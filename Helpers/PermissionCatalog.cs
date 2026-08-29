@@ -299,6 +299,16 @@ namespace MyApp.Api.Helpers
             new("itemtypes.manage.update", "ItemTypes", "Manage", "Update", "Edit an item type"),
             new("itemtypes.manage.delete", "ItemTypes", "Manage", "Delete", "Delete an item type"),
 
+            // ── HS / PCT code master (reference data) ───────────────────────
+            // Deliberately its own module rather than part of "FBR": the tariff
+            // master is what Item Types are classified against, and it must stay
+            // usable by companies that have FBR integration switched OFF. The
+            // token key is separate from the import key because it writes a
+            // credential (same reasoning as companies.manage.fbrtoken).
+            new("hscodes.list.view",   "HsCodes", "Master", "View",   "Search the HS / PCT code master and its UOMs"),
+            new("hscodes.import.run",  "HsCodes", "Master", "Import", "Import / re-sync HS codes from FBR's tariff catalog"),
+            new("hscodes.token.manage","HsCodes", "Master", "Token",  "Set the installation-wide FBR reference token used to read HS codes"),
+
             // ── Non-Inventory Items (per-company GL-account shortcut lines) ──
             // Freight / Discount / service-fee line items that post to a mapped
             // income/expense account and move no stock (Manager.io "Non-inventory

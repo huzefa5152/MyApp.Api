@@ -857,6 +857,32 @@ if isinstance(good_quote, dict) and good_quote.get("items"):
     request("DELETE", f"/api/salesquotes/{good_quote['id']}", token=admin)
 
 
+# ── Suite 12: HS code master (reference data, but companyId-bearing) ──
+# The HS master itself is installation-wide and carries no tenant data, so its
+# reads take no companyId. The two endpoints that DO accept one — import (which
+# may fall back to that company's FBR token) and the per-code UOM lookup — must
+# still refuse a company the caller cannot reach, otherwise passing an arbitrary
+# id would let a user drive another tenant's FBR credentials.
+suite12 = "hs code master"
+
+s, _ = request("POST", "/api/hscodes/import", token=tokens["alice"],
+               body={"companyId": beta["id"], "createItemTypes": False})
+status_check(suite12, "alice POST /hscodes/import (companyId=Beta)", s, 403)
+
+s, _ = request("GET", f"/api/hscodes/6109.1000/uoms?companyId={beta['id']}", token=tokens["alice"])
+status_check(suite12, "alice GET /hscodes/{code}/uoms (companyId=Beta)", s, 403)
+
+# Alice's own company is fine — the guard is about whose token may be used,
+# not about locking the tariff away from her.
+s, _ = request("GET", f"/api/hscodes/6109.1000/uoms?companyId={alpha['id']}", token=tokens["alice"])
+check(suite12, "alice GET uoms for her own company", s in (200, 404), f"got {s}")
+
+# And the plain reads need no company context at all — that is the whole point
+# of a shared master: a company with FBR off still searches the tariff.
+s, _ = request("GET", "/api/hscodes?search=6109&take=5", token=tokens["alice"])
+check(suite12, "alice searches the HS master with no companyId", s == 200, f"got {s}")
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

@@ -138,6 +138,10 @@ namespace MyApp.Api.Data
                 // Matches Hakimi's production setup verbatim.
                 FbrBusinessActivity = "Wholesaler",
                 FbrSector = "Wholesale / Retails",
+                // Explicit since Company.FbrEnabled now defaults to false
+                // (new companies start with FBR off): the demo company is
+                // the FBR sandbox scenario fixture, so it stays opted in.
+                FbrEnabled = true,
                 FbrEnvironment = "sandbox",
                 FbrDefaultSaleType = "Goods at Standard Rate (default)",
                 FbrDefaultUOM = "Numbers, pieces, units",

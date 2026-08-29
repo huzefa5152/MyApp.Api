@@ -88,6 +88,10 @@ export const PERMISSION_SECTIONS = [
       { key: "CustomerPortal", label: "Customer Portal" },
       { key: "Suppliers" },
       { key: "ItemTypes", label: "Item Types" },
+      // HS / PCT tariff master an Item Type is classified against. Sits
+      // beside Item Types (not under FBR) because it is reference data
+      // usable with FBR integration switched off.
+      { key: "HsCodes", label: "HS Codes" },
       { key: "NonInventoryItems", label: "Non-Inventory Items" },
       { key: "Configuration", label: "Lookups" },
       { key: "POFormats", label: "PO Formats" },

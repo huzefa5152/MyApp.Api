@@ -40,6 +40,16 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<bool> IsKnownHsCodeAsync(int companyId, string hsCode);
         Task<List<FbrUOMDto>> GetUOMsAsync(int companyId);
+
+        // ── Reference catalogs fetched with an explicit token ──────────────
+        // Used by the HS Code master import (2026-08-30). The company-scoped
+        // overloads above need a company that has its own FBR token; these take
+        // the token directly so the installation-wide reference token can pull
+        // tariff data for companies that have FBR integration switched off.
+        // Read-only catalog endpoints only — never submission.
+        Task<List<FbrHSCodeDto>> FetchHsCodeCatalogWithTokenAsync(string token);
+        Task<List<FbrUOMDto>> FetchUomCatalogWithTokenAsync(string token);
+        Task<List<FbrUOMDto>> FetchHsCodeUomWithTokenAsync(string token, string hsCode, int annexureId);
         Task<List<FbrTransactionTypeDto>> GetTransactionTypesAsync(int companyId);
         Task<List<FbrSROItemDto>> GetSROItemCodesAsync(int companyId);
 

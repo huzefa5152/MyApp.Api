@@ -65,10 +65,20 @@
         // Master switch for the whole FBR flow on this company. When false,
         // the Validate/Submit-to-FBR buttons are hidden, challans don't get
         // gated into "Setup Required" for FBR reasons, and the company+client
-        // FBR-details readiness check is skipped. Defaults TRUE so existing
-        // tenants (Hakimi/Roshan) keep working exactly as before; operators
-        // turn it OFF for non-FBR companies.
-        public bool FbrEnabled { get; set; } = true;
+        // FBR-details readiness check is skipped.
+        //
+        // Defaults FALSE (2026-08-30): a new company starts with FBR
+        // integration OFF and is opted in deliberately, so nobody has to paste
+        // FBR credentials just to create item types, classify them against an
+        // HS code, or raise documents. HS code master data is reference data
+        // and is reachable regardless of this flag — see Models/HsCode.cs.
+        //
+        // This changes NEW companies only. The column already exists and is not
+        // rewritten by any migration, so the live tenants (Hakimi CompanyId=1,
+        // Roshan CompanyId=2) keep the value they have today. It is also NOT
+        // the default on UpdateCompanyDto: an update that omitted the field
+        // must never silently switch a working tenant's FBR off.
+        public bool FbrEnabled { get; set; }
         public int? FbrProvinceCode { get; set; }
         public string? FbrBusinessActivity { get; set; }
         public string? FbrSector { get; set; }

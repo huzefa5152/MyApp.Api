@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { getFbrHSCodes } from "../api/fbrApi";
+import { searchHsCodes } from "../api/hsCodeApi";
 
 // PCT/HS format: NNNN.NNNN with an optional .NN tail. Used to tell a
 // complete, already-valid code (e.g. an item's SAVED code on edit) apart
@@ -8,9 +9,16 @@ import { getFbrHSCodes } from "../api/fbrApi";
 const HS_FORMAT = /^\d{4}\.\d{4}(\.\d{2})?$/;
 
 /**
- * Autocomplete that searches FBR's official HS Code catalog (V1.12 §5.3).
- * Calls GET /api/fbr/hscodes/{companyId}?search=query which proxies to
- * https://gw.fbr.gov.pk/pdi/v1/itemdesccode.
+ * Autocomplete over the HS / PCT code catalog.
+ *
+ * SOURCE ORDER (2026-08-30). The LOCAL master (GET /api/hscodes) is asked
+ * first: it is imported once for the whole installation, needs no FBR token,
+ * and therefore works for companies that have FBR integration switched off —
+ * which is the whole reason classifying item types must not depend on FBR.
+ * If the master is empty (never imported) or unreachable for this user, we
+ * fall back to the original live PRAL proxy, GET /api/fbr/hscodes/{companyId}
+ * → https://gw.fbr.gov.pk/pdi/v1/itemdesccode, so nothing is lost for tenants
+ * that are already FBR-enabled.
  *
  * Users type a product keyword (e.g. "valve", "steel pipe") and pick from
  * FBR-matched results — no need to know HS codes by heart.
@@ -86,13 +94,40 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       const term = (q || "").trim();
+      // Hide HS codes already used elsewhere in the user's catalog
+      const exclude = new Set((excludeHsCodes || []).map((c) => (c || "").trim()));
+      const notExcluded = (rows) => rows.filter((h) => !exclude.has((h.hS_CODE || "").trim()));
+
+      // Local master rows are {code, description, uom, itemTypeName}; map them
+      // onto the FBR catalog's shape so the dropdown renders either source.
+      const fromMaster = async () => {
+        const { data } = await searchHsCodes(term, 50);
+        const rows = (data || []).map((h) => ({
+          hS_CODE: h.code,
+          description: h.description || "",
+          uom: h.uom || null,
+          itemTypeName: h.itemTypeName || null,
+        }));
+        return { hits: notExcluded(rows), masterIsEmpty: (data || []).length === 0 };
+      };
+
       setLoading(true);
       try {
+        try {
+          const { hits, masterIsEmpty } = await fromMaster();
+          if (hits.length > 0) return setSuggestions(hits);
+          // Nothing matched. If the master holds no codes at all the tariff has
+          // simply never been imported → try FBR. If it does hold codes and we
+          // have no company context to ask FBR with, this is a genuine no-match.
+          if (!masterIsEmpty && !companyId) return setSuggestions([]);
+        } catch {
+          // Master unreachable (e.g. this role lacks hscodes.list.view) — fall
+          // through to the live FBR catalog rather than show an empty picker.
+        }
+
+        // Live FBR catalog — the original behaviour, unchanged.
         const { data } = await getFbrHSCodes(companyId, term, saleType || null);
-        // Hide HS codes already used elsewhere in the user's catalog
-        const exclude = new Set((excludeHsCodes || []).map((c) => (c || "").trim()));
-        const filtered = (data || []).filter((h) => !exclude.has((h.hS_CODE || "").trim()));
-        setSuggestions(filtered);
+        setSuggestions(notExcluded(data || []));
       } catch (err) {
         console.error("HS code lookup error:", err);
         setSuggestions([]);

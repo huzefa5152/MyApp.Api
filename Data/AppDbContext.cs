@@ -95,6 +95,11 @@ namespace MyApp.Api.Data
         public DbSet<ItemDescription> ItemDescriptions { get; set; }
         public DbSet<Unit> Units { get; set; }
         public DbSet<ItemType> ItemTypes { get; set; }
+        // Master HS / PCT tariff codes — installation-wide reference data,
+        // deliberately independent of any company's FBR integration (see HsCode).
+        public DbSet<HsCode> HsCodes { get; set; }
+        // Installation-wide key/value settings (FBR reference token, ...).
+        public DbSet<SystemSetting> SystemSettings { get; set; }
         // Per-company GL-account shortcut line items (Freight, Discount, …) —
         // NOT stock, NOT FBR. Mirrors Manager.io's "Non-inventory Items".
         public DbSet<NonInventoryItem> NonInventoryItems { get; set; }
@@ -540,6 +545,41 @@ namespace MyApp.Api.Data
                 .HasIndex(it => new { it.Name, it.HSCode })
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0");
+
+            // ── HS code master (reference data, no CompanyId) ──────────────
+            // Code is the natural key the import upserts on, so it is unique.
+            // ItemType.HsCodeId is NoAction: retiring a tariff code must never
+            // cascade-delete the operator's catalog rows (their documents and
+            // FBR history reference them). The link is nulled by hand if a code
+            // is ever removed, which the import never does — it deactivates.
+            modelBuilder.Entity<HsCode>()
+                .HasIndex(h => h.Code)
+                .IsUnique();
+
+            modelBuilder.Entity<HsCode>()
+                .Property(h => h.Code)
+                .HasMaxLength(32);
+
+            modelBuilder.Entity<HsCode>()
+                .HasOne(h => h.Unit)
+                .WithMany()
+                .HasForeignKey(h => h.UnitId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<ItemType>()
+                .HasOne(it => it.HsCodeRef)
+                .WithMany()
+                .HasForeignKey(it => it.HsCodeId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // ── System settings (installation-wide key/value) ──────────────
+            modelBuilder.Entity<SystemSetting>()
+                .HasIndex(x => x.Key)
+                .IsUnique();
+
+            modelBuilder.Entity<SystemSetting>()
+                .Property(x => x.Key)
+                .HasMaxLength(128);
 
             // ── Non-Inventory Items (per-company GL-account shortcut lines) ──
             // Company Restrict (a company's non-inv items can't cascade-wipe).

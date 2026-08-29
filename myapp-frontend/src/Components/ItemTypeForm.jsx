@@ -29,6 +29,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MdLock, MdInfo, MdInventory2 } from "react-icons/md";
 import { createItemType, updateItemType, getItemTypeFbrHints } from "../api/itemTypeApi";
+import { getHsCodeUoms } from "../api/hsCodeApi";
 import { getFbrHsUom } from "../api/fbrApi";
 import { getOpeningBalances, upsertOpeningBalance } from "../api/stockApi";
 import { getAccountsFlat } from "../api/accountApi";
@@ -97,8 +98,9 @@ export default function ItemTypeForm({
   // the new item type is registered against the same division by default.
   defaultDivisionId = null,
   existingHsCodes = [],
-  // FBR-off companies don't use HS codes — the field is hidden for them.
-  // Defaults true so other callers (quick-add from documents) are unchanged.
+  // Whether this company submits to FBR. Controls the FBR-only bits of the form
+  // (Sale Type, rate hints) — NOT the HS Code field, which every company needs
+  // to classify its catalog and which reads the local HS master.
   fbrOn = true,
   onClose,
   onSaved,
@@ -217,7 +219,24 @@ export default function ItemTypeForm({
   // doesn't flicker. Used by the edit-mode mount fetch (the field
   // already shows a saved value; no need for a "looking up" badge).
   const fetchHsHints = async (code, { silent = false } = {}) => {
-    if (!code || code.replace(/\D/g, "").length < 4 || !companyId) {
+    if (!code || code.replace(/\D/g, "").length < 4) {
+      if (aliveRef.current) setHsHints(null);
+      return null;
+    }
+    // No company context (or a company with no FBR token): the local HS master
+    // still knows this code's UOM once the tariff has been imported, so ask it
+    // rather than leaving the operator with an empty UOM. Sale-type hints and
+    // live rates genuinely need FBR, so those stay absent here.
+    if (!companyId) {
+      try {
+        const { data } = await getHsCodeUoms(code);
+        if (!aliveRef.current) return null;
+        if (Array.isArray(data) && data.length > 0) {
+          const local = { uoms: data, defaultUom: data[0], defaultSaleType: null, saleTypeOptions: [] };
+          setHsHints(local);
+          return local;
+        }
+      } catch { /* fall through — the operator can still pick a UOM by hand */ }
       if (aliveRef.current) setHsHints(null);
       return null;
     }
@@ -251,6 +270,18 @@ export default function ItemTypeForm({
           hsHintCache.set(cacheKey, synthetic);
           setHsHints(synthetic);
           return synthetic;
+        }
+      } catch { /* nothing */ }
+      // Last resort — the local HS master. Reached when the company has no
+      // usable FBR token, which is exactly the FBR-off case this must survive.
+      try {
+        const { data } = await getHsCodeUoms(code, companyId);
+        if (!aliveRef.current || myVersion !== lookupSeqRef.current) return null;
+        if (Array.isArray(data) && data.length > 0) {
+          const local = { uoms: data, defaultUom: data[0], defaultSaleType: null, saleTypeOptions: [] };
+          hsHintCache.set(cacheKey, local);
+          setHsHints(local);
+          return local;
         }
       } catch { /* nothing */ }
       return null;
@@ -435,7 +466,7 @@ export default function ItemTypeForm({
                 ? `Sale Type is locked to ${scenarioCode}'s rule; UOM auto-fills from FBR's HS-UOM mapping.`
                 : fbrOn
                   ? "Pick an HS code to auto-fill UOM, sale type, and rate."
-                  : ""}
+                  : "Pick an HS code to auto-fill its UOM. This company has FBR integration off — nothing here is submitted to FBR."}
             </p>
 
             <div style={formStyles.formGroup}>
@@ -449,7 +480,11 @@ export default function ItemTypeForm({
               />
             </div>
 
-            {fbrOn && (
+            {/* HS Code is shown for EVERY company (2026-08-30), including those
+                with FBR integration off. Classifying an item against the tariff
+                is master-data work: the codes come from the local HS master, and
+                needing them is not the same as submitting invoices to FBR. Sale
+                Type below stays FBR-only — that one really is submission metadata. */}
             <div style={formStyles.formGroup}>
               <label style={styles.label}>
                 HS Code{" "}
@@ -470,8 +505,9 @@ export default function ItemTypeForm({
                 excludeHsCodes={existingHsCodes}
               />
               <p style={styles.hint}>
-                Must be picked from FBR's official catalog. A free-typed code that
-                isn't in PRAL's master list will be rejected at save time.
+                Search by code or description. Codes come from this system's HS master —
+                use <strong>Import HS Codes</strong> on the Item Catalog screen to load or
+                refresh them from FBR. A code that isn't in the master is rejected at save time.
               </p>
 
               {showRichHints && hsHints && (
@@ -529,7 +565,6 @@ export default function ItemTypeForm({
                 <span style={styles.compactNote}>{hsHints.notes[0]}</span>
               )}
             </div>
-            )}
 
             <div style={styles.row}>
               <div style={{ flex: 1 }}>

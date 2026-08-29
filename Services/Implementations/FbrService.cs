@@ -343,6 +343,16 @@ namespace MyApp.Api.Services.Implementations
                 ? $"{DiBaseUrl}/validateinvoicedata"
                 : $"{DiBaseUrl}/validateinvoicedata_sb";
 
+        // Same client, but authorised with a token that is not tied to a
+        // Company row (the installation-wide reference token).
+        private HttpClient CreateClient(string token)
+        {
+            var client = _httpClientFactory.CreateClient("FBR");
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", token);
+            return client;
+        }
+
         private HttpClient CreateClient(Company company)
         {
             var client = _httpClientFactory.CreateClient("FBR");
@@ -1602,6 +1612,27 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<FbrUOMDto>> GetUOMsAsync(int companyId)
             => await GetReferenceData<FbrUOMDto>(companyId, $"{RefBaseV1}/uom");
+
+        // ── Token-explicit reference fetches (HS master import, 2026-08-30) ──
+        // The catalog endpoints are read-only and return the same national
+        // tariff for every caller, so authorising them with the installation's
+        // own reference token — instead of a tenant's — is both correct and what
+        // audit H-9 asked for: no tenant's token is ever used on another
+        // tenant's behalf. Sandbox and production share this gateway.
+        public async Task<List<FbrHSCodeDto>> FetchHsCodeCatalogWithTokenAsync(string token)
+            => await GetReferenceListAsync<FbrHSCodeDto>(
+                CreateClient(token), $"{RefBaseV1}/itemdesccode", "itemdesccode");
+
+        public async Task<List<FbrUOMDto>> FetchUomCatalogWithTokenAsync(string token)
+            => await GetReferenceListAsync<FbrUOMDto>(
+                CreateClient(token), $"{RefBaseV1}/uom", "uom");
+
+        public async Task<List<FbrUOMDto>> FetchHsCodeUomWithTokenAsync(
+            string token, string hsCode, int annexureId)
+            => await GetReferenceListAsync<FbrUOMDto>(
+                CreateClient(token),
+                $"{RefBaseV2}/HS_UOM?hs_code={Uri.EscapeDataString(hsCode)}&annexure_id={annexureId}",
+                "HS_UOM");
 
         public async Task<List<FbrTransactionTypeDto>> GetTransactionTypesAsync(int companyId)
             => await GetReferenceData<FbrTransactionTypeDto>(companyId, $"{RefBaseV1}/transtypecode");

@@ -289,6 +289,16 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-30 — HS codes are your own master data, and new companies start with FBR off
+
+- **New companies now start with FBR integration switched OFF.** Nobody has to paste FBR credentials just to set up their catalog or raise documents; you turn FBR on when you are ready to file digital invoices. Existing companies are untouched — Hakimi and Roshan keep the setting they already have.
+- **HS / PCT codes now live in this system.** A new HS code master holds the tariff — code, description and the applicable UOM — once for the whole installation instead of being fetched from FBR every time someone opens the Item Type form. Searching it, classifying items against it and picking a UOM all work with FBR integration off.
+- **Import HS Codes.** A new button on the Item Catalog screen pulls the tariff straight from FBR (7,803 codes today) with a progress state and a summary: total received, new codes added, already existing, descriptions updated, and skipped. Running it again is safe by design — codes you already have keep their row, only genuinely new ones are added — so you can re-run it whenever FBR updates the tariff. Errors are reported without throwing the whole import away.
+- **Reading the tariff needs one token, set once.** The import authorises itself with an installation-wide FBR reference token you paste in the import dialog. It is used only to read HS codes and UOMs, it is stored encrypted, it is never shown back to you in full, and it does **not** switch FBR invoice submission on for anybody.
+- **Item Types can be created from HS codes automatically.** The import can create an item for each new code, named "HS Code 6109.1000" until you rename it — renaming keeps the code attached. Those placeholder items are hidden from the bill and challan pickers and from the Item Catalog list by default (there are thousands); a "Show HS-code placeholders" switch on the Item Catalog finds them when you want to curate one.
+- **The HS Code field now appears for every company**, not just FBR-enabled ones, and searches by code or description with the UOM shown alongside. Sale Type stays where it was — it is genuinely FBR submission metadata.
+- **Stricter, clearer validation.** Once the tariff has been imported, a code that isn't in it is refused at save time with an explanation, instead of being accepted and later rejected by FBR with error 0007.
+
 ### 2026-08-29 — Printed documents: signature at the foot of every page, and no more filler rows
 
 - **The signature block now prints at the bottom of every page.** Before, it only appeared on the last page of a document, part-way up — so a two-page invoice had no signature line at all on page 1, and a long one had none on pages 1 and 2. Every document type is covered: bill, tax invoice, delivery challan, sales quote, sales order, credit and debit note, purchase bill, goods receipt, and the receipt, payment, transfer, journal and withholding-tax vouchers.

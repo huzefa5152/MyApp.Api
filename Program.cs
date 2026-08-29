@@ -306,6 +306,9 @@ builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddSingleton<MyApp.Api.Helpers.AttachmentStorage>();
 builder.Services.AddScoped<IDivisionService, DivisionService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+// The one implementation of a customer's derived money trail (ClientService's
+// statement delegates to it).
+builder.Services.AddScoped<ICustomerLedgerService, CustomerLedgerService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
 // General Ledger (Phase B): the posting engine, GL admin/reports/summary,
@@ -344,6 +347,7 @@ builder.Services.AddScoped<IDocumentCopyService, DocumentCopyService>();
 // Customer Portal: internal management + the public token-scoped read surface.
 builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
+builder.Services.AddScoped<IHsCodeService, HsCodeService>();
 builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();
