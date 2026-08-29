@@ -289,11 +289,17 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-30 — Refreshing a page keeps you on that page
+
+- **F5 no longer throws you back to the Dashboard.** Reloading Invoices, Clients, Reports — any screen — now reloads that screen. Opening a sidebar link in a new tab (ctrl-click or middle-click) lands on the right page too, instead of the Dashboard.
+- The cause: on a fresh page load the app decided what you were allowed to see a moment before it knew who you were, concluded you had no permissions, and redirected. It now waits for the sign-in check to finish before making that decision.
+
 ### 2026-08-30 — Import your customer list from a spreadsheet
 
 - **Import Clients** on the Clients screen adds hundreds of customers in one go. Download the sample CSV, paste your list under its headings, upload it, and the screen shows what it will do — row by row — before anything is saved.
 - **Nothing is written until you confirm.** Each row is marked *will be added*, *already exists* or *cannot import*, with the reason next to it (blank name, the same customer twice in the file, a customer already on your books).
 - **Re-importing is safe.** Customers you already have are skipped, never overwritten, so uploading next month's updated list only adds the new names.
+- The sample file opens straight in Excel (UTF-8 with a byte-order mark, Windows line endings), so customer names with Urdu or accented characters survive the round trip.
 - Accepts CSV and Excel (.xlsx), copes with commas inside quoted addresses, semicolon-separated exports and files saved by Excel with a byte-order mark, and reads the usual column names (Customer / Party / Client all map to Name).
 - Bad rows never sink the whole file: the good ones import and the rest are listed with their reasons.
 

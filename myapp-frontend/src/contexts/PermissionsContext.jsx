@@ -19,22 +19,41 @@ const PermissionsContext = createContext(null);
  * Refreshes whenever the authenticated user changes.
  */
 export function PermissionsProvider({ children }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState(new Set());
   const [isSeedAdmin, setIsSeedAdmin] = useState(false);
   const [divisionRestrictions, setDivisionRestrictions] = useState({});
-  const [loading, setLoading] = useState(true);
+
+  // Whose permission set is currently in state — the signed-in user's key, or
+  // ANONYMOUS once we've settled that nobody is signed in.
+  //
+  // This replaces a plain `loading` flag, and it is the fix for the
+  // hard-refresh bug (2026-08-30): opening /invoices directly, or ctrl-clicking
+  // a sidebar link, used to land on /dashboard. On boot the provider ran once
+  // while auth was still bootstrapping, took the not-authenticated branch and
+  // set loading = false with an EMPTY permission set. Auth then resolved, and
+  // for the render between that and the reload effect firing, RequirePermission
+  // saw "loaded, and you have nothing" — so it redirected. Deriving loading
+  // from *who* the loaded set belongs to closes that window: the moment the
+  // user changes, loading is true again in the same render, with no effect
+  // needing to run first.
+  const ANONYMOUS = "anonymous";
+  const [loadedFor, setLoadedFor] = useState(null);
+
+  const userKey = user?.id ?? user?.username ?? null;
 
   const load = useCallback(async () => {
+    // Auth hasn't finished restoring the session yet — decide nothing.
+    if (authLoading) return;
+
     if (!isAuthenticated) {
       setPermissions(new Set());
       setIsSeedAdmin(false);
       setDivisionRestrictions({});
-      setLoading(false);
+      setLoadedFor(ANONYMOUS);
       return;
     }
     try {
-      setLoading(true);
       const res = await getMyPermissions();
       setPermissions(new Set(res.data.permissions || []));
       setIsSeedAdmin(res.data.isSeedAdmin === true);
@@ -44,11 +63,18 @@ export function PermissionsProvider({ children }) {
       setIsSeedAdmin(false);
       setDivisionRestrictions({});
     } finally {
-      setLoading(false);
+      setLoadedFor(userKey ?? ANONYMOUS);
     }
-  }, [isAuthenticated]);
+  }, [authLoading, isAuthenticated, userKey]);
 
-  useEffect(() => { load(); }, [load, user?.id, user?.username]);
+  useEffect(() => { load(); }, [load]);
+
+  // Derived, never stale: true until the set in state belongs to the user we
+  // currently have. Consumers (RequirePermission, sidebar gates) must not act
+  // on an empty set while this is true.
+  const loading = authLoading || (isAuthenticated
+    ? loadedFor !== (userKey ?? ANONYMOUS)
+    : loadedFor !== ANONYMOUS);
 
   const has = useCallback(
     (key) => {

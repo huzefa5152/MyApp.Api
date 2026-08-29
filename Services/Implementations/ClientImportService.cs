@@ -69,13 +69,20 @@ namespace MyApp.Api.Services.Implementations
 
         public byte[] BuildTemplateCsv()
         {
+            // CRLF line endings and a UTF-8 BOM: Excel on Windows is the tool
+            // this file is opened with, and without the BOM it reads the bytes
+            // as the system codepage — an operator with Urdu or accented
+            // customer names would see mojibake and "fix" it by retyping.
+            const string nl = "\r\n";
             var sb = new StringBuilder();
-            sb.AppendLine("Name,Address,Phone,Email,NTN,STRN,CNIC,RegistrationType,Site,FbrProvinceCode");
+            sb.Append("Name,Address,Phone,Email,NTN,STRN,CNIC,RegistrationType,Site,FbrProvinceCode").Append(nl);
             // Two filled examples beat a page of instructions: one registered
             // customer with an NTN, one unregistered with a CNIC.
-            sb.AppendLine("Meko Fabrics,\"Plot 5, SITE Area, Karachi\",021-32001234,accounts@meko.example,1234567-8,3277876175852,,Registered,Main Store,8");
-            sb.AppendLine("Rehman Traders,\"Shop 12, Bolton Market, Karachi\",0300-2001234,,,,42101-1234567-1,Unregistered,,8");
-            return Encoding.UTF8.GetBytes(sb.ToString());
+            sb.Append("Meko Fabrics,\"Plot 5, SITE Area, Karachi\",021-32001234,accounts@meko.example,1234567-8,3277876175852,,Registered,Main Store,8").Append(nl);
+            sb.Append("Rehman Traders,\"Shop 12, Bolton Market, Karachi\",0300-2001234,,,,42101-1234567-1,Unregistered,,8").Append(nl);
+
+            var utf8Bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+            return utf8Bom.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
         }
 
         // ─────────────────────────────────────────────────────────────
