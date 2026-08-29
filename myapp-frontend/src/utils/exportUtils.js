@@ -42,6 +42,34 @@ function createStyledContainer(css, bodyHtml) {
 }
 
 /**
+ * Lift the page-bottom signature out of the captured flow.
+ *
+ * utils/printLayout.js pins the signature with `position: fixed`, which the
+ * browser repeats on every printed page. html2canvas has no pages — it paints
+ * one tall bitmap — so a fixed element would be captured once, at whatever the
+ * real viewport happened to be. Instead the signature is moved into a sibling
+ * container (carrying the same `.pdf-content` class, so the scoped template CSS
+ * still applies), rasterised on its own, and stamped onto the bottom of every
+ * PDF page below. The hidden spacer printLayout put in the item table's <tfoot>
+ * stays behind, so the reserved strip is still there and nothing collides.
+ */
+function detachPrintFooter(wrapper, content) {
+  const footer = content.querySelector(".mpl-fixed");
+  if (!footer) return null;
+  const holder = document.createElement("div");
+  holder.className = "pdf-content";
+  holder.style.cssText = "box-sizing:border-box;width:796px;";
+  footer.style.position = "static";
+  // The holder already carries the template's body padding; keep the wrapper's
+  // inherited copy from doubling it.
+  footer.style.paddingLeft = "0";
+  footer.style.paddingRight = "0";
+  holder.appendChild(footer);
+  wrapper.appendChild(holder);
+  return holder;
+}
+
+/**
  * Export rendered template HTML to PDF.
  */
 export async function exportToPdf(html, filename) {
@@ -51,6 +79,7 @@ export async function exportToPdf(html, filename) {
   ]);
   const { css, bodyHtml } = parseHtml(html);
   const { wrapper, content } = createStyledContainer(css, bodyHtml);
+  const footerHolder = detachPrintFooter(wrapper, content);
 
   await new Promise((r) => setTimeout(r, 400));
 
@@ -61,14 +90,28 @@ export async function exportToPdf(html, filename) {
       letterRendering: true,
       windowWidth: 796,
     });
+    const footerCanvas = footerHolder
+      ? await html2canvas(footerHolder, { scale: 2, useCORS: true, letterRendering: true, windowWidth: 796 })
+      : null;
     const imgData = canvas.toDataURL("image/jpeg", 0.98);
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     const pageW = 210;
     const pageH = 297;
     const imgH = (canvas.height * pageW) / canvas.width;
+    const marginMm = 8;
+
+    // Same signature on the bottom of every page as the print path produces.
+    const footerData = footerCanvas && footerCanvas.height
+      ? footerCanvas.toDataURL("image/png")
+      : null;
+    const footerMmH = footerData ? (footerCanvas.height * pageW) / footerCanvas.width : 0;
+    const stampFooter = () => {
+      if (footerData) pdf.addImage(footerData, "PNG", 0, pageH - marginMm - footerMmH, pageW, footerMmH);
+    };
 
     if (imgH <= pageH * 1.02) {
       pdf.addImage(imgData, "JPEG", 0, 0, pageW, Math.min(imgH, pageH));
+      stampFooter();
     } else {
       // Multi-page: leave a top + bottom white margin on EVERY page so
       // consecutive pages don't butt together — page 1 ends with a bottom
@@ -76,7 +119,6 @@ export async function exportToPdf(html, filename) {
       // was sliced edge-to-edge at exact A4 heights, so the break looked
       // "combined" and rows were cut flush). Content is sliced into
       // (pageH − 2·margin) tall bands, each drawn `marginMm` down from the top.
-      const marginMm = 8;
       const contentMm = pageH - marginMm * 2;
       const pageCanvasH = (canvas.width * contentMm) / pageW;   // slice height in canvas px
       let y = 0;
@@ -91,6 +133,7 @@ export async function exportToPdf(html, filename) {
         const sliceData = page.toDataURL("image/jpeg", 0.98);
         const sliceMmH = (sliceH * pageW) / canvas.width;
         pdf.addImage(sliceData, "JPEG", 0, marginMm, pageW, sliceMmH);
+        stampFooter();
         y += pageCanvasH;
         pageNum++;
       }
@@ -113,6 +156,11 @@ export async function exportToExcel(html, filename, sheetName) {
 
   const { css, bodyHtml } = parseHtml(html);
   const { wrapper, content } = createStyledContainer(css, bodyHtml);
+  // One sheet, one image, no pages — so the signature simply flows at the end
+  // and the reserved strip printLayout put in the <tfoot> comes back out.
+  const pinned = content.querySelector(".mpl-fixed");
+  if (pinned) pinned.style.position = "static";
+  content.querySelectorAll(".mpl-spacer").forEach((el) => el.remove());
 
   await new Promise((r) => setTimeout(r, 400));
 

@@ -94,7 +94,6 @@ tbody tr:nth-child(even) td{background:#f5f5f5 !important;}
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{#if hasLineImages}}{{emptyRows (math 12 "-" items.length) 8}}{{else}}{{emptyRows (math 12 "-" items.length) 7}}{{/if}}
     </tbody>
   </table>
   <div class="totals">
@@ -302,7 +301,6 @@ tbody tr:nth-child(even) td{background:#f0f5fb !important;}
           <td class="r">Rs {{fmt this.lineTotal}}</td>
         </tr>
       {{/each}}
-      {{#if hasLineImages}}{{emptyRows (math 10 "-" items.length) 7}}{{else}}{{emptyRows (math 10 "-" items.length) 6}}{{/if}}
       </tbody>
     </table>
     <div class="totals">
@@ -510,7 +508,6 @@ td{border-bottom:1px dotted #999;padding:6px 8px;font-size:11.5px;}
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{#if hasLineImages}}{{emptyRows (math 12 "-" items.length) 7}}{{else}}{{emptyRows (math 12 "-" items.length) 6}}{{/if}}
     </tbody>
   </table>
   <div class="totals">
@@ -718,7 +715,6 @@ tbody tr:nth-child(even) td{background:#f5f8fc !important;}
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{#if hasLineImages}}{{emptyRows (math 18 "-" items.length) 7}}{{else}}{{emptyRows (math 18 "-" items.length) 6}}{{/if}}
     </tbody>
   </table>
   <div class="totals">
@@ -945,7 +941,6 @@ table.items td:last-child{border-right:none;}
           <td class="r">Rs {{fmt this.lineTotal}}</td>
         </tr>
       {{/each}}
-      {{#if hasLineImages}}{{emptyRows (math 10 "-" items.length) 7}}{{else}}{{emptyRows (math 10 "-" items.length) 6}}{{/if}}
       </tbody>
     </table>
     <div class="footer-section">
@@ -1057,7 +1052,6 @@ tbody tr:nth-child(even) td{background:#f1f8f2 !important;}
         <td class="r">Rs {{fmt this.lineTotal}}</td>
       </tr>
     {{/each}}
-    {{#if hasLineImages}}{{emptyRows (math 10 "-" items.length) 7}}{{else}}{{emptyRows (math 10 "-" items.length) 6}}{{/if}}
     </tbody>
   </table>
   <div class="totals">
@@ -1598,7 +1592,6 @@ table.items tbody tr:nth-child(even) td{background:#f8f8f8 !important;}
           <td class="r cell">Rs {{fmt this.lineTotal}}</td>
         </tr>
       {{/each}}
-      {{#if hasLineImages}}{{emptyRows (math 10 "-" items.length) 7}}{{else}}{{emptyRows (math 10 "-" items.length) 6}}{{/if}}
       </tbody>
     </table>
     <div class="totals-section">

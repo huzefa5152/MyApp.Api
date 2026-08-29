@@ -15,7 +15,7 @@
  *   allocations[] — sNo, documentLabel, date, amount
  *
  * Registered helpers only: fmt, fmtDate, fmtDec, nl2br, richText, inc, math,
- * eq, gt, or, join, emptyRows, plus built-ins #if/#unless/#each/@index.
+ * eq, gt, or, join, plus built-ins #if/#unless/#each/@index.
  * Money is always right-aligned. Accent is blue/indigo (#0d47a1 / #e3f2fd)
  * to mark payments (money-out) apart from receipts.
  */

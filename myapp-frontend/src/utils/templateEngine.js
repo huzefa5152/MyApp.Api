@@ -1,5 +1,6 @@
 import Handlebars from "handlebars";
 import { materializeStamp } from "./stampSlot.js";
+import { applyPrintLayoutToHtml } from "./printLayout.js";
 
 // Register custom helpers
 Handlebars.registerHelper("fmtDate", (d) => {
@@ -73,15 +74,20 @@ Handlebars.registerHelper("joinDates", (arr) =>
   }).filter(Boolean).join(", ")
 );
 
-Handlebars.registerHelper("emptyRows", (count, cols) => {
-  let html = "";
-  for (let i = 0; i < count; i++) {
-    html += "<tr>";
-    for (let j = 0; j < cols; j++) html += '<td class="cell">&nbsp;</td>';
-    html += "</tr>";
-  }
-  return new Handlebars.SafeString(html);
-});
+// ── Blank-row padding: retired 2026-08-29 ───────────────────────────────────
+// emptyRows / billEmptyRows / taxEmptyRows used to pad the item table out to a
+// fixed row count (18, 22, 15 …) so the signature — pinned with the one-page
+// `margin-top: auto` idiom — landed near the bottom of the sheet. That is where
+// the run of blank rows after the last real line item came from, and it never
+// worked beyond page 1 anyway. utils/printLayout.js now repeats the signature at
+// the bottom of every page, so the padding has no job left and the table prints
+// exactly the rows the document has.
+//
+// They stay REGISTERED because 40 templates already saved in the database call
+// them, and Handlebars throws on an unknown helper — an unregistered helper
+// would blank those documents instead of just dropping the padding.
+const noPadding = () => new Handlebars.SafeString("");
+Handlebars.registerHelper("emptyRows", noPadding);
 
 Handlebars.registerHelper("math", (a, op, b) => {
   a = Number(a || 0);
@@ -102,35 +108,8 @@ Handlebars.registerHelper("uniqueTypes", (items) => {
 
 Handlebars.registerHelper("inc", (n) => Number(n) + 1);
 
-Handlebars.registerHelper("billEmptyRows", (count) => {
-  let html = "";
-  for (let i = 0; i < count; i++) {
-    html += '<tr>';
-    html += '<td class="cell c">&nbsp;</td>';
-    html += '<td class="cell c">&nbsp;</td>';
-    html += '<td class="cell">&nbsp;</td>';
-    html += '<td class="cell r">&nbsp;</td>';
-    html += '<td class="cell r">Rs &nbsp;&nbsp; -</td>';
-    html += '</tr>';
-  }
-  return new Handlebars.SafeString(html);
-});
-
-Handlebars.registerHelper("taxEmptyRows", (count) => {
-  let html = "";
-  for (let i = 0; i < count; i++) {
-    html += '<tr>';
-    html += '<td></td>';
-    html += '<td></td>';
-    html += '<td></td>';
-    html += '<td class="right">-</td>';
-    html += '<td class="center">-</td>';
-    html += '<td class="right">-</td>';
-    html += '<td class="right">-</td>';
-    html += '</tr>';
-  }
-  return new Handlebars.SafeString(html);
-});
+Handlebars.registerHelper("billEmptyRows", noPadding);
+Handlebars.registerHelper("taxEmptyRows", noPadding);
 
 /**
  * Compile a Handlebars template and merge with data.
@@ -169,7 +148,11 @@ export function mergeTemplate(htmlTemplate, data) {
   const compiled = Handlebars.compile(src);
   // Inject stamps unless the caller already supplied its own.
   const merged = { ...(data || {}), stamps: (data && data.stamps) || _activeStamps };
-  const html = compiled(merged);
+  // Repeat the signature at the bottom of every printed page. Done here rather
+  // than per template so print, the customer portal, the PDF export and the
+  // editor preview agree, and templates already saved in the database get the
+  // pagination fix without being rewritten. See utils/printLayout.js.
+  const html = applyPrintLayoutToHtml(compiled(merged));
   if (typeof window !== "undefined" && window.location?.origin) {
     const base = `<base href="${window.location.origin}/">`;
     return /<head[^>]*>/i.test(html)

@@ -1,7 +1,7 @@
 /**
  * Bill / Invoice starter templates — 15 archetypes for Pakistani FBR-compliant wholesale ERP.
  * Renders via Handlebars, prints to A4.
- * ONLY registered helpers used: fmtDate, fmt, fmtDec, nl2br, join, joinDates, emptyRows, math, gt, eq, or, inc
+ * ONLY registered helpers used: fmtDate, fmt, fmtDec, nl2br, join, joinDates, math, gt, eq, or, inc
  */
 
 export const billStarters = [
@@ -85,7 +85,6 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:90px">Unit Price</th><th style="width:95px">Amount</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -194,7 +193,6 @@ table.items th.c { text-align: center; }
   <thead><tr><th style="width:32px">S#</th><th>Description</th><th class="c" style="width:50px">Qty</th><th class="c" style="width:45px">UoM</th><th class="r" style="width:88px">Unit Price</th><th class="r" style="width:92px">Amount</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -290,7 +288,6 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
     <thead><tr><th style="width:32px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-      {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
   <div class="no-break">
@@ -386,7 +383,6 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
     <thead><tr><th style="width:32px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-      {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
   <div class="no-break">
@@ -486,7 +482,6 @@ table.items th.l { text-align: left; }
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:90px">Unit Price</th><th style="width:95px">Total</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -599,7 +594,6 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:50px">Qty</th><th style="width:45px">UoM</th><th style="width:90px">Unit Price</th><th style="width:95px">Total</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -689,7 +683,6 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
   <thead><tr><th style="width:26px">S#</th><th class="l">Description</th><th style="width:42px">Qty</th><th style="width:40px">UoM</th><th style="width:82px">Unit Price</th><th style="width:88px">Total</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 26 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -799,7 +792,6 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
       <thead><tr><th style="width:28px">S#</th><th class="l">Description</th><th style="width:44px">Qty</th><th style="width:42px">UoM</th><th style="width:84px">Unit Price</th><th style="width:90px">Total</th></tr></thead>
       <tbody>
         {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-        {{emptyRows (math 20 "-" items.length) 6}}
       </tbody>
     </table>
     <div class="no-break">
@@ -910,7 +902,6 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
     <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:92px">Total</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-      {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
   <div class="totals-box no-break">
@@ -1017,7 +1008,6 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -1118,7 +1108,6 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
     <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-      {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
   <div class="no-break">
@@ -1236,7 +1225,6 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
     <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-      {{emptyRows (math 20 "-" items.length) 6}}
     </tbody>
   </table>
   <div class="no-break">
@@ -1335,7 +1323,6 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -1436,7 +1423,6 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
   <thead><tr><th style="width:30px">S#</th><th class="l">Description</th><th style="width:48px">Qty</th><th style="width:44px">UoM</th><th style="width:88px">Unit Price</th><th style="width:94px">Total</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 6}}
   </tbody>
 </table>
 <div class="no-break">
@@ -1543,7 +1529,6 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
     <thead><tr><th style="width:28px">S#</th><th class="l">Item Type</th><th class="l">Description</th><th style="width:44px">Qty</th><th style="width:40px">UoM</th><th style="width:84px">Unit Price</th><th style="width:90px">Total</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c">{{this.sNo}}</td><td class="cell">{{this.itemTypeName}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c">{{this.quantity}}</td><td class="cell c">{{this.uom}}</td><td class="cell r">Rs {{fmt this.unitPrice}}</td><td class="cell r">Rs {{fmt this.lineTotal}}</td></tr>{{/each}}
-      {{emptyRows (math 18 "-" items.length) 7}}
     </tbody>
   </table>
   <div class="totals-section no-break">

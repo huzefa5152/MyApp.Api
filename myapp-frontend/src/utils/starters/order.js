@@ -97,7 +97,6 @@ tfoot td { font-style:italic; font-size:11px; color:#555; padding-top:4px; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 14 "-" items.length) 6}}
     </tbody>
   </table>
 
@@ -199,7 +198,6 @@ td { padding:8px; font-size:12px; border-bottom:1px solid #f0f0f0; color:#333; }
         <td class="c rem-cell">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 14 "-" items.length) 6}}
     </tbody>
   </table>
 
@@ -303,7 +301,6 @@ td.rem { font-weight:800; color:#0d3b72; }
           <td class="c rem">{{this.remainingQuantity}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 13 "-" items.length) 6}}
       </tbody>
     </table>
   </div>
@@ -412,7 +409,6 @@ tbody tr:nth-child(even) .rem-td { background:#00695c !important; color:#fff !im
           <td class="c rem-td">{{this.remainingQuantity}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 13 "-" items.length) 6}}
       </tbody>
     </table>
 
@@ -514,7 +510,6 @@ td.rem { font-weight:900; border:1.5px solid #000; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 15 "-" items.length) 6}}
     </tbody>
   </table>
 
@@ -627,7 +622,6 @@ tbody tr:nth-child(even) td.rem { background:#fef9e7 !important; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 13 "-" items.length) 6}}
     </tbody>
   </table>
 
@@ -728,7 +722,6 @@ tbody tr:nth-child(even) td.rem { background:#e8f0fe !important; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 20 "-" items.length) 7}}
     </tbody>
   </table>
 
@@ -832,7 +825,6 @@ tbody tr:nth-child(even) td.rem { background:#e8e8f0 !important; }
           <td class="c rem">{{this.remainingQuantity}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 13 "-" items.length) 6}}
       </tbody>
     </table>
 
@@ -944,7 +936,6 @@ tbody tr:nth-child(even) td.rem { background:#eaf1fb !important; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 13 "-" items.length) 6}}
     </tbody>
   </table>
   <div class="sig-row">
@@ -1052,7 +1043,6 @@ tbody tr:nth-child(even) td.rem { background:#d4f0dc !important; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 13 "-" items.length) 6}}
     </tbody>
   </table>
 
@@ -1161,7 +1151,6 @@ tbody tr:nth-child(even) td.rem { background:#fffbe6 !important; }
           <td class="c rem">{{this.remainingQuantity}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 13 "-" items.length) 6}}
       </tbody>
     </table>
 
@@ -1268,7 +1257,6 @@ tbody tr:nth-child(even) td.rem { background:#d1fafa !important; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 13 "-" items.length) 6}}
     </tbody>
   </table>
 
@@ -1371,7 +1359,6 @@ tbody tr:nth-child(even) td.rem { background:#ffe0d8 !important; }
           <td class="c rem">{{this.remainingQuantity}}</td>
         </tr>
       {{/each}}
-      {{emptyRows (math 12 "-" items.length) 6}}
       </tbody>
     </table>
   </div>
@@ -1485,7 +1472,6 @@ tbody tr:nth-child(even) td.rem { background:#e8ecf5 !important; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 13 "-" items.length) 6}}
     </tbody>
   </table>
 
@@ -1603,7 +1589,6 @@ tbody tr:nth-child(even) td.rem { background:#fffbe0 !important; }
         <td class="c rem">{{this.remainingQuantity}}</td>
       </tr>
     {{/each}}
-    {{emptyRows (math 15 "-" items.length) 6}}
     </tbody>
   </table>
   <div class="sig-row">

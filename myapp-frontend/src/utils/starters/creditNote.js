@@ -1,7 +1,7 @@
 /**
  * Starter templates for Credit Note — FBR digital-invoicing sales-return / adjustment documents.
  * Pakistani wholesale ERP, A4 print-ready, Handlebars merge fields.
- * Registered helpers: fmtDate, fmt, fmtDec, nl2br, richText, join, joinDates, emptyRows, math, inc, eq, gt, or
+ * Registered helpers: fmtDate, fmt, fmtDec, nl2br, richText, join, joinDates, math, inc, eq, gt, or
  * CreditNote merge fields: supplierName, supplierLogoPath, supplierAddress, supplierPhone, supplierNTN,
  *   supplierSTRN, buyerName, buyerAddress, buyerPhone, buyerNTN, buyerSTRN, invoiceNumber (the note's own
  *   number), date, subtotal, gstRate, gstAmount, grandTotal, amountInWords, originalInvoiceNumber,
@@ -111,7 +111,6 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 14 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -242,7 +241,6 @@ table.items thead th.left { text-align: left; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 14 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -369,7 +367,6 @@ tbody tr:nth-child(even) td { background: #f9eff0 !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 14 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -498,7 +495,6 @@ tbody tr:nth-child(even) td { background: #fdecea !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 14 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -615,7 +611,6 @@ table.items th.left { text-align: left; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 14 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -750,7 +745,6 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 12 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -871,7 +865,6 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -1006,7 +999,6 @@ tbody tr:nth-child(even) td { background: #f9edee !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 12 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -1132,7 +1124,6 @@ table.items th.left { text-align: left; }
         <td class="cell r">{{fmtDec this.gstAmount}}</td>
         <td class="cell r">{{fmtDec this.totalInclTax}}</td>
       </tr>{{/each}}
-      {{emptyRows (math 12 "-" items.length) 7}}
     </tbody>
     <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
   </table>
@@ -1271,7 +1262,6 @@ tbody tr:nth-child(even) td { background: #fdf1e7 !important; }
         <td class="cell r">{{fmtDec this.gstAmount}}</td>
         <td class="cell r">{{fmtDec this.totalInclTax}}</td>
       </tr>{{/each}}
-      {{emptyRows (math 12 "-" items.length) 7}}
     </tbody>
     <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
   </table>
@@ -1404,7 +1394,6 @@ tbody tr:nth-child(even) td { background: #faeded !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 12 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -1543,7 +1532,6 @@ tbody tr:nth-child(even) td { background: #fbe9e7 !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 12 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -1687,7 +1675,6 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 12 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -1821,7 +1808,6 @@ tbody tr:nth-child(even) td { background: #f7eced !important; }
       <td class="cell r">{{fmtDec this.gstAmount}}</td>
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
-    {{emptyRows (math 12 "-" items.length) 7}}
   </tbody>
   <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
 </table>
@@ -1971,7 +1957,6 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
         <td class="cell r">{{fmtDec this.gstAmount}}</td>
         <td class="cell r">{{fmtDec this.totalInclTax}}</td>
       </tr>{{/each}}
-      {{emptyRows (math 12 "-" items.length) 7}}
     </tbody>
     <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL CREDIT :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
   </table>
