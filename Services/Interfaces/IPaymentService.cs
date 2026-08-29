@@ -37,6 +37,13 @@ namespace MyApp.Api.Services.Interfaces
         /// previously-settled invoices'/bills' AmountPaid. Returns false if not found.</summary>
         Task<bool> DeleteAsync(int id);
 
+        /// <summary>Apply part of a receipt's unallocated balance (the customer's
+        /// advance) to one or more invoices. Only a non-cancelled Receipt may be
+        /// allocated. Reuses the create/update-path guards (cross-tenant, over-
+        /// allocation) and re-posts the GL so the advance leg shrinks by exactly
+        /// what A/R gains. Returns null if the payment is not found.</summary>
+        Task<PaymentDto?> AllocateAsync(int paymentId, List<CreatePaymentAllocationDto> lines);
+
         /// <summary>Advance a cheque's lifecycle (Pending → Deposited → Cleared /
         /// Bounced) without a full document edit — the PDC register action.</summary>
         Task<PaymentDto?> SetChequeStatusAsync(int id, string status);

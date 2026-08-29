@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
+using MyApp.Api.Models;
 using MyApp.Api.Models.Accounting;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
@@ -129,19 +130,16 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException("The selected adjustment account doesn't belong to this company.");
             }
 
-            AssertAllocationsFitAmount(dto);
+            AssertAllocationsFitAmount(dto, direction);
 
             // Period-close guard (GL lock date) before any writes.
             await _posting.AssertPeriodOpenAsync(companyId, dto.Date == default ? PakistanClock.Today : dto.Date);
 
             // Cross-tenant guard: every referenced document must belong to this
             // company (never trust the ids in the body — CLAUDE.md §1/§4).
-            var invoices = await _context.Invoices
-                .Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
+            var invoices = await AssertInvoicesBelongToCompanyAsync(companyId, dto.Allocations);
             var bills = await _context.PurchaseBills
                 .Where(b => billIds.Contains(b.Id)).ToListAsync();
-            if (invoices.Any(i => i.CompanyId != companyId) || invoices.Count != invoiceIds.Distinct().Count())
-                throw new InvalidOperationException("One or more invoices do not belong to this company.");
             if (bills.Any(b => b.CompanyId != companyId) || bills.Count != billIds.Distinct().Count())
                 throw new InvalidOperationException("One or more purchase bills do not belong to this company.");
 
@@ -183,20 +181,11 @@ namespace MyApp.Api.Services.Implementations
 
             // Over-allocation guard: a single document can't be paid beyond its
             // grand total. Sum this payment's lines per document, add to what's
-            // already paid, and reject anything over the total.
-            foreach (var grp in dto.Allocations.Where(a => a.InvoiceId.HasValue)
-                         .GroupBy(a => a.InvoiceId!.Value))
-            {
-                var inv = invoices.First(i => i.Id == grp.Key);
-                // Cap at the COLLECTIBLE (GrandTotal − withheld), not GrandTotal:
-                // the withheld slice is settled by the customer at invoice time,
-                // so only the reduced balance can be received.
-                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
-                var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount);
-                if (newTotal > collectible)
-                    throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {collectible - inv.AmountPaid:0.00}).");
-            }
+            // already paid, and reject anything over the total. (Cap at the
+            // COLLECTIBLE — GrandTotal − withheld — not GrandTotal: the withheld
+            // slice is settled by the customer at invoice time, so only the
+            // reduced balance can be received. See AssertNoInvoiceOverpayAsync.)
+            await AssertNoInvoiceOverpayAsync(dto.Allocations, invoices);
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue)
                          .GroupBy(a => a.PurchaseBillId!.Value))
             {
@@ -239,7 +228,7 @@ namespace MyApp.Api.Services.Implementations
                 BankAccountName = bankAccountName,
                 Method = string.IsNullOrWhiteSpace(dto.Method) ? "Cash" : dto.Method.Trim(),
                 Description = Trimmed(dto.Description),
-                Amount = ResolveAmount(dto),
+                Amount = ResolveAmount(dto, direction),
                 ChequeNumber = Trimmed(dto.ChequeNumber),
                 ChequeDate = dto.ChequeDate,
                 ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber),
@@ -335,13 +324,11 @@ namespace MyApp.Api.Services.Implementations
                 if (a.InvoiceId.HasValue) invoiceIds.Add(a.InvoiceId.Value);
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
             }
-            AssertAllocationsFitAmount(dto);
+            AssertAllocationsFitAmount(dto, direction);
             await AssertAllocationAccountsAsync(companyId, dto);
 
-            var invoices = await _context.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
+            var invoices = await AssertInvoicesBelongToCompanyAsync(companyId, dto.Allocations);
             var bills = await _context.PurchaseBills.Where(b => billIds.Contains(b.Id)).ToListAsync();
-            if (invoices.Any(i => i.CompanyId != companyId) || invoices.Count != invoiceIds.Distinct().Count())
-                throw new InvalidOperationException("One or more invoices do not belong to this company.");
             if (bills.Any(b => b.CompanyId != companyId) || bills.Count != billIds.Distinct().Count())
                 throw new InvalidOperationException("One or more purchase bills do not belong to this company.");
 
@@ -371,17 +358,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Over-allocation guard, EXCLUDING this payment's own current lines
             // (we're replacing them), so editing down/up stays within the total.
-            foreach (var grp in dto.Allocations.Where(a => a.InvoiceId.HasValue).GroupBy(a => a.InvoiceId!.Value))
-            {
-                var inv = invoices.First(i => i.Id == grp.Key);
-                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
-                var paidByOthers = await _context.PaymentAllocations
-                    .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
-                    .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
-                    throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {collectible - paidByOthers:0.00}).");
-            }
+            await AssertNoInvoiceOverpayAsync(dto.Allocations, invoices, excludePaymentId: id);
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = bills.First(b => b.Id == grp.Key);
@@ -413,7 +390,7 @@ namespace MyApp.Api.Services.Implementations
                 payment.ChequeNumber = Trimmed(dto.ChequeNumber);
                 payment.ChequeDate = dto.ChequeDate;
                 payment.ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber);
-                payment.Amount = ResolveAmount(dto);
+                payment.Amount = ResolveAmount(dto, direction);
 
                 // Replace allocation lines.
                 _context.PaymentAllocations.RemoveRange(payment.Allocations);
@@ -438,6 +415,110 @@ namespace MyApp.Api.Services.Implementations
                 // the ledger mirrors the edited allocations/date/bank account.
                 await _posting.PostPaymentAsync(payment);
 
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+
+            return await GetByIdAsync(payment.Id);
+        }
+
+        // ── Allocate (advance -> invoice) ───────────────────────────────────────
+
+        /// <summary>Apply part of a receipt's unallocated balance to invoices.
+        /// Reuses the create-path guards: each invoice must belong to the same
+        /// company, must not be over-paid, and the new lines plus the existing
+        /// ones may not exceed the receipt amount.</summary>
+        public async Task<PaymentDto?> AllocateAsync(int paymentId, List<CreatePaymentAllocationDto> lines)
+        {
+            var payment = await _repo.GetByIdAsync(paymentId);   // tracked, incl. allocations
+            if (payment == null) return null;
+            if (payment.Direction != PaymentDirection.Receipt)
+                throw new InvalidOperationException("Only a receipt can be allocated to invoices.");
+            if (payment.IsCancelled)
+                throw new InvalidOperationException("A cancelled receipt cannot be allocated.");
+            if (lines == null || lines.Count == 0)
+                throw new InvalidOperationException("Choose at least one invoice to allocate to.");
+            // Every line must target exactly one invoice — never a bill or a
+            // direct account (an advance is a Client's money; there is nothing
+            // else to allocate it to). Same "exactly one target" shape rule as
+            // Create/Update, narrowed to the one target Allocate accepts.
+            if (lines.Any(l => !l.InvoiceId.HasValue || l.PurchaseBillId.HasValue || l.AccountId.HasValue))
+                throw new InvalidOperationException("A receipt allocation must target a sales invoice.");
+            if (lines.Any(l => l.Amount < 0 || l.AdjustmentAmount < 0))
+                throw new InvalidOperationException("Allocation amounts cannot be negative.");
+            if (lines.Any(l => l.Amount + l.AdjustmentAmount <= 0))
+                throw new InvalidOperationException("Each allocation must apply a positive amount (cash and/or adjustment).");
+
+            // CASH only against the RECEIPT — see Global Constraints / the
+            // module docstring in test_customer_receipts_ledger.py.
+            // AdjustmentAmount is a non-cash write-off that settles the INVOICE,
+            // not the receipt, so it plays no part in "how much of this receipt
+            // is still unallocated" (using the settlement figure here would
+            // wrongly reject a legitimate allocation that carries a write-off).
+            var appliedCash = payment.Allocations.Sum(a => a.Amount);
+            var addingCash = lines.Sum(l => l.Amount);
+            if (appliedCash + addingCash > payment.Amount)
+                throw new InvalidOperationException(
+                    $"Only {payment.Amount - appliedCash:0.00} of this receipt is unallocated.");
+
+            // A settle-remainder adjustment needs a GL account (when the ledger
+            // is on), and that account must belong to this company — the same
+            // rule CreateAsync applies to its own adjustment lines.
+            var glEnabled = await _posting.IsEnabledAsync(payment.CompanyId);
+            var adjAccountIds = new HashSet<int>();
+            foreach (var l in lines)
+            {
+                if (l.AdjustmentAmount > 0)
+                {
+                    if (glEnabled && !l.AdjustmentAccountId.HasValue)
+                        throw new InvalidOperationException("Choose the account the adjustment posts to (e.g. Discount allowed, Bad debts written off, or another account).");
+                    if (l.AdjustmentAccountId.HasValue) adjAccountIds.Add(l.AdjustmentAccountId.Value);
+                }
+            }
+            if (adjAccountIds.Count > 0)
+            {
+                var validAdjAccounts = await _context.Accounts
+                    .Where(x => x.CompanyId == payment.CompanyId && adjAccountIds.Contains(x.Id))
+                    .Select(x => x.Id).ToListAsync();
+                if (adjAccountIds.Except(validAdjAccounts).Any())
+                    throw new InvalidOperationException("The selected adjustment account doesn't belong to this company.");
+            }
+
+            // Period-close guard before any writes — Allocate is a GL-affecting
+            // mutation on an EXISTING document (IPostingService.AssertPeriodOpenAsync:
+            // "Document services call this before any GL-affecting mutation"),
+            // exactly like Delete guards the stored Date before it removes one.
+            await _posting.AssertPeriodOpenAsync(payment.CompanyId, payment.Date);
+
+            // Same company, and no invoice pushed past its balance — shared with
+            // Create/Update rather than a third copy of either guard.
+            var invoices = await AssertInvoicesBelongToCompanyAsync(payment.CompanyId, lines);
+            await AssertNoInvoiceOverpayAsync(lines, invoices);
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var l in lines)
+                    payment.Allocations.Add(new PaymentAllocation
+                    {
+                        PaymentId = payment.Id,
+                        InvoiceId = l.InvoiceId,
+                        Amount = l.Amount,
+                        AdjustmentAmount = l.AdjustmentAmount,
+                        AdjustmentAccountId = l.AdjustmentAmount > 0 ? l.AdjustmentAccountId : null,
+                    });
+                await _context.SaveChangesAsync();
+
+                foreach (var invId in lines.Select(l => l.InvoiceId!.Value).Distinct())
+                    await RecomputeInvoiceAsync(invId);
+                await _context.SaveChangesAsync();
+
+                // Re-post: the advance leg shrinks by exactly what A/R gains.
+                await _posting.PostPaymentAsync(payment);
                 await tx.CommitAsync();
             }
             catch
@@ -547,19 +628,28 @@ namespace MyApp.Api.Services.Implementations
             dto.Allocations ??= new List<CreatePaymentAllocationDto>();
         }
 
-        /// <summary>Cash total of the document. Explicit when supplied; otherwise
-        /// Σ allocation cash, which is what every pre-2026-08-29 caller meant.</summary>
-        private static decimal ResolveAmount(CreatePaymentDto dto) =>
-            dto.Amount ?? dto.Allocations.Sum(a => a.Amount);
+        /// <summary>Cash total of the document. For a RECEIPT, explicit when
+        /// supplied — that's the whole point of the 2026-08-29 change: an
+        /// advance can exceed Σ allocations. For a PAYMENT (money-out), there is
+        /// no "advance to supplier" concept yet, so the override is ignored and
+        /// Amount is always derived — byte-for-byte the same stored value every
+        /// pre-2026-08-29 caller got, no matter what a caller now sends in
+        /// dto.Amount. (Without this gate, PostingService silently plugs the
+        /// uncovered remainder of a money-out payment to Suspense — an ungated
+        /// new capability nothing asked for and nothing tests.)</summary>
+        private static decimal ResolveAmount(CreatePaymentDto dto, PaymentDirection direction) =>
+            direction == PaymentDirection.Payment
+                ? dto.Allocations.Sum(a => a.Amount)
+                : dto.Amount ?? dto.Allocations.Sum(a => a.Amount);
 
-        /// <summary>Allocations may spend part of the receipt's CASH, but never
-        /// more than it — the difference is the advance, and it cannot be
-        /// negative. AdjustmentAmount is deliberately absent: it is a non-cash
-        /// write-off, so a 1000 receipt may legitimately clear an 1100 invoice
-        /// as 1000 cash + 100 written off.</summary>
-        private static void AssertAllocationsFitAmount(CreatePaymentDto dto)
+        /// <summary>Allocations may spend part of the document's CASH, but never
+        /// more than it — the difference is the advance (Receipt only — see
+        /// ResolveAmount), and it cannot be negative. AdjustmentAmount is
+        /// deliberately absent: it is a non-cash write-off, so a 1000 receipt
+        /// may legitimately clear an 1100 invoice as 1000 cash + 100 written off.</summary>
+        private static void AssertAllocationsFitAmount(CreatePaymentDto dto, PaymentDirection direction)
         {
-            var amount = ResolveAmount(dto);
+            var amount = ResolveAmount(dto, direction);
             var appliedCash = dto.Allocations.Sum(a => a.Amount);
             // Sign first: a negative amount would otherwise be reported as an
             // over-allocation ("0.00 is more than -5000.00"), which reads as
@@ -592,6 +682,61 @@ namespace MyApp.Api.Services.Implementations
                 .CountAsync(a => accountIds.Contains(a.Id) && a.CompanyId == companyId && a.IsActive);
             if (ok != accountIds.Count)
                 throw new InvalidOperationException("One or more allocation accounts do not belong to this company.");
+        }
+
+        /// <summary>Cross-tenant guard: every invoice an allocation line targets
+        /// must belong to this company (never trust ids in the body — CLAUDE.md
+        /// §1/§4). Shared by Create, Update and Allocate — was three near-copies
+        /// of the same invoice half of this check. Returns the loaded invoices
+        /// so callers don't reload them for the over-pay guard below.</summary>
+        private async Task<List<Invoice>> AssertInvoicesBelongToCompanyAsync(
+            int companyId, IEnumerable<CreatePaymentAllocationDto> lines)
+        {
+            var invoiceIds = lines.Where(a => a.InvoiceId.HasValue)
+                .Select(a => a.InvoiceId!.Value).Distinct().ToList();
+            var invoices = await _context.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
+            if (invoices.Any(i => i.CompanyId != companyId) || invoices.Count != invoiceIds.Count)
+                throw new InvalidOperationException("One or more invoices do not belong to this company.");
+            return invoices;
+        }
+
+        /// <summary>Per-invoice over-pay guard: an invoice's cash+adjustment
+        /// settled total may never exceed its COLLECTIBLE cap (GrandTotal −
+        /// withheld — the withheld slice is settled by the customer at invoice
+        /// time, so only the reduced balance can be received).
+        ///
+        /// Create and Allocate only ADD allocation lines, so "already paid" is
+        /// simply the invoice's current AmountPaid. Update REPLACES this
+        /// payment's own prior lines (delete-then-reinsert), so it passes
+        /// excludePaymentId to recompute what every OTHER payment settled —
+        /// otherwise this payment's own old contribution would be double-counted
+        /// against its own replacement lines.
+        ///
+        /// Wording matches each original call site exactly — a refactor, not a
+        /// redesign: "balance due" when adding fresh (Create/Allocate),
+        /// "available" when excluding self (Update).</summary>
+        private async Task AssertNoInvoiceOverpayAsync(
+            IEnumerable<CreatePaymentAllocationDto> lines, IReadOnlyCollection<Invoice> invoices,
+            int? excludePaymentId = null)
+        {
+            foreach (var grp in lines.Where(a => a.InvoiceId.HasValue).GroupBy(a => a.InvoiceId!.Value))
+            {
+                var inv = invoices.First(i => i.Id == grp.Key);
+                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+                var alreadyPaid = inv.AmountPaid;
+                if (excludePaymentId.HasValue)
+                {
+                    alreadyPaid = await _context.PaymentAllocations
+                        .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != excludePaymentId.Value && !pa.Payment.IsCancelled)
+                        .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
+                }
+                if (alreadyPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount) > collectible)
+                {
+                    var label = excludePaymentId.HasValue ? "available" : "balance due";
+                    throw new InvalidOperationException(
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} ({label} is {collectible - alreadyPaid:0.00}).");
+                }
+            }
         }
 
         // ── Recompute helpers ─────────────────────────────────────────────────

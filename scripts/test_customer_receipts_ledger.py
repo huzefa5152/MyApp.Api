@@ -33,6 +33,17 @@ Suites:
                                     thing to BOTH the allocations-optional test
                                     and the belongs-to-this-company guard
   9. Ledger integrity            -> trial balance balanced, advance account total
+  10. Allocate advance           -> POST /api/receipts/{id}/allocate applies part
+                                    of an existing advance to invoices raised
+                                    LATER; over-allocation past the remaining
+                                    unallocated cash, another company's invoice,
+                                    a money-out target and a cancelled receipt
+                                    are all rejected
+  11. Money-out Amount gate      -> Payment.Amount is authoritative for a
+                                    RECEIPT only (suite 1) — a money-out payment
+                                    cannot inflate it past Σ allocation cash on
+                                    EITHER create or edit; PostingService would
+                                    otherwise plug the gap to Suspense silently
 
 Runs against a fresh ephemeral GL-enabled company + client, plus a second
 company used only as the "other tenant" in suite 8. Both torn down at the end.
@@ -48,10 +59,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
+
+# Direct-SQL escape hatch for the one thing the API cannot do: Payment.IsCancelled
+# has no controller action (it's legacy-import-only — voided rows carried over
+# from Manager). Used ONLY by suite 10's cancelled-receipt case, and only when
+# --db is passed explicitly, so this script never fires a raw UPDATE against an
+# unintended database just because --base pointed somewhere unexpected.
+SQLCMD = r"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\sqlcmd.exe"
+SQL_SERVER = r"CRKRL-HUSSAHUZ1\MSSQLSERVER2"
 
 PKT = timezone(timedelta(hours=5))
 results: list[tuple[str, str, bool, str]] = []   # (suite, name, ok, reason)
@@ -130,6 +151,25 @@ def post_receipt(base, token, cid, body):
 
 def put_receipt(base, token, rid, body):
     return http("PUT", f"/api/payments/receipts/{rid}", base, token=token, body=body)
+
+
+def post_allocate(base, token, rid, lines):
+    """lines is a raw JSON array of {invoiceId, amount, ...} — the endpoint
+    takes List<CreatePaymentAllocationDto> directly, not a wrapped object."""
+    return http("POST", f"/api/receipts/{rid}/allocate", base, token=token, body=lines)
+
+
+def sql_cancel_payment(db, payment_id) -> bool:
+    """Flip Payment.IsCancelled via direct SQL. Returns False (never raises) if
+    --db wasn't supplied or sqlcmd isn't on this machine, so the caller can
+    treat the cancelled-receipt case as skippable rather than fatal."""
+    if not db or not os.path.exists(SQLCMD):
+        return False
+    out = subprocess.run(
+        [SQLCMD, "-S", SQL_SERVER, "-d", db, "-E", "-C", "-N", "-I", "-Q",
+         f"UPDATE Payments SET IsCancelled = 1 WHERE Id = {int(payment_id)};"],
+        capture_output=True, text=True, timeout=30)
+    return out.returncode == 0
 
 
 def get_invoice(base, token, invoice_id):
@@ -463,6 +503,129 @@ def suite_9_ledger(base, token, cid, advance_acct):
               bal is not None and eq(abs(bal), 1510000), f"balance = {bal}")
 
 
+def suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc_acct, db):
+    """POST /api/receipts/{id}/allocate — apply part of an existing advance to
+    invoices raised AFTER the receipt was taken (Task 4). Shares this file's
+    cash-vs-settlement invariant: the guard against the RECEIPT is Σ a.Amount
+    only (no AdjustmentAmount), so it must not reject cash+write-off lines."""
+    suite = "10. Allocate advance to invoices"
+    print(f"\n=== {suite} ===")
+
+    st, rcp = post_receipt(base, token, cid, receipt_body(client_id, amount=5000000))
+    if not check(suite, "5,000,000 advance receipt created", st in (200, 201),
+                 f"got {st} {err_of(rcp)}"):
+        return
+    rid = rcp["id"]
+    check(suite, "unallocatedAmount starts at 5,000,000",
+          eq(rcp.get("unallocatedAmount"), 5000000), f"unallocatedAmount = {rcp.get('unallocatedAmount')}")
+
+    inv = make_invoice(base, token, cid, client_id, item_type_id, 300000)
+    if not check(suite, "300000 invoice created (after the receipt)", inv is not None,
+                 "invoice create failed"):
+        return
+
+    st, r = post_allocate(base, token, rid, [{"invoiceId": inv["id"], "amount": 300000}])
+    if not check(suite, "allocating 300000 of the advance is accepted", st == 200, f"got {st} {err_of(r)}"):
+        return
+    check(suite, "unallocatedAmount drops by exactly the cash applied (4,700,000)",
+          eq(r.get("unallocatedAmount"), 4700000), f"unallocatedAmount = {r.get('unallocatedAmount')}")
+    after_inv = get_invoice(base, token, inv["id"])
+    check(suite, "invoice amountPaid rises by exactly the settled amount (300000)",
+          eq(after_inv.get("amountPaid"), 300000), f"amountPaid = {after_inv.get('amountPaid')}")
+
+    # Over-allocating beyond the remaining unallocated cash (4,700,000) is rejected.
+    inv2 = make_invoice(base, token, cid, client_id, item_type_id, 5000000)
+    if inv2:
+        st, r = post_allocate(base, token, rid, [{"invoiceId": inv2["id"], "amount": 4800000}])
+        check(suite, "allocating beyond the remaining unallocated cash is rejected (400)",
+              st == 400 and "unallocated" in err_of(r).lower(), f"got {st} {err_of(r)}")
+        st, still = http("GET", f"/api/payments/receipts/{rid}", base, token=token)
+        still = still if isinstance(still, dict) else {}
+        check(suite, "the rejected over-allocation changed nothing (still 4,700,000 unallocated)",
+              eq(still.get("unallocatedAmount"), 4700000), f"unallocatedAmount = {still.get('unallocatedAmount')}")
+
+    # Allocating to another company's invoice is rejected — cross-tenant guard,
+    # shared with Create/Update via AssertInvoicesBelongToCompanyAsync.
+    foreign_inv = make_invoice(base, token, foreign["company_id"], foreign["client_id"], item_type_id, 50000)
+    if foreign_inv:
+        st, r = post_allocate(base, token, rid, [{"invoiceId": foreign_inv["id"], "amount": 50000}])
+        check(suite, "allocating to another company's invoice is rejected (400)",
+              st == 400 and "belong to this company" in err_of(r), f"got {st} {err_of(r)}")
+
+    # Money-out cannot be allocated to an invoice — only a Receipt qualifies.
+    st, pay = http("POST", f"/api/payments/payments/company/{cid}", base, token=token, body={
+        "direction": "Payment", "date": today_iso(), "contactType": "Other",
+        "contactId": None, "method": "Cash",
+        "allocations": [{"accountId": disc_acct, "amount": 5000}]})
+    if check(suite, "money-out payment created (for the negative test)", st in (200, 201),
+             f"got {st} {err_of(pay)}"):
+        st, r = post_allocate(base, token, pay["id"], [{"invoiceId": inv["id"], "amount": 1000}])
+        check(suite, "a money-out payment cannot be allocated to an invoice (400)",
+              st == 400 and "only a receipt" in err_of(r).lower(), f"got {st} {err_of(r)}")
+
+    # A cancelled receipt cannot be allocated. Payment.IsCancelled has no API
+    # (legacy-import-only), so this is exercised via direct SQL, opt-in via --db.
+    st, rcp2 = post_receipt(base, token, cid, receipt_body(client_id, amount=100000))
+    if check(suite, "second advance receipt created (for the cancelled-receipt test)",
+             st in (200, 201), f"got {st} {err_of(rcp2)}"):
+        if sql_cancel_payment(db, rcp2["id"]):
+            inv3 = make_invoice(base, token, cid, client_id, item_type_id, 10000)
+            if inv3:
+                st, r = post_allocate(base, token, rcp2["id"], [{"invoiceId": inv3["id"], "amount": 10000}])
+                check(suite, "a cancelled receipt cannot be allocated (400)",
+                      st == 400 and "cancelled" in err_of(r).lower(), f"got {st} {err_of(r)}")
+        else:
+            print("  SKIP - 'a cancelled receipt cannot be allocated': "
+                  "pass --db <name> (direct-SQL escape hatch; no API sets IsCancelled)")
+
+
+def suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc_acct):
+    """2026-08-30: Payment.Amount became authoritative (suite 1) without being
+    gated to Direction == Receipt, so a money-out payload could declare an
+    Amount above its allocation cash total — PostingService's advance leg is
+    skipped for money-out (isEqReceipt false), so the uncovered remainder was
+    silently plugged to Suspense. No pre-existing caller could hit this (the
+    field is new), but it contradicted the plan's money-out-byte-for-byte-
+    unchanged constraint and nothing tested it. Fixed by making ResolveAmount
+    IGNORE dto.Amount for Direction == Payment and always derive Σ allocations —
+    the same value every pre-2026-08-29 caller got, no matter what a caller now
+    sends. Applied identically on Create and Update."""
+    suite = "11. Money-out Amount gate"
+    print(f"\n=== {suite} ===")
+
+    st, pay = http("POST", f"/api/payments/payments/company/{cid}", base, token=token, body={
+        "direction": "Payment", "date": today_iso(), "contactType": "Supplier",
+        "contactId": supplier_id, "method": "Cash", "amount": 999999,
+        "allocations": [{"accountId": disc_acct, "amount": 7000}]})
+    ok = check(suite, "money-out with amount far above the allocation cash total is accepted (not rejected)",
+               st in (200, 201), f"got {st} {err_of(pay)}")
+    if ok:
+        check(suite, "the inflated amount is IGNORED — stored amount is the allocation cash total (7000)",
+              eq(pay.get("amount"), 7000), f"amount = {pay.get('amount')}")
+        check(suite, "unallocatedAmount is 0 — no advance concept for money-out",
+              eq(pay.get("unallocatedAmount"), 0), f"unallocatedAmount = {pay.get('unallocatedAmount')}")
+
+    # A normal money-out payment (amount == allocation cash total) is unaffected.
+    st, pay2 = http("POST", f"/api/payments/payments/company/{cid}", base, token=token, body={
+        "direction": "Payment", "date": today_iso(), "contactType": "Supplier",
+        "contactId": supplier_id, "method": "Cash", "amount": 3000,
+        "allocations": [{"accountId": disc_acct, "amount": 3000}]})
+    ok2 = check(suite, "a normal money-out payment (amount == allocation total) is unaffected",
+                st in (200, 201) and eq(pay2.get("amount"), 3000),
+                f"got {st} amount={pay2.get('amount') if isinstance(pay2, dict) else pay2}")
+
+    # The Update (edit) path must not be able to inflate it either — the fix
+    # was applied to BOTH ResolveAmount call sites, not just Create's.
+    if ok2:
+        st, edited = http("PUT", f"/api/payments/payments/{pay2['id']}", base, token=token, body={
+            "direction": "Payment", "date": today_iso(), "contactType": "Supplier",
+            "contactId": supplier_id, "method": "Cash", "amount": 999999,
+            "allocations": [{"accountId": disc_acct, "amount": 3000}]})
+        check(suite, "editing money-out with an inflated amount is also ignored (still 3000)",
+              st == 200 and eq(edited.get("amount"), 3000),
+              f"got {st} amount={edited.get('amount') if isinstance(edited, dict) else edited}")
+
+
 # ── Setup / teardown ───────────────────────────────────────────────
 def make_company(base, token, name, gl=True):
     st, company = http("POST", "/api/companies", base, token=token, body={
@@ -545,6 +708,10 @@ def main() -> int:
     p.add_argument("--admin-pw", default="admin123")
     p.add_argument("--keep", action="store_true",
                    help="Leave the ephemeral company in the DB after the run.")
+    p.add_argument("--db", default=None,
+                   help="Database name for the direct-SQL escape hatch suite 10 "
+                        "needs to flip Payment.IsCancelled (no API sets it). "
+                        "Omit to skip only that one case.")
     args = p.parse_args()
     base = args.base
 
@@ -572,6 +739,8 @@ def main() -> int:
         suite_7_edit(base, token, cid, client_id, item_type_id, money_out)
         suite_8_contact_type(base, token, cid, client_id, supplier_id, foreign, disc)
         suite_9_ledger(base, token, cid, advance)
+        suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc, args.db)
+        suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 

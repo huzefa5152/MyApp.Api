@@ -883,6 +883,59 @@ s, _ = request("GET", "/api/hscodes?search=6109&take=5", token=tokens["alice"])
 check(suite12, "alice searches the HS master with no companyId", s == 200, f"got {s}")
 
 
+# ── Suite 13: receipt-allocate tenant guard (2026-08-30) ──────
+# POST /api/receipts/{id}/allocate is id-based, like the print-template and
+# copy-document guards above: it loads the payment then asserts access against
+# its STORED CompanyId, never a companyId in the body. alice holds Administrator
+# RBAC (so accounting.receipts.create passes) but has no UserCompany row for
+# Beta, so only the tenant guard can produce the 403 here.
+print("\n  Suite 13 — receipt-allocate tenant guard")
+suite13a = "receipt-allocate tenant guard"
+status, alloc_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Allocate Client", "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": "0000004", "cnic": "0000004000004",
+    "strn": "0000004000004", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta allocate client: {status} {alloc_client}"
+
+status, beta_receipt = request("POST", f"/api/payments/receipts/company/{beta['id']}", token=admin, body={
+    "direction": "Receipt", "date": "2026-08-30", "contactType": "Client",
+    "contactId": alloc_client["id"], "method": "Cash", "amount": 500000, "allocations": [],
+})
+assert status in (200, 201), f"seed beta receipt: {status} {beta_receipt}"
+
+status, its13 = request("GET", "/api/itemtypes", token=admin)
+its13_rows = its13 if isinstance(its13, list) else ((its13 or {}).get("items") or (its13 or {}).get("data") or [])
+alloc_item_type_id = its13_rows[0]["id"] if its13_rows else None
+status, beta_invoice = request("POST", "/api/invoices/standalone", token=admin, body={
+    "companyId": beta["id"], "clientId": alloc_client["id"], "date": "2026-08-30", "gstRate": 18,
+    "items": [{"description": "Allocate Bait", "quantity": 1, "uom": "Numbers, pieces, units",
+               "unitPrice": 100000, "itemTypeId": alloc_item_type_id}],
+})
+assert status in (200, 201), f"seed beta invoice: {status} {beta_invoice}"
+
+# alice (Alpha only) tries to allocate Beta's own advance to Beta's own invoice —
+# both documents are entirely within Beta; only the tenant guard stands between
+# her and them.
+s, _ = request("POST", f"/api/receipts/{beta_receipt['id']}/allocate", token=tokens["alice"],
+               body=[{"invoiceId": beta_invoice["id"], "amount": 50000}])
+status_check(suite13a, "alice POST /receipts/{betaReceiptId}/allocate", s, 403)
+
+# admin (both tenants) can allocate it for real — sanity check the guard isn't
+# just failing every request outright.
+s, allocated = request("POST", f"/api/receipts/{beta_receipt['id']}/allocate", token=admin,
+                        body=[{"invoiceId": beta_invoice["id"], "amount": 50000}])
+check(suite13a, "admin allocate 200 + unallocatedAmount drops to 450000",
+      s == 200 and isinstance(allocated, dict)
+      and abs(float(allocated.get("unallocatedAmount", -1)) - 450000) < 0.01,
+      f"status {s}, body {allocated}")
+
+# Cleanup (invoice/payment before the client — Restrict FKs).
+request("DELETE", f"/api/invoices/{beta_invoice['id']}", token=admin)
+request("DELETE", f"/api/payments/receipts/{beta_receipt['id']}", token=admin)
+request("DELETE", f"/api/clients/{alloc_client['id']}", token=admin)
+
+
 # ── Suite 13: bulk client import ─────────────────────────────────────
 # The uploaded sheet never carries a company id — it comes from the request —
 # so the only thing between a user and another tenant's customer list is the

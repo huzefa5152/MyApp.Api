@@ -78,6 +78,32 @@ namespace MyApp.Api.Controllers
         [HasPermission("accounting.receipts.delete")]
         public Task<IActionResult> DeleteReceipt(int id) => Delete(id, PaymentDirection.Receipt);
 
+        /// <summary>Apply a receipt's unallocated balance (the customer's advance)
+        /// to one or more of that customer's invoices. Route is absolute
+        /// (POST /api/receipts/{id}/allocate, not under /api/payments) to match
+        /// the ledger feature's URL shape; permission is accounting.receipts.create
+        /// (money-in) — this can never touch a money-out Payment.</summary>
+        [HttpPost("~/api/receipts/{id}/allocate")]
+        [HasPermission("accounting.receipts.create")]
+        public async Task<ActionResult<PaymentDto>> Allocate(int id, [FromBody] List<CreatePaymentAllocationDto> lines)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            // Tenant guard reads CompanyId off the STORED payment — never the body.
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.AllocateAsync(id, lines);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Allocate receipt {Id} failed", id);
+                return StatusCode(500, new { error = "Could not allocate the receipt. Please try again." });
+            }
+        }
+
         // ── Payments (money out — settle purchase bills) ──────────────────────
 
         [HttpGet("payments/company/{companyId}/paged")]
