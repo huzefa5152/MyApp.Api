@@ -11,6 +11,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using MyApp.Api.Data;
 using MyApp.Api.Helpers;
+using MyApp.Api.Models.Accounting;
 using MyApp.Api.Repositories.Implementations;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Middleware;
@@ -1921,30 +1922,57 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // One-time: every company that already has a chart of accounts gains the
-    // customer-advance control account added to CoaPresetSeeder (2026-08-29).
-    // Re-running the wholesale preset seeder is safe for a company that
-    // already has a chart — every group/account it creates is looked up by a
-    // stable "seed:*" ExternalRef first, so re-seeding an existing company
-    // only adds whatever is still missing (here: just "Advance from
-    // Customers"); nothing is duplicated. Idempotent via the AuditLog marker
-    // below, same convention as the backfills above.
+    // One-time: every company that already has a chart of accounts, but is
+    // missing the customer-advance control account added to CoaPresetSeeder
+    // (2026-08-29), gains exactly that one row — nothing else. This does NOT
+    // call SeedWholesaleAsync: re-running the full preset seeder would also
+    // recreate ANY other preset account a company happens to be missing
+    // (e.g. the Aug-7 settlement accounts for a tenant created before that
+    // commit, or one whose chart was customised since) — a behaviour change
+    // this task must not cause. Instead it inserts a single Account row
+    // directly, using the same "seed:*" ExternalRef convention as the
+    // seeder, so a later SeedWholesaleAsync recognises it and will not
+    // double-create it. Idempotent via the AuditLog marker below, same
+    // convention as the backfills above.
     if (!db.AuditLogs.Any(a => a.ExceptionType == "CUSTOMER_ADVANCES_BACKFILL_V1"))
     {
         try
         {
-            var coaSeeder = scope.ServiceProvider.GetRequiredService<ICoaPresetSeeder>();
+            var accountRepo = scope.ServiceProvider.GetRequiredService<IAccountRepository>();
             var companyIds = await db.Accounts.AsNoTracking()
                 .Select(a => a.CompanyId).Distinct().ToListAsync();
+            var added = 0;
             foreach (var companyId in companyIds)
             {
-                await coaSeeder.SeedWholesaleAsync(companyId);
+                var existing = await accountRepo.GetAccountByExternalRefAsync(companyId, "seed:customer_advances");
+                if (existing != null) continue;
+
+                var liabilities = await accountRepo.GetGroupByExternalRefAsync(companyId, "seed:liabilities");
+                if (liabilities == null)
+                {
+                    Log.Warning("Customer-advances backfill: company {CompanyId} has no seed:liabilities group — skipped.", companyId);
+                    continue;
+                }
+
+                await accountRepo.AddAccountAsync(new Account
+                {
+                    CompanyId = companyId,
+                    Name = "Advance from Customers",
+                    AccountGroupId = liabilities.Id,
+                    AccountType = AccountType.Liability,
+                    IsControlAccount = true,
+                    ControlType = ControlType.CustomerAdvances,
+                    IsActive = true,
+                    Position = await accountRepo.NextAccountPositionAsync(liabilities.Id),
+                    ExternalRef = "seed:customer_advances",
+                });
+                added++;
             }
 
             db.Database.ExecuteSqlRaw(
                 "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
                 "VALUES ('Info', 'CUSTOMER_ADVANCES_BACKFILL_V1', {0}, 'STARTUP', '/seed/accounts/customer-advances', 200, SYSUTCDATETIME())",
-                $"Customer-advances control account backfilled across {companyIds.Count} compan(y/ies) with an existing chart.");
+                $"Customer-advances control account added for {added} of {companyIds.Count} {(companyIds.Count == 1 ? "company" : "companies")} with an existing chart.");
         }
         catch (Exception ex)
         {
