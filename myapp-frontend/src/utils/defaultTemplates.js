@@ -8,8 +8,13 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
 <style>
   a { color: inherit !important; text-decoration: none !important; }
   @media print {
+    /* One page box for every page. Blink positions a repeated position:fixed
+       element — the page-bottom signature, see utils/printLayout.js — using the
+       FIRST page's box, so an @page:first that changed the vertical margin
+       pushed the signature partly off every later sheet. The 10mm top inset
+       page 1 used to get from the body padding now comes from the page margin
+       instead, which leaves page 1 identical and every page consistent. */
     @page { size: A4; margin: 10mm 0 0 0; }
-    @page:first { margin: 0; }
     html, body { height: 100%; margin: 0; }
     .footer-section { page-break-inside: avoid; }
   }
@@ -21,7 +26,7 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
   html, body { height: 100%; }
   body { font-family: "Times New Roman", Times, serif; font-size: 16px; color: #000;
          display: flex; flex-direction: column; min-height: 100vh;
-         padding: 10mm 12mm; }
+         padding: 0 12mm 10mm; }
   .main-content { flex: 1; }
   .footer-section { margin-top: auto; }
   .header-grid { display: flex; justify-content: space-between; }
@@ -88,7 +93,6 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
       <td class="cell item">{{{richText this.description}}}</td>
     </tr>
     {{/each}}
-    {{emptyRows (math 15 "-" items.length) 2}}
   </tbody>
 </table>
 </div>
@@ -264,7 +268,6 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
       <td class="cell r">Rs &nbsp; {{fmt this.lineTotal}}</td>
     </tr>
     {{/each}}
-    {{billEmptyRows (math 22 "-" items.length)}}
   </tbody>
 </table>
 
@@ -477,7 +480,6 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>
     {{/each}}
-    {{taxEmptyRows (math 20 "-" items.length)}}
   </tbody>
   <tfoot>
     <tr class="total-row">

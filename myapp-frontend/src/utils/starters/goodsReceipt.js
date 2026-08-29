@@ -6,7 +6,7 @@
  * supplierChallanNumber, purchaseBillNumber, site, status,
  * items[] (sNo, itemTypeName, description, quantity, unit).
  * Use only registered helpers: fmtDate, fmt, fmtDec, nl2br, richText, join,
- * joinDates, emptyRows, math, inc, eq, gt, or, #each, #if.
+ * joinDates, math, inc, eq, gt, or, #each, #if.
  */
 
 export const goodsReceiptStarters = [
@@ -71,7 +71,6 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
   <thead><tr><th class="n">S#</th><th class="c">Qty</th><th>Description of Goods</th><th class="type-col">Type</th><th class="c">Unit</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell n">{{inc @index}}</td><td class="cell c">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell type-col">{{#if this.itemTypeName}}{{this.itemTypeName}}{{else}}&mdash;{{/if}}</td><td class="cell c">{{this.unit}}</td></tr>{{/each}}
-    {{emptyRows (math 15 "-" items.length) 5}}
   </tbody>
 </table>
 <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -147,7 +146,6 @@ td.c { text-align: center; }
   <thead><tr><th class="c n">#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-    {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
 <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -226,7 +224,6 @@ tbody tr:nth-child(even) td { background: #eef2f9 !important; }
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -311,7 +308,6 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -382,7 +378,6 @@ td.c { text-align: center; }
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-    {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
 <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -462,7 +457,6 @@ tbody tr:nth-child(even) td { background: #fdf8ee !important; }
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-    {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
 <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -534,7 +528,6 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-    {{emptyRows (math 20 "-" items.length) 4}}
   </tbody>
 </table>
 <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -610,7 +603,6 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -687,7 +679,6 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="recv-box">Received the above goods in good order &amp; condition.</div>
@@ -762,7 +753,6 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-    {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
 <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -844,7 +834,6 @@ tbody tr:nth-child(odd) td { background: #fff !important; }
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -924,7 +913,6 @@ tbody tr:nth-child(even) td { background: #eceff1 !important; }
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -1003,7 +991,6 @@ tbody tr:nth-child(even) td { background: #e8edf5 !important; }
   <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
   <tbody>
     {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-    {{emptyRows (math 15 "-" items.length) 4}}
   </tbody>
 </table>
 <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -1078,7 +1065,6 @@ tbody tr:nth-child(even) td { background: #f5f7f9 !important; }
     <thead><tr><th class="c n">S#</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="received">Received the above goods in good order &amp; condition.</div>
@@ -1161,7 +1147,6 @@ table.items td.c { text-align: center; }
     <thead><tr><th class="c n">S.No.</th><th class="c qty">Qty</th><th>Description of Goods</th><th class="c unit">Unit</th></tr></thead>
     <tbody>
       {{#each items}}<tr><td class="cell c n">{{inc @index}}</td><td class="cell c qty">{{this.quantity}}</td><td class="cell">{{{richText this.description}}}</td><td class="cell c unit">{{this.unit}}</td></tr>{{/each}}
-      {{emptyRows (math 15 "-" items.length) 4}}
     </tbody>
   </table>
   <div class="recv-row">Received the above goods in good order &amp; condition.</div>

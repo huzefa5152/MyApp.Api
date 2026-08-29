@@ -289,6 +289,15 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-29 — Printed documents: signature at the foot of every page, and no more filler rows
+
+- **The signature block now prints at the bottom of every page.** Before, it only appeared on the last page of a document, part-way up — so a two-page invoice had no signature line at all on page 1, and a long one had none on pages 1 and 2. Every document type is covered: bill, tax invoice, delivery challan, sales quote, sales order, credit and debit note, purchase bill, goods receipt, and the receipt, payment, transfer, journal and withholding-tax vouchers.
+- **The empty rows after the last line item are gone.** Item tables were padded out to a fixed row count (18, 20, 22 rows depending on the template), so a three-line invoice printed with seventeen blank ruled rows under it. Tables now print exactly the lines the document has, and the signature is still held at the foot of the page.
+- **Line items can never run underneath the signature.** Each page reserves exactly the room the signature block needs — measured from the block itself, so it is right whether or not your company has a stamp image on it.
+- **Column headings now repeat on continuation pages.** Some templates dropped the table header on page 2; a multi-page document keeps its headings throughout.
+- Totals, amount in words and the FBR digital-invoice panel still print once, after the items, exactly as before — only the signature repeats. Existing template designs, fonts, colours, logos and stamps are unchanged, and the fix applies to templates you have already saved as well as to every starter design, so anything created from now on behaves the same way.
+- Also applies to **Export PDF**, not just Print.
+
 ### 2026-08-29 — Trimmed the sidebar to the tabs this deployment uses
 
 - **Eight sidebar tabs are hidden**: Sales Quotes, Sales Orders and Import Challans (Sales); FBR Settings, FBR Sandbox and FBR Monitor (Settings); Data Migration and Manager.io Import (Administration). The section counts next to each heading follow suit.

@@ -70,8 +70,10 @@ merge fields for the dynamic parts.
   thousands), `fmtDec` (2-dp), `fmtQty` (thousands sep, keeps decimals only when
   present: 1,000 / 500 / 2.5 — use for item quantities), `nl2br`, `richText`
   (allows `<b>/<i>/<u>`+`<br>`, XSS-safe — use `{{{richText x}}}`), `join`, `joinDates`,
-  `emptyRows`, `billEmptyRows`, `taxEmptyRows`, `math` (only `+`/`-`), `gt`, `eq`, `or`,
-  `uniqueTypes`, `inc`. Plus built-in `{{#each}}`, `{{#if}}`, `{{else}}`.
+  `math` (only `+`/`-`), `gt`, `eq`, `or`, `uniqueTypes`, `inc`.
+  Plus built-in `{{#each}}`, `{{#if}}`, `{{else}}`.
+  `emptyRows` / `billEmptyRows` / `taxEmptyRows` are still registered but are
+  **no-ops** — they used to pad the item table with blank rows; see §11.
   Note `{{#if x}}` treats `0` and `""` as falsy — handy to hide a zero tax row or a
   blank debit/credit cell.
 - **Endpoints** (`Controllers/PrintTemplatesController.cs`, perm `printtemplates.manage.*`):
@@ -280,3 +282,69 @@ user's **exported PDF** as the layout source — it's the true render.
 **When a new PDF arrives:** extract → identify type+brand → read the DTO → map fields
 (ask on any gap per §6) → author (§4) → render_check → browser-assert → backup+push →
 report. Keep it pixel-faithful; be honest about what our data can't render.
+
+---
+
+## 11. Pagination: the signature at the bottom of every page
+
+Since 2026-08-29 the signature is pinned by the **renderer**, not by the
+template. `myapp-frontend/src/utils/printLayout.js` runs inside `mergeTemplate()`
+and, for every document, wraps the signature block in a
+`position: fixed; bottom: 0` element and drops a hidden clone of it into the
+line-item table's `<tfoot>`. Print, the customer portal, the PDF export and the
+editor preview all go through that one path.
+
+**Do not re-implement any of this in a template.** In particular:
+
+- **No blank-row padding.** `emptyRows` / `billEmptyRows` / `taxEmptyRows` are
+  registered no-ops kept only so the templates already in the database still
+  compile. Never call them in new work — the table prints the rows the document
+  actually has.
+- **No `margin-top: auto` sticky footer.** `html,body{height:100%}` +
+  `body{display:flex;flex-direction:column;min-height:100vh}` +
+  `.footer{margin-top:auto}` pins the signature on page 1 only; on a longer
+  document it printed once, partway up the LAST page. printLayout neutralises
+  the idiom, so it is dead weight.
+- **No hand-rolled reserve** — a `<tfoot>` spacer row, a `.footer-gap{height:95px}`,
+  a `position:absolute; bottom:0` footer. The reservation is a clone of the real
+  signature, so it is already exactly the right height, stamp or no stamp.
+- **One page box.** Never let `@page:first` change a *vertical* margin. Blink
+  positions a repeated fixed element using the FIRST page's box, so a different
+  top margin on page 1 pushes the signature partly off every later sheet
+  (measured: page 2 kept "Thank you for your business!" and lost both signature
+  lines). Differing *horizontal* margins are fine. If page 1 needs a smaller top
+  inset, take it off the body padding instead — `body{padding: 0 12mm 10mm}` with
+  `@page{margin:10mm 0 0 0}` gives page 1 the same 10mm it had before and every
+  page the same box.
+
+Name the signature block `class="print-signature"` in new templates. The legacy
+conventions (`.sig-row`, `.sigs`, `.sig-block`, `.sign`, `.footer-sect`, …) are
+still detected, but the explicit class removes the guesswork.
+
+### Verifying
+
+```bash
+# 1. dump the templates you want to check as <id>_<companyId>_<Type>.html
+#    (production rows, or the whole starter catalog:)
+node --import ./scripts/print_templates/register-hooks.mjs \
+     scripts/print_templates/dump_starters.mjs /tmp/starters
+
+# 2. render each at several line counts, with the real transform applied in-page
+node --import ./scripts/print_templates/register-hooks.mjs \
+     scripts/print_templates/pagination_render.mjs /tmp/starters /tmp/cases 1,3,20,60,120
+
+# 3. print every case through real Chrome and measure the page geometry
+python scripts/verify_print_pagination.py /tmp/cases --jobs 7
+```
+
+Step 3 prints each case with Chrome's `--print-to-pdf` — the same Blink print
+pipeline `window.print()` uses — and asserts, per page, that the signature is
+present, sits at the page bottom at a consistent offset, has no line item
+underneath it, and that no filler rows were emitted. `--reuse-pdf` re-measures
+without reprinting; `--baseline` measures the pre-fix behaviour instead.
+
+`scripts/print_templates/build_domparser_check.mjs` covers the other entry point
+— `applyPrintLayoutToHtml()`, the string/DOMParser path `mergeTemplate()` calls —
+over every template at once, and is much faster than the PDF run. Node has no
+DOMParser, so open the page it writes in a browser (or headless Chrome with
+`--dump-dom`) and read the summary.

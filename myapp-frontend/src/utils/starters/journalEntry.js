@@ -7,7 +7,7 @@
  * reference, entryNo, date, narration, totalDebit, totalCredit,
  * lines[] (sNo, accountCode, accountName, description, debit, credit).
  * Use only registered helpers: fmt, fmtDate, fmtDec, nl2br, richText, inc,
- * math, eq, gt, or, emptyRows, #each, #if, #unless.
+ * math, eq, gt, or, #each, #if, #unless.
  */
 
 export const journalEntryStarters = [
@@ -71,7 +71,6 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
   <thead><tr><th class="c n">S#</th><th class="code">Account Code</th><th>Account</th><th>Description</th><th class="money">Debit</th><th class="money">Credit</th></tr></thead>
   <tbody>
     {{#each lines}}<tr><td class="c n">{{inc @index}}</td><td>{{this.accountCode}}</td><td>{{this.accountName}}</td><td>{{{richText this.description}}}</td><td class="money">{{#if this.debit}}{{fmt this.debit}}{{/if}}</td><td class="money">{{#if this.credit}}{{fmt this.credit}}{{/if}}</td></tr>{{/each}}
-    {{emptyRows (math 10 "-" lines.length) 6}}
     <tr class="total"><td class="lbl" colspan="4">TOTAL</td><td class="money">Rs {{fmt totalDebit}}</td><td class="money">Rs {{fmt totalCredit}}</td></tr>
   </tbody>
 </table>
@@ -150,7 +149,6 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
   <thead><tr><th class="c n">#</th><th class="code">Code</th><th>Account</th><th>Description</th><th class="money">Debit</th><th class="money">Credit</th></tr></thead>
   <tbody>
     {{#each lines}}<tr><td class="c n">{{inc @index}}</td><td>{{this.accountCode}}</td><td>{{this.accountName}}</td><td>{{{richText this.description}}}</td><td class="money">{{#if this.debit}}{{fmt this.debit}}{{/if}}</td><td class="money">{{#if this.credit}}{{fmt this.credit}}{{/if}}</td></tr>{{/each}}
-    {{emptyRows (math 10 "-" lines.length) 6}}
     <tr class="total"><td class="lbl" colspan="4">TOTAL</td><td class="money">Rs {{fmt totalDebit}}</td><td class="money">Rs {{fmt totalCredit}}</td></tr>
   </tbody>
 </table>
@@ -235,7 +233,6 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
     <thead><tr><th class="c n">S#</th><th class="code">Account Code</th><th>Account</th><th>Description</th><th class="money">Debit</th><th class="money">Credit</th></tr></thead>
     <tbody>
       {{#each lines}}<tr><td class="c n">{{inc @index}}</td><td>{{this.accountCode}}</td><td>{{this.accountName}}</td><td>{{{richText this.description}}}</td><td class="money">{{#if this.debit}}{{fmt this.debit}}{{/if}}</td><td class="money">{{#if this.credit}}{{fmt this.credit}}{{/if}}</td></tr>{{/each}}
-      {{emptyRows (math 10 "-" lines.length) 6}}
       <tr class="total"><td class="lbl" colspan="4">TOTAL</td><td class="money">Rs {{fmt totalDebit}}</td><td class="money">Rs {{fmt totalCredit}}</td></tr>
     </tbody>
   </table>
@@ -313,7 +310,6 @@ tr.total td.lbl { text-align: right; text-transform: uppercase; letter-spacing: 
   <thead><tr><th class="c n">S#</th><th class="code">Account Code</th><th>Account</th><th>Description</th><th class="money">Debit</th><th class="money">Credit</th></tr></thead>
   <tbody>
     {{#each lines}}<tr><td class="c n">{{inc @index}}</td><td>{{this.accountCode}}</td><td>{{this.accountName}}</td><td>{{{richText this.description}}}</td><td class="money">{{#if this.debit}}{{fmt this.debit}}{{/if}}</td><td class="money">{{#if this.credit}}{{fmt this.credit}}{{/if}}</td></tr>{{/each}}
-    {{emptyRows (math 10 "-" lines.length) 6}}
     <tr class="total"><td class="lbl" colspan="4">TOTAL</td><td class="money">Rs {{fmt totalDebit}}</td><td class="money">Rs {{fmt totalCredit}}</td></tr>
   </tbody>
 </table>

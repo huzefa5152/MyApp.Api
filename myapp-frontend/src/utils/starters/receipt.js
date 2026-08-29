@@ -8,7 +8,7 @@
  * description, amount, amountInWords,
  * allocations[] (sNo, documentLabel, date, amount).
  * Use only registered helpers: fmt, fmtDate, fmtDec, nl2br, richText, join,
- * emptyRows, math, inc, eq, gt, or, #each, #if, #unless.
+ * math, inc, eq, gt, or, #each, #if, #unless.
  */
 
 export const receiptStarters = [

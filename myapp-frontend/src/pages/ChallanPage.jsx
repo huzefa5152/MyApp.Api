@@ -684,8 +684,10 @@ function buildChallanPrintHtml(data) {
   return `<!DOCTYPE html><html><head><title>DC #${data.challanNumber}</title>
 <style>
   @media print {
+    /* One page box for every page — see utils/defaultTemplates.js for why an
+       @page:first that changed the vertical margin broke the repeating
+       page-bottom signature. */
     @page { size: A4; margin: 10mm 0 0 0; }
-    @page:first { margin: 0; }
     html, body { height: 100%; margin: 0; }
     .footer-section { page-break-inside: avoid; }
   }
@@ -697,7 +699,7 @@ function buildChallanPrintHtml(data) {
   html, body { height: 100%; }
   body { font-family: "Times New Roman", Times, serif; font-size: 16px; color: #000;
          display: flex; flex-direction: column; min-height: 100vh;
-         padding: 10mm 12mm; }
+         padding: 0 12mm 10mm; }
   .main-content { flex: 1; }
   .footer-section { margin-top: auto; }
 
