@@ -51,6 +51,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
 import { getAvatarUrl } from "../utils/avatarUrl";
+import { isNavPathVisible, visibleNavPermissions } from "../config/navVisibility";
 import "./DashboardLayout.css";
 
 /* ------------------------------------------------------------------ */
@@ -173,7 +174,7 @@ export default function DashboardLayout() {
     "config.units.manage",
   ];
   // Settings — company/system configuration + FBR tooling.
-  const settingsKeys = [
+  const settingsKeys = visibleNavPermissions([
     "companies.manage.view",
     "divisions.manage.view",
     "poformats.manage.view",
@@ -182,8 +183,8 @@ export default function DashboardLayout() {
     "fbr.sandbox.view",
     "fbrmonitor.view",
     "folders.list.view",
-  ];
-  const salesKeys = [
+  ]);
+  const salesKeys = visibleNavPermissions([
     // Sales tab visible if the user has any of: sales quotes, sales orders,
     // see-bills (Bills + Invoices tabs), see-challans, import-challans,
     // item-rate-history.
@@ -195,7 +196,7 @@ export default function DashboardLayout() {
     "itemratehistory.view",
     "challans.list.view",
     "challans.import.create",
-  ];
+  ]);
   const purchasesKeys = [
     "purchasebills.list.view",
     "purchasedebitnotes.list.view",
@@ -214,14 +215,14 @@ export default function DashboardLayout() {
     "reports.taxsheet.view",
     "accounting.reports.view",
   ];
-  const adminKeys = [
+  const adminKeys = visibleNavPermissions([
     "users.manage.view",
     "rbac.roles.view",
     "tenantaccess.manage.view",
     "auditlogs.view",
     "accounting.import.run",
     "accounting.import.manager",
-  ];
+  ]);
   const canSeeDashboards    = hasAny(dashboardsKeys);
   const canSeeMasterData    = hasAny(masterDataKeys);
   const canSeeSettings      = hasAny(settingsKeys);
@@ -376,24 +377,30 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "sales"}
               isChildActive={activeSection === "sales"}
             >
-              <Can permission="salesquotes.list.view">
-                <NavLink to="/sales-quotes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdRequestQuote className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Sales Quotes</span>
-                </NavLink>
-              </Can>
-              <Can permission="salesorders.list.view">
-                <NavLink to="/sales-orders" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdAssignment className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Sales Orders</span>
-                </NavLink>
-              </Can>
-              <Can permission="challans.import.create">
-                <NavLink to="/challans/import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Import Challans</span>
-                </NavLink>
-              </Can>
+              {isNavPathVisible("/sales-quotes") && (
+                <Can permission="salesquotes.list.view">
+                  <NavLink to="/sales-quotes" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdRequestQuote className="dl-subitem__icon" aria-hidden="true" />
+                    <span>Sales Quotes</span>
+                  </NavLink>
+                </Can>
+              )}
+              {isNavPathVisible("/sales-orders") && (
+                <Can permission="salesorders.list.view">
+                  <NavLink to="/sales-orders" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdAssignment className="dl-subitem__icon" aria-hidden="true" />
+                    <span>Sales Orders</span>
+                  </NavLink>
+                </Can>
+              )}
+              {isNavPathVisible("/challans/import") && (
+                <Can permission="challans.import.create">
+                  <NavLink to="/challans/import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
+                    <span>Import Challans</span>
+                  </NavLink>
+                </Can>
+              )}
               <Can permission="challans.list.view">
                 {/* `end`: /challans is a prefix of /challans/import, so without
                     it this link stays active on the Import Challans route and
@@ -648,24 +655,30 @@ export default function DashboardLayout() {
                   <span>PO Formats</span>
                 </NavLink>
               </Can>
-              <Can permission="fbr.config.update">
-                <NavLink to="/fbr-settings" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdTune className="dl-subitem__icon" aria-hidden="true" />
-                  <span>FBR Settings</span>
-                </NavLink>
-              </Can>
-              <Can permission="fbr.sandbox.view">
-                <NavLink to="/fbr-sandbox" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdScience className="dl-subitem__icon" aria-hidden="true" />
-                  <span>FBR Sandbox</span>
-                </NavLink>
-              </Can>
-              <Can permission="fbrmonitor.view">
-                <NavLink to="/fbr-monitor" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdMonitorHeart className="dl-subitem__icon" aria-hidden="true" />
-                  <span>FBR Monitor</span>
-                </NavLink>
-              </Can>
+              {isNavPathVisible("/fbr-settings") && (
+                <Can permission="fbr.config.update">
+                  <NavLink to="/fbr-settings" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdTune className="dl-subitem__icon" aria-hidden="true" />
+                    <span>FBR Settings</span>
+                  </NavLink>
+                </Can>
+              )}
+              {isNavPathVisible("/fbr-sandbox") && (
+                <Can permission="fbr.sandbox.view">
+                  <NavLink to="/fbr-sandbox" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdScience className="dl-subitem__icon" aria-hidden="true" />
+                    <span>FBR Sandbox</span>
+                  </NavLink>
+                </Can>
+              )}
+              {isNavPathVisible("/fbr-monitor") && (
+                <Can permission="fbrmonitor.view">
+                  <NavLink to="/fbr-monitor" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdMonitorHeart className="dl-subitem__icon" aria-hidden="true" />
+                    <span>FBR Monitor</span>
+                  </NavLink>
+                </Can>
+              )}
               <Can permission="folders.list.view">
                 <NavLink to="/configuration/navigation-menu" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFolder className="dl-subitem__icon" aria-hidden="true" />
@@ -710,18 +723,22 @@ export default function DashboardLayout() {
               </Can>
               {/* Whole-company data-import / migration ops — admin-grade tools,
                   moved out of the Accounting module. */}
-              <Can permission="accounting.import.run">
-                <NavLink to="/accounting/data-migration" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdCloudDownload className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Data Migration</span>
-                </NavLink>
-              </Can>
-              <Can permission="accounting.import.manager">
-                <NavLink to="/accounting/manager-import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-                  <MdCloudDownload className="dl-subitem__icon" aria-hidden="true" />
-                  <span>Manager.io Import</span>
-                </NavLink>
-              </Can>
+              {isNavPathVisible("/accounting/data-migration") && (
+                <Can permission="accounting.import.run">
+                  <NavLink to="/accounting/data-migration" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdCloudDownload className="dl-subitem__icon" aria-hidden="true" />
+                    <span>Data Migration</span>
+                  </NavLink>
+                </Can>
+              )}
+              {isNavPathVisible("/accounting/manager-import") && (
+                <Can permission="accounting.import.manager">
+                  <NavLink to="/accounting/manager-import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                    <MdCloudDownload className="dl-subitem__icon" aria-hidden="true" />
+                    <span>Manager.io Import</span>
+                  </NavLink>
+                </Can>
+              )}
             </NavGroup>
           )}
 

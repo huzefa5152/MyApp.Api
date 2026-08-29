@@ -289,6 +289,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-29 — Trimmed the sidebar to the tabs this deployment uses
+
+- **Eight sidebar tabs are hidden**: Sales Quotes, Sales Orders and Import Challans (Sales); FBR Settings, FBR Sandbox and FBR Monitor (Settings); Data Migration and Manager.io Import (Administration). The section counts next to each heading follow suit.
+- **Nothing was removed.** The pages, their data and their permissions are all still there — the features keep working, are still reachable by address, and are still assignable in Roles & Permissions. Only the menu entries are hidden.
+- Which tabs show is now one list in `myapp-frontend/src/config/navVisibility.js`. To bring a tab back, flip its `visible` to `true` — no other change needed.
+
 ### 2026-08-29 — Customer Portal: choose the document, and a redesigned customer view
 
 - **Pick which document customers download.** When you create a portal you now choose the **Bill** or the **Tax Invoice**, and the portal always uses that one. Only documents your company actually has a template for can be selected — the rest are shown greyed out so it's obvious what's missing. You can change the choice on an existing portal at any time from the list, and the customer's link stays the same.
