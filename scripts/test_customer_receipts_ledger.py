@@ -27,9 +27,15 @@ Suites:
                                     and the money-out direct-account line
   7. Edit path                   -> UpdateAsync mirrors every create-path rule;
                                     an edit can neither destroy nor forge cash
-  8. Ledger integrity            -> trial balance balanced, advance account total
+  8. Contact type normalisation  -> a line-less receipt no longer inherits a
+                                    tenant check from an allocated invoice, so
+                                    "client" and "Client" must mean the same
+                                    thing to BOTH the allocations-optional test
+                                    and the belongs-to-this-company guard
+  9. Ledger integrity            -> trial balance balanced, advance account total
 
-Runs against a fresh ephemeral GL-enabled company + client, torn down at the end.
+Runs against a fresh ephemeral GL-enabled company + client, plus a second
+company used only as the "other tenant" in suite 8. Both torn down at the end.
 Production data is never touched.
 
 Usage:
@@ -374,8 +380,74 @@ def suite_7_edit(base, token, cid, client_id, item_type_id, money_out):
           f"amount = {final.get('amount')}, unallocated = {final.get('unallocatedAmount')}")
 
 
-def suite_8_ledger(base, token, cid, advance_acct):
-    suite = "8. Ledger integrity"
+def suite_8_contact_type(base, token, cid, client_id, own_supplier, foreign, disc_acct):
+    """The relaxation made allocations optional for a customer receipt, which
+    removed the indirect tenant check a line-less receipt used to inherit from
+    its allocated invoice. If IsCustomerReceipt and the belongs-to-this-company
+    guard disagree about the spelling of "Client", such a receipt can keep a
+    ContactId owned by another tenant."""
+    suite = "8. Contact type normalisation"
+    print(f"\n=== {suite} ===")
+    fclient, fsupplier = foreign["client_id"], foreign["supplier_id"]
+
+    st, r = post_receipt(base, token, cid, receipt_body(
+        None, amount=60000, contact_type="client", contact_id=fclient))
+    check(suite, "lowercase 'client' + another company's client is rejected (400)",
+          st == 400 and "belong to this company" in err_of(r),
+          f"got {st} {err_of(r)}")
+
+    st, page = http("GET", f"/api/payments/receipts/company/{cid}/paged?page=1&pageSize=100",
+                    base, token=token)
+    rows = (page or {}).get("items", []) if isinstance(page, dict) else []
+    check(suite, "no receipt was stored carrying the foreign contactId",
+          all(row.get("contactId") != fclient for row in rows),
+          f"foreign contactId {fclient} found among {len(rows)} receipts")
+
+    st, r = post_receipt(base, token, cid, receipt_body(
+        None, amount=60000, contact_type="Client", contact_id=fclient))
+    check(suite, "canonical 'Client' + another company's client still rejected (400)",
+          st == 400 and "belong to this company" in err_of(r), f"got {st} {err_of(r)}")
+
+    st, r = post_receipt(base, token, cid, receipt_body(
+        None, amount=60000, contact_type="client", contact_id=client_id))
+    ok = check(suite, "lowercase 'client' + this company's own client is accepted",
+               st in (200, 201), f"got {st} {err_of(r)}")
+    rid = r.get("id") if ok else None
+    if ok:
+        check(suite, "it is stored canonically as 'Client'", r.get("contactType") == "Client",
+              f"contactType = {r.get('contactType')}")
+        check(suite, "its contact name resolves and the advance is 60000",
+              bool(r.get("contactName")) and eq(r.get("unallocatedAmount"), 60000),
+              f"contactName = {r.get('contactName')}, unallocated = {r.get('unallocatedAmount')}")
+
+    if rid:
+        st, r = put_receipt(base, token, rid, receipt_body(
+            None, amount=60000, contact_type="client", contact_id=fclient))
+        check(suite, "editing it onto another company's client is rejected (400)",
+              st == 400 and "belong to this company" in err_of(r), f"got {st} {err_of(r)}")
+
+    st, r = http("POST", f"/api/payments/payments/company/{cid}", base, token=token, body={
+        "direction": "Payment", "date": today_iso(), "contactType": "supplier",
+        "contactId": fsupplier, "method": "Cash",
+        "allocations": [{"accountId": disc_acct, "amount": 5000}]})
+    check(suite, "money-out: lowercase 'supplier' + another company's supplier rejected (400)",
+          st == 400 and "belong to this company" in err_of(r), f"got {st} {err_of(r)}")
+
+    if own_supplier:
+        st, r = http("POST", f"/api/payments/payments/company/{cid}", base, token=token, body={
+            "direction": "Payment", "date": today_iso(), "contactType": "Supplier",
+            "contactId": own_supplier, "method": "Cash",
+            "allocations": [{"accountId": disc_acct, "amount": 5000}]})
+        ok = check(suite, "money-out: proper 'Supplier' + own supplier still saves",
+                   st in (200, 201), f"got {st} {err_of(r)}")
+        if ok:
+            check(suite, "its amount is 5000 and the supplier name resolves",
+                  eq(r.get("amount"), 5000) and bool(r.get("contactName")),
+                  f"amount = {r.get('amount')}, contactName = {r.get('contactName')}")
+
+
+def suite_9_ledger(base, token, cid, advance_acct):
+    suite = "9. Ledger integrity"
     print(f"\n=== {suite} ===")
     st, tb = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance",
                   base, token=token)
@@ -384,13 +456,41 @@ def suite_8_ledger(base, token, cid, advance_acct):
           tb.get("totalCredit")),
           f"got {st} debit={tb.get('totalDebit')} credit={tb.get('totalCredit')}")
     if advance_acct:
-        # 100000 (suite 1) + 250000 (suite 2) + 700000 (suite 3) + 400000 (suite 7)
+        # 100000 (suite 1) + 250000 (suite 2) + 700000 (suite 3)
+        # + 400000 (suite 7) + 60000 (suite 8)
         bal = balance_of(base, token, cid, advance_acct["id"])
-        check(suite, "advance account totals 1,450,000 across the run",
-              bal is not None and eq(abs(bal), 1450000), f"balance = {bal}")
+        check(suite, "advance account totals 1,510,000 across the run",
+              bal is not None and eq(abs(bal), 1510000), f"balance = {bal}")
 
 
 # ── Setup / teardown ───────────────────────────────────────────────
+def make_company(base, token, name, gl=True):
+    st, company = http("POST", "/api/companies", base, token=token, body={
+        "name": name, "startingInvoiceNumber": 1,
+        "startingPurchaseBillNumber": 1, "startingChallanNumber": 1,
+        "startingGoodsReceiptNumber": 1, "fbrEnabled": False,
+        "inventoryTrackingEnabled": False, "enableGl": gl})
+    if st not in (200, 201):
+        print(f"FATAL: company create failed ({st} {company})")
+        sys.exit(2)
+    return company["id"]
+
+
+def make_client(base, token, cid, name):
+    st, c = http("POST", "/api/clients", base, token=token, body={
+        "name": name, "companyId": cid, "registrationType": "Unregistered"})
+    if st not in (200, 201):
+        print(f"FATAL: client create failed ({st} {c})")
+        sys.exit(2)
+    return c["id"]
+
+
+def make_supplier(base, token, cid, name):
+    st, s = http("POST", "/api/suppliers", base, token=token, body={
+        "name": name, "companyId": cid})
+    return s["id"] if st in (200, 201) and isinstance(s, dict) else None
+
+
 def setup(base, user, pw):
     st, data = http("POST", "/api/auth/login", base, body={"username": user, "password": pw})
     if st != 200:
@@ -398,32 +498,33 @@ def setup(base, user, pw):
         sys.exit(2)
     token = data["token"]
     sfx = datetime.now().strftime("%Y%m%d%H%M%S")
-    st, company = http("POST", "/api/companies", base, token=token, body={
-        "name": f"_test_receipts_ledger {sfx}", "startingInvoiceNumber": 1,
-        "startingPurchaseBillNumber": 1, "startingChallanNumber": 1,
-        "startingGoodsReceiptNumber": 1, "fbrEnabled": False,
-        "inventoryTrackingEnabled": False, "enableGl": True})
-    if st not in (200, 201):
-        print(f"FATAL: company create failed ({st} {company})")
-        sys.exit(2)
-    cid = company["id"]
-    st, client = http("POST", "/api/clients", base, token=token, body={
-        "name": f"Ledger Client {sfx}", "companyId": cid, "registrationType": "Unregistered"})
-    if st not in (200, 201):
-        print(f"FATAL: client create failed ({st} {client})")
-        sys.exit(2)
+
+    cid = make_company(base, token, f"_test_receipts_ledger {sfx}")
+    client_id = make_client(base, token, cid, f"Ledger Client {sfx}")
+    supplier_id = make_supplier(base, token, cid, f"Ledger Supplier {sfx}")
+
+    # A SECOND tenant, so the suite can prove a contact id belonging to another
+    # company is refused rather than quietly stored on the receipt.
+    other_cid = make_company(base, token, f"_test_receipts_other {sfx}", gl=False)
+    foreign = {
+        "company_id": other_cid,
+        "client_id": make_client(base, token, other_cid, f"Foreign Client {sfx}"),
+        "supplier_id": make_supplier(base, token, other_cid, f"Foreign Supplier {sfx}"),
+    }
+
     _, its = http("GET", "/api/itemtypes", base, token=token)
     rows = its if isinstance(its, list) else (its.get("items") or its.get("data") or [])
     item_type_id = rows[0]["id"] if rows else None
-    return token, cid, client["id"], item_type_id
+    return token, cid, client_id, supplier_id, item_type_id, foreign
 
 
-def teardown(base, token, cid, keep):
+def teardown(base, token, cids, keep):
     if keep:
-        print(f"\n(kept company {cid})")
+        print(f"\n(kept companies {cids})")
         return
-    http("DELETE", f"/api/companies/{cid}", base, token=token)
-    print(f"\n(cleaned up company {cid})")
+    for cid in cids:
+        http("DELETE", f"/api/companies/{cid}", base, token=token)
+    print(f"\n(cleaned up companies {cids})")
 
 
 def report() -> int:
@@ -447,7 +548,8 @@ def main() -> int:
     args = p.parse_args()
     base = args.base
 
-    token, cid, client_id, item_type_id = setup(base, args.admin_user, args.admin_pw)
+    token, cid, client_id, supplier_id, item_type_id, foreign = setup(
+        base, args.admin_user, args.admin_pw)
     flat = flat_accounts(base, token, cid)
 
     def by_control(ct):
@@ -456,8 +558,9 @@ def main() -> int:
     advance = by_control("CustomerAdvances")
     disc = (by_control("DiscountAllowed") or {}).get("id")
     bad_debt = (by_control("BadDebtWriteOff") or {}).get("id")
-    print(f"\n== company={cid} client={client_id} itemType={item_type_id} "
-          f"advance={advance['id'] if advance else None} disc={disc} badDebt={bad_debt} ==")
+    print(f"\n== company={cid} client={client_id} supplier={supplier_id} "
+          f"itemType={item_type_id} advance={advance['id'] if advance else None} "
+          f"disc={disc} badDebt={bad_debt} foreign={foreign} ==")
 
     try:
         suite_1_advance(base, token, cid, client_id, advance)
@@ -467,9 +570,10 @@ def main() -> int:
         suite_5_guards(base, token, cid, client_id, item_type_id, disc)
         money_out = suite_6_backcompat(base, token, cid, client_id, item_type_id, bad_debt, disc)
         suite_7_edit(base, token, cid, client_id, item_type_id, money_out)
-        suite_8_ledger(base, token, cid, advance)
+        suite_8_contact_type(base, token, cid, client_id, supplier_id, foreign, disc)
+        suite_9_ledger(base, token, cid, advance)
     finally:
-        teardown(base, token, cid, args.keep)
+        teardown(base, token, [cid, foreign["company_id"]], args.keep)
 
     return report()
 

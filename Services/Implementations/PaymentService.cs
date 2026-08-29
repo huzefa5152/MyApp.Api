@@ -74,6 +74,10 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PaymentDto> CreateAsync(int companyId, CreatePaymentDto dto)
         {
             var direction = ParseDirection(dto.Direction);
+            // Canonicalise the contact type BEFORE anything branches on it, so
+            // the belongs-to-this-company guard below and IsCustomerReceipt can
+            // never disagree about what "Client" means.
+            dto.ContactType = NormalizeContactType(dto.ContactType);
 
             AssertAllocationsPresent(direction, dto);
 
@@ -228,7 +232,7 @@ namespace MyApp.Api.Services.Implementations
                 // Cleared-by-default (Manager-style): a new receipt/payment is
                 // reconciled as of its own date; "pending" is the opt-in exception.
                 ReconciledDate = paymentDate,
-                ContactType = string.IsNullOrWhiteSpace(dto.ContactType) ? "Other" : dto.ContactType.Trim(),
+                ContactType = dto.ContactType,   // canonical + trimmed already
                 ContactId = dto.ContactId,
                 DivisionId = divisionId,
                 BankAccountId = dto.BankAccountId,
@@ -300,6 +304,8 @@ namespace MyApp.Api.Services.Implementations
             if (payment == null) return null;
             var companyId = payment.CompanyId;
             var direction = payment.Direction;            // direction is immutable on edit
+            // Canonical before any branch reads it — see CreateAsync.
+            dto.ContactType = NormalizeContactType(dto.ContactType);
 
             // Same rules as the create path — an edit must not be able to make a
             // document a create could not have made, nor silently drop the cash
@@ -397,7 +403,7 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 payment.Date = dto.Date == default ? payment.Date : dto.Date;
-                payment.ContactType = string.IsNullOrWhiteSpace(dto.ContactType) ? "Other" : dto.ContactType.Trim();
+                payment.ContactType = dto.ContactType;   // canonical + trimmed already
                 payment.ContactId = dto.ContactId;
                 payment.DivisionId = dto.DivisionId;
                 payment.BankAccountId = dto.BankAccountId;
@@ -503,13 +509,33 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Amount / allocation rules (shared by create and edit) ─────────────
 
+        /// <summary>Canonical contact type — "Client", "Supplier", "Other" for a
+        /// blank, otherwise the trimmed value as given.
+        ///
+        /// Every branch on ContactType in this file, and PostingService's party
+        /// tag, compares ORDINALLY against "Client"/"Supplier". Folding the
+        /// incoming value once, before anything reads it, is what keeps them all
+        /// agreeing. They previously did not: a body sending "client" made
+        /// IsCustomerReceipt say yes (so allocations became optional) while the
+        /// belongs-to-this-company guard said no and never ran, and a line-less
+        /// receipt — which has no allocated invoice to be company-checked in its
+        /// place — could then persist a ContactId owned by another tenant.</summary>
+        private static string NormalizeContactType(string? s)
+        {
+            var t = s?.Trim();
+            if (string.IsNullOrEmpty(t)) return "Other";
+            if (string.Equals(t, "Client", StringComparison.OrdinalIgnoreCase)) return "Client";
+            if (string.Equals(t, "Supplier", StringComparison.OrdinalIgnoreCase)) return "Supplier";
+            return t;
+        }
+
         /// <summary>A receipt taken from a named customer — the only document
         /// whose unapplied balance has somewhere to live (Advance from
         /// Customers). Money-out and party-less "Other" receipts have no such
         /// account, so they still need at least one allocation line.</summary>
         private static bool IsCustomerReceipt(PaymentDirection direction, CreatePaymentDto dto) =>
             direction == PaymentDirection.Receipt
-            && string.Equals(dto.ContactType?.Trim(), "Client", StringComparison.OrdinalIgnoreCase)
+            && NormalizeContactType(dto.ContactType) == "Client"
             && dto.ContactId.HasValue;
 
         /// <summary>Enforce the allocation requirement and normalise the list so
@@ -598,7 +624,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var prefix = p.Direction == PaymentDirection.Receipt ? "RCP" : "PMT";
             string? contactName = null;
-            if (p.ContactId.HasValue && names.TryGetValue((p.ContactType, p.ContactId.Value), out var n))
+            if (p.ContactId.HasValue
+                && names.TryGetValue((NormalizeContactType(p.ContactType), p.ContactId.Value), out var n))
                 contactName = n;
 
             // Show the bank/cash account NAME, not the stored code. The migration
@@ -661,22 +688,33 @@ namespace MyApp.Api.Services.Implementations
         private async Task<Dictionary<(string, int), string>> ResolveContactNamesAsync(IEnumerable<Payment> payments)
         {
             var result = new Dictionary<(string, int), string>();
-            var clientIds = payments.Where(p => p.ContactType == "Client" && p.ContactId.HasValue)
-                .Select(p => p.ContactId!.Value).Distinct().ToList();
-            var supplierIds = payments.Where(p => p.ContactType == "Supplier" && p.ContactId.HasValue)
-                .Select(p => p.ContactId!.Value).Distinct().ToList();
+            // Normalised, so a legacy row stored as "client" still resolves; and
+            // paired with its payment's CompanyId, so resolving it can only ever
+            // name a contact that company owns.
+            var refs = payments.Where(p => p.ContactId.HasValue)
+                .Select(p => (Type: NormalizeContactType(p.ContactType), p.CompanyId, Id: p.ContactId!.Value))
+                .ToList();
+            var clientKeys = refs.Where(x => x.Type == "Client").Select(x => (x.CompanyId, x.Id)).ToHashSet();
+            var supplierKeys = refs.Where(x => x.Type == "Supplier").Select(x => (x.CompanyId, x.Id)).ToHashSet();
+            var clientIds = clientKeys.Select(k => k.Id).Distinct().ToList();
+            var supplierIds = supplierKeys.Select(k => k.Id).Distinct().ToList();
 
             if (clientIds.Count > 0)
             {
                 var rows = await _context.Clients.Where(c => clientIds.Contains(c.Id))
-                    .Select(c => new { c.Id, c.Name }).AsNoTracking().ToListAsync();
-                foreach (var r in rows) result[("Client", r.Id)] = r.Name;
+                    .Select(c => new { c.Id, c.CompanyId, c.Name }).AsNoTracking().ToListAsync();
+                // A ContactId pointing at another tenant resolves to NO name
+                // rather than leaking one. The write path can no longer create
+                // such a row; this covers anything already stored.
+                foreach (var r in rows.Where(r => clientKeys.Contains((r.CompanyId, r.Id))))
+                    result[("Client", r.Id)] = r.Name;
             }
             if (supplierIds.Count > 0)
             {
                 var rows = await _context.Suppliers.Where(s => supplierIds.Contains(s.Id))
-                    .Select(s => new { s.Id, s.Name }).AsNoTracking().ToListAsync();
-                foreach (var r in rows) result[("Supplier", r.Id)] = r.Name;
+                    .Select(s => new { s.Id, s.CompanyId, s.Name }).AsNoTracking().ToListAsync();
+                foreach (var r in rows.Where(r => supplierKeys.Contains((r.CompanyId, r.Id))))
+                    result[("Supplier", r.Id)] = r.Name;
             }
             return result;
         }
@@ -746,14 +784,20 @@ namespace MyApp.Api.Services.Implementations
             // Contact is a soft ref (ContactType + ContactId), resolve its name.
             string contactName = "";
             string? contactAddress = null, contactPhone = null;
-            if (p.ContactId.HasValue && p.ContactType == "Client")
+            // Normalised comparison + tenant-scoped lookup: the voucher prints a
+            // name, address AND phone, so a ContactId belonging to another
+            // company must resolve to nothing rather than print their details.
+            var contactType = NormalizeContactType(p.ContactType);
+            if (p.ContactId.HasValue && contactType == "Client")
             {
-                var c = await _context.Clients.AsNoTracking().FirstOrDefaultAsync(x => x.Id == p.ContactId.Value);
+                var c = await _context.Clients.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == p.ContactId.Value && x.CompanyId == p.CompanyId);
                 contactName = c?.Name ?? ""; contactAddress = c?.Address; contactPhone = c?.Phone;
             }
-            else if (p.ContactId.HasValue && p.ContactType == "Supplier")
+            else if (p.ContactId.HasValue && contactType == "Supplier")
             {
-                var s = await _context.Suppliers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == p.ContactId.Value);
+                var s = await _context.Suppliers.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == p.ContactId.Value && x.CompanyId == p.CompanyId);
                 contactName = s?.Name ?? ""; contactAddress = s?.Address; contactPhone = s?.Phone;
             }
 
