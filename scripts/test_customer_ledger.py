@@ -33,6 +33,17 @@ Suites:
   4. Unallocated cash       -> one receipt row at its FULL amount, no double count
   5. Scope + exclusions     -> per-client, per-company, deleted receipts drop out
   6. Plain A/R agreement    -> closing == invoice balanceDue when nothing exotic
+  7. Cash from another contact -> a receipt whose contact is "Other" can settle
+                               this client's invoice (PaymentService checks the
+                               COMPANY, not the contact), so it must show on the
+                               trail — and an own-contact receipt reachable from
+                               both sources must still be counted exactly once
+
+KNOWN LIMITATION, deliberately not asserted: invoices are charged at full
+GrandTotal while `Invoice.BalanceDue` settles against
+`Collectible = GrandTotal - WithholdingTaxAmount`, so with withholding tax in
+play the closing balance does NOT equal BalanceDue. Inherited from the statement
+this replaced; accepted 2026-08-30, to be picked up deliberately later.
 
 REACHABLE SURFACE: the ledger has no HTTP route of its own yet (the controller
 is a later task), so this suite drives it through `GET /api/clients/{id}/statement`,
@@ -120,11 +131,16 @@ def make_invoice(base, token, cid, client_id, item_type_id, total, date=None):
     return inv if st in (200, 201) and isinstance(inv, dict) else None
 
 
-def make_receipt(base, token, cid, client_id, amount, allocations=None, date=None):
-    st, r = http("POST", f"/api/payments/receipts/company/{cid}", base, token=token, body={
-        "direction": "Receipt", "date": date or today_iso(), "contactType": "Client",
-        "contactId": client_id, "method": "Cash", "amount": amount,
-        "allocations": allocations or []})
+def make_receipt(base, token, cid, client_id, amount, allocations=None, date=None,
+                 contact_type="Client"):
+    body = {"direction": "Receipt", "date": date or today_iso(),
+            "contactType": contact_type, "method": "Cash", "amount": amount,
+            "allocations": allocations or []}
+    # A party-less "Other" receipt carries no ContactId (and is REQUIRED to
+    # carry allocations — PaymentService.AssertAllocationsPresent).
+    if contact_type == "Client":
+        body["contactId"] = client_id
+    st, r = http("POST", f"/api/payments/receipts/company/{cid}", base, token=token, body=body)
     return st, r
 
 
@@ -451,6 +467,85 @@ def suite_6_plain_ar(base, token, cid, client_id, item_type_id):
           f"chronological types={[e.get('type') for e in s['_chrono']]}")
 
 
+# ── Suite 7: cash from a receipt naming another contact ────────────
+def suite_7_foreign_contact_cash(base, token, cid, client_id, item_type_id, disc_acct):
+    """PaymentService only checks that an allocation's invoice shares the
+       COMPANY — never the contact — so a receipt whose contact is "Other" can
+       settle client X's invoice. X's AmountPaid rises, so X's ledger MUST show
+       that money or the closing balance stops agreeing with BalanceDue. The
+       old allocation-sourced statement did capture it; dropping it would be a
+       regression."""
+    suite = "7. Cash from another contact"
+    print(f"\n=== {suite} ===")
+
+    inv = make_invoice(base, token, cid, client_id, item_type_id, 400000)
+    if not check(suite, "400,000 invoice created", inv is not None, "create failed"):
+        return
+
+    st, r = make_receipt(base, token, cid, client_id, 400000, contact_type="Other",
+                         allocations=[{"invoiceId": inv["id"], "amount": 400000}])
+    if not check(suite, "'Other'-contact receipt settling the invoice accepted",
+                 st in (200, 201), f"got {st} {err_of(r)}"):
+        return
+
+    after = get_invoice(base, token, inv["id"])
+    check(suite, "the invoice really was settled by it (amountPaid 400,000)",
+          eq(after.get("amountPaid"), 400000) and eq(after.get("balanceDue"), 0),
+          f"amountPaid={after.get('amountPaid')} balanceDue={after.get('balanceDue')}")
+
+    s = statement(base, token, client_id)
+    if not check(suite, "statement loads", s is not None, "statement request failed"):
+        return
+    rec = rows_of(s, "Receipt")
+    check(suite, "the money appears on this customer's trail", len(rec) == 1,
+          f"rows={[(x.get('reference'), x.get('debit')) for x in rec]}")
+    if rec:
+        check(suite, "it is the allocated 400,000, in the DEBIT column",
+              eq(rec[0].get("debit"), 400000) and eq(rec[0].get("credit"), 0),
+              f"debit={rec[0].get('debit')} credit={rec[0].get('credit')}")
+    check(suite, "closing balance 0 == invoice balanceDue (no phantom receivable)",
+          eq(s.get("closingBalance"), 0) and eq(s.get("closingBalance"), after.get("balanceDue")),
+          f"ledger={s.get('closingBalance')} balanceDue={after.get('balanceDue')}")
+
+    # De-duplication: a NORMAL receipt (contact = this client, allocated to this
+    # client's own invoice) is reachable from both sources and must be counted
+    # exactly once — at its full amount, not once per allocation.
+    inv2 = make_invoice(base, token, cid, client_id, item_type_id, 100000)
+    if not check(suite, "second 100,000 invoice created", inv2 is not None, "create failed"):
+        return
+    st, r2 = make_receipt(base, token, cid, client_id, 150000,
+                          allocations=[{"invoiceId": inv2["id"], "amount": 100000}])
+    if not check(suite, "150,000 own-contact receipt allocating 100,000 accepted",
+                 st in (200, 201), f"got {st} {err_of(r2)}"):
+        return
+    s2 = statement(base, token, client_id)
+    rec2 = rows_of(s2, "Receipt")
+    check(suite, "still one row per receipt — the own-contact one is NOT double counted",
+          len(rec2) == 2, f"rows={[(x.get('reference'), x.get('debit')) for x in rec2]}")
+    check(suite, "own-contact receipt shows its FULL 150,000 exactly once",
+          len([x for x in rec2 if eq(x.get("debit"), 150000)]) == 1,
+          f"rows={[(x.get('reference'), x.get('debit')) for x in rec2]}")
+    check(suite, "closing balance -50,000 (the 50,000 advance), not -150,000",
+          eq(s2.get("closingBalance"), -50000), f"got {s2.get('closingBalance')}")
+
+    # And the write-off slice still rides alongside, never inside, the cash.
+    if disc_acct is not None:
+        inv3 = make_invoice(base, token, cid, client_id, item_type_id, 60000)
+        st, r3 = make_receipt(base, token, cid, client_id, 50000, contact_type="Other",
+                              allocations=[{"invoiceId": inv3["id"], "amount": 50000,
+                                            "adjustmentAmount": 10000,
+                                            "adjustmentAccountId": disc_acct}])
+        if check(suite, "'Other' receipt with a 10,000 write-off accepted",
+                 st in (200, 201), f"got {st} {err_of(r3)}"):
+            s3 = statement(base, token, client_id)
+            adj = rows_of(s3, "Adjustment")
+            check(suite, "its adjustment row is present exactly once",
+                  len(adj) == 1 and eq(adj[0].get("debit"), 10000),
+                  f"rows={[(a.get('reference'), a.get('debit')) for a in adj]}")
+            check(suite, "closing still -50,000 — the 60,000 bill is fully cleared",
+                  eq(s3.get("closingBalance"), -50000), f"got {s3.get('closingBalance')}")
+
+
 # ── Setup / teardown ───────────────────────────────────────────────
 def make_company(base, token, name, gl=True):
     st, company = http("POST", "/api/companies", base, token=token, body={
@@ -490,7 +585,8 @@ def setup(base, user, pw):
     cid = make_company(base, token, f"_test_customer_ledger {sfx}")
     # One client per suite so the balances stay independent and readable.
     clients = {k: make_client(base, token, cid, f"Ledger {k} {sfx}")
-               for k in ("scenario", "discount", "notes", "advance", "scopeA", "scopeB", "plain")}
+               for k in ("scenario", "discount", "notes", "advance",
+                         "scopeA", "scopeB", "plain", "foreigncontact")}
 
     other_cid = make_company(base, token, f"_test_customer_ledger_other {sfx}", gl=False)
     foreign = {
@@ -546,6 +642,8 @@ def main() -> int:
         suite_4_unallocated_cash(base, token, cid, clients["advance"], item_type_id)
         suite_5_scope(base, token, cid, clients["scopeA"], clients["scopeB"], item_type_id, foreign)
         suite_6_plain_ar(base, token, cid, clients["plain"], item_type_id)
+        suite_7_foreign_contact_cash(base, token, cid, clients["foreigncontact"],
+                                     item_type_id, disc)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 

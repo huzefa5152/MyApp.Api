@@ -40,7 +40,7 @@ namespace MyApp.Api.Services.Implementations
         /// <inheritdoc/>
         public async Task<CustomerLedgerDto> GetForClientAsync(
             int companyId, int clientId, DateTime? from, DateTime? to,
-            string? type, int page, int pageSize)
+            string? type, int page, int? pageSize)
         {
             // Resolve the caller-supplied id INSIDE the company — never trust it.
             var client = await _context.Clients.AsNoTracking()
@@ -165,6 +165,18 @@ namespace MyApp.Api.Services.Implementations
                         Type = isDebitNote ? TypeDebitNote : TypeInvoice,
                         Reference = (isDebitNote ? "DN-" : "INV-") + d.InvoiceNumber,
                         DocId = d.Id,
+                        // KNOWN LIMITATION — withholding tax (accepted 2026-08-30,
+                        // inherited from the statement this replaced, NOT a
+                        // regression). We charge the customer the full GrandTotal,
+                        // but InvoiceService.cs:218 computes
+                        //   BalanceDue = Collectible(GrandTotal, WHT) − AmountPaid
+                        // where Collectible = GrandTotal − WithholdingTaxAmount.
+                        // So for any invoice with WithholdingTaxAmount > 0 this
+                        // ledger overstates A/R by the withheld slice — money
+                        // reclaimable from FBR, not owed by the customer — and the
+                        // closing balance will not equal BalanceDue. Fixing it
+                        // means charging Collectible here and booking the withheld
+                        // slice as its own row; deliberately deferred.
                         Credit = d.GrandTotal,
                     });
                 }
@@ -199,6 +211,66 @@ namespace MyApp.Api.Services.Implementations
                     BankAccount = r.BankAccountName,
                     Description = r.Description,
                 });
+
+            // Cash that settles THIS client's invoices from a receipt naming a
+            // DIFFERENT contact. PaymentService.AssertInvoicesBelongToCompanyAsync
+            // only checks that an allocation's invoice belongs to the same
+            // COMPANY — never that it belongs to the receipt's contact — so a
+            // receipt whose contact is "Other" (or another client) can settle
+            // this client's bill. That is reachable, not theoretical: an "Other"
+            // receipt is REQUIRED to carry allocations (PaymentService's
+            // AssertAllocationsPresent / IsCustomerReceipt). Without these rows the
+            // invoice's AmountPaid rises with nothing to show for it on the
+            // customer's trail and the closing balance stops agreeing with
+            // BalanceDue. The old allocation-sourced statement did capture this
+            // money, so omitting it would be a one-directional regression.
+            //
+            // DE-DUPLICATION RULE — a payment reaches this ledger through EXACTLY
+            // ONE of the two cash sources, chosen by whose receipt it is:
+            //   • contact IS this client  → the contact-sourced row above, at the
+            //     FULL Payment.Amount so unallocated cash shows. Every allocation
+            //     it carries is already inside that amount, so it contributes no
+            //     allocation row here.
+            //   • contact is NOT this client → one row per allocation against this
+            //     client's invoices, at the allocation's cash Amount only. The
+            //     rest of that payment is somebody else's money.
+            // Adjustments are never part of Payment.Amount (the cash total is
+            // Σ Amount), so they are collected below for BOTH kinds and can never
+            // double count against either.
+            //
+            // Nuance, deliberate: when client Y's receipt settles client X's
+            // invoice, Y's trail still shows Y's full cash. That is the stated
+            // design (cash received from Y), and X now correctly shows the slice
+            // that settled X's bill.
+            var allocatedCash = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                join inv in _context.Invoices.AsNoTracking() on a.InvoiceId equals inv.Id
+                where a.Amount != 0m
+                      && inv.ClientId == clientId && inv.CompanyId == companyId
+                      && !inv.IsDemo && !inv.IsCancelled
+                      && p.CompanyId == companyId && !p.IsCancelled
+                      && p.Direction == PaymentDirection.Receipt
+                select new { p.Id, p.Number, p.Date, p.Method, p.BankAccountName,
+                             p.ContactType, p.ContactId, a.Amount, inv.InvoiceNumber }
+            ).ToListAsync();
+
+            foreach (var a in allocatedCash)
+            {
+                // Already represented by its contact-sourced row above.
+                if (IsContactOf(a.ContactType, a.ContactId, clientId)) continue;
+                entries.Add(new CustomerLedgerEntryDto
+                {
+                    Date = a.Date,
+                    Type = TypeReceipt,
+                    Reference = "RCP-" + a.Number,
+                    DocId = a.Id,
+                    Debit = a.Amount,
+                    Method = a.Method,
+                    BankAccount = a.BankAccountName,
+                    Description = $"Applied to INV-{a.InvoiceNumber} from a receipt recorded against another contact",
+                });
+            }
 
             // Settle-remainder adjustments — the non-cash slice that ALSO clears
             // the invoice (a discount, a write-off). Invoice.AmountPaid counts
@@ -263,6 +335,21 @@ namespace MyApp.Api.Services.Implementations
                 .Select(p => new { ClientId = p.ContactId!.Value, p.Date, p.Amount })
                 .ToListAsync();
 
+            // Cash allocated to a client's invoice from a receipt naming another
+            // contact — same de-duplication rule as BuildEntriesAsync: a payment
+            // counts EITHER through its contact (at the full amount) OR through
+            // its allocations (at allocation amounts), never both.
+            var allocatedCash = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                join inv in _context.Invoices.AsNoTracking() on a.InvoiceId equals inv.Id
+                where a.Amount != 0m
+                      && inv.CompanyId == companyId && !inv.IsDemo && !inv.IsCancelled
+                      && p.CompanyId == companyId && !p.IsCancelled
+                      && p.Direction == PaymentDirection.Receipt
+                select new { inv.ClientId, p.Date, p.ContactType, p.ContactId, a.Amount }
+            ).ToListAsync();
+
             var adjustments = await (
                 from a in _context.PaymentAllocations.AsNoTracking()
                 join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
@@ -297,6 +384,11 @@ namespace MyApp.Api.Services.Implementations
                 else Add(d.ClientId, d.Date, d.GrandTotal, 0m);
             }
             foreach (var r in receipts) Add(r.ClientId, r.Date, 0m, r.Amount);
+            foreach (var a in allocatedCash)
+            {
+                if (IsContactOf(a.ContactType, a.ContactId, a.ClientId)) continue;
+                Add(a.ClientId, a.Date, 0m, a.Amount);
+            }
             foreach (var a in adjustments) Add(a.ClientId, a.Date, 0m, a.AdjustmentAmount);
 
             return clients
@@ -326,6 +418,21 @@ namespace MyApp.Api.Services.Implementations
                 .ThenBy(r => r.ClientName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+
+        /// <summary>
+        /// Is this payment's contact the given client? The discriminator of the
+        /// de-duplication rule: true means the payment already reaches that
+        /// client's ledger through its contact-sourced row at the full
+        /// Payment.Amount, so its allocations must NOT be added again.
+        ///
+        /// ContactType is normalised on write (trimmed, canonical case) but
+        /// legacy rows may hold "client" / " Client ", so compare trimmed and
+        /// case-insensitively — the same comparison the EF-side receipts query
+        /// makes, kept in step with it.
+        /// </summary>
+        private static bool IsContactOf(string? contactType, int? contactId, int clientId) =>
+            contactId == clientId
+            && string.Equals(contactType?.Trim(), "Client", StringComparison.OrdinalIgnoreCase);
 
         private sealed class Bucket
         {

@@ -191,9 +191,13 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
-        /// Customer A/R statement — chronological ledger of invoices (debits)
-        /// and receipts (credits) with a running balance, opened from the
-        /// Accounts-Receivable cell.
+        /// Customer statement — the chronological money trail with a running
+        /// balance, opened from the Accounts-Receivable cell. Derived by
+        /// <c>ICustomerLedgerService</c>; columns follow the operator's workbook,
+        /// so invoices and debit notes sit in CREDIT while receipts, credit notes
+        /// and settle-remainder adjustments sit in DEBIT, and the balance is
+        /// opening + Σcredit − Σdebit. A negative closing balance means the
+        /// customer holds an advance rather than owing anything.
         /// </summary>
         [HttpGet("{clientId}/statement")]
         [HasPermission("clients.manage.view")]
