@@ -67,8 +67,11 @@
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
 
-        // Tenant isolation flag. See CompanyDto for semantics. Defaults to
-        // false on a newly created company so existing flows keep working.
-        public bool IsTenantIsolated { get; set; }
+        // Tenant isolation flag: "Restrict to assigned users only". Informational
+        // metadata only — access is already fail-closed for every non-seed-admin
+        // via an explicit UserCompany row regardless of this flag (see
+        // CompanyAccessGuard). Defaulted true on create so the UI checkbox
+        // reflects that reality; existing companies keep whatever is stored.
+        public bool IsTenantIsolated { get; set; } = true;
     }
 }
