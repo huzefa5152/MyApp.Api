@@ -75,8 +75,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var direction = ParseDirection(dto.Direction);
 
-            if (dto.Allocations == null || dto.Allocations.Count == 0)
-                throw new InvalidOperationException("A payment needs at least one allocation line.");
+            AssertAllocationsPresent(direction, dto);
 
             // Validate each line: exactly one target, positive amount, correct
             // side for the direction. Collect the documents we'll need to touch.
@@ -125,6 +124,8 @@ namespace MyApp.Api.Services.Implementations
                 if (adjAccountIds.Except(valid).Any())
                     throw new InvalidOperationException("The selected adjustment account doesn't belong to this company.");
             }
+
+            AssertAllocationsFitAmount(dto);
 
             // Period-close guard (GL lock date) before any writes.
             await _posting.AssertPeriodOpenAsync(companyId, dto.Date == default ? PakistanClock.Today : dto.Date);
@@ -234,7 +235,7 @@ namespace MyApp.Api.Services.Implementations
                 BankAccountName = bankAccountName,
                 Method = string.IsNullOrWhiteSpace(dto.Method) ? "Cash" : dto.Method.Trim(),
                 Description = Trimmed(dto.Description),
-                Amount = dto.Allocations.Sum(a => a.Amount),
+                Amount = ResolveAmount(dto),
                 ChequeNumber = Trimmed(dto.ChequeNumber),
                 ChequeDate = dto.ChequeDate,
                 ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber),
@@ -300,8 +301,11 @@ namespace MyApp.Api.Services.Implementations
             var companyId = payment.CompanyId;
             var direction = payment.Direction;            // direction is immutable on edit
 
-            if (dto.Allocations == null || dto.Allocations.Count == 0)
-                throw new InvalidOperationException("A payment needs at least one allocation line.");
+            // Same rules as the create path — an edit must not be able to make a
+            // document a create could not have made, nor silently drop the cash
+            // of one it could. The contact CAN change on an edit, so the
+            // customer-receipt test reads the INCOMING dto, not the stored row.
+            AssertAllocationsPresent(direction, dto);
 
             // Period-close guard: the payment can't move out of OR into a
             // locked period, so check both the stored and the incoming date.
@@ -325,6 +329,7 @@ namespace MyApp.Api.Services.Implementations
                 if (a.InvoiceId.HasValue) invoiceIds.Add(a.InvoiceId.Value);
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
             }
+            AssertAllocationsFitAmount(dto);
             await AssertAllocationAccountsAsync(companyId, dto);
 
             var invoices = await _context.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToListAsync();
@@ -402,7 +407,7 @@ namespace MyApp.Api.Services.Implementations
                 payment.ChequeNumber = Trimmed(dto.ChequeNumber);
                 payment.ChequeDate = dto.ChequeDate;
                 payment.ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber);
-                payment.Amount = dto.Allocations.Sum(a => a.Amount);
+                payment.Amount = ResolveAmount(dto);
 
                 // Replace allocation lines.
                 _context.PaymentAllocations.RemoveRange(payment.Allocations);
@@ -496,6 +501,58 @@ namespace MyApp.Api.Services.Implementations
             return await GetByIdAsync(id);
         }
 
+        // ── Amount / allocation rules (shared by create and edit) ─────────────
+
+        /// <summary>A receipt taken from a named customer — the only document
+        /// whose unapplied balance has somewhere to live (Advance from
+        /// Customers). Money-out and party-less "Other" receipts have no such
+        /// account, so they still need at least one allocation line.</summary>
+        private static bool IsCustomerReceipt(PaymentDirection direction, CreatePaymentDto dto) =>
+            direction == PaymentDirection.Receipt
+            && string.Equals(dto.ContactType?.Trim(), "Client", StringComparison.OrdinalIgnoreCase)
+            && dto.ContactId.HasValue;
+
+        /// <summary>Enforce the allocation requirement and normalise the list so
+        /// the rest of the pipeline can treat it as non-null.</summary>
+        private static void AssertAllocationsPresent(PaymentDirection direction, CreatePaymentDto dto)
+        {
+            if ((dto.Allocations == null || dto.Allocations.Count == 0) && !IsCustomerReceipt(direction, dto))
+                throw new InvalidOperationException("A payment needs at least one allocation line.");
+            dto.Allocations ??= new List<CreatePaymentAllocationDto>();
+        }
+
+        /// <summary>Cash total of the document. Explicit when supplied; otherwise
+        /// Σ allocation cash, which is what every pre-2026-08-29 caller meant.</summary>
+        private static decimal ResolveAmount(CreatePaymentDto dto) =>
+            dto.Amount ?? dto.Allocations.Sum(a => a.Amount);
+
+        /// <summary>Allocations may spend part of the receipt's CASH, but never
+        /// more than it — the difference is the advance, and it cannot be
+        /// negative. AdjustmentAmount is deliberately absent: it is a non-cash
+        /// write-off, so a 1000 receipt may legitimately clear an 1100 invoice
+        /// as 1000 cash + 100 written off.</summary>
+        private static void AssertAllocationsFitAmount(CreatePaymentDto dto)
+        {
+            var amount = ResolveAmount(dto);
+            var appliedCash = dto.Allocations.Sum(a => a.Amount);
+            // Sign first: a negative amount would otherwise be reported as an
+            // over-allocation ("0.00 is more than -5000.00"), which reads as
+            // nonsense to the operator.
+            if (amount < 0m)
+                throw new InvalidOperationException("A receipt must be for a positive amount.");
+            if (appliedCash > amount)
+                throw new InvalidOperationException(
+                    $"Allocations apply {appliedCash:0.00} in cash, which is more than the receipt amount {amount:0.00}.");
+            // Only a LINE-LESS document is required to carry cash — with no
+            // lines and no cash it records nothing at all. A zero-cash document
+            // WITH lines is the pure write-off the settle-remainder feature
+            // already ships (cash 0 + AdjustmentAmount > 0): no money moves, the
+            // invoice clears from the adjustment account, and it is accepted on
+            // BOTH directions today — so money-out stays byte-for-byte the same.
+            if (amount == 0m && dto.Allocations.Count == 0)
+                throw new InvalidOperationException("A receipt must be for a positive amount.");
+        }
+
         /// <summary>Direct-line allocation accounts (PaymentAllocation.AccountId)
         /// must be active accounts of THIS company — the ids come from the
         /// request body and now carry a real FK.</summary>
@@ -570,6 +627,9 @@ namespace MyApp.Api.Services.Implementations
                 Method = p.Method,
                 Description = p.Description,
                 Amount = p.Amount,
+                // CASH only — AdjustmentAmount is non-cash: it settles the
+                // invoice, not the receipt, and already has its own GL leg.
+                UnallocatedAmount = p.Amount - p.Allocations.Sum(a => a.Amount),
                 ChequeNumber = p.ChequeNumber,
                 ChequeDate = p.ChequeDate,
                 ChequeStatus = p.ChequeStatus.ToString(),

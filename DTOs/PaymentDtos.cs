@@ -27,6 +27,11 @@ namespace MyApp.Api.DTOs
         public string Method { get; set; } = "Cash";
         public string? Description { get; set; }
         public decimal Amount { get; set; }
+        /// <summary>Cash on this document that no allocation line spends —
+        /// Amount − Σ allocation CASH. For a customer receipt this is the
+        /// customer's advance. AdjustmentAmount is deliberately absent: it is a
+        /// non-cash write-off that settles the invoice, not the receipt.</summary>
+        public decimal UnallocatedAmount { get; set; }
 
         public string? ChequeNumber { get; set; }
         public DateTime? ChequeDate { get; set; }
@@ -58,10 +63,9 @@ namespace MyApp.Api.DTOs
         public string? AdjustmentAccountName { get; set; }
     }
 
-    /// <summary>Create shape. Amount is derived server-side from the allocation
-    /// lines (Σ). Number is optional — null/0 auto-allocates the next per
-    /// (company, direction); the ETL importer supplies it to preserve legacy
-    /// document numbers.</summary>
+    /// <summary>Create shape. Number is optional — null/0 auto-allocates the
+    /// next per (company, direction); the ETL importer supplies it to preserve
+    /// legacy document numbers.</summary>
     public class CreatePaymentDto
     {
         public string Direction { get; set; } = "Receipt";
@@ -82,6 +86,12 @@ namespace MyApp.Api.DTOs
         public string? ChequeNumber { get; set; }
         public DateTime? ChequeDate { get; set; }
         public string? ChequeStatus { get; set; }
+
+        /// <summary>Cash total of the document. Authoritative — allocations may
+        /// cover all, part, or none of it. The uncovered remainder is the
+        /// customer's advance. Legacy callers that omit it fall back to
+        /// Σ allocation amounts, preserving the old behaviour exactly.</summary>
+        public decimal? Amount { get; set; }
 
         public List<CreatePaymentAllocationDto> Allocations { get; set; } = new();
     }
