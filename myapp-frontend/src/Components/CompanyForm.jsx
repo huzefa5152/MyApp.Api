@@ -88,9 +88,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         requireSalesOrderForBilling: false,
         startingPurchaseBillNumber: 0,
         startingGoodsReceiptNumber: 0,
-        // Tenant isolation — off by default to preserve "any user with the
-        // right RBAC permission can reach this company" behaviour.
-        isTenantIsolated: false,
+        // Tenant isolation — "Restrict to assigned users only". Informational
+        // metadata only: access is already fail-closed for every non-seed-admin
+        // via an explicit UserCompany row regardless of this flag (see
+        // CompanyAccessGuard). Defaulted true so the create form reflects that
+        // reality.
+        isTenantIsolated: true,
     });
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
@@ -557,7 +560,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <span style={{ fontSize: "0.86rem", color: "#1a2332", lineHeight: 1.4 }}>
                                     <strong style={{ display: "block" }}>Restrict to assigned users only</strong>
                                     <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
-                                        OFF (default) — any authenticated user with the right RBAC permission can reach this company. ON — only users with an explicit grant in <em>Configuration → Tenant Access</em> see this company. The seed admin always bypasses.
+                                        Informational metadata only — access is already fail-closed for every non-seed-admin: a user reaches this company only via an explicit grant in <em>Configuration → Tenant Access</em>, regardless of this flag. Checked by default on new companies so the box reflects that reality; the seed admin always bypasses.
                                     </span>
                                 </span>
                             </label>
