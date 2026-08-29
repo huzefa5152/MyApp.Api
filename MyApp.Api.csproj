@@ -9,9 +9,14 @@
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
-  <!-- scripts/ and tools/ contain standalone dev tools (PdfDumper, ManagerImport)
-       that must not be compiled into the main web API assembly — each has its
-       own .csproj. -->
+  <!-- scripts/, tools/ and tests/ contain standalone projects (PdfDumper,
+       ManagerImport, the xUnit suite) that must not be compiled into the main
+       web API assembly — each has its own .csproj.
+       tests/ matters even when the suite isn't checked out on this branch:
+       only the ROOT obj/ and bin/ are excluded by DefaultItemExcludes, so a
+       nested project's leftover obj/**/*.AssemblyInfo.cs gets swallowed by the
+       default **/*.cs glob and the build dies with 8 × CS0579 duplicate
+       assembly attributes. -->
   <ItemGroup>
     <Compile Remove="scripts/**/*.cs" />
     <Content Remove="scripts/**/*" />
@@ -21,6 +26,10 @@
     <Content Remove="tools/**/*" />
     <None Remove="tools/**/*" />
     <EmbeddedResource Remove="tools/**/*" />
+    <Compile Remove="tests/**/*.cs" />
+    <Content Remove="tests/**/*" />
+    <None Remove="tests/**/*" />
+    <EmbeddedResource Remove="tests/**/*" />
   </ItemGroup>
 
   <ItemGroup>
