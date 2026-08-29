@@ -146,6 +146,32 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
+            // Unallocated remainder of a customer receipt — money in hand that
+            // settles no invoice yet. A liability, not negative A/R (see
+            // ControlType.CustomerAdvances). Money-out has no supplier
+            // equivalent, so this only ever fires for a Receipt. Must run
+            // BEFORE the generic on-account/Suspense plug below so a genuine
+            // customer advance lands on its own control account instead of
+            // pooling on Suspense; once it's added here drSum/crSum already
+            // balance, so the Suspense plug is a no-op for this case.
+            var allocated = payment.Allocations.Sum(a => a.Amount + a.AdjustmentAmount);
+            var unallocated = payment.Amount - allocated;
+            if (isReceipt && unallocated > 0m)
+            {
+                var advances = await ResolveAsync(payment.CompanyId, accounts,
+                    ControlType.CustomerAdvances, "customer advances");
+                lines.Add(new JournalLine
+                {
+                    AccountId = advances.Id,
+                    Debit = 0m,
+                    Credit = unallocated,
+                    PartyType = payment.ContactType == "Client" ? "Client" : null,
+                    PartyId = payment.ContactType == "Client" ? payment.ContactId : null,
+                    DivisionId = payment.DivisionId,
+                    Description = reference,
+                });
+            }
+
             // On-account remainder: money moved but not fully matched by settlement
             // legs — an advance/prepayment, a receipt/payment on account, or a
             // migrated document whose income/expense lines aren't mapped to
