@@ -1920,6 +1920,37 @@ using (var scope = app.Services.CreateScope())
             Log.Warning(ex, "StockMovement division backfill failed (non-fatal).");
         }
     }
+
+    // One-time: every company that already has a chart of accounts gains the
+    // customer-advance control account added to CoaPresetSeeder (2026-08-29).
+    // Re-running the wholesale preset seeder is safe for a company that
+    // already has a chart — every group/account it creates is looked up by a
+    // stable "seed:*" ExternalRef first, so re-seeding an existing company
+    // only adds whatever is still missing (here: just "Advance from
+    // Customers"); nothing is duplicated. Idempotent via the AuditLog marker
+    // below, same convention as the backfills above.
+    if (!db.AuditLogs.Any(a => a.ExceptionType == "CUSTOMER_ADVANCES_BACKFILL_V1"))
+    {
+        try
+        {
+            var coaSeeder = scope.ServiceProvider.GetRequiredService<ICoaPresetSeeder>();
+            var companyIds = await db.Accounts.AsNoTracking()
+                .Select(a => a.CompanyId).Distinct().ToListAsync();
+            foreach (var companyId in companyIds)
+            {
+                await coaSeeder.SeedWholesaleAsync(companyId);
+            }
+
+            db.Database.ExecuteSqlRaw(
+                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
+                "VALUES ('Info', 'CUSTOMER_ADVANCES_BACKFILL_V1', {0}, 'STARTUP', '/seed/accounts/customer-advances', 200, SYSUTCDATETIME())",
+                $"Customer-advances control account backfilled across {companyIds.Count} compan(y/ies) with an existing chart.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Customer-advances account backfill failed (non-fatal).");
+        }
+    }
 }
 
 // Configure the HTTP request pipeline.

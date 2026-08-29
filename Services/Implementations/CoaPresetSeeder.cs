@@ -86,6 +86,7 @@ namespace MyApp.Api.Services.Implementations
             await Account("ap", "Accounts payable", "liabilities", AccountType.Liability, ControlType.AccountsPayable);
             await Account("output_tax", "Output Sales Tax", "liabilities", AccountType.Liability, ControlType.OutputTax);
             await Account("wht_payable", "WHT payable", "liabilities", AccountType.Liability, ControlType.WithholdingPayable);
+            await Account("customer_advances", "Advance from Customers", "liabilities", AccountType.Liability, ControlType.CustomerAdvances);
 
             await Group("equity", "Equity", FinancialStatement.BalanceSheet, null, true);
             await Account("capital", "Owner's capital", "equity", AccountType.Equity, ControlType.Capital);

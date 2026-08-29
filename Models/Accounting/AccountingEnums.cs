@@ -52,5 +52,10 @@ namespace MyApp.Api.Models.Accounting
         BadDebtWriteOff = 17,
         /// <summary>Payment-side write-back of an amount no longer owed to a supplier (P&amp;L income).</summary>
         WriteBackIncome = 18,
+
+        /// <summary>Customer money received but not yet applied to an invoice —
+        /// a liability, NOT negative A/R. The customer owes nothing for it yet,
+        /// so it must not net against Accounts Receivable. (2026-08-29)</summary>
+        CustomerAdvances = 19,
     }
 }
