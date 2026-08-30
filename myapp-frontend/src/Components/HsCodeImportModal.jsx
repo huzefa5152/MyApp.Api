@@ -46,11 +46,30 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
   const [createItemTypes, setCreateItemTypes] = useState(true);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
+  // Set when the API answers with the SPA's own HTML — see isStaleBackend.
+  const [staleBackend, setStaleBackend] = useState(false);
+
+  // The SPA is served for any path the API doesn't handle, so a server running
+  // an older build answers these calls with index.html and a 200. Axios parses
+  // that as a string, the response has no fields we asked for, and the dialog
+  // would otherwise look like it silently ignored the operator — which is
+  // exactly what "unable to save token" felt like. Detect it and say so.
+  const isStaleBackend = (data) =>
+    typeof data === "string" || data == null || typeof data !== "object";
+
+  const STALE_MESSAGE =
+    "The server is running an older build that doesn't have the HS code import yet. " +
+    "Restart the backend, then reopen this dialog.";
 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await getFbrReferenceToken();
+        if (isStaleBackend(data)) {
+          setStaleBackend(true);
+          setTokenStatus(null);
+          return;
+        }
         setTokenStatus(data);
         setEnvironment(data?.environment || "production");
         // Nothing to import with → open the token field straight away rather
@@ -67,6 +86,11 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
     setSavingToken(true);
     try {
       const { data } = await setFbrReferenceToken(tokenInput.trim(), environment);
+      if (isStaleBackend(data)) {
+        setStaleBackend(true);
+        notify(STALE_MESSAGE, "error");
+        return;
+      }
       setTokenStatus(data);
       setTokenInput("");
       setShowTokenField(false);
@@ -83,6 +107,11 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
     setResult(null);
     try {
       const { data } = await importHsCodes({ companyId, createItemTypes });
+      if (isStaleBackend(data)) {
+        setStaleBackend(true);
+        notify(STALE_MESSAGE, "error");
+        return;
+      }
       setResult(data);
       if (data?.errors?.length && data.totalReceived === 0) {
         notify("Import could not read FBR's catalog — see the details.", "error");
@@ -132,6 +161,13 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
             This is reference data. It does <strong>not</strong> switch FBR integration on for
             any company — companies with FBR off use these codes for their item types just the same.
           </div>
+
+          {staleBackend && (
+            <div style={styles.staleBox}>
+              <MdWarning size={16} color={colors.warn} style={{ flexShrink: 0 }} />
+              <div>{STALE_MESSAGE}</div>
+            </div>
+          )}
 
           {/* ── Credentials ─────────────────────────────────────────── */}
           <div style={styles.section}>
@@ -310,6 +346,11 @@ const styles = {
   note: {
     fontSize: "0.8rem", lineHeight: 1.45, color: colors.textPrimary,
     background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 8, padding: "0.6rem 0.75rem",
+  },
+  staleBox: {
+    display: "flex", gap: "0.5rem", alignItems: "flex-start", fontSize: "0.83rem",
+    lineHeight: 1.45, color: colors.textPrimary, background: colors.warnBg,
+    border: "1px solid #f0e0b6", borderRadius: 8, padding: "0.6rem 0.75rem",
   },
   section: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.75rem" },
   sectionHead: {
