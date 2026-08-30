@@ -48,9 +48,26 @@ export default function ClientImportModal({ companyId, companyName, onClose, onI
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef(null);
 
+  // The SPA falls back to index.html for any path the API doesn't serve, and a
+  // blob request happily "succeeds" with that HTML — which is how you end up
+  // with a .csv that Excel refuses to open. Whenever the server is running an
+  // older build than the browser, say so instead of handing over the page.
+  const looksLikeSpaFallback = async (blob) => {
+    const head = (await blob.slice(0, 64).text()).trimStart().toLowerCase();
+    return head.startsWith("<!doctype") || head.startsWith("<html");
+  };
+
+  const staleBackendMessage =
+    "The server is running an older build that doesn't have the client import yet. " +
+    "Restart the backend, then try again.";
+
   const getTemplate = async () => {
     try {
       const { data } = await downloadClientImportTemplate();
+      if (await looksLikeSpaFallback(data)) {
+        notify(staleBackendMessage, "error");
+        return;
+      }
       const url = URL.createObjectURL(new Blob([data], { type: "text/csv" }));
       const a = document.createElement("a");
       a.href = url;
@@ -72,6 +89,13 @@ export default function ClientImportModal({ companyId, companyName, onClose, onI
     setParsing(true);
     try {
       const { data } = await previewClientImport(companyId, f);
+      // Same stale-backend trap as the template download: the fallback returns
+      // the SPA's HTML with a 200, which has no `rows` to render.
+      if (!data || !Array.isArray(data.rows)) {
+        notify(staleBackendMessage, "error");
+        setFile(null);
+        return;
+      }
       setPreview(data);
       if (data?.fileMessages?.length && data.totalRows === 0) {
         notify(data.fileMessages[0], "error");
