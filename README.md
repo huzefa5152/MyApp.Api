@@ -289,6 +289,16 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-30 — Customer receipts without an invoice, and customer advances
+
+- **Record a receipt without picking an invoice.** Money received from a customer can now be entered on its own — date, customer, amount, method, reference and notes — with no invoice selected. Previously every receipt had to be applied to at least one invoice at the moment the cash arrived, which is not how payments actually turn up.
+- **Money paid in excess becomes a customer advance.** When a customer pays more than they owe, the extra is no longer rejected: it stays on their account as an advance. A single receipt can be part-applied to invoices and part-advance.
+- **Apply an advance to invoices later.** An existing advance can be settled against one or more of that customer's invoices whenever you choose, without re-entering the receipt.
+- **Customer ledger.** Each customer now has a full chronological trail — invoices, receipts, credit and debit notes, write-offs, opening balance and a running balance — instead of a list of invoices only. Amounts follow the familiar ledger layout: invoices in the Credit column, money received in the Debit column.
+- **Fixes a statement that could disagree with the balance owed.** Where a receipt settled an invoice partly in cash and partly by writing off the remainder, the old statement counted only the cash, so its closing figure drifted from the customer's real balance. Credit and debit notes were missing from it altogether, and it silently stopped after 200 rows.
+- **Advance from Customers account.** New companies get it automatically and existing companies gain it on next start-up. Unapplied money is held there rather than reducing what customers owe, so receivables, aged receivables and the trial balance stay correct while the customer holds a credit.
+- **New companies start with access restricted to assigned users.** The option is on by default when creating a company, and the wording beside it now describes what it actually does.
+
 ### 2026-08-30 — Refreshing a page keeps you on that page
 
 - **F5 no longer throws you back to the Dashboard.** Reloading Invoices, Clients, Reports — any screen — now reloads that screen. Opening a sidebar link in a new tab (ctrl-click or middle-click) lands on the right page too, instead of the Dashboard.
