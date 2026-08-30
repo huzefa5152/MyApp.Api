@@ -38,12 +38,21 @@ Suites:
                                     LATER; over-allocation past the remaining
                                     unallocated cash, another company's invoice,
                                     a money-out target and a cancelled receipt
-                                    are all rejected
+                                    are all rejected; a mixed cash+write-off
+                                    allocate line that exceeds the remaining
+                                    cash only under the SETTLEMENT figure (not
+                                    cash alone) is accepted — the cash-only
+                                    invariant on the allocate path itself
   11. Money-out Amount gate      -> Payment.Amount is authoritative for a
                                     RECEIPT only (suite 1) — a money-out payment
                                     cannot inflate it past Σ allocation cash on
                                     EITHER create or edit; PostingService would
                                     otherwise plug the gap to Suspense silently
+  12. Allocate GL integrity      -> allocating shrinks the advance leg and grows
+                                    the AR leg by exactly the cash moved, the
+                                    entry stays balanced, and a SECOND allocate
+                                    on the same receipt does not duplicate the
+                                    first call's journal lines (re-post REPLACES)
 
 Runs against a fresh ephemeral GL-enabled company + client, plus a second
 company used only as the "other tenant" in suite 8. Both torn down at the end.
@@ -76,6 +85,13 @@ SQL_SERVER = r"CRKRL-HUSSAHUZ1\MSSQLSERVER2"
 
 PKT = timezone(timedelta(hours=5))
 results: list[tuple[str, str, bool, str]] = []   # (suite, name, ok, reason)
+# A skipped check is NEITHER pass nor fail — it was never exercised (e.g. the
+# cancelled-receipt case needs --db). Tracked separately from `results` so it
+# can never silently vanish from the final count: report() always prints it
+# and appends ", N skipped" to the summary line, so a plain run with no --db
+# cannot look "fully green" while quietly omitting a check (coordinator
+# review, 2026-08-30).
+skipped: list[tuple[str, str, str]] = []   # (suite, name, reason)
 
 
 def today_iso() -> str:
@@ -106,6 +122,11 @@ def check(suite: str, name: str, ok: bool, reason: str = "") -> bool:
     results.append((suite, name, ok, reason))
     print(("PASS" if ok else "FAIL") + f" - {name}" + ("" if ok else f"   [{reason}]"))
     return ok
+
+
+def skip(suite: str, name: str, reason: str) -> None:
+    skipped.append((suite, name, reason))
+    print(f"SKIP - {name}   [{reason}]")
 
 
 def eq(a, b, tol: float = 0.01) -> bool:
@@ -552,6 +573,26 @@ def suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc_a
         check(suite, "allocating to another company's invoice is rejected (400)",
               st == 400 and "belong to this company" in err_of(r), f"got {st} {err_of(r)}")
 
+    # Cash-vs-settlement on the ALLOCATE path (coordinator review, 2026-08-30):
+    # cash (4,700,000) + write-off (100,000) = 4,800,000 exceeds the remaining
+    # unallocated cash (4,700,000), but the CASH alone exactly matches it. Only
+    # the cash-only rule accepts this. This is the exact defect this plan has
+    # hit twice before — flip PaymentService.cs's cash-fit check (~:464) to
+    # Σ(a.Amount + a.AdjustmentAmount) and THIS assertion is what turns red;
+    # nothing else in this suite uses AdjustmentAmount on an allocate call, so
+    # a flip-and-revert is a clean, isolated proof (see task-4-report.md).
+    st, r = post_allocate(base, token, rid, [{
+        "invoiceId": inv2["id"], "amount": 4700000,
+        "adjustmentAmount": 100000, "adjustmentAccountId": disc_acct}])
+    if check(suite, "cash (4,700,000) + write-off (100,000) exceeding the remaining "
+                    "unallocated cash, but cash ALONE not exceeding it, is accepted",
+             st == 200, f"got {st} {err_of(r)}"):
+        check(suite, "unallocatedAmount drops to exactly 0 (cash-only, not cash+write-off)",
+              eq(r.get("unallocatedAmount"), 0), f"unallocatedAmount = {r.get('unallocatedAmount')}")
+        after_inv2 = get_invoice(base, token, inv2["id"])
+        check(suite, "inv2 amountPaid settles for cash + write-off (4,800,000)",
+              eq(after_inv2.get("amountPaid"), 4800000), f"amountPaid = {after_inv2.get('amountPaid')}")
+
     # Money-out cannot be allocated to an invoice — only a Receipt qualifies.
     st, pay = http("POST", f"/api/payments/payments/company/{cid}", base, token=token, body={
         "direction": "Payment", "date": today_iso(), "contactType": "Other",
@@ -575,8 +616,8 @@ def suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc_a
                 check(suite, "a cancelled receipt cannot be allocated (400)",
                       st == 400 and "cancelled" in err_of(r).lower(), f"got {st} {err_of(r)}")
         else:
-            print("  SKIP - 'a cancelled receipt cannot be allocated': "
-                  "pass --db <name> (direct-SQL escape hatch; no API sets IsCancelled)")
+            skip(suite, "a cancelled receipt cannot be allocated",
+                 "pass --db <name> (direct-SQL escape hatch; no API sets IsCancelled)")
 
 
 def suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc_acct):
@@ -624,6 +665,83 @@ def suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc_acct):
         check(suite, "editing money-out with an inflated amount is also ignored (still 3000)",
               st == 200 and eq(edited.get("amount"), 3000),
               f"got {st} amount={edited.get('amount') if isinstance(edited, dict) else edited}")
+
+
+def suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, advance_acct, ar_acct):
+    """GL proof for AllocateAsync's re-post (coordinator review, 2026-08-30):
+    suite 9's ledger check runs BEFORE suites 10/11, so nothing previously
+    pinned that allocating shrinks the advance leg by exactly the cash moved,
+    grows the AR leg by exactly the same, keeps the entry balanced, and — the
+    one only a SECOND allocate call can prove — that re-posting REPLACES the
+    payment's journal entry rather than appending to it. A fresh receipt is
+    used so before/after deltas are exact regardless of what earlier suites
+    already posted to these same control accounts."""
+    suite = "12. Allocate GL integrity"
+    print(f"\n=== {suite} ===")
+    if not advance_acct or not ar_acct:
+        skip(suite, "advance/AR balance movement + no-duplicate-lines on re-post",
+             "'Advance from Customers' or 'Accounts Receivable' control account not found")
+        return
+
+    st, rcp = post_receipt(base, token, cid, receipt_body(client_id, amount=900000))
+    if not check(suite, "900,000 advance receipt created", st in (200, 201),
+                 f"got {st} {err_of(rcp)}"):
+        return
+    rid = rcp["id"]
+
+    inv_a = make_invoice(base, token, cid, client_id, item_type_id, 200000)
+    inv_b = make_invoice(base, token, cid, client_id, item_type_id, 150000)
+    if not check(suite, "two invoices created (200000, 150000)",
+                 inv_a is not None and inv_b is not None, "invoice create failed"):
+        return
+
+    # ── First allocate: 200,000 cash to inv_a ──────────────────────────
+    before_adv_1 = balance_of(base, token, cid, advance_acct["id"])
+    before_ar_1 = balance_of(base, token, cid, ar_acct["id"])
+    st, r = post_allocate(base, token, rid, [{"invoiceId": inv_a["id"], "amount": 200000}])
+    if not check(suite, "first allocate (200000 cash) accepted", st == 200, f"got {st} {err_of(r)}"):
+        return
+    after_adv_1 = balance_of(base, token, cid, advance_acct["id"])
+    after_ar_1 = balance_of(base, token, cid, ar_acct["id"])
+    check(suite, "advance account moves by exactly the cash allocated (200000)",
+          before_adv_1 is not None and after_adv_1 is not None
+          and eq(abs(abs(before_adv_1) - abs(after_adv_1)), 200000),
+          f"before={before_adv_1}, after={after_adv_1}")
+    check(suite, "AR account moves by exactly the settled amount (200000)",
+          before_ar_1 is not None and after_ar_1 is not None
+          and eq(abs(abs(after_ar_1) - abs(before_ar_1)), 200000),
+          f"before={before_ar_1}, after={after_ar_1}")
+    st_tb1, tb1 = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance", base, token=token)
+    tb1 = tb1 if isinstance(tb1, dict) else {}
+    check(suite, "trial balance still balanced after first allocate",
+          st_tb1 == 200 and eq(tb1.get("totalDebit"), tb1.get("totalCredit")),
+          f"got {st_tb1} debit={tb1.get('totalDebit')} credit={tb1.get('totalCredit')}")
+
+    # ── Second allocate, SAME receipt, a DIFFERENT invoice: if PostPaymentAsync
+    #    appended instead of replacing the payment's journal entry, these deltas
+    #    would reflect the first call's effect a second time too (double), not
+    #    just this call's 150,000. ───────────────────────────────────────────
+    st, r2 = post_allocate(base, token, rid, [{"invoiceId": inv_b["id"], "amount": 150000}])
+    if not check(suite, "second allocate (150000 cash, different invoice) accepted",
+                 st == 200, f"got {st} {err_of(r2)}"):
+        return
+    after_adv_2 = balance_of(base, token, cid, advance_acct["id"])
+    after_ar_2 = balance_of(base, token, cid, ar_acct["id"])
+    check(suite, "advance account moves by exactly 150000 MORE (not duplicated)",
+          after_adv_1 is not None and after_adv_2 is not None
+          and eq(abs(abs(after_adv_1) - abs(after_adv_2)), 150000),
+          f"after first={after_adv_1}, after second={after_adv_2}")
+    check(suite, "AR account moves by exactly 150000 MORE (not duplicated)",
+          after_ar_1 is not None and after_ar_2 is not None
+          and eq(abs(abs(after_ar_2) - abs(after_ar_1)), 150000),
+          f"after first={after_ar_1}, after second={after_ar_2}")
+    st_tb2, tb2 = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance", base, token=token)
+    tb2 = tb2 if isinstance(tb2, dict) else {}
+    check(suite, "trial balance still balanced after second allocate (no duplicate lines)",
+          st_tb2 == 200 and eq(tb2.get("totalDebit"), tb2.get("totalCredit")),
+          f"got {st_tb2} debit={tb2.get('totalDebit')} credit={tb2.get('totalCredit')}")
+    check(suite, "unallocatedAmount reflects BOTH allocations (900000 - 350000 = 550000)",
+          eq(r2.get("unallocatedAmount"), 550000), f"unallocatedAmount = {r2.get('unallocatedAmount')}")
 
 
 # ── Setup / teardown ───────────────────────────────────────────────
@@ -697,7 +815,10 @@ def report() -> int:
     failures = [(s, n, r) for s, n, ok, r in results if not ok]
     for s, n, r in failures:
         print(f"FAILED  {s} :: {n}   [{r}]")
-    print(f"{passed}/{total} checks passed")
+    for s, n, r in skipped:
+        print(f"SKIPPED {s} :: {n}   [{r}]")
+    suffix = f", {len(skipped)} skipped" if skipped else ""
+    print(f"{passed}/{total} checks passed{suffix}")
     return 0 if passed == total else 1
 
 
@@ -723,6 +844,7 @@ def main() -> int:
         return next((a for a in flat if a.get("controlType") == ct), None)
 
     advance = by_control("CustomerAdvances")
+    ar = by_control("AccountsReceivable")
     disc = (by_control("DiscountAllowed") or {}).get("id")
     bad_debt = (by_control("BadDebtWriteOff") or {}).get("id")
     print(f"\n== company={cid} client={client_id} supplier={supplier_id} "
@@ -741,6 +863,7 @@ def main() -> int:
         suite_9_ledger(base, token, cid, advance)
         suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc, args.db)
         suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc)
+        suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, advance, ar)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 
