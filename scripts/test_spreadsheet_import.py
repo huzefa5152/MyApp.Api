@@ -29,6 +29,12 @@ What it proves:
     inherits the date above it
   * imported balances read back through the app's own Customer Ledger, and the
     receivable total lands on Accounts receivable with the ledger frozen
+  * a built-in layout ships for each kind, cannot be deleted, and is offered as
+    a starting point when a workbook is not recognised
+  * a layout keeps recognising its own template after every value in the file
+    has changed — the property that stops a monthly re-upload being re-mapped
+  * a period is supplied per import, so a layout carries no dates and stays
+    correct year on year
   * every route refuses a company the caller cannot reach
 
     python scripts/test_spreadsheet_import.py --base http://localhost:5134
@@ -716,6 +722,81 @@ def main():
         check("a customer that does not reconcile blocks the import",
               lp4.get("clientsOutOfBalance") == 1 and lp4.get("canCommit") is False,
               f"outOfBalance={lp4.get('clientsOutOfBalance')} canCommit={lp4.get('canCommit')}")
+
+        # ── 12. Built-in layouts ────────────────────────────────────────
+        # The product ships a layout per kind so a first import never starts
+        # from a blank mapping form.
+        r = requests.get(f"{api}/import-profiles", headers=h, timeout=30,
+                         params={"companyId": company})
+        allp = r.json() if r.ok else []
+        builtins = [p_ for p_ in allp if p_.get("isDefault")]
+        check("a built-in layout ships for each kind",
+              {p_["kind"] for p_ in builtins} == {"OpeningStock", "CustomerLedger"},
+              f"found {[(p_['kind'], p_['name']) for p_ in builtins]}")
+        check("built-in layouts are installation-wide",
+              all(p_["isShared"] for p_ in builtins),
+              f"{[p_['name'] for p_ in builtins if not p_['isShared']]} are not shared")
+
+        stock_builtin = next((p_ for p_ in builtins if p_["kind"] == "OpeningStock"), None)
+        r = requests.delete(f"{api}/import-profiles/{stock_builtin['id']}", headers=h, timeout=30)
+        check("a built-in layout cannot be deleted", r.status_code == 400,
+              f"http {r.status_code}")
+
+        # An unfamiliar workbook still gets a described layout to start from.
+        odd = stock_workbook(base_rows(tag), month="Jul 2026", sheet_name="Nothing Like It")
+        wbx = openpyxl.load_workbook(io.BytesIO(odd))
+        wsx = wbx["Nothing Like It"]
+        wsx.cell(1, 6, "Some Other Business Entirely")
+        for col in range(1, 20):
+            if wsx.cell(3, col).value:
+                wsx.cell(3, col, f"Unfamiliar Heading {col}")
+        bx = io.BytesIO(); wbx.save(bx)
+        r = upload(idurl, h, bx.getvalue(), "odd.xlsx", None,
+                   {"companyId": company, "kind": "OpeningStock"})
+        odd_id = r.json() if r.ok else {}
+        check("an unrecognised workbook is offered the built-in as a starting point",
+              (odd_id.get("defaultProfile") or {}).get("isDefault") is True,
+              f"default={odd_id.get('defaultProfile')}")
+        check("and it is not passed off as a confident match",
+              odd_id.get("matchedProfile") is None,
+              f"matched={odd_id.get('matchedProfile')}")
+
+        # ── 13. A layout survives its data changing ─────────────────────
+        # The property the whole feature rests on: next period's workbook has
+        # the same columns and entirely different contents, and must still be
+        # recognised without being re-mapped.
+        r = upload(idurl, h, stock_workbook(base_rows(tag)), "m1.xlsx", None,
+                   {"companyId": company, "kind": "OpeningStock"})
+        first = r.json().get("signatureHash") if r.ok else None
+
+        later = [("ZZZZ-LOT-9", "7318", "7318.1500:-", f"ENTIRELY OTHER GOODS {tag}", "Fasteners", "Kg", 812.5, 990125),
+                 ("ZZZZ-LOT-9", "9403", "9403.2000:-", f"SOMETHING ELSE AGAIN {tag}", "Furniture", "Pcs", 4, 61000)]
+        r = upload(idurl, h, stock_workbook(later, month="Dec 2027"), "m2.xlsx", None,
+                   {"companyId": company, "kind": "OpeningStock"})
+        second = r.json().get("signatureHash") if r.ok else None
+        check("the same layout with different data is still recognised",
+              first is not None and first == second,
+              f"{first} vs {second}")
+
+        # ── 14. The period belongs to the import, not the layout ────────
+        r = upload(ledger_preview, h, book, "ledger.xlsx",
+                   {"mappingJson": json.dumps({k: v for k, v in LEDGER_MAPPING.items()
+                                               if k not in ("periodStart", "periodEnd")})},
+                   {"companyId": company})
+        msg = (r.json().get("message") or "") if r.status_code == 400 else ""
+        check("a layout with no period asks for one instead of guessing",
+              r.status_code == 400 and "period" in msg.lower(),
+              f"http {r.status_code}: {msg[:80]}")
+
+        r = upload(ledger_preview, h, book, "ledger.xlsx",
+                   {"mappingJson": json.dumps({k: v for k, v in LEDGER_MAPPING.items()
+                                               if k not in ("periodStart", "periodEnd")}),
+                    "periodStart": "2025-07-01", "periodEnd": "2026-06-30",
+                    "openingDate": "2025-06-30"},
+                   {"companyId": company})
+        check("the period supplied with the import is used",
+              r.ok and (r.json().get("periodEnd") or "").startswith("2026-06-30"),
+              f"http {r.status_code}, periodEnd={r.json().get('periodEnd') if r.ok else '-'}")
 
         # ── 8. Isolation ────────────────────────────────────────────────
         r = upload(stock_preview, h, good, "stock.xlsx", form, {"companyId": 999999})

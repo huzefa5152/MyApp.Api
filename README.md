@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-01 — Spreadsheet import: built-in layouts
+
+- **Two layouts now ship with the product** — a standard stock sheet and a standard customer ledger — so a first import starts from a described layout instead of a blank mapping form. They are installation-wide, cannot be deleted, and a layout you save for your own company is used ahead of them.
+- **A layout is recognised by its headings, not its contents.** Next period's workbook is matched automatically even though every product, customer, amount and date in it has changed — which is the point: a monthly re-upload should never be re-mapped by hand. Previously the file's own product names went into the fingerprint, so the same template scored too low against itself to even be offered.
+- **A layout no longer carries dates.** The period a ledger covers is asked for on each import, so one layout stays correct year after year.
+- When a workbook genuinely is not recognised, the built-in is offered as a starting point and clearly labelled as one, rather than presented as a confident match.
+
 ### 2026-09-01 — Spreadsheet import: the screens
 
 - **Accounting → Spreadsheet Import** is now a page, not just an API. Pick the company and what you are importing, upload the workbook, say which column is which, review, import.

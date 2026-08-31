@@ -253,6 +253,13 @@ namespace MyApp.Api.Services.Implementations
             var profile = await _db.ImportProfiles.FirstOrDefaultAsync(p => p.Id == id);
             if (profile == null) return false;
 
+            // A built-in would simply be re-seeded on the next startup, so
+            // deleting one is a confusing no-op rather than a destructive act.
+            // Say so instead of pretending it worked.
+            if (profile.IsDefault)
+                throw new InvalidOperationException(
+                    "This layout ships with the product and cannot be deleted. Switch it off instead, or save your own copy.");
+
             // Versions cascade. ImportRun keeps a nullable ImportProfileId on
             // purpose, so deleting a layout never takes the audit trail of what
             // it imported with it.
@@ -306,6 +313,7 @@ namespace MyApp.Api.Services.Implementations
             CompanyId = p.CompanyId,
             CompanyName = companyName,
             IsShared = p.CompanyId == null,
+            IsDefault = p.IsDefault,
             SignatureHash = p.SignatureHash,
             MappingJson = p.MappingJson,
             CurrentVersion = p.CurrentVersion,

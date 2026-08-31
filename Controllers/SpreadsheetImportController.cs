@@ -230,7 +230,12 @@ namespace MyApp.Api.Controllers
             [FromForm] IFormFile file,
             [FromQuery] int companyId,
             [FromQuery] int? profileId,
-            [FromForm] string? mappingJson)
+            [FromForm] string? mappingJson,
+            // The period comes with the IMPORT, not the layout — a shipped
+            // layout carries no dates so it stays correct year on year.
+            [FromForm] DateTime? periodStart = null,
+            [FromForm] DateTime? periodEnd = null,
+            [FromForm] DateTime? openingDate = null)
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
             if (!await CompanyExistsAsync(companyId))
@@ -247,7 +252,8 @@ namespace MyApp.Api.Controllers
             {
                 return Ok(await _customerLedger.PreviewAsync(
                     validated.Bytes, validated.Extension, validated.FileName, validated.Sha256,
-                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion));
+                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion,
+                    periodStart, periodEnd, openingDate));
             }
             catch (InvalidOperationException ex)
             {

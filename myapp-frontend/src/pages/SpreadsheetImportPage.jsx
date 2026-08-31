@@ -188,6 +188,11 @@ export default function SpreadsheetImportPage() {
   const [result, setResult] = useState(null);
 
   const [asOfDate, setAsOfDate] = useState(() => `${new Date().getFullYear()}-07-01`);
+  // The financial year the ledger covers. Asked here rather than stored on the
+  // layout, so the same layout serves every year.
+  const thisYear = new Date().getFullYear();
+  const [periodStart, setPeriodStart] = useState(`${thisYear - 1}-07-01`);
+  const [periodEnd, setPeriodEnd] = useState(`${thisYear}-06-30`);
   const [postValue, setPostValue] = useState(true);
   const [enableTracking, setEnableTracking] = useState(true);
   const [setCutover, setSetCutover] = useState(true);
@@ -233,6 +238,12 @@ export default function SpreadsheetImportPage() {
       if (data.matchedProfile) {
         setProfileId(String(data.matchedProfile.profileId));
         notify(`Recognised as "${data.matchedProfile.name}".`, "success");
+      } else if (data.candidates?.length) {
+        // Close, not certain — offered, never assumed, because a wrong layout
+        // reads amounts out of the wrong column without complaining.
+        setProfileId("");
+      } else if (data.defaultProfile) {
+        setProfileId(String(data.defaultProfile.profileId));
       }
     } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
   };
@@ -254,7 +265,13 @@ export default function SpreadsheetImportPage() {
       };
       const { data } = isStock
         ? await previewOpeningStock(args)
-        : await previewCustomerLedger(args);
+        : await previewCustomerLedger({
+            ...args, periodStart, periodEnd,
+            // Opening balances sit the day before the period opens, so they
+            // never land inside the period they open.
+            openingDate: new Date(new Date(periodStart).getTime() - 86400000)
+              .toISOString().slice(0, 10),
+          });
       setPreview(data);
       if (!isStock && data.periodEnd) setAsOfDate((d) => d);
     } catch { /* surfaced */ } finally { setBusy(""); }
@@ -408,18 +425,27 @@ export default function SpreadsheetImportPage() {
               {ident.errors?.map((e, i) => <Banner key={i} tone="error" icon={MdError}>{e}</Banner>)}
               {ident.warnings?.map((w, i) => <Banner key={i} tone="warn" icon={MdWarning}>{w}</Banner>)}
 
-              {(profiles.length > 0 || ident.matchedProfile) && (
-                <label style={{ fontSize: 13, color: colors.textSecondary, display: "block", marginBottom: "0.7rem" }}>
-                  Saved layout
-                  <select value={profileId} onChange={(e) => setProfileId(e.target.value)} style={input}>
-                    <option value="">Map the columns myself</option>
-                    {profiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}{p.isShared ? " (shared)" : ""} · v{p.currentVersion}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              {profiles.length > 0 && (
+                <>
+                  <label style={{ fontSize: 13, color: colors.textSecondary, display: "block", marginBottom: "0.4rem" }}>
+                    Layout
+                    <select value={profileId} onChange={(e) => setProfileId(e.target.value)} style={input}>
+                      <option value="">Map the columns myself</option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}{p.isDefault ? "" : p.isShared ? " (shared)" : ""} · v{p.currentVersion}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p style={{ fontSize: 12.5, color: colors.textSecondary, margin: "0 0 0.8rem" }}>
+                    {ident.matchedProfile
+                      ? "This workbook was recognised — the columns below are already described."
+                      : ident.defaultProfile && String(ident.defaultProfile.profileId) === profileId
+                        ? "Not seen before, so the built-in layout is selected as a starting point. Review it before importing."
+                        : "Choose a saved layout, or map the columns yourself."}
+                  </p>
+                </>
               )}
 
               {!profileId && mapping && (
@@ -445,6 +471,25 @@ export default function SpreadsheetImportPage() {
                     </div>
                   </div>
                 </>
+              )}
+
+              {!isStock && (
+                <div style={{ ...grid, marginTop: "0.8rem" }}>
+                  <label style={{ fontSize: 13, color: colors.textSecondary }}>
+                    Period starts
+                    <input type="date" value={periodStart} style={input}
+                      onChange={(e) => setPeriodStart(e.target.value)} />
+                  </label>
+                  <label style={{ fontSize: 13, color: colors.textSecondary }}>
+                    Period ends
+                    <input type="date" value={periodEnd} style={input}
+                      onChange={(e) => setPeriodEnd(e.target.value)} />
+                  </label>
+                  <p style={{ fontSize: 12.5, color: colors.textSecondary, alignSelf: "end", margin: 0 }}>
+                    The year this workbook covers. Layouts carry no dates, so the
+                    same one works every year.
+                  </p>
+                </div>
               )}
 
               <div style={{ marginTop: "0.9rem" }}>

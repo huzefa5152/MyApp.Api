@@ -48,9 +48,10 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<CustomerLedgerPreviewDto> PreviewAsync(
             byte[] bytes, string extension, string fileName, string fileSha256,
-            string mappingJson, int companyId, int? profileId, int? profileVersion)
+            string mappingJson, int companyId, int? profileId, int? profileVersion,
+            DateTime? periodStart, DateTime? periodEnd, DateTime? openingDate)
         {
-            var map = CustomerLedgerMapping.Parse(mappingJson);
+            var map = CustomerLedgerMapping.Parse(mappingJson, periodStart, periodEnd, openingDate);
 
             var preview = new CustomerLedgerPreviewDto
             {

@@ -210,6 +210,11 @@ namespace MyApp.Api.Controllers
                     ? NoContent()
                     : NotFound(new { message = "That layout does not exist." });
             }
+            catch (InvalidOperationException ex)
+            {
+                // Refusing to delete a built-in is an answer, not a fault.
+                return BadRequest(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Deleting import layout {ProfileId} failed", id);

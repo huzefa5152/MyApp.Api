@@ -1368,6 +1368,10 @@ namespace MyApp.Api.Data
                 .HasIndex(p => new { p.Kind, p.SignatureHash });
             modelBuilder.Entity<ImportProfile>()
                 .HasIndex(p => new { p.CompanyId, p.Kind, p.IsActive });
+            // The seeder asks "does this kind already have its built-in?" on
+            // every startup, so that lookup gets its own index.
+            modelBuilder.Entity<ImportProfile>()
+                .HasIndex(p => new { p.Kind, p.IsDefault });
             modelBuilder.Entity<ImportProfile>()
                 .Property(p => p.MappingJson)
                 .HasColumnType("nvarchar(max)");

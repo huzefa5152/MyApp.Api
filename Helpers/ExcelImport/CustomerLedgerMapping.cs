@@ -135,7 +135,19 @@ namespace MyApp.Api.Helpers.ExcelImport
             return (int.Parse(m.Groups[2].Value), col);
         }
 
-        public static CustomerLedgerMapping Parse(string? mappingJson)
+        /// <summary>
+        /// Reads a stored mapping, letting the REQUEST override the period.
+        ///
+        /// A period belongs to an import, not to a layout: the shipped default
+        /// carries no dates at all, and a saved layout that happens to carry
+        /// last year's would otherwise be wrong from January. The overrides are
+        /// applied before validation so a layout with no dates is still usable.
+        /// </summary>
+        public static CustomerLedgerMapping Parse(
+            string? mappingJson,
+            DateTime? periodStart = null,
+            DateTime? periodEnd = null,
+            DateTime? openingDate = null)
         {
             CustomerLedgerMapping? mapping;
             try
@@ -150,6 +162,10 @@ namespace MyApp.Api.Helpers.ExcelImport
 
             mapping ??= new CustomerLedgerMapping();
 
+            if (periodStart.HasValue) mapping.PeriodStart = periodStart.Value.Date;
+            if (periodEnd.HasValue) mapping.PeriodEnd = periodEnd.Value.Date;
+            if (openingDate.HasValue) mapping.OpeningDate = openingDate.Value.Date;
+
             if (mapping.IndexColumns.Name <= 0)
                 throw new InvalidOperationException("The mapping does not say which column of the index sheet holds the customer name.");
             if (mapping.Columns.Debit <= 0 || mapping.Columns.Credit <= 0)
@@ -159,7 +175,8 @@ namespace MyApp.Api.Helpers.ExcelImport
             if (mapping.ResolveNameCell().Row == 0)
                 throw new InvalidOperationException($"'{mapping.ClientNameCell}' is not a cell reference like A3.");
             if (mapping.PeriodEnd == default)
-                throw new InvalidOperationException("The mapping does not say when the period ends.");
+                throw new InvalidOperationException(
+                    "Say when the imported period ends — the layout does not carry a period, because a period belongs to the import.");
             if (mapping.OpeningDate == default)
                 mapping.OpeningDate = mapping.PeriodStart != default
                     ? mapping.PeriodStart.AddDays(-1)

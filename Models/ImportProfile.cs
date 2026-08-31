@@ -110,6 +110,17 @@ namespace MyApp.Api.Models
         /// pool without losing the history of what it used to do.</summary>
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// True for a layout that ships with the product (see
+        /// <see cref="Helpers.DefaultImportLayouts"/>). At most one per kind.
+        ///
+        /// It is what the import screen pre-selects when a workbook is not
+        /// recognised, so the operator starts from a described layout rather
+        /// than an empty form. Seeding is create-only, so an operator who
+        /// corrects a built-in keeps their correction.
+        /// </summary>
+        public bool IsDefault { get; set; }
+
         public string? Notes { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

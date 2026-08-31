@@ -82,7 +82,11 @@ namespace MyApp.Api.Services.Implementations
             await MatchProfilesAsync(result, canonicalKind, companyId, accessibleCompanyIds);
 
             if (result.MatchedProfile == null && result.Candidates.Count == 0)
-                result.Warnings.Add("This layout has not been seen before. Map the columns to continue — the mapping is saved for next time.");
+            {
+                result.Warnings.Add(result.DefaultProfile == null
+                    ? "This layout has not been seen before. Map the columns to continue — the mapping is saved for next time."
+                    : $"This layout has not been seen before. \"{result.DefaultProfile.Name}\" is selected as a starting point — check the columns below before importing.");
+            }
 
             return result;
         }
@@ -181,7 +185,7 @@ namespace MyApp.Api.Services.Implementations
                             && (p.CompanyId == null || p.CompanyId == companyId)
                             // ...and still inside what the caller may see at all.
                             && (p.CompanyId == null || allowed.Contains(p.CompanyId.Value)))
-                .Select(p => new { p.Id, p.Name, p.Layout, p.CompanyId, p.SignatureHash, p.TokenSignature })
+                .Select(p => new { p.Id, p.Name, p.Layout, p.CompanyId, p.SignatureHash, p.TokenSignature, p.IsDefault })
                 .ToListAsync();
 
             var scored = new List<ImportProfileMatchDto>();
@@ -198,6 +202,7 @@ namespace MyApp.Api.Services.Implementations
                     Name = p.Name,
                     Layout = p.Layout,
                     IsShared = p.CompanyId == null,
+                    IsDefault = p.IsDefault,
                     Similarity = Math.Round(similarity, 4),
                     IsExact = exact,
                 });
@@ -217,6 +222,10 @@ namespace MyApp.Api.Services.Implementations
                 .ThenBy(s => s.IsShared ? 1 : 0)
                 .Take(MaxCandidates)
                 .ToList();
+
+            // The shipped layout, so an unrecognised workbook still starts from
+            // something described rather than an empty form.
+            result.DefaultProfile = scored.FirstOrDefault(s => s.IsDefault);
         }
 
         private static List<WorkbookSheetPreviewDto> DescribeSheets(IImportedWorkbook workbook)

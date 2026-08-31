@@ -34,10 +34,19 @@ export const previewOpeningStock = ({ file, companyId, profileId, mappingJson })
 export const commitOpeningStock = (body) =>
   httpClient.post("/spreadsheet-import/opening-stock/commit", body, { timeout: LONG });
 
-export const previewCustomerLedger = ({ file, companyId, profileId, mappingJson }) =>
+// The period travels with the IMPORT, not the layout — a saved layout stays
+// correct year on year because it carries no dates.
+export const previewCustomerLedger = ({
+  file, companyId, profileId, mappingJson, periodStart, periodEnd, openingDate,
+}) =>
   upload("/spreadsheet-import/customer-ledger/preview", file,
     { companyId, ...(profileId ? { profileId } : {}) },
-    profileId ? {} : { mappingJson });
+    {
+      ...(profileId ? {} : { mappingJson }),
+      ...(periodStart ? { periodStart } : {}),
+      ...(periodEnd ? { periodEnd } : {}),
+      ...(openingDate ? { openingDate } : {}),
+    });
 
 export const commitCustomerLedger = (body) =>
   httpClient.post("/spreadsheet-import/customer-ledger/commit", body, { timeout: LONG });

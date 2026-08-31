@@ -18,6 +18,10 @@ namespace MyApp.Api.DTOs
         /// reads, so it never has to infer meaning from a null.</summary>
         public bool IsShared { get; set; }
 
+        /// <summary>Ships with the product. The import screen falls back to this
+        /// one when nothing recognises the workbook.</summary>
+        public bool IsDefault { get; set; }
+
         public string SignatureHash { get; set; } = "";
         public string MappingJson { get; set; } = "{}";
         public int CurrentVersion { get; set; }
@@ -116,6 +120,8 @@ namespace MyApp.Api.DTOs
         /// <summary>True only for an exact hash match — the case the UI may skip
         /// straight past. A near match is always confirmed by a human.</summary>
         public bool IsExact { get; set; }
+
+        public bool IsDefault { get; set; }
     }
 
     /// <summary>
@@ -141,6 +147,13 @@ namespace MyApp.Api.DTOs
 
         /// <summary>Near matches worth confirming, best first.</summary>
         public List<ImportProfileMatchDto> Candidates { get; set; } = new();
+
+        /// <summary>
+        /// The built-in layout for this kind. Offered when nothing recognises
+        /// the workbook, so the operator starts from a described layout instead
+        /// of an empty form.
+        /// </summary>
+        public ImportProfileMatchDto? DefaultProfile { get; set; }
 
         /// <summary>Set when this exact file was already imported into this
         /// company for this kind. Non-null means commit will be refused.</summary>

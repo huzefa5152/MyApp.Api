@@ -21,7 +21,10 @@ namespace MyApp.Api.Services.Interfaces
             string mappingJson,
             int companyId,
             int? profileId,
-            int? profileVersion);
+            int? profileVersion,
+            DateTime? periodStart = null,
+            DateTime? periodEnd = null,
+            DateTime? openingDate = null);
 
         Task<CustomerLedgerCommitResultDto> CommitAsync(CustomerLedgerCommitDto dto, int userId);
     }

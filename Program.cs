@@ -760,6 +760,23 @@ using (var scope = app.Services.CreateScope())
     // idempotent runtime-seed contract.
     await MyApp.Api.Data.DivisionMergeFieldSeeder.SeedAsync(db);
 
+    // Spreadsheet import: the layouts that ship with the product, one per kind,
+    // so an operator's first import starts from a described layout instead of a
+    // blank mapping form. Create-only — a built-in an operator has corrected is
+    // never overwritten on restart.
+    try
+    {
+        var seededLayouts = await MyApp.Api.Helpers.DefaultImportLayouts.SeedAsync(db);
+        if (seededLayouts > 0)
+            app.Logger.LogInformation("Seeded {Count} built-in spreadsheet import layout(s).", seededLayouts);
+    }
+    catch (Exception ex)
+    {
+        // A missing built-in layout costs the operator a mapping step; it must
+        // never stop the application from starting.
+        app.Logger.LogError(ex, "Could not seed the built-in spreadsheet import layouts.");
+    }
+
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
     // connection string at the DeliveryChallanDemo database). Lays down

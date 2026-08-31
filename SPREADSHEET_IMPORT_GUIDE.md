@@ -142,13 +142,13 @@ balance on the **Inventory** account.
    **Opening Stock**.
 2. **Upload the workbook.** The system checks it is a real Excel file and reads
    its shape.
-3. **Recognise or map.**
-   - If this shape has been imported before, the saved layout is picked
-     automatically — go to step 4.
-   - If not, you are shown the sheet and asked which column is which: item name,
-     HS code, unit, closing quantity, closing value. Name the layout when you
-     save it (e.g. *"Alpha Traders stock sheet"*) and it is remembered for next
-     time.
+3. **Check the layout.** Two layouts ship with the system — **Standard stock
+   sheet** and **Standard customer ledger** — so a normal workbook is recognised
+   and described before you touch anything.
+   - Recognised: the columns are already right. Go to step 4.
+   - Not recognised: the built-in is selected as a starting point and the sheet
+     is shown with column numbers along the top. Correct anything wrong, name it,
+     and press **Save layout** — that shape is then recognised on sight.
 4. **Review.** Every row shows what will happen:
 
    | Says | Means |
@@ -220,7 +220,9 @@ familiar. Behind the scenes the accounting entries are the conventional ones.
 
 1. **Accounting → Spreadsheet Import.** Choose the company, and choose
    **Customer Ledger**.
-2. **Upload the workbook** and map it, exactly as in Part 2.
+2. **Upload the workbook** and check the layout, exactly as in Part 2. Then set
+   the **period** the workbook covers — layouts carry no dates, so the same one
+   keeps working every year.
 3. **Check the customer list.** The index sheet names every customer and there is
    one sheet each. Where the two names differ slightly — *"Imperial Developers &
    Builders"* on the index and *"Imperial Developers And Builders (PVT) LTD"* on
@@ -361,6 +363,16 @@ imported ones.
 Do not create a second layout. **Spreadsheet Import → Layouts**, open it, fix the
 columns and save. Every change is versioned, and you can roll back to any earlier
 version — so an edit that turns out wrong is one click to undo.
+
+The two built-in layouts cannot be deleted — save your own copy instead, which is
+then used ahead of the built-in for your company.
+
+### "Will next year's file need mapping again?"
+
+No. Layouts are matched on the **headings**, not the contents, so next period's
+workbook is recognised even though every product, customer, amount and date in it
+has changed. It also carries no dates of its own — you set the period on each
+import.
 
 ---
 

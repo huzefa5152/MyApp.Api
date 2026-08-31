@@ -316,6 +316,142 @@ export const GUIDE_SECTIONS = [
     ],
   },
 
+  // ═══════════════════════════════════════════════════ STARTING FROM EXCEL ══
+  {
+    id: "import-overview",
+    group: "Starting from Excel",
+    title: "Bringing a business in from its Excel books",
+    blocks: [
+      { p: "A business joining the system already has books. Two spreadsheets carry everything that matters: **what stock it is holding**, and **what its customers owe**. Both can be imported rather than typed." },
+      { path: "Accounting → Spreadsheet Import" },
+      {
+        table: {
+          head: ["The spreadsheet", "What it becomes", "Where you will see it"],
+          rows: [
+            ["Stock sheet", "An item for each product, with its opening quantity", "Stock → On Hand"],
+            ["Stock sheet total", "The Inventory account's opening balance", "Chart of Accounts"],
+            ["Customer ledger", "A customer, their invoices and their receipts", "Accounting → Customer Ledger"],
+            ["Ledger closing total", "The Accounts receivable opening balance", "Chart of Accounts"],
+          ],
+        },
+      },
+      { p: "Do this **before** anyone starts entering day-to-day work, and do the setup first: create the company, give yourself access under Tenant Access, seed the chart of accounts, and add the bank and cash accounts." },
+      { warn: "Seed the chart of accounts from the Wholesale preset rather than building it by hand. The preset's accounts are tagged with their role — “this one is Accounts receivable” — and an account you create yourself carries no tag, so the import cannot find it." },
+      { note: "There is a fuller step-by-step runbook outside the app: SPREADSHEET_IMPORT_GUIDE.md. This section covers what you need while you are actually at the screen." },
+    ],
+  },
+  {
+    id: "import-layouts",
+    group: "Starting from Excel",
+    title: "Layouts — describing a spreadsheet once",
+    blocks: [
+      { p: "Every accountant lays a spreadsheet out slightly differently, so the system has to be told which column holds what. It only has to be told **once**." },
+      { p: "A **layout** is that description. Two ship with the product and are already selected for you:" },
+      {
+        bullets: [
+          "**Standard stock sheet** — a customs-lot sheet with its headings on row 3 and one row per lot below.",
+          "**Standard customer ledger** — an index sheet naming every customer, then one sheet each.",
+        ],
+      },
+      {
+        steps: [
+          "Upload the workbook. The system reads its shape and looks for a layout that recognises it.",
+          "If it is recognised, the columns are already described — go straight to the review step.",
+          "If not, the built-in layout is selected as a starting point and the sheet is shown with column numbers along the top. Correct anything that is wrong.",
+          "Give it a name and press Save layout. From then on that shape is recognised on sight.",
+        ],
+      },
+      { note: "Next period's file is recognised automatically even though every product, customer, amount and date in it has changed. The system matches on the **headings**, not the contents." },
+      { p: "A layout you save belongs to your company and is used ahead of the built-in one. The built-ins cannot be deleted — save your own copy instead." },
+      { warn: "A layout carries no dates. The period a ledger covers is asked for on each import, so the same layout keeps working year after year." },
+    ],
+  },
+  {
+    id: "import-stock",
+    group: "Starting from Excel",
+    title: "Importing the stock sheet",
+    blocks: [
+      { path: "Accounting → Spreadsheet Import → Opening stock" },
+      {
+        steps: [
+          "Choose the company, choose Opening stock, and upload the workbook.",
+          "Check the layout, then press Review what this would do.",
+          "Read the table. Every product says what will happen to it.",
+          "Set the date the quantities are as at — normally the first day of the new financial year.",
+          "Press Import.",
+        ],
+      },
+      {
+        table: {
+          head: ["It says", "It means"],
+          rows: [
+            ["Matched", "The item already exists. Its opening quantity is updated; nothing new is created."],
+            ["Reused placeholder", "An empty item created by the HS code import is reused and renamed."],
+            ["HS code filled in", "The item existed without an HS code. The code from the sheet is added."],
+            ["Needs a choice", "The name matches an item with a different HS code. You decide: reuse it, or create a separate one."],
+            ["Will create", "A genuinely new item."],
+            ["Unknown HS code", "That code is not in the tariff list. Fix the sheet, or run Item Types → Import HS Codes."],
+          ],
+        },
+      },
+      { p: "One product held across two customs declarations is **one** item — the quantities are added together and both declaration numbers are kept on the opening balance, so the figure can be traced back." },
+      { p: "The sheet's total value posts as the Inventory account's opening balance, with the other side going to Retained earnings automatically. You do not make a balancing entry." },
+      { warn: "Importing stock also switches the company to tracking every item as inventory, which starts blocking sales of more than is on hand. That outlives the import — tell the team before you press it." },
+    ],
+  },
+  {
+    id: "import-ledger",
+    group: "Starting from Excel",
+    title: "Importing the customer ledger",
+    blocks: [
+      { path: "Accounting → Spreadsheet Import → Customer ledger" },
+      { p: "These ledgers read backwards from what an accountant expects, and the system follows the same convention so the screen looks familiar:" },
+      {
+        table: {
+          head: ["Column", "Is", "Effect"],
+          rows: [
+            ["Credit", "an invoice", "increases what the customer owes"],
+            ["Debit", "money received", "decreases what they owe"],
+            ["Balance", "Opening + Credit − Debit", "calculated, never typed"],
+          ],
+        },
+      },
+      {
+        steps: [
+          "Choose the company, choose Customer ledger, and upload the workbook.",
+          "Set the period the workbook covers.",
+          "Press Review what this would do.",
+          "Read the reconciliation table — this is the important part.",
+          "Press Import.",
+        ],
+      },
+      { p: "The reconciliation table puts each customer's **calculated** closing balance beside the one the workbook's own index sheet states. Differences should be **paisa, not rupees**: amounts are kept to two decimal places while these workbooks carry many more, so a customer with thirty documents can land a few paisa out." },
+      { warn: "If a difference runs to rupees the import is refused outright. Fix the workbook — a wrong opening balance follows that customer through every statement afterwards." },
+      { p: "Things the importer handles without being asked: an invoice number written across several rows becomes one invoice; a row with no date takes the date above it; a customer whose opening balance is negative had paid ahead, so it is recorded as money received rather than a negative invoice; and a customer whose name differs between the index and their own sheet is shown to you to confirm rather than guessed." },
+      { note: "Receipts are recorded **on account**. The workbook never says which invoice a payment settled, so the system does not invent that link — the balance is right either way, and you can apply an on-account receipt to an invoice later." },
+      { warn: "The workbook records totals only, with no sales-tax split, so the tax reports will show no output tax for the imported period. That is correct for a year already filed — but say so to anyone who opens the report expecting last year's figures." },
+    ],
+  },
+  {
+    id: "import-again",
+    group: "Starting from Excel",
+    title: "Importing again, and fixing a mistake",
+    blocks: [
+      { p: "You cannot import the same file twice. The system refuses it and tells you when it was imported and by whom. Nothing is written." },
+      { p: "A file that has been re-saved or re-exported is refused too — different file, same rows. A workbook that has genuinely **gained** rows still imports, adding only the new ones." },
+      { path: "Accounting → Spreadsheet Import → History" },
+      { p: "The History tab lists everything imported into the company, who imported it and what it wrote." },
+      {
+        steps: [
+          "Find the run and choose Set aside, giving a reason.",
+          "Import the corrected file.",
+        ],
+      },
+      { warn: "Setting a run aside does not remove what it wrote — it only stops the old file blocking a fresh import. Anything created in error still has to be deleted on its own screen. Ask first on a company that has been live a while: real transactions may be sitting on top of the imported ones." },
+      { note: "Setting a run aside needs its own permission, because it is the one action that lets imported history be written over." },
+    ],
+  },
+
   // ══════════════════════════════════════════════════════════════ SALES ══
   {
     id: "create-customer",
@@ -1411,6 +1547,7 @@ export const GUIDE_SECTIONS = [
 /** Sidebar groups, in the order they should appear. */
 export const GUIDE_GROUPS = [
   "Accounting setup",
+  "Starting from Excel",
   "Sales",
   "Purchases",
   "Expenses",
