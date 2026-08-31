@@ -18,25 +18,49 @@ import { getAccountsFlat } from "../api/accountApi";
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
 
 /**
- * Record a Receipt (money in) or Payment (money out). mode = "receipts" |
- * "payments" flips the contact (Client ↔ Supplier) and the documents settled
- * (sales invoices ↔ purchase bills). The operator picks a contact, the form
- * lists that contact's open documents (balance > 0) with a cash-received
- * input each; the payment's money total is the sum of the cash applied.
+ * Record money in (a Receipt) or money out (a Payment). mode = "receipts" |
+ * "payments" sets the direction; everything else the operator chooses.
  *
- * Per line the operator can also "settle the remainder": when they receive
- * LESS cash than a document's balance, the shortfall is routed to a GL account
- * (Discount / Write-off quick-picks resolved by control type, or any account)
- * so the invoice/bill shows FULLY SETTLED while only the cash is recorded. When
- * opened from a specific document (preset.documentId) the form is scoped to that
- * one document. Direct (account-only) lines remain deferred.
+ * Two questions drive the whole form, in plain language:
+ *
+ *   Who are you paying / who paid you?   → payeeType: Client | Supplier | Other
+ *   What is this for?                    → purpose:
+ *        "settle"   settle their unpaid invoices/bills: lists open documents
+ *                   with a cash box each, plus an optional "write off the
+ *                   difference" that clears the rest to a GL account so the
+ *                   document shows fully settled. For a customer receipt the
+ *                   document ticks are OPTIONAL — the operator types the money
+ *                   received and whatever no invoice claims becomes the
+ *                   customer's advance
+ *        "expense"  a plain income/expense line — "paid the electricity bill".
+ *                   Picks an account from the Chart of Accounts, with optional
+ *                   recoverable tax
+ *        "advance"  money against the party's running balance with no document
+ *                   (a supplier advance, a customer advance, either refund)
+ *
+ * Deliberately NOT accounting-shaped: the operator never sees debit/credit. The
+ * payee scopes the pickers and names the party on the ledger; the purpose picks
+ * which account the other side of the entry lands on. The server derives the
+ * double entry (see Services/Implementations/PostingService.PostPaymentAsync)
+ * and re-validates every line by its Kind (PaymentService.NormalizeAllocations).
  */
 export default function PaymentForm({ mode, companyId, preset, editPayment = null, onClose, onSaved }) {
   const isReceipt = mode === "receipts";
   const isEdit = !!editPayment?.id;
-  const contactLabel = isReceipt ? "Client" : "Supplier";
   const docLabel = isReceipt ? "Invoice" : "Bill";
   const dir = isReceipt ? "receipts" : "payments";
+
+  // Who the money went to / came from. Defaults to the side that matches the
+  // direction, which is the common case, but either is allowed: a refund to a
+  // customer is a Payment with a Client payee.
+  const [payeeType, setPayeeType] = useState(
+    editPayment?.contactType || preset?.contactType || (isReceipt ? "Client" : "Supplier"));
+  const [payeeName, setPayeeName] = useState(
+    (editPayment?.contactType === "Other" && editPayment?.contactName) || "");
+  const contactLabel = payeeType === "Client" ? "Client" : payeeType === "Supplier" ? "Supplier" : "Payee";
+  // Settling documents only makes sense for the party that owns them, and only
+  // in the matching direction (a receipt can't settle a purchase bill).
+  const canSettle = (isReceipt && payeeType === "Client") || (!isReceipt && payeeType === "Supplier");
 
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(editPayment?.date ? editPayment.date.slice(0, 10) : today);
@@ -61,12 +85,44 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // the invoice/bill shortcut.
   const [divisionId, setDivisionId] = useState(
     editPayment?.divisionId ? String(editPayment.divisionId) : (preset?.divisionId ? String(preset.divisionId) : ""));
-  // Receipt-only: the operator TYPES the document's total cash — it is no
-  // longer derived by summing the per-invoice allocations below. Whatever is
+  // What this money is for. Derived on open from the record being edited: a
+  // saved payment's first line already says which shape it is. A receipt with
+  // NO lines at all is a pure advance held against the customer's balance, and
+  // it is the "settle" screen that owns that shape (typed amount, no ticks) —
+  // so it opens there rather than on the explicit advance line.
+  const [purpose, setPurpose] = useState(() => {
+    const k = editPayment?.allocations?.[0]?.kind;
+    if (k === "Account") return "expense";
+    if (k === "OnAccount") return "advance";
+    return "settle";
+  });
+
+  // Income/expense lines for purpose === "expense". Amount is GROSS (what left
+  // the bank); the tax rate carves the recoverable slice out of it, matching how
+  // an invoice's GrandTotal already includes its GST.
+  const [expLines, setExpLines] = useState(() => {
+    const rows = (editPayment?.allocations || [])
+      .filter((a) => a.kind === "Account")
+      .map((a) => ({
+        accountId: a.accountId ?? null,
+        amount: String(a.amount ?? ""),
+        taxRate: a.taxRate != null ? String(a.taxRate) : "",
+      }));
+    return rows.length ? rows : [{ accountId: null, amount: "", taxRate: "" }];
+  });
+  // Advance amount for purpose === "advance" (one figure, no document).
+  const [advanceAmount, setAdvanceAmount] = useState(() => {
+    const a = (editPayment?.allocations || []).find((x) => x.kind === "OnAccount");
+    return a ? String(a.amount) : "";
+  });
+
+  // Receipt + "settle" only: the operator TYPES the document's total cash — it
+  // is not derived by summing the per-invoice allocations below. Whatever is
   // left after those allocations becomes the customer's advance. Sent as
   // `amount` on BOTH create and edit so an existing advance is never silently
   // flattened to the allocated total (Task 7, 2026-08-31). Payment (money-out)
-  // has no such field; its total stays derived from cashTotal, unchanged.
+  // has no such field; its total stays derived server-side, unchanged. The
+  // expense/advance purposes derive it from their own lines (see receiptAmount).
   const [amount, setAmount] = useState(editPayment?.amount != null ? String(editPayment.amount) : "");
   const [docs, setDocs] = useState([]);          // open documents for the contact
   // alloc[docId] = { cash: "30000", adj: "0.50", adjMode: "none"|"discount"|
@@ -99,18 +155,36 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
-  // Below 768px the allocation table reflows to a stacked card per document.
+  // Below 768px the allocation table reflows to a stacked card per document and
+  // the expense grid collapses to one column.
   const isNarrow = useIsNarrow();
 
-  // Load the contact list once.
+  // Load the list that matches the chosen payee type. "Other" has no master
+  // list — the operator just types the name.
   useEffect(() => {
+    if (payeeType === "Other") { setContacts([]); return; }
     let cancelled = false;
-    const load = isReceipt ? getClientsByCompany : getSuppliersByCompany;
+    const load = payeeType === "Client" ? getClientsByCompany : getSuppliersByCompany;
     load(companyId)
       .then(({ data }) => { if (!cancelled) setContacts(data || []); })
       .catch(() => { if (!cancelled) setContacts([]); });
     return () => { cancelled = true; };
-  }, [companyId, isReceipt]);
+  }, [companyId, payeeType]);
+
+  // Switching payee type invalidates the selected party and, when the new type
+  // can't own settleable documents, the "settle" purpose too.
+  const changePayeeType = (next) => {
+    if (next === payeeType) return;
+    setPayeeType(next);
+    setContactId("");
+    setDocs([]);
+    setAlloc({});
+    setError("");
+    if (next === "Other") setPurpose((p) => (p === "settle" || p === "advance" ? "expense" : p));
+    else if (!((isReceipt && next === "Client") || (!isReceipt && next === "Supplier"))) {
+      setPurpose((p) => (p === "settle" ? "expense" : p));
+    }
+  };
 
   // Load the flat Chart of Accounts once (best-effort — the form works without it).
   useEffect(() => {
@@ -153,9 +227,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const accountName = (id) => accounts.find((a) => String(a.id) === String(id))?.name || "";
 
   // When a contact is picked, fetch their open documents (balance due > 0).
+  // Only for the "settle" purpose — an expense or an advance has no document.
   //
   // `alloc` is cleared unconditionally on every run of this effect, BEFORE
-  // the `contactId` guard — not just when contactId goes empty. Previously
+  // the guards below — not just when contactId goes empty. Previously
   // it was only cleared on empty, so ticking invoices for Client A and then
   // switching the picker to Client B (without submitting) left Client A's
   // entries in `alloc`: invisible in the new `docs` list (keyed by a docId
@@ -180,7 +255,15 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   useEffect(() => {
     setAlloc({});
     setDocsLoadFailed(false);
-    if (!contactId) { setDocs([]); return; }
+    if (purpose !== "settle" || !canSettle || !contactId) {
+      setDocs([]);
+      // Clear the in-flight flag too: a run cancelled mid-fetch never reaches
+      // its own .finally, so without this an edit could be left permanently
+      // "Loading…" (and therefore permanently un-saveable) after switching
+      // purpose or clearing the contact while a fetch was still open.
+      setLoadingDocs(false);
+      return;
+    }
     let cancelled = false;
     setLoadingDocs(true);
     const fetcher = isReceipt
@@ -251,16 +334,43 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           setAlloc(pre);
         } else if (preset?.documentId) {
           const target = shown.find((d) => d.id === preset.documentId);
-          if (target) setAlloc({ [target.id]: { cash: String(target.available), adj: "0", adjMode: "none", adjAccountId: null } });
+          if (target) {
+            setAlloc({ [target.id]: { cash: String(target.available), adj: "0", adjMode: "none", adjAccountId: null } });
+            // "Record a receipt for THIS invoice" means the money received is
+            // the invoice's balance — seed the typed amount to match, so the
+            // shortcut isn't born over-allocated (cash ticked, amount blank).
+            // The operator can still raise it to bank an advance on top.
+            if (isReceipt) setAmount(String(target.available));
+          }
         }
       })
       .catch(() => { if (!cancelled) { setDocs([]); setDocsLoadFailed(true); } })
       .finally(() => { if (!cancelled) setLoadingDocs(false); });
     return () => { cancelled = true; };
-  }, [contactId, companyId, isReceipt, preset?.documentId, editPayment?.id, retryToken]);
+  }, [contactId, companyId, isReceipt, purpose, canSettle, preset?.documentId, editPayment?.id, retryToken]);
 
   const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
   const EMPTY_ROW = { cash: "", adj: "0", adjMode: "none", adjAccountId: null };
+
+  // ── Income/expense lines (purpose === "expense") ───────────────────────────
+  const patchExp = (i, patch) =>
+    setExpLines((prev) => prev.map((r, ix) => (ix === i ? { ...r, ...patch } : r)));
+  const addExpLine = () => setExpLines((prev) => [...prev, { accountId: null, amount: "", taxRate: "" }]);
+  const removeExpLine = (i) =>
+    setExpLines((prev) => (prev.length === 1 ? prev : prev.filter((_, ix) => ix !== i)));
+
+  /** Tax is the slice already inside the gross amount: gross × rate / (100 + rate).
+   *  Mirrors the server (PaymentService.NormalizeLineTax) so the preview the
+   *  operator sees is the figure that gets posted. */
+  const expCalc = (row) => {
+    const gross = parseFloat(row.amount) || 0;
+    const rate = parseFloat(row.taxRate) || 0;
+    const tax = rate > 0 ? round2((gross * rate) / (100 + rate)) : 0;
+    return { gross, rate, tax, net: round2(gross - tax) };
+  };
+  const expTotal = useMemo(
+    () => expLines.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0), [expLines]);
+  const advanceNum = parseFloat(advanceAmount) || 0;
 
   const patchRow = (docId, patch) =>
     setAlloc((prev) => ({ ...prev, [docId]: { ...(prev[docId] || EMPTY_ROW), ...patch } }));
@@ -298,15 +408,21 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     return { row, cashNum, adjNum, settled, gap, over, isSettled, needsAccount };
   };
 
-  // Cash total = the receipt/payment money (backend derives Payment.Amount from
-  // Σ cash). Adjustments are the non-cash gaps that also clear the docs.
-  const cashTotal = useMemo(
+  // Σ cash ticked against open documents (the "settle" purpose only — the other
+  // purposes leave `alloc` empty, so this is 0 there).
+  const docCashTotal = useMemo(
     () => Object.values(alloc).reduce((s, r) => s + (parseFloat(r?.cash) || 0), 0),
     [alloc]
   );
+  // Cash that actually moves through the bank on this document, whatever shape
+  // it takes. Adjustments are the non-cash gaps that also clear the docs.
+  const cashTotal = purpose === "expense" ? expTotal
+    : purpose === "advance" ? advanceNum
+      : docCashTotal;
   const adjTotal = useMemo(
-    () => Object.values(alloc).reduce((s, r) => s + (r?.adjMode !== "none" ? (parseFloat(r?.adj) || 0) : 0), 0),
-    [alloc]
+    () => (purpose !== "settle" ? 0
+      : Object.values(alloc).reduce((s, r) => s + (r?.adjMode !== "none" ? (parseFloat(r?.adj) || 0) : 0), 0)),
+    [alloc, purpose]
   );
 
   // Receipt only: the live split shown under the invoice list. Advance is
@@ -315,8 +431,14 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // AssertAllocationsFitAmount — the server enforces the same cash-only rule
   // and rejects Σ allocation cash > amount).
   const amountNum = parseFloat(amount) || 0;
-  const advance = Math.max(0, round2(amountNum - cashTotal));
-  const overAllocated = isReceipt && round2(cashTotal) > round2(amountNum) + 0.005;
+  // What goes on the wire as Payment.Amount for a receipt: the typed figure on
+  // the "settle" screen (which may exceed the ticks — that gap is the advance),
+  // and the lines' own total on the expense/advance screens, which have no
+  // separate amount box to disagree with.
+  const receiptAmount = purpose === "settle" ? amountNum : cashTotal;
+  const advance = Math.max(0, round2(amountNum - docCashTotal));
+  const overAllocated = isReceipt && purpose === "settle"
+    && round2(docCashTotal) > round2(amountNum) + 0.005;
 
   // Settle-remainder affordance for one document row (shared desktop + mobile).
   // Nothing shows until the operator receives less cash than the balance due.
@@ -398,54 +520,104 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     // reachable via a click, but guard the handler itself too in case
     // submission is ever triggered another way (e.g. an implicit Enter
     // submit slipping past a disabled default button in some browser).
-    if (isEdit && (loadingDocs || docsLoadFailed)) return;
+    if (isEdit && purpose === "settle" && (loadingDocs || docsLoadFailed)) return;
     setError("");
 
-    const allocations = docs
-      .map((d) => {
-        const c = rowCalc(d);
-        return { doc: d, cash: c.cashNum, adj: c.adjNum, adjMode: c.row.adjMode, adjAccountId: c.row.adjAccountId, over: c.over, needsAccount: c.needsAccount };
-      })
-      .filter((x) => x.cash > 0 || x.adj > 0);
+    // Who the money went to / came from.
+    if (payeeType === "Other") {
+      if (!payeeName.trim()) {
+        setError(isReceipt ? "Enter who this money came from." : "Enter who this payment was made to.");
+        return;
+      }
+    } else if (!contactId) {
+      setError(`Select the ${contactLabel.toLowerCase()}.`);
+      return;
+    }
 
-    // A receipt no longer needs a settled invoice — the uncovered remainder
-    // becomes a customer advance. It still needs somewhere to post that
-    // advance to (a named Client) and a positive amount when there's nothing
-    // else on the document. Money-out keeps the old "at least one line" rule,
-    // untouched, in the else branch below.
-    if (isReceipt) {
-      if (allocations.length === 0) {
-        if (!contactId) {
-          setError(`Select a ${contactLabel} to record a receipt with no invoice selected.`);
-          return;
-        }
-        if (amountNum <= 0) {
+    // Build the lines for the chosen purpose. Each shape maps to one server-side
+    // allocation Kind; the server re-validates all of this.
+    let allocLines = [];
+    if (purpose === "expense") {
+      const rows = expLines
+        .map((r) => ({ ...r, ...expCalc(r) }))
+        .filter((r) => r.accountId != null || r.gross > 0);
+      if (rows.length === 0) { setError("Add at least one line: what the money was for, and how much."); return; }
+      const noAccount = rows.find((r) => r.accountId == null);
+      if (noAccount) { setError("Choose what each line was for (an income or expense account)."); return; }
+      const badAmount = rows.find((r) => !(r.gross > 0));
+      if (badAmount) { setError("Enter an amount greater than zero on every line."); return; }
+      const badRate = rows.find((r) => r.rate < 0 || r.rate > 100);
+      if (badRate) { setError("Tax rate must be between 0 and 100."); return; }
+      allocLines = rows.map((r) => ({
+        kind: "Account",
+        accountId: Number(r.accountId),
+        amount: round2(r.gross),
+        taxRate: r.rate > 0 ? r.rate : null,
+        taxAmount: r.rate > 0 ? r.tax : 0,
+        adjustmentAmount: 0,
+        adjustmentAccountId: null,
+      }));
+    } else if (purpose === "advance") {
+      if (!(advanceNum > 0)) { setError("Enter the advance amount."); return; }
+      if (payeeType === "Other") {
+        setError("An advance has to be against a client or a supplier. Pick one, or record this as an expense.");
+        return;
+      }
+      allocLines = [{
+        kind: "OnAccount",
+        amount: round2(advanceNum),
+        adjustmentAmount: 0,
+        adjustmentAccountId: null,
+      }];
+    } else {
+      const allocations = docs
+        .map((d) => {
+          const c = rowCalc(d);
+          return { doc: d, cash: c.cashNum, adj: c.adjNum, adjMode: c.row.adjMode, adjAccountId: c.row.adjAccountId, over: c.over, needsAccount: c.needsAccount };
+        })
+        .filter((x) => x.cash > 0 || x.adj > 0);
+
+      // A receipt no longer needs a settled invoice — the uncovered remainder
+      // becomes a customer advance. It still needs a positive amount when
+      // there's nothing else on the document (the named Client is already
+      // enforced by the payee check above). Money-out keeps the old
+      // "at least one line" rule, untouched, in the else branch below.
+      if (isReceipt) {
+        if (allocations.length === 0 && amountNum <= 0) {
           setError("Enter the amount received.");
           return;
         }
-      }
-      // Server rejects Σ allocation cash > amount (the advance can't go
-      // negative) — check it here too so the button never 400s.
-      if (round2(cashTotal) > round2(amountNum) + 0.005) {
-        setError(`Allocated cash (Rs ${cashTotal.toLocaleString()}) is more than the amount received (Rs ${amountNum.toLocaleString()}).`);
+        // Server rejects Σ allocation cash > amount (the advance can't go
+        // negative) — check it here too so the button never 400s.
+        if (round2(docCashTotal) > round2(amountNum) + 0.005) {
+          setError(`Allocated cash (Rs ${docCashTotal.toLocaleString()}) is more than the amount received (Rs ${amountNum.toLocaleString()}).`);
+          return;
+        }
+      } else if (allocations.length === 0) {
+        setError(`Enter an amount against at least one ${docLabel.toLowerCase()}.`);
         return;
       }
-    } else if (allocations.length === 0) {
-      setError(`Enter an amount against at least one ${docLabel.toLowerCase()}.`);
-      return;
-    }
-    // Client-side over-allocation guard (server enforces too). Uses `available`
-    // (= balance due + this payment's own settlement when editing).
-    const over = allocations.find((x) => x.over);
-    if (over) {
-      setError(`${docLabel} #${over.doc.number}: cash + adjustment exceeds the balance due (${over.doc.available.toLocaleString()}).`);
-      return;
-    }
-    // An adjustment must land in an account when the ledger is on (server 400s otherwise).
-    const missingAcct = allocations.find((x) => x.needsAccount);
-    if (missingAcct) {
-      setError(`${docLabel} #${missingAcct.doc.number}: choose an account for the settle-remainder adjustment.`);
-      return;
+      // Client-side over-allocation guard (server enforces too). Uses `available`
+      // (= balance due + this payment's own settlement when editing).
+      const over = allocations.find((x) => x.over);
+      if (over) {
+        setError(`${docLabel} #${over.doc.number}: cash + adjustment exceeds the balance due (${over.doc.available.toLocaleString()}).`);
+        return;
+      }
+      // An adjustment must land in an account when the ledger is on (server 400s otherwise).
+      const missingAcct = allocations.find((x) => x.needsAccount);
+      if (missingAcct) {
+        setError(`${docLabel} #${missingAcct.doc.number}: choose an account for the settle-remainder adjustment.`);
+        return;
+      }
+      allocLines = allocations.map((x) => ({
+        kind: "Document",
+        invoiceId: isReceipt ? x.doc.id : null,
+        purchaseBillId: isReceipt ? null : x.doc.id,
+        amount: round2(x.cash),                                  // cash applied
+        adjustmentAmount: x.adjMode === "none" ? 0 : round2(x.adj),
+        adjustmentAccountId: x.adjMode === "none" ? null : (x.adjAccountId ?? null),
+      }));
     }
     if (method === "Cheque" && !chequeNumber.trim()) {
       setError("Enter the cheque number.");
@@ -456,7 +628,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     // write-off (no cash) doesn't touch a bank account, so it's not required.
     // For a receipt the cash that moved is the typed Amount, not just what got
     // allocated — an all-advance receipt (zero ticks) still landed somewhere.
-    const cashMoved = isReceipt ? amountNum : cashTotal;
+    const cashMoved = isReceipt ? receiptAmount : cashTotal;
     if (hasBankAccounts && !bankAccountId && cashMoved > 0) {
       setError(`Select the bank/cash account the money was ${isReceipt ? "received in" : "paid from"}.`);
       return;
@@ -467,8 +639,9 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       const payload = {
         direction: isReceipt ? "Receipt" : "Payment",
         date: new Date(date).toISOString(),
-        contactType: contactLabel,
-        contactId: contactId ? Number(contactId) : null,
+        contactType: payeeType,
+        contactId: payeeType === "Other" ? null : (contactId ? Number(contactId) : null),
+        contactName: payeeType === "Other" ? payeeName.trim() : null,
         divisionId: divisionId ? Number(divisionId) : null,
         bankAccountId: bankAccountId ? Number(bankAccountId) : null,
         bankAccountName: bankAccountName.trim() || null,
@@ -476,20 +649,14 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         description: description.trim() || null,
         chequeNumber: method === "Cheque" ? chequeNumber.trim() : null,
         chequeDate: method === "Cheque" && chequeDate ? new Date(chequeDate).toISOString() : null,
-        allocations: allocations.map((x) => ({
-          invoiceId: isReceipt ? x.doc.id : null,
-          purchaseBillId: isReceipt ? null : x.doc.id,
-          amount: round2(x.cash),                                  // cash applied
-          adjustmentAmount: x.adjMode === "none" ? 0 : round2(x.adj),
-          adjustmentAccountId: x.adjMode === "none" ? null : (x.adjAccountId ?? null),
-        })),
+        allocations: allocLines,
       };
       // Authoritative cash total (Task 7, 2026-08-31): always sent for a
       // receipt, on BOTH create and edit — the server otherwise falls back to
       // Σ allocation cash, which on an edit would silently flatten (destroy)
-      // an existing advance. Money-out keeps deriving it server-side; never
-      // add `amount` there.
-      if (isReceipt) payload.amount = round2(amountNum);
+      // an existing advance. Money-out ignores it server-side (ResolveAmount);
+      // never add `amount` there.
+      if (isReceipt) payload.amount = round2(receiptAmount);
       const { data: saved } = isEdit
         ? await updatePayment(dir, editPayment.id, payload)
         : await createPayment(dir, companyId, payload);
@@ -518,16 +685,87 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           <div style={formStyles.body}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
-            {/* Contact picker spans the full row so long client/supplier names
-                aren't truncated inside a narrow grid column. */}
+            {/* Question 1: who. Plain language on purpose — the operator should
+                never have to think about contact "types" or subledgers. The
+                picker spans the full row so long client/supplier names aren't
+                truncated inside a narrow grid column. */}
             <div style={formStyles.formGroup}>
-              <label style={formStyles.label}>{contactLabel}</label>
-              <SearchableSelect
-                items={contacts}
-                value={contactId}
-                onChange={(id) => setContactId(id ? String(id) : "")}
-                placeholder={`— Select ${contactLabel} —`}
-              />
+              <label style={formStyles.label}>{isReceipt ? "Who paid you?" : "Who are you paying?"}</label>
+              <div style={payeeTabs}>
+                {[
+                  { key: "Client", label: "Client" },
+                  { key: "Supplier", label: "Supplier" },
+                  { key: "Other", label: "Someone else" },
+                ].map((t) => (
+                  <button
+                    type="button"
+                    key={t.key}
+                    onClick={() => changePayeeType(t.key)}
+                    style={{ ...payeeTab, ...(payeeType === t.key ? payeeTabActive : null) }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {payeeType === "Other" ? (
+                <input
+                  style={{ ...formStyles.input, marginTop: "0.5rem" }}
+                  data-testid="payee-name"
+                  value={payeeName}
+                  onChange={(e) => setPayeeName(e.target.value)}
+                  placeholder="Name — e.g. the landlord, a courier, an employee"
+                />
+              ) : (
+                <div style={{ marginTop: "0.5rem" }}>
+                  <SearchableSelect
+                    items={contacts}
+                    value={contactId}
+                    onChange={(id) => setContactId(id ? String(id) : "")}
+                    placeholder={`— Select ${contactLabel} —`}
+                  />
+                </div>
+              )}
+              {payeeType === "Other" && (
+                <span style={payeeHint}>
+                  Not added to your Clients or Suppliers — use this for one-off payees.
+                </span>
+              )}
+            </div>
+
+            {/* Question 2: what for. Decides which account the other side of the
+                entry lands on; the operator picks a purpose, not a debit. */}
+            <div style={formStyles.formGroup}>
+              <label style={formStyles.label}>What is this {isReceipt ? "money" : "payment"} for?</label>
+              <div style={payeeTabs}>
+                {[
+                  canSettle && {
+                    key: "settle",
+                    label: `Settle unpaid ${docLabel.toLowerCase()}s`,
+                    hint: `Clear specific ${docLabel.toLowerCase()}s they already owe`,
+                  },
+                  {
+                    key: "expense",
+                    label: isReceipt ? "Other income" : "An expense",
+                    hint: isReceipt ? "Money in that isn't against an invoice" : "Rent, electricity, supplies…",
+                  },
+                  payeeType !== "Other" && {
+                    key: "advance",
+                    label: "Advance / on account",
+                    hint: "No document yet — sits against their balance",
+                  },
+                ].filter(Boolean).map((t) => (
+                  <button
+                    type="button"
+                    key={t.key}
+                    title={t.hint}
+                    data-testid={`purpose-${t.key}`}
+                    onClick={() => { setPurpose(t.key); setError(""); }}
+                    style={{ ...payeeTab, ...(purpose === t.key ? payeeTabActive : null) }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
@@ -582,131 +820,233 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
 
-            {/* Receipt-only: the total cash of this document, typed — not
-                summed from the ticks below. Whatever isn't allocated to an
-                invoice becomes the customer's advance (see the split under
-                the invoice list). */}
-            {isReceipt && (
+            {/* Income/expense lines — the everyday "paid the electricity bill".
+                Amount is what left the bank; the tax rate carves the recoverable
+                slice out of it, so the operator types the figure on the bill. */}
+            {purpose === "expense" && (
               <div style={formStyles.formGroup}>
-                <label style={formStyles.label}>Amount received</label>
-                <input
-                  type="number" min="0" step="0.01"
-                  data-testid="receipt-amount"
-                  style={formStyles.input}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                />
+                <label style={formStyles.label}>
+                  What was it for? {glOn && <span style={{ fontWeight: 400, color: colors.textSecondary }}>(from your Chart of Accounts)</span>}
+                </label>
+                {accounts.length === 0 ? (
+                  <div style={hintBox}>
+                    No accounts available yet. Set them up under Accounting → Chart of Accounts,
+                    then come back to record this {isReceipt ? "income" : "expense"}.
+                  </div>
+                ) : (
+                  <>
+                    {expLines.map((row, i) => {
+                      const c = expCalc(row);
+                      return (
+                        <div key={i} style={isNarrow ? expRowNarrow : expRow}>
+                          <div style={isNarrow ? expAccountCellNarrow : expAccountCell}>
+                            <AccountSelect
+                              accounts={activeAccounts}
+                              value={row.accountId}
+                              onChange={(id) => patchExp(i, { accountId: id != null ? Number(id) : null })}
+                              side={isReceipt ? "credit" : "debit"}
+                              placeholder={isReceipt ? "Income account — e.g. Other income" : "Expense account — e.g. Electricity"}
+                            />
+                          </div>
+                          <div style={expCell}>
+                            <input
+                              type="number" min="0" step="0.01"
+                              data-testid={`exp-amount-${i}`}
+                              style={formStyles.input}
+                              value={row.amount}
+                              onChange={(e) => patchExp(i, { amount: e.target.value })}
+                              placeholder="Amount"
+                            />
+                          </div>
+                          <div style={expCell}>
+                            <input
+                              type="number" min="0" max="100" step="0.01"
+                              style={formStyles.input}
+                              value={row.taxRate}
+                              onChange={(e) => patchExp(i, { taxRate: e.target.value })}
+                              placeholder="Tax %"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            style={{ ...expRemove, opacity: expLines.length === 1 ? 0.45 : 1, cursor: expLines.length === 1 ? "not-allowed" : "pointer" }}
+                            title="Remove this line"
+                            disabled={expLines.length === 1}
+                            onClick={() => removeExpLine(i)}
+                          >×</button>
+                          {c.tax > 0 && (
+                            <div style={expTaxHint}>
+                              Includes Rs {c.tax.toLocaleString()} {isReceipt ? "sales tax" : "input tax"} —
+                              Rs {c.net.toLocaleString()} goes to {accountName(row.accountId) || "the account"}.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <button type="button" style={expAddBtn} onClick={addExpLine}>+ Add another line</button>
+                    <span style={payeeHint}>
+                      Enter the amount as it appears on the bill — including tax. Leave Tax % blank
+                      when there is no recoverable tax.
+                    </span>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Allocation against open documents */}
-            <div style={formStyles.formGroup}>
-              <label style={formStyles.label}>Apply to open {docLabel.toLowerCase()}s</label>
-              {!contactId ? (
-                <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
-              ) : loadingDocs ? (
-                <div style={hintBox}>Loading…</div>
-              ) : docsLoadFailed ? (
-                <div style={{ ...hintBox, borderStyle: "solid", borderColor: colors.danger, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                  <span style={{ color: colors.danger }}>
-                    Could not load {docLabel.toLowerCase()}s for this {contactLabel.toLowerCase()}.
-                    {isEdit && " This receipt cannot be saved until they load."}
-                  </span>
-                  <button type="button" style={retryBtn} onClick={() => setRetryToken((t) => t + 1)}>Retry</button>
-                </div>
-              ) : docs.length === 0 ? (
-                <div style={hintBox}>No open {docLabel.toLowerCase()}s with a balance due for this {contactLabel.toLowerCase()}.</div>
-              ) : isNarrow ? (
-                /* Phone (<768px): one card per open document so the amount
-                   input + Max button get full-width tap targets instead of a
-                   5-column table squeezed into ~340px. */
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  {docs.map((d) => {
-                    const c = rowCalc(d);
-                    return (
-                      <div key={d.id} style={allocCard}>
-                        <div style={allocCardHead}>
-                          <strong>#{d.number}</strong>
-                          <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
-                        </div>
-                        <div style={allocCardMeta}>
-                          <div><span style={allocMetaLabel}>Total</span><span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span></div>
-                          <div><span style={allocMetaLabel}>Balance due</span><span style={allocMetaValue}>{d.available.toLocaleString()}</span></div>
-                        </div>
-                        <div>
-                          <span style={allocMetaLabel}>{isReceipt ? "Received" : "Paid"} (cash)</span>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <input
-                              type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
-                              value={c.row.cash ?? ""}
-                              onChange={(e) => setCash(d.id, e.target.value)}
-                            />
-                            <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0.5rem 0.85rem", boxShadow: "none" }} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
-                          </div>
-                          {renderAdjust(d, c)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={tbl}>
-                    <thead>
-                      <tr>
-                        <th style={th}>{docLabel} #</th>
-                        <th style={th}>Date</th>
-                        <th style={{ ...th, textAlign: "right" }}>Total</th>
-                        <th style={{ ...th, textAlign: "right" }}>Balance due</th>
-                        <th style={{ ...th, textAlign: "right", width: 160 }}>{isReceipt ? "Received" : "Paid"}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+            {/* Advance / on account — one figure, no document. */}
+            {purpose === "advance" && (
+              <div style={formStyles.formGroup}>
+                <label style={formStyles.label}>Advance amount</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  data-testid="advance-amount"
+                  style={formStyles.input}
+                  value={advanceAmount}
+                  onChange={(e) => setAdvanceAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+                <span style={payeeHint}>
+                  {isReceipt
+                    ? "Held against this client's balance until you raise the invoice it belongs to."
+                    : payeeType === "Client"
+                      ? "Recorded against this client's balance — use this for a refund."
+                      : "Held against this supplier's balance until their bill arrives."}
+                </span>
+              </div>
+            )}
+
+            {purpose === "settle" && (
+              <>
+                {/* Receipt-only: the total cash of this document, typed — not
+                    summed from the ticks below. Whatever isn't allocated to an
+                    invoice becomes the customer's advance (see the split under
+                    the invoice list). */}
+                {isReceipt && (
+                  <div style={formStyles.formGroup}>
+                    <label style={formStyles.label}>Amount received</label>
+                    <input
+                      type="number" min="0" step="0.01"
+                      data-testid="receipt-amount"
+                      style={formStyles.input}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                )}
+
+                {/* Allocation against open documents */}
+                <div style={formStyles.formGroup}>
+                  <label style={formStyles.label}>
+                    Apply to open {docLabel.toLowerCase()}s
+                    {isReceipt && <span style={{ fontWeight: 400, color: colors.textSecondary }}> (optional — anything left over is an advance)</span>}
+                  </label>
+                  {!contactId ? (
+                    <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
+                  ) : loadingDocs ? (
+                    <div style={hintBox}>Loading…</div>
+                  ) : docsLoadFailed ? (
+                    <div style={{ ...hintBox, borderStyle: "solid", borderColor: colors.danger, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ color: colors.danger }}>
+                        Could not load {docLabel.toLowerCase()}s for this {contactLabel.toLowerCase()}.
+                        {isEdit && " This receipt cannot be saved until they load."}
+                      </span>
+                      <button type="button" style={retryBtn} onClick={() => setRetryToken((t) => t + 1)}>Retry</button>
+                    </div>
+                  ) : docs.length === 0 ? (
+                    <div style={hintBox}>No open {docLabel.toLowerCase()}s with a balance due for this {contactLabel.toLowerCase()}.</div>
+                  ) : isNarrow ? (
+                    /* Phone (<768px): one card per open document so the amount
+                       input + Max button get full-width tap targets instead of a
+                       5-column table squeezed into ~340px. */
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                       {docs.map((d) => {
                         const c = rowCalc(d);
-                        const adjNode = renderAdjust(d, c);
-                        // Drop the main row's bottom border when an adjustment
-                        // sub-row follows, so the two read as one unit.
-                        const cellTd = adjNode ? { ...td, borderBottom: "none" } : td;
                         return (
-                          <Fragment key={d.id}>
-                            <tr>
-                              <td style={cellTd}><strong>#{d.number}</strong></td>
-                              <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>{d.available.toLocaleString()}</td>
-                              <td style={{ ...cellTd, textAlign: "right" }}>
-                                <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-                                  <input
-                                    type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", padding: "0.35rem 0.5rem", width: 110 }}
-                                    value={c.row.cash ?? ""}
-                                    onChange={(e) => setCash(d.id, e.target.value)}
-                                  />
-                                  <button type="button" style={fillBtn} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
-                                </div>
-                              </td>
-                            </tr>
-                            {adjNode && (
-                              <tr>
-                                <td colSpan={5} style={{ ...td, paddingTop: 0 }}>{adjNode}</td>
-                              </tr>
-                            )}
-                          </Fragment>
+                          <div key={d.id} style={allocCard}>
+                            <div style={allocCardHead}>
+                              <strong>#{d.number}</strong>
+                              <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
+                            </div>
+                            <div style={allocCardMeta}>
+                              <div><span style={allocMetaLabel}>Total</span><span style={allocMetaValue}>{d.grandTotal.toLocaleString()}</span></div>
+                              <div><span style={allocMetaLabel}>Balance due</span><span style={allocMetaValue}>{d.available.toLocaleString()}</span></div>
+                            </div>
+                            <div>
+                              <span style={allocMetaLabel}>{isReceipt ? "Received" : "Paid"} (cash)</span>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <input
+                                  type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1, minHeight: 44 }}
+                                  value={c.row.cash ?? ""}
+                                  onChange={(e) => setCash(d.id, e.target.value)}
+                                />
+                                <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0.5rem 0.85rem", boxShadow: "none" }} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
+                              </div>
+                              {renderAdjust(d, c)}
+                            </div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={tbl}>
+                        <thead>
+                          <tr>
+                            <th style={th}>{docLabel} #</th>
+                            <th style={th}>Date</th>
+                            <th style={{ ...th, textAlign: "right" }}>Total</th>
+                            <th style={{ ...th, textAlign: "right" }}>Balance due</th>
+                            <th style={{ ...th, textAlign: "right", width: 160 }}>{isReceipt ? "Received" : "Paid"}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {docs.map((d) => {
+                            const c = rowCalc(d);
+                            const adjNode = renderAdjust(d, c);
+                            // Drop the main row's bottom border when an adjustment
+                            // sub-row follows, so the two read as one unit.
+                            const cellTd = adjNode ? { ...td, borderBottom: "none" } : td;
+                            return (
+                              <Fragment key={d.id}>
+                                <tr>
+                                  <td style={cellTd}><strong>#{d.number}</strong></td>
+                                  <td style={cellTd}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
+                                  <td style={{ ...cellTd, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
+                                  <td style={{ ...cellTd, textAlign: "right" }}>{d.available.toLocaleString()}</td>
+                                  <td style={{ ...cellTd, textAlign: "right" }}>
+                                    <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
+                                      <input
+                                        type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", padding: "0.35rem 0.5rem", width: 110 }}
+                                        value={c.row.cash ?? ""}
+                                        onChange={(e) => setCash(d.id, e.target.value)}
+                                      />
+                                      <button type="button" style={fillBtn} onClick={() => fillBalance(d)} title="Pay full balance in cash">Max</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {adjNode && (
+                                  <tr>
+                                    <td colSpan={5} style={{ ...td, paddingTop: 0 }}>{adjNode}</td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
 
             <div style={summaryWrap}>
-              {isReceipt ? (
+              {isReceipt && purpose === "settle" ? (
                 <>
                   <div style={summaryLine}>
                     <span style={summaryLabel}>Allocated:</span>
-                    <span style={summaryStrong} data-testid="receipt-allocated">Rs {cashTotal.toLocaleString()}</span>
+                    <span style={summaryStrong} data-testid="receipt-allocated">Rs {docCashTotal.toLocaleString()}</span>
                   </div>
                   <div style={summaryLine}>
                     <span style={summaryLabelMuted}>Advance:</span>
@@ -720,8 +1060,8 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 </>
               ) : (
                 <div style={summaryLine}>
-                  <span style={summaryLabel}>Cash paid:</span>
-                  <span style={summaryStrong}>Rs {cashTotal.toLocaleString()}</span>
+                  <span style={summaryLabel}>Cash {isReceipt ? "received" : "paid"}:</span>
+                  <span style={summaryStrong} data-testid="cash-total">Rs {cashTotal.toLocaleString()}</span>
                 </div>
               )}
               {adjTotal > 0 && (
@@ -732,7 +1072,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                   </div>
                   <div style={summaryLine}>
                     <span style={summaryLabelMuted}>Total settled:</span>
-                    <span style={summaryMuted}>Rs {(cashTotal + adjTotal).toLocaleString()}</span>
+                    <span style={summaryMuted}>Rs {(docCashTotal + adjTotal).toLocaleString()}</span>
                   </div>
                 </>
               )}
@@ -752,14 +1092,17 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {(() => {
-              const bankMissing = hasBankAccounts && !bankAccountId && (isReceipt ? amountNum : cashTotal) > 0;
+              const bankMissing = hasBankAccounts && !bankAccountId && (isReceipt ? receiptAmount : cashTotal) > 0;
               // Allow submit when there's any settlement — cash and/or a pure
               // write-off adjustment (Σ cash + Σ adjustment > 0). A receipt
               // with a positive typed Amount is also submittable with zero
-              // ticks — the whole thing becomes an advance.
-              const hasSomething = isReceipt
-                ? (amountNum > 0 || (cashTotal + adjTotal) > 0)
-                : (cashTotal + adjTotal) > 0;
+              // ticks — the whole thing becomes an advance. The expense and
+              // advance screens have no adjustments, so cash alone decides.
+              const hasSomething = purpose !== "settle"
+                ? cashTotal > 0
+                : isReceipt
+                  ? (amountNum > 0 || (docCashTotal + adjTotal) > 0)
+                  : (docCashTotal + adjTotal) > 0;
               // An edit's OWN allocations aren't in `alloc` yet until the docs
               // fetch for its contact resolves SUCCESSFULLY (see the
               // docs-fetch effect) — but `amount` is seeded from
@@ -776,12 +1119,15 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               // alloc was already correctly cleared, not "not yet loaded" —
               // see the docs-fetch effect), so this only gates the edit
               // path; it must never make a brand-new receipt wait, even if
-              // that contact's own doc fetch also fails.
-              const notReadyToSubmit = isEdit && (loadingDocs || docsLoadFailed);
+              // that contact's own doc fetch also fails. It is scoped to the
+              // "settle" purpose because that is the only one whose lines
+              // come from that fetch — an edit switched to expense/advance is
+              // deliberately replacing them.
+              const notReadyToSubmit = isEdit && purpose === "settle" && (loadingDocs || docsLoadFailed);
               const blocked = saving || !hasSomething || bankMissing || notReadyToSubmit;
               return (
                 <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
-                  {saving ? "Saving…" : (isEdit && docsLoadFailed) ? "Unable to Save" : notReadyToSubmit ? "Loading…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
+                  {saving ? "Saving…" : (isEdit && purpose === "settle" && docsLoadFailed) ? "Unable to Save" : notReadyToSubmit ? "Loading…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
                 </button>
               );
             })()}
@@ -825,6 +1171,50 @@ const clearXNarrow = { width: 44, height: 44, minWidth: 44, fontSize: "1.2rem" }
 const adjAcctHint = { fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" };
 const adjError = { fontSize: "0.72rem", color: colors.danger, fontWeight: 600 };
 const adjRemainHint = { fontSize: "0.72rem", color: colors.textSecondary };
+
+// ── Payee / purpose selectors ────────────────────────────────────────────────
+// Wraps instead of scrolling, so three or four choices stack on a phone rather
+// than hiding behind an edge (CLAUDE.md §3: no media queries needed).
+const payeeTabs = { display: "flex", flexWrap: "wrap", gap: "0.4rem" };
+const payeeTab = {
+  flex: "1 1 auto", minWidth: 110, minHeight: 44, padding: "0.5rem 0.75rem",
+  border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg,
+  color: colors.textSecondary, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
+};
+const payeeTabActive = { background: colors.blue, borderColor: colors.blue, color: "#fff" };
+const payeeHint = { display: "block", marginTop: "0.35rem", color: colors.textSecondary, fontSize: "0.78rem" };
+
+// ── Income/expense line editor ───────────────────────────────────────────────
+// Desktop: the account takes the room it needs; amount and tax stay side by
+// side. Phone: the account claims its own full-width row above them, because
+// the four desktop columns need ~475px and a 375px viewport would scroll.
+const expRow = {
+  display: "grid", gap: "0.4rem", alignItems: "start", marginBottom: "0.5rem",
+  gridTemplateColumns: "minmax(min(240px, 100%), 3fr) minmax(110px, 1fr) minmax(80px, 0.6fr) 44px",
+};
+const expRowNarrow = {
+  display: "grid", gap: "0.4rem", alignItems: "start", marginBottom: "0.75rem",
+  gridTemplateColumns: "1fr 1fr 44px",
+};
+const expAccountCell = { minWidth: 0 };
+const expAccountCellNarrow = { minWidth: 0, gridColumn: "1 / -1" };
+const expCell = { minWidth: 0 };
+// box-sizing + padding are explicit so the button really is the 44px the grid
+// column reserves for it — the global button padding otherwise widens it past
+// its own track.
+const expRemove = {
+  display: "grid", placeItems: "center", boxSizing: "border-box", padding: 0,
+  width: 44, height: 44, minWidth: 44,
+  border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg,
+  color: colors.textSecondary, fontSize: "1.1rem", lineHeight: 1, cursor: "pointer",
+};
+const expTaxHint = { gridColumn: "1 / -1", color: colors.textSecondary, fontSize: "0.78rem" };
+const expAddBtn = {
+  minHeight: 44, padding: "0.5rem 0.9rem", border: `1px dashed ${colors.inputBorder}`,
+  borderRadius: 8, background: "transparent", color: colors.blue,
+  fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
+};
+
 // Footer money summary.
 const summaryWrap = { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 };
 const summaryLine = { display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: "0.5rem" };

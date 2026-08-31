@@ -22,6 +22,7 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import DivisionSelect from "../Components/DivisionSelect";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import useIsNarrow from "../hooks/useIsNarrow";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 
 const fmtMoney = (n) =>
@@ -153,7 +154,11 @@ export default function PaymentsPage({ mode = "receipts" }) {
           <span style={{ ...st.headerIcon, background: `${accent}15`, color: accent }}><Icon size={24} /></span>
           <div>
             <h2 style={st.h2}>{title}</h2>
-            <div style={st.subtitle}>{isReceipt ? "Money received from customers" : "Money paid to suppliers"}</div>
+            <div style={st.subtitle}>
+              {isReceipt
+                ? "Money in — settle invoices, record other income, or take an advance"
+                : "Money out — pay bills, record an expense, or pay an advance"}
+            </div>
           </div>
         </div>
         {canCreate && companyId && (
@@ -273,6 +278,10 @@ export default function PaymentsPage({ mode = "receipts" }) {
  */
 function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, exportingId, onDelete, onEdit, onView, onPrint, onExportPdf }) {
   const [open, setOpen] = useState(false);
+  // Below 768px every card control grows to a real 44px tap target
+  // (CLAUDE.md §3); desktop keeps the denser 36px row.
+  const isNarrow = useIsNarrow();
+  const tap = isNarrow ? st.tapNarrow : null;
   const allocs = p.allocations || [];
   const count = allocs.length;
   // Cash the receipt carries that no allocation line spent — the customer's
@@ -346,7 +355,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
         {(count > 0 || hasAdvance) && (
           <div style={st.allocWrap}>
             <button
-              style={st.allocToggle}
+              style={{ ...st.allocToggle, ...(isNarrow ? st.allocToggleNarrow : null) }}
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
             >
@@ -388,12 +397,12 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
 
         {/* Footer — View / Edit / Delete */}
         <div style={st.cardActions}>
-          <button style={st.viewBtn} onClick={onView} title="View details">
+          <button style={{ ...st.viewBtn, ...tap }} onClick={onView} title="View details">
             <MdVisibility size={16} /> View
           </button>
           {canPrint && (
             <button
-              style={{ ...st.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+              style={{ ...st.printBtn, ...tap, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
               disabled={tplPicker.noTemplate}
               title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print voucher"}
               onClick={onPrint}
@@ -403,7 +412,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
           )}
           {canPrint && (
             <button
-              style={{ ...st.pdfBtn, ...((tplPicker.noTemplate || exportingId === p.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+              style={{ ...st.pdfBtn, ...tap, ...((tplPicker.noTemplate || exportingId === p.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
               disabled={tplPicker.noTemplate || !!exportingId}
               title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
               onClick={onExportPdf}
@@ -412,12 +421,12 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
             </button>
           )}
           {canEdit && !p.isCancelled && (
-            <button style={st.editBtn} onClick={onEdit} title="Edit">
+            <button style={{ ...st.editBtn, ...tap }} onClick={onEdit} title="Edit">
               <MdEdit size={16} /> Edit
             </button>
           )}
           {canDelete && (
-            <button style={st.delBtn} onClick={onDelete} title="Delete">
+            <button style={{ ...st.delBtn, ...tap }} onClick={onDelete} title="Delete">
               <MdDelete size={16} /> Delete
             </button>
           )}
@@ -511,6 +520,9 @@ const st = {
 
   allocWrap: { marginTop: 10, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: 8 },
   allocToggle: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minHeight: 36, padding: "0.3rem 0", background: "none", border: "none", cursor: "pointer", font: "inherit", color: colors.textPrimary },
+  // Phone variants of the card controls (CLAUDE.md §3, >=44px).
+  allocToggleNarrow: { minHeight: 44, padding: "0.5rem 0" },
+  tapNarrow: { minHeight: 44, padding: "0.6rem 0.85rem" },
   allocToggleLabel: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.82rem", fontWeight: 700 },
   allocToggleHint: { fontSize: "0.72rem", color: colors.textSecondary },
   allocList: { marginTop: 4, display: "flex", flexDirection: "column", gap: 1 },
@@ -545,5 +557,5 @@ const vd = {
   v: { color: colors.textPrimary, fontWeight: 600, textAlign: "right" },
   allocRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.25rem 0.5rem", background: colors.inputBg, borderRadius: 6, marginBottom: 4, fontSize: "0.82rem" },
   footer: { display: "flex", justifyContent: "flex-end", padding: "0.75rem 1.1rem", borderTop: `1px solid ${colors.cardBorder}` },
-  closeBtn: { padding: "0.5rem 1rem", minHeight: 40, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textPrimary, fontWeight: 700, cursor: "pointer" },
+  closeBtn: { padding: "0.6rem 1.1rem", minHeight: 44, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textPrimary, fontWeight: 700, cursor: "pointer" },
 };

@@ -289,6 +289,16 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — The screens for paying a payee
+
+- **The Receipt and Payment forms now ask the two questions in plain language.** Who paid you / who are you paying — a client, a supplier, or someone not on your books, named free-text — and what the money is for: settle their unpaid invoices or bills, an expense or other income, or an advance on account. Until now the Accounting Guide described controls that had no screen behind them.
+- **Recording an expense is a real form.** Pick the account, type the amount as it appears on the bill and (optionally) the tax rate; the line shows how much tax is recoverable and how much lands on the account before you save.
+- **The Suppliers screen shows Accounts payable and a status on each supplier**, and the figure opens that supplier's ledger — bills, payments, advances and refunds with a running amount owed.
+- **A customer in credit is labelled as such.** Their statement says "Held for this customer (in credit)" and shows a positive figure instead of a bare minus sign under "Accounts Receivable".
+- **Recording a receipt straight from an invoice pre-fills the amount received** with that invoice's balance, so the shortcut no longer opens in a state it refuses to save.
+- **Account pickers show and search the group an account belongs to**, so two similarly named accounts are told apart at a glance.
+- Buttons and list rows on the Receipts, Payments, Client Ledger and Accounting Guide screens are now full-size tap targets on a phone.
+
 ### 2026-08-31 — An advance reads the same on every screen
 
 - **The customer portal shows an advance again.** An advance recorded as its own "advance / on account" line was being netted away to nothing on the portal, so a customer who had paid ahead saw no credit and a balance overstated by the whole amount they had paid. Advances entered the other way — a receipt saved without picking an invoice — were always shown correctly; both now read the same.

@@ -3,11 +3,23 @@ import { deleteSupplier } from "../api/supplierApi";
 import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
+import useIsNarrow from "../hooks/useIsNarrow";
 import { notify } from "../utils/notify";
 
-export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers, billCounts = {}, onShowBills }) {
+export default function SupplierList({
+  suppliers, onEdit, onCopy, fetchSuppliers, billCounts = {}, onShowBills,
+  // Per-supplier payables roll-up, keyed by supplier id — { accountsPayable,
+  // status, openBills }. Absent while it loads, so the card degrades to what it
+  // showed before rather than rendering "Rs 0.00" as if it were settled.
+  summary = {},
+  onShowLedger,
+}) {
   const confirm = useConfirm();
   const { has } = usePermissions();
+  // Below 768px the payables drill-down grows to a real 44px tap target
+  // (CLAUDE.md §3); on desktop it stays an inline text link so the card keeps
+  // the same density as the customer A/R cell it mirrors.
+  const isNarrow = useIsNarrow();
   const canUpdate = has("suppliers.manage.update");
   const canDelete = has("suppliers.manage.delete");
   const canCopy = has("suppliers.manage.copy");
@@ -51,6 +63,30 @@ export default function SupplierList({ suppliers, onEdit, onCopy, fetchSuppliers
           <div style={cardStyles.cardContent}>
             <div>
               <h5 style={cardStyles.title}>{supplier.name}</h5>
+
+              {/* Accounts payable + status. The figure is clickable and opens the
+                  supplier's ledger, the same affordance the customer A/R cell has. */}
+              {summary[supplier.id] && (
+                <div style={payRow}>
+                  <span style={payLabel}>Accounts payable</span>
+                  {onShowLedger ? (
+                    <button
+                      type="button"
+                      onClick={() => onShowLedger(supplier)}
+                      title="Open this supplier's ledger"
+                      style={{ ...payAmountBtn, ...(isNarrow ? payAmountBtnNarrow : null) }}
+                    >
+                      {fmtPayable(summary[supplier.id].accountsPayable)}
+                    </button>
+                  ) : (
+                    <span style={payAmount}>{fmtPayable(summary[supplier.id].accountsPayable)}</span>
+                  )}
+                  <span style={{ ...statusPill, ...statusTone(summary[supplier.id].status) }}>
+                    {summary[supplier.id].status}
+                  </span>
+                </div>
+              )}
+
               {onShowBills && (
                 <button
                   type="button"
@@ -149,3 +185,33 @@ const countChip = {
   borderRadius: 14, border: "1px solid #ce93d8", background: "#f3e5f5",
   color: "#6a1b9a", fontSize: "0.74rem", fontWeight: 700, cursor: "pointer",
 };
+
+// ── Accounts payable + status ───────────────────────────────────────────────
+/** "Rs 1,234.00", or "Rs 500.00 in credit" when we have paid ahead — a bare
+ *  negative reads like a bug, and "in credit" is what it actually means. */
+const fmtPayable = (n) => {
+  const v = Number(n) || 0;
+  const amount = `Rs ${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return v < -0.005 ? `${amount} in credit` : amount;
+};
+
+const payRow = {
+  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem",
+  margin: "0.4rem 0 0.2rem",
+};
+const payLabel = { color: "#5f6d7e", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em" };
+const payAmount = { fontSize: "0.86rem", fontWeight: 700, color: "#1a2332", fontVariantNumeric: "tabular-nums" };
+const payAmountBtn = {
+  ...payAmount, padding: 0, border: "none", background: "none",
+  color: "#0d47a1", textDecoration: "underline", cursor: "pointer",
+};
+// Phone: same link, but tall enough to hit (CLAUDE.md §3).
+const payAmountBtnNarrow = { display: "inline-flex", alignItems: "center", minHeight: 44, padding: "0 0.25rem", margin: "0 -0.25rem" };
+const statusPill = {
+  padding: "0.1rem 0.5rem", borderRadius: 12,
+  fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.02em",
+};
+const statusTone = (status) =>
+  status === "Paid" ? { background: "#e8f5e9", color: "#1b5e20", border: "1px solid #a5d6a7" }
+  : status === "Partial" ? { background: "#fff8e1", color: "#8a5a00", border: "1px solid #ffe082" }
+  : { background: "#fdecea", color: "#b3261e", border: "1px solid #f5c6c2" };
