@@ -14,7 +14,9 @@ namespace MyApp.Api.Helpers.ExcelImport
     /// month with different numbers, different dates and an extra customer or
     /// two. Three rules do most of that work:
     ///
-    ///   • Digits are stripped, so "Jul 2026" and "Aug 2026" fingerprint alike.
+    ///   • Digits are stripped and month names are stop-worded, so "Jul 2026"
+    ///     and "Aug 2026" fingerprint alike. Digits alone are not enough — the
+    ///     month NAME is letters.
     ///   • Only the first few sheets and their top rows are read — that is where
     ///     the template's header vocabulary lives; everything below is data.
     ///   • Short tokens are dropped, which removes most stray value fragments.
@@ -42,9 +44,22 @@ namespace MyApp.Api.Helpers.ExcelImport
         /// strips digits, punctuation and currency marks in one pass.</summary>
         private static readonly Regex NonLetter = new(@"[^\p{L}]+", RegexOptions.Compiled);
 
+        /// <summary>
+        /// Words that are date or filler content rather than structure.
+        ///
+        /// Month names earn their place here. Stripping digits alone normalises
+        /// "2026" but leaves "Jul" and "Aug" as distinct tokens, so the same
+        /// monthly workbook would fingerprint differently every month and never
+        /// match its own saved layout — and these sheets are titled and tabbed
+        /// by period as a matter of course.
+        /// </summary>
         private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
         {
             "the", "and", "for", "with", "from", "this", "that", "sheet", "sheets",
+            "january", "february", "march", "april", "may", "june", "july",
+            "august", "september", "october", "november", "december",
+            "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept",
+            "oct", "nov", "dec",
         };
 
         public sealed record Result(string Hash, string TokenSignature, IReadOnlyList<string> Tokens);

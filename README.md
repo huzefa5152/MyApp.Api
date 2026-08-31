@@ -289,6 +289,16 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Spreadsheet import: opening stock
+
+- **An opening stock sheet can now be imported.** Upload the workbook, review what it would do row by row, then import — item types, opening quantities and the stock's total value all land in one go.
+- **Existing items are reused, never duplicated.** An item already in the catalog has its opening quantity updated; a placeholder created by the HS code import is reused and renamed; an item that was never classified has its HS code filled in. Only a genuinely new item creates a catalog row, and where the same name already exists under a different HS code the importer asks rather than guessing.
+- **One item held across several customs lots becomes one item** with the quantities added together, and the lot references are kept on the opening balance so the figure can be traced back to the sheet.
+- **The stock's total value posts as the Inventory opening balance**, with the contra to Retained earnings, so the opening balance sheet balances without a manual journal.
+- Importing also switches the company to tracking every item type as inventory, which turns on the block against selling more than is on hand — the import screen says so before you commit.
+- Re-importing is safe: the same file is refused, and so is a re-saved copy whose rows are all already present. A sheet that has genuinely gained rows still imports, adding only the new ones.
+- New suite `scripts/test_spreadsheet_import.py` (54 checks) covers layouts, file validation, the match ladder, commit and re-import protection.
+
 ### 2026-08-31 — Spreadsheet import: recognised layouts, file checks and re-import protection
 
 - **New Spreadsheet Import module** (Accounting → Spreadsheet Import) for onboarding a business from its own Excel books — an opening stock sheet and a customer outstanding ledger — instead of typing them in.

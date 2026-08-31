@@ -30,20 +30,29 @@ namespace MyApp.Api.Controllers
     public class SpreadsheetImportController : ControllerBase
     {
         private readonly ISpreadsheetImportService _service;
+        private readonly IImportProfileService _profiles;
+        private readonly IOpeningStockImportService _openingStock;
         private readonly ICompanyAccessGuard _access;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IPermissionService _permissions;
         private readonly AppDbContext _db;
         private readonly ILogger<SpreadsheetImportController> _logger;
 
         public SpreadsheetImportController(
             ISpreadsheetImportService service,
+            IImportProfileService profiles,
+            IOpeningStockImportService openingStock,
             ICompanyAccessGuard access,
+            IDivisionAccessGuard divisionAccess,
             IPermissionService permissions,
             AppDbContext db,
             ILogger<SpreadsheetImportController> logger)
         {
             _service = service;
+            _profiles = profiles;
+            _openingStock = openingStock;
             _access = access;
+            _divisionAccess = divisionAccess;
             _permissions = permissions;
             _db = db;
             _logger = logger;
@@ -114,6 +123,126 @@ namespace MyApp.Api.Controllers
                 return StatusCode(500, new { message = "The file could not be read. Please check it and try again." });
             }
         }
+
+        // ── Opening stock ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Reads the stock sheet and reports what it would do. Writes nothing.
+        /// Takes either a saved layout (<paramref name="profileId"/>) or a
+        /// mapping being edited on screen (<paramref name="mappingJson"/>) —
+        /// the second is what makes the mapping step iterative.
+        /// </summary>
+        [HttpPost("opening-stock/preview")]
+        [HasPermission("spreadsheetimport.stock.run")]
+        [RequestSizeLimit(ExcelUploadValidator.MaxBytes)]
+        public async Task<ActionResult<OpeningStockPreviewDto>> PreviewOpeningStock(
+            [FromForm] IFormFile file,
+            [FromQuery] int companyId,
+            [FromQuery] int? profileId,
+            [FromForm] string? mappingJson)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            if (!await CompanyExistsAsync(companyId))
+                return NotFound(new { message = "That company no longer exists." });
+
+            var validated = await ExcelUploadValidator.ValidateAsync(file, HttpContext.RequestAborted);
+            if (!validated.Ok) return BadRequest(new { message = validated.Error });
+
+            var resolved = await ResolveMappingAsync(
+                profileId, mappingJson, ImportKinds.OpeningStock, companyId);
+            if (resolved.Error != null) return resolved.Error;
+
+            try
+            {
+                return Ok(await _openingStock.PreviewAsync(
+                    validated.Bytes, validated.Extension, validated.FileName, validated.Sha256,
+                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion));
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Mapping problems are the operator's to fix on the mapping
+                // screen, so they are echoed rather than swallowed.
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Opening stock preview failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "The file could not be read. Please check it and try again." });
+            }
+        }
+
+        /// <summary>Writes the reviewed rows.</summary>
+        [HttpPost("opening-stock/commit")]
+        [HasPermission("spreadsheetimport.stock.run")]
+        public async Task<ActionResult<OpeningStockCommitResultDto>> CommitOpeningStock(
+            [FromBody] OpeningStockCommitDto dto)
+        {
+            if (dto == null || dto.CompanyId <= 0)
+                return BadRequest(new { message = "Choose a company to import into." });
+
+            // Guarded here rather than trusted: the body carries the company id.
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            if (!await CompanyExistsAsync(dto.CompanyId))
+                return NotFound(new { message = "That company no longer exists." });
+
+            // Opening balances are company-level inventory state, which a
+            // division-restricted user may not write (policy D2) — the same
+            // guard the Opening Balances screen applies.
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
+
+            if (dto.Rows == null || dto.Rows.Count == 0)
+                return BadRequest(new { message = "There is nothing to import." });
+            if (dto.Rows.Count > Services.Implementations.OpeningStockImportService.MaxSourceRows)
+                return BadRequest(new { message = "Too many rows in one import. Split the file and try again." });
+            if (dto.AsOfDate == default)
+                return BadRequest(new { message = "Choose the date these opening quantities are as at." });
+
+            try
+            {
+                return Ok(await _openingStock.CommitAsync(dto, CurrentUserId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Opening stock commit failed for company {CompanyId}", dto.CompanyId);
+                return StatusCode(500, new { message = "The import could not be completed. Nothing was changed." });
+            }
+        }
+
+        /// <summary>
+        /// Works out which mapping an import should run with. A saved layout is
+        /// resolved and scope-checked; an inline mapping is used as-is so the
+        /// mapping screen can preview edits before anything is saved.
+        /// </summary>
+        private async Task<(string? MappingJson, int? ProfileId, int? ProfileVersion, ActionResult? Error)>
+            ResolveMappingAsync(int? profileId, string? mappingJson, string kind, int companyId)
+        {
+            if (profileId.HasValue)
+            {
+                var profile = await _profiles.GetAsync(profileId.Value);
+                if (profile == null)
+                    return (null, null, null, NotFound(new { message = "That layout does not exist." }));
+
+                // Usable by THIS company: its own, or installation-wide.
+                if (profile.CompanyId != null && profile.CompanyId != companyId)
+                    return (null, null, null, NotFound(new { message = "That layout does not exist." }));
+
+                if (!string.Equals(profile.Kind, kind, StringComparison.OrdinalIgnoreCase))
+                    return (null, null, null, BadRequest(new { message = "That layout is for a different kind of import." }));
+
+                return (profile.MappingJson, profile.Id, profile.CurrentVersion, null);
+            }
+
+            if (string.IsNullOrWhiteSpace(mappingJson))
+                return (null, null, null, BadRequest(new { message = "Choose a saved layout, or map the columns." }));
+
+            return (mappingJson, null, null, null);
+        }
+
+        // ── History ──────────────────────────────────────────────────────────
 
         [HttpGet("runs")]
         [HasPermission("spreadsheetimport.runs.view")]
