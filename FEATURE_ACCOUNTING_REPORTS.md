@@ -1,7 +1,6 @@
 # Accounting Reports — full reporting system
 
-**Status:** Phase 1 COMPLETE + verified (2026-08-31). Phases 2–6 designed, not started.
-Not yet committed — awaiting the user's go-ahead.
+**Status:** Phase 1 COMMITTED (9508895). Phase 2 COMPLETE + verified. Phases 3–6 designed, not started.
 **Branch:** `customize-solution-for-other`
 **Transient doc** — delete once every phase is implemented + verified (CLAUDE.md rule).
 The durable record is the README `## Changelog`, `accountingGuide.js`, and git history.
@@ -316,13 +315,46 @@ machine) — icon `svg` width > 0, no horizontal page scroll.
 
 | Phase | Contents | Blocked on |
 |---|---|---|
-| 2 | Customers + Suppliers: Ledger (all-periods), Statement, Balance Summary, AR/AP aging drill-down, Outstanding, Customer Sales by Item | — (needs `JournalLine (PartyType, PartyId)` index) |
+| 2 | **DONE.** Customer/Supplier Ledger (all-periods), Statement, Balance Summary, AR/AP aging (+`asOf` + drill-down), Outstanding docs, Customer Sales / Supplier Purchases. Index `JournalLine(PartyType, PartyId)` added (migration `20260831141947`). | — |
 | 3 | Financial Statements: **real Balance Sheet + P&L with comparatives**, General Ledger, Account Balance Summary, Trial Balance upgrade | — |
 | 4 | Sales + Purchases: both Registers, by customer·item·itemtype·account·date·tax, Payment Status, Outstanding | Discount columns need a nominated discount account (§2) |
 | 5 | Taxes + Accounting Control: Tax Summary, Output/Input Tax, Tax by Customer/Supplier, Tax Transaction Detail, Journal Register, Posting Exceptions | — |
 | 6 | Management: Revenue/Expense Summary, **Gross Profit, Net Profit, Customer Profitability**, Monthly Sales/Purchases/Expenses/Profit, Cash Flow Summary | **COGS-on-sale (§2) — own spec first** |
 
 ---
+
+## 7a. Phase 2 findings worth keeping
+
+**Imported ledgers carry no party tags.** `ManagerImportService` writes journal
+entries directly instead of through `PostingService`, so `JournalLine.PartyType`
+/ `PartyId` are never set — Al-Qahera has 15,376 lines and zero tags, 2,944 of
+them on the AR account. A migrated company also has a `GlLockDate`, so those
+entries are frozen and a GL rebuild will not tag them either. The party reports
+therefore detect "GL on but no party tags" and fall back to the DOCUMENT
+subledger, flagging `LedgerSourced = false` with an explanatory notice. Same code
+path serves GL-off companies.
+
+**`AmountPaid` is the product's settled figure, and it can diverge from the
+allocations.** The migration set `Invoice.AmountPaid` directly without creating
+`PaymentAllocation` rows — 742 invoices, 23,525,145.07 more than the recorded
+allocations — and separately left bills whose allocations EXCEED AmountPaid by
+381,520. Aging, payment status and Outstanding all read `AmountPaid`, so the
+document-sourced ledger reconciles to it in BOTH directions with an explicit
+"Settled before migration" / "Settlement adjustment" row per document. Without
+that the ledger disagreed with aging by exactly those amounts.
+
+**Balance Summary and Aging legitimately differ.** Aging sums only documents
+still carrying a balance; the summary is the whole position. Verified exactly on
+Al-Qahera: customers 70,659,903.45 − 45,827.48 (in credit) − 3,247.06 (credit
+notes) = 70,610,828.91; suppliers 1,374,933.00 − 634,280.00 (debit notes) =
+740,653.00. The summary reports the gap and names the cause rather than leaving
+two screens quietly contradicting each other.
+
+**Route space is shared.** `AccountingController` already owns
+`api/accounting/reports/company/{id}/{trial-balance,aged-receivables,aged-payables}`.
+Colliding on those throws `AmbiguousMatchException` at request time, not build
+time — the report versions are named `receivables-aging` / `payables-aging`.
+Phase 3 must avoid `trial-balance` the same way.
 
 ## 8. Phase 1 task tracker
 

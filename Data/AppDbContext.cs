@@ -1106,6 +1106,11 @@ namespace MyApp.Api.Data
                 .HasIndex(l => l.InvoiceId);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
                 .HasIndex(l => l.PurchaseBillId);
+            // Customer/supplier ledgers, statements and balance summaries all
+            // filter the AR/AP control account by party. Without this they scan
+            // every journal line the company has ever written.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => new { l.PartyType, l.PartyId });
 
             // ── Inter-account transfers ────────────────────────────────────────
             modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountTransfer>()

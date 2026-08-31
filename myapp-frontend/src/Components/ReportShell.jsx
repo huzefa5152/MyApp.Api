@@ -139,15 +139,22 @@ export default function ReportShell({
         </div>
       </div>
 
-      {/* Provenance and truncation warnings, stated rather than implied. */}
-      {report && report.ledgerSourced === false && (
+      {/* Provenance and truncation warnings, stated rather than implied.
+          The generic banner is a FALLBACK only. A report that knows why it is not
+          ledger-sourced sends its own notice — "the ledger was imported and its
+          entries are not attributed to individual customers" — and showing both
+          put a wrong sentence ("GL posting switched off") above a right one. */}
+      {report && report.ledgerSourced === false && !report.notice && (
         <Notice tone="warn">
-          These figures come from the payment records, not the general ledger — this
-          company has GL posting switched off, so manual journals and unpaid bills
-          are not included.
+          These figures come from the documents rather than the general ledger, so
+          they cannot include journal entries that moved the balance.
         </Notice>
       )}
-      {report?.notice && <Notice tone="info">{report.notice}</Notice>}
+      {report?.notice && (
+        <Notice tone={report.ledgerSourced === false ? "warn" : "info"}>
+          {report.notice}
+        </Notice>
+      )}
 
       {/* ── 2. The answer ─────────────────────────────────────────────────── */}
       {report && Object.keys(totals).length > 0 && (
@@ -163,12 +170,24 @@ export default function ReportShell({
         </div>
       )}
 
-      {/* Books state opening → closing, which a column total cannot express. */}
-      {report?.openingBalance !== undefined && report?.accountName !== undefined && (
+      {/* A statement is a document you send, so it leads with the letterhead,
+          the addressee and the amount due rather than a row of tiles. */}
+      {report?.party && <StatementHead report={report} />}
+
+      {/* Books and party ledgers both state opening → closing, which a column
+          total cannot express. */}
+      {report?.openingBalance !== undefined
+        && (report?.accountName !== undefined || report?.partyType) && (
         <div style={st.bookStrip}>
           <BookFigure label="Opening balance" value={report.openingBalance} />
           <BookFigure label="Closing balance" value={report.closingBalance} strong />
           {report.accountName && <BookFigure label="Account" text={report.accountName} />}
+          {!report.accountName && report.partyName && (
+            <BookFigure
+              label={report.partyType === "Supplier" ? "Supplier" : "Customer"}
+              text={report.partyName}
+            />
+          )}
         </div>
       )}
 
@@ -263,6 +282,11 @@ export default function ReportShell({
         />
       )}
 
+      {/* How old the debt is — the part of a statement that prompts payment. */}
+      {report?.aging && Number(report.aging.total || 0) !== 0 && (
+        <AgingFooter aging={report.aging} owed={report.closingBalance} />
+      )}
+
       {/* ── 4. The breakdown ──────────────────────────────────────────────── */}
       {(report?.groupSummaries || []).map((group) => (
         <GroupSummary key={group.title} group={group} onDrill={onDrill} />
@@ -298,6 +322,110 @@ function Notice({ tone, children }) {
     </div>
   );
 }
+
+/**
+ * Statement letterhead and addressee.
+ *
+ * A statement is not a screen, it is a document that leaves the building: who
+ * it is from, who it is to, the period, and what is owed. The amount due is
+ * given its own panel because it is the only number the recipient reads first.
+ */
+function StatementHead({ report }) {
+  const from = report.companyContact || {};
+  const to = report.party || {};
+  const owed = Number(report.closingBalance || 0);
+  const isSupplier = report.partyType === "Supplier";
+
+  return (
+    <div style={st.statement}>
+      <div style={st.statementGrid}>
+        <div style={{ minWidth: 0 }}>
+          <span style={st.statementLabel}>From</span>
+          <div style={st.statementName}>{from.name || report.companyName}</div>
+          <ContactLines c={from} />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <span style={st.statementLabel}>
+            {isSupplier ? "Statement of account with" : "Statement for"}
+          </span>
+          <div style={st.statementName}>{to.name || report.partyName}</div>
+          <ContactLines c={to} />
+        </div>
+        <div style={st.dueBox}>
+          <span style={st.statementLabel}>
+            {isSupplier ? "Balance we owe" : "Amount due"}
+          </span>
+          <span style={st.dueAmount}>Rs {fmtMoney(owed)}</span>
+          <span style={st.duePeriod}>{report.periodLabel}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactLines({ c }) {
+  const lines = [c.address, c.phone, c.email].filter(Boolean);
+  const tax = [c.ntn && `NTN ${c.ntn}`, c.strn && `STRN ${c.strn}`].filter(Boolean).join("  ·  ");
+  return (
+    <div style={st.contactLines}>
+      {lines.map((l, i) => <div key={i}>{l}</div>)}
+      {tax && <div style={{ marginTop: 2 }}>{tax}</div>}
+    </div>
+  );
+}
+
+/**
+ * Age breakdown of the closing balance, with a proportion bar per bucket.
+ * Overdue buckets are tinted so "90+" cannot be skimmed past.
+ */
+function AgingFooter({ aging, owed }) {
+  const buckets = [
+    { key: "current", label: "Current", tone: "ok" },
+    { key: "days1To30", label: "1–30 days", tone: "ok" },
+    { key: "days31To60", label: "31–60 days", tone: "warn" },
+    { key: "days61To90", label: "61–90 days", tone: "warn" },
+    { key: "over90", label: "Over 90 days", tone: "bad" },
+  ];
+  const total = Math.abs(Number(aging.total || 0)) || 1;
+
+  return (
+    <div style={st.agingCard}>
+      <div style={st.groupHead}>
+        <h3 style={st.groupTitle}>How old is this balance</h3>
+        <span style={st.groupTotal}>Rs {fmtMoney(owed)}</span>
+      </div>
+      <div style={st.agingGrid}>
+        {buckets.map((b) => {
+          const amount = Number(aging[b.key] || 0);
+          const pct = Math.max(0, Math.min(100, (Math.abs(amount) / total) * 100));
+          const tone = amount === 0 ? "zero" : b.tone;
+          return (
+            <div key={b.key} style={st.agingCell}>
+              <span style={st.totalLabel}>{b.label}</span>
+              <span style={{ ...st.agingAmount, ...AGING_TONE[tone] }}>{fmtMoney(amount)}</span>
+              <div style={st.barTrack}>
+                <div style={{ ...st.barFill, width: `${pct}%`, ...AGING_BAR[tone] }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const AGING_TONE = {
+  zero: { color: colors.textSecondary, fontWeight: 600 },
+  ok: { color: colors.textPrimary },
+  warn: { color: "#b26a00" },
+  bad: { color: colors.danger },
+};
+const AGING_BAR = {
+  zero: { background: "#e3e8ef" },
+  ok: { background: `linear-gradient(90deg, ${colors.blue}, ${colors.teal})` },
+  warn: { background: "#f0a000" },
+  bad: { background: colors.danger },
+};
 
 function BookFigure({ label, value, text, strong }) {
   return (
@@ -523,6 +651,44 @@ function buildReportHtml(report) {
       </tbody>
     </table>`).join("");
 
+  // A printed statement needs the letterhead and addressee, or it is just a
+  // table of numbers with no indication of who owes whom.
+  const statement = report.party ? `
+    <table class="stmt"><tr>
+      <td>
+        <div class="lbl">From</div>
+        <div class="nm">${esc(report.companyContact?.name || report.companyName)}</div>
+        <div class="sm">${[report.companyContact?.address, report.companyContact?.phone]
+          .filter(Boolean).map(esc).join("<br/>")}</div>
+      </td>
+      <td>
+        <div class="lbl">${report.partyType === "Supplier" ? "Account with" : "Statement for"}</div>
+        <div class="nm">${esc(report.party?.name || report.partyName)}</div>
+        <div class="sm">${[report.party?.address, report.party?.phone, report.party?.email]
+          .filter(Boolean).map(esc).join("<br/>")}</div>
+      </td>
+      <td class="due">
+        <div class="lbl">${report.partyType === "Supplier" ? "Balance we owe" : "Amount due"}</div>
+        <div class="dueamt">Rs ${esc(fmtMoney(report.closingBalance))}</div>
+      </td>
+    </tr></table>` : "";
+
+  const openClose = (report.openingBalance !== undefined && (report.partyType || report.accountName))
+    ? `<table class="grp"><tbody>
+         <tr><td>Opening balance</td><td class="num">${esc(fmtMoney(report.openingBalance))}</td></tr>
+         <tr class="grp-total"><td>Closing balance</td><td class="num">${esc(fmtMoney(report.closingBalance))}</td></tr>
+       </tbody></table>` : "";
+
+  const aging = report.aging && Number(report.aging.total || 0) !== 0 ? `
+    <h3>How old is this balance</h3>
+    <table class="grp"><tbody>
+      ${[["Current", "current"], ["1–30 days", "days1To30"], ["31–60 days", "days31To60"],
+         ["61–90 days", "days61To90"], ["Over 90 days", "over90"]]
+        .map(([label, key]) =>
+          `<tr><td>${esc(label)}</td><td class="num">${esc(fmtMoney(report.aging[key]))}</td></tr>`)
+        .join("")}
+    </tbody></table>` : "";
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(report.title)}</title>
 <style>
   @page { size: A4 landscape; margin: 12mm 10mm; }
@@ -545,6 +711,13 @@ function buildReportHtml(report) {
   h3 { font-size: 12px; margin: 14px 0 4px; color: #0d47a1; }
   .grp { width: 60%; }
   .grp-total td { font-weight: 700; border-top: 1px solid #0d47a1; }
+  .stmt { width: 100%; margin-bottom: 12px; }
+  .stmt td { border: none; vertical-align: top; padding: 0 12px 0 0; width: 33%; }
+  .stmt .lbl { font-size: 8px; text-transform: uppercase; letter-spacing: .05em; color: #5f6d7e; }
+  .stmt .nm { font-size: 13px; font-weight: 700; margin: 2px 0; }
+  .stmt .sm { font-size: 9px; color: #5f6d7e; line-height: 1.45; }
+  .stmt .due { text-align: right; }
+  .stmt .dueamt { font-size: 20px; font-weight: 800; color: #0d47a1; }
 </style></head><body>
   <div class="co">${esc(report.companyName)}</div>
   <div class="ttl">${esc(report.title)}</div>
@@ -553,8 +726,11 @@ function buildReportHtml(report) {
   }<br/>${esc(report.ledgerSourced ? "Source: general ledger" : "Source: payment records (GL posting off)")}
    ·  Generated ${esc(fmtDateTime(report.generatedAt))}</div>
   <div class="rule"></div>
+  ${statement}
   ${totals ? `<div class="kpis">${totals}</div>` : ""}
   <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table>
+  ${openClose}
+  ${aging}
   ${groups}
 </body></html>`;
 }
@@ -618,6 +794,46 @@ const st = {
   },
   totalValue: { fontSize: "1.35rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums" },
   totalValueCount: { color: colors.textPrimary, fontSize: "1.2rem" },
+
+  // Statement letterhead: three columns that collapse to one on a phone.
+  statement: {
+    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 14, padding: "1rem clamp(0.85rem, 1.8vw, 1.25rem)",
+    marginBottom: "1rem", boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
+  },
+  statementGrid: {
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(210px, 100%), 1fr))",
+    gap: "1rem",
+  },
+  statementLabel: {
+    display: "block", fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.06em", color: colors.textSecondary, marginBottom: 3,
+  },
+  statementName: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary, lineHeight: 1.3 },
+  contactLines: { fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.5, marginTop: 3 },
+  dueBox: {
+    display: "flex", flexDirection: "column", gap: 2, justifyContent: "flex-start",
+    padding: "0.75rem 0.9rem", borderRadius: 12,
+    background: "linear-gradient(135deg, rgba(13,71,161,0.07), rgba(0,137,123,0.08))",
+    border: `1px solid ${colors.cardBorder}`,
+  },
+  dueAmount: {
+    fontSize: "1.5rem", fontWeight: 800, color: colors.blue,
+    letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums",
+  },
+  duePeriod: { fontSize: "0.74rem", color: colors.textSecondary },
+
+  agingCard: {
+    marginTop: "1.25rem", background: colors.cardBg,
+    border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
+    boxShadow: "0 2px 12px rgba(0,0,0,0.05)", overflow: "hidden",
+  },
+  agingGrid: {
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))",
+    gap: "0.9rem", padding: "0.9rem 1rem",
+  },
+  agingCell: { display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
+  agingAmount: { fontSize: "1.02rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
 
   bookStrip: {
     display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",

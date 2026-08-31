@@ -289,6 +289,20 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Accounting Reports: customers and suppliers
+
+- **Customer Ledger and Supplier Ledger.** Every transaction on a party's account in date order with a running balance — invoices, credit and debit notes, receipts, payments, advances and journal entries. Set Period to **All Periods** and the ledger answers "how did this balance arise?" from the very first entry. Pick one party, or leave it empty to see everyone in one stream.
+- **Customer Statement and Supplier Statement** — the same figures laid out to send out: your letterhead, the customer's name and address, the period, the transactions, **Amount Due** in its own panel, and an age breakdown of the balance at the foot. Print or PDF.
+- **Customer / Supplier Balance Summary** — one line per party: opening, invoiced, received, owed, open documents and status. Click a party to open their ledger.
+- **AR / AP Aging, upgraded** — now proper reports with filters, an as-of date taken from the period end, and a drill-down: click a customer to see the individual invoices making up their balance. A past as-of date now re-derives what was actually settled by then instead of using today's paid figures.
+- **Outstanding Invoices / Outstanding Bills** — the unpaid documents, oldest debt first, each with an age bucket and days overdue, plus a by-party breakdown.
+- **Customer Sales / Supplier Purchases** — document-and-item detail of what each party bought or supplied, with a by-item-type breakdown. Also serves Sales by Customer and Purchases by Supplier.
+- **Money you owe reads positive.** A payable is a credit balance in the accounts, which would print as a minus; the supplier reports flip the balance so "we owe 50,000" shows as 50,000.
+- **Imported data is handled honestly.** A company migrated from another system has ledger entries that were never attributed to individual customers, so the party reports build from the documents instead and say so in a note. The figures reconcile to the aging report either way.
+- **Where two reports differ, they explain themselves.** The Balance Summary states, with the exact figure, when its total differs from the Aging total — aging counts only open documents, while the summary is the full position including credit notes and parties in credit.
+- **Supplier Sales** is listed as Blocked with the reason on the card: a sales invoice is always raised to a Client, so suppliers are purchase-side only.
+- One reporting index added (`JournalLines(PartyType, PartyId)`); no table or column changes.
+
 ### 2026-08-31 — Accounting Reports: an organised reporting section, and the Company Expense Report
 
 - **Reports → Accounting Reports is now a proper section, not a three-tab screen.** Reports are grouped into ten categories — Expenses, Cash & Bank, Financial Statements, Customers, Suppliers, Sales, Purchases, Taxes, Accounting Control, Management — with a "Start here" row for the ones most people open. Reports not built yet are listed and marked **Soon** rather than hidden, so you can see the shape of the module.

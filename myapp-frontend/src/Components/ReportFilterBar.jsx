@@ -120,6 +120,9 @@ export default function ReportFilterBar({
   }, [draft.payeeType, clients, suppliers]);
 
   const isCustom = draft.period === "custom";
+  // A report that filters by customer or supplier is a party report, so its
+  // Status control offers transaction types rather than cheque states.
+  const isPartyReport = wants.has(FILTERS.client) || wants.has(FILTERS.supplier);
 
   // Chips describe the APPLIED filters, not the draft.
   const chips = useMemo(
@@ -293,6 +296,32 @@ export default function ReportFilterBar({
               </Field>
             )}
 
+            {wants.has(FILTERS.client) && (
+              <Field label="Customer">
+                <SearchableSelect
+                  items={clients.map((c) => ({ id: c.id, name: c.name, ntn: c.ntn || "", phone: c.phone || "" }))}
+                  value={draft.clientId ?? ""}
+                  onChange={(id) => set({ clientId: id === "" ? undefined : id })}
+                  searchKeys={["name", "ntn", "phone"]}
+                  placeholder="All customers"
+                  style={st.control}
+                />
+              </Field>
+            )}
+
+            {wants.has(FILTERS.supplier) && (
+              <Field label="Supplier">
+                <SearchableSelect
+                  items={suppliers.map((x) => ({ id: x.id, name: x.name, ntn: x.ntn || "", phone: x.phone || "" }))}
+                  value={draft.supplierId ?? ""}
+                  onChange={(id) => set({ supplierId: id === "" ? undefined : id })}
+                  searchKeys={["name", "ntn", "phone"]}
+                  placeholder="All suppliers"
+                  style={st.control}
+                />
+              </Field>
+            )}
+
             {wants.has(FILTERS.tax) && (
               <Field label="Tax">
                 <SelectPlain
@@ -309,12 +338,12 @@ export default function ReportFilterBar({
             )}
 
             {wants.has(FILTERS.status) && (
-              <Field label="Status">
+              <Field label={isPartyReport ? "Transaction" : "Status"}>
                 <SelectPlain
                   value={draft.status}
                   onChange={(v) => set({ status: v })}
                   placeholder="Any"
-                  options={STATUS_OPTIONS}
+                  options={isPartyReport ? PARTY_STATUS_OPTIONS : STATUS_OPTIONS}
                   numeric={false}
                 />
               </Field>
@@ -387,6 +416,16 @@ function SelectPlain({ value, onChange, placeholder, options, numeric = true }) 
   );
 }
 
+/// Transaction-type filter for a customer/supplier ledger, plus the collection
+/// worklist shortcut the aging and outstanding reports use.
+const PARTY_STATUS_OPTIONS = [
+  { id: "invoice", name: "Invoices / bills only" },
+  { id: "receipt", name: "Receipts / payments only" },
+  { id: "note", name: "Credit & debit notes only" },
+  { id: "journal", name: "Journal entries only" },
+  { id: "overdue", name: "Overdue only" },
+];
+
 const STATUS_OPTIONS = [
   { id: "cheque", name: "Cheque pending" },
   { id: "chequeCleared", name: "Cheque cleared" },
@@ -399,7 +438,8 @@ const STATUS_OPTIONS = [
 
 const hasMoreFilters = (wants) =>
   [FILTERS.division, FILTERS.account, FILTERS.accountGroup, FILTERS.paymentAccount,
-   FILTERS.payeeType, FILTERS.payee, FILTERS.tax, FILTERS.status].some((k) => wants.has(k));
+   FILTERS.payeeType, FILTERS.payee, FILTERS.client, FILTERS.supplier,
+   FILTERS.tax, FILTERS.status].some((k) => wants.has(k));
 
 /** Bank/cash split follows the account NAME, matching the server's resolution. */
 function isMoneyAccount(a, kind) {
@@ -435,8 +475,18 @@ function describeChips(applied, lookups) {
   }
   if (applied.tax)
     out.push({ key: "tax", text: `Tax: ${applied.tax === "taxed" ? "with tax" : applied.tax === "untaxed" ? "without tax" : `${applied.tax}%`}` });
-  if (applied.status)
-    out.push({ key: "status", text: `Status: ${STATUS_OPTIONS.find((s) => s.id === applied.status)?.name || applied.status}` });
+  if (applied.status) {
+    const label = STATUS_OPTIONS.find((s) => s.id === applied.status)?.name
+      || PARTY_STATUS_OPTIONS.find((s) => s.id === applied.status)?.name
+      || applied.status;
+    out.push({ key: "status", text: label });
+  }
+  if (applied.clientId)
+    out.push({ key: "clientId", text: `Customer: ${name(lookups.clients, applied.clientId) || applied.clientId}` });
+  if (applied.supplierId)
+    out.push({ key: "supplierId", text: `Supplier: ${name(lookups.suppliers, applied.supplierId) || applied.supplierId}` });
+  if (applied.itemTypeId)
+    out.push({ key: "itemTypeId", text: `Item type: ${applied.itemTypeId}` });
   if (applied.search)
     out.push({ key: "search", text: `Search: "${applied.search}"` });
 

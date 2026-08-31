@@ -93,5 +93,51 @@ namespace MyApp.Api.Services.Interfaces
         /// "Unallocated/Unlinked Payments".
         /// </summary>
         Task<ReportResultDto> GetUnallocatedPaymentsAsync(int companyId, ReportFilterDto filter);
+
+        // -- Customers & suppliers ------------------------------------------------
+
+        /// <summary>
+        /// Customer or supplier ledger — every movement on the AR/AP control
+        /// account for the party, so invoices, credit and debit notes, bills,
+        /// payments, advances and party-tagged journals are all included. Handles a
+        /// single party or all of them, any period including all-time, with an
+        /// opening balance and a running balance.
+        ///
+        /// <paramref name="asStatement"/> renders the same figures as a sendable
+        /// statement: addressee, letterhead and an age breakdown of the closing
+        /// balance. <paramref name="customers"/> false = suppliers.
+        /// </summary>
+        Task<PartyLedgerResultDto> GetPartyLedgerAsync(int companyId, ReportFilterDto filter,
+            bool customers, bool asStatement = false);
+
+        /// <summary>
+        /// One line per party: opening, movement, closing, open documents, status.
+        /// Reconciles to the AR/AP control account and reports any unattributed
+        /// remainder rather than hiding the difference.
+        /// </summary>
+        Task<PartyBalanceSummaryDto> GetPartyBalanceSummaryAsync(int companyId,
+            ReportFilterDto filter, bool customers);
+
+        /// <summary>Unpaid sales invoices / purchase bills, oldest debt first, with
+        /// an age bucket per document and a by-party breakdown.</summary>
+        Task<ReportResultDto> GetOutstandingDocumentsAsync(int companyId,
+            ReportFilterDto filter, bool customers);
+
+        /// <summary>
+        /// Customer Sales / Supplier Purchases at document-and-item level, with a
+        /// by-item-type breakdown. Document tax is apportioned across lines by
+        /// subtotal share, and the column label says so.
+        /// </summary>
+        Task<ReportResultDto> GetPartyTradeAsync(int companyId, ReportFilterDto filter,
+            bool customers);
+
+        /// <summary>
+        /// AR/AP aging as a standard report — buckets come straight from
+        /// <see cref="IGeneralLedgerService"/> (no second bucket calculation), plus
+        /// an as-of date taken from the period end and a per-party drill-down into
+        /// the outstanding documents.
+        /// </summary>
+        Task<ReportResultDto> GetAgingReportAsync(int companyId, ReportFilterDto filter,
+            bool customers);
     }
 }

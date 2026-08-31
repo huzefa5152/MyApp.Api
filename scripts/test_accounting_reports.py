@@ -1,6 +1,6 @@
 """
-Accounting Reports regression tests — the Expenses and Cash & Bank report
-families, their drill-downs, exports and RBAC scoping.
+Accounting Reports regression tests — the Expenses, Cash & Bank and
+Customer/Supplier report families, their drill-downs, exports and RBAC scoping.
 
 Must pass before any push that touches AccountingReportService (or its
 Expenses / CashBank partials), AccountingReportsController, ReportPeriod,
@@ -141,6 +141,12 @@ def setup(base: str, user: str, pw: str):
     st, company = http("POST", "/api/companies", base, token=token, body={
         "name": name, "address": "Test", "phone": "0000", "ntn": "0000000-0",
         "strn": "0000000000000", "invoiceType": "Sale Invoice",
+        # Without these the create paths reject every document with
+        # "Starting invoice number has not been set for this company".
+        "startingInvoiceNumber": 1,
+        "startingPurchaseBillNumber": 1,
+        "startingChallanNumber": 1,
+        "startingGoodsReceiptNumber": 1,
     })
     if st not in (200, 201) or not isinstance(company, dict):
         print(f"FATAL: company create failed ({st} {str(company)[:300]})")
@@ -191,6 +197,14 @@ def pick(accounts: list[dict], *, control: str | None = None,
         if name_contains and name_contains.lower() not in (a.get("name") or "").lower():
             continue
         return a
+    return None
+
+
+def first_item_type_id(base: str, token: str) -> int | None:
+    """Bills require a classified line, so every document here needs an item type."""
+    st, rows = http("GET", "/api/itemtypes", base, token=token)
+    if st == 200 and isinstance(rows, list) and rows:
+        return rows[0].get("id")
     return None
 
 
@@ -314,7 +328,8 @@ def suite_expenses(base: str, token: str, cid: int, supplier_id: int | None) -> 
               "K-Electric" in labels, f"labels {labels}")
 
     return {"rent": rent, "power": power, "supplies": supplies, "bank": bank["id"],
-            "expected_subtotal": expected_subtotal, "expected_tax": expected_tax}
+            "expected_subtotal": expected_subtotal, "expected_tax": expected_tax,
+            "clientId": None, "supplierId": supplier_id}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -672,10 +687,319 @@ def suite_isolation(base: str, token: str, cid: int, ctx: dict):
           bool(book.get("notice")) and not book["rows"],
           f"notice={book.get('notice')} rows={len(book['rows'])}")
 
+    # A party report is the most sensitive of all: it names who owes what.
+    for path in ["customer-ledger", "customer-statement", "customer-balances",
+                 "supplier-ledger", "supplier-balances", "receivables-aging",
+                 "customer-outstanding", "customer-sales"]:
+        r = report(base, token, other_id, path, period="allPeriods")
+        rows = r.get("rows") or []
+        check(S, f"{path} on a fresh company returns no other tenant's parties",
+              len(rows) == 0, f"got {len(rows)} rows")
+
+    # Another company's client id must not pull that client's ledger.
+    leak = report(base, token, other_id, "customer-ledger", period="allPeriods", clientId=ctx["clientId"])
+    check(S, "a foreign clientId leaks no ledger rows", len(leak.get("rows") or []) == 0,
+          f"got {len(leak.get('rows') or [])} rows")
+
     st, body = http("GET", "/api/accounting/reports/company/99999999/expenses", base, token=token)
     check(S, "a non-existent company -> 404, not a blank report", st == 404, f"got {st}")
 
     return other_id
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 10 — Customer & supplier ledgers
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_party_ledgers(base: str, token: str, cid: int, ctx: dict,
+                        client_id: int | None, supplier_id: int | None):
+    S = "10. Party ledgers"
+    print(f"\n=== {S} ===")
+
+    accounts = flat_accounts(base, token, cid)
+    ar = pick(accounts, control="AccountsReceivable")
+    ap = pick(accounts, control="AccountsPayable")
+    if not ar or not ap:
+        check(S, "seeded CoA has AR and AP control accounts", False, "missing")
+        return
+
+    # This suite gets its OWN customer. Suite 4 puts a 25,000 advance on the
+    # shared one, which is realistic but makes exact ledger figures depend on
+    # suite order — the first version of this suite asserted a 4,000 credit and
+    # legitimately saw 29,000.
+    st, ledger_client = http("POST", "/api/clients", base, token=token, body={
+        "name": "_test Ledger Customer", "companyId": cid, "address": "x", "phone": "1",
+    })
+    if st in (200, 201) and isinstance(ledger_client, dict):
+        client_id = ledger_client["id"]
+    else:
+        check(S, "dedicated ledger customer created", False, f"got {st}")
+        return
+
+    # A sale, a receipt against it, and a bill — enough for both sides to have a
+    # ledger with a debit, a credit and a running balance.
+    item_type = first_item_type_id(base, token)
+    st, invoice = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "companyId": cid, "clientId": client_id, "date": pkt_date(0), "gstRate": 0,
+        "items": [{"description": "_test ledger widget", "quantity": 2, "unitPrice": 5000,
+                   "uom": "Pcs", "itemTypeId": item_type}],
+    })
+    if st not in (200, 201) or not isinstance(invoice, dict):
+        check(S, "sales invoice created for the ledger", False, f"got {st} {str(invoice)[:200]}")
+        return
+    check(S, "sales invoice created for the ledger", True)
+    invoice_total = float(invoice.get("grandTotal") or 0)
+
+    st, _ = http("POST", f"/api/payments/receipts/company/{cid}", base, token=token, body={
+        "direction": "Receipt", "date": pkt_date(0),
+        "contactType": "Client", "contactId": client_id,
+        "bankAccountId": ctx["bank"], "method": "Bank Transfer",
+        "allocations": [{"kind": "Document", "invoiceId": invoice["id"], "amount": 4000.00}],
+    })
+    check(S, "receipt allocated to the invoice", st in (200, 201), f"got {st}")
+
+    # ── Customer ledger ──
+    led = report(base, token, cid, "customer-ledger", period="allPeriods", clientId=client_id)
+    check(S, "customer ledger is ledger-sourced on a GL company",
+          led.get("ledgerSourced") is True, f"got {led.get('ledgerSourced')} — {led.get('notice')}")
+    check(S, "customer ledger names the customer", bool(led.get("partyName")),
+          f"got {led.get('partyName')}")
+    check(S, f"customer ledger debit == invoice total {invoice_total:,.2f}",
+          eq(led["totalDebit"], invoice_total), f"got {led.get('totalDebit')}")
+    check(S, "customer ledger credit == 4,000.00", eq(led["totalCredit"], 4000.00),
+          f"got {led.get('totalCredit')}")
+    check(S, "customer ledger: opening + debit - credit == closing",
+          eq(float(led["openingBalance"]) + float(led["totalDebit"]) - float(led["totalCredit"]),
+             led["closingBalance"]),
+          f"open {led['openingBalance']} dr {led['totalDebit']} cr {led['totalCredit']} close {led['closingBalance']}")
+    check(S, "customer owing shows as a POSITIVE balance",
+          float(led["closingBalance"]) > 0, f"got {led['closingBalance']}")
+
+    # Running balance must chain from the opening figure.
+    running = float(led["openingBalance"])
+    drift = None
+    for row in led["rows"]:
+        running += float(row["debit"]) - float(row["credit"])
+        if not eq(running, row["balance"]):
+            drift = f"expected {running} at {row.get('reference')}, got {row['balance']}"
+            break
+    check(S, "customer ledger running balance chains correctly", drift is None, drift or "")
+    check(S, "ledger rows name the transaction in plain words",
+          all(r.get("transaction") for r in led["rows"]),
+          f"missing on {[r.get('reference') for r in led['rows'] if not r.get('transaction')]}")
+    kinds = {r["transaction"] for r in led["rows"]}
+    check(S, "ledger distinguishes the invoice from the receipt",
+          "Sales Invoice" in kinds and "Receipt" in kinds, f"got {kinds}")
+
+    # ── Supplier ledger: the sign flip is the thing most easily got wrong ──
+    st, bill = http("POST", "/api/purchasebills", base, token=token, body={
+        "companyId": cid, "supplierId": supplier_id, "date": pkt_date(0), "gstRate": 0,
+        "items": [{"description": "_test ledger stock", "quantity": 1, "unitPrice": 7000,
+                   "uom": "Pcs", "itemTypeId": item_type}],
+    })
+    if st in (200, 201) and isinstance(bill, dict):
+        check(S, "purchase bill created for the supplier ledger", True)
+        sled = report(base, token, cid, "supplier-ledger", period="allPeriods", supplierId=supplier_id)
+        check(S, "supplier ledger credit == bill total",
+              eq(sled["totalCredit"], float(bill.get("grandTotal") or 0)),
+              f"got {sled.get('totalCredit')} vs {bill.get('grandTotal')}")
+        check(S, "money we OWE a supplier reads POSITIVE (sign flipped for payables)",
+              float(sled["closingBalance"]) > 0, f"got {sled['closingBalance']}")
+        check(S, "supplier ledger: opening + debit - credit, flipped, == closing",
+              eq(-(float(sled["openingBalance"]) * -1 + float(sled["totalDebit"])
+                   - float(sled["totalCredit"])), sled["closingBalance"]),
+              f"dr {sled['totalDebit']} cr {sled['totalCredit']} close {sled['closingBalance']}")
+    else:
+        check(S, "purchase bill created for the supplier ledger", False, f"got {st} {str(bill)[:180]}")
+
+    # ── All-parties view ──
+    allp = report(base, token, cid, "customer-ledger", period="allPeriods")
+    check(S, "all-customers ledger adds a Customer column",
+          any(c["key"] == "party" for c in allp["columns"]),
+          f"columns {[c['key'] for c in allp['columns']]}")
+    check(S, "all-customers ledger names the party on each row",
+          all(r.get("party") for r in allp["rows"]),
+          "a row came back with no party name")
+
+    return {"invoiceId": invoice["id"], "invoiceTotal": invoice_total}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 11 — Statements
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_statements(base: str, token: str, cid: int, client_id: int | None,
+                     supplier_id: int | None):
+    S = "11. Statements"
+    print(f"\n=== {S} ===")
+
+    stmt = report(base, token, cid, "customer-statement", period="allPeriods", clientId=client_id)
+    check(S, "statement carries the addressee", bool((stmt.get("party") or {}).get("name")),
+          f"got {stmt.get('party')}")
+    check(S, "statement carries the company letterhead",
+          bool((stmt.get("companyContact") or {}).get("name")), f"got {stmt.get('companyContact')}")
+    check(S, "statement states an amount due", stmt.get("closingBalance") is not None)
+    check(S, "statement carries an age breakdown", stmt.get("aging") is not None,
+          "no aging block — the recipient cannot see how old the debt is")
+
+    if stmt.get("aging"):
+        a = stmt["aging"]
+        parts = sum(float(a.get(k) or 0) for k in
+                    ["current", "days1To30", "days31To60", "days61To90", "over90"])
+        check(S, "aging buckets sum to the aging total", eq(parts, a.get("total")),
+              f"buckets {parts} vs total {a.get('total')}")
+
+    # The statement must agree with the ledger it is a presentation of.
+    led = report(base, token, cid, "customer-ledger", period="allPeriods", clientId=client_id)
+    check(S, "statement closing == ledger closing",
+          eq(stmt["closingBalance"], led["closingBalance"]),
+          f"statement {stmt['closingBalance']} vs ledger {led['closingBalance']}")
+
+    sstmt = report(base, token, cid, "supplier-statement", period="allPeriods", supplierId=supplier_id)
+    check(S, "supplier statement carries the addressee",
+          bool((sstmt.get("party") or {}).get("name")))
+    check(S, "supplier statement is titled as a supplier statement",
+          sstmt["title"] == "Supplier Statement", f"got {sstmt['title']}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 12 — Balance summaries reconcile
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_party_balances(base: str, token: str, cid: int, client_id: int | None,
+                         supplier_id: int | None):
+    S = "12. Balance summaries"
+    print(f"\n=== {S} ===")
+
+    for side, path, ledger_path, key, party in [
+        ("customer", "customer-balances", "customer-ledger", "clientId", client_id),
+        ("supplier", "supplier-balances", "supplier-ledger", "supplierId", supplier_id),
+    ]:
+        bal = report(base, token, cid, path, period="allPeriods")
+        check(S, f"{side} balance summary returns rows", len(bal["rows"]) > 0,
+              f"got {len(bal['rows'])}")
+        check(S, f"{side} summary total == sum of its rows",
+              eq(bal["totals"].get("closing"), sum(float(r["closing"]) for r in bal["rows"])))
+
+        # THE consistency check: a party's summary row must equal that party's
+        # ledger closing balance, or the two screens contradict each other.
+        row = next((r for r in bal["rows"] if r["partyId"] == party), None)
+        if check(S, f"{side} appears in the summary", row is not None):
+            led = report(base, token, cid, ledger_path, period="allPeriods", **{key: party})
+            check(S, f"{side} summary row == that party's ledger closing",
+                  eq(row["closing"], led["closingBalance"]),
+                  f"summary {row['closing']} vs ledger {led['closingBalance']}")
+            check(S, f"{side} row carries a status", row.get("status") in
+                  ("Owing", "Settled", "In credit"), f"got {row.get('status')}")
+
+        # Any gap against aging must be REPORTED, not silent.
+        gap = float(bal.get("unattributed") or 0)
+        if abs(gap) > 0.005:
+            check(S, f"{side}: a gap against aging is explained in a notice",
+                  bool(bal.get("notice")), f"gap {gap:,.2f} with no notice")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 13 — Aging, outstanding, and party trade
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_aging_outstanding(base: str, token: str, cid: int, client_id: int | None):
+    S = "13. Aging & outstanding"
+    print(f"\n=== {S} ===")
+
+    for side, aging_path, out_path in [
+        ("receivables", "receivables-aging", "customer-outstanding"),
+        ("payables", "payables-aging", "supplier-outstanding"),
+    ]:
+        aging = report(base, token, cid, aging_path, period="allPeriods")
+        out = report(base, token, cid, out_path, period="allPeriods", pageSize=100)
+
+        # Aging and Outstanding are NOT the same figure, and the difference is
+        # meaningful: aging includes money sitting on a party's account with no
+        # document (an advance), which a list of documents cannot show. So the
+        # relationship to pin is:
+        #     aging total  ==  outstanding total  +  net on-account for that side
+        # A receipt on account reduces a receivable; a payment on account reduces
+        # a payable. Pinning equality instead would pass only by luck, on data
+        # that happens to have no advances.
+        unalloc = report(base, token, cid, "unallocated", period="allPeriods", pageSize=200)
+        want_receipt = (side == "receivables")
+        on_account = 0.0
+        for r in unalloc["rows"]:
+            is_receipt = r["direction"] == "Receipt"
+            party_is_client = r["contactType"] == "Client"
+            if party_is_client != want_receipt:
+                continue
+            on_account += (-float(r["amount"]) if is_receipt == want_receipt
+                           else float(r["amount"]))
+        expected = float(out["totals"].get("outstanding") or 0) + on_account
+        check(S, f"{side}: aging == outstanding + net on-account ({on_account:,.2f})",
+              eq(aging["totals"].get("total"), expected),
+              f"aging {aging['totals'].get('total')} vs outstanding+advances {expected}")
+
+        buckets = sum(float(aging["totals"].get(k) or 0) for k in
+                      ["current", "days1To30", "days31To60", "days61To90", "over90"])
+        check(S, f"{side}: buckets sum to the aging total",
+              eq(buckets, aging["totals"].get("total")),
+              f"buckets {buckets} vs total {aging['totals'].get('total')}")
+        check(S, f"{side}: aging states an as-of date",
+              "As of" in aging.get("periodLabel", ""), f"got '{aging.get('periodLabel')}'")
+
+        # Every outstanding row must carry a bucket, and it must match its own age.
+        bad = [r["documentNo"] for r in out["rows"]
+               if r["ageBucket"] != expected_bucket(int(r["daysOverdue"]))]
+        check(S, f"{side}: each document's age bucket matches its days overdue",
+              not bad, f"wrong on {bad[:4]}")
+        check(S, f"{side}: outstanding == total - paid on every row",
+              all(eq(float(r["outstanding"]),
+                     float(r["grandTotal"]) - float(r["withholdingTax"]) - float(r["paid"]))
+                  for r in out["rows"]),
+              "a row's outstanding does not equal total - withholding - paid")
+
+    # ── Trade reports ──
+    trade = report(base, token, cid, "customer-sales", period="allPeriods", pageSize=100)
+    check(S, "customer sales returns item-level rows", trade["totalCount"] > 0,
+          f"got {trade['totalCount']}")
+    check(S, "line totals sum to the report total",
+          eq(sum(float(r["lineTotal"]) for r in trade["rows"]), trade["totals"].get("lineTotal")),
+          "page sum differs from the total (only valid while all rows fit one page)")
+    check(S, "tax column is labelled as apportioned, not recorded",
+          any("apportioned" in c["label"].lower() for c in trade["columns"]),
+          f"columns {[c['label'] for c in trade['columns']]}")
+    check(S, "there is no Discount column (the model stores none)",
+          not any("discount" in c["key"].lower() for c in trade["columns"]),
+          "a discount column appeared — it would be invented, not reported")
+    grp = next((g for g in trade["groupSummaries"] if "Item Type" in g["title"]), None)
+    if check(S, "sales are broken down by item type", grp is not None):
+        check(S, "item-type rows sum to that block's total",
+              eq(sum(float(r["amount"]) for r in grp["rows"]), grp["total"]))
+
+    purch = report(base, token, cid, "supplier-purchases", period="allPeriods", pageSize=100)
+    check(S, "supplier purchases returns item-level rows", purch["totalCount"] > 0,
+          f"got {purch['totalCount']}")
+
+    # ── Drill-down: aging -> that party's outstanding documents ──
+    aging = report(base, token, cid, "receivables-aging", period="allPeriods")
+    grp = next((g for g in aging["groupSummaries"] if g.get("drillFilter") == "clientId"), None)
+    if check(S, "aging offers a per-customer drill-down", grp is not None and grp["rows"]):
+        # Pick a party whose aging balance is made of documents ONLY. A party
+        # carrying an on-account advance nets that into its aging row, so its
+        # aging figure legitimately differs from its list of open documents.
+        advances = report(base, token, cid, "unallocated", period="allPeriods", pageSize=200)
+        advance_parties = {str(r["contactId"]) for r in advances["rows"] if r.get("contactId")}
+        docs_party = next((r for r in grp["rows"]
+                           if r["count"] > 0 and r["drillKey"] not in advance_parties), None)
+        if check(S, "at least one customer has open documents to drill into",
+                 docs_party is not None):
+            detail = report(base, token, cid, "customer-outstanding", period="allPeriods",
+                            clientId=docs_party["drillKey"], pageSize=200)
+            check(S, f"'{docs_party['label'][:24]}' aging row == their outstanding total",
+                  eq(detail["totals"].get("outstanding"), docs_party["amount"]),
+                  f"aging {docs_party['amount']} vs outstanding {detail['totals'].get('outstanding')}")
+
+
+def expected_bucket(days: int) -> str:
+    if days <= 0: return "Current"
+    if days <= 30: return "1-30"
+    if days <= 60: return "31-60"
+    if days <= 90: return "61-90"
+    return "90+"
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -696,6 +1020,7 @@ def main() -> int:
     other_id = None
     try:
         ctx = suite_expenses(args.base, token, cid, supplier_id)
+        ctx["clientId"] = client_id
         suite_groupings(args.base, token, cid, ctx)
         suite_drilldown(args.base, token, cid, ctx)
         suite_cash_bank(args.base, token, cid, ctx, client_id)
@@ -703,6 +1028,10 @@ def main() -> int:
         suite_cheques_unallocated(args.base, token, cid, ctx, supplier_id, client_id)
         suite_periods(args.base, token, cid, ctx)
         suite_paging_export(args.base, token, cid)
+        suite_party_ledgers(args.base, token, cid, ctx, client_id, supplier_id)
+        suite_statements(args.base, token, cid, client_id, supplier_id)
+        suite_party_balances(args.base, token, cid, client_id, supplier_id)
+        suite_aging_outstanding(args.base, token, cid, client_id)
         other_id = suite_isolation(args.base, token, cid, ctx)
     except Fatal as e:
         print(f"\n!! FATAL: {e}")

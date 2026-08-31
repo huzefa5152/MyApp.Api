@@ -671,7 +671,10 @@ const st = {
     borderRadius: 14, fontSize: "0.92rem", lineHeight: 1.55,
   },
   linkBtn: {
-    background: "none", border: "none", padding: 0,
+    background: "none", border: "none", padding: "0.5rem 0",
+    // 44px tap target even though it reads as an inline link — it is the only
+    // way out of an empty / unknown-report state on a phone.
+    minHeight: 44,
     color: colors.blue, fontWeight: 700, cursor: "pointer", fontSize: "inherit",
     boxShadow: "none",
   },

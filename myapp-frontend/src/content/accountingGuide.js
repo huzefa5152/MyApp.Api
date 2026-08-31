@@ -1040,6 +1040,110 @@ export const GUIDE_SECTIONS = [
     ],
   },
   {
+    id: "customer-reports",
+    group: "Accounting Reports",
+    title: "Customer reports",
+    blocks: [
+      { p: "Five reports answer the customer side, and they fit together in a chain: who owes the most, then that customer’s history, then the invoices making up the balance." },
+      { path: "Reports → Accounting Reports → Customers" },
+      {
+        table: {
+          head: ["Report", "Answers"],
+          rows: [
+            ["Customer Balance Summary", "Which customers owe us, largest first"],
+            ["Customer Ledger", "Every transaction on one customer’s account, and how the balance arose"],
+            ["Customer Statement", "The same thing laid out to send to the customer"],
+            ["Accounts Receivable Aging", "How old each customer’s debt is"],
+            ["Outstanding Invoices", "The individual unpaid invoices, oldest first"],
+            ["Customer Sales", "What each customer actually bought, by item"],
+            ["Customer Receipts", "Every receipt taken from them"],
+          ],
+        },
+      },
+      { p: "**Customer Ledger** is the one to reach for when a customer disputes a balance. Set Period to **All Periods**, pick the customer, and every invoice, credit note, receipt and advance appears in date order with a running balance. The closing figure is what they owe." },
+      {
+        table: {
+          head: ["Column", "What it means"],
+          rows: [
+            ["Date", "When it happened"],
+            ["Reference", "INV-1041, CN-12, RCP-0007 — the document"],
+            ["Transaction", "Sales Invoice, Credit Note, Receipt, Advance / On account, Journal"],
+            ["Debit", "Increases what they owe (an invoice)"],
+            ["Credit", "Reduces it (a receipt, a credit note)"],
+            ["Balance", "What they owed after that line"],
+          ],
+        },
+      },
+      { note: "Leave the Customer box empty to see every customer’s movements in one stream, with a Customer column added. Useful for a quick scan; pick a customer when you want a balance you can rely on." },
+      { p: "**Customer Sales** is also the honest answer to “customer purchase history”. Customers don’t raise purchases in this system, so what it shows is what they purchased **from us** — by item and item type, with a breakdown at the bottom." },
+    ],
+  },
+  {
+    id: "supplier-reports",
+    group: "Accounting Reports",
+    title: "Supplier reports",
+    blocks: [
+      { p: "The same set, mirrored for the people you buy from." },
+      { path: "Reports → Accounting Reports → Suppliers" },
+      {
+        table: {
+          head: ["Report", "Answers"],
+          rows: [
+            ["Supplier Balance Summary", "Who we owe, largest first"],
+            ["Supplier Ledger", "Every transaction on one supplier’s account"],
+            ["Supplier Statement", "A statement you can reconcile against theirs"],
+            ["Accounts Payable Aging", "How old each debt is"],
+            ["Outstanding Bills", "The individual unpaid bills, oldest first"],
+            ["Supplier Purchases", "What was bought from each supplier, by item"],
+            ["Supplier Payments", "Every payment made to them"],
+          ],
+        },
+      },
+      { p: "**Money you owe reads as a positive number.** In the accounts a payable is a credit balance, which would print as a minus; the supplier reports flip it so “we owe 50,000” shows as 50,000. The Debit and Credit columns themselves are never flipped." },
+      { note: "**Supplier Sales** is listed but marked Blocked. A sales invoice in this system is always raised to a Client, so a supplier cannot make a sale. If you do sell to a supplier, add them as a customer as well and they will appear in the customer reports." },
+    ],
+  },
+  {
+    id: "statements-to-send",
+    group: "Accounting Reports",
+    title: "Sending a statement",
+    blocks: [
+      { p: "A statement is a document that leaves the building, so it is laid out differently from the other reports." },
+      { path: "Reports → Accounting Reports → Customer Statement" },
+      { steps: [
+          "Pick the customer — a statement is addressed to one of them, so this is required.",
+          "Set the Period. All Periods gives their whole history; a date range gives a period statement with an opening balance.",
+          "Click Apply, check it reads correctly, then use Print or PDF.",
+        ] },
+      { p: "The output carries your company details, the customer’s name and address, the period, every transaction, and the **Amount Due** in its own panel. At the foot is an age breakdown — how much of the balance is current, 1–30 days, 31–60, 61–90 and over 90 — which is usually what prompts payment." },
+      { note: "The statement always agrees with the Customer Ledger for the same customer and period; it is the same figures in a different layout." },
+    ],
+  },
+  {
+    id: "why-two-totals",
+    group: "Accounting Reports",
+    title: "When two reports show different totals",
+    blocks: [
+      { p: "The Balance Summary and the Aging report can show different totals for the same customers. Both are right — they answer different questions." },
+      { p: "**Aging** adds up only the documents that still carry a balance. That is what you want when chasing money: an invoice either has something outstanding or it does not." },
+      { p: "**Balance Summary** is the customer’s whole position. A credit note reduces what they owe without being an open document. A customer who has overpaid nets off here but is simply absent from aging." },
+      { p: "So the summary can be lower than the aging total by the value of credit notes and customers in credit. Where that happens the summary says so, with the exact figure, rather than leaving you to spot it." },
+      { note: "For suppliers the same applies with debit notes." },
+    ],
+  },
+  {
+    id: "imported-ledgers",
+    group: "Accounting Reports",
+    title: "If your data was imported",
+    blocks: [
+      { p: "A company migrated from another system may show an amber note at the top of its customer and supplier reports:" },
+      { p: "*“This company’s ledger was imported, and the imported entries are not attributed to individual customers.”*" },
+      { p: "Here is what that means. The import brought the accounts across as one set of totals rather than transaction-by-transaction against each customer, so the general ledger knows the overall receivable but not whose it is. The **documents** still know, so these reports are built from the invoices, bills, receipts and payments instead." },
+      { p: "The figures are correct and they reconcile to the aging report. The one limitation is that a journal entry an accountant posted directly against a customer will not appear — there is nothing linking it to them." },
+      { note: "Documents raised in this system after the migration are attributed normally. Over time the reports become fully ledger-based on their own." },
+    ],
+  },
+  {
     id: "exporting-reports",
     group: "Accounting Reports",
     title: "Printing and exporting",

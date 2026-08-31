@@ -152,6 +152,9 @@ namespace MyApp.Api.DTOs
         public int? ClientId { get; set; }
         public int? SupplierId { get; set; }
 
+        /// <summary>Item-type filter for the sales/purchase trade reports.</summary>
+        public int? ItemTypeId { get; set; }
+
         /// <summary>Tax filter: "taxed" | "untaxed" | a rate as a plain number ("18").</summary>
         public string? Tax { get; set; }
 
@@ -372,5 +375,185 @@ namespace MyApp.Api.DTOs
         public decimal Amount { get; set; }
         public string? Description { get; set; }
         public int AgeDays { get; set; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Party (customer / supplier) row shapes
+    //
+    //  Sign convention, stated once because it is the thing most easily got wrong:
+    //  the ledger stores everything debit-positive. Receivables are an asset, so a
+    //  customer who owes money carries a DEBIT balance and the figures pass through
+    //  unchanged. Payables are a liability, so a supplier we owe carries a CREDIT
+    //  balance — and "we owe 50,000" has to read as +50,000, not −50,000. The
+    //  supplier reports therefore flip the sign of the BALANCE (credit − debit).
+    //  The Debit and Credit columns themselves are never flipped.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// One line of a customer or supplier ledger, taken from the AR/AP control
+    /// account's journal lines for that party. Being ledger-sourced, it includes
+    /// everything that touched the party's balance — invoices, credit and debit
+    /// notes, bills, payments, advances and party-tagged journal entries — not just
+    /// the documents any one subledger knows about.
+    /// </summary>
+    public class PartyLedgerRowDto
+    {
+        public DateTime Date { get; set; }
+        public int JournalEntryId { get; set; }
+        public int EntryNo { get; set; }
+
+        /// <summary>What the operator should read: "Sales Invoice", "Credit Note",
+        /// "Receipt", "Purchase Bill", "Payment", "Advance", "Journal".</summary>
+        public string Transaction { get; set; } = "";
+        /// <summary>Human document number: INV-1041, CN-12, RCP-0007, BILL-308.</summary>
+        public string Reference { get; set; } = "";
+        public string SourceType { get; set; } = "";
+        public int? SourceId { get; set; }
+
+        public string? Description { get; set; }
+
+        /// <summary>The party — for the all-parties view. Null when the report is
+        /// already scoped to a single party.</summary>
+        public string? Party { get; set; }
+        public int? PartyId { get; set; }
+
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        /// <summary>Running balance after this row, in the party's natural
+        /// direction (see the sign note above).</summary>
+        public decimal Balance { get; set; }
+
+        public string? Division { get; set; }
+    }
+
+    /// <summary>Party ledger / statement wrapper — the envelope plus the opening
+    /// and closing figures a ledger has to state.</summary>
+    public class PartyLedgerResultDto : ReportResultDto
+    {
+        public int? PartyId { get; set; }
+        public string? PartyName { get; set; }
+        /// <summary>"Client" | "Supplier".</summary>
+        public string PartyType { get; set; } = "";
+
+        public decimal OpeningBalance { get; set; }
+        public decimal TotalDebit { get; set; }
+        public decimal TotalCredit { get; set; }
+        public decimal ClosingBalance { get; set; }
+
+        /// <summary>Addressee and letterhead details, so a statement can be sent
+        /// out as-is. Populated only when scoped to one party.</summary>
+        public PartyContactDto? Party { get; set; }
+        public PartyContactDto? CompanyContact { get; set; }
+
+        /// <summary>Age breakdown of the closing balance for the statement footer
+        /// ("of which 61–90 days: 12,000"). Null on the plain ledger.</summary>
+        public AgingBucketsDto? Aging { get; set; }
+    }
+
+    /// <summary>Name and address block for a statement's letterhead or addressee.</summary>
+    public class PartyContactDto
+    {
+        public string Name { get; set; } = "";
+        public string? Address { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public string? Ntn { get; set; }
+        public string? Strn { get; set; }
+    }
+
+    /// <summary>One party's position, for the Customer/Supplier Balance Summary.</summary>
+    public class PartyBalanceRowDto
+    {
+        public int PartyId { get; set; }
+        public string Party { get; set; } = "";
+        public decimal Opening { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Closing { get; set; }
+        /// <summary>Documents still carrying a balance.</summary>
+        public int OpenDocuments { get; set; }
+        /// <summary>"Owing" | "Settled" | "In credit".</summary>
+        public string Status { get; set; } = "Settled";
+    }
+
+    /// <summary>
+    /// Balance-summary wrapper. <see cref="Unattributed"/> is the gap between the
+    /// AR/AP control account balance and the sum of the party rows — normally zero,
+    /// but non-zero when a migration loaded an opening receivable as a lump sum
+    /// carrying no party tag. Surfacing it is the whole point: without it the
+    /// summary silently disagrees with the Chart of Accounts and nobody can tell why.
+    /// </summary>
+    public class PartyBalanceSummaryDto : ReportResultDto
+    {
+        public decimal ControlAccountBalance { get; set; }
+        public decimal Unattributed { get; set; }
+        public string? ControlAccountName { get; set; }
+    }
+
+    /// <summary>
+    /// An unpaid sales invoice or purchase bill. "Outstanding" is what is still
+    /// collectible or payable: grand total − withholding tax − amount paid, the
+    /// same expression the aging report and the payment screens already use.
+    /// </summary>
+    public class OutstandingDocumentRowDto
+    {
+        public int DocumentId { get; set; }
+        public DateTime Date { get; set; }
+        public DateTime? DueDate { get; set; }
+        public string DocumentNo { get; set; } = "";
+        public string Party { get; set; } = "";
+        public int PartyId { get; set; }
+        public decimal GrandTotal { get; set; }
+        public decimal Tax { get; set; }
+        public decimal WithholdingTax { get; set; }
+        public decimal Paid { get; set; }
+        public decimal Outstanding { get; set; }
+        /// <summary>Days past the due date (or the document date when there is
+        /// none). Negative means not yet due.</summary>
+        public int DaysOverdue { get; set; }
+        /// <summary>"Current" | "1-30" | "31-60" | "61-90" | "90+".</summary>
+        public string AgeBucket { get; set; } = "Current";
+        /// <summary>"Unpaid" | "Partial" | "Overdue".</summary>
+        public string Status { get; set; } = "Unpaid";
+        public string? Division { get; set; }
+    }
+
+    /// <summary>
+    /// One line of Customer Sales / Supplier Purchases — document and item level,
+    /// so "what did this customer actually buy" is answerable.
+    ///
+    /// There is deliberately no Discount column: this product stores no discount
+    /// field on a document or its lines (a discount is a non-inventory line of its
+    /// own, or a settlement adjustment on the payment), so a discount column here
+    /// would be invented rather than reported.
+    /// </summary>
+    public class PartyTradeRowDto
+    {
+        public DateTime Date { get; set; }
+        public int DocumentId { get; set; }
+        public string DocumentNo { get; set; } = "";
+        /// <summary>"Sales Invoice" | "Credit Note" | "Debit Note" | "Purchase Bill".</summary>
+        public string DocumentType { get; set; } = "";
+        public string Party { get; set; } = "";
+        public int PartyId { get; set; }
+
+        public string? Item { get; set; }
+        public string? ItemType { get; set; }
+        public int? ItemTypeId { get; set; }
+        public decimal Quantity { get; set; }
+        public string? Uom { get; set; }
+        public decimal UnitPrice { get; set; }
+        public decimal LineTotal { get; set; }
+
+        /// <summary>The document's tax apportioned to this line by its share of the
+        /// subtotal. Tax is recorded per document, not per line, so this is derived
+        /// — the column says "Tax (apportioned)" so nobody reads it as recorded.</summary>
+        public decimal Tax { get; set; }
+        public decimal Total { get; set; }
+
+        /// <summary>The DOCUMENT's payment status, repeated on each of its lines:
+        /// "Paid" | "Partial" | "Unpaid" | "Overdue".</summary>
+        public string PaymentStatus { get; set; } = "";
+        public string? Division { get; set; }
     }
 }
