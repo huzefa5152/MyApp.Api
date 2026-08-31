@@ -4,6 +4,7 @@ import {
   MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess,
 } from "react-icons/md";
 import { getClientLedgerReport, getClientLedgerReportExcel } from "../api/reportApi";
+import { getClientsByCompany } from "../api/clientApi";
 import SearchableSelect from "../Components/SearchableSelect";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
@@ -78,9 +79,14 @@ export default function ClientLedgerReportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Customer options for the filter come from the report itself, so this page
-  // needs no clients.* permission of its own. Refreshed only on an UNFILTERED
-  // response — a filtered one holds a single customer and would collapse the list.
+  // Customer options for the filter come from the COMPANY'S CLIENT LIST, not
+  // from the report payload. The report deliberately omits customers with no
+  // carried-in balance and no activity, but the server renders an empty
+  // statement happily when one is asked for by id — sourcing the picker from the
+  // report would make exactly those customers unreachable. The picker feed is
+  // co-authorized for `reports.clientledger.view` (ReferenceAccessPolicy), and
+  // if it fails anyway the report's own customers are used so the filter still
+  // works for everyone it can reach.
   const [clientOptions, setClientOptions] = useState([]);
 
   const buildParams = useCallback(() => {
@@ -111,8 +117,12 @@ export default function ClientLedgerReportPage() {
     try {
       const { data } = await getClientLedgerReport(selectedCompany.id, buildParams());
       setReport(data);
+      // Fallback only — see the clientOptions note. Filled from an UNFILTERED
+      // response (a filtered one holds one customer) and only while the real
+      // client list has not arrived, so it never shrinks a full list.
       if (!clientId) {
-        setClientOptions((data.clients || []).map((c) => ({ id: c.clientId, name: c.clientName })));
+        setClientOptions((prev) => (prev.length ? prev
+          : (data.clients || []).map((c) => ({ id: c.clientId, name: c.clientName }))));
       }
     } catch (e) {
       setError(e?.response?.data?.message || "Failed to load the client ledger report.");
@@ -124,8 +134,27 @@ export default function ClientLedgerReportPage() {
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
-  // Switching company invalidates the cached customer list.
-  useEffect(() => { setClientOptions([]); setClientId(""); }, [selectedCompany?.id]);
+  // Every customer of the company, so the filter can reach the dormant ones the
+  // report leaves out. Switching company invalidates the cached list.
+  useEffect(() => {
+    setClientOptions([]);
+    setClientId("");
+    const companyId = selectedCompany?.id;
+    if (!companyId || !canView) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await getClientsByCompany(companyId);
+        if (cancelled) return;
+        setClientOptions((data || [])
+          .map((c) => ({ id: c.id, name: c.name }))
+          .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })));
+      } catch {
+        // No picker access — the report's own customers stand in (set by fetchReport).
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCompany?.id, canView]);
 
   const periodLabel = mode === "custom"
     ? `${prettyDate(dateFrom)} – ${prettyDate(dateTo)}`

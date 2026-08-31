@@ -179,12 +179,17 @@ namespace MyApp.Api.Controllers
             {
                 return Ok(await _reports.GetClientLedgerReportAsync(companyId, year, month, clientId, dateFrom, dateTo));
             }
-            catch (InvalidOperationException)
+            catch (ReportClientNotFoundException)
             {
                 // The service resolves clientId INSIDE companyId and throws this
                 // when the pair doesn't match. One generic 404 for both "unknown"
                 // and "belongs to another company" — never confirm it exists
-                // elsewhere. Same contract as CustomerLedgerController.
+                // elsewhere. Deliberately NOT `catch (InvalidOperationException)`:
+                // EF ("a second operation was started on this context") and LINQ
+                // ("Sequence contains no elements") throw that type too, and
+                // catching it here would show an infrastructure fault to the
+                // operator as a missing customer with nothing in the log to
+                // explain it. Those fall through to the logged 500 below.
                 return NotFound(new { message = "Customer not found." });
             }
             catch (Exception ex)
@@ -224,8 +229,9 @@ namespace MyApp.Api.Controllers
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     fileName);
             }
-            catch (InvalidOperationException)
+            catch (ReportClientNotFoundException)
             {
+                // Same narrow catch as GetClientLedger — see the reasoning there.
                 return NotFound(new { message = "Customer not found." });
             }
             catch (Exception ex)

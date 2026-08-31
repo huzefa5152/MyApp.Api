@@ -372,6 +372,26 @@ def suite_3_client_filter(base, token, cid, clients, wide, foreign):
           one.get("clientId") == clients["alpha"] and one.get("clientName"),
           f"clientId={one.get('clientId')} clientName={one.get('clientName')}")
 
+    # The header names the GROUP the id resolved to, so it can never disagree
+    # with the section beneath it (it did when it echoed the requested member).
+    only = (one.get("clients") or [None])[0]
+    check(suite, "the header's client id/name match the section's, not the requested member",
+          only is not None and one.get("clientId") == only.get("clientId")
+          and one.get("clientName") == only.get("clientName"),
+          f"header=({one.get('clientId')}, {one.get('clientName')}) "
+          f"section=({(only or {}).get('clientId')}, {(only or {}).get('clientName')})")
+
+    # A customer the company-wide report OMITS (no balance, no activity) must
+    # still be reachable by id — the UI's picker is sourced accordingly.
+    st, dormant = ledger_report(base, token, cid, dateFrom=WIDE_FROM, dateTo=WIDE_TO,
+                                clientId=clients["dormant"])
+    check(suite, "a dormant customer omitted company-wide still renders when asked for by id",
+          st == 200 and isinstance(dormant, dict) and len(dormant.get("clients") or []) == 1
+          and dormant["clients"][0]["clientId"] == clients["dormant"]
+          and dormant["clients"][0]["entries"] == []
+          and eq(dormant["clients"][0]["closing"], 0),
+          f"got {st} {dormant if not isinstance(dormant, dict) else dormant.get('clients')}")
+
     filtered = section(one, clients["alpha"])
     unfiltered = section(wide, clients["alpha"])
     check(suite, "the filtered section is identical to its company-wide counterpart",
@@ -590,6 +610,23 @@ def suite_0_static(repo_root):
               "does not call ValidatePeriod")
     check(suite, "no endpoint returns ex.Message to the client",
           "ex.Message" not in src, "ex.Message found in ReportsController")
+
+    # The 404 path must catch ONLY the intended not-found type. Catching
+    # InvalidOperationException would also swallow EF's "a second operation was
+    # started on this context" and LINQ's "Sequence contains no elements",
+    # showing an infrastructure fault as a missing customer with nothing logged.
+    check(suite, "the 404 path catches the dedicated not-found type",
+          src.count("catch (ReportClientNotFoundException)") == 2,
+          f"found {src.count('catch (ReportClientNotFoundException)')} of 2")
+    # Comments are stripped first — the controller's own comment explains why it
+    # does NOT catch that type, and a substring match would trip over it.
+    code_only = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("//"))
+    check(suite, "no bare catch (InvalidOperationException) swallows unrelated failures",
+          "catch (InvalidOperationException" not in code_only,
+          "a broad InvalidOperationException catch is back")
+    check(suite, "every other failure is logged before its generic 500",
+          src.count("_logger.LogError(ex,") == 2,
+          f"found {src.count('_logger.LogError(ex,')} logged catch blocks of 2")
 
 
 # ── Setup / teardown ───────────────────────────────────────────────

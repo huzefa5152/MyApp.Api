@@ -84,7 +84,15 @@ namespace MyApp.Api.Helpers
                 // granted just customerportal.* would 403 on the very screen those
                 // permissions exist for, which is exactly the coupling this policy
                 // was written to remove.
-                ["clients"]        = new[] { "clients.manage.view", "customerportal.manage.create" }
+                // "reports.clientledger.view" is here for the same reason as the
+                // portal key below it: the Client Ledger report's customer filter
+                // IS a client picker, and its options must include customers the
+                // report itself omits (a dormant one with no balance and no
+                // activity). Sourcing that picker from the report's own payload
+                // would make exactly those customers unreachable. It surfaces no
+                // name the holder cannot already read on the report.
+                ["clients"]        = new[] { "clients.manage.view", "customerportal.manage.create",
+                                             "reports.clientledger.view" }
                                         .Concat(SalesDocKeys).ToArray(),
                 ["suppliers"]      = new[] { "suppliers.manage.view" }.Concat(PurchaseDocKeys).ToArray(),
                 ["divisions"]      = new[] { "divisions.manage.view" }

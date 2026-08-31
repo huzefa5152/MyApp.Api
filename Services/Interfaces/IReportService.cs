@@ -47,10 +47,14 @@ namespace MyApp.Api.Services.Interfaces
         /// orders the service's entries for the page.
         /// </summary>
         /// <param name="clientId">Optional single-customer filter, resolved
-        /// INSIDE the company. Null = every customer with activity or a
-        /// carried-in balance.</param>
-        /// <exception cref="InvalidOperationException">A <paramref name="clientId"/>
-        /// was supplied that does not exist in this company.</exception>
+        /// INSIDE the company and reported back as the customer GROUP it landed
+        /// on. Null = every customer with activity or a carried-in balance; an
+        /// explicit id always renders, even a dormant customer with nothing to
+        /// show.</param>
+        /// <exception cref="MyApp.Api.Helpers.ReportClientNotFoundException">A
+        /// <paramref name="clientId"/> was supplied that does not exist in this
+        /// company. A dedicated type so the controller's 404 path cannot also
+        /// swallow unrelated <see cref="InvalidOperationException"/>s.</exception>
         Task<ClientLedgerReportDto> GetClientLedgerReportAsync(int companyId, int? year, int? month,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
 

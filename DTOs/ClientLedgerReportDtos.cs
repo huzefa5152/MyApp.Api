@@ -56,11 +56,18 @@ namespace MyApp.Api.DTOs
 
         public string PeriodLabel { get; set; } = "";
 
-        /// <summary>Echo of the optional customer filter, resolved inside the
-        /// company. Null = every customer.</summary>
+        /// <summary>The optional customer filter, resolved inside the company
+        /// and reported as the customer GROUP it landed on — the group's anchor
+        /// (lowest member id), not necessarily the id the caller typed. Every
+        /// figure in this report is group-level, so the anchor is the identity
+        /// that matches them; echoing the requested member instead put one name
+        /// in the header and another on the section below it. Null = every
+        /// customer.</summary>
         public int? ClientId { get; set; }
 
-        /// <summary>Name of the filtered customer, when one was requested.</summary>
+        /// <summary>Name of the group anchor named by <see cref="ClientId"/> —
+        /// always equal to the single section's <c>ClientName</c> when a filter
+        /// was applied. Null when no filter was requested.</summary>
         public string? ClientName { get; set; }
 
         /// <summary>One section per customer, biggest closing balance first

@@ -533,16 +533,14 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
 
             int? focusGroup = null;
-            string? focusName = null;
             if (clientId.HasValue)
             {
                 // Resolve the caller-supplied id INSIDE the company — never
                 // trust it. An id belonging to another company must fail exactly
                 // like an unknown one (the controller turns this into a 404).
                 var target = clients.FirstOrDefault(c => c.Id == clientId.Value)
-                    ?? throw new InvalidOperationException("Customer not found.");
+                    ?? throw new ReportClientNotFoundException("Customer not found.");
                 focusGroup = target.ClientGroupId ?? -target.Id;
-                focusName = target.Name;
             }
 
             var groups = clients.GroupBy(c => c.ClientGroupId ?? -c.Id).ToList();
@@ -553,6 +551,24 @@ namespace MyApp.Api.Services.Implementations
 
             var aggregates = await _ledger.GetAllCustomersAsync(companyId, from, toInclusive);
 
+            // The filter echo names the GROUP the id resolved to, not the id the
+            // caller happened to type. Filtering by a non-anchor member of a
+            // group otherwise put one name in the header and a different one on
+            // the section below it, for the same set of figures. Every figure
+            // here is group-level (the ledger service rolls up by
+            // `ClientGroupId ?? -ClientId`), so the group's anchor — its lowest
+            // member id and that member's name, exactly what
+            // GetAllCustomersAsync picks — is the identity that matches them.
+            int? echoId = clientId;
+            string? echoName = null;
+            if (focusGroup.HasValue)
+            {
+                var anchor = groups.First(g => g.Key == focusGroup.Value)
+                    .OrderBy(c => c.Id).First();
+                echoId = anchor.Id;
+                echoName = anchor.Name;
+            }
+
             var report = new ClientLedgerReportDto
             {
                 CompanyId = companyId,
@@ -562,8 +578,8 @@ namespace MyApp.Api.Services.Implementations
                 DateFrom = from,
                 DateTo = toInclusive,
                 PeriodLabel = periodLabel,
-                ClientId = clientId,
-                ClientName = focusName,
+                ClientId = echoId,
+                ClientName = echoName,
             };
 
             foreach (var agg in aggregates)
