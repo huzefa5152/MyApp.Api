@@ -291,7 +291,11 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
-| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `94/94 checks passed` |
+| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `116/116 checks passed` |
+| Customer receipts + advances | `python scripts/test_customer_receipts_ledger.py` | `87/87 checks passed` (1 skipped) |
+| Customer ledger | `python scripts/test_customer_ledger.py` | `79/79 checks passed` |
+| Customer ledger grouping | `python scripts/test_customer_ledger_groups.py` | `47/47 checks passed` |
+| Client Ledger report | `python scripts/test_client_ledger_report.py` | `97/97 checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py --fbr-token <token>` | `all PASS` (15 checks) |
@@ -320,6 +324,16 @@ add the case to `scripts/test_stock_v2_lifecycle.py` — the V2 benchmark that
 pins the reserve→deliver→bill lifecycle, over-commit hard-block (409), and the
 race-free concurrent guard. See `INVENTORY_FLOW_AUDIT_2026_07_05.md` for the
 full design + decisions.
+
+If you touch **customer receipts, advances or the customer ledger**, add the
+case to the matching script: allocation/advance maths and the GL postings
+behind them go in `scripts/test_customer_receipts_ledger.py`; ledger entries,
+opening/closing and the statement's own arithmetic go in
+`scripts/test_customer_ledger.py`; the "one business kept under two client
+records reads as one customer" behaviour goes in
+`scripts/test_customer_ledger_groups.py`; and the company-wide report, its
+Excel export and its picker feed go in `scripts/test_client_ledger_report.py`
+(suite 6 is where every route on that controller gets its cross-company 403).
 
 **Inventory V2 (2026-07):** tracking has a per-company version —
 `Company.InventoryFlowVersion` (1 = legacy: only HS-coded items tracked;

@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Editing a receipt keeps what it was applied to
+
+- **Editing a receipt no longer risks dropping its allocations.** The form now sends the amount you actually typed, and while it is still loading which invoices a receipt was applied to, Save is held shut and reads "Loading…" — so a quick save can't write the receipt back with its allocations, or its advance, missing.
+- **If those allocations fail to load, Save stays shut** and says so, rather than letting you overwrite the receipt from a form that never finished filling itself in.
+- **Switching the customer mid-entry clears the previous customer's ticked invoices.** Before, they stayed behind out of sight and were still counted into the Allocated and Advance figures, which could show an advance with nothing on screen to explain it.
+- **Changing company clears the payment methods** carried over from the company you were just looking at.
+- **The customer portal's advance figure only counts documents that customer can see**, so it can no longer hint at invoices hidden from their portal.
+
 ### 2026-08-31 — Client Ledger report
 
 - **Client Ledger** is a new report under Reports: every customer's statement for one period, on one screen. Each customer gets their own section — opening balance, the full trail with a running balance, and the balance carried out — laid out exactly like the ledger workbook you already keep.
