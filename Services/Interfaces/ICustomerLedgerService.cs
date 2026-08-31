@@ -64,9 +64,41 @@ namespace MyApp.Api.Services.Interfaces
         /// only applies when the caller passes nothing at all.</param>
         /// <exception cref="InvalidOperationException">The client does not exist
         /// in this company.</exception>
+        /// <remarks>
+        /// Covers exactly ONE client record. Where a company holds two records
+        /// for the same legal entity in one <c>ClientGroup</c>, this reports only
+        /// the id it was given — which is what <c>ClientService.GetStatementAsync</c>
+        /// and the Client Ledger report both want, since they address a specific
+        /// customer record. Use <see cref="GetForCustomerAsync"/> for the grouped
+        /// identity that <see cref="GetAllCustomersAsync"/> reports.
+        /// </remarks>
         Task<CustomerLedgerDto> GetForClientAsync(
             int companyId, int clientId, DateTime? from, DateTime? to,
             string? type, int page, int? pageSize);
+
+        /// <summary>
+        /// The same trail as <see cref="GetForClientAsync"/> but for the GROUPED
+        /// customer — every client record of this company sharing the resolved
+        /// client's <c>ClientGroupId</c>, which is the identity
+        /// <see cref="GetAllCustomersAsync"/> rolls its rows up by. Use this
+        /// wherever the trail is shown underneath an aggregate row, so the two
+        /// cannot disagree; <c>ClientGroupId</c> is only a plain index, so one
+        /// company genuinely can hold several records in a group.
+        ///
+        /// <c>ClientId</c>/<c>ClientName</c> on the result are the group's anchor
+        /// (lowest member id), matching <c>CustomerLedgerRowDto.ClientId</c>.
+        /// An ungrouped client behaves exactly like
+        /// <see cref="GetForClientAsync"/>.
+        /// </summary>
+        /// <param name="method">Optional DISPLAY filter on
+        /// <see cref="CustomerLedgerEntryDto.Method"/> — receipts only, so it
+        /// implicitly narrows to receipts. Like <c>type</c> it hides rows and
+        /// never re-bases a balance; <c>Total</c> counts what survives both.</param>
+        /// <exception cref="InvalidOperationException">The client does not exist
+        /// in this company.</exception>
+        Task<CustomerLedgerDto> GetForCustomerAsync(
+            int companyId, int clientId, DateTime? from, DateTime? to,
+            string? type, string? method, int page, int? pageSize);
 
         /// <summary>
         /// Per-customer aggregates for one company, rolled up by

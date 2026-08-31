@@ -25,19 +25,27 @@ export const getCustomerLedgerSummary = (companyId, params = {}) =>
   httpClient.get(`/customer-ledger/company/${companyId}`, { params });
 
 /**
- * One customer's chronological trail → CustomerLedgerDto (newest-first, paged).
- * The client id is resolved INSIDE the company scope server-side, so an id
- * from another company 404s exactly like an unknown one.
+ * One CUSTOMER's chronological trail → CustomerLedgerDto (newest-first, paged).
  *
- * @param params { from?, to?, type?, page?, pageSize? }
+ * Note the route: `/customer/`, NOT `/client/`. The summary above rolls its rows
+ * up by `ClientGroupId ?? -ClientId`, so a company holding two records for the
+ * same legal entity shows ONE row carrying BOTH records' figures. This route
+ * resolves the same group, so the trail always adds up to the row it is opened
+ * under. The `/client/` route reports a single client record and is what
+ * ClientService.GetStatementAsync and the Client Ledger report use — do not
+ * swap one for the other.
+ *
+ * The client id is resolved INSIDE the company scope server-side, so an id from
+ * another company 404s exactly like an unknown one.
+ *
+ * @param params { from?, to?, type?, method?, page?, pageSize? }
  *   `type` is an exact (case-insensitive) match on the entry Type —
  *   "Invoice" | "Debit Note" | "Credit Note" | "Receipt" | "Adjustment".
- *   It HIDES rows only: running balances, Opening/Closing and the Credit/Debit
- *   totals are always computed over the whole window first.
+ *   `method` matches CustomerLedgerEntryDto.Method and applies to receipts only.
+ *   Both HIDE rows: running balances, Opening/Closing and the Credit/Debit
+ *   totals are computed over the whole window before either runs, and `total`
+ *   counts what survives both — so paging always matches what is displayed.
  *   pageSize defaults to 50 server-side and is clamped at 200.
- *
- * There is deliberately no `method` parameter — the API does not offer one.
- * The page filters by payment method on the loaded page (see CustomerLedgerPage).
  */
 export const getCustomerLedgerEntries = (companyId, clientId, params = {}) =>
-  httpClient.get(`/customer-ledger/company/${companyId}/client/${clientId}`, { params });
+  httpClient.get(`/customer-ledger/company/${companyId}/customer/${clientId}`, { params });

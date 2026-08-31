@@ -301,7 +301,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 - **Customer Ledger** is a new tab under Accounting, beside Receipts and Payments. It lists every customer once with their Opening, Invoiced, Received, Outstanding, Advance and Closing figures, biggest debtor first.
 - **Click a customer to open their ledger in place.** Their full trail — date, reference, type, debit, credit and running balance — drops open underneath the row; clicking again closes it. You never leave the list, and you can have several customers open side by side to compare them.
-- **Filter the whole screen.** Narrow to a date range, to one kind of transaction (invoice, receipt, credit note, debit note, adjustment), to a payment method, or to just the customers who owe you money or just those holding an advance. Search by customer name to jump to one.
+- **Filters say what they narrow.** Period changes every figure on the page; Customers (owes / in advance, and a name search) narrows which customers are listed; Entries (transaction type, payment method) narrows what you see inside a customer you have opened. They are grouped and labelled that way on screen, so a payment method can't be mistaken for "customers who paid by cheque".
+- **A customer kept under two records reads as one customer throughout.** Where the same business appears twice on your books, the row and the ledger you open beneath it both cover both records, so the two can never show different closing balances.
 - Figures follow the same familiar ledger layout as the statement: invoices and debit notes in the Credit column, receipts, credit notes and write-offs in the Debit column, with a positive balance meaning the customer owes you and a negative one meaning they are in credit.
 - Each customer's entries are fetched only when you open that customer, so the list stays quick however many customers you have.
 

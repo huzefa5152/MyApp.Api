@@ -50,7 +50,68 @@ namespace MyApp.Api.Services.Implementations
             if (client == null)
                 throw new InvalidOperationException("Customer not found.");
 
-            var entries = await BuildEntriesAsync(companyId, clientId);
+            // ONE client record, deliberately — see the interface docs. Callers
+            // that want the whole ClientGroup use GetForCustomerAsync instead.
+            return await ComposeAsync(
+                companyId, new[] { client.Id }, client.Id, client.Name,
+                from, to, type, method: null, page, pageSize);
+        }
+
+        /// <inheritdoc/>
+        public async Task<CustomerLedgerDto> GetForCustomerAsync(
+            int companyId, int clientId, DateTime? from, DateTime? to,
+            string? type, string? method, int page, int? pageSize)
+        {
+            // Resolve the caller-supplied id INSIDE the company — never trust it.
+            var client = await _context.Clients.AsNoTracking()
+                .Where(c => c.Id == clientId && c.CompanyId == companyId)
+                .Select(c => new { c.Id, c.Name, c.ClientGroupId })
+                .FirstOrDefaultAsync();
+            if (client == null)
+                throw new InvalidOperationException("Customer not found.");
+
+            // The whole ClientGroup, scoped to THIS company — the same identity
+            // GetAllCustomersAsync rolls its rows up by (ClientGroupId ?? -Id).
+            // Client.ClientGroupId carries a plain, NON-unique index
+            // (AppDbContext:257), so two records of one company sharing a group
+            // is normal — merging duplicate customer records is what groups are
+            // for. Reporting only the anchor here would put a different closing
+            // balance in the drill-down than on the row above it.
+            var members = client.ClientGroupId.HasValue
+                ? await _context.Clients.AsNoTracking()
+                    .Where(c => c.CompanyId == companyId && c.ClientGroupId == client.ClientGroupId.Value)
+                    .Select(c => new { c.Id, c.Name })
+                    .ToListAsync()
+                : new[] { new { client.Id, client.Name } }.ToList();
+
+            // Anchor id/name picked EXACTLY as GetAllCustomersAsync picks them
+            // (Min(Id), and the name of the lowest id), so the drill-down and the
+            // aggregate row identify the same customer.
+            var anchor = members.OrderBy(c => c.Id).First();
+
+            return await ComposeAsync(
+                companyId, members.Select(m => m.Id).ToList(), anchor.Id, anchor.Name,
+                from, to, type, method, page, pageSize);
+        }
+
+        /// <summary>
+        /// The shared trail pipeline: build → order → window → run the balance →
+        /// hide by type/method → page. <paramref name="clientIds"/> is ONE id for
+        /// <see cref="GetForClientAsync"/> and every group member for
+        /// <see cref="GetForCustomerAsync"/>; with a single id the result is
+        /// identical to the pre-group behaviour, which is what keeps
+        /// <c>ClientService.GetStatementAsync</c> and the Client Ledger report
+        /// unchanged.
+        ///
+        /// Summing members here reproduces the aggregate row exactly, because
+        /// <see cref="GetAllCustomersAsync"/> applies the same per-client rules
+        /// (including the de-duplication rule) and then sums across the group.
+        /// </summary>
+        private async Task<CustomerLedgerDto> ComposeAsync(
+            int companyId, IReadOnlyCollection<int> clientIds, int anchorId, string anchorName,
+            DateTime? from, DateTime? to, string? type, string? method, int page, int? pageSize)
+        {
+            var entries = await BuildEntriesAsync(companyId, clientIds);
 
             // Chronological. On the same date a document (Credit column) lands
             // before the money that settles it (Debit column), mirroring the
@@ -99,6 +160,19 @@ namespace MyApp.Api.Services.Implementations
                     .ToList();
             }
 
+            // Payment method — receipts only, so choosing one implicitly narrows
+            // to receipts. Like `type` it HIDES rows: it runs after the balance
+            // above, so nothing it removes can move a balance or the closing
+            // figure. `Total` therefore counts the rows left after BOTH filters,
+            // which is what the caller pages through.
+            if (!string.IsNullOrWhiteSpace(method))
+            {
+                var wanted = method.Trim();
+                ordered = ordered
+                    .Where(e => string.Equals(e.Method, wanted, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
             var size = PaginationHelper.Clamp(pageSize, 50, PaginationHelper.AuditMax);
             var pageNo = PaginationHelper.ClampPage(page);
             var total = ordered.Count;
@@ -107,8 +181,8 @@ namespace MyApp.Api.Services.Implementations
 
             return new CustomerLedgerDto
             {
-                ClientId = client.Id,
-                ClientName = client.Name,
+                ClientId = anchorId,
+                ClientName = anchorName,
                 OpeningBalance = opening,
                 ClosingBalance = closing,
                 Outstanding = closing > 0m ? closing : 0m,
@@ -125,16 +199,30 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>
         /// Every ledger row for one customer, unordered and unfiltered by date.
         /// Four sequential reads (never concurrent — AppDbContext is not
-        /// thread-safe); each filters on BOTH CompanyId and the client.
+        /// thread-safe); each filters on BOTH CompanyId and the client set.
+        ///
+        /// <paramref name="clientIds"/> is normally ONE id. It takes a set only
+        /// so a ClientGroup can be read in four queries instead of four per
+        /// member; with a single id every filter below is exactly the equality
+        /// test it replaced, so the single-client behaviour is unchanged.
+        ///
+        /// The de-duplication rule stays per INVOICE OWNER, not per set: a
+        /// payment whose contact is the invoice's own client is already carried
+        /// by its contact-sourced row, so its allocations are skipped. That is
+        /// the same test <see cref="GetAllCustomersAsync"/> makes before it sums
+        /// a group, which is why the two agree.
         /// </summary>
-        private async Task<List<CustomerLedgerEntryDto>> BuildEntriesAsync(int companyId, int clientId)
+        private async Task<List<CustomerLedgerEntryDto>> BuildEntriesAsync(
+            int companyId, IReadOnlyCollection<int> clientIds)
         {
             var entries = new List<CustomerLedgerEntryDto>();
+            if (clientIds.Count == 0) return entries;
+            var ids = clientIds as ICollection<int> ?? clientIds.ToList();
 
             // Documents — invoices and BOTH note kinds. Demo bills are excluded
             // from every KPI (house rule) and cancelled bills carry no balance.
             var docs = await _context.Invoices.AsNoTracking()
-                .Where(i => i.ClientId == clientId && i.CompanyId == companyId
+                .Where(i => ids.Contains(i.ClientId) && i.CompanyId == companyId
                             && !i.IsDemo && !i.IsCancelled)
                 .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.DocumentType })
                 .ToListAsync();
@@ -193,7 +281,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(p => p.CompanyId == companyId
                             && p.Direction == PaymentDirection.Receipt
                             && !p.IsCancelled
-                            && p.ContactId == clientId
+                            && p.ContactId != null && ids.Contains(p.ContactId.Value)
                             && p.ContactType != null
                             && p.ContactType.Trim().ToLower() == "client")
                 .Select(p => new { p.Id, p.Number, p.Date, p.Amount, p.Method, p.BankAccountName, p.Description })
@@ -247,18 +335,19 @@ namespace MyApp.Api.Services.Implementations
                 join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
                 join inv in _context.Invoices.AsNoTracking() on a.InvoiceId equals inv.Id
                 where a.Amount != 0m
-                      && inv.ClientId == clientId && inv.CompanyId == companyId
+                      && ids.Contains(inv.ClientId) && inv.CompanyId == companyId
                       && !inv.IsDemo && !inv.IsCancelled
                       && p.CompanyId == companyId && !p.IsCancelled
                       && p.Direction == PaymentDirection.Receipt
                 select new { p.Id, p.Number, p.Date, p.Method, p.BankAccountName,
-                             p.ContactType, p.ContactId, a.Amount, inv.InvoiceNumber }
+                             p.ContactType, p.ContactId, a.Amount, inv.InvoiceNumber,
+                             InvoiceClientId = inv.ClientId }
             ).ToListAsync();
 
             foreach (var a in allocatedCash)
             {
                 // Already represented by its contact-sourced row above.
-                if (IsContactOf(a.ContactType, a.ContactId, clientId)) continue;
+                if (IsContactOf(a.ContactType, a.ContactId, a.InvoiceClientId)) continue;
                 entries.Add(new CustomerLedgerEntryDto
                 {
                     Date = a.Date,
@@ -283,7 +372,7 @@ namespace MyApp.Api.Services.Implementations
                 join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
                 join inv in _context.Invoices.AsNoTracking() on a.InvoiceId equals inv.Id
                 where a.AdjustmentAmount != 0m
-                      && inv.ClientId == clientId && inv.CompanyId == companyId
+                      && ids.Contains(inv.ClientId) && inv.CompanyId == companyId
                       && !inv.IsDemo && !inv.IsCancelled
                       && p.CompanyId == companyId && !p.IsCancelled
                       && p.Direction == PaymentDirection.Receipt

@@ -98,5 +98,40 @@ namespace MyApp.Api.Controllers
                 return StatusCode(500, new { error = "Could not load the customer ledger." });
             }
         }
+
+        /// <summary>One CUSTOMER's full chronological trail — the grouped
+        /// identity, covering every client record of this company in the same
+        /// <c>ClientGroup</c>. This is the drill-down partner of
+        /// <see cref="GetAll"/>: its figures are the ones on that customer's
+        /// aggregate row, so a screen showing the trail underneath the row must
+        /// use this route and not <see cref="GetForClient"/>, which reports a
+        /// single client record. Also accepts a <c>method</c> filter (receipts
+        /// only), so paging counts what is actually displayed.</summary>
+        [HttpGet("company/{companyId}/customer/{clientId}")]
+        [HasPermission("customerledger.list.view")]
+        public async Task<ActionResult<CustomerLedgerDto>> GetForCustomer(
+            int companyId, int clientId,
+            [FromQuery] DateTime? from, [FromQuery] DateTime? to,
+            [FromQuery] string? type, [FromQuery] string? method,
+            [FromQuery] int page = 1, [FromQuery] int? pageSize = null)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            try
+            {
+                return Ok(await _service.GetForCustomerAsync(companyId, clientId, from, to, type, method, page, pageSize));
+            }
+            catch (InvalidOperationException)
+            {
+                // Same enumeration-safe 404 as GetForClient — the id is resolved
+                // inside the company, so a foreign id is indistinguishable from
+                // an unknown one.
+                return NotFound(new { error = "Customer not found." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Customer ledger fetch failed for company {CompanyId}, customer {ClientId}", companyId, clientId);
+                return StatusCode(500, new { error = "Could not load the customer ledger." });
+            }
+        }
     }
 }

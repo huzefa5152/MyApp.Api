@@ -48,11 +48,20 @@ const isMoneyIn = (type) => type === "Receipt" || type === "Credit Note" || type
  * The API returns figures this way already. This screen RENDERS them; it never
  * re-derives, negates or swaps a column.
  *
- * FILTERS split two ways:
- *   • from / to / type go to the server — they change the figures, so a change
- *     drops every cached per-customer trail and refetches whatever is open.
- *   • method and outstanding/advance are client-side; the API has no parameter
- *     for either, so they only hide rows that are already loaded.
+ * FILTERS are grouped on screen BY WHAT THEY NARROW, because that is not
+ * guessable from the controls themselves and getting it wrong misreads the
+ * numbers ("customers with cheque payments" vs "cheque rows in this trail"):
+ *   • Period (from/to) re-bases every figure on the page, list and trail alike.
+ *   • Customers (balance, name) narrow the LIST only — client-side, because the
+ *     summary route is unpaged so filtering the loaded array is exact.
+ *   • Entries (type, method) narrow what is inside an OPENED customer only —
+ *     both server-side, so paging counts exactly what is displayed.
+ * Any of the server-side ones changing drops every cached trail and refetches
+ * whatever is open.
+ *
+ * The trail comes from the /customer/ route, which resolves the whole
+ * ClientGroup — the same identity the aggregate row is rolled up by — so the
+ * panel can never show a different closing balance from the row above it.
  *
  * Gated by customerledger.list.view (route + page + nav entry all agree).
  */
@@ -62,13 +71,13 @@ export default function CustomerLedgerPage() {
   const canView = has("customerledger.list.view");
   const companyId = selectedCompany?.id;
 
-  // Server-side filters.
+  // Server-side. Period re-bases everything; type/method narrow the trail.
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [type, setType] = useState("");
-
-  // Client-side filters — they hide loaded rows, they never refetch.
   const [method, setMethod] = useState("");
+
+  // Client-side — these narrow the customer LIST and never refetch.
   const [balance, setBalance] = useState("");     // "" | "outstanding" | "advance"
   const [search, setSearch] = useState("");
 
@@ -78,9 +87,12 @@ export default function CustomerLedgerPage() {
 
   const [expanded, setExpanded] = useState(() => new Set());
   const [ledgers, setLedgers] = useState({});     // clientId → { loading, error, data, page }
+  // Methods actually seen in loaded trails. Kept OUTSIDE `ledgers` so pruning
+  // that cache can't make an option vanish from the dropdown mid-session.
+  const [seenMethods, setSeenMethods] = useState(() => new Set());
 
-  // Any of these changing re-bases every figure on screen.
-  const ledgerKey = `${companyId || ""}|${from}|${to}|${type}`;
+  // Any of these changing re-bases or re-filters every trail on screen.
+  const ledgerKey = `${companyId || ""}|${from}|${to}|${type}|${method}`;
 
   // Mirrors of state read from inside the invalidation effect, so that effect
   // can stay keyed on ledgerKey alone instead of re-running on every expand.
@@ -129,12 +141,22 @@ export default function CustomerLedgerPage() {
       if (from) params.from = from;
       if (to) params.to = to;
       if (type) params.type = type;
+      if (method) params.method = method;
       const { data } = await getCustomerLedgerEntries(companyId, clientId, params);
       if (genRef.current !== gen) return;
       setLedgers((prev) => ({
         ...prev,
         [clientId]: { loading: false, error: "", data, page: data?.page || pg || 1 },
       }));
+      const found = (data?.entries || []).map((e) => e.method).filter(Boolean);
+      if (found.length) {
+        setSeenMethods((prev) => {
+          const next = new Set(prev);
+          let grew = false;
+          found.forEach((m) => { if (!next.has(m)) { next.add(m); grew = true; } });
+          return grew ? next : prev;
+        });
+      }
     } catch (err) {
       if (genRef.current !== gen) return;
       setLedgers((prev) => ({
@@ -145,11 +167,11 @@ export default function CustomerLedgerPage() {
         },
       }));
     }
-  }, [companyId, from, to, type]);
+  }, [companyId, from, to, type, method]);
 
-  // Drop every cached trail when the window or type changes, then refetch the
-  // rows the operator has open. A COMPANY switch collapses them instead — the
-  // open client ids belong to the company we just left.
+  // Drop every cached trail when a SERVER-SIDE filter changes (period, type or
+  // method), then refetch the rows the operator has open. A COMPANY switch
+  // collapses them instead — the open ids belong to the company we just left.
   const prevCompanyRef = useRef(companyId);
   useEffect(() => {
     genRef.current += 1;
@@ -170,8 +192,21 @@ export default function CustomerLedgerPage() {
     const next = new Set(expanded);
     if (isOpen) next.delete(clientId); else next.add(clientId);
     setExpanded(next);
+    if (isOpen) {
+      // Drop the closed customer's trail so the cache stays bounded by what is
+      // actually on screen — a long session opening many customers would
+      // otherwise accumulate a page of entries for every one of them. Re-opening
+      // refetches, which is a single fast read.
+      setLedgers((prev) => {
+        if (!(clientId in prev)) return prev;
+        const rest = { ...prev };
+        delete rest[clientId];
+        return rest;
+      });
+      return;
+    }
     // Lazy: fetch the first time this customer is opened, not for every row.
-    if (!isOpen && !ledgers[clientId]) fetchLedger(clientId, 1);
+    if (!ledgers[clientId]) fetchLedger(clientId, 1);
   };
 
   /* ---- client-side narrowing -------------------------------------- */
@@ -196,15 +231,11 @@ export default function CustomerLedgerPage() {
   }), { opening: 0, invoiced: 0, received: 0, outstanding: 0, advance: 0, closing: 0 }),
   [visibleRows]);
 
-  // Methods offered = the canonical list plus anything a loaded page actually
-  // carries, so a hand-typed method is still selectable.
-  const methodOptions = useMemo(() => {
-    const seen = new Set(METHODS);
-    Object.values(ledgers).forEach((s) => {
-      (s?.data?.entries || []).forEach((e) => { if (e.method) seen.add(e.method); });
-    });
-    return Array.from(seen);
-  }, [ledgers]);
+  // Methods offered = the canonical list plus anything a loaded trail actually
+  // carried, so a hand-typed method stays selectable.
+  const methodOptions = useMemo(
+    () => Array.from(new Set([...METHODS, ...seenMethods])),
+    [seenMethods]);
 
   const filtersActive = !!(from || to || type || method || balance || search);
   const clearFilters = () => {
@@ -249,52 +280,79 @@ export default function CustomerLedgerPage() {
         <div style={st.empty}>Select a company to view the customer ledger.</div>
       ) : (
         <>
-          {/* ---- Filters ------------------------------------------- */}
+          {/* ---- Filters --------------------------------------------
+              Grouped BY WHAT THEY NARROW. Without this the method and type
+              controls sit beside the period ones and read as "customers who
+              paid by cheque", when they only ever narrow an OPENED customer's
+              entries. The scope headings are always visible — a caveat that
+              only appears once you have already chosen is a caveat you read
+              too late. ------------------------------------------------- */}
           <div style={st.filterCard}>
             <div style={st.filterGrid}>
-              <label style={st.field}>
-                <span style={st.fieldLabel}>From</span>
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={st.input} />
-              </label>
-              <label style={st.field}>
-                <span style={st.fieldLabel}>To</span>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={st.input} />
-              </label>
-              <label style={st.field}>
-                <span style={st.fieldLabel}>Transaction type</span>
-                <select value={type} onChange={(e) => setType(e.target.value)} style={st.input}>
-                  <option value="">All types</option>
-                  {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </label>
-              <label style={st.field}>
-                <span style={st.fieldLabel}>Payment method</span>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} style={st.input}>
-                  <option value="">All methods</option>
-                  {methodOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </label>
-              <label style={st.field}>
-                <span style={st.fieldLabel}>Balance</span>
-                <select value={balance} onChange={(e) => setBalance(e.target.value)} style={st.input}>
-                  <option value="">All customers</option>
-                  <option value="outstanding">Has outstanding</option>
-                  <option value="advance">Has advance</option>
-                </select>
-              </label>
-              <label style={st.field}>
-                <span style={st.fieldLabel}>Customer</span>
-                <span style={{ position: "relative", display: "block" }}>
-                  <MdSearch size={18} style={st.searchIcon} />
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search by name…"
-                    style={{ ...st.input, paddingLeft: 34 }}
-                  />
-                </span>
-              </label>
+              <fieldset style={st.group}>
+                <legend style={st.groupLegend}>Period <span style={st.groupScope}>— the whole page</span></legend>
+                <div style={st.groupBody}>
+                  <label style={st.field}>
+                    <span style={st.fieldLabel}>From</span>
+                    <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={st.input} />
+                  </label>
+                  <label style={st.field}>
+                    <span style={st.fieldLabel}>To</span>
+                    <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={st.input} />
+                  </label>
+                </div>
+              </fieldset>
+
+              <fieldset style={st.group}>
+                <legend style={st.groupLegend}>Customers <span style={st.groupScope}>— which rows are listed</span></legend>
+                <div style={st.groupBody}>
+                  <label style={st.field}>
+                    <span style={st.fieldLabel}>Balance</span>
+                    <select value={balance} onChange={(e) => setBalance(e.target.value)} style={st.input}>
+                      <option value="">All customers</option>
+                      <option value="outstanding">Has outstanding</option>
+                      <option value="advance">Has advance</option>
+                    </select>
+                  </label>
+                  <label style={st.field}>
+                    <span style={st.fieldLabel}>Name</span>
+                    <span style={{ position: "relative", display: "block" }}>
+                      <MdSearch size={18} style={st.searchIcon} />
+                      <input
+                        type="search"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search by name…"
+                        style={{ ...st.input, paddingLeft: 34 }}
+                      />
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <fieldset style={st.group}>
+                <legend style={st.groupLegend}>Entries <span style={st.groupScope}>— inside an opened customer</span></legend>
+                <div style={st.groupBody}>
+                  <label style={st.field}>
+                    <span style={st.fieldLabel}>Transaction type</span>
+                    <select value={type} onChange={(e) => setType(e.target.value)} style={st.input}>
+                      <option value="">All types</option>
+                      {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </label>
+                  <label style={st.field}>
+                    <span style={st.fieldLabel}>Payment method</span>
+                    <select value={method} onChange={(e) => setMethod(e.target.value)} style={st.input}>
+                      <option value="">All methods</option>
+                      {methodOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div style={st.groupNote}>
+                  These do not change the customer list or its figures — a method
+                  applies to receipts, so choosing one shows only receipts.
+                </div>
+              </fieldset>
             </div>
 
             <div style={st.filterFoot}>
@@ -304,7 +362,6 @@ export default function CustomerLedgerPage() {
                   {from
                     ? "Opening carries in everything dated before the From date."
                     : "Opening is 0 until a From date is set — the window is all of history."}
-                  {method ? " Payment method narrows the entries already loaded on a page (receipts only)." : ""}
                 </span>
               </span>
               {filtersActive && (
@@ -350,7 +407,8 @@ export default function CustomerLedgerPage() {
                   row={r}
                   open={expanded.has(r.clientId)}
                   state={ledgers[r.clientId]}
-                  method={method}
+                  typeFilter={type}
+                  methodFilter={method}
                   onToggle={() => toggleRow(r.clientId)}
                   onPage={(pg) => fetchLedger(r.clientId, pg)}
                 />
@@ -367,7 +425,7 @@ export default function CustomerLedgerPage() {
 /*  One customer — aggregate header + in-place trail                    */
 /* ------------------------------------------------------------------ */
 
-function CustomerRow({ row, open, state, method, onToggle, onPage }) {
+function CustomerRow({ row, open, state, typeFilter, methodFilter, onToggle, onPage }) {
   return (
     <div style={{ ...st.row, ...(open ? st.rowOpen : null) }}>
       {/* The whole aggregate block is the toggle, so a tap anywhere on the
@@ -390,7 +448,9 @@ function CustomerRow({ row, open, state, method, onToggle, onPage }) {
               names must stay distinguishable (dashboard incident 2026-05-13). */}
           <span style={st.clientName}>{row.clientName}</span>
           <span style={{ ...st.closingPill, ...pillTone(row.closing) }}>
-            {Number(row.closing) < 0 ? "Advance" : "Owes"} Rs {fmtMoney(Math.abs(row.closing))}
+            {Number(row.closing) === 0
+              ? "Settled"
+              : `${Number(row.closing) < 0 ? "Advance" : "Owes"} Rs ${fmtMoney(Math.abs(row.closing))}`}
           </span>
         </span>
 
@@ -404,13 +464,13 @@ function CustomerRow({ row, open, state, method, onToggle, onPage }) {
         </span>
       </button>
 
-      {open && <LedgerPanel state={state} method={method} onPage={onPage} />}
+      {open && <LedgerPanel state={state} typeFilter={typeFilter} methodFilter={methodFilter} onPage={onPage} />}
     </div>
   );
 }
 
 /** The expanded trail. Lazily fetched — `state` is undefined until first open. */
-function LedgerPanel({ state, method, onPage }) {
+function LedgerPanel({ state, typeFilter, methodFilter, onPage }) {
   if (!state || state.loading) {
     return <div style={st.panelMsg}>Loading ledger…</div>;
   }
@@ -420,11 +480,10 @@ function LedgerPanel({ state, method, onPage }) {
   const d = state.data;
   if (!d) return null;
 
-  const all = d.entries || [];
-  // Method is client-side: the API has no parameter for it, so it narrows the
-  // page that is already loaded. Say so rather than silently under-reporting.
-  const shown = method ? all.filter((e) => (e.method || "") === method) : all;
-  const hiddenByMethod = all.length - shown.length;
+  // Type and method are both applied server-side, so this page is already
+  // exactly what the filters asked for and `d.total` counts the same rows the
+  // pager walks. Nothing is hidden client-side.
+  const shown = d.entries || [];
 
   return (
     <div style={st.panel}>
@@ -437,7 +496,9 @@ function LedgerPanel({ state, method, onPage }) {
 
       {shown.length === 0 ? (
         <div style={st.panelMsg}>
-          {all.length === 0 ? "No entries in this window." : `No ${method} entries on this page.`}
+          {typeFilter || methodFilter
+            ? `No ${[methodFilter, typeFilter].filter(Boolean).join(" ")} entries in this window.`
+            : "No entries in this window."}
         </div>
       ) : (
         <>
@@ -480,10 +541,10 @@ function LedgerPanel({ state, method, onPage }) {
             </table>
           </div>
 
-          {hiddenByMethod > 0 && (
+          {(typeFilter || methodFilter) && (
             <div style={st.panelNote}>
-              {hiddenByMethod} entr{hiddenByMethod === 1 ? "y" : "ies"} on this page hidden by the {method} filter.
-              Paging still counts all {d.total} entries in the window.
+              Showing {d.total} {[methodFilter, typeFilter].filter(Boolean).join(" ")} entr{d.total === 1 ? "y" : "ies"}.
+              Opening, Closing and the totals above cover the whole window, unfiltered.
             </div>
           )}
         </>
@@ -543,6 +604,13 @@ const st = {
 
   filterCard: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 14, padding: "0.9rem 1rem", marginBottom: "1rem" },
   filterGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" },
+  // Each group is its own auto-fit grid, so the whole card still collapses to
+  // one column on a phone without a media query.
+  group: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.5rem 0.7rem 0.6rem", margin: 0, minWidth: 0 },
+  groupLegend: { padding: "0 0.35rem", fontSize: "0.68rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.blue },
+  groupScope: { fontWeight: 600, textTransform: "none", letterSpacing: 0, color: colors.textSecondary },
+  groupBody: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.6rem" },
+  groupNote: { marginTop: "0.45rem", fontSize: "0.7rem", lineHeight: 1.4, color: colors.textSecondary },
   field: { display: "flex", flexDirection: "column", gap: 4, minWidth: 0 },
   fieldLabel: { fontSize: "0.66rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
   input: { ...dropdownStyles.base, width: "100%", minWidth: 0, minHeight: 44, boxSizing: "border-box" },
