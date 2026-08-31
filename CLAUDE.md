@@ -258,6 +258,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
 | Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `94/94 checks passed` |
+| Accounting reports | `python scripts/test_accounting_reports.py` | `107/107 checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
@@ -271,6 +272,20 @@ must keep BOTH the offline corpus harness AND the production read-only check
 green, and add corpus cases for the new behaviour. Full runbook (parser
 internals, feedback system, cross-branch cherry-pick, prod-check setup) is in
 `PO_IMPORT_PARSER_GUIDE.md`.
+
+**Accounting reports — MANDATORY.** Any change to
+`Services/Implementations/AccountingReportService*.cs`,
+`Controllers/AccountingReportsController.cs`, `Helpers/ReportPeriod.cs` or
+`Helpers/ReportExcelBuilder.cs` must keep `scripts/test_accounting_reports.py`
+green and add a case for the new behaviour. That suite is deliberately built out
+of CROSS-CHECKS against the existing engine (expense total vs trial balance,
+cash-book closing vs the CoA balance, register totals vs the dashboard summary),
+because a reporting bug shows up as a plausible wrong number, not a crash. A
+report must never grow its own accounting calculation — read `JournalLines` and
+reuse `GeneralLedgerService`'s primitives. Report scope for a division-restricted
+user comes from `ReportFilterDto.AllowedDivisionIds`, which is `[BindNever]` and
+set only by the controller; never widen it, and never let a report skip
+`ScopeToDivisions`.
 
 If you add a new endpoint that takes `companyId`, add a tenant-isolation
 case to `scripts/test_tenant_isolation.py`. If you touch invoice/bill

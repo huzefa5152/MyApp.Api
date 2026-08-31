@@ -702,8 +702,12 @@ namespace MyApp.Api.Helpers
         /// Numbers / dates / cells that already routed through the
         /// numeric / date branches above never hit this path — we only
         /// neutralise string values.
+        ///
+        /// <c>internal</c> rather than private so <see cref="ReportExcelBuilder"/>
+        /// shares this exact implementation — injection neutralisation must not be
+        /// duplicated, or a fix to one copy silently leaves the other vulnerable.
         /// </summary>
-        private static string CsvSafe(string? s)
+        internal static string CsvSafe(string? s)
         {
             if (string.IsNullOrEmpty(s)) return s ?? "";
             var first = s[0];

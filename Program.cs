@@ -313,6 +313,9 @@ builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
 // transaction.
 builder.Services.AddScoped<IPostingService, PostingService>();
 builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
+// Accounting reports read the ledger the two services above write — never their own
+// accounting logic. See Services/Implementations/AccountingReportService*.cs.
+builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
 builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
 builder.Services.AddScoped<IAccountTransferService, AccountTransferService>();
 builder.Services.AddScoped<IBankReconciliationService, BankReconciliationService>();
@@ -956,6 +959,35 @@ using (var scope = app.Services.CreateScope())
             SELECT rp.RoleId, @itQtyId FROM RolePermissions rp
             WHERE rp.PermissionId = @fullEditId
               AND NOT EXISTS (SELECT 1 FROM RolePermissions x WHERE x.RoleId = rp.RoleId AND x.PermissionId = @itQtyId);
+        END
+    ");
+
+    // ── One-time perm migration: accounting.reports.export ──
+    // The accounting reports gained Excel export, gated by its own permission so a
+    // role can read reports without being able to take the data off the system.
+    //
+    // Adding a NEW key would leave every existing role unable to export — a silent
+    // capability regression for operators who could already export the Sales report.
+    // So the grant is copied onto every role that already holds
+    // accounting.reports.view. Idempotent: the NOT EXISTS guard makes every restart
+    // after the first a no-op.
+    db.Database.ExecuteSqlRaw(@"
+        -- Ensure the row exists so the FK below resolves; RbacSeeder finalises
+        -- the Description from PermissionCatalog on startup.
+        INSERT INTO Permissions ([Key], Module, Page, [Action], Description)
+        SELECT 'accounting.reports.export', 'Accounting', 'Reports', 'Export',
+               'Download an accounting report as Excel'
+        WHERE NOT EXISTS (SELECT 1 FROM Permissions WHERE [Key] = 'accounting.reports.export');
+
+        DECLARE @rptViewId   INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.reports.view');
+        DECLARE @rptExportId INT = (SELECT Id FROM Permissions WHERE [Key] = 'accounting.reports.export');
+        IF @rptViewId IS NOT NULL AND @rptExportId IS NOT NULL
+        BEGIN
+            INSERT INTO RolePermissions (RoleId, PermissionId)
+            SELECT rp.RoleId, @rptExportId FROM RolePermissions rp
+            WHERE rp.PermissionId = @rptViewId
+              AND NOT EXISTS (SELECT 1 FROM RolePermissions x
+                              WHERE x.RoleId = rp.RoleId AND x.PermissionId = @rptExportId);
         END
     ");
 

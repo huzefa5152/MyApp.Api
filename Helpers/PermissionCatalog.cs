@@ -164,7 +164,8 @@ namespace MyApp.Api.Helpers
             new("accounting.reconciliation.view",   "Accounting", "Bank Reconciliation", "View",   "View bank/cash account balances and reconciliation status"),
             new("accounting.reconciliation.manage", "Accounting", "Bank Reconciliation", "Manage", "Mark transactions cleared and reconcile a bank statement"),
             new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Enable GL posting, run backfill/rebuild and set the lock date"),
-            new("accounting.reports.view",    "Accounting", "Reports", "View", "View trial balance and AR/AP aging reports"),
+            new("accounting.reports.view",    "Accounting", "Reports", "View", "View the accounting reports — expenses, cash & bank, trial balance, AR/AP aging"),
+            new("accounting.reports.export",  "Accounting", "Reports", "Export", "Download an accounting report as Excel"),
             new("accounting.dashboard.view",  "Accounting", "Dashboard", "View", "View the accounting summary dashboard"),
 
             // Legacy data migration (admin/ops). Also gated by a non-Production

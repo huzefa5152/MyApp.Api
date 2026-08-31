@@ -289,6 +289,20 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Accounting Reports: an organised reporting section, and the Company Expense Report
+
+- **Reports → Accounting Reports is now a proper section, not a three-tab screen.** Reports are grouped into ten categories — Expenses, Cash & Bank, Financial Statements, Customers, Suppliers, Sales, Purchases, Taxes, Accounting Control, Management — with a "Start here" row for the ones most people open. Reports not built yet are listed and marked **Soon** rather than hidden, so you can see the shape of the module.
+- **Company Expense Report** — the answer to "where did the money go?". Every expense in a period with payee, expense account, payment account, tax and reference; totals for Total Expenses / Total Tax / Total Paid / Transactions; and two breakdowns (by Account, by Payee) with a share bar. Click any breakdown line to see the transactions behind it, then open the original payment or bill.
+- **Eight more expense views** off the same figures: Expense Detail, by Account, by Payee, by Category, by Date, Monthly, by Payment Account, by Tax.
+- **Cash & Bank (10 reports):** Cash & Bank Summary (opening → receipts → payments → closing → uncleared cheques per account), Cash Book, Bank Book with a running balance, Receipt and Payment Registers, Receipts/Payments by Account, Cheques in Hand, Cheques Issued (post-dated flagged, days-to-due, past-due total) and Unallocated Payments (advances nothing has absorbed yet, oldest first).
+- **The dashboard is now a starting point.** Cash & Bank, Receipts, Payments, Net cash flow, Receivables, Payables, Net position, Expenses and both cheque cards open the matching report, carrying the period the card was showing so the figures match. Recent receipt/payment rows open the document.
+- **Every report is filtered the same way:** Period (Today, This Week, This Month, Last Month, This Quarter, This Year, Last Year, Custom, **All Periods**), plus Branch, Expense account, Category, Payee type, Payee, Payment account, Tax, Status and Search where they make sense. Applied filters show as chips, print on the report, and live in the address bar so a view can be bookmarked or shared.
+- **Excel, Print and PDF on every report.** Excel exports the whole filtered set — not just the page on screen — with the company name, period, filters and totals on the sheet.
+- **Expenses are read from the general ledger, not the payments table**, so an expense that arrived via a purchase bill or a manual journal is included. The report total equals the Trial Balance's expense-account debits, and a Cash/Bank Book's closing balance equals that account's Chart of Accounts balance — the reports read the same ledger rather than recalculating it.
+- **Honest about what isn't there.** Gross Profit and Customer Profitability are listed as **Blocked**, with the reason on the card: sales record revenue but nothing yet relieves inventory, so there is no cost of sales to compare against. Suppliers remain purchase-side only, so there is no "Supplier Sales" report.
+- Accounting guide gains an **Accounting Reports** chapter: how to read any report, the filters, the Company Expense Report end to end, Cash & Bank, the registers, cheques, exporting, and dashboard drill-down.
+- New permission `accounting.reports.export` gates Excel download; it is granted automatically to every role that already had `accounting.reports.view`, so nobody loses access. Two reporting indexes added (`Payments(CompanyId, Direction, Date)`, `PaymentAllocations(Kind, AccountId)`); no table or column changes.
+
 ### 2026-08-31 — Record any payment or receipt, without knowing accounting
 
 - **You can now record an ordinary expense.** Until today the only way to enter "paid the electricity bill" was to invent a purchase bill or write a journal entry. Accounting → Payments → **Record Payment** now asks two plain questions — *who are you paying?* and *what is this payment for?* — and writes the accounting itself. Receipts work the same way.
