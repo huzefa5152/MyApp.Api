@@ -21,6 +21,7 @@ import AccountingDashboardPage from "./pages/AccountingDashboardPage";
 import AccountingReportsPage from "./pages/AccountingReportsPage";
 import DataMigrationPage from "./pages/DataMigrationPage";
 import ManagerImportPage from "./pages/ManagerImportPage";
+import SpreadsheetImportPage from "./pages/SpreadsheetImportPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
@@ -145,6 +146,7 @@ export default function App() {
           <Route path="/accounting/reports/:reportId" element={<RequirePermission anyPrefix="accounting.reports"><AccountingReportsPage /></RequirePermission>} />
           <Route path="/accounting/data-migration" element={<RequirePermission anyPrefix="accounting.import"><DataMigrationPage /></RequirePermission>} />
           <Route path="/accounting/manager-import" element={<RequirePermission anyPrefix="accounting.import"><ManagerImportPage /></RequirePermission>} />
+          <Route path="/accounting/spreadsheet-import" element={<RequirePermission anyPrefix="spreadsheetimport."><SpreadsheetImportPage /></RequirePermission>} />
           <Route path="/purchase-bills" element={<RequirePermission anyPrefix="purchasebills."><PurchaseBillsPage /></RequirePermission>} />
           <Route path="/purchase-debit-notes" element={<RequirePermission anyPrefix="purchasedebitnotes."><PurchaseDebitNotesPage /></RequirePermission>} />
           <Route path="/goods-receipts" element={<RequirePermission anyPrefix="goodsreceipts."><GoodsReceiptsPage /></RequirePermission>} />

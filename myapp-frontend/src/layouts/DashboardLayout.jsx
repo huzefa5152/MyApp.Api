@@ -42,6 +42,7 @@ import {
   MdReceiptLong,
   MdPayments,
   MdCloudDownload,
+  MdCloudUpload,
   MdSwapHoriz,
   MdMenuBook,
   MdInsights,
@@ -546,6 +547,12 @@ export default function DashboardLayout() {
                 <NavLink to="/chart-of-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
                   <span>Chart of Accounts</span>
+                </NavLink>
+              </Can>
+              <Can anyOf={["spreadsheetimport.stock.run", "spreadsheetimport.ledger.run"]}>
+                <NavLink to="/accounting/spreadsheet-import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdCloudUpload className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Spreadsheet Import</span>
                 </NavLink>
               </Can>
               {/* No Can wrapper: the guide explains the product and shows no

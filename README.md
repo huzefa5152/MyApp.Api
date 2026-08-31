@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-01 — Spreadsheet import: the screens
+
+- **Accounting → Spreadsheet Import** is now a page, not just an API. Pick the company and what you are importing, upload the workbook, say which column is which, review, import.
+- **The layout is described once.** When a workbook shape is not recognised, the page shows the top-left corner of each sheet with the column numbers along the top and asks which column holds what. Save it under a name and the next file in that shape is recognised automatically.
+- **The review step shows the numbers before anything is written** — for stock, what happens to every item and whether it is matched or created; for the ledger, every customer's calculated closing balance beside the one the workbook states, with any difference called out.
+- An **Import history** tab lists what has been loaded into the company and who loaded it, and is where a completed import is set aside if it has to be run again.
+
 ### 2026-09-01 — Spreadsheet import: customer outstanding ledger
 
 - **A customer outstanding ledger workbook can now be imported** — an index sheet naming every customer plus one sheet each. Customers, their invoices and their receipts all land in one go, and the Customer Ledger screen then shows the same running balance the workbook does.
