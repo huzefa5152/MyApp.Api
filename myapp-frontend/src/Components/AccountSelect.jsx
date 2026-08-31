@@ -86,6 +86,7 @@ export default function AccountSelect({
       !term ||
       (a.name || "").toLowerCase().includes(term) ||
       (a.code || "").toLowerCase().includes(term) ||
+      (a.accountGroupName || "").toLowerCase().includes(term) ||
       (a.accountType || "").toLowerCase().includes(term);
     const byType = new Map();
     accounts.filter(match).forEach((a) => {
@@ -184,7 +185,7 @@ export default function AccountSelect({
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search account by name, code, type…"
+              placeholder="Search account by name, code, group…"
               value={query}
               onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
               onKeyDown={handleKeyDown}
@@ -227,6 +228,14 @@ export default function AccountSelect({
                           {a.code && <span style={styles.codeChip}>{a.code}</span>}
                           {a.name}
                         </span>
+                        {/* Which group the account sits in, muted on the right —
+                            the same cue Manager.io shows, and the only way to
+                            tell two like-named accounts apart at a glance. The
+                            group is dropped when it merely repeats the section
+                            header above it, so it adds signal, not noise. */}
+                        {a.accountGroupName && a.accountGroupName !== g.label && (
+                          <span style={styles.rowGroup}>{a.accountGroupName}</span>
+                        )}
                       </div>
                     );
                   })}
@@ -275,9 +284,14 @@ const styles = {
   searchInput: { width: "100%", padding: "0.35rem 0.35rem 0.35rem 1.85rem", border: "1px solid #e8edf3", borderRadius: 6, fontSize: "0.82rem", outline: "none", backgroundColor: "#f8f9fb" },
   list: { overflowY: "auto", flex: 1 },
   groupHeader: { padding: "0.35rem 0.7rem", fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", position: "sticky", top: 0, zIndex: 1 },
-  row: { padding: "0.45rem 0.7rem", cursor: "pointer", borderBottom: "1px solid #f0f4f8", fontSize: "0.82rem", color: "#1a2332" },
+  row: {
+    display: "flex", alignItems: "baseline", gap: "0.6rem",
+    padding: "0.45rem 0.7rem", cursor: "pointer", borderBottom: "1px solid #f0f4f8",
+    fontSize: "0.82rem", color: "#1a2332",
+  },
   noneRow: { color: "#5f6d7e", fontStyle: "italic" },
-  rowName: { display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  rowName: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  rowGroup: { flexShrink: 0, maxWidth: "45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#94a3b8", fontSize: "0.74rem" },
   codeChip: { padding: "0.05rem 0.35rem", backgroundColor: "#eef2ff", color: "#0d47a1", fontFamily: "monospace", fontWeight: 700, fontSize: "0.7rem", borderRadius: 3, flexShrink: 0 },
   empty: { padding: "0.8rem", color: "#5f6d7e", fontSize: "0.82rem" },
 };

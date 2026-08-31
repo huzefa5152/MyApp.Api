@@ -6,7 +6,8 @@ import SupplierForm from "../Components/SupplierForm";
 import CommonSuppliersPanel from "../Components/CommonSuppliersPanel";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
-import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies } from "../api/supplierApi";
+import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies, getSupplierSummary } from "../api/supplierApi";
+import SupplierStatementDialog from "../Components/SupplierStatementDialog";
 import { getPurchaseBillCountsBySupplier } from "../api/purchaseBillApi";
 import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
@@ -31,6 +32,10 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState([]);
   // supplierId -> purchase-bill count, for the clickable chip on each card.
   const [billCounts, setBillCounts] = useState({});
+  // supplierId -> { accountsPayable, status, openBills }
+  const [supplierSummary, setSupplierSummary] = useState({});
+  // Supplier whose ledger is open, or null.
+  const [ledgerSupplier, setLedgerSupplier] = useState(null);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
@@ -85,6 +90,23 @@ export default function SuppliersPage() {
   useEffect(() => {
     if (selectedCompany) fetchSuppliers(selectedCompany.id);
     else setSuppliers([]);
+  }, [selectedCompany]);
+
+  // Accounts payable + status per supplier (one call). Best-effort: the cards
+  // render without it, they just omit the payables line until it arrives.
+  useEffect(() => {
+    if (!selectedCompany) { setSupplierSummary({}); return; }
+    let cancelled = false;
+    getSupplierSummary(selectedCompany.id)
+      .then(({ data }) => {
+        if (cancelled) return;
+        // The SPA fallback answers a missing endpoint with 200 + HTML, so only
+        // accept a real array (same guard the bill counts use below).
+        const rows = Array.isArray(data) ? data : [];
+        setSupplierSummary(Object.fromEntries(rows.map((r) => [r.supplierId, r])));
+      })
+      .catch(() => { if (!cancelled) setSupplierSummary({}); });
+    return () => { cancelled = true; };
   }, [selectedCompany]);
 
   // Purchase-bill counts per supplier (one GROUP BY call). Best-effort.
@@ -214,7 +236,13 @@ export default function SuppliersPage() {
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
           billCounts={billCounts}
           onShowBills={canViewBills ? (s) => navigate(`/purchase-bills?supplierId=${s.id}`) : null}
+          summary={supplierSummary}
+          onShowLedger={(s) => setLedgerSupplier(s)}
         />
+      )}
+
+      {ledgerSupplier && (
+        <SupplierStatementDialog supplier={ledgerSupplier} onClose={() => setLedgerSupplier(null)} />
       )}
 
       {copyingSupplier && (

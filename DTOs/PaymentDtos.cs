@@ -15,7 +15,8 @@ namespace MyApp.Api.DTOs
 
         public string ContactType { get; set; } = "Other";
         public int? ContactId { get; set; }
-        /// <summary>Resolved Client/Supplier name (null for "Other").</summary>
+        /// <summary>Display name of the payee/payer: resolved from the
+        /// Client/Supplier FK, or the stored free-text name for an "Other".</summary>
         public string? ContactName { get; set; }
 
         /// <summary>Optional Division tag and its resolved name.</summary>
@@ -43,14 +44,25 @@ namespace MyApp.Api.DTOs
     public class PaymentAllocationDto
     {
         public int Id { get; set; }
+        /// <summary>"Document" | "Account" | "OnAccount" — what this line is for.</summary>
+        public string Kind { get; set; } = "Document";
         public int? InvoiceId { get; set; }
         public int? InvoiceNumber { get; set; }
         public int? PurchaseBillId { get; set; }
         public int? PurchaseBillNumber { get; set; }
         public int? AccountId { get; set; }
-        /// <summary>Human label of what this line settled, e.g. "Invoice #123".</summary>
+        /// <summary>Resolved name of the income/expense account on an Account line.</summary>
+        public string? AccountName { get; set; }
+        /// <summary>Human label of what this line settled, e.g. "Invoice #123",
+        /// "Electricity" or "Advance".</summary>
         public string? DocumentLabel { get; set; }
         public decimal Amount { get; set; }
+        /// <summary>Tax rate applied (18 = 18%); null when the line carries no tax.</summary>
+        public decimal? TaxRate { get; set; }
+        /// <summary>Tax included in <see cref="Amount"/> (0 = none).</summary>
+        public decimal TaxAmount { get; set; }
+        /// <summary>Amount net of tax — what hits the income/expense account.</summary>
+        public decimal NetAmount { get; set; }
         /// <summary>Settle-remainder adjustment applied on this line (0 = none).</summary>
         public decimal AdjustmentAmount { get; set; }
         public int? AdjustmentAccountId { get; set; }
@@ -70,6 +82,9 @@ namespace MyApp.Api.DTOs
 
         public string ContactType { get; set; } = "Other";
         public int? ContactId { get; set; }
+        /// <summary>Free-text payee/payer name — only for ContactType "Other".
+        /// Ignored (and cleared) for Client/Supplier, whose name comes from the FK.</summary>
+        public string? ContactName { get; set; }
 
         /// <summary>Optional Division tag (validated against the company server-side).</summary>
         public int? DivisionId { get; set; }
@@ -88,11 +103,24 @@ namespace MyApp.Api.DTOs
 
     public class CreatePaymentAllocationDto
     {
+        /// <summary>"Document" (settle an invoice/bill) | "Account" (income/expense)
+        /// | "OnAccount" (advance against the contact's balance). Optional — when
+        /// omitted it is inferred from which id is set, so existing callers and the
+        /// ETL importer keep working unchanged.</summary>
+        public string? Kind { get; set; }
         public int? InvoiceId { get; set; }
         public int? PurchaseBillId { get; set; }
         public int? AccountId { get; set; }
-        /// <summary>Cash applied to this document/account.</summary>
+        /// <summary>Cash applied to this document/account — GROSS, i.e. including
+        /// any <see cref="TaxAmount"/>. This is what moves through the bank.</summary>
         public decimal Amount { get; set; }
+        /// <summary>Tax rate for an Account line, as a percentage (18 = 18%). When
+        /// supplied without <see cref="TaxAmount"/> the server derives the tax as
+        /// the inclusive slice of Amount: Amount × rate / (100 + rate).</summary>
+        public decimal? TaxRate { get; set; }
+        /// <summary>Tax included in Amount. Optional — derived from
+        /// <see cref="TaxRate"/> when null. Only valid on an Account line.</summary>
+        public decimal? TaxAmount { get; set; }
         /// <summary>Optional "settle remainder" adjustment — a non-cash amount that
         /// also clears the settled invoice/bill (Amount + this = cleared). 0 = none.</summary>
         public decimal AdjustmentAmount { get; set; }

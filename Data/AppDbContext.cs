@@ -918,6 +918,9 @@ namespace MyApp.Api.Data
                 .Property(p => p.Amount).HasPrecision(18, 2);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .Property(p => p.ContactType).HasMaxLength(20);
+            // Free-text payee/payer name — only set for ContactType "Other".
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ContactName).HasMaxLength(150);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .Property(p => p.Method).HasMaxLength(30);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
@@ -966,10 +969,16 @@ namespace MyApp.Api.Data
             // (AccountService pre-checks and returns a friendly message). The
             // migration NULLs any dangling values before adding the constraint.
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
-                .HasOne<MyApp.Api.Models.Accounting.Account>().WithMany()
+                .HasOne(a => a.Account).WithMany()
                 .HasForeignKey(a => a.AccountId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
+            // Recoverable tax carried by a direct income/expense line. Rate is a
+            // percentage (18 = 18%); the amount follows the document money precision.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .Property(a => a.TaxRate).HasPrecision(9, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .Property(a => a.TaxAmount).HasPrecision(18, 2);
             // Settle-remainder adjustment: amount + the GL account it posts to
             // (Restrict, like AccountId — a referenced account can't be hard-deleted).
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()

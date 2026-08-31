@@ -342,5 +342,176 @@ namespace MyApp.Api.Services.Implementations
                 throw;
             }
         }
+
+        // ── Payables roll-up + ledger ────────────────────────────────────────
+        // The mirror of the client summary/statement. Both read the SAME two
+        // sources a supplier's position comes from: their purchase bills, and the
+        // payments tagged to them. Reading bills alone is what made advances
+        // invisible on the customer side.
+
+        public async Task<List<SupplierSummaryDto>> GetSummaryAsync(int companyId)
+        {
+            var suppliers = await _context.Suppliers.AsNoTracking()
+                .Where(s => s.CompanyId == companyId)
+                .Select(s => new { s.Id, s.Name })
+                .ToListAsync();
+            if (suppliers.Count == 0) return new List<SupplierSummaryDto>();
+
+            // Owed per supplier, and how many bills still carry a balance.
+            var bills = await _context.PurchaseBills.AsNoTracking()
+                .Where(b => b.CompanyId == companyId)
+                .Select(b => new
+                {
+                    b.SupplierId,
+                    Due = b.GrandTotal - b.WithholdingTaxAmount - b.AmountPaid,
+                    b.AmountPaid,
+                })
+                .ToListAsync();
+
+            var owedByBills = bills.GroupBy(b => b.SupplierId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Due));
+            var openBills = bills.Where(b => b.Due > 0.005m).GroupBy(b => b.SupplierId)
+                .ToDictionary(g => g.Key, g => g.Count());
+            var partPaid = bills.Where(b => b.Due > 0.005m && b.AmountPaid > 0.005m)
+                .Select(b => b.SupplierId).ToHashSet();
+
+            // Money sitting with the supplier on account (no bill yet): an advance
+            // we paid is a debit that reduces what we owe; a refund they sent back
+            // is a credit that increases it again.
+            var onAccount = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                where a.Kind == Models.Accounting.AllocationKind.OnAccount
+                      && p.CompanyId == companyId && p.ContactType == "Supplier"
+                      && p.ContactId != null && !p.IsCancelled
+                group new { p.Direction, a.Amount } by p.ContactId!.Value into g
+                select new
+                {
+                    SupplierId = g.Key,
+                    Net = g.Sum(x => x.Direction == Models.Accounting.PaymentDirection.Payment
+                        ? -x.Amount : x.Amount),
+                }
+            ).ToDictionaryAsync(x => x.SupplierId, x => x.Net);
+
+            return suppliers.Select(s =>
+            {
+                var payable = owedByBills.GetValueOrDefault(s.Id) + onAccount.GetValueOrDefault(s.Id);
+                var open = openBills.GetValueOrDefault(s.Id);
+                // Nothing outstanding — or we are in credit — reads as Paid.
+                var status = payable <= 0.005m ? "Paid"
+                           : partPaid.Contains(s.Id) ? "Partial"
+                           : "Unpaid";
+                return new SupplierSummaryDto
+                {
+                    SupplierId = s.Id,
+                    SupplierName = s.Name,
+                    AccountsPayable = payable,
+                    OpenBills = open,
+                    Status = status,
+                };
+            }).ToList();
+        }
+
+        public async Task<SupplierStatementDto> GetStatementAsync(int supplierId, string supplierName)
+        {
+            const int CAP = 200;
+            var entries = new List<SupplierStatementEntryDto>();
+
+            // Credits — purchase bills increase what we owe.
+            var bills = await _context.PurchaseBills.AsNoTracking()
+                .Where(b => b.SupplierId == supplierId)
+                .Select(b => new { b.Id, b.PurchaseBillNumber, b.Date, b.GrandTotal, b.WithholdingTaxAmount })
+                .ToListAsync();
+            foreach (var b in bills)
+                entries.Add(new SupplierStatementEntryDto
+                {
+                    Date = b.Date,
+                    Type = "Purchase Bill",
+                    Reference = "BILL-" + b.PurchaseBillNumber,
+                    DocId = b.Id,
+                    // We owe the collectible: the withheld slice goes to FBR, not them.
+                    Credit = b.GrandTotal - b.WithholdingTaxAmount,
+                });
+
+            // Debits — payments allocated to this supplier's bills. Found through
+            // the bill, so Σ debits == Σ bill AmountPaid.
+            var allocs = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                join bill in _context.PurchaseBills.AsNoTracking() on a.PurchaseBillId equals bill.Id
+                where a.PurchaseBillId != null && bill.SupplierId == supplierId
+                      && p.Direction == Models.Accounting.PaymentDirection.Payment && !p.IsCancelled
+                select new { p.Number, p.Date, p.BankAccountName, p.Description, a.Amount, a.AdjustmentAmount, AdjustmentAccountName = a.AdjustmentAccount != null ? a.AdjustmentAccount.Name : null, a.Id }
+            ).ToListAsync();
+            foreach (var a in allocs)
+            {
+                if (a.Amount != 0m)
+                    entries.Add(new SupplierStatementEntryDto
+                    {
+                        Date = a.Date, Type = "Payment", Reference = "PMT-" + a.Number, DocId = a.Id,
+                        BankAccount = a.BankAccountName, Description = a.Description, Debit = a.Amount,
+                    });
+
+                // A settle-remainder write-off (a discount they gave us) clears the
+                // bill exactly as cash does, so it must show here or the ledger
+                // disagrees with the payables column by the amount written off.
+                if (a.AdjustmentAmount != 0m)
+                    entries.Add(new SupplierStatementEntryDto
+                    {
+                        Date = a.Date,
+                        Type = a.AdjustmentAccountName != null ? $"Written off — {a.AdjustmentAccountName}" : "Written off",
+                        Reference = "PMT-" + a.Number,
+                        DocId = a.Id,
+                        Description = a.Description,
+                        Debit = a.AdjustmentAmount,
+                    });
+            }
+
+            // On-account movements — no document, so they are found by the party
+            // named on the payment. An advance we paid reduces what we owe; a
+            // refund they sent back increases it.
+            var onAccount = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                where a.Kind == Models.Accounting.AllocationKind.OnAccount
+                      && p.ContactType == "Supplier" && p.ContactId == supplierId && !p.IsCancelled
+                select new { p.Number, p.Date, p.Direction, p.BankAccountName, p.Description, a.Amount, a.Id }
+            ).ToListAsync();
+            foreach (var a in onAccount)
+            {
+                var isPayment = a.Direction == Models.Accounting.PaymentDirection.Payment;
+                entries.Add(new SupplierStatementEntryDto
+                {
+                    Date = a.Date,
+                    Type = isPayment ? "Advance paid" : "Refund received",
+                    Reference = (isPayment ? "PMT-" : "RCP-") + a.Number,
+                    DocId = a.Id,
+                    BankAccount = a.BankAccountName,
+                    Description = a.Description,
+                    Debit = isPayment ? a.Amount : 0m,
+                    Credit = isPayment ? 0m : a.Amount,
+                });
+            }
+
+            // Running amount owed, oldest → newest. On the same date a bill lands
+            // before the payment that settles it, mirroring the customer statement.
+            var ordered = entries.OrderBy(e => e.Date).ThenByDescending(e => e.Credit).ToList();
+            decimal bal = 0m;
+            foreach (var e in ordered) { bal += e.Credit - e.Debit; e.Balance = bal; }
+
+            var total = ordered.Count;
+            ordered.Reverse();   // newest-first for display
+            var shown = ordered.Take(CAP).ToList();
+
+            return new SupplierStatementDto
+            {
+                SupplierId = supplierId,
+                SupplierName = supplierName,
+                ClosingBalance = bal,
+                Total = total,
+                Capped = total > shown.Count,
+                Entries = shown,
+            };
+        }
     }
 }

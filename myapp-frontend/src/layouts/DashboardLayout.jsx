@@ -259,7 +259,7 @@ export default function DashboardLayout() {
       || p.startsWith("/accounting/data-migration") || p.startsWith("/accounting/manager-import")) return "administration";
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
+    if (p.startsWith("/receipts") || p.startsWith("/help/accounting") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/clients") || p.startsWith("/suppliers") || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units")) return "masterdata";
     if (p.startsWith("/companies") || p.startsWith("/configuration/") || p.startsWith("/divisions") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "settings";
@@ -532,6 +532,12 @@ export default function DashboardLayout() {
                   <span>Chart of Accounts</span>
                 </NavLink>
               </Can>
+              {/* No Can wrapper: the guide explains the product and shows no
+                  company data, so everyone who can reach Accounting can read it. */}
+              <NavLink to="/help/accounting" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
+                <span>Accounting Guide</span>
+              </NavLink>
             </NavGroup>
           )}
 

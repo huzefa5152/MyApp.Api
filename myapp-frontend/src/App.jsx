@@ -12,6 +12,7 @@ import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
+import UserGuidePage from "./pages/UserGuidePage";
 import BankCashAccountsPage from "./pages/BankCashAccountsPage";
 import JournalEntriesPage from "./pages/JournalEntriesPage";
 import TransfersPage from "./pages/TransfersPage";
@@ -121,6 +122,9 @@ export default function App() {
           <Route path="/receipts" element={<RequirePermission anyPrefix="accounting.receipts"><PaymentsPage key="receipts" mode="receipts" /></RequirePermission>} />
           <Route path="/payments" element={<RequirePermission anyPrefix="accounting.payments"><PaymentsPage key="payments" mode="payments" /></RequirePermission>} />
           <Route path="/chart-of-accounts" element={<RequirePermission anyPrefix="accounting.coa"><ChartOfAccountsPage /></RequirePermission>} />
+          {/* Accounting guide — explains the product, exposes no company data,
+              so it needs no permission. */}
+          <Route path="/help/accounting" element={<UserGuidePage />} />
           <Route path="/bank-cash-accounts" element={<RequirePermission anyPrefix={["accounting.coa", "accounting.reconciliation"]}><BankCashAccountsPage /></RequirePermission>} />
           {/* General Ledger (Phase B): transfers move money between own
               bank/cash accounts; journal entries are manual GL postings;

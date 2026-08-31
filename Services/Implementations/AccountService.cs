@@ -448,6 +448,7 @@ namespace MyApp.Api.Services.Implementations
             Name = a.Name,
             Code = a.Code,
             AccountGroupId = a.AccountGroupId,
+            AccountGroupName = a.AccountGroup?.Name,
             AccountType = a.AccountType.ToString(),
             Statement = StatementFor(a.AccountType).ToString(),
             CashFlowClass = a.CashFlowClass?.ToString(),

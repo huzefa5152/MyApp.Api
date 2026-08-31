@@ -455,10 +455,57 @@ namespace MyApp.Api.Services.Implementations
                     .Select(x => (x.SupplierId, x.SupplierName, (x.DueDate ?? x.Date).Date, x.Due)).ToList();
             }
 
-            foreach (var grp in open.GroupBy(x => new { x.PartyId, x.Name }).OrderByDescending(g => g.Sum(x => x.Due)))
+            // Money held on account — an advance with no document yet. It has no
+            // invoice/bill to age against and is not overdue, so it belongs in
+            // Current; but it must be here, or a party sitting entirely in credit
+            // is missing from the report while their balance is real in the ledger.
+            var contactType = receivables ? "Client" : "Supplier";
+            var onAccount = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                where a.Kind == AllocationKind.OnAccount
+                      && p.CompanyId == companyId && p.ContactType == contactType
+                      && p.ContactId != null && !p.IsCancelled
+                group new { p.Direction, a.Amount } by p.ContactId!.Value into g
+                select new
+                {
+                    PartyId = g.Key,
+                    // The sign flips with the side of the ledger, because "reduces
+                    // the balance" means opposite directions of cash:
+                    //   receivables — money IN from a customer reduces what they owe
+                    //   payables    — money OUT to a supplier reduces what we owe
+                    Net = g.Sum(x =>
+                        receivables
+                            ? (x.Direction == PaymentDirection.Receipt ? -x.Amount : x.Amount)
+                            : (x.Direction == PaymentDirection.Payment ? -x.Amount : x.Amount)),
+                }
+            ).ToDictionaryAsync(x => x.PartyId, x => x.Net);
+
+            var names = onAccount.Count == 0
+                ? new Dictionary<int, string>()
+                : receivables
+                    ? await _context.Clients.AsNoTracking()
+                        .Where(x => onAccount.Keys.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.Name)
+                    : await _context.Suppliers.AsNoTracking()
+                        .Where(x => onAccount.Keys.Contains(x.Id))
+                        .ToDictionaryAsync(x => x.Id, x => x.Name);
+
+            var byParty = open.GroupBy(x => new { x.PartyId, x.Name })
+                .ToDictionary(g => g.Key.PartyId, g => (g.Key.Name, Rows: g.ToList()));
+
+            foreach (var partyId in byParty.Keys.Concat(onAccount.Keys).Distinct())
             {
-                var row = new AgedPartyRowDto { PartyId = grp.Key.PartyId, Name = grp.Key.Name, OpenDocuments = grp.Count() };
-                foreach (var (_, _, anchor, due) in grp)
+                byParty.TryGetValue(partyId, out var docs);
+                var name = docs.Name ?? names.GetValueOrDefault(partyId) ?? "";
+                var row = new AgedPartyRowDto
+                {
+                    PartyId = partyId,
+                    Name = name,
+                    // An advance is not a document, so it doesn't inflate this count.
+                    OpenDocuments = docs.Rows?.Count ?? 0,
+                };
+                foreach (var (_, _, anchor, due) in docs.Rows ?? new List<(int, string, DateTime, decimal)>())
                 {
                     var days = (today - anchor).Days;
                     row.Total += due;
@@ -468,8 +515,11 @@ namespace MyApp.Api.Services.Implementations
                     else if (days <= 90) row.Days61To90 += due;
                     else row.Over90 += due;
                 }
+                var net = onAccount.GetValueOrDefault(partyId);
+                if (net != 0m) { row.Total += net; row.Current += net; }
                 report.Rows.Add(row);
             }
+            report.Rows = report.Rows.OrderByDescending(r => r.Total).ToList();
 
             report.Total = report.Rows.Sum(r => r.Total);
             report.Current = report.Rows.Sum(r => r.Current);

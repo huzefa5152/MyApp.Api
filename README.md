@@ -289,6 +289,19 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Record any payment or receipt, without knowing accounting
+
+- **You can now record an ordinary expense.** Until today the only way to enter "paid the electricity bill" was to invent a purchase bill or write a journal entry. Accounting → Payments → **Record Payment** now asks two plain questions — *who are you paying?* and *what is this payment for?* — and writes the accounting itself. Receipts work the same way.
+- **Pay or be paid by anyone.** The payee can be a **Client**, a **Supplier**, or **Someone else** (a landlord, a courier, an employee) whose name you simply type — nothing is added to your master data. Paying a supplier for a one-off cost with no bill is now a single document instead of two.
+- **Three things a payment can be for:** settle their unpaid invoices/bills (as before), **an expense or other income**, or an **advance / on account**.
+- **Advances are finally real.** Money paid to a supplier before their bill, or taken from a customer before you invoice them, now sits against that party's balance and is absorbed when the document arrives. Previously such amounts disappeared into a Suspense account and never showed on the party's ledger.
+- **Recoverable tax on an expense.** Enter the amount as it appears on the bill and a Tax %; the form shows the split before you save, the expense records net of tax, and the tax goes to Input Sales Tax (or Output Sales Tax on money in).
+- **Spending shows up in the supplier's ledger.** An expense paid to a known supplier is now tagged to them instead of being left unattributed.
+- **Every account dropdown shows which group an account belongs to**, and searching matches the group name too — so two similarly-named accounts are easy to tell apart.
+- **Chart of Accounts ships more of what a business actually needs**: Electricity, Internet, Telephone, Office supplies, Travel & conveyance, Repairs & maintenance, Marketing & advertising, Professional fees, plus Owner's capital, Owner drawings, Service revenue, Other income, Prepaid expenses and Loans payable.
+- **New in-app Accounting Guide** (Accounting → **Accounting Guide**) — written for business owners, not accountants: how to set a company up, when to use Receipts vs Payments, what each document does to your accounts, ten worked examples, and how to trace any figure back to the transaction behind it.
+- Wrong entries are now refused with a readable reason instead of being quietly posted: no payee, no payment account, no expense account, zero or negative amounts, tax larger than the line, tax on a line that settles a document, an advance with no party, and posting an expense straight at a system-maintained account.
+
 ### 2026-08-29 — Printed documents: signature at the foot of every page, and no more filler rows
 
 - **The signature block now prints at the bottom of every page.** Before, it only appeared on the last page of a document, part-way up — so a two-page invoice had no signature line at all on page 1, and a long one had none on pages 1 and 2. Every document type is covered: bill, tax invoice, delivery challan, sales quote, sales order, credit and debit note, purchase bill, goods receipt, and the receipt, payment, transfer, journal and withholding-tax vouchers.

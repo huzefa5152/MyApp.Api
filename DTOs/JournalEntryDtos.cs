@@ -11,6 +11,20 @@ namespace MyApp.Api.DTOs
         public decimal Debit { get; set; }
         public decimal Credit { get; set; }
         public string? Description { get; set; }
+
+        // ── Subledger attribution ──
+        // Which party and which document this line belongs to, when it has one.
+        // A control-account line (Accounts receivable / payable) always names its
+        // party, so a reader can see whose balance moved without opening the
+        // source document — and so the ledger view can group by party.
+
+        /// <summary>"Client" | "Supplier", or null for a line with no party.</summary>
+        public string? PartyType { get; set; }
+        public int? PartyId { get; set; }
+        /// <summary>Sales invoice this line settles, when it settles one.</summary>
+        public int? InvoiceId { get; set; }
+        /// <summary>Purchase bill this line settles, when it settles one.</summary>
+        public int? PurchaseBillId { get; set; }
     }
 
     /// <summary>Read shape for a general-ledger journal entry — covers both

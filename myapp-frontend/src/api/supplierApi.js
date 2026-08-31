@@ -9,6 +9,16 @@ export const deleteSupplier = (id) => http.delete(`/suppliers/${id}`);
 export const getSuppliersCount = (companyId) =>
   http.get("/suppliers/count", { params: companyId ? { companyId } : {} });
 
+// Per-supplier Accounts payable + status for the Suppliers screen — the
+// payables mirror of getClientSummary.
+export const getSupplierSummary = (companyId) =>
+  http.get(`/suppliers/company/${companyId}/summary`);
+
+// Supplier ledger — bills, payments, advances and refunds with a running
+// amount owed. Opened from the Accounts-payable figure on the card.
+export const getSupplierStatement = (supplierId) =>
+  http.get(`/suppliers/${supplierId}/statement`);
+
 // Common Suppliers (group view) — mirror of the client-side helpers.
 // Multi-company duplicates collapsed into a single editable record.
 // Single-company suppliers DO NOT appear here; they keep working

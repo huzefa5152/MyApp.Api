@@ -153,7 +153,11 @@ export default function PaymentsPage({ mode = "receipts" }) {
           <span style={{ ...st.headerIcon, background: `${accent}15`, color: accent }}><Icon size={24} /></span>
           <div>
             <h2 style={st.h2}>{title}</h2>
-            <div style={st.subtitle}>{isReceipt ? "Money received from customers" : "Money paid to suppliers"}</div>
+            <div style={st.subtitle}>
+              {isReceipt
+                ? "Money in — settle invoices, record other income, or take an advance"
+                : "Money out — pay bills, record an expense, or pay an advance"}
+            </div>
           </div>
         </div>
         {canCreate && companyId && (

@@ -245,9 +245,13 @@ def run(base: str, token: str, company: dict, client: dict, supplier: dict) -> N
     check(suite, "enable returns 200", st == 200, f"got {st} {enabled}")
     if st != 200:
         raise Fatal("GL enable failed")
-    check(suite, "enable seeded the wholesale CoA (seededAccounts > 0)",
-          int(enabled.get("seededAccounts") or 0) > 0,
-          f"seededAccounts = {enabled.get('seededAccounts')}")
+    # Creating a company already lays down the wholesale preset, so enable finds
+    # accounts present and correctly seeds nothing. What matters either way is
+    # that the company ends up with a usable chart — assert that, not the count
+    # of rows this particular call happened to insert.
+    check(suite, "the company has a chart of accounts after enable",
+          len(get_flat(base, token, cid)) > 10,
+          f"seededAccounts={enabled.get('seededAccounts')} accounts={len(get_flat(base, token, cid))}")
     status = gl_status(base, token, cid)
     check(suite, "status.enabled == true", status.get("enabled") is True, str(status))
     check(suite, "status.hasCoa == true", status.get("hasCoa") is True, str(status))

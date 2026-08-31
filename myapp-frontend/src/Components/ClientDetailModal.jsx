@@ -165,8 +165,15 @@ function StatementView({ stmt }) {
   return (
     <>
       <div style={s.stmtHead}>
-        <span style={s.stmtLbl}>Accounts Receivable balance</span>
-        <span style={{ ...s.stmtVal, color: stmt.closingBalance < 0 ? colors.blue : colors.textPrimary }}>{money(stmt.closingBalance)}</span>
+        {/* A negative balance means we hold their money (an advance or an
+            overpayment). "−1,000" under "Accounts Receivable" reads like an
+            error to a non-accountant, so say what it is. */}
+        <span style={s.stmtLbl}>
+          {stmt.closingBalance < 0 ? "Held for this customer (in credit)" : "Accounts Receivable balance"}
+        </span>
+        <span style={{ ...s.stmtVal, color: stmt.closingBalance < 0 ? colors.blue : colors.textPrimary }}>
+          {money(stmt.closingBalance < 0 ? -stmt.closingBalance : stmt.closingBalance)}
+        </span>
       </div>
       {rows.length === 0 ? (
         <div style={s.empty}>No invoices or receipts for this customer yet.</div>

@@ -25,5 +25,18 @@ namespace MyApp.Api.Services.Interfaces
 
         Task<SupplierDto> UpdateAsync(SupplierDto dto);
         Task DeleteAsync(int id);
+
+        /// <summary>
+        /// Per-supplier Accounts payable + status for the Suppliers screen —
+        /// the payables mirror of <see cref="IClientService.GetSummaryAsync"/>.
+        /// </summary>
+        Task<List<SupplierSummaryDto>> GetSummaryAsync(int companyId);
+
+        /// <summary>
+        /// Supplier ledger: bills, payments, advances and refunds in date order
+        /// with a running amount owed. The payables mirror of
+        /// <see cref="IClientService.GetStatementAsync"/>.
+        /// </summary>
+        Task<SupplierStatementDto> GetStatementAsync(int supplierId, string supplierName);
     }
 }

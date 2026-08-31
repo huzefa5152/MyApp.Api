@@ -348,13 +348,36 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ClientId = g.Key, N = g.Count() })
                 .ToDictionaryAsync(x => x.ClientId, x => x.N);
 
-            // Money: AR = Σ(GrandTotal − AmountPaid) over sale invoices.
+            // Money: AR = Σ(GrandTotal − AmountPaid) over sale invoices, LESS any
+            // money held on account for the client.
+            //
+            // Invoice-settling receipts are already reflected in AmountPaid, so
+            // only the UNAPPLIED (on-account) movements are added here — counting
+            // every receipt would double-count them. An advance received puts the
+            // customer in credit and can legitimately take A/R negative; a refund
+            // paid back to them pushes it the other way.
             var arByClient = await _context.Invoices
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                             && i.DocumentType != 9 && i.DocumentType != 10)
                 .GroupBy(i => i.ClientId)
                 .Select(g => new { ClientId = g.Key, Bal = g.Sum(i => i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid) })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Bal);
+
+            var onAccountByClient = await (
+                from a in _context.PaymentAllocations
+                join p in _context.Payments on a.PaymentId equals p.Id
+                where a.Kind == MyApp.Api.Models.Accounting.AllocationKind.OnAccount
+                      && p.CompanyId == companyId && p.ContactType == "Client"
+                      && p.ContactId != null && !p.IsCancelled
+                group new { p.Direction, a.Amount } by p.ContactId!.Value into g
+                select new
+                {
+                    ClientId = g.Key,
+                    // Receipt → credit (reduces A/R); Payment → debit (increases it).
+                    Net = g.Sum(x => x.Direction == MyApp.Api.Models.Accounting.PaymentDirection.Receipt
+                        ? -x.Amount : x.Amount),
+                }
+            ).ToDictionaryAsync(x => x.ClientId, x => x.Net);
 
             var whtByClient = await _context.WithholdingTaxReceipts
                 .Where(r => r.CompanyId == companyId)
@@ -399,7 +422,7 @@ namespace MyApp.Api.Services.Implementations
             var list = new List<ClientSummaryDto>(clients.Count);
             foreach (var c in clients)
             {
-                var ar = arByClient.GetValueOrDefault(c.Id);
+                var ar = arByClient.GetValueOrDefault(c.Id) + onAccountByClient.GetValueOrDefault(c.Id);
                 var ordered = orderedByClient.GetValueOrDefault(c.Id);
                 var delivered = deliveredOnOrdersByClient.GetValueOrDefault(c.Id);
                 list.Add(new ClientSummaryDto
@@ -507,10 +530,60 @@ namespace MyApp.Api.Services.Implementations
                 where a.InvoiceId != null
                       && inv.ClientId == clientId && !inv.IsDemo && !inv.IsCancelled && inv.DocumentType != 9 && inv.DocumentType != 10
                       && p.Direction == MyApp.Api.Models.Accounting.PaymentDirection.Receipt && !p.IsCancelled
-                select new { p.Number, p.Date, p.BankAccountName, p.Description, a.Amount, a.Id }
+                select new { p.Number, p.Date, p.BankAccountName, p.Description, a.Amount, a.AdjustmentAmount, AdjustmentAccountName = a.AdjustmentAccount != null ? a.AdjustmentAccount.Name : null, a.Id }
             ).ToListAsync();
             foreach (var a in allocs)
-                entries.Add(new ClientStatementEntryDto { Date = a.Date, Type = "Receipt", Reference = "RCP-" + a.Number, DocId = a.Id, BankAccount = a.BankAccountName, Description = a.Description, Credit = a.Amount });
+            {
+                if (a.Amount != 0m)
+                    entries.Add(new ClientStatementEntryDto { Date = a.Date, Type = "Receipt", Reference = "RCP-" + a.Number, DocId = a.Id, BankAccount = a.BankAccountName, Description = a.Description, Credit = a.Amount });
+
+                // The settle-remainder write-off clears the invoice just as cash
+                // does (Invoice.AmountPaid counts it), so it has to appear here
+                // too — otherwise an invoice that reads "Paid" still shows a
+                // balance on the statement, and the closing balance disagrees
+                // with the A/R column by exactly the amount written off.
+                if (a.AdjustmentAmount != 0m)
+                    entries.Add(new ClientStatementEntryDto
+                    {
+                        Date = a.Date,
+                        Type = a.AdjustmentAccountName != null ? $"Written off — {a.AdjustmentAccountName}" : "Written off",
+                        Reference = "RCP-" + a.Number,
+                        DocId = a.Id,
+                        Description = a.Description,
+                        Credit = a.AdjustmentAmount,
+                    });
+            }
+
+            // On-account movements — an advance the customer paid before there was
+            // an invoice, or a refund we paid back. These carry NO document, so the
+            // invoice join above cannot see them; they are found by the party named
+            // on the payment instead. Without this the money is posted to the
+            // ledger (Accounts receivable, tagged to the client) but invisible on
+            // the statement, and the closing balance disagrees with the GL.
+            var onAccount = await (
+                from a in _context.PaymentAllocations.AsNoTracking()
+                join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                where a.Kind == MyApp.Api.Models.Accounting.AllocationKind.OnAccount
+                      && p.ContactType == "Client" && p.ContactId == clientId && !p.IsCancelled
+                select new { p.Number, p.Date, p.Direction, p.BankAccountName, p.Description, a.Amount, a.Id }
+            ).ToListAsync();
+            foreach (var a in onAccount)
+            {
+                var isReceipt = a.Direction == MyApp.Api.Models.Accounting.PaymentDirection.Receipt;
+                entries.Add(new ClientStatementEntryDto
+                {
+                    Date = a.Date,
+                    Type = isReceipt ? "Advance received" : "Refund paid",
+                    Reference = (isReceipt ? "RCP-" : "PMT-") + a.Number,
+                    DocId = a.Id,
+                    BankAccount = a.BankAccountName,
+                    Description = a.Description,
+                    // An advance received is a credit (we owe them goods); a refund
+                    // paid out is a debit (it undoes that credit).
+                    Credit = isReceipt ? a.Amount : 0m,
+                    Debit = isReceipt ? 0m : a.Amount,
+                });
+            }
 
             // Running balance oldest → newest; on the same date, debits (invoices)
             // land before credits (receipts), mirroring the reference.
