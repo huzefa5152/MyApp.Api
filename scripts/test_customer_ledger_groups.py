@@ -228,8 +228,23 @@ def suite_3_old_route_unchanged(base, token, ctx):
     check("/client/ excludes the sibling's entries",
           all(e["reference"] not in (ctx["inv_b_ref"], ctx["rcp_b_ref"]) for e in d["entries"]),
           f"{[e['reference'] for e in d['entries']]}")
+
+    # Compare the two routes against EACH OTHER, not against a constant neither
+    # of them returns. The gap must be exactly member B's contribution
+    # (250,000 + 80,000 credit - 50,000 debit = 280,000) — which is the size of
+    # the discrepancy the old screen put on one card.
+    st_g, g = trail(base, token, cid, anchor)
+    if not check("/customer/ loads for the comparison", st_g == 200, f"{st_g} {g}"):
+        return
     check("/client/ and /customer/ genuinely differ for a grouped customer",
-          not eq(d["closingBalance"], 500000), "the two routes returned the same figure")
+          not eq(d["closingBalance"], g["closingBalance"]),
+          f"both routes returned {d['closingBalance']}")
+    check("the gap between the routes is exactly the sibling's contribution",
+          eq(g["closingBalance"] - d["closingBalance"], 280000),
+          f"group={g['closingBalance']} single={d['closingBalance']} "
+          f"gap={g['closingBalance'] - d['closingBalance']} want 280000")
+    check("the group trail carries more entries than the single record",
+          g["total"] > d["total"], f"group={g['total']} single={d['total']}")
 
 
 def suite_4_company_scope(base, token, ctx):

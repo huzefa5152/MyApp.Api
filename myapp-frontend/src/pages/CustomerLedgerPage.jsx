@@ -179,6 +179,12 @@ export default function CustomerLedgerPage() {
     if (prevCompanyRef.current !== companyId) {
       prevCompanyRef.current = companyId;
       setExpanded(new Set());
+      // Payment.Method is free text, so the methods seen in one tenant's trails
+      // are that tenant's own vocabulary. Clear them with the expansion state —
+      // the list this replaced was derived from `ledgers` and self-pruned, so
+      // without this a company switch would leave company A's methods offered
+      // to someone now looking at company B.
+      setSeenMethods(new Set());
       return;
     }
     openRef.current.forEach((id) => fetchLedger(id, 1));
