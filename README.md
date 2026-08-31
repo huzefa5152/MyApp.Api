@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Customer Ledger screen
+
+- **Customer Ledger** is a new tab under Accounting, beside Receipts and Payments. It lists every customer once with their Opening, Invoiced, Received, Outstanding, Advance and Closing figures, biggest debtor first.
+- **Click a customer to open their ledger in place.** Their full trail — date, reference, type, debit, credit and running balance — drops open underneath the row; clicking again closes it. You never leave the list, and you can have several customers open side by side to compare them.
+- **Filter the whole screen.** Narrow to a date range, to one kind of transaction (invoice, receipt, credit note, debit note, adjustment), to a payment method, or to just the customers who owe you money or just those holding an advance. Search by customer name to jump to one.
+- Figures follow the same familiar ledger layout as the statement: invoices and debit notes in the Credit column, receipts, credit notes and write-offs in the Debit column, with a positive balance meaning the customer owes you and a negative one meaning they are in credit.
+- Each customer's entries are fetched only when you open that customer, so the list stays quick however many customers you have.
+
 ### 2026-08-30 — Customer receipts without an invoice, and customer advances
 
 - **Record a receipt without picking an invoice.** Money received from a customer can now be entered on its own — date, customer, amount, method, reference and notes — with no invoice selected. Previously every receipt had to be applied to at least one invoice at the moment the cash arrived, which is not how payments actually turn up.

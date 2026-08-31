@@ -29,6 +29,9 @@ export const NAV_ITEMS = [
   { path: "/sales-orders",              permission: "salesorders.list.view",       label: "Sales Orders",       visible: false },
   { path: "/challans/import",           permission: "challans.import.create",      label: "Import Challans",    visible: false },
 
+  // ── Accounting ───────────────────────────────────────────────────────────
+  { path: "/customer-ledger",           permission: "customerledger.list.view",    label: "Customer Ledger",    visible: true },
+
   // ── Settings ─────────────────────────────────────────────────────────────
   { path: "/fbr-settings",              permission: "fbr.config.update",           label: "FBR Settings",       visible: false },
   { path: "/fbr-sandbox",               permission: "fbr.sandbox.view",            label: "FBR Sandbox",        visible: false },

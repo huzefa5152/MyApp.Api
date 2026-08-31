@@ -11,6 +11,7 @@ import SalesQuotePage from "./pages/SalesQuotePage";
 import SalesOrderPage from "./pages/SalesOrderPage";
 import InvoicePage from "./pages/InvoicePage";
 import PaymentsPage from "./pages/PaymentsPage";
+import CustomerLedgerPage from "./pages/CustomerLedgerPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import BankCashAccountsPage from "./pages/BankCashAccountsPage";
 import JournalEntriesPage from "./pages/JournalEntriesPage";
@@ -120,6 +121,10 @@ export default function App() {
               doesn't leak. */}
           <Route path="/receipts" element={<RequirePermission anyPrefix="accounting.receipts"><PaymentsPage key="receipts" mode="receipts" /></RequirePermission>} />
           <Route path="/payments" element={<RequirePermission anyPrefix="accounting.payments"><PaymentsPage key="payments" mode="payments" /></RequirePermission>} />
+          {/* Customer Ledger — read-only, derived live from invoices, notes and
+              receipts. Its own catalog module (customerledger.*), sitting next
+              to the Receipts/Payments it reports on. */}
+          <Route path="/customer-ledger" element={<RequirePermission anyPrefix="customerledger."><CustomerLedgerPage /></RequirePermission>} />
           <Route path="/chart-of-accounts" element={<RequirePermission anyPrefix="accounting.coa"><ChartOfAccountsPage /></RequirePermission>} />
           <Route path="/bank-cash-accounts" element={<RequirePermission anyPrefix={["accounting.coa", "accounting.reconciliation"]}><BankCashAccountsPage /></RequirePermission>} />
           {/* General Ledger (Phase B): transfers move money between own

@@ -206,6 +206,7 @@ export default function DashboardLayout() {
   const accountingKeys = [
     "accounting.receipts.view",
     "accounting.payments.view",
+    "customerledger.list.view",
     "accounting.transfers.view",
     "accounting.journal.view",
     "accounting.coa.view",
@@ -260,7 +261,7 @@ export default function DashboardLayout() {
       || p.startsWith("/accounting/data-migration") || p.startsWith("/accounting/manager-import")) return "administration";
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
+    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/customer-ledger") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/clients") || p.startsWith("/suppliers") || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units")) return "masterdata";
     if (p.startsWith("/companies") || p.startsWith("/configuration/") || p.startsWith("/divisions") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "settings";
@@ -519,6 +520,12 @@ export default function DashboardLayout() {
                 <NavLink to="/payments" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdPayments className="dl-subitem__icon" aria-hidden="true" />
                   <span>Payments</span>
+                </NavLink>
+              </Can>
+              <Can permission="customerledger.list.view">
+                <NavLink to="/customer-ledger" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountBalance className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Customer Ledger</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.transfers.view">
@@ -871,6 +878,7 @@ function getBreadcrumb(pathname) {
     "/withholding-tax": "Sales / Withholding Tax Receipts",
     "/credit-debit-notes": "Sales / New Credit / Debit Note",
     "/item-rate-history": "Sales / Item Rate History",
+    "/customer-ledger": "Accounting / Customer Ledger",
     "/profile": "My Profile",
     "/users": "User Management",
     "/roles": "Roles & Permissions",
