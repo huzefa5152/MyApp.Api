@@ -289,6 +289,17 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Record any payment or receipt against a payee
+
+- **Recording an ordinary expense no longer needs a purchase bill.** A payment line can now point straight at an income or expense account — electricity, rent, freight, professional fees — so paying a bill you were never invoiced for is a two-field job instead of an invented document or a hand-written journal entry.
+- **You can pay, or be paid by, someone who is not on your books.** Choose "Other" as the payee and type their name — a landlord, a courier, an employee reimbursement — and it is recorded and printed on the voucher without adding them to your Customers or Suppliers.
+- **An expense line can carry recoverable sales tax.** Enter the gross amount and the rate; the account takes the net and Input Tax takes the rest (Output Tax on money coming in), the same tax-inclusive way invoice and bill totals already work.
+- **An advance now shows on the party's own account.** Money received before there is an invoice, or paid before there is a bill, sits against that customer's or supplier's balance instead of somewhere separate — so it nets against what they owe, appears on their ledger, in the A/R and A/P columns and on the aged reports, and can be applied to an invoice raised later. The same rule covers refunds in both directions.
+- **A supplier paid for a one-off expense now shows up in their ledger.** Every journal line carries the party named on the document, not only the ones settling an invoice or bill, so that spend is visible against the supplier who received it.
+- **Suppliers gain the payables view customers already had** — Accounts payable and a status on each supplier, and a supplier ledger reached from that figure showing bills, payments, advances and refunds with a running amount owed.
+- **A payment can only settle documents belonging to the party named on it**, so a receipt can no longer clear another customer's invoice by accident and tag it to the wrong ledger. Records that already carry an older mismatch stay editable.
+- **The chart of accounts ships with the everyday categories** — electricity, internet, telephone, office supplies, travel, repairs, marketing, professional fees — plus prepaid expenses, loans payable, owner's capital and drawings, service revenue and other income. Every account picker now shows which group an account belongs to, and searches it.
+
 ### 2026-08-31 — Editing a receipt keeps what it was applied to
 
 - **Editing a receipt no longer risks dropping its allocations.** The form now sends the amount you actually typed, and while it is still loading which invoices a receipt was applied to, Save is held shut and reads "Loading…" — so a quick save can't write the receipt back with its allocations, or its advance, missing.
