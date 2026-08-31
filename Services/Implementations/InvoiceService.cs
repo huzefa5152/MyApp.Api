@@ -779,24 +779,11 @@ namespace MyApp.Api.Services.Implementations
                     // Update company invoice number
                     await _companyRepo.UpdateAsync(company);
 
-                    // Auto-save new item descriptions for future use
-                    var newDescs = dto.Items
-                        .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                        .Select(i => i.Description!)
-                        .Distinct()
-                        .ToList();
-                    if (newDescs.Any())
-                    {
-                        var existing = await _context.ItemDescriptions
-                            .Where(d => newDescs.Contains(d.Name))
-                            .Select(d => d.Name)
-                            .ToListAsync();
-                        foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
-                        {
-                            _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
-                        }
-                        await _context.SaveChangesAsync();
-                    }
+                    // Auto-save new item descriptions for future use. Goes through
+                    // the registry so the "already exists?" test matches the
+                    // unique index (CI + PadSpace) — see ItemDescriptionRegistry.
+                    await ItemDescriptionRegistry.EnsureNamesAsync(
+                        _context, dto.Items.Select(i => i.Description));
 
                     // 2026-05-12: stock-out on save (create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
@@ -1129,21 +1116,8 @@ namespace MyApp.Api.Services.Implementations
 
                     // Auto-save typed item descriptions for future autocomplete —
                     // mirrors CreateAsync.
-                    var newDescs = dto.Items
-                        .Where(i => !string.IsNullOrWhiteSpace(i.Description))
-                        .Select(i => i.Description!)
-                        .Distinct()
-                        .ToList();
-                    if (newDescs.Count > 0)
-                    {
-                        var existing = await _context.ItemDescriptions
-                            .Where(d => newDescs.Contains(d.Name))
-                            .Select(d => d.Name)
-                            .ToListAsync();
-                        foreach (var desc in newDescs.Where(d => !existing.Contains(d)))
-                            _context.ItemDescriptions.Add(new ItemDescription { Name = desc });
-                        await _context.SaveChangesAsync();
-                    }
+                    await ItemDescriptionRegistry.EnsureNamesAsync(
+                        _context, dto.Items.Select(i => i.Description));
 
                     // 2026-05-12: stock-out on save (standalone create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
