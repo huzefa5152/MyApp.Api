@@ -27,7 +27,7 @@ Cleans up the test rows it created on success; leaves them on failure
 so you can inspect.
 """
 from __future__ import annotations
-import json, os, sys, uuid, urllib.request, urllib.error
+import io, json, os, sys, uuid, urllib.request, urllib.error
 from typing import Any
 
 BASE = "http://localhost:5134"
@@ -1046,6 +1046,130 @@ check(suite15, "bob GET the same supplier statement (has Beta access)",
       f"status {s}, body {body}")
 
 request("DELETE", f"/api/suppliers/{beta_supplier['id']}", token=admin)
+
+
+# ── Suite 16: spreadsheet import (opening stock + customer ledger) ────
+# Same shape as the client import above: the workbook never carries a company
+# id — it comes from the request — so the guard on that id is the only thing
+# between a user and another tenant's stock and customer ledger.
+#
+# Import PROFILES are guarded differently and get their own cases: a profile
+# scoped to a company is invisible outside it (404, not 403, so the status does
+# not confirm it exists), and an installation-wide profile may only be written
+# by the seed admin because it is visible to every tenant.
+print("\n  Suite 16 — spreadsheet import")
+suite16 = "spreadsheet import"
+
+# A real .xlsx: the upload validator sniffs magic bytes, so a fake body would be
+# rejected at the door and prove nothing about the tenant guard.
+_wb = io.BytesIO()
+try:
+    import openpyxl  # noqa: E402
+    _book = openpyxl.Workbook()
+    _ws = _book.active
+    _ws.cell(1, 1, "GD Number")
+    _ws.cell(1, 2, "Items")
+    _ws.cell(1, 3, "8 Digit Hs code")
+    _ws.cell(1, 4, "Qty")
+    _ws.cell(2, 1, "LOT-1")
+    _ws.cell(2, 2, "Isolation Probe Item")
+    _ws.cell(2, 3, "8481.1000")
+    _ws.cell(2, 4, 5)
+    _book.save(_wb)
+    xlsx_bytes = _wb.getvalue()
+except ImportError:
+    xlsx_bytes = None
+
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+stock_map = json.dumps({
+    "sheetSelect": {"mode": "byIndex", "index": 0},
+    "headerRow": 1, "firstDataRow": 2,
+    "columns": {"lotRef": 1, "itemName": 2, "hsCodeFull": 3, "balanceQty": 4},
+})
+ledger_map = json.dumps({
+    "indexSheet": {"mode": "byIndex", "index": 0},
+    "indexFirstRow": 2, "indexColumns": {"name": 2, "opening": 3, "closing": 4},
+    "clientSheets": {"mode": "allExcept", "except": []},
+    "clientNameCell": "A1", "firstDataRow": 2,
+    "columns": {"date": 1, "refAny": [2], "debit": 3, "credit": 4},
+    "periodEnd": "2026-06-30",
+})
+
+if xlsx_bytes is None:
+    check(suite16, "openpyxl available for the workbook fixtures", False,
+          "pip install openpyxl")
+else:
+    s_, _ = upload_file(f"/api/spreadsheet-import/identify?companyId={beta['id']}&kind=OpeningStock",
+                        tokens["alice"], "stock.xlsx", xlsx_bytes, XLSX_MIME)
+    status_check(suite16, "alice POST /spreadsheet-import/identify (Beta)", s_, 403)
+
+    s_, _ = upload_file(f"/api/spreadsheet-import/opening-stock/preview?companyId={beta['id']}",
+                        tokens["alice"], "stock.xlsx", xlsx_bytes, XLSX_MIME,
+                        fields={"mappingJson": stock_map})
+    status_check(suite16, "alice POST /opening-stock/preview (Beta)", s_, 403)
+
+    s_, _ = upload_file(f"/api/spreadsheet-import/customer-ledger/preview?companyId={beta['id']}",
+                        tokens["alice"], "ledger.xlsx", xlsx_bytes, XLSX_MIME,
+                        fields={"mappingJson": ledger_map})
+    status_check(suite16, "alice POST /customer-ledger/preview (Beta)", s_, 403)
+
+    # Her own company is fine — the guard is on whose data is touched, not on
+    # the act of importing.
+    s_, _ = upload_file(f"/api/spreadsheet-import/identify?companyId={alpha['id']}&kind=OpeningStock",
+                        tokens["alice"], "stock.xlsx", xlsx_bytes, XLSX_MIME)
+    check(suite16, "alice identifies a workbook for her own company", s_ == 200, f"got {s_}")
+
+# Commit bodies carry the company id, so they are guarded on the body value.
+s, _ = request("POST", "/api/spreadsheet-import/opening-stock/commit", token=tokens["alice"],
+               body={"companyId": beta["id"], "asOfDate": "2026-07-01",
+                     "rows": [{"itemName": "Isolation Probe Item", "hsCode": "8481.1000",
+                               "quantity": 5, "value": 100}]})
+status_check(suite16, "alice POST /opening-stock/commit (Beta body)", s, 403)
+
+s, _ = request("POST", "/api/spreadsheet-import/customer-ledger/commit", token=tokens["alice"],
+               body={"companyId": beta["id"], "periodEnd": "2026-06-30",
+                     "clients": [{"indexRow": 3, "indexName": "Probe", "opening": 0,
+                                  "totalCredit": 0, "totalDebit": 0, "computedClosing": 0}],
+                     "invoices": [], "receipts": []})
+status_check(suite16, "alice POST /customer-ledger/commit (Beta body)", s, 403)
+
+s, _ = request("GET", f"/api/spreadsheet-import/runs?companyId={beta['id']}", token=tokens["alice"])
+status_check(suite16, "alice GET /spreadsheet-import/runs (Beta)", s, 403)
+
+# A layout saved against Beta must be invisible to alice — 404 rather than 403,
+# so the status itself does not confirm the row exists.
+status, beta_profile = request("POST", "/api/import-profiles", token=admin, body={
+    "kind": "OpeningStock", "layout": "LotRows", "name": "Beta Private Layout",
+    "companyId": beta["id"], "signatureHash": "e" * 64,
+    "tokenSignature": "probe", "mappingJson": stock_map,
+})
+assert status in (200, 201), f"seed beta import profile: {status} {beta_profile}"
+
+s, _ = request("GET", f"/api/import-profiles/{beta_profile['id']}", token=tokens["alice"])
+status_check(suite16, "alice GET another tenant's private layout", s, 404)
+
+s, _ = request("GET", f"/api/import-profiles/{beta_profile['id']}/versions", token=tokens["alice"])
+status_check(suite16, "alice GET another tenant's layout history", s, 404)
+
+s, _ = request("PUT", f"/api/import-profiles/{beta_profile['id']}", token=tokens["alice"],
+               body={"name": "hijacked"})
+status_check(suite16, "alice PUT another tenant's layout", s, 403)
+
+s, body16 = request("GET", "/api/import-profiles", token=tokens["alice"])
+visible16 = [x["id"] for x in (body16 or [])]
+check(suite16, "another tenant's layout is absent from alice's list",
+      beta_profile["id"] not in visible16, f"saw {len(visible16)} layouts")
+
+# An installation-wide layout is visible to every tenant, so only the seed admin
+# may create one — otherwise a tenant user could change how other tenants read
+# their columns.
+s, _ = request("POST", "/api/import-profiles", token=tokens["alice"], body={
+    "kind": "OpeningStock", "layout": "LotRows", "name": "Alice Shared Layout",
+    "companyId": None, "signatureHash": "f" * 64, "mappingJson": stock_map,
+})
+status_check(suite16, "alice POST an installation-wide layout", s, 403)
+
+request("DELETE", f"/api/import-profiles/{beta_profile['id']}", token=admin)
 
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────

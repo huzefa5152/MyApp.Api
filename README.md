@@ -289,6 +289,17 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-01 — Spreadsheet import: customer outstanding ledger
+
+- **A customer outstanding ledger workbook can now be imported** — an index sheet naming every customer plus one sheet each. Customers, their invoices and their receipts all land in one go, and the Customer Ledger screen then shows the same running balance the workbook does.
+- **Every customer is reconciled against the index sheet before anything is written.** Preview shows, per customer, the closing balance worked out from the rows against the one the index states, and the import is refused if they disagree by more than rounding. A reporting import fails as a plausible wrong number rather than a crash, so this check is the point of the whole preview.
+- **Amounts are shown at the precision they will be stored** (two decimal places), so the balance previewed is the balance the system ends up holding — no surprise paisa appearing after the import.
+- Handles what these workbooks actually contain: a reference that wanders between two columns, one invoice written across several rows, a row with no date (it inherits the date above it), a customer whose opening balance is negative because they paid ahead (recorded as money received, not a negative invoice), and customer names that differ slightly between the index and their own sheet (surfaced for confirmation, never silently guessed).
+- **Receipts are recorded on account.** The workbook never says which invoice a payment settled, so the importer does not invent that link — the balance is right either way, and an on-account receipt can be applied to an invoice later.
+- The general ledger is frozen at the imported period's end and the receivable total is loaded onto Accounts receivable, which is what keeps the GL enable path open afterwards.
+- Imported invoices carry no tax split, because the workbook records totals only — the tax reports therefore show no output tax for the imported period, and the import screen says so before you commit.
+- An import run no longer blocks deleting its company.
+
 ### 2026-08-31 — Spreadsheet import: opening stock
 
 - **An opening stock sheet can now be imported.** Upload the workbook, review what it would do row by row, then import — item types, opening quantities and the stock's total value all land in one go.

@@ -21,6 +21,9 @@ namespace MyApp.Api.Models
     /// Re-importing on purpose is allowed but explicit: an operator marks the
     /// prior run <see cref="IsSuperseded"/>, which drops it out of the filtered
     /// index while keeping it for audit.
+    ///
+    /// Runs cascade with their company: what a run records is what was written
+    /// into that company, so it has no meaning once the company is gone.
     /// </summary>
     public class ImportRun
     {

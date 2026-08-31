@@ -8,9 +8,9 @@ Written for the person doing the onboarding. No accounting background assumed,
 but the order matters, so work top to bottom.
 
 > **Two routes are described.** Each data step shows the **Import** route (the
-> Spreadsheet Import screens) and the **By hand** route (screens that exist
-> today). Steps marked **_coming with the importer_** are not on the live site
-> yet — use the by-hand route until they are.
+> Spreadsheet Import screens) and the **By hand** route. Use the importer for a
+> real onboarding — the by-hand route is there for a handful of rows, and for
+> understanding what the importer is actually doing.
 
 ---
 
@@ -136,7 +136,7 @@ left and what it is worth.
 that item's **opening stock balance**. The total value becomes the opening
 balance on the **Inventory** account.
 
-### Route A — Import _(coming with the importer)_
+### Route A — Import
 
 1. **Accounting → Spreadsheet Import.** Choose the company, and choose
    **Opening Stock**.
@@ -216,7 +216,7 @@ backwards from what an accountant expects:
 The system shows the customer ledger the same way round, so it will look
 familiar. Behind the scenes the accounting entries are the conventional ones.
 
-### Route A — Import _(coming with the importer)_
+### Route A — Import
 
 1. **Accounting → Spreadsheet Import.** Choose the company, and choose
    **Customer Ledger**.
@@ -231,15 +231,21 @@ familiar. Behind the scenes the accounting entries are the conventional ones.
 
    ```
    Customer                  From the sheet      Calculated      Difference
-   Pakistan Hardware          7,178,505.86     7,178,505.86            0.00
+   Pakistan Hardware          7,178,505.86     7,178,505.83            0.03
+   Elite Ventures            10,363,964.71    10,363,964.73            0.02
    ```
 
-   Every line should read zero. Then check the grand total against the index
-   sheet's own total.
+   Differences should be **paisa, not rupees**. Amounts are stored to two
+   decimal places while these workbooks carry many more, so a customer with
+   thirty documents can land a few paisa out — that is rounding, and it is
+   expected. The importer allows one paisa per document and refuses anything
+   larger.
 
-   If a difference appears, **stop and go back to the sheet**. Do not import and
-   plan to fix it later — a wrong opening balance quietly follows that customer
-   through every statement from then on.
+   Then check the grand total against the index sheet's own total.
+
+   If a difference runs to **rupees**, the import is refused outright. Go back to
+   the sheet — a wrong opening balance quietly follows that customer through
+   every statement from then on.
 
 5. **Read the warnings.** They are not blocking, but each one is telling you
    something real. See the table below.
@@ -285,6 +291,21 @@ for the imported period**.
 This is correct for a year that is already filed and closed: the real tax
 position lives in the opening balances. But it surprises people who open the tax
 report expecting last year's figures, so say it up front.
+
+---
+
+### What a real import looks like
+
+For reference, the client's own 66-sheet workbook imports as:
+
+| | |
+|---|---|
+| Customers | 65 |
+| Invoices | 647 (598 from the sheets, 49 opening balances) |
+| Receipts | 166 (165 from the sheets, 1 negative opening) |
+| Opening total | 78,094,026.22 |
+| Closing total | 234,434,673.96 |
+| Customers out of balance | 0 |
 
 ---
 

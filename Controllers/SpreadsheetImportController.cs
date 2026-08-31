@@ -32,6 +32,7 @@ namespace MyApp.Api.Controllers
         private readonly ISpreadsheetImportService _service;
         private readonly IImportProfileService _profiles;
         private readonly IOpeningStockImportService _openingStock;
+        private readonly ICustomerLedgerImportService _customerLedger;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IPermissionService _permissions;
@@ -42,6 +43,7 @@ namespace MyApp.Api.Controllers
             ISpreadsheetImportService service,
             IImportProfileService profiles,
             IOpeningStockImportService openingStock,
+            ICustomerLedgerImportService customerLedger,
             ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess,
             IPermissionService permissions,
@@ -51,6 +53,7 @@ namespace MyApp.Api.Controllers
             _service = service;
             _profiles = profiles;
             _openingStock = openingStock;
+            _customerLedger = customerLedger;
             _access = access;
             _divisionAccess = divisionAccess;
             _permissions = permissions;
@@ -208,6 +211,90 @@ namespace MyApp.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Opening stock commit failed for company {CompanyId}", dto.CompanyId);
+                return StatusCode(500, new { message = "The import could not be completed. Nothing was changed." });
+            }
+        }
+
+        // ── Customer ledger ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Reads the ledger workbook and reconciles it against its own index
+        /// sheet. Writes nothing. The reconciliation block it returns is the
+        /// whole point of previewing: a reporting import fails as a plausible
+        /// wrong number, not a crash.
+        /// </summary>
+        [HttpPost("customer-ledger/preview")]
+        [HasPermission("spreadsheetimport.ledger.run")]
+        [RequestSizeLimit(ExcelUploadValidator.MaxBytes)]
+        public async Task<ActionResult<CustomerLedgerPreviewDto>> PreviewCustomerLedger(
+            [FromForm] IFormFile file,
+            [FromQuery] int companyId,
+            [FromQuery] int? profileId,
+            [FromForm] string? mappingJson)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            if (!await CompanyExistsAsync(companyId))
+                return NotFound(new { message = "That company no longer exists." });
+
+            var validated = await ExcelUploadValidator.ValidateAsync(file, HttpContext.RequestAborted);
+            if (!validated.Ok) return BadRequest(new { message = validated.Error });
+
+            var resolved = await ResolveMappingAsync(
+                profileId, mappingJson, ImportKinds.CustomerLedger, companyId);
+            if (resolved.Error != null) return resolved.Error;
+
+            try
+            {
+                return Ok(await _customerLedger.PreviewAsync(
+                    validated.Bytes, validated.Extension, validated.FileName, validated.Sha256,
+                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Customer ledger preview failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "The file could not be read. Please check it and try again." });
+            }
+        }
+
+        /// <summary>Writes the reviewed customers, invoices and receipts.</summary>
+        [HttpPost("customer-ledger/commit")]
+        [HasPermission("spreadsheetimport.ledger.run")]
+        public async Task<ActionResult<CustomerLedgerCommitResultDto>> CommitCustomerLedger(
+            [FromBody] CustomerLedgerCommitDto dto)
+        {
+            if (dto == null || dto.CompanyId <= 0)
+                return BadRequest(new { message = "Choose a company to import into." });
+
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            if (!await CompanyExistsAsync(dto.CompanyId))
+                return NotFound(new { message = "That company no longer exists." });
+
+            // The import writes company-level opening balances and the GL lock
+            // date, which a division-restricted user may not set (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
+
+            if (dto.Clients == null || dto.Clients.Count == 0)
+                return BadRequest(new { message = "There is nothing to import." });
+            if (dto.Clients.Count > Services.Implementations.CustomerLedgerImportService.MaxClients)
+                return BadRequest(new { message = "Too many customers in one import. Split the file and try again." });
+            if (dto.PeriodEnd == default)
+                return BadRequest(new { message = "Say when the imported period ends." });
+
+            try
+            {
+                return Ok(await _customerLedger.CommitAsync(dto, CurrentUserId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Customer ledger commit failed for company {CompanyId}", dto.CompanyId);
                 return StatusCode(500, new { message = "The import could not be completed. Nothing was changed." });
             }
         }

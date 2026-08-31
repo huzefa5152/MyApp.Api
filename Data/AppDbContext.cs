@@ -1443,14 +1443,20 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<ImportRun>()
                 .Property(r => r.SupersedeReason)
                 .HasMaxLength(1000);
-            // Restrict: an import run is the audit trail for rows that still
-            // exist in the company, so it must not vanish with a company delete
-            // without someone dealing with the imported data first.
+            // Cascade. A run records what was written INTO a company, so once
+            // that company and its documents are gone the run describes nothing
+            // — and Restrict here made a company with any import history
+            // undeletable, blocking a supported operation to protect an audit
+            // trail whose subject no longer exists.
+            //
+            // Deliberately unlike PoImportArchive, which has no FK at all: that
+            // one archives the FILE and why it failed to parse, which stays
+            // useful for triage no matter which company it was aimed at.
             modelBuilder.Entity<ImportRun>()
                 .HasOne(r => r.Company)
                 .WithMany()
                 .HasForeignKey(r => r.CompanyId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade);
 
             // ── PoImportArchive ────────────────────────────────────────────
             // No FKs on CompanyId / UploadedByUserId — the archive must

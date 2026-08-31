@@ -23,6 +23,12 @@ What it proves:
   * the same file cannot be imported twice, a re-saved copy with identical
     content is refused too, a grown sheet still imports, and setting the run
     aside unlocks a deliberate re-import
+  * the ledger reconciles every customer against the index sheet before it will
+    import, a negative opening becomes a receipt rather than a negative invoice,
+    one reference across several rows becomes one invoice, and an undated row
+    inherits the date above it
+  * imported balances read back through the app's own Customer Ledger, and the
+    receivable total lands on Accounts receivable with the ledger frozen
   * every route refuses a company the caller cannot reach
 
     python scripts/test_spreadsheet_import.py --base http://localhost:5134
@@ -35,7 +41,7 @@ import io
 import json
 import sys
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 import requests
 
@@ -135,6 +141,81 @@ def base_rows(tag):
         ("KAPW-HC-128753", "8712", "8712.0000:-", f"CHILDREN BICYCLE {tag}", "Sports", "Pcs", 2, 15120),
     ]
 
+
+
+LEDGER_MAPPING = {
+    "indexSheet": {"mode": "byName", "name": "Index"},
+    "indexFirstRow": 3,
+    "indexColumns": {"name": 2, "opening": 3, "debit": 4, "credit": 5, "closing": 6},
+    "clientSheets": {"mode": "allExcept", "except": ["Index"]},
+    "clientNameCell": "A3",
+    "firstDataRow": 6,
+    "columns": {"date": 2, "refAny": [3, 4], "debit": 6, "credit": 7, "balance": 8},
+    "creditIsInvoice": True,
+    "refPattern": r"^[A-Za-z]{1,4}-\d+$",
+    "undatedRule": "carryPreviousRow",
+    "openingDate": "2025-06-30",
+    "periodStart": "2025-07-01",
+    "periodEnd": "2026-06-30",
+    "openingBand": 900000,
+    "unreferencedBand": 950000,
+}
+
+
+def ledger_workbook(clients):
+    """clients: list of dicts with name, tab, opening, rows.
+
+    rows: (date|None, ref_col_c, particulars_col_d, debit, credit)
+    Mirrors the real workbook: an index sheet, then one sheet per customer with
+    the customer's name in A3 and transactions from row 6.
+    """
+    wb = openpyxl.Workbook()
+    idx = wb.active
+    idx.title = "Index"
+    idx.cell(1, 1, "ALPHA TRADERS")
+    for col, text in {1: "S.No", 2: "Name", 3: "Opening Balance",
+                      4: "Debit", 5: "Credit", 6: "Closing Balance"}.items():
+        idx.cell(2, col, text)
+
+    for i, c in enumerate(clients):
+        debit = sum(r[3] for r in c["rows"])
+        credit = sum(r[4] for r in c["rows"])
+        row = 3 + i
+        idx.cell(row, 1, i + 1)
+        idx.cell(row, 2, c["name"])
+        idx.cell(row, 3, c["opening"])
+        idx.cell(row, 4, debit)
+        idx.cell(row, 5, credit)
+        idx.cell(row, 6, c["opening"] + credit - debit)
+
+    for c in clients:
+        ws = wb.create_sheet(c["tab"])
+        ws.cell(1, 1, "ALPHA TRADERS")
+        ws.cell(2, 1, "Ledger")
+        ws.cell(3, 1, c.get("sheetName", c["name"]))
+        for col, text in {1: "S.No", 2: "Date", 3: "Inv", 4: "Particulars",
+                          5: "Opening", 6: "Debit", 7: "Credit", 8: "Balance"}.items():
+            ws.cell(5, col, text)
+        running = c["opening"]
+        for i, (dt, ref_c, ref_d, debit, credit) in enumerate(c["rows"]):
+            r = 6 + i
+            ws.cell(r, 1, i + 1)
+            if dt:
+                ws.cell(r, 2, dt)
+            if ref_c:
+                ws.cell(r, 3, ref_c)
+            if ref_d:
+                ws.cell(r, 4, ref_d)
+            if debit:
+                ws.cell(r, 6, debit)
+            if credit:
+                ws.cell(r, 7, credit)
+            running += credit - debit
+            ws.cell(r, 8, running)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
 
 def empty_workbook():
     wb = openpyxl.Workbook()
@@ -445,6 +526,197 @@ def main():
               not any("already imported on" in e for e in p6.get("blockingErrors", [])),
               f"errors={p6.get('blockingErrors')}")
 
+        # ── 9. Customer ledger ──────────────────────────────────────────
+        ledger_preview = f"{api}/spreadsheet-import/customer-ledger/preview"
+        ledger_commit = f"{api}/spreadsheet-import/customer-ledger/commit"
+        lparams = {"companyId": other}
+        lform = {"mappingJson": json.dumps(LEDGER_MAPPING)}
+
+        d1, d2, d3 = datetime(2025, 8, 4), datetime(2025, 9, 12), datetime(2026, 2, 3)
+        clients_spec = [
+            # Ordinary customer: opening, three invoices, one receipt.
+            {"name": f"Alpha Hardware {tag}", "tab": f"ALPHA HW {tag}", "opening": 100000.0,
+             "rows": [(d1, None, "AA-1", 0, 50000.0),
+                      (d2, None, "AA-2", 0, 25000.0),
+                      (None, None, "Cash Rec", 30000.0, 0),
+                      (d3, "AA-3", None, 0, 12000.0)]},
+            # Same reference across two rows — ONE invoice.
+            {"name": f"Beta Traders {tag}", "tab": f"BETA {tag}", "opening": 0.0,
+             "rows": [(d1, None, "AA-10", 0, 40000.0),
+                      (d1, None, "AA-10", 0, 15000.0),
+                      (d2, None, "BAH # 11841307", 20000.0, 0)]},
+            # Negative opening — customer paid ahead.
+            {"name": f"Gamma Supply {tag}", "tab": f"GAMMA {tag}", "opening": -75000.0,
+             "rows": [(d2, None, "AA-20", 0, 30000.0)]},
+            # Sheet name differs from the index name — must be offered, not assumed.
+            {"name": f"Delta Developers {tag}", "tab": f"DELTA {tag}", "opening": 5000.0,
+             "sheetName": f"Delta Developers & Builders (PVT) LTD {tag}",
+             "rows": [(d3, None, "AA-30", 0, 9000.0)]},
+        ]
+        book = ledger_workbook(clients_spec)
+
+        r = upload(ledger_preview, h, book, "ledger.xlsx", lform, lparams)
+        lp = r.json() if r.ok else {}
+        check("the ledger workbook previews", r.ok, f"http {r.status_code}: {r.text[:180]}")
+        check("every customer on the index is read", len(lp.get("clients", [])) == 4,
+              f"{len(lp.get('clients', []))} customers")
+        check("every customer reconciles against the index",
+              lp.get("clientsOutOfBalance") == 0 and lp.get("canCommit") is True,
+              f"outOfBalance={lp.get('clientsOutOfBalance')} errors={lp.get('blockingErrors')}")
+
+        byname = {c["indexName"]: c for c in lp.get("clients", [])}
+        alpha = byname.get(f"Alpha Hardware {tag}")
+        check("closing is opening plus credit minus debit",
+              alpha is not None and abs(alpha["computedClosing"] - 157000.0) < 0.01,
+              f"closing={alpha['computedClosing'] if alpha else '-'}")
+        check("an undated row is dated from the row above",
+              alpha is not None and alpha["undatedRowCount"] == 1,
+              f"undated={alpha['undatedRowCount'] if alpha else '-'}")
+
+        beta = byname.get(f"Beta Traders {tag}")
+        beta_invoices = [i for i in lp["invoices"] if i["indexRow"] == beta["indexRow"]]
+        check("one reference across two rows becomes one invoice",
+              len(beta_invoices) == 1 and abs(beta_invoices[0]["amount"] - 55000.0) < 0.01,
+              f"{len(beta_invoices)} invoices, amount={beta_invoices[0]['amount'] if beta_invoices else '-'}")
+        check("the merge is reported, not silent",
+              any("appears on 2 rows" in w for w in beta["warnings"]),
+              f"warnings={beta['warnings']}")
+
+        beta_receipt = [x for x in lp["receipts"] if x["indexRow"] == beta["indexRow"]][0]
+        check("a bank reference becomes a bank transfer, keeping the reference",
+              beta_receipt["method"] == "Bank Transfer" and "11841307" in (beta_receipt["description"] or ""),
+              f"method={beta_receipt['method']} desc={beta_receipt['description']}")
+
+        alpha_receipt = [x for x in lp["receipts"] if x["indexRow"] == alpha["indexRow"]][0]
+        check("a cash row becomes a cash receipt", alpha_receipt["method"] == "Cash",
+              f"method={alpha_receipt['method']}")
+
+        gamma = byname.get(f"Gamma Supply {tag}")
+        gamma_open_receipts = [x for x in lp["receipts"]
+                               if x["indexRow"] == gamma["indexRow"] and x["isOpening"]]
+        gamma_open_invoices = [i for i in lp["invoices"]
+                               if i["indexRow"] == gamma["indexRow"] and i["isOpening"]]
+        check("a negative opening becomes a receipt, never a negative invoice",
+              len(gamma_open_receipts) == 1 and len(gamma_open_invoices) == 0
+              and abs(gamma_open_receipts[0]["amount"] - 75000.0) < 0.01,
+              f"receipts={len(gamma_open_receipts)} invoices={len(gamma_open_invoices)}")
+
+        delta = byname.get(f"Delta Developers {tag}")
+        check("a differing sheet name is surfaced for confirmation",
+              delta is not None and delta["sheetName"] is not None,
+              f"sheetName={delta['sheetName'] if delta else '-'}")
+
+        # Two positive openings (Alpha, Delta). Beta opens at zero, and Gamma's
+        # negative opening is a receipt, so neither produces an opening invoice.
+        openings = [i for i in lp["invoices"] if i["isOpening"]]
+        check("opening invoices are numbered clear of the sheet's own references",
+              all(i["invoiceNumber"] >= 900000 for i in openings) and len(openings) == 2,
+              f"{len(openings)} openings, numbers={[i['invoiceNumber'] for i in openings]}")
+
+        before = requests.get(f"{api}/clients/company/{other}", headers=h, timeout=60).json()
+        check("ledger preview wrote nothing", len(before) == 0, f"{len(before)} clients exist")
+
+        # ── 10. Ledger commit ───────────────────────────────────────────
+        lbody = {
+            "companyId": other,
+            "fileSha256": lp["fileSha256"], "fileName": "ledger.xlsx",
+            "fileSizeBytes": lp["fileSizeBytes"],
+            "openingDate": lp["openingDate"], "periodEnd": lp["periodEnd"],
+            "setGlCutover": True,
+            "clients": lp["clients"], "invoices": lp["invoices"], "receipts": lp["receipts"],
+        }
+        requests.post(f"{api}/accounts/company/{other}/seed-wholesale", headers=h, timeout=120)
+        r = requests.post(ledger_commit, headers=h, timeout=600, json=lbody)
+        lres = r.json() if r.ok else {}
+        check("ledger commit succeeds", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        check("four customers are created", lres.get("clientsCreated") == 4,
+              f"created={lres.get('clientsCreated')}")
+        # Six from the sheets (AA-10's two rows are one invoice) plus the two openings.
+        check("eight invoices are created", lres.get("invoicesCreated") == 8,
+              f"invoices={lres.get('invoicesCreated')}")
+        check("three receipts are created", lres.get("receiptsCreated") == 3,
+              f"receipts={lres.get('receiptsCreated')}")
+
+        expected_total = sum(c["opening"] + sum(r_[4] for r_ in c["rows"]) - sum(r_[3] for r_ in c["rows"])
+                             for c in clients_spec)
+        check("the receivable total matches the workbook",
+              abs(lres.get("totalReceivable", 0) - expected_total) < 0.05,
+              f"receivable={lres.get('totalReceivable')} expected={expected_total}")
+        check("the ledger is frozen at the period end",
+              (lres.get("glLockDate") or "").startswith("2026-06-30"),
+              f"lock={lres.get('glLockDate')}")
+
+        # Read the balances back through the app's OWN ledger, not the importer.
+        created = requests.get(f"{api}/clients/company/{other}", headers=h, timeout=60).json()
+        ids = {c["name"]: c["id"] for c in created}
+        total_back = 0.0
+        drift = []
+        for c in lp["clients"]:
+            cname = c["sheetName"] or c["indexName"]
+            cid_ = ids.get(cname)
+            if cid_ is None:
+                drift.append((cname, "client not found"))
+                continue
+            L = requests.get(f"{api}/customer-ledger/company/{other}/client/{cid_}", headers=h, timeout=60)
+            if not L.ok:
+                drift.append((cname, f"http {L.status_code}"))
+                continue
+            closing = L.json()["closingBalance"]
+            total_back += closing
+            if abs(closing - c["computedClosing"]) > 0.01:
+                drift.append((cname, f"{closing} vs {c['computedClosing']}"))
+
+        check("every customer's ledger reads back the previewed balance", not drift,
+              f"{len(drift)} differ: {drift[:3]}")
+        check("the ledger total matches the workbook",
+              abs(total_back - expected_total) < 0.05,
+              f"ledger total={total_back} expected={expected_total}")
+
+        r = requests.get(f"{api}/accounts/company/{other}/flat", headers=h, timeout=60)
+        ar = next((a for a in r.json() if a.get("controlType") == "AccountsReceivable"), None) if r.ok else None
+        check("Accounts receivable carries the opening balance",
+              ar is not None and abs(ar.get("openingBalance", 0) - expected_total) < 0.05
+              and ar.get("openingBalanceIsDebit") is True,
+              f"opening={ar.get('openingBalance') if ar else '-'}")
+
+        check("a customer in advance shows a credit balance",
+              abs(requests.get(f"{api}/customer-ledger/company/{other}/client/{ids[f'Gamma Supply {tag}']}",
+                               headers=h, timeout=60).json()["closingBalance"] - (-45000.0)) < 0.01)
+
+        # ── 11. Ledger re-import and number collisions ──────────────────
+        r = upload(ledger_preview, h, book, "ledger.xlsx", lform, lparams)
+        lp2 = r.json() if r.ok else {}
+        check("re-uploading the ledger is refused",
+              any("already imported" in e for e in lp2.get("blockingErrors", [])),
+              f"errors={lp2.get('blockingErrors')}")
+        check("the clash with existing invoice numbers is also reported",
+              any("already used in this company" in e for e in lp2.get("blockingErrors", [])),
+              f"errors={lp2.get('blockingErrors')}")
+
+        clash = ledger_workbook([
+            {"name": f"One {tag}", "tab": f"ONE {tag}", "opening": 0.0,
+             "rows": [(d1, None, "ZZ-77", 0, 1000.0)]},
+            {"name": f"Two {tag}", "tab": f"TWO {tag}", "opening": 0.0,
+             "rows": [(d1, None, "ZZ-77", 0, 2000.0)]},
+        ])
+        r = upload(ledger_preview, h, clash, "clash.xlsx", lform, {"companyId": company})
+        lp3 = r.json() if r.ok else {}
+        check("one reference used by two customers is refused",
+              any("used by more than one customer" in e for e in lp3.get("blockingErrors", [])),
+              f"errors={lp3.get('blockingErrors')}")
+
+        broken = ledger_workbook([
+            {"name": f"Wrong {tag}", "tab": f"WRONG {tag}", "opening": 0.0,
+             "rows": [(d1, None, "QQ-1", 0, 1000.0)]}])
+        wb_ = openpyxl.load_workbook(io.BytesIO(broken))
+        wb_["Index"].cell(3, 6, 999999.0)          # index states a closing the rows cannot produce
+        buf = io.BytesIO(); wb_.save(buf)
+        r = upload(ledger_preview, h, buf.getvalue(), "broken.xlsx", lform, {"companyId": company})
+        lp4 = r.json() if r.ok else {}
+        check("a customer that does not reconcile blocks the import",
+              lp4.get("clientsOutOfBalance") == 1 and lp4.get("canCommit") is False,
+              f"outOfBalance={lp4.get('clientsOutOfBalance')} canCommit={lp4.get('canCommit')}")
+
         # ── 8. Isolation ────────────────────────────────────────────────
         r = upload(stock_preview, h, good, "stock.xlsx", form, {"companyId": 999999})
         check("preview refuses a company that does not exist", r.status_code == 404,
@@ -464,6 +736,14 @@ def main():
         r = upload(stock_preview, h, good, "stock.xlsx", None,
                    {"companyId": other, "profileId": pid})
         check("another company's private layout cannot be used", r.status_code == 404,
+              f"http {r.status_code}")
+
+        r = upload(ledger_preview, h, book, "ledger.xlsx", lform, {"companyId": 999999})
+        check("ledger preview refuses a company that does not exist", r.status_code == 404,
+              f"http {r.status_code}")
+
+        r = requests.post(ledger_commit, headers=h, timeout=60, json=dict(lbody, companyId=999999))
+        check("ledger commit refuses a company that does not exist", r.status_code == 404,
               f"http {r.status_code}")
 
     finally:
