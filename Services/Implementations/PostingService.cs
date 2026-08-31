@@ -53,6 +53,26 @@ namespace MyApp.Api.Services.Implementations
                     $"This period is locked (lock date {lockDate.Value:dd/MM/yyyy}). Documents dated on or before it can't be changed.");
         }
 
+        /// <summary>Canonical subledger party for a payment's ContactType, or null
+        /// when the payee is neither ("Other", or anything unrecognised).
+        ///
+        /// Trimmed and case-insensitive ON PURPOSE. PaymentService canonicalises
+        /// the value on write, but rows written before that landed may hold
+        /// "client" / " Client ", and every read path that attributes on-account
+        /// money to a party — <see cref="Helpers.PartyOnAccount"/> in SQL,
+        /// CustomerLedgerService in memory — matches those rows. An ordinal test
+        /// here would post their advance to Suspense while all three credited it to
+        /// the party: exactly the drift PartyOnAccount exists to prevent, and it
+        /// became load-bearing when ContactType started choosing the target
+        /// account rather than just a tag.</summary>
+        private static string? NormalizePartyType(string? contactType)
+        {
+            var t = contactType?.Trim();
+            if (string.Equals(t, "Client", StringComparison.OrdinalIgnoreCase)) return "Client";
+            if (string.Equals(t, "Supplier", StringComparison.OrdinalIgnoreCase)) return "Supplier";
+            return null;
+        }
+
         // ── Payments / receipts ────────────────────────────────────────────────
 
         public async Task PostPaymentAsync(Payment payment)
@@ -93,7 +113,17 @@ namespace MyApp.Api.Services.Implementations
             // expense is a normal thing to do, and that spend has to be visible in
             // that supplier's ledger, so an income/expense line gets tagged too.
             // "Other" payees have no row to point at, so they stay untagged.
-            string? headerPartyType = payment.ContactType is "Client" or "Supplier" ? payment.ContactType : null;
+            //
+            // Compared case-insensitively, and NOT optional. PaymentService
+            // canonicalises ContactType on write, but rows written before that
+            // landed can still hold "client" / " Client ". An ordinal test used to
+            // cost such a row only its party TAG; since the 2026-08-31 change it
+            // decides the TARGET ACCOUNT, so a mis-cased row would send its
+            // advance to Suspense while Helpers.PartyOnAccount — which compares in
+            // SQL, under a case-insensitive collation — credits the same money to
+            // the party on the A/R column, the aged report and their ledger. The
+            // two must not be able to disagree; see PartyOnAccount.
+            string? headerPartyType = NormalizePartyType(payment.ContactType);
             int? headerPartyId = headerPartyType != null ? payment.ContactId : null;
 
             // Where money held ON ACCOUNT for the party sits: the party's OWN

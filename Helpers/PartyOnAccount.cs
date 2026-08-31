@@ -53,16 +53,22 @@ namespace MyApp.Api.Helpers
 
         /// <param name="contactType">"Client" or "Supplier". Compared by SQL, so a
         /// legacy row stored as "client" still matches under the database's
-        /// case-insensitive collation.</param>
+        /// case-insensitive collation — which is why PostingService normalises the
+        /// same value case-insensitively before choosing where to post.</param>
+        /// <param name="companyId">REQUIRED, and deliberately not optional:
+        /// <c>Payment.ContactId</c> is a soft reference with no FK, so a row in
+        /// another tenant naming this party's id would otherwise be picked up.
+        /// Every caller has a company in hand; making this defaultable is how one
+        /// call site silently lost its scope once already.</param>
         /// <param name="partyIds">Narrow to these parties. Pass the whole set a
         /// ClientGroup covers rather than querying once per member.</param>
         public static IQueryable<Row> Query(
-            AppDbContext ctx, string contactType, int? companyId = null,
+            AppDbContext ctx, string contactType, int companyId,
             ICollection<int>? partyIds = null)
         {
             var q = ctx.Payments.AsNoTracking()
-                .Where(p => !p.IsCancelled && p.ContactId != null && p.ContactType == contactType);
-            if (companyId.HasValue) q = q.Where(p => p.CompanyId == companyId.Value);
+                .Where(p => !p.IsCancelled && p.ContactId != null
+                            && p.ContactType == contactType && p.CompanyId == companyId);
             if (partyIds != null) q = q.Where(p => partyIds.Contains(p.ContactId!.Value));
 
             return q.Select(p => new Row

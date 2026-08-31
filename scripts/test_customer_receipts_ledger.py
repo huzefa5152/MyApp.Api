@@ -69,6 +69,19 @@ Suites:
                                     cash applied, removes it once spent, leaves
                                     Payment.Amount untouched, and re-labels the
                                     party-control leg instead of re-valuing it
+  14. Mis-cased contact type     -> a legacy row storing "client" lowercase still
+                                    posts its advance to the client's A/R, not to
+                                    Suspense — PostingService and PartyOnAccount
+                                    must agree on who counts as a party, not just
+                                    on the formula
+  15. Supplier statement scope   -> a payment in ANOTHER company naming this
+                                    supplier's id (ContactId is a soft ref) can
+                                    never reach this supplier's ledger
+  16. The two on-account rules   -> PaymentService.OnAccountCash (C#) and
+      agree                         Helpers.PartyOnAccount (SQL) return the same
+                                    figure for an explicit OnAccount line, an
+                                    implicit remainder, and both together — the
+                                    only thing stopping the twins drifting
 
 Runs against a fresh ephemeral GL-enabled company + client, plus a second
 company used only as the "other tenant" in suite 8. Both torn down at the end.
@@ -194,6 +207,23 @@ def post_allocate(base, token, rid, lines):
     """lines is a raw JSON array of {invoiceId, amount, ...} — the endpoint
     takes List<CreatePaymentAllocationDto> directly, not a wrapped object."""
     return http("POST", f"/api/receipts/{rid}/allocate", base, token=token, body=lines)
+
+
+def sql_exec(db, statement) -> bool:
+    """Run one statement via sqlcmd. Returns False (never raises) if --db wasn't
+    supplied or sqlcmd isn't on this machine, so the caller can treat the case as
+    skippable rather than fatal.
+
+    The escape hatch exists because the cases below need rows the API REFUSES to
+    write — a mis-cased ContactType, a ContactId owned by another tenant. Those
+    are exactly the legacy shapes the guards were added for, so they can only be
+    manufactured underneath the guards."""
+    if not db or not os.path.exists(SQLCMD):
+        return False
+    out = subprocess.run(
+        [SQLCMD, "-S", SQL_SERVER, "-d", db, "-E", "-C", "-N", "-I", "-Q", statement],
+        capture_output=True, text=True, timeout=30)
+    return out.returncode == 0
 
 
 def sql_cancel_payment(db, payment_id) -> bool:
@@ -994,6 +1024,200 @@ def suite_13_allocate_on_account_line(base, token, cid, client_id, item_type_id,
           f"got {st} debit={tb.get('totalDebit')} credit={tb.get('totalCredit')}")
 
 
+def suite_14_legacy_contact_case(base, token, cid, client_id, item_type_id, ar_acct, db):
+    """A mis-cased legacy ContactType must post to the party's control account,
+    not to Suspense.
+
+    PostingService decides WHERE an advance posts from Payment.ContactType, while
+    Helpers.PartyOnAccount — the read-side twin feeding the A/R column, the aged
+    report and the customer ledger — matches the same column in SQL under a
+    case-insensitive collation. PaymentService canonicalises the value on write,
+    but rows written before that landed can hold "client". While ContactType only
+    picked a party TAG an ordinal comparison here cost little; since it started
+    picking the TARGET ACCOUNT (2026-08-31) an ordinal comparison would send that
+    row's advance to Suspense while all three read paths credited the same money
+    to the client — the exact drift the shared helper exists to prevent."""
+    suite = "14. Mis-cased legacy contact type"
+    print(f"\n=== {suite} ===")
+    if not ar_acct:
+        skip(suite, "advance posts to A/R despite a lowercase ContactType",
+             "'Accounts receivable' control account not found")
+        return
+
+    st, rcp = post_receipt(base, token, cid, receipt_body(client_id, amount=100000))
+    if not check(suite, "100,000 advance receipt created", st in (200, 201),
+                 f"got {st} {err_of(rcp)}"):
+        return
+    rid = rcp["id"]
+
+    # Manufacture the legacy shape underneath the write-path normaliser.
+    if not sql_exec(db, f"UPDATE Payments SET ContactType = 'client' WHERE Id = {int(rid)};"):
+        skip(suite, "advance posts to A/R despite a lowercase ContactType",
+             "--db not supplied or sqlcmd unavailable — cannot write the legacy row")
+        return
+    check(suite, "the row now holds a lowercase 'client' contact type", True)
+
+    # Re-post it. Allocate is the one mutation that re-posts WITHOUT rewriting
+    # ContactType on the way through (an edit would canonicalise it back).
+    inv = make_invoice(base, token, cid, client_id, item_type_id, 10000)
+    if not check(suite, "10,000 invoice created", inv is not None, "invoice create failed"):
+        return
+    st, r = post_allocate(base, token, rid, [{"invoiceId": inv["id"], "amount": 10000}])
+    if not check(suite, "allocating against the legacy row is accepted", st == 200,
+                 f"got {st} {err_of(r)}"):
+        return
+
+    entry = payment_entry(base, token, cid, rid)
+    if not check(suite, "the re-posted journal entry is readable", entry is not None,
+                 "no Payment entry found"):
+        return
+    lines = entry.get("lines") or []
+    ar_legs = [l for l in lines if l.get("accountId") == ar_acct["id"]]
+    check(suite, "the WHOLE 100,000 sits on Accounts receivable",
+          eq(sum(float(l.get("credit") or 0) for l in ar_legs), 100000),
+          str([(l.get("accountId"), l.get("credit")) for l in lines]))
+    check(suite, "every A/R leg still names the client — the tag survives the mis-casing",
+          len(ar_legs) > 0 and all(l.get("partyType") == "Client" and l.get("partyId") == client_id
+                                   for l in ar_legs),
+          str([(l.get("partyType"), l.get("partyId")) for l in ar_legs]))
+
+    susp = next((a for a in flat_accounts(base, token, cid)
+                 if a.get("controlType") == "Suspense"), None)
+    if susp:
+        check(suite, "and NOTHING was plugged to Suspense",
+              not any(l.get("accountId") == susp["id"] for l in lines),
+              str([l.get("accountId") for l in lines]))
+    check(suite, "the entry balances",
+          eq(sum(float(l.get("debit") or 0) for l in lines),
+             sum(float(l.get("credit") or 0) for l in lines)), str(lines))
+
+
+def suite_15_supplier_statement_scope(base, token, cid, supplier_id, foreign, db):
+    """A supplier statement must not surface another company's payment rows.
+
+    Payment.ContactId is a soft reference with no FK. The belongs-to-this-company
+    guard refuses to WRITE a cross-tenant one now, but a row written before it
+    existed still would — and the statement's on-account query is the one read
+    that finds payments by that id rather than through a document. Without the
+    company scope, that row's date, bank-account name and description would print
+    on this supplier's ledger."""
+    suite = "15. Supplier statement company scope"
+    print(f"\n=== {suite} ===")
+
+    def statement():
+        st, s = http("GET", f"/api/suppliers/{supplier_id}/statement", base, token=token)
+        return s if st == 200 and isinstance(s, dict) else None
+
+    before = statement()
+    if not check(suite, "the supplier statement loads", before is not None, "statement not returned"):
+        return
+
+    # A real, legal advance in the OTHER company, to the OTHER company's supplier.
+    st, alien = http("POST", f"/api/payments/payments/company/{foreign['company_id']}",
+                     base, token=token, body={
+        "direction": "Payment", "date": today_iso(), "contactType": "Supplier",
+        "contactId": foreign["supplier_id"], "method": "Cash",
+        "description": "ALIEN-TENANT-ADVANCE",
+        "allocations": [{"kind": "OnAccount", "amount": 777777}]})
+    if not check(suite, "a 777,777 advance is recorded in the OTHER company",
+                 st in (200, 201), f"got {st} {err_of(alien)}"):
+        return
+
+    # Re-point it at THIS company's supplier id — the legacy shape the guard now
+    # refuses to write, manufactured underneath it.
+    if not sql_exec(db, "UPDATE Payments SET ContactId = "
+                        f"{int(supplier_id)} WHERE Id = {int(alien['id'])};"):
+        skip(suite, "another company's payment cannot reach this supplier's ledger",
+             "--db not supplied or sqlcmd unavailable — cannot write the legacy row")
+        return
+
+    after = statement()
+    if not check(suite, "the statement still loads", after is not None, "statement not returned"):
+        return
+    check(suite, "the other company's 777,777 is NOT on this supplier's ledger",
+          not any(eq(e.get("debit"), 777777) or eq(e.get("credit"), 777777)
+                  for e in (after.get("entries") or [])),
+          str(after.get("entries"))[:300])
+    check(suite, "and neither is its description",
+          not any("ALIEN-TENANT-ADVANCE" in (e.get("description") or "")
+                  for e in (after.get("entries") or [])),
+          str(after.get("entries"))[:300])
+    check(suite, "the closing balance is unchanged",
+          eq(after.get("closingBalance"), before.get("closingBalance")),
+          f"was {before.get('closingBalance')}, now {after.get('closingBalance')}")
+    check(suite, "and the entry count is unchanged",
+          after.get("total") == before.get("total"),
+          f"was {before.get('total')}, now {after.get('total')}")
+
+    # The payables column reads the same money through NetByPartyAsync — it has
+    # always passed a companyId, and this pins that it keeps doing so.
+    st, rows = http("GET", f"/api/suppliers/company/{cid}/summary", base, token=token)
+    row = next((r for r in rows if r.get("supplierId") == supplier_id), None) if st == 200 else None
+    check(suite, "the Accounts payable column is untouched too",
+          row is not None and eq(row.get("accountsPayable"), after.get("closingBalance")),
+          f"column={row.get('accountsPayable') if row else None} ledger={after.get('closingBalance')}")
+
+
+def suite_16_twins_agree(base, token, cid, item_type_id):
+    """The in-memory and SQL definitions of on-account cash must return the same
+    figure for the same payment.
+
+    PaymentService.OnAccountCash (which drives PaymentDto.UnallocatedAmount and
+    what AllocateAsync will spend) and Helpers.PartyOnAccount (which drives the
+    A/R column, the aged reports and the party ledgers) implement one rule twice,
+    in C# and in SQL. Nothing but a doc comment links them, so either can be
+    changed alone and still compile. Each of the three shapes is checked on its
+    OWN client, with no invoices, so that client's A/R column IS the SQL figure
+    and the receipt's unallocatedAmount IS the in-memory one."""
+    suite = "16. The two on-account rules agree"
+    print(f"\n=== {suite} ===")
+
+    def column(client_id):
+        st, rows = http("GET", f"/api/clients/company/{cid}/summary", base, token=token)
+        if st != 200 or not isinstance(rows, list):
+            return None
+        row = next((r for r in rows if r.get("clientId") == client_id), None)
+        return float(row.get("accountsReceivable") or 0) if row else None
+
+    sfx = datetime.now().strftime("%H%M%S")
+    shapes = [
+        ("an explicit OnAccount line only", 50000, [{"kind": "OnAccount", "amount": 50000}], 50000),
+        ("an implicit remainder only",      30000, [],                                       30000),
+        ("both at once",                    90000, [{"kind": "OnAccount", "amount": 40000}], 90000),
+    ]
+    made = []
+    for i, (label, amount, allocs, expected) in enumerate(shapes):
+        client_id = make_client(base, token, cid, f"Twin Client {i} {sfx}")
+        st, r = post_receipt(base, token, cid, receipt_body(client_id, amount=amount, allocations=allocs))
+        if not check(suite, f"receipt with {label} created", st in (200, 201), f"got {st} {err_of(r)}"):
+            continue
+        in_memory = r.get("unallocatedAmount")
+        check(suite, f"{label}: unallocatedAmount is {expected}", eq(in_memory, expected),
+              f"unallocatedAmount = {in_memory}")
+        in_sql = column(client_id)
+        check(suite, f"{label}: the A/R column agrees to the paisa",
+              in_sql is not None and eq(-in_sql, in_memory),
+              f"in-memory = {in_memory}, A/R column = {in_sql}")
+        made.append((client_id, r["id"]))
+
+    # …and they stay in step once some of it is spent, which is where a drift in
+    # either definition would first show up as money appearing or vanishing.
+    if len(made) == 3:
+        client_id, rid = made[2]
+        inv = make_invoice(base, token, cid, client_id, item_type_id, 20000)
+        if check(suite, "20,000 invoice created for the both-at-once client",
+                 inv is not None, "invoice create failed"):
+            st, r = post_allocate(base, token, rid, [{"invoiceId": inv["id"], "amount": 20000}])
+            if check(suite, "allocating 20,000 of it is accepted", st == 200, f"got {st} {err_of(r)}"):
+                in_memory = r.get("unallocatedAmount")
+                check(suite, "in-memory drops to 70,000", eq(in_memory, 70000),
+                      f"unallocatedAmount = {in_memory}")
+                in_sql = column(client_id)
+                check(suite, "and the A/R column follows it down, invoice fully settled",
+                      in_sql is not None and eq(-in_sql, in_memory),
+                      f"in-memory = {in_memory}, A/R column = {in_sql}")
+
+
 # ── Setup / teardown ───────────────────────────────────────────────
 def make_company(base, token, name, gl=True):
     st, company = http("POST", "/api/companies", base, token=token, body={
@@ -1120,6 +1344,9 @@ def main() -> int:
         suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc)
         suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ar, bank)
         suite_13_allocate_on_account_line(base, token, cid, client_id, item_type_id, ar, bank)
+        suite_14_legacy_contact_case(base, token, cid, client_id, item_type_id, ar, args.db)
+        suite_15_supplier_statement_scope(base, token, cid, supplier_id, foreign, args.db)
+        suite_16_twins_agree(base, token, cid, item_type_id)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 

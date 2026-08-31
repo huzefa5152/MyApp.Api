@@ -407,9 +407,23 @@ namespace MyApp.Api.Services.Implementations
             const int CAP = 200;
             var entries = new List<SupplierStatementEntryDto>();
 
+            // The signature carries no companyId, so resolve the owning company
+            // from the supplier itself and scope EVERY read below to it — the same
+            // shape ClientService.GetStatementAsync uses. Payment.ContactId is a
+            // soft reference this codebase deliberately refuses to trust: a row
+            // written before the belongs-to-this-company guard existed could name
+            // this supplier's id from another tenant, and without the scope its
+            // date, bank account and description would land on this statement.
+            var companyId = await _context.Suppliers.AsNoTracking()
+                .Where(s => s.Id == supplierId)
+                .Select(s => (int?)s.CompanyId)
+                .FirstOrDefaultAsync();
+            if (companyId == null)
+                return new SupplierStatementDto { SupplierId = supplierId, SupplierName = supplierName };
+
             // Credits — purchase bills increase what we owe.
             var bills = await _context.PurchaseBills.AsNoTracking()
-                .Where(b => b.SupplierId == supplierId)
+                .Where(b => b.SupplierId == supplierId && b.CompanyId == companyId.Value)
                 .Select(b => new { b.Id, b.PurchaseBillNumber, b.Date, b.GrandTotal, b.WithholdingTaxAmount })
                 .ToListAsync();
             foreach (var b in bills)
@@ -430,6 +444,7 @@ namespace MyApp.Api.Services.Implementations
                 join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
                 join bill in _context.PurchaseBills.AsNoTracking() on a.PurchaseBillId equals bill.Id
                 where a.PurchaseBillId != null && bill.SupplierId == supplierId
+                      && bill.CompanyId == companyId.Value && p.CompanyId == companyId.Value
                       && p.Direction == Models.Accounting.PaymentDirection.Payment && !p.IsCancelled
                 select new { p.Number, p.Date, p.BankAccountName, p.Description, a.Amount, a.AdjustmentAmount, AdjustmentAccountName = a.AdjustmentAccount != null ? a.AdjustmentAccount.Name : null, a.Id }
             ).ToListAsync();
@@ -461,7 +476,7 @@ namespace MyApp.Api.Services.Implementations
             // named on the payment (see PartyOnAccount for what counts). An advance
             // we paid reduces what we owe; a refund they sent back increases it.
             var onAccount = await PartyOnAccount
-                .Query(_context, "Supplier", partyIds: new[] { supplierId }).ToListAsync();
+                .Query(_context, "Supplier", companyId.Value, new[] { supplierId }).ToListAsync();
             foreach (var a in onAccount.Where(r => r.Amount != 0m))
             {
                 var isPayment = a.Direction == Models.Accounting.PaymentDirection.Payment;

@@ -462,14 +462,17 @@ namespace MyApp.Api.Services.Implementations
             // is missing from the report while their balance is real in the ledger.
             var onAccount = await PartyOnAccount.NetByPartyAsync(_context, companyId, receivables);
 
+            // Scoped to the company, like every other read here: the ids come from
+            // Payment.ContactId, a soft reference, so an unscoped lookup would
+            // resolve — and print — another tenant's party name on this report.
             var names = onAccount.Count == 0
                 ? new Dictionary<int, string>()
                 : receivables
                     ? await _context.Clients.AsNoTracking()
-                        .Where(x => onAccount.Keys.Contains(x.Id))
+                        .Where(x => x.CompanyId == companyId && onAccount.Keys.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.Name)
                     : await _context.Suppliers.AsNoTracking()
-                        .Where(x => onAccount.Keys.Contains(x.Id))
+                        .Where(x => x.CompanyId == companyId && onAccount.Keys.Contains(x.Id))
                         .ToDictionaryAsync(x => x.Id, x => x.Name);
 
             var byParty = open.GroupBy(x => new { x.PartyId, x.Name })
