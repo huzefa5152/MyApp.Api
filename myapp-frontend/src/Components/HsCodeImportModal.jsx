@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { MdClose, MdCloudDownload, MdCheckCircle, MdWarning, MdKey } from "react-icons/md";
 import {
   importHsCodes,
+  importHsCodesFromTariff,
   getFbrReferenceToken,
   setFbrReferenceToken,
 } from "../api/hsCodeApi";
@@ -99,6 +100,31 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
       notify(err?.response?.data?.message || "Could not save the token.", "error");
     } finally {
       setSavingToken(false);
+    }
+  };
+
+  // The token-free path. Kept as its own action rather than a fallback inside
+  // runImport: which source the master came from matters, so the operator picks
+  // it rather than discovering it after the fact.
+  const runTariffImport = async () => {
+    setRunning(true);
+    setResult(null);
+    try {
+      const { data } = await importHsCodesFromTariff({ createItemTypes });
+      setResult(data);
+      if (data?.errors?.length && data.totalReceived === 0) {
+        notify("The bundled tariff could not be read — see the details.", "error");
+      } else {
+        notify(
+          `Loaded from ${data.source} — ${data.added} new, ${data.alreadyExisting} already existing.`,
+          "success",
+        );
+        onImported?.(data);
+      }
+    } catch (err) {
+      notify(err?.response?.data?.message || "The import failed. Please try again.", "error");
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -301,11 +327,23 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
           </button>
           <button
             type="button"
+            onClick={runTariffImport}
+            disabled={running}
+            title="Loads Pakistan's published customs tariff, which ships with the product. No FBR token needed. Does not bring units."
+            style={{ ...styles.secondaryBtn, opacity: running ? 0.6 : 1 }}
+          >
+            {running ? "Loading…" : "Load from published tariff"}
+          </button>
+          <button
+            type="button"
             onClick={runImport}
             disabled={running || !canRun}
+            title={canRun
+              ? "Reads FBR's own catalog. Brings units as well as codes."
+              : "Needs an FBR reference token. Use “Load from published tariff” instead."}
             style={{ ...styles.primaryBtn, opacity: running || !canRun ? 0.6 : 1 }}
           >
-            {running ? "Importing…" : result ? "Run again" : "Import HS Codes"}
+            {running ? "Importing…" : result ? "Run again" : "Import from FBR"}
           </button>
         </div>
       </div>

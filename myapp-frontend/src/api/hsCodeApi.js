@@ -37,6 +37,13 @@ export const getHsCodeUoms = (code, companyId) =>
 export const importHsCodes = ({ companyId, createItemTypes = true } = {}) =>
   http.post("/hscodes/import", { companyId, createItemTypes });
 
+// Load the master from the Pakistan Customs Tariff bundled with the product.
+// No FBR token and no network call — FBR's catalog endpoints answer 401 without
+// OAuth credentials, so this is the only path open to an installation that has
+// never been issued one. Brings no UOMs: the published tariff has no unit column.
+export const importHsCodesFromTariff = ({ createItemTypes = true } = {}) =>
+  http.post("/hscodes/import-tariff", { createItemTypes }, { timeout: 300000 });
+
 /** Masked status of the reference token — never returns the token itself. */
 export const getFbrReferenceToken = () => http.get("/hscodes/reference-token");
 

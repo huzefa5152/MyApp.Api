@@ -173,6 +173,19 @@ Rules:
   lives in `SystemSettings` (`Fbr.ReferenceToken`), encrypted with the same
   `IFbrTokenProtector` as `Company.FbrToken`, and is used ONLY for read-only
   catalogs. Never borrow another tenant's token for it (audit H-9).
+- **There is a token-free path, and it is the default one to reach for.** Every
+  PRAL `pdi/*` endpoint answers `401 Missing Credentials` without OAuth, so an
+  installation that has never been issued a token could not classify anything.
+  FBR publishes the Pakistan Customs Tariff as an open PDF; that is parsed
+  offline by `scripts/build_hscode_dataset.py` into
+  `Data/HsCodes/pakistan-customs-tariff.csv`, embedded in the assembly, and
+  loaded by `ImportFromTariffAsync` — same upsert contract as the FBR import.
+  It brings NO UOMs: the tariff has no unit column. Regenerate it once a year
+  when FBR publishes a new tariff.
+- **Pakistan splits some WCO subheadings into national lines**, so `8536.5000`
+  and `7318.1500` genuinely do not exist while `8536.5010` and `7318.1510` do.
+  A fixture that invents a code is rejected by master-first validation and the
+  failure looks like an importer bug — it is not.
 - **HS validation is master-first**: once the master holds rows, a code missing
   from it is rejected. The old PRAL/format fallback only applies while the
   master is empty. Test fixtures therefore have to use REAL tariff codes.
@@ -333,7 +346,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Accounting reports | `python scripts/test_accounting_reports.py` | `315/315 checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
-| HS code master + FBR-off classification | `python scripts/test_hscode_master.py --fbr-token <token>` | `all PASS` (15 checks) |
+| HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Spreadsheet import (layouts, file checks, stock, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (83 checks, 1 skipped without the HS master) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |

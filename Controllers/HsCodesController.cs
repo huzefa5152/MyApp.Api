@@ -111,6 +111,33 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Load the master from the Pakistan Customs Tariff bundled with the
+        /// product — no FBR token and no network call.
+        ///
+        /// PRAL's catalog endpoints answer 401 without OAuth credentials, so an
+        /// installation that has never been issued a token could not classify
+        /// its items at all. FBR publishes the tariff itself openly, and that is
+        /// what this loads. Same upsert contract as the FBR import; it simply
+        /// brings no UOMs, because the published tariff has no unit column.
+        /// </summary>
+        [HttpPost("import-tariff")]
+        [HasPermission("hscodes.import.run")]
+        public async Task<ActionResult<HsCodeImportResultDto>> ImportFromTariff(
+            [FromBody] HsCodeImportRequestDto? dto)
+        {
+            dto ??= new HsCodeImportRequestDto();
+            try
+            {
+                return Ok(await _service.ImportFromTariffAsync(dto.CreateItemTypes, CurrentUserId));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Tariff HS code import failed for user {UserId}", CurrentUserId);
+                return StatusCode(500, new { message = "The HS code import could not be completed. Please try again — nothing was left half-applied." });
+            }
+        }
+
+        /// <summary>
         /// Masked status of the installation-wide FBR reference token. Never
         /// returns the token itself.
         /// </summary>

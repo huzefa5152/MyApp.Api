@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-01 — HS codes without an FBR token
+
+- **The HS code master can now be filled with no FBR token at all.** FBR's catalog service refuses every request without OAuth credentials, so a business that has not been issued a token could not classify its items — which defeated the point of keeping classification independent of FBR.
+- FBR publishes the **Pakistan Customs Tariff** as an open download, and that is now parsed and shipped with the product: **7,594 PCT codes with descriptions**, loaded by a new *Load from published tariff* button beside the existing FBR import. Takes about three seconds, needs no network, and running it twice adds nothing.
+- The FBR import stays the better source when a token exists, because it also brings units. **The published tariff has no unit column**, so codes loaded this way carry no unit — you set it on the Item Type as before, and it fills in automatically if a token is added later.
+- Verified against the client's own stock sheet: all 38 of its HS codes are present.
+- Worth knowing: Pakistan splits some international subheadings into its own national lines, so `8536.5000` is genuinely absent while `8536.5010` exists. Codes are validated against the master, so an invented one is rejected.
+
 ### 2026-09-01 — Guide: entering the same data by hand
 
 - **The in-app Accounting Guide now covers doing it manually**, not just importing — three new sections under *Starting from Excel*: typing one customer's ledger in, typing one item's stock in, and which correction to use when.

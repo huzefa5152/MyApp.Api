@@ -221,6 +221,84 @@ namespace MyApp.Api.Services.Implementations
                 incoming.Add((code, string.IsNullOrWhiteSpace(row.Description) ? null : row.Description.Trim()));
             }
 
+            await UpsertAsync(incoming, "FBR", createItemTypes, result);
+
+            _logger.LogInformation(
+                "HS code import by user {UserId} via {Source}: received {Received}, added {Added}, existing {Existing}, item types {ItemTypes}",
+                userId, source, result.TotalReceived, result.Added, result.AlreadyExisting, result.ItemTypesCreated);
+
+            result.CompletedAt = DateTime.UtcNow;
+            return result;
+        }
+
+        /// <summary>
+        /// Load the HS master from the Pakistan Customs Tariff that ships with
+        /// the product. No FBR token, no network call.
+        ///
+        /// PRAL's catalog endpoints answer 401 without an OAuth token, so a
+        /// company that has not been issued one cannot classify its items at
+        /// all — which contradicts the rule that HS classification must never
+        /// depend on FBR. FBR publishes the tariff itself as an open PDF, and
+        /// scripts/build_hscode_dataset.py turns that into the embedded dataset
+        /// this reads.
+        ///
+        /// It carries NO units: the tariff has no unit column. Rows land with a
+        /// null UOM, which <see cref="GetUomsForCodeAsync"/> fills in later the
+        /// first time someone asks for a code's UOMs with a token available.
+        /// Prefer <see cref="ImportAsync"/> when a token exists — FBR's own feed
+        /// is what its validation is built on.
+        /// </summary>
+        public async Task<HsCodeImportResultDto> ImportFromTariffAsync(bool createItemTypes, int userId)
+        {
+            var result = new HsCodeImportResultDto();
+
+            List<(string Code, string? Description)> incoming;
+            string edition;
+            try
+            {
+                (incoming, edition) = BundledTariff.Read();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Reading the bundled customs tariff failed");
+                result.Errors.Add("The bundled customs tariff could not be read. See the server log.");
+                return result;
+            }
+
+            result.Source = edition;
+            result.TotalReceived = incoming.Count;
+            if (incoming.Count == 0)
+            {
+                result.Errors.Add("The bundled customs tariff is empty. Nothing was changed.");
+                return result;
+            }
+
+            await UpsertAsync(incoming, "Tariff", createItemTypes, result);
+
+            _logger.LogInformation(
+                "HS code import by user {UserId} from the bundled tariff ({Edition}): received {Received}, added {Added}, existing {Existing}, item types {ItemTypes}",
+                userId, edition, result.TotalReceived, result.Added, result.AlreadyExisting, result.ItemTypesCreated);
+
+            result.CompletedAt = DateTime.UtcNow;
+            return result;
+        }
+
+        /// <summary>
+        /// The shared write half of both imports: upsert the codes, link Item
+        /// Types that already carry one, and optionally create a placeholder per
+        /// unmapped code.
+        ///
+        /// <paramref name="source"/> is stamped on rows this call CREATES only.
+        /// An existing row keeps the source that first introduced it, so loading
+        /// the bundled tariff over a master FBR populated does not rewrite its
+        /// provenance.
+        /// </summary>
+        private async Task UpsertAsync(
+            List<(string Code, string? Description)> incoming,
+            string source,
+            bool createItemTypes,
+            HsCodeImportResultDto result)
+        {
             // ── Upsert against what we already hold ────────────────────────
             var existing = await _db.HsCodes
                 .ToDictionaryAsync(h => h.Code, h => h, StringComparer.OrdinalIgnoreCase);
@@ -256,7 +334,7 @@ namespace MyApp.Api.Services.Implementations
                             Code = item.Code,
                             Description = item.Description,
                             IsActive = true,
-                            Source = "FBR",
+                            Source = source,
                             LastSyncedAt = now,
                             CreatedAt = now,
                             UpdatedAt = now,
@@ -298,13 +376,6 @@ namespace MyApp.Api.Services.Implementations
                                    + "Run the import again to finish that step.");
                 }
             }
-
-            _logger.LogInformation(
-                "HS code import by user {UserId} via {Source}: received {Received}, added {Added}, existing {Existing}, item types {ItemTypes}",
-                userId, source, result.TotalReceived, result.Added, result.AlreadyExisting, result.ItemTypesCreated);
-
-            result.CompletedAt = DateTime.UtcNow;
-            return result;
         }
 
         /// <summary>

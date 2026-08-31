@@ -19,6 +19,11 @@
        assembly attributes. -->
   <ItemGroup>
     <Compile Remove="scripts/**/*.cs" />
+    <!-- The published Pakistan Customs Tariff, parsed offline by
+         scripts/build_hscode_dataset.py. Embedded rather than copied so it
+         cannot go missing on a deploy that only ships the binaries. -->
+    <EmbeddedResource Include="Data/HsCodes/pakistan-customs-tariff.csv" />
+
     <Content Remove="scripts/**/*" />
     <None Remove="scripts/**/*" />
     <EmbeddedResource Remove="scripts/**/*" />

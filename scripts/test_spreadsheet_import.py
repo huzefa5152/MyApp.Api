@@ -136,6 +136,9 @@ def stock_workbook(rows, month="Jul 2026", sheet_name=None):
     return buf.getvalue()
 
 
+# Every HS code below is a REAL Pakistan tariff line. Validation is master-first,
+# so an invented code is rejected — and Pakistan splits some WCO subheadings into
+# national lines, which is why this uses 8536.5010 rather than 8536.5000.
 def base_rows(tag):
     """Two lots of one item, plus three singles — 5 rows, 4 items."""
     return [
@@ -501,7 +504,7 @@ def main():
 
         # A sheet that has genuinely grown must still import.
         grown = stock_workbook(base_rows(tag) + [
-            ("KAPE-HC-9000", "8536", "8536.5000:-", f"NEW SWITCH {tag}", "Electrical", "Pcs", 25, 5000)])
+            ("KAPE-HC-9000", "8536", "8536.5010:-", f"NEW SWITCH {tag}", "Electrical", "Pcs", 25, 5000)])
         r = upload(stock_preview, h, grown, "stock-grown.xlsx", form, params)
         p5 = r.json() if r.ok else {}
         check("a sheet with new rows still imports", p5.get("canCommit") is True,
@@ -769,7 +772,7 @@ def main():
                    {"companyId": company, "kind": "OpeningStock"})
         first = r.json().get("signatureHash") if r.ok else None
 
-        later = [("ZZZZ-LOT-9", "7318", "7318.1500:-", f"ENTIRELY OTHER GOODS {tag}", "Fasteners", "Kg", 812.5, 990125),
+        later = [("ZZZZ-LOT-9", "7318", "7318.1510:-", f"ENTIRELY OTHER GOODS {tag}", "Fasteners", "Kg", 812.5, 990125),
                  ("ZZZZ-LOT-9", "9403", "9403.2000:-", f"SOMETHING ELSE AGAIN {tag}", "Furniture", "Pcs", 4, 61000)]
         r = upload(idurl, h, stock_workbook(later, month="Dec 2027"), "m2.xlsx", None,
                    {"companyId": company, "kind": "OpeningStock"})

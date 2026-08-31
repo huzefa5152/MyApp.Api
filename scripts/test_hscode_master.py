@@ -7,10 +7,14 @@ is OFF, and the import is a safe-to-repeat upsert rather than a blind insert.
 
     python scripts/test_hscode_master.py --base http://localhost:5134
 
-The import case needs an FBR reference token. Provide one with --fbr-token (or
+The FBR import case needs a reference token. Provide one with --fbr-token (or
 the FBR_REFERENCE_TOKEN environment variable) to exercise the live PRAL fetch;
-without it, the import cases are reported as SKIPPED and the local-master cases
-still run against whatever the master already holds.
+without it those cases are reported as SKIPPED.
+
+The TARIFF import cases need no token and always run — that is the property they
+exist to prove. PRAL's catalog endpoints answer 401 without OAuth credentials, so
+an installation that has never been issued a token fills its master from the
+Pakistan Customs Tariff bundled with the product instead.
 
 Nothing here writes to an existing tenant: it creates its own throwaway company
 (FBR off) and its own item types, and it never enables FBR anywhere.
@@ -128,7 +132,69 @@ def main():
               after == before + first.get("added", 0),
               f"{before} + {first.get('added')} = {after}")
     else:
-        skip("import cases", "no --fbr-token / FBR_REFERENCE_TOKEN supplied")
+        skip("FBR import cases", "no --fbr-token / FBR_REFERENCE_TOKEN supplied")
+
+    # ── 2b. The token-free import from the bundled tariff ──────────────
+    # This is the whole point of the bundled dataset: PRAL's catalog endpoints
+    # answer 401 without OAuth credentials, so an installation that has never
+    # been issued a token has to be able to fill the master anyway. These cases
+    # deliberately need NO token and therefore always run.
+    before_t = requests.get(f"{api}/hscodes/count", headers=h, timeout=30).json()["count"]
+
+    r = requests.post(f"{api}/hscodes/import-tariff", headers=h, timeout=600,
+                      json={"createItemTypes": False})
+    first_t = r.json() if r.ok else {}
+    check("the tariff import runs with no FBR token at all", r.ok,
+          f"http {r.status_code}: {r.text[:160]}")
+    check("it names the tariff edition it loaded",
+          "Tariff" in (first_t.get("source") or ""),
+          f"source={first_t.get('source')}")
+    check("it carries the whole tariff, not a sample",
+          first_t.get("totalReceived", 0) > 5000,
+          f"received={first_t.get('totalReceived')}")
+    check("it reports no errors", not first_t.get("errors"),
+          f"errors={first_t.get('errors')}")
+
+    after_t = requests.get(f"{api}/hscodes/count", headers=h, timeout=30).json()["count"]
+    check("the master grew by exactly what it added",
+          after_t == before_t + first_t.get("added", 0),
+          f"{before_t} + {first_t.get('added')} = {after_t}")
+
+    second_t = requests.post(f"{api}/hscodes/import-tariff", headers=h, timeout=600,
+                             json={"createItemTypes": False}).json()
+    check("running the tariff import twice adds nothing",
+          second_t.get("added") == 0,
+          f"added={second_t.get('added')}")
+    check("and it recognises every code as already present",
+          second_t.get("alreadyExisting", 0) == second_t.get("totalReceived", -1),
+          f"existing={second_t.get('alreadyExisting')} of {second_t.get('totalReceived')}")
+    check("the row count is unchanged by the repeat",
+          requests.get(f"{api}/hscodes/count", headers=h, timeout=30).json()["count"] == after_t,
+          "a repeat must not move the count")
+
+    # Codes the real client sheets actually use must be in there, or the master
+    # is useless for the import it exists to serve.
+    for real_code in ("8481.1000", "8513.1090", "8450.9000", "9616.1000", "8712.0000"):
+        rr = requests.get(f"{api}/hscodes/{real_code}", headers=h, timeout=30)
+        check(f"the tariff knows {real_code}",
+              rr.ok and (rr.json() or {}).get("description"),
+              f"http {rr.status_code}")
+
+    # Pakistan splits some WCO subheadings into national lines, so the six-digit
+    # parent is genuinely absent. Worth pinning: it looks like a gap and is not.
+    rr = requests.get(f"{api}/hscodes/8536.5000", headers=h, timeout=30)
+    check("a WCO subheading Pakistan splits is absent, as the tariff has it",
+          rr.status_code == 404,
+          f"http {rr.status_code} — Pakistan lists 8536.5010/5021/5029/5091/5099 instead")
+    rr = requests.get(f"{api}/hscodes/8536.5010", headers=h, timeout=30)
+    check("and its national line is present", rr.ok, f"http {rr.status_code}")
+
+    # The honest limitation: the published tariff has no unit column.
+    rr = requests.get(f"{api}/hscodes/8481.1000", headers=h, timeout=30)
+    body = rr.json() if rr.ok else {}
+    check("a tariff-loaded code carries no UOM, as documented",
+          body.get("uom") in (None, ""),
+          f"uom={body.get('uom')} — the published tariff has no unit column")
 
     # ── 3. Master search — no FBR involvement ──────────────────────────
     total = requests.get(f"{api}/hscodes/count", headers=h, timeout=30).json()["count"]
