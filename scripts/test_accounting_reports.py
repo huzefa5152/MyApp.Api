@@ -693,7 +693,9 @@ def suite_isolation(base: str, token: str, cid: int, ctx: dict):
                  "supplier-ledger", "supplier-balances", "receivables-aging",
                  "customer-outstanding", "customer-sales", "general-ledger",
                  "account-balances", "trial-balance-report", "sales-register",
-                 "purchase-register", "sales-summary", "credit-debit-notes"]:
+                 "purchase-register", "sales-summary", "credit-debit-notes",
+                 "tax-summary", "output-tax", "tax-transactions", "journal-register",
+                 "revenue-summary", "cash-flow"]:
         r = report(base, token, other_id, path, period="allPeriods")
         rows = r.get("rows") or []
         check(S, f"{path} on a fresh company returns no other tenant's parties",
@@ -1277,6 +1279,462 @@ def suite_documents(base: str, token: str, cid: int):
               f"status {st}, {len(blob) if isinstance(blob, bytes) else '?'} bytes")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 16 — Taxes, accounting control, management
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_tax_control(base: str, token: str, cid: int):
+    S = "16. Tax, control & management"
+    print(f"\n=== {S} ===")
+
+    # ── Tax summary ──
+    ts = report(base, token, cid, "tax-summary", period="allPeriods")
+    t = ts["totals"]
+    check(S, "tax summary reports output and input sales tax separately",
+          "outputTax" in t and "inputTax" in t, f"got {list(t.keys())}")
+    check(S, "net sales tax == output - input",
+          eq(t.get("netSalesTax"), float(t.get("outputTax") or 0) - float(t.get("inputTax") or 0)),
+          f"net {t.get('netSalesTax')} vs {float(t.get('outputTax') or 0) - float(t.get('inputTax') or 0)}")
+    # Withholding is income tax, not sales tax, and must not be folded in.
+    check(S, "withholding tax is NOT netted into the sales-tax figure",
+          "netTax" not in t,
+          "a combined netTax reappeared - sales tax and withholding are different taxes")
+    if "withholdingPayable" in t:
+        check(S, "when withholding exists, the separation is explained",
+              bool(ts.get("notice")), "withholding shown with no explanation")
+    check(S, "each tax row states which tax it is",
+          all(r.get("kind") for r in ts["rows"]),
+          "a tax row came back with no type")
+
+    # Output-tax detail must sum to the summary's output figure.
+    od = report(base, token, cid, "output-tax", period="allPeriods", pageSize=1)
+    if float(t.get("outputTax") or 0) != 0:
+        check(S, "output-tax detail total == tax summary output tax",
+              eq(od["totals"].get("tax"), t.get("outputTax")),
+              f"detail {od['totals'].get('tax')} vs summary {t.get('outputTax')}")
+
+    # Tax must also agree with the P&L-era ledger: output tax is a liability, so it
+    # appears on the balance sheet. Cross-check against the trial balance.
+    tb = report(base, token, cid, "trial-balance-report", period="allPeriods")
+    check(S, "trial balance still balances (tax reports changed nothing)",
+          eq(tb["totals"].get("debit"), tb["totals"].get("credit")))
+
+    # Tax by party: either rows, or a notice explaining why not.
+    for path, label in [("tax-by-customer", "customer"), ("tax-by-supplier", "supplier")]:
+        r = report(base, token, cid, path, period="allPeriods")
+        has_rows = len(r.get("rows") or []) > 0
+        check(S, f"tax by {label}: returns rows or explains why not",
+              has_rows or bool(r.get("notice")),
+              "neither rows nor a notice - the operator is left guessing")
+        if has_rows:
+            check(S, f"tax by {label}: rows sum to the total",
+                  eq(sum(float(x["amount"]) for x in r["rows"]), r["totals"].get("amount")))
+
+    # Tax transaction detail covers both directions.
+    td = report(base, token, cid, "tax-transactions", period="allPeriods", pageSize=50)
+    check(S, "tax transaction detail reports output and input separately",
+          "outputTax" in td["totals"] and "inputTax" in td["totals"],
+          f"got {list(td['totals'].keys())}")
+
+    # ── Journal register ──
+    jr = report(base, token, cid, "journal-register", period="allPeriods", pageSize=50)
+    check(S, "journal register returns entries", jr["totalCount"] > 0, f"got {jr['totalCount']}")
+    check(S, "no unbalanced entries (the posting engine asserts balance)",
+          eq(jr["totals"].get("unbalanced"), 0),
+          f"{jr['totals'].get('unbalanced')} unbalanced entries found")
+    check(S, "every entry row says whether it balances",
+          all(r.get("balanced") for r in jr["rows"]))
+    check(S, "every entry names its source", all(r.get("source") for r in jr["rows"]))
+    check(S, "register total == general ledger total debit",
+          eq(jr["totals"].get("amount"),
+             report(base, token, cid, "general-ledger", period="allPeriods",
+                    pageSize=1)["totals"].get("debit")),
+          "journal register and general ledger disagree on what was posted")
+
+    manual = report(base, token, cid, "journal-register", period="allPeriods", status="journal")
+    check(S, "register can be filtered to manual journals only",
+          all(r["source"] == "Manual journal" for r in manual["rows"]),
+          f"got {set(r['source'] for r in manual['rows'])}")
+
+    # ── Posting exceptions ──
+    pe = report(base, token, cid, "posting-exceptions", period="allPeriods")
+    check(S, "posting exceptions always returns at least one row",
+          len(pe["rows"]) > 0, "an empty control report tells the operator nothing")
+    check(S, "every exception row says what to do about it",
+          all(r.get("action") for r in pe["rows"]),
+          "a row reported a problem with no remedy")
+    issues = int(float(pe["totals"].get("problems") or 0))
+    if issues == 0:
+        check(S, "with no problems it says so explicitly",
+              any("No exceptions" in str(r["issue"]) for r in pe["rows"]),
+              f"got {[r['issue'] for r in pe['rows']]}")
+
+    # ── Management ──
+    rs = report(base, token, cid, "revenue-summary", period="thisYear")
+    pl = report(base, token, cid, "profit-loss", period="thisYear")
+    check(S, "revenue summary total == P&L income",
+          eq(rs["totals"].get("amount"), pl["totalIncome"]),
+          f"revenue {rs['totals'].get('amount')} vs P&L income {pl['totalIncome']}")
+
+    es = report(base, token, cid, "expense-summary-accounts", period="thisYear")
+    check(S, "expense summary total == P&L cost of sales + expenses",
+          eq(es["totals"].get("amount"),
+             float(pl["totalCostOfSales"]) + float(pl["totalExpenses"])),
+          f"expense {es['totals'].get('amount')} vs P&L "
+          f"{float(pl['totalCostOfSales']) + float(pl['totalExpenses'])}")
+    check(S, "revenue/expense rows carry the account group",
+          all("group" in r for r in rs["rows"]) if rs["rows"] else True)
+
+    # Cash flow must reconcile to the cash & bank summary and chain month to month.
+    cf = report(base, token, cid, "cash-flow", period="allPeriods")
+    cbs = report(base, token, cid, "cash-bank-summary", period="allPeriods")
+    if cf["totalCount"] > 0:
+        check(S, "cash flow closing == Cash & Bank Summary closing",
+              eq(cf["totals"].get("closing"), cbs["totals"].get("closing")),
+              f"cash flow {cf['totals'].get('closing')} vs summary {cbs['totals'].get('closing')}")
+        check(S, "cash flow: net == in - out",
+              eq(cf["totals"].get("net"),
+                 float(cf["totals"].get("moneyIn") or 0) - float(cf["totals"].get("moneyOut") or 0)))
+        drift = None
+        for r in cf["rows"]:
+            if not eq(float(r["opening"]) + float(r["net"]), r["closing"]):
+                drift = f"{r['label']}: {r['opening']} + {r['net']} != {r['closing']}"
+                break
+        check(S, "each month: opening + net == closing", drift is None, drift or "")
+        prev = None
+        chain = None
+        for r in cf["rows"]:
+            if prev is not None and not eq(prev, r["opening"]):
+                chain = f"{r['label']} opens at {r['opening']}, previous closed at {prev}"
+                break
+            prev = float(r["closing"])
+        check(S, "each month opens where the previous closed", chain is None, chain or "")
+        check(S, "cash flow says it is not a statutory statement of cash flows",
+              "not a statutory" in (cf.get("notice") or ""),
+              "no caveat - a reader could file this as an IAS-7 statement")
+
+    me = report(base, token, cid, "expenses/summary", period="allPeriods", groupBy="month")
+    check(S, "monthly expenses agrees with the expense engine",
+          eq(me["totals"].get("amount"),
+             report(base, token, cid, "expenses", period="allPeriods",
+                    pageSize=1)["totals"].get("subtotal")),
+          "monthly expenses and the Company Expense Report disagree")
+
+    # ── Exports ──
+    for rid in ["tax-summary", "output-tax", "input-tax", "tax-transactions",
+                "tax-by-customer", "journal-register", "posting-exceptions",
+                "revenue-summary", "cash-flow"]:
+        st, blob = http("GET",
+                        f"/api/accounting/reports/company/{cid}/export/{rid}?period=allPeriods",
+                        base, token=token, raw_bytes=True)
+        ok = st == 200 and isinstance(blob, bytes) and blob[:2] == b"PK" and len(blob) > 2000
+        check(S, f"export/{rid} returns a real .xlsx", ok,
+              f"status {st}, {len(blob) if isinstance(blob, bytes) else '?'} bytes")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 16 — Taxes, accounting control, management
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_tax_control(base: str, token: str, cid: int):
+    S = "16. Tax, control & management"
+    print(f"\n=== {S} ===")
+
+    # ── Tax summary ──
+    ts = report(base, token, cid, "tax-summary", period="allPeriods")
+    t = ts["totals"]
+    check(S, "tax summary reports output and input sales tax separately",
+          "outputTax" in t and "inputTax" in t, f"got {list(t.keys())}")
+    check(S, "net sales tax == output - input",
+          eq(t.get("netSalesTax"), float(t.get("outputTax") or 0) - float(t.get("inputTax") or 0)),
+          f"net {t.get('netSalesTax')} vs {float(t.get('outputTax') or 0) - float(t.get('inputTax') or 0)}")
+    # Withholding is income tax, not sales tax, and must not be folded in.
+    check(S, "withholding tax is NOT netted into the sales-tax figure",
+          "netTax" not in t,
+          "a combined netTax reappeared - sales tax and withholding are different taxes")
+    if "withholdingPayable" in t:
+        check(S, "when withholding exists, the separation is explained",
+              bool(ts.get("notice")), "withholding shown with no explanation")
+    check(S, "each tax row states which tax it is",
+          all(r.get("kind") for r in ts["rows"]),
+          "a tax row came back with no type")
+
+    # Output-tax detail must sum to the summary's output figure.
+    od = report(base, token, cid, "output-tax", period="allPeriods", pageSize=1)
+    if float(t.get("outputTax") or 0) != 0:
+        check(S, "output-tax detail total == tax summary output tax",
+              eq(od["totals"].get("tax"), t.get("outputTax")),
+              f"detail {od['totals'].get('tax')} vs summary {t.get('outputTax')}")
+
+    # Tax must also agree with the P&L-era ledger: output tax is a liability, so it
+    # appears on the balance sheet. Cross-check against the trial balance.
+    tb = report(base, token, cid, "trial-balance-report", period="allPeriods")
+    check(S, "trial balance still balances (tax reports changed nothing)",
+          eq(tb["totals"].get("debit"), tb["totals"].get("credit")))
+
+    # Tax by party: either rows, or a notice explaining why not.
+    for path, label in [("tax-by-customer", "customer"), ("tax-by-supplier", "supplier")]:
+        r = report(base, token, cid, path, period="allPeriods")
+        has_rows = len(r.get("rows") or []) > 0
+        check(S, f"tax by {label}: returns rows or explains why not",
+              has_rows or bool(r.get("notice")),
+              "neither rows nor a notice - the operator is left guessing")
+        if has_rows:
+            check(S, f"tax by {label}: rows sum to the total",
+                  eq(sum(float(x["amount"]) for x in r["rows"]), r["totals"].get("amount")))
+
+    # Tax transaction detail covers both directions.
+    td = report(base, token, cid, "tax-transactions", period="allPeriods", pageSize=50)
+    check(S, "tax transaction detail reports output and input separately",
+          "outputTax" in td["totals"] and "inputTax" in td["totals"],
+          f"got {list(td['totals'].keys())}")
+
+    # ── Journal register ──
+    jr = report(base, token, cid, "journal-register", period="allPeriods", pageSize=50)
+    check(S, "journal register returns entries", jr["totalCount"] > 0, f"got {jr['totalCount']}")
+    check(S, "no unbalanced entries (the posting engine asserts balance)",
+          eq(jr["totals"].get("unbalanced"), 0),
+          f"{jr['totals'].get('unbalanced')} unbalanced entries found")
+    check(S, "every entry row says whether it balances",
+          all(r.get("balanced") for r in jr["rows"]))
+    check(S, "every entry names its source", all(r.get("source") for r in jr["rows"]))
+    check(S, "register total == general ledger total debit",
+          eq(jr["totals"].get("amount"),
+             report(base, token, cid, "general-ledger", period="allPeriods",
+                    pageSize=1)["totals"].get("debit")),
+          "journal register and general ledger disagree on what was posted")
+
+    manual = report(base, token, cid, "journal-register", period="allPeriods", status="journal")
+    check(S, "register can be filtered to manual journals only",
+          all(r["source"] == "Manual journal" for r in manual["rows"]),
+          f"got {set(r['source'] for r in manual['rows'])}")
+
+    # ── Posting exceptions ──
+    pe = report(base, token, cid, "posting-exceptions", period="allPeriods")
+    check(S, "posting exceptions always returns at least one row",
+          len(pe["rows"]) > 0, "an empty control report tells the operator nothing")
+    check(S, "every exception row says what to do about it",
+          all(r.get("action") for r in pe["rows"]),
+          "a row reported a problem with no remedy")
+    issues = int(float(pe["totals"].get("problems") or 0))
+    if issues == 0:
+        check(S, "with no problems it says so explicitly",
+              any("No exceptions" in str(r["issue"]) for r in pe["rows"]),
+              f"got {[r['issue'] for r in pe['rows']]}")
+
+    # ── Management ──
+    rs = report(base, token, cid, "revenue-summary", period="thisYear")
+    pl = report(base, token, cid, "profit-loss", period="thisYear")
+    check(S, "revenue summary total == P&L income",
+          eq(rs["totals"].get("amount"), pl["totalIncome"]),
+          f"revenue {rs['totals'].get('amount')} vs P&L income {pl['totalIncome']}")
+
+    es = report(base, token, cid, "expense-summary-accounts", period="thisYear")
+    check(S, "expense summary total == P&L cost of sales + expenses",
+          eq(es["totals"].get("amount"),
+             float(pl["totalCostOfSales"]) + float(pl["totalExpenses"])),
+          f"expense {es['totals'].get('amount')} vs P&L "
+          f"{float(pl['totalCostOfSales']) + float(pl['totalExpenses'])}")
+    check(S, "revenue/expense rows carry the account group",
+          all("group" in r for r in rs["rows"]) if rs["rows"] else True)
+
+    # Cash flow must reconcile to the cash & bank summary and chain month to month.
+    cf = report(base, token, cid, "cash-flow", period="allPeriods")
+    cbs = report(base, token, cid, "cash-bank-summary", period="allPeriods")
+    if cf["totalCount"] > 0:
+        check(S, "cash flow closing == Cash & Bank Summary closing",
+              eq(cf["totals"].get("closing"), cbs["totals"].get("closing")),
+              f"cash flow {cf['totals'].get('closing')} vs summary {cbs['totals'].get('closing')}")
+        check(S, "cash flow: net == in - out",
+              eq(cf["totals"].get("net"),
+                 float(cf["totals"].get("moneyIn") or 0) - float(cf["totals"].get("moneyOut") or 0)))
+        drift = None
+        for r in cf["rows"]:
+            if not eq(float(r["opening"]) + float(r["net"]), r["closing"]):
+                drift = f"{r['label']}: {r['opening']} + {r['net']} != {r['closing']}"
+                break
+        check(S, "each month: opening + net == closing", drift is None, drift or "")
+        prev = None
+        chain = None
+        for r in cf["rows"]:
+            if prev is not None and not eq(prev, r["opening"]):
+                chain = f"{r['label']} opens at {r['opening']}, previous closed at {prev}"
+                break
+            prev = float(r["closing"])
+        check(S, "each month opens where the previous closed", chain is None, chain or "")
+        check(S, "cash flow says it is not a statutory statement of cash flows",
+              "not a statutory" in (cf.get("notice") or ""),
+              "no caveat - a reader could file this as an IAS-7 statement")
+
+    me = report(base, token, cid, "expenses/summary", period="allPeriods", groupBy="month")
+    check(S, "monthly expenses agrees with the expense engine",
+          eq(me["totals"].get("amount"),
+             report(base, token, cid, "expenses", period="allPeriods",
+                    pageSize=1)["totals"].get("subtotal")),
+          "monthly expenses and the Company Expense Report disagree")
+
+    # ── Exports ──
+    for rid in ["tax-summary", "output-tax", "input-tax", "tax-transactions",
+                "tax-by-customer", "journal-register", "posting-exceptions",
+                "revenue-summary", "cash-flow"]:
+        st, blob = http("GET",
+                        f"/api/accounting/reports/company/{cid}/export/{rid}?period=allPeriods",
+                        base, token=token, raw_bytes=True)
+        ok = st == 200 and isinstance(blob, bytes) and blob[:2] == b"PK" and len(blob) > 2000
+        check(S, f"export/{rid} returns a real .xlsx", ok,
+              f"status {st}, {len(blob) if isinstance(blob, bytes) else '?'} bytes")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 16 — Taxes, accounting control, management
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_tax_control(base: str, token: str, cid: int):
+    S = "16. Tax, control & management"
+    print(f"\n=== {S} ===")
+
+    # ── Tax summary ──
+    ts = report(base, token, cid, "tax-summary", period="allPeriods")
+    t = ts["totals"]
+    check(S, "tax summary reports output and input sales tax separately",
+          "outputTax" in t and "inputTax" in t, f"got {list(t.keys())}")
+    check(S, "net sales tax == output - input",
+          eq(t.get("netSalesTax"), float(t.get("outputTax") or 0) - float(t.get("inputTax") or 0)),
+          f"net {t.get('netSalesTax')} vs {float(t.get('outputTax') or 0) - float(t.get('inputTax') or 0)}")
+    # Withholding is income tax, not sales tax, and must not be folded in.
+    check(S, "withholding tax is NOT netted into the sales-tax figure",
+          "netTax" not in t,
+          "a combined netTax reappeared - sales tax and withholding are different taxes")
+    if "withholdingPayable" in t:
+        check(S, "when withholding exists, the separation is explained",
+              bool(ts.get("notice")), "withholding shown with no explanation")
+    check(S, "each tax row states which tax it is",
+          all(r.get("kind") for r in ts["rows"]),
+          "a tax row came back with no type")
+
+    # Output-tax detail must sum to the summary's output figure.
+    od = report(base, token, cid, "output-tax", period="allPeriods", pageSize=1)
+    if float(t.get("outputTax") or 0) != 0:
+        check(S, "output-tax detail total == tax summary output tax",
+              eq(od["totals"].get("tax"), t.get("outputTax")),
+              f"detail {od['totals'].get('tax')} vs summary {t.get('outputTax')}")
+
+    # Tax must also agree with the P&L-era ledger: output tax is a liability, so it
+    # appears on the balance sheet. Cross-check against the trial balance.
+    tb = report(base, token, cid, "trial-balance-report", period="allPeriods")
+    check(S, "trial balance still balances (tax reports changed nothing)",
+          eq(tb["totals"].get("debit"), tb["totals"].get("credit")))
+
+    # Tax by party: either rows, or a notice explaining why not.
+    for path, label in [("tax-by-customer", "customer"), ("tax-by-supplier", "supplier")]:
+        r = report(base, token, cid, path, period="allPeriods")
+        has_rows = len(r.get("rows") or []) > 0
+        check(S, f"tax by {label}: returns rows or explains why not",
+              has_rows or bool(r.get("notice")),
+              "neither rows nor a notice - the operator is left guessing")
+        if has_rows:
+            check(S, f"tax by {label}: rows sum to the total",
+                  eq(sum(float(x["amount"]) for x in r["rows"]), r["totals"].get("amount")))
+
+    # Tax transaction detail covers both directions.
+    td = report(base, token, cid, "tax-transactions", period="allPeriods", pageSize=50)
+    check(S, "tax transaction detail reports output and input separately",
+          "outputTax" in td["totals"] and "inputTax" in td["totals"],
+          f"got {list(td['totals'].keys())}")
+
+    # ── Journal register ──
+    jr = report(base, token, cid, "journal-register", period="allPeriods", pageSize=50)
+    check(S, "journal register returns entries", jr["totalCount"] > 0, f"got {jr['totalCount']}")
+    check(S, "no unbalanced entries (the posting engine asserts balance)",
+          eq(jr["totals"].get("unbalanced"), 0),
+          f"{jr['totals'].get('unbalanced')} unbalanced entries found")
+    check(S, "every entry row says whether it balances",
+          all(r.get("balanced") for r in jr["rows"]))
+    check(S, "every entry names its source", all(r.get("source") for r in jr["rows"]))
+    check(S, "register total == general ledger total debit",
+          eq(jr["totals"].get("amount"),
+             report(base, token, cid, "general-ledger", period="allPeriods",
+                    pageSize=1)["totals"].get("debit")),
+          "journal register and general ledger disagree on what was posted")
+
+    manual = report(base, token, cid, "journal-register", period="allPeriods", status="journal")
+    check(S, "register can be filtered to manual journals only",
+          all(r["source"] == "Manual journal" for r in manual["rows"]),
+          f"got {set(r['source'] for r in manual['rows'])}")
+
+    # ── Posting exceptions ──
+    pe = report(base, token, cid, "posting-exceptions", period="allPeriods")
+    check(S, "posting exceptions always returns at least one row",
+          len(pe["rows"]) > 0, "an empty control report tells the operator nothing")
+    check(S, "every exception row says what to do about it",
+          all(r.get("action") for r in pe["rows"]),
+          "a row reported a problem with no remedy")
+    issues = int(float(pe["totals"].get("problems") or 0))
+    if issues == 0:
+        check(S, "with no problems it says so explicitly",
+              any("No exceptions" in str(r["issue"]) for r in pe["rows"]),
+              f"got {[r['issue'] for r in pe['rows']]}")
+
+    # ── Management ──
+    rs = report(base, token, cid, "revenue-summary", period="thisYear")
+    pl = report(base, token, cid, "profit-loss", period="thisYear")
+    check(S, "revenue summary total == P&L income",
+          eq(rs["totals"].get("amount"), pl["totalIncome"]),
+          f"revenue {rs['totals'].get('amount')} vs P&L income {pl['totalIncome']}")
+
+    es = report(base, token, cid, "expense-summary-accounts", period="thisYear")
+    check(S, "expense summary total == P&L cost of sales + expenses",
+          eq(es["totals"].get("amount"),
+             float(pl["totalCostOfSales"]) + float(pl["totalExpenses"])),
+          f"expense {es['totals'].get('amount')} vs P&L "
+          f"{float(pl['totalCostOfSales']) + float(pl['totalExpenses'])}")
+    check(S, "revenue/expense rows carry the account group",
+          all("group" in r for r in rs["rows"]) if rs["rows"] else True)
+
+    # Cash flow must reconcile to the cash & bank summary and chain month to month.
+    cf = report(base, token, cid, "cash-flow", period="allPeriods")
+    cbs = report(base, token, cid, "cash-bank-summary", period="allPeriods")
+    if cf["totalCount"] > 0:
+        check(S, "cash flow closing == Cash & Bank Summary closing",
+              eq(cf["totals"].get("closing"), cbs["totals"].get("closing")),
+              f"cash flow {cf['totals'].get('closing')} vs summary {cbs['totals'].get('closing')}")
+        check(S, "cash flow: net == in - out",
+              eq(cf["totals"].get("net"),
+                 float(cf["totals"].get("moneyIn") or 0) - float(cf["totals"].get("moneyOut") or 0)))
+        drift = None
+        for r in cf["rows"]:
+            if not eq(float(r["opening"]) + float(r["net"]), r["closing"]):
+                drift = f"{r['label']}: {r['opening']} + {r['net']} != {r['closing']}"
+                break
+        check(S, "each month: opening + net == closing", drift is None, drift or "")
+        prev = None
+        chain = None
+        for r in cf["rows"]:
+            if prev is not None and not eq(prev, r["opening"]):
+                chain = f"{r['label']} opens at {r['opening']}, previous closed at {prev}"
+                break
+            prev = float(r["closing"])
+        check(S, "each month opens where the previous closed", chain is None, chain or "")
+        check(S, "cash flow says it is not a statutory statement of cash flows",
+              "not a statutory" in (cf.get("notice") or ""),
+              "no caveat - a reader could file this as an IAS-7 statement")
+
+    me = report(base, token, cid, "expenses/summary", period="allPeriods", groupBy="month")
+    check(S, "monthly expenses agrees with the expense engine",
+          eq(me["totals"].get("amount"),
+             report(base, token, cid, "expenses", period="allPeriods",
+                    pageSize=1)["totals"].get("subtotal")),
+          "monthly expenses and the Company Expense Report disagree")
+
+    # ── Exports ──
+    for rid in ["tax-summary", "output-tax", "input-tax", "tax-transactions",
+                "tax-by-customer", "journal-register", "posting-exceptions",
+                "revenue-summary", "cash-flow"]:
+        st, blob = http("GET",
+                        f"/api/accounting/reports/company/{cid}/export/{rid}?period=allPeriods",
+                        base, token=token, raw_bytes=True)
+        ok = st == 200 and isinstance(blob, bytes) and blob[:2] == b"PK" and len(blob) > 2000
+        check(S, f"export/{rid} returns a real .xlsx", ok,
+              f"status {st}, {len(blob) if isinstance(blob, bytes) else '?'} bytes")
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -1309,6 +1767,7 @@ def main() -> int:
         suite_aging_outstanding(args.base, token, cid, client_id)
         suite_statements_financial(args.base, token, cid)
         suite_documents(args.base, token, cid)
+        suite_tax_control(args.base, token, cid)
         other_id = suite_isolation(args.base, token, cid, ctx)
     except Fatal as e:
         print(f"\n!! FATAL: {e}")

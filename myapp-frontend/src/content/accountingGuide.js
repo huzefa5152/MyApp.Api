@@ -1222,6 +1222,77 @@ export const GUIDE_SECTIONS = [
     ],
   },
   {
+    id: "tax-reports",
+    group: "Accounting Reports",
+    title: "Tax reports",
+    blocks: [
+      { p: "**Tax Summary** is the starting point: what you charged customers, what you paid suppliers, and the net." },
+      { path: "Reports → Accounting Reports → Taxes → Tax Summary" },
+      {
+        table: {
+          head: ["Report", "Answers"],
+          rows: [
+            ["Tax Summary", "Output tax owed, input tax reclaimable, and the net position"],
+            ["Sales / Output Tax", "Tax charged to customers, transaction by transaction"],
+            ["Purchase / Input Tax", "Tax paid to suppliers — including tax on expenses"],
+            ["Tax Transaction Detail", "Every taxed posting behind the totals, both directions"],
+            ["Tax by Customer", "Output tax charged, per customer"],
+            ["Tax by Supplier", "Input tax paid, per supplier"],
+          ],
+        },
+      },
+      { p: "**These read the tax accounts, not the invoices.** Adding up the GST on your invoices would miss two things: tax on an expense you paid directly, and any adjustment your accountant journalled. Both of those still hit the Output Tax or Input Tax account, so that is what the reports read — which also means the tax reports and the Balance Sheet always agree about what is owed." },
+      { note: "**Sales tax and withholding tax are shown separately, and never netted.** They are different taxes: sales tax is on the goods, withholding is income tax deducted at source. A single combined figure would be neither the sales-tax position you file nor the withholding position, and it is the sort of number someone puts on a return by mistake." },
+      { p: "Nothing here decides what is taxable or at what rate. The reports show what was recorded. Grouping by rate uses the rate actually applied to the document, not a rate table." },
+    ],
+  },
+  {
+    id: "control-reports",
+    group: "Accounting Reports",
+    title: "Checking the books",
+    blocks: [
+      { p: "Two reports for when you want to be sure nothing is quietly wrong." },
+      { path: "Reports → Accounting Reports → Accounting Control" },
+      { p: "**Journal Register** lists every journal entry — the ones the system wrote from your documents, and the ones people entered by hand — with its source, how many lines it has, the amount, and whether it balances. Filter Status to *Manual journals only* to see just what people entered." },
+      { p: "**Posting Exceptions** is the health check. It looks for the three things that actually make the accounts wrong:" },
+      {
+        table: {
+          head: ["Issue", "What it means"],
+          rows: [
+            ["Postings in Suspense", "An account the system needed was missing, so the amount went to Suspense instead"],
+            ["Documents with no ledger entry", "An invoice or bill that never posted, so it is missing from the statements"],
+            ["Unbalanced journal entries", "Debits do not equal credits — this should be impossible"],
+          ],
+        },
+      },
+      { p: "Each row says what to do about it. When there is nothing wrong the report says so explicitly, rather than showing an empty screen you have to interpret." },
+      { note: "You may have expected a list of *unposted* or *draft* transactions. This system has no draft state — a document posts the moment you save it, and it posts again whenever you edit it. So the useful question is not “what is waiting to post” but “what posted wrongly”, which is what this report answers." },
+    ],
+  },
+  {
+    id: "management-reports",
+    group: "Accounting Reports",
+    title: "Management summaries",
+    blocks: [
+      { p: "The month-by-month view, for when the question is about the shape of the business rather than a particular transaction." },
+      { path: "Reports → Accounting Reports → Management" },
+      {
+        table: {
+          head: ["Report", "Answers"],
+          rows: [
+            ["Revenue Summary", "Which accounts the income came from, largest first"],
+            ["Expense Summary", "Which accounts the spend went to"],
+            ["Monthly Sales / Purchases / Expenses", "The trend, month by month"],
+            ["Cash Flow Summary", "Money in, out and net per month, with the balance carried forward"],
+          ],
+        },
+      },
+      { p: "**Cash Flow Summary** reads like a bank statement by month: each month opens where the last one closed, and the final closing figure matches Cash & Bank Summary." },
+      { note: "It is a summary of cash **movement**, not a statutory statement of cash flows. Movements are not split into operating, investing and financing, because the accounts carry no such classification to split them by — and guessing would be worse than not saying." },
+      { p: "**Gross Profit, Monthly Profit and Customer Profitability** are listed but marked Blocked, with the reason on the card. A sale records the income, but nothing yet takes the cost of the goods out of stock, so there is no cost of sales to compare against. Revenue and expenses on their own are available from the reports above and from the Profit & Loss." },
+    ],
+  },
+  {
     id: "exporting-reports",
     group: "Accounting Reports",
     title: "Printing and exporting",
