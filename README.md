@@ -289,6 +289,17 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Accounting Reports: tax, control checks and management summaries
+
+- **Tax Summary, Output Tax, Input Tax, Tax Transaction Detail, Tax by Customer and Tax by Supplier.** All of them read the Output Tax and Input Tax accounts in the ledger rather than adding up GST on invoices — so tax paid on an expense, and any adjustment an accountant journalled, are included, and the tax reports always agree with the Balance Sheet.
+- **Sales tax and withholding tax are reported separately and never netted.** They are different taxes — sales tax on the goods, withholding income tax deducted at source — and a single combined figure would be neither the position you file nor the one you reclaim.
+- **Journal Register** — every journal entry with its source, line count, amount and balance check, filterable to manual journals only.
+- **Posting Exceptions** replaces the "unposted transactions" report this system cannot have (documents post immediately; there is no draft state). It checks the three things that actually make the accounts wrong — postings that fell into Suspense, documents with no ledger entry, and unbalanced entries — and each row says what to do. When nothing is wrong it says so explicitly.
+- **Revenue Summary and Expense Summary** — the Profit & Loss figures ordered by size instead of laid out as a statement, tying exactly to it.
+- **Monthly Sales, Monthly Purchases, Monthly Expenses** and a **Cash Flow Summary** that reads like a bank statement by month: each month opens where the last closed, and the closing figure matches Cash & Bank Summary. Labelled as a cash-movement summary, not a statutory statement of cash flows, since the accounts carry no operating/investing/financing classification.
+- **Gross Profit, Monthly Profit and Customer Profitability** are listed as Blocked with the reason on the card: a sale does not yet relieve inventory, so there is no cost of sales to compare against.
+- Every report in the module now has Excel, Print and PDF, standard filters, and drill-down where it makes sense.
+
 ### 2026-08-31 — Accounting Reports: sales and purchase registers
 
 - **Sales Invoice Register and Purchase Bill Register** — every document with subtotal, tax, withholding, grand total, paid, outstanding and payment status, filterable by customer/supplier, tax and status, with a breakdown by status.

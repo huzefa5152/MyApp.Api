@@ -93,6 +93,14 @@ const PURCHASE_FILTERS = [
   FILTERS.search,
 ];
 
+const TAX_FILTERS = [
+  FILTERS.period,
+  FILTERS.division,
+  FILTERS.client,
+  FILTERS.supplier,
+  FILTERS.status,
+];
+
 const MONEY_FILTERS = [
   FILTERS.period,
   FILTERS.division,
@@ -692,10 +700,52 @@ export const REPORT_CATEGORIES = [
     title: "Taxes",
     blurb: "Output tax collected, input tax paid, and the net position.",
     reports: [
-      { id: "tax-summary", title: "Tax Summary", blurb: "Output vs input tax and the net payable.", status: "planned" },
-      { id: "output-tax", title: "Sales / Output Tax", blurb: "Tax charged to customers, by invoice.", status: "planned" },
-      { id: "input-tax", title: "Purchase / Input Tax", blurb: "Tax paid to suppliers and on expenses.", status: "planned" },
-      { id: "tax-transactions", title: "Tax Transaction Detail", blurb: "Every taxed transaction behind the totals.", status: "planned" },
+      {
+        id: "tax-summary",
+        path: "tax-summary",
+        title: "Tax Summary",
+        blurb: "Output tax owed, input tax reclaimable, and the net position.",
+        filters: [FILTERS.period, FILTERS.division],
+        featured: true,
+        drill: { filter: "accountId", to: "tax-transactions" },
+      },
+      {
+        id: "output-tax",
+        path: "output-tax",
+        title: "Sales / Output Tax",
+        blurb: "Tax charged to customers, transaction by transaction.",
+        filters: TAX_FILTERS,
+      },
+      {
+        id: "input-tax",
+        path: "input-tax",
+        title: "Purchase / Input Tax",
+        blurb: "Tax paid to suppliers and on expenses — including expense tax.",
+        filters: TAX_FILTERS,
+      },
+      {
+        id: "tax-transactions",
+        path: "tax-transactions",
+        title: "Tax Transaction Detail",
+        blurb: "Every taxed posting behind the totals, both directions.",
+        filters: TAX_FILTERS,
+      },
+      {
+        id: "tax-by-customer",
+        path: "tax-by-customer",
+        title: "Tax by Customer",
+        blurb: "Output tax charged, per customer.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client],
+        drill: { filter: "clientId", to: "output-tax" },
+      },
+      {
+        id: "tax-by-supplier",
+        path: "tax-by-supplier",
+        title: "Tax by Supplier",
+        blurb: "Input tax paid, per supplier.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier],
+        drill: { filter: "supplierId", to: "input-tax" },
+      },
     ],
   },
   {
@@ -703,8 +753,21 @@ export const REPORT_CATEGORIES = [
     title: "Accounting Control",
     blurb: "Checks that the books hang together.",
     reports: [
-      { id: "journal-register", title: "Journal Register", blurb: "Every journal entry, system-posted and manual.", status: "planned" },
-      { id: "posting-exceptions", title: "Posting Exceptions", blurb: "Suspense balances and documents with no journal entry.", status: "planned" },
+      {
+        id: "journal-register",
+        path: "journal-register",
+        title: "Journal Register",
+        blurb: "Every journal entry, system-posted and manual, with its balance check.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.status, FILTERS.search],
+        featured: true,
+      },
+      {
+        id: "posting-exceptions",
+        path: "posting-exceptions",
+        title: "Posting Exceptions",
+        blurb: "Suspense postings, documents with no ledger entry, unbalanced entries — and what to do.",
+        filters: [FILTERS.period],
+      },
     ],
   },
   {
@@ -712,10 +775,68 @@ export const REPORT_CATEGORIES = [
     title: "Management",
     blurb: "The summary view for decisions.",
     reports: [
-      { id: "revenue-summary", title: "Revenue Summary", blurb: "Income by account and month.", status: "planned" },
-      { id: "monthly-sales", title: "Monthly Sales", blurb: "Sales, tax and net per month.", status: "planned" },
-      { id: "monthly-purchases", title: "Monthly Purchases", blurb: "Purchases, tax and net per month.", status: "planned" },
-      { id: "cash-flow", title: "Cash Flow Summary", blurb: "Money in, money out and the net movement.", status: "planned" },
+      {
+        id: "revenue-summary",
+        path: "revenue-summary",
+        title: "Revenue Summary",
+        blurb: "Income by account for the period, largest first.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.accountGroup],
+        featured: true,
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "expense-summary-accounts",
+        path: "expense-summary-accounts",
+        title: "Expense Summary",
+        blurb: "Expense by account for the period, largest first.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.accountGroup],
+        drill: { filter: "accountId", to: "general-ledger" },
+      },
+      {
+        id: "mgmt-monthly-sales",
+        path: "sales-summary",
+        title: "Monthly Sales",
+        blurb: "Sales, tax and net per month.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client],
+        query: { groupBy: "month" },
+        exportId: "sales-summary",
+      },
+      {
+        id: "mgmt-monthly-purchases",
+        path: "purchase-summary",
+        title: "Monthly Purchases",
+        blurb: "Purchases, tax and net per month.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier],
+        query: { groupBy: "month" },
+        exportId: "purchase-summary",
+      },
+      {
+        id: "mgmt-monthly-expenses",
+        path: "expenses/summary",
+        title: "Monthly Expenses",
+        blurb: "Spend per month — the trend, not the transactions.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.account],
+        query: { groupBy: "month" },
+        exportId: "expenses-summary",
+      },
+      {
+        id: "cash-flow",
+        path: "cash-flow",
+        title: "Cash Flow Summary",
+        blurb: "Money in, out and net by month, with the cash balance carried forward.",
+        filters: [FILTERS.period, FILTERS.division],
+        exportId: "cash-flow",
+      },
+      {
+        id: "monthly-profit",
+        title: "Monthly Profit",
+        blurb: "Revenue, cost of sales, gross profit and net profit per month.",
+        status: "blocked",
+        blockedReason:
+          "The revenue and expense halves are available from Monthly Sales and Monthly Expenses. "
+          + "The cost-of-sales half needs cost of goods sold, which is not recorded yet — see "
+          + "Gross Profit below.",
+      },
       {
         id: "gross-profit",
         title: "Gross Profit",

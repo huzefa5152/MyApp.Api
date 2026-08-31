@@ -209,5 +209,55 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>Sales returns and adjustments — credit and debit notes.</summary>
         Task<ReportResultDto> GetNotesReportAsync(int companyId, ReportFilterDto filter);
+
+        // -- Taxes ----------------------------------------------------------------
+
+        /// <summary>
+        /// Output tax owed, input tax reclaimable, and the net position, read from the
+        /// Output/Input Tax and withholding control accounts rather than from document
+        /// GST fields — so expense input tax and journalled adjustments are included,
+        /// and the figures agree with the Balance Sheet.
+        /// </summary>
+        Task<ReportResultDto> GetTaxSummaryAsync(int companyId, ReportFilterDto filter);
+
+        /// <summary>
+        /// Every posting to the tax accounts with the document and party behind it.
+        /// <paramref name="output"/> true = output tax, false = input tax,
+        /// null = both (Tax Transaction Detail).
+        /// </summary>
+        Task<ReportResultDto> GetTaxDetailAsync(int companyId, ReportFilterDto filter, bool? output);
+
+        /// <summary>Tax grouped by the customer charged or the supplier paid. Tax with
+        /// no party (expense input tax, journals) is reported as unattributed rather
+        /// than dropped.</summary>
+        Task<ReportResultDto> GetTaxByPartyAsync(int companyId, ReportFilterDto filter, bool customers);
+
+        // -- Accounting control ---------------------------------------------------
+
+        /// <summary>Every journal entry with its source, line count, amount and
+        /// whether it balances.</summary>
+        Task<ReportResultDto> GetJournalRegisterAsync(int companyId, ReportFilterDto filter);
+
+        /// <summary>
+        /// The control report that stands in for "unposted transactions", which this
+        /// product has no concept of: postings that landed in Suspense, documents with
+        /// no journal entry, and unbalanced entries. Each row says what to do.
+        /// </summary>
+        Task<ReportResultDto> GetPostingExceptionsAsync(int companyId, ReportFilterDto filter);
+
+        // -- Management -----------------------------------------------------------
+
+        /// <summary>Income or expense by account for the period — the P&amp;L's figures
+        /// ordered by size instead of laid out as a statement.</summary>
+        Task<ReportResultDto> GetRevenueExpenseSummaryAsync(int companyId, ReportFilterDto filter,
+            bool income);
+
+        /// <summary>Month-by-month spend; delegates to the expense engine.</summary>
+        Task<ReportResultDto> GetMonthlyExpensesAsync(int companyId, ReportFilterDto filter);
+
+        /// <summary>Money in, out and net by month across the bank and cash accounts.
+        /// A cash-movement summary, NOT a statutory statement of cash flows — the
+        /// accounts carry no operating/investing/financing classification.</summary>
+        Task<ReportResultDto> GetCashFlowSummaryAsync(int companyId, ReportFilterDto filter);
     }
 }

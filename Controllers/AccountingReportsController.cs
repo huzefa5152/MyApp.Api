@@ -465,6 +465,122 @@ namespace MyApp.Api.Controllers
             return Ok(await _reports.GetNotesReportAsync(companyId, filter));
         }
 
+        // ── Taxes ─────────────────────────────────────────────────────────────────
+
+        [HttpGet("company/{companyId}/tax-summary")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> TaxSummary(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetTaxSummaryAsync(companyId, filter));
+        }
+
+        [HttpGet("company/{companyId}/output-tax")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> OutputTax(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetTaxDetailAsync(companyId, filter, output: true));
+        }
+
+        [HttpGet("company/{companyId}/input-tax")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> InputTax(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetTaxDetailAsync(companyId, filter, output: false));
+        }
+
+        [HttpGet("company/{companyId}/tax-transactions")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> TaxTransactions(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetTaxDetailAsync(companyId, filter, output: null));
+        }
+
+        [HttpGet("company/{companyId}/tax-by-customer")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> TaxByCustomer(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetTaxByPartyAsync(companyId, filter, customers: true));
+        }
+
+        [HttpGet("company/{companyId}/tax-by-supplier")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> TaxBySupplier(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetTaxByPartyAsync(companyId, filter, customers: false));
+        }
+
+        // ── Accounting control ────────────────────────────────────────────────────
+
+        [HttpGet("company/{companyId}/journal-register")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> JournalRegister(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetJournalRegisterAsync(companyId, filter));
+        }
+
+        [HttpGet("company/{companyId}/posting-exceptions")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> PostingExceptions(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPostingExceptionsAsync(companyId, filter));
+        }
+
+        // ── Management ────────────────────────────────────────────────────────────
+
+        [HttpGet("company/{companyId}/revenue-summary")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> RevenueSummary(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetRevenueExpenseSummaryAsync(companyId, filter, income: true));
+        }
+
+        [HttpGet("company/{companyId}/expense-summary-accounts")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> ExpenseSummaryByAccount(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetRevenueExpenseSummaryAsync(companyId, filter, income: false));
+        }
+
+        [HttpGet("company/{companyId}/cash-flow")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> CashFlow(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetCashFlowSummaryAsync(companyId, filter));
+        }
+
         // ── Export ────────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -560,6 +676,28 @@ namespace MyApp.Api.Controllers
                     report = await _reports.GetDocumentSummaryAsync(companyId, filter, false, groupBy); break;
                 case "credit-debit-notes":
                     report = await _reports.GetNotesReportAsync(companyId, filter); break;
+                case "tax-summary":
+                    report = await _reports.GetTaxSummaryAsync(companyId, filter); break;
+                case "output-tax":
+                    report = await _reports.GetTaxDetailAsync(companyId, filter, true); break;
+                case "input-tax":
+                    report = await _reports.GetTaxDetailAsync(companyId, filter, false); break;
+                case "tax-transactions":
+                    report = await _reports.GetTaxDetailAsync(companyId, filter, null); break;
+                case "tax-by-customer":
+                    report = await _reports.GetTaxByPartyAsync(companyId, filter, true); break;
+                case "tax-by-supplier":
+                    report = await _reports.GetTaxByPartyAsync(companyId, filter, false); break;
+                case "journal-register":
+                    report = await _reports.GetJournalRegisterAsync(companyId, filter); break;
+                case "posting-exceptions":
+                    report = await _reports.GetPostingExceptionsAsync(companyId, filter); break;
+                case "revenue-summary":
+                    report = await _reports.GetRevenueExpenseSummaryAsync(companyId, filter, true); break;
+                case "expense-summary-accounts":
+                    report = await _reports.GetRevenueExpenseSummaryAsync(companyId, filter, false); break;
+                case "cash-flow":
+                    report = await _reports.GetCashFlowSummaryAsync(companyId, filter); break;
                 default:
                     return BadRequest(new { message = "Unknown report." });
             }
