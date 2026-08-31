@@ -1144,6 +1144,46 @@ export const GUIDE_SECTIONS = [
     ],
   },
   {
+    id: "financial-statements",
+    group: "Accounting Reports",
+    title: "Balance Sheet and Profit & Loss",
+    blocks: [
+      { p: "These are the two statements an accountant, a bank or a tax authority will ask for." },
+      { path: "Reports → Accounting Reports → Financial Statements" },
+      { p: "**Balance Sheet** is a snapshot: what the business owns, what it owes, and what is left over, **as at a date**. Only the end of the period matters, so a Period of “This Year” gives you 31 December. Alongside it is the same date one year earlier, and the change." },
+      { p: "**Profit & Loss** is a flow: income, cost of sales and expenses **across a period**, with the period immediately before it for comparison. A month compares to the month before, a quarter to the quarter before." },
+      { p: "Both are laid out the way a statement should be — indented groups, subtotals at every level, and totals in bold. Click any account line to open its ledger and see what made up the figure." },
+      { note: "At the top of the Balance Sheet is a green **Assets = Liabilities + Equity** confirmation. If the books ever do not balance it turns red and states the difference, rather than leaving you to add up the columns." },
+      { p: "**Why the Balance Sheet balances.** Profit sits in your income and expense accounts, not in equity, because the year is never formally closed. So the statement adds a **Current-Year Earnings** line to Equity — the profit so far. It is not an account you can post to; it is the profit, shown where a balance sheet expects it." },
+      { p: "**A note on profit if you track stock.** A sale records the income, but nothing yet takes the cost of the goods out of inventory. So purchases sit on the Balance Sheet as stock, and the Profit & Loss shows income before the cost of what you sold. The statement says so at the top when it applies." },
+    ],
+  },
+  {
+    id: "general-ledger",
+    group: "Accounting Reports",
+    title: "General Ledger and Trial Balance",
+    blocks: [
+      { p: "**General Ledger** is every posting the system has made, in date order, across every account. It is the report to open when you want to know where a figure came from." },
+      { path: "Reports → Accounting Reports → General Ledger" },
+      {
+        table: {
+          head: ["Column", "What it means"],
+          rows: [
+            ["Date", "When it was posted"],
+            ["Entry", "JE-124 — the journal entry number"],
+            ["Account", "Which account moved"],
+            ["Document", "The invoice, bill, receipt or payment behind it"],
+            ["Party", "The customer or supplier, where one applies"],
+            ["Debit / Credit", "The two sides of the entry"],
+          ],
+        },
+      },
+      { p: "Filter by **Account** and a running Balance column appears. Across all accounts there is no running balance, because a total that mixes bank, sales and tax accounts would not mean anything." },
+      { note: "Over a whole period, total debits always equal total credits. If they ever do not, the report says so — that is a sign something is wrong with the ledger, and Accounting → Dashboard has the health figures." },
+      { p: "**Trial Balance** is the same information collapsed to one line per account: opening, debit, credit, closing. **Account Balance Summary** is the Trial Balance plus the account group and type, so you can filter to “only the expense accounts” or one group. Clicking an account opens its ledger." },
+    ],
+  },
+  {
     id: "exporting-reports",
     group: "Accounting Reports",
     title: "Printing and exporting",

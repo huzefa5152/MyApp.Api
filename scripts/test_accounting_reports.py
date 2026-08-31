@@ -1,6 +1,7 @@
 """
-Accounting Reports regression tests — the Expenses, Cash & Bank and
-Customer/Supplier report families, their drill-downs, exports and RBAC scoping.
+Accounting Reports regression tests — Expenses, Cash & Bank,
+Customers/Suppliers and the Financial Statements, with their drill-downs,
+exports and RBAC scoping.
 
 Must pass before any push that touches AccountingReportService (or its
 Expenses / CashBank partials), AccountingReportsController, ReportPeriod,
@@ -690,7 +691,8 @@ def suite_isolation(base: str, token: str, cid: int, ctx: dict):
     # A party report is the most sensitive of all: it names who owes what.
     for path in ["customer-ledger", "customer-statement", "customer-balances",
                  "supplier-ledger", "supplier-balances", "receivables-aging",
-                 "customer-outstanding", "customer-sales"]:
+                 "customer-outstanding", "customer-sales", "general-ledger",
+                 "account-balances", "trial-balance-report"]:
         r = report(base, token, other_id, path, period="allPeriods")
         rows = r.get("rows") or []
         check(S, f"{path} on a fresh company returns no other tenant's parties",
@@ -1002,6 +1004,152 @@ def expected_bucket(days: int) -> str:
     return "90+"
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 14 — Financial statements
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_statements_financial(base: str, token: str, cid: int):
+    S = "14. Financial statements"
+    print(f"\n=== {S} ===")
+
+    # ── Balance sheet ──
+    bs = report(base, token, cid, "balance-sheet", period="thisYear")
+    check(S, "balance sheet is titled as at a date",
+          bs["periodLabel"].startswith("As at"), f"got '{bs['periodLabel']}'")
+    check(S, "balance sheet reports a balance check", bs.get("difference") is not None)
+
+    # THE assertion for a balance sheet. Anything else about it is secondary.
+    check(S, "ASSETS == LIABILITIES + EQUITY",
+          eq(bs["totalAssets"], float(bs["totalLiabilities"]) + float(bs["totalEquity"])),
+          f"assets {bs['totalAssets']} vs L+E "
+          f"{float(bs['totalLiabilities']) + float(bs['totalEquity'])}")
+    check(S, "isBalanced agrees with the arithmetic",
+          bs["isBalanced"] == (abs(float(bs["difference"])) < 0.01),
+          f"isBalanced {bs['isBalanced']} difference {bs['difference']}")
+
+    kinds = {r["kind"] for r in bs["rows"]}
+    check(S, "statement lines carry a kind (group/account/subtotal/total)",
+          {"group", "subtotal", "total"} <= kinds, f"got {kinds}")
+    check(S, "statement lines carry an indent level",
+          all("level" in r for r in bs["rows"] if r["kind"] != "spacer"))
+    check(S, "account lines are drillable, headings are not",
+          all(r.get("accountId") for r in bs["rows"] if r["kind"] == "account"
+              and r["label"] != "Current-Year Earnings"),
+          "an account line came back with no accountId")
+
+    # Equity must contain the synthetic earnings line, or the sheet cannot balance.
+    labels = [r["label"] for r in bs["rows"]]
+    pl_check = report(base, token, cid, "profit-loss", period="thisYear")
+    if abs(float(pl_check["netProfit"])) > 0.01:
+        check(S, "equity carries a Current-Year Earnings line",
+              "Current-Year Earnings" in labels,
+              "without it assets exceed liabilities + equity by the net profit")
+
+    comp = report(base, token, cid, "balance-sheet", period="thisYear", comparative="true")
+    check(S, "comparative column is labelled with its own date",
+          bool(comp.get("comparativeLabel")), f"got {comp.get('comparativeLabel')}")
+    check(S, "comparative figures are present on account lines",
+          any(r.get("comparative") is not None for r in comp["rows"]))
+
+    no_comp = report(base, token, cid, "balance-sheet", period="thisYear", comparative="false")
+    check(S, "comparative can be turned off", no_comp.get("comparativeLabel") is None,
+          f"got {no_comp.get('comparativeLabel')}")
+    check(S, "without a comparative there are only 2 columns",
+          len(no_comp["columns"]) == 2, f"got {[c['key'] for c in no_comp['columns']]}")
+
+    # ── Profit & loss ──
+    pl = report(base, token, cid, "profit-loss", period="thisYear")
+    check(S, "P&L net profit == income - cost of sales - expenses",
+          eq(pl["netProfit"], float(pl["totalIncome"]) - float(pl["totalCostOfSales"])
+             - float(pl["totalExpenses"])),
+          f"net {pl['netProfit']} vs computed "
+          f"{float(pl['totalIncome']) - float(pl['totalCostOfSales']) - float(pl['totalExpenses'])}")
+    check(S, "income is presented POSITIVE (credit-natural, flipped once)",
+          float(pl["totalIncome"]) >= 0, f"got {pl['totalIncome']}")
+    check(S, "gross profit is only offered when cost of sales has activity",
+          (pl.get("grossProfit") is not None) == bool(pl.get("grossProfitMeaningful")),
+          f"grossProfit {pl.get('grossProfit')} meaningful {pl.get('grossProfitMeaningful')}")
+
+    # ── The cross-check that matters: statements vs the trial balance ──
+    tb = report(base, token, cid, "trial-balance-report", period="thisYear")
+    tb_income = -sum(float(r["debit"]) - float(r["credit"])
+                     for r in tb["rows"] if r["accountType"] == "Income")
+    tb_expense = sum(float(r["debit"]) - float(r["credit"])
+                     for r in tb["rows"] if r["accountType"] == "Expense")
+    check(S, "P&L net profit == trial balance income - expenses",
+          eq(pl["netProfit"], tb_income - tb_expense),
+          f"P&L {pl['netProfit']} vs trial balance {tb_income - tb_expense}")
+    check(S, "trial balance: total debit == total credit",
+          eq(tb["totals"].get("debit"), tb["totals"].get("credit")),
+          f"dr {tb['totals'].get('debit')} cr {tb['totals'].get('credit')}")
+
+    # ── General ledger ──
+    gl = report(base, token, cid, "general-ledger", period="thisYear", pageSize=100)
+    check(S, "general ledger returns postings", gl["totalCount"] > 0, f"got {gl['totalCount']}")
+    check(S, "general ledger: total debit == total credit over the whole ledger",
+          eq(gl["totals"].get("debit"), gl["totals"].get("credit")),
+          f"dr {gl['totals'].get('debit')} cr {gl['totals'].get('credit')}")
+    check(S, "general ledger agrees with the trial balance on total debit",
+          eq(gl["totals"].get("debit"), tb["totals"].get("debit")),
+          f"GL {gl['totals'].get('debit')} vs TB {tb['totals'].get('debit')}")
+    check(S, "no running-balance column across all accounts (it would be meaningless)",
+          not any(c["key"] == "balance" for c in gl["columns"]),
+          "a balance column appeared on the all-accounts view")
+    check(S, "GL rows name the account and the entry",
+          all(r.get("account") and r.get("entryRef") for r in gl["rows"]))
+
+    # Scoped to one account, the running balance appears and must chain.
+    accounts = flat_accounts(base, token, cid)
+    posted = next((a for a in accounts if abs(float(a.get("balance") or 0)) > 0.01), None)
+    if check(S, "an account with activity exists to scope the GL to", posted is not None):
+        one = report(base, token, cid, "general-ledger", period="allPeriods",
+                     accountId=posted["id"], pageSize=200)
+        check(S, "single-account GL adds the running balance column",
+              any(c["key"] == "balance" for c in one["columns"]))
+        if one["rows"]:
+            drift = None
+            prev = None
+            for r in one["rows"]:
+                if prev is not None:
+                    expected = prev + float(r["debit"]) - float(r["credit"])
+                    if not eq(expected, r["balance"]):
+                        drift = f"expected {expected} at {r['entryRef']}, got {r['balance']}"
+                        break
+                prev = float(r["balance"])
+            check(S, "single-account running balance chains row to row", drift is None, drift or "")
+            check(S, "single-account GL closing == the CoA balance for that account",
+                  eq(one["rows"][-1]["balance"], posted["balance"]),
+                  f"GL {one['rows'][-1]['balance']} vs CoA {posted['balance']}")
+
+    # ── Account balance summary ──
+    ab = report(base, token, cid, "account-balances", period="thisYear")
+    check(S, "account balances returns rows", ab["totalCount"] > 0, f"got {ab['totalCount']}")
+    check(S, "account balances total debit == trial balance total debit",
+          eq(ab["totals"].get("debit"), tb["totals"].get("debit")),
+          f"{ab['totals'].get('debit')} vs {tb['totals'].get('debit')}")
+    check(S, "every row reconciles: opening + debit - credit == closing",
+          all(eq(float(r["opening"]) + float(r["debit"]) - float(r["credit"]), r["closing"])
+              for r in ab["rows"]),
+          "a row does not reconcile")
+    check(S, "rows carry the account group, for filtering",
+          any(r.get("accountGroup") for r in ab["rows"]))
+
+    # Filter by account type via the Status control.
+    exp_only = report(base, token, cid, "account-balances", period="allPeriods", status="Expense")
+    check(S, "account balances can be filtered to one account type",
+          all(r["accountType"] == "Expense" for r in exp_only["rows"]),
+          f"got types {set(r['accountType'] for r in exp_only['rows'])}")
+
+    # ── Exports ──
+    for rid in ["balance-sheet", "profit-loss", "general-ledger", "account-balances",
+                "trial-balance-report"]:
+        st, blob = http("GET",
+                        f"/api/accounting/reports/company/{cid}/export/{rid}?period=thisYear",
+                        base, token=token, raw_bytes=True)
+        ok = st == 200 and isinstance(blob, bytes) and blob[:2] == b"PK" and len(blob) > 2000
+        check(S, f"export/{rid} returns a real .xlsx", ok,
+              f"status {st}, {len(blob) if isinstance(blob, bytes) else '?'} bytes")
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -1032,6 +1180,7 @@ def main() -> int:
         suite_statements(args.base, token, cid, client_id, supplier_id)
         suite_party_balances(args.base, token, cid, client_id, supplier_id)
         suite_aging_outstanding(args.base, token, cid, client_id)
+        suite_statements_financial(args.base, token, cid)
         other_id = suite_isolation(args.base, token, cid, ctx)
     except Fatal as e:
         print(f"\n!! FATAL: {e}")

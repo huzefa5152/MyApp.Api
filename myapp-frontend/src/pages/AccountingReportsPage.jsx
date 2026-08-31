@@ -341,6 +341,7 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
         onExportExcel={exportExcel}
         onDrill={report.drill || report.detailTarget ? drill : undefined}
         onOpenRow={openRow}
+        onOpenAccount={(accountId) => drill("accountId", accountId)}
       />
     </div>
   );

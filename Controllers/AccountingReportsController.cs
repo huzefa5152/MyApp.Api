@@ -332,6 +332,65 @@ namespace MyApp.Api.Controllers
             return Ok(await _reports.GetPartyTradeAsync(companyId, filter, customers: false));
         }
 
+        // ── Financial statements ──────────────────────────────────────────────────
+
+        /// <summary>Balance Sheet as at the period end. <c>comparative=true</c> adds
+        /// the same date a year earlier.</summary>
+        [HttpGet("company/{companyId}/balance-sheet")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StatementResultDto>> BalanceSheet(
+            int companyId, [FromQuery] ReportFilterDto filter, [FromQuery] bool comparative = true)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetBalanceSheetAsync(companyId, filter, comparative));
+        }
+
+        /// <summary>Profit &amp; Loss for the period. <c>comparative=true</c> adds the
+        /// preceding period of the same length.</summary>
+        [HttpGet("company/{companyId}/profit-loss")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StatementResultDto>> ProfitAndLoss(
+            int companyId, [FromQuery] ReportFilterDto filter, [FromQuery] bool comparative = true)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetProfitAndLossAsync(companyId, filter, comparative));
+        }
+
+        [HttpGet("company/{companyId}/general-ledger")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> GeneralLedger(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetGeneralLedgerAsync(companyId, filter));
+        }
+
+        [HttpGet("company/{companyId}/account-balances")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> AccountBalances(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetAccountBalanceSummaryAsync(companyId, filter));
+        }
+
+        // trial-balance-report, not trial-balance: AccountingController already owns
+        // api/accounting/reports/company/{id}/trial-balance as the raw primitive,
+        // and two controllers on one route is a runtime AmbiguousMatchException.
+        [HttpGet("company/{companyId}/trial-balance-report")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> TrialBalanceReport(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetTrialBalanceReportAsync(companyId, filter));
+        }
+
         // ── Export ────────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -402,6 +461,17 @@ namespace MyApp.Api.Controllers
                     report = await _reports.GetOutstandingDocumentsAsync(companyId, filter, false); break;
                 case "supplier-purchases":
                     report = await _reports.GetPartyTradeAsync(companyId, filter, false); break;
+                case "balance-sheet":
+                    report = await _reports.GetBalanceSheetAsync(companyId, filter, true); break;
+                case "profit-loss":
+                    report = await _reports.GetProfitAndLossAsync(companyId, filter, true); break;
+                case "general-ledger":
+                    report = await _reports.GetGeneralLedgerAsync(companyId, filter); break;
+                case "account-balances":
+                    report = await _reports.GetAccountBalanceSummaryAsync(companyId, filter); break;
+                case "trial-balance":
+                case "trial-balance-report":
+                    report = await _reports.GetTrialBalanceReportAsync(companyId, filter); break;
                 default:
                     return BadRequest(new { message = "Unknown report." });
             }

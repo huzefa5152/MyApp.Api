@@ -1,6 +1,7 @@
 # Accounting Reports — full reporting system
 
-**Status:** Phase 1 COMMITTED (9508895). Phase 2 COMPLETE + verified. Phases 3–6 designed, not started.
+**Status:** Phases 1–3 COMMITTED + verified. Phases 4–6 in progress.
+Phase 6b (profit reports) and COGS deferred by the user — see §2.
 **Branch:** `customize-solution-for-other`
 **Transient doc** — delete once every phase is implemented + verified (CLAUDE.md rule).
 The durable record is the README `## Changelog`, `accountingGuide.js`, and git history.
@@ -316,7 +317,7 @@ machine) — icon `svg` width > 0, no horizontal page scroll.
 | Phase | Contents | Blocked on |
 |---|---|---|
 | 2 | **DONE.** Customer/Supplier Ledger (all-periods), Statement, Balance Summary, AR/AP aging (+`asOf` + drill-down), Outstanding docs, Customer Sales / Supplier Purchases. Index `JournalLine(PartyType, PartyId)` added (migration `20260831141947`). | — |
-| 3 | Financial Statements: **real Balance Sheet + P&L with comparatives**, General Ledger, Account Balance Summary, Trial Balance upgrade | — |
+| 3 | **DONE.** Balance Sheet + P&L with comparatives (statement hierarchy flattened to indented lines), General Ledger, Account Balance Summary, Trial Balance in the envelope. | — |
 | 4 | Sales + Purchases: both Registers, by customer·item·itemtype·account·date·tax, Payment Status, Outstanding | Discount columns need a nominated discount account (§2) |
 | 5 | Taxes + Accounting Control: Tax Summary, Output/Input Tax, Tax by Customer/Supplier, Tax Transaction Detail, Journal Register, Posting Exceptions | — |
 | 6 | Management: Revenue/Expense Summary, **Gross Profit, Net Profit, Customer Profitability**, Monthly Sales/Purchases/Expenses/Profit, Cash Flow Summary | **COGS-on-sale (§2) — own spec first** |
