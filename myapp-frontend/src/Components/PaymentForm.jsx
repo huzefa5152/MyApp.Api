@@ -61,6 +61,13 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // the invoice/bill shortcut.
   const [divisionId, setDivisionId] = useState(
     editPayment?.divisionId ? String(editPayment.divisionId) : (preset?.divisionId ? String(preset.divisionId) : ""));
+  // Receipt-only: the operator TYPES the document's total cash — it is no
+  // longer derived by summing the per-invoice allocations below. Whatever is
+  // left after those allocations becomes the customer's advance. Sent as
+  // `amount` on BOTH create and edit so an existing advance is never silently
+  // flattened to the allocated total (Task 7, 2026-08-31). Payment (money-out)
+  // has no such field; its total stays derived from cashTotal, unchanged.
+  const [amount, setAmount] = useState(editPayment?.amount != null ? String(editPayment.amount) : "");
   const [docs, setDocs] = useState([]);          // open documents for the contact
   // alloc[docId] = { cash: "30000", adj: "0.50", adjMode: "none"|"discount"|
   //                  "writeoff"|"other", adjAccountId: <id|null> }
@@ -263,6 +270,15 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     [alloc]
   );
 
+  // Receipt only: the live split shown under the invoice list. Advance is
+  // CASH only — never subtract adjustmentAmount, since that settles the
+  // invoice, not the receipt (see PaymentService.ResolveAmount /
+  // AssertAllocationsFitAmount — the server enforces the same cash-only rule
+  // and rejects Σ allocation cash > amount).
+  const amountNum = parseFloat(amount) || 0;
+  const advance = Math.max(0, round2(amountNum - cashTotal));
+  const overAllocated = isReceipt && round2(cashTotal) > round2(amountNum) + 0.005;
+
   // Settle-remainder affordance for one document row (shared desktop + mobile).
   // Nothing shows until the operator receives less cash than the balance due.
   const renderAdjust = (d, c) => {
@@ -347,7 +363,29 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
       })
       .filter((x) => x.cash > 0 || x.adj > 0);
 
-    if (allocations.length === 0) {
+    // A receipt no longer needs a settled invoice — the uncovered remainder
+    // becomes a customer advance. It still needs somewhere to post that
+    // advance to (a named Client) and a positive amount when there's nothing
+    // else on the document. Money-out keeps the old "at least one line" rule,
+    // untouched, in the else branch below.
+    if (isReceipt) {
+      if (allocations.length === 0) {
+        if (!contactId) {
+          setError(`Select a ${contactLabel} to record a receipt with no invoice selected.`);
+          return;
+        }
+        if (amountNum <= 0) {
+          setError("Enter the amount received.");
+          return;
+        }
+      }
+      // Server rejects Σ allocation cash > amount (the advance can't go
+      // negative) — check it here too so the button never 400s.
+      if (round2(cashTotal) > round2(amountNum) + 0.005) {
+        setError(`Allocated cash (Rs ${cashTotal.toLocaleString()}) is more than the amount received (Rs ${amountNum.toLocaleString()}).`);
+        return;
+      }
+    } else if (allocations.length === 0) {
       setError(`Enter an amount against at least one ${docLabel.toLowerCase()}.`);
       return;
     }
@@ -371,7 +409,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     // When bank/cash accounts are configured and actual cash moves, picking one
     // is mandatory — it's the account the money lands in / comes from. A pure
     // write-off (no cash) doesn't touch a bank account, so it's not required.
-    if (hasBankAccounts && !bankAccountId && cashTotal > 0) {
+    // For a receipt the cash that moved is the typed Amount, not just what got
+    // allocated — an all-advance receipt (zero ticks) still landed somewhere.
+    const cashMoved = isReceipt ? amountNum : cashTotal;
+    if (hasBankAccounts && !bankAccountId && cashMoved > 0) {
       setError(`Select the bank/cash account the money was ${isReceipt ? "received in" : "paid from"}.`);
       return;
     }
@@ -398,6 +439,12 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           adjustmentAccountId: x.adjMode === "none" ? null : (x.adjAccountId ?? null),
         })),
       };
+      // Authoritative cash total (Task 7, 2026-08-31): always sent for a
+      // receipt, on BOTH create and edit — the server otherwise falls back to
+      // Σ allocation cash, which on an edit would silently flatten (destroy)
+      // an existing advance. Money-out keeps deriving it server-side; never
+      // add `amount` there.
+      if (isReceipt) payload.amount = round2(amountNum);
       const { data: saved } = isEdit
         ? await updatePayment(dir, editPayment.id, payload)
         : await createPayment(dir, companyId, payload);
@@ -489,6 +536,24 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               <label style={formStyles.label}>Description (optional)</label>
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
+
+            {/* Receipt-only: the total cash of this document, typed — not
+                summed from the ticks below. Whatever isn't allocated to an
+                invoice becomes the customer's advance (see the split under
+                the invoice list). */}
+            {isReceipt && (
+              <div style={formStyles.formGroup}>
+                <label style={formStyles.label}>Amount received</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  data-testid="receipt-amount"
+                  style={formStyles.input}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
 
             {/* Allocation against open documents */}
             <div style={formStyles.formGroup}>
@@ -584,10 +649,28 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
             </div>
 
             <div style={summaryWrap}>
-              <div style={summaryLine}>
-                <span style={summaryLabel}>Cash {isReceipt ? "received" : "paid"}:</span>
-                <span style={summaryStrong}>Rs {cashTotal.toLocaleString()}</span>
-              </div>
+              {isReceipt ? (
+                <>
+                  <div style={summaryLine}>
+                    <span style={summaryLabel}>Allocated:</span>
+                    <span style={summaryStrong} data-testid="receipt-allocated">Rs {cashTotal.toLocaleString()}</span>
+                  </div>
+                  <div style={summaryLine}>
+                    <span style={summaryLabelMuted}>Advance:</span>
+                    <span style={summaryMuted} data-testid="receipt-advance">Rs {advance.toLocaleString()}</span>
+                  </div>
+                  {overAllocated && (
+                    <div style={summaryLine}>
+                      <span style={adjError}>Allocated cash is more than the amount received.</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={summaryLine}>
+                  <span style={summaryLabel}>Cash paid:</span>
+                  <span style={summaryStrong}>Rs {cashTotal.toLocaleString()}</span>
+                </div>
+              )}
               {adjTotal > 0 && (
                 <>
                   <div style={summaryLine}>
@@ -616,10 +699,15 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             {(() => {
-              const bankMissing = hasBankAccounts && !bankAccountId && cashTotal > 0;
+              const bankMissing = hasBankAccounts && !bankAccountId && (isReceipt ? amountNum : cashTotal) > 0;
               // Allow submit when there's any settlement — cash and/or a pure
-              // write-off adjustment (Σ cash + Σ adjustment > 0).
-              const blocked = saving || (cashTotal + adjTotal) <= 0 || bankMissing;
+              // write-off adjustment (Σ cash + Σ adjustment > 0). A receipt
+              // with a positive typed Amount is also submittable with zero
+              // ticks — the whole thing becomes an advance.
+              const hasSomething = isReceipt
+                ? (amountNum > 0 || (cashTotal + adjTotal) > 0)
+                : (cashTotal + adjTotal) > 0;
+              const blocked = saving || !hasSomething || bankMissing;
               return (
                 <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
                   {saving ? "Saving…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}

@@ -14,6 +14,13 @@ export const getPaymentById = (dir, id) =>
 export const getPaymentPrintData = (dir, id) =>
   httpClient.get(`/payments/${dir}/${id}/print`);
 
+// `payload` is passed through as-is. For a receipt, PaymentForm now always
+// includes `amount` (the typed cash total — authoritative; any uncovered
+// remainder becomes the customer's advance). Sending it on UPDATE too matters
+// just as much as on CREATE: omit it and the API's backward-compat fallback
+// derives Amount from Σ allocation cash, silently flattening an existing
+// advance on edit. Money-out (Payments) never sets `amount` — its total stays
+// server-derived from the allocations, unchanged.
 export const createPayment = (dir, companyId, payload) =>
   httpClient.post(`/payments/${dir}/company/${companyId}`, payload);
 
