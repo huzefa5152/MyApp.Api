@@ -75,6 +75,19 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // non-cash "settle remainder" gap that also clears the doc.
   const [alloc, setAlloc] = useState({});
   const [loadingDocs, setLoadingDocs] = useState(false);
+  // True when the docs fetch for the CURRENT contact settled with a failure
+  // (network error, 5xx, timeout) rather than success. Distinct from
+  // `loadingDocs`, which only tracks "in flight" -- a FAILED fetch still
+  // resolves that to false, which used to silently re-enable Save on an
+  // edit whose real allocations never actually loaded (review fix round 3;
+  // same failure class as rounds 1-2, just reached via a network error
+  // instead of a race). Reset at the top of every effect run -- a fresh
+  // attempt (new contact, or a Retry) starts clean -- and set only in the
+  // .catch() below.
+  const [docsLoadFailed, setDocsLoadFailed] = useState(false);
+  // Bumped by the Retry action to re-run the docs-fetch effect without any
+  // of its other dependencies changing.
+  const [retryToken, setRetryToken] = useState(0);
 
   // Flat Chart of Accounts, fetched once — feeds the settle-remainder quick-pick
   // resolution and the "Other" account picker. Empty when GL is off / unseeded,
@@ -166,6 +179,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // back to the original contact correctly restores the original pre-fill.
   useEffect(() => {
     setAlloc({});
+    setDocsLoadFailed(false);
     if (!contactId) { setDocs([]); return; }
     let cancelled = false;
     setLoadingDocs(true);
@@ -240,10 +254,10 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
           if (target) setAlloc({ [target.id]: { cash: String(target.available), adj: "0", adjMode: "none", adjAccountId: null } });
         }
       })
-      .catch(() => { if (!cancelled) setDocs([]); })
+      .catch(() => { if (!cancelled) { setDocs([]); setDocsLoadFailed(true); } })
       .finally(() => { if (!cancelled) setLoadingDocs(false); });
     return () => { cancelled = true; };
-  }, [contactId, companyId, isReceipt, preset?.documentId, editPayment?.id]);
+  }, [contactId, companyId, isReceipt, preset?.documentId, editPayment?.id, retryToken]);
 
   const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
   const EMPTY_ROW = { cash: "", adj: "0", adjMode: "none", adjAccountId: null };
@@ -384,7 +398,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
     // reachable via a click, but guard the handler itself too in case
     // submission is ever triggered another way (e.g. an implicit Enter
     // submit slipping past a disabled default button in some browser).
-    if (isEdit && loadingDocs) return;
+    if (isEdit && (loadingDocs || docsLoadFailed)) return;
     setError("");
 
     const allocations = docs
@@ -593,6 +607,14 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
               ) : loadingDocs ? (
                 <div style={hintBox}>Loading…</div>
+              ) : docsLoadFailed ? (
+                <div style={{ ...hintBox, borderStyle: "solid", borderColor: colors.danger, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ color: colors.danger }}>
+                    Could not load {docLabel.toLowerCase()}s for this {contactLabel.toLowerCase()}.
+                    {isEdit && " This receipt cannot be saved until they load."}
+                  </span>
+                  <button type="button" style={retryBtn} onClick={() => setRetryToken((t) => t + 1)}>Retry</button>
+                </div>
               ) : docs.length === 0 ? (
                 <div style={hintBox}>No open {docLabel.toLowerCase()}s with a balance due for this {contactLabel.toLowerCase()}.</div>
               ) : isNarrow ? (
@@ -739,22 +761,27 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 ? (amountNum > 0 || (cashTotal + adjTotal) > 0)
                 : (cashTotal + adjTotal) > 0;
               // An edit's OWN allocations aren't in `alloc` yet until the docs
-              // fetch for its contact resolves (see the docs-fetch effect) —
-              // but `amount` is seeded from editPayment.amount at mount, so
-              // `hasSomething` above is already true before that fetch
-              // settles. Without this gate a fast click (or a slow network)
+              // fetch for its contact resolves SUCCESSFULLY (see the
+              // docs-fetch effect) — but `amount` is seeded from
+              // editPayment.amount at mount, so `hasSomething` above is
+              // already true before that fetch settles. Without this gate a
+              // fast click, a slow network, or a fetch that fails outright
               // submits an empty allocations array and wipes the receipt's
               // real ones — the exact failure class Task 7 exists to close,
-              // just via a race instead of a missing field (review fix round
-              // 2). A fresh CREATE has nothing to lose in that same window
-              // (its alloc was already correctly cleared, not "not yet
-              // loaded" — see the docs-fetch effect), so this only gates the
-              // edit path; it must never make a brand-new receipt wait.
-              const notReadyToSubmit = isEdit && loadingDocs;
+              // just via a race or a network error instead of a missing
+              // field (review fix rounds 2 and 3). `docsLoadFailed` covers
+              // the "fails outright" half: `loadingDocs` alone cannot see
+              // it, since a failed fetch still resolves that to false. A
+              // fresh CREATE has nothing to lose in either window (its
+              // alloc was already correctly cleared, not "not yet loaded" —
+              // see the docs-fetch effect), so this only gates the edit
+              // path; it must never make a brand-new receipt wait, even if
+              // that contact's own doc fetch also fails.
+              const notReadyToSubmit = isEdit && (loadingDocs || docsLoadFailed);
               const blocked = saving || !hasSomething || bankMissing || notReadyToSubmit;
               return (
                 <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
-                  {saving ? "Saving…" : notReadyToSubmit ? "Loading…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
+                  {saving ? "Saving…" : (isEdit && docsLoadFailed) ? "Unable to Save" : notReadyToSubmit ? "Loading…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
                 </button>
               );
             })()}
@@ -770,6 +797,8 @@ const tbl = { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" };
 const th = { textAlign: "left", padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontWeight: 700, whiteSpace: "nowrap" };
 const td = { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary };
 const fillBtn = { padding: "0.3rem 0.5rem", fontSize: "0.7rem", fontWeight: 700, borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" };
+// Retry action inside the docs-load-failed hint box (review fix round 3). Sized for a real tap target (>=44px) since this recovers a stuck edit.
+const retryBtn = { minHeight: 44, padding: "0.4rem 0.9rem", fontSize: "0.78rem", fontWeight: 700, borderRadius: 6, border: `1px solid ${colors.danger}`, background: "#fff", color: colors.danger, cursor: "pointer", flexShrink: 0 };
 // Mobile (<768px) allocation cards.
 const allocCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: "0.5rem" };
 const allocCardHead = { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" };
