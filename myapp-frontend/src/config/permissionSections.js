@@ -67,9 +67,14 @@ export const PERMISSION_SECTIONS = [
   {
     // Everything under the sidebar's Accounting group (receipts, payments,
     // transfers, journals, CoA, GL, reports, data migration) shares the
-    // single "Accounting" catalog module.
+    // single "Accounting" catalog module. Customer Ledger is its own catalog
+    // module (CustomerLedgerController) but sits in this section, right next
+    // to the Receipts/Payments entries it derives from.
     section: "Accounting",
-    modules: [{ key: "Accounting" }],
+    modules: [
+      { key: "Accounting" },
+      { key: "CustomerLedger", label: "Customer Ledger" },
+    ],
   },
   {
     // Reporting module — Sales report + Tax Sheet share the "Reports"

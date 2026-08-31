@@ -323,6 +323,9 @@ endpoints_to_test = [
     ("GET",  "/api/payments/payments/company/{cid}/paged"),
     ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
     ("GET",  "/api/payments/company/{cid}/by-bill/1"),
+    # Customer Ledger — derived money in/out trail (Task 6).
+    ("GET",  "/api/customer-ledger/company/{cid}"),
+    ("GET",  "/api/customer-ledger/company/{cid}/client/1"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:
@@ -958,6 +961,44 @@ status_check(suite13, "alice POST /clients/import/commit (Beta)", s, 403)
 s, _ = upload_file(f"/api/clients/import/preview?companyId={alpha['id']}", tokens["alice"],
                    "clients.csv", csv_bytes, "text/csv")
 check(suite13, "alice previews her own company", s == 200, f"got {s}")
+
+
+# ── Suite 14: customer ledger tenant guard (Task 6) ──────────
+# Cross-company companyId -> 403 is already covered by Suite 2 (both routes are
+# in endpoints_to_test above). This suite is the OTHER half: a clientId that
+# does not belong to the (accessible) company in the route must 404, not leak
+# that it exists elsewhere — CustomerLedgerService.GetForClientAsync resolves
+# clientId INSIDE companyId and throws, which the controller maps to 404.
+print("\n  Suite 14 — customer ledger tenant guard")
+suite14 = "customer ledger tenant guard"
+status, ledger_beta_client = request("POST", "/api/clients", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Ledger Client", "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": "0000005", "cnic": "0000005000005",
+    "strn": "0000005000005", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta ledger client: {status} {ledger_beta_client}"
+
+# alice (Alpha only) has access to Alpha but Beta's client doesn't live there —
+# must 404, not 403 (403 already proven by Suite 2 for a Beta companyId).
+s, _ = request("GET", f"/api/customer-ledger/company/{alpha['id']}/client/{ledger_beta_client['id']}",
+               token=tokens["alice"])
+status_check(suite14, "alice GET ledger for beta-owned clientId under alpha companyId", s, 404)
+
+# Sanity: the same clientId under its OWN (Beta) company works for someone
+# with Beta access, proving the guard isn't just failing every request.
+s, body = request("GET", f"/api/customer-ledger/company/{beta['id']}/client/{ledger_beta_client['id']}",
+                   token=tokens["bob"])
+check(suite14, "bob GET ledger for beta-owned client under beta companyId",
+      s == 200 and isinstance(body, dict) and body.get("clientId") == ledger_beta_client["id"],
+      f"status {s}, body {body}")
+
+# And the all-customers summary for alice's own company still works (the
+# 403/404 wiring above didn't just break the happy path).
+s, body = request("GET", f"/api/customer-ledger/company/{alpha['id']}", token=tokens["alice"])
+check(suite14, "alice GET all-customers ledger for her own company", s == 200 and isinstance(body, list),
+      f"status {s}, body {body}")
+
+request("DELETE", f"/api/clients/{ledger_beta_client['id']}", token=admin)
 
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────

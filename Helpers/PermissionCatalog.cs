@@ -142,6 +142,13 @@ namespace MyApp.Api.Helpers
             new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
             new("accounting.payments.print",  "Accounting", "Payments", "Print",  "Print or download a payment voucher"),
 
+            // Customer Ledger — derived money in/out trail per customer
+            // (ICustomerLedgerService). Separate module from "Accounting" so it
+            // gets its own navbar-section mapping entry, but it lives in the
+            // same Accounting section next to Receipts/Payments.
+            new("customerledger.list.view",  "CustomerLedger", "Customer Ledger", "View",  "View every customer's balance and their full money in/out ledger"),
+            new("customerledger.list.print", "CustomerLedger", "Customer Ledger", "Print", "Print or download a customer statement"),
+
             // Chart of Accounts (the account tree postings land on). View to read
             // the tree; manage to add/edit/delete groups & accounts and seed a
             // sector preset. Control accounts can't be deleted (subledger-backed).
