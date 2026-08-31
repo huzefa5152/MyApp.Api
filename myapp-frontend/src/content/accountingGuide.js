@@ -452,6 +452,132 @@ export const GUIDE_SECTIONS = [
     ],
   },
 
+  {
+    id: "manual-ledger",
+    group: "Starting from Excel",
+    title: "Typing a customer's ledger in by hand",
+    blocks: [
+      { p: "The importer is for a whole book of customers. For **one** customer — a late arrival, a correction, or a business with a handful of accounts — type it in. It is the same three documents in the same order." },
+      { p: "Work down that customer's sheet from the top and record each row as it comes." },
+      {
+        table: {
+          head: ["The row in Excel", "What you record", "Where"],
+          rows: [
+            ["Opening balance, positive", "One invoice dated the day BEFORE the period starts", "Sales → Bills"],
+            ["Opening balance, negative", "One receipt dated the day BEFORE the period starts", "Accounting → Receipts"],
+            ["Credit column", "An invoice", "Sales → Bills"],
+            ["Debit column", "A receipt", "Accounting → Receipts"],
+            ["Balance column", "Nothing at all", "—"],
+          ],
+        },
+      },
+      { warn: "**Never type the closing balance in.** It is worked out from the invoices and receipts you enter. Recording it as well doubles the customer's debt — this is the single most common mistake." },
+      { p: "**The opening balance.** A customer who already owed money before you started needs somewhere for that debt to come from:" },
+      {
+        steps: [
+          "Open Sales → Bills and click New.",
+          "Pick the customer, and date it the day before your period starts — e.g. 30 June if your year opens on 1 July, so it never lands inside the year it opens.",
+          "Number it well clear of the real invoices — 900001 upward — so it can never collide with one.",
+          "Enter one line for the opening amount, with no tax.",
+          "Save.",
+        ],
+      },
+      { note: "A customer whose opening balance is **negative** had paid you in advance. Record a receipt instead — a negative invoice is not a real document and it breaks totals and printing." },
+      { p: "**Each invoice.** Enter it with the number the sheet gives it, so the two can be reconciled later. `AA-412` becomes invoice number `412`." },
+      { note: "Where the same invoice number appears on several rows of the sheet, that is **one** invoice split over several lines. Add the amounts together and enter one document." },
+      { p: "**Each receipt.**" },
+      { path: "Accounting → Receipts" },
+      {
+        steps: [
+          "Click New receipt and pick the customer.",
+          "Set the date, the method (Cash, Bank Transfer, Cheque) and the amount.",
+          "Leave it as an advance rather than settling a particular invoice — unless the sheet actually tells you which invoice was paid.",
+          "Save.",
+        ],
+      },
+      { note: "An advance sits against the customer's running balance with no document attached. The balance is right either way, and you can apply it to an invoice later without unpicking anything. Guessing which invoice was paid is a guess you cannot undo cleanly." },
+      { p: "**Check it.** Open Accounting → Customer Ledger, pick the customer, and compare the closing balance with the one on their sheet. Do this per customer as you go — finding a mismatch after twenty customers means checking all twenty." },
+    ],
+  },
+  {
+    id: "manual-stock",
+    group: "Starting from Excel",
+    title: "Typing stock in by hand",
+    blocks: [
+      { p: "Opening stock is two things: the **item** must exist, and the item must have an **opening quantity**." },
+      { path: "Master Data → Item Types" },
+      {
+        steps: [
+          "Check whether the item already exists before creating it — an item is shared across the whole installation, not per company.",
+          "If it does not, create it with the name from the sheet, its HS code and its unit.",
+        ],
+      },
+      { note: "One product held across two customs declarations is still **one** item. Add the quantities together — do not create the item twice." },
+      { path: "Dashboards → Inventory → Opening Balances" },
+      {
+        steps: [
+          "Click Opening Balance.",
+          "Pick the Item, enter the Quantity from the sheet's closing column, set As Of to the date the figures are as at, and add a Note if it helps you trace it later.",
+          "Save. Repeat per item.",
+        ],
+      },
+      { warn: "Take the quantity from the sheet's **closing** column, not its opening column. The closing figure is what the business is holding now." },
+      { p: "There is one opening balance per item per company, and saving it again **replaces** the figure rather than adding to it — so correcting a mistake is simply entering the right number." },
+      { p: "**The value.** The quantities do not carry a cost, so the stock's total value is set once on the account:" },
+      { path: "Accounting → Chart of Accounts" },
+      {
+        steps: [
+          "Find the Inventory account.",
+          "Set its opening balance to the sheet's total closing value, as a debit.",
+        ],
+      },
+      { note: "The other side of that entry posts to Retained earnings on its own. Do not make a balancing entry — you would count it twice." },
+      { p: "**Check it** on Dashboards → Inventory → On-Hand. The opening quantity shows in its own column, so you can compare it against the sheet directly." },
+    ],
+  },
+  {
+    id: "manual-adjustments",
+    group: "Starting from Excel",
+    title: "Corrections and adjustments",
+    blocks: [
+      { p: "Three different things get called an adjustment. They are not interchangeable — pick by **what actually changed**." },
+      {
+        table: {
+          head: ["What changed", "Use", "Where"],
+          rows: [
+            ["The quantity on the shelf", "Stock Adjustment", "Dashboards → Inventory"],
+            ["The starting quantity was wrong", "Re-enter the opening balance", "Dashboards → Inventory → Opening Balances"],
+            ["An invoice was wrong", "Credit or Debit Note", "Sales → Credit Notes / Debit Notes"],
+            ["An account balance needs moving", "Journal Entry", "Accounting → Journal Entries"],
+          ],
+        },
+      },
+      { p: "**Stock Adjustment** — a count correction, breakage, or a write-off. It records a movement, so the history shows what happened and when." },
+      { path: "Dashboards → Inventory" },
+      {
+        steps: [
+          "Click Adjustment — or use the Adjustment action on the item's own row, which fills the item in for you.",
+          "Enter the Delta: **positive to increase, negative to decrease.** It is the change, not the new total.",
+          "Set the Date and write a Note — “count correction”, “breakage”. The note is the only record of why.",
+          "Save.",
+        ],
+      },
+      { warn: "Delta is the **difference**, not the new figure. An item showing 100 that should read 90 needs −10, not 90." },
+      { p: "**Re-entering an opening balance** is the right fix when the starting figure itself was wrong — the stock never moved, you simply seeded it incorrectly. Saving over it replaces the number and leaves no movement behind." },
+      { note: "Use an adjustment when something physically happened, and a corrected opening balance when the starting number was a typo. Getting this backwards leaves a movement in the history explaining an event that never occurred." },
+      { p: "**Journal Entry** — for moving a balance between accounts when no document is involved." },
+      { path: "Accounting → Journal Entries" },
+      {
+        steps: [
+          "Click New, set the date and write a Narration saying why.",
+          "Add lines: one account per line, an amount in Debit or Credit.",
+          "The form shows Balanced or Unbalanced — it will not save until debits equal credits.",
+        ],
+      },
+      { warn: "Do not reach for a journal entry to fix a customer's balance. Enter the missing invoice or receipt instead: the ledger, the statement and the aged report are all built from documents, and a journal entry moves the account total without them — so the customer's own ledger still shows the old figure." },
+    ],
+  },
+
   // ══════════════════════════════════════════════════════════════ SALES ══
   {
     id: "create-customer",

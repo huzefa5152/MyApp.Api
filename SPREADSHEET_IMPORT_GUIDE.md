@@ -311,6 +311,73 @@ For reference, the client's own 66-sheet workbook imports as:
 
 ---
 
+## Part 3b — Doing it by hand, and correcting it later
+
+The importer is for a whole book. For **one** customer or **one** item — a late
+arrival, or a correction — type it in.
+
+### One customer's ledger
+
+Work down their sheet from the top:
+
+| The row in Excel | What you record | Where |
+|---|---|---|
+| Opening balance, positive | One invoice dated the day **before** the period starts | Sales → Bills |
+| Opening balance, negative | One receipt dated the day **before** the period starts | Accounting → Receipts |
+| Credit column | An invoice | Sales → Bills |
+| Debit column | A receipt | Accounting → Receipts |
+| Balance column | **Nothing at all** | — |
+
+- **Opening invoice:** number it 900001 upward so it cannot collide with a real
+  invoice, date it the day before the year opens, one line, no tax.
+- **Each invoice:** use the sheet's own number — `AA-412` becomes `412`. The same
+  number on several rows is **one** invoice; add the amounts together.
+- **Each receipt:** Accounting → Receipts, pick the customer, set date, method and
+  amount, and leave it as an **advance** unless the sheet actually says which
+  invoice was paid.
+
+Check each customer against Accounting → Customer Ledger as you go. Finding a
+mismatch after twenty customers means re-checking all twenty.
+
+### One item's stock
+
+1. **Master Data → Item Types** — check it does not already exist (items are
+   shared across the whole installation), then create it with the name, HS code
+   and unit.
+2. **Dashboards → Inventory → Opening Balances** → **Opening Balance** — pick the
+   Item, enter the **closing** quantity from the sheet, set **As Of**, save.
+3. **Accounting → Chart of Accounts** → Inventory → set the opening balance to the
+   sheet's total value as a debit. The contra to Retained earnings is automatic.
+
+Saving an opening balance again **replaces** the figure rather than adding to it,
+so fixing a wrong one is simply entering the right number.
+
+### Corrections
+
+Three things get called an adjustment. Pick by **what actually changed**:
+
+| What changed | Use | Where |
+|---|---|---|
+| The quantity on the shelf | Stock Adjustment | Dashboards → Inventory |
+| The starting quantity was wrong | Re-enter the opening balance | Dashboards → Inventory → Opening Balances |
+| An invoice was wrong | Credit or Debit Note | Sales → Credit Notes / Debit Notes |
+| An account balance needs moving | Journal Entry | Accounting → Journal Entries |
+
+**Stock Adjustment** takes a **Delta** — positive to increase, negative to
+decrease. It is the *change*, not the new total: an item showing 100 that should
+read 90 needs **−10**. Always write the Note; it is the only record of why.
+
+Use an adjustment when something physically happened, and a corrected opening
+balance when the starting number was a typo. Backwards, and the movement history
+explains an event that never occurred.
+
+**Do not use a journal entry to fix a customer's balance.** Enter the missing
+invoice or receipt instead — the ledger, the statement and the aged report are
+built from documents, so a journal entry moves the account total while the
+customer's own ledger still shows the old figure.
+
+---
+
 ## Part 4 — Check it worked
 
 Do all four. They take five minutes and catch almost everything.

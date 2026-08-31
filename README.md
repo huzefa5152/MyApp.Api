@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-01 — Guide: entering the same data by hand
+
+- **The in-app Accounting Guide now covers doing it manually**, not just importing — three new sections under *Starting from Excel*: typing one customer's ledger in, typing one item's stock in, and which correction to use when.
+- Written against the real screens: which row of the spreadsheet becomes which document, why the closing balance is never typed in, why a negative opening balance is a receipt rather than a negative invoice, and why the same invoice number on several rows is one invoice.
+- The corrections section separates the three things people call an adjustment — a stock adjustment for what physically happened, a re-entered opening balance for a wrong starting figure, and a journal entry for moving an account balance — and warns against using a journal entry to fix a customer's balance, which leaves their own ledger showing the old figure.
+- Same material added to `SPREADSHEET_IMPORT_GUIDE.md`.
+
 ### 2026-09-01 — Fix: the browser kept showing the previous version after a deploy
 
 - **A deploy is now picked up on the next page load.** `index.html` was served with no cache instruction, so browsers were free to reuse a stored copy without checking. Because each deploy replaces the fingerprinted bundle it points at, that stored copy asked for a file that no longer existed — the app then failed to start and the site looked unchanged, or blank.
