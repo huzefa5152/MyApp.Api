@@ -1184,6 +1184,44 @@ export const GUIDE_SECTIONS = [
     ],
   },
   {
+    id: "sales-purchase-reports",
+    group: "Accounting Reports",
+    title: "Sales and purchase reports",
+    blocks: [
+      { p: "Two registers and a set of groupings, mirrored for both sides of the business." },
+      { path: "Reports → Accounting Reports → Sales" },
+      { p: "**Sales Invoice Register** is every invoice with its subtotal, tax, withholding, grand total, what has been received and what is still outstanding, plus its payment status. **Purchase Bill Register** is the same for bills." },
+      {
+        table: {
+          head: ["Grouping", "Answers"],
+          rows: [
+            ["by Customer / Supplier", "Who we sold the most to, or bought the most from"],
+            ["by Item", "Which products actually move"],
+            ["by Item Type", "The same, rolled up"],
+            ["by Account", "Which revenue or cost accounts it landed on"],
+            ["by Date", "Day by day"],
+            ["Monthly", "The trend, month by month"],
+            ["by Tax", "Split by the tax rate actually charged"],
+          ],
+        },
+      },
+      { note: "**by Account** reads the general ledger rather than working out which account a line should have gone to. That means it always agrees with the Profit & Loss — the same figures, grouped differently." },
+      { p: "**Payment Status** is the register with the status breakdown to the front: paid, part-paid, unpaid and overdue. Filter the register by Status to see just one of them." },
+      { p: "**Credit & Debit Notes** covers sales returns and adjustments. Notes are deliberately kept OUT of the invoice register — mixing them in would make the register’s total stop meaning “what we sold”." },
+      { note: "There is no Discount column anywhere in these reports. This system does not store a discount on a document or its lines — a discount is either its own line (a non-inventory item) or a settlement adjustment on the payment — so a discount column would be a number we invented rather than one we recorded." },
+    ],
+  },
+  {
+    id: "register-vs-aging",
+    group: "Accounting Reports",
+    title: "Why the register and the aging can differ",
+    blocks: [
+      { p: "The register’s Outstanding total can be slightly lower than the Accounts Receivable Aging total. The reason is overpayment." },
+      { p: "If a customer overpays one invoice, that invoice has a negative outstanding. The register nets it off; the aging report simply leaves it out, because an overpaid invoice has nothing to chase." },
+      { p: "Where that happens the register adds an **Overpaid by customers** figure, so the arithmetic is visible: outstanding plus overpaid equals the aging total." },
+    ],
+  },
+  {
     id: "exporting-reports",
     group: "Accounting Reports",
     title: "Printing and exporting",
