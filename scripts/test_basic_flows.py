@@ -30,6 +30,7 @@ import argparse
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from typing import Any
@@ -585,6 +586,76 @@ def test_withholding_tax_flow(base: str, token: str, company: dict, client: dict
         check(suite, "fixed-amount invoice created", False, f"{st}")
 
 
+# ── Suite 9: Item-description casing collision ─────────────────────
+def test_item_description_casing(base: str, token: str, company: dict, client: dict) -> None:
+    """Regression: a typed item name that already exists in the global catalog
+    under a different casing (or with a trailing space) must still bill.
+
+    Pre-fix both bill-create paths probed ItemDescriptions in SQL (case-
+    INSENSITIVE collation, so a stored "STEEL PIPE" matched a typed "Steel
+    Pipe") and then re-tested the result in C# with a case-SENSITIVE
+    Contains(), concluded the row was missing, and inserted a duplicate that
+    the UNIQUE IX_ItemDescriptions_Name rejected. The resulting SQL 2601 landed
+    in the create's `catch (DbUpdateException) when
+    (NumberAllocationRetry.IsUniqueViolation(...))` handler — which matches
+    2601/2627 from ANY unique index — so the bill rolled back and retried the
+    NUMBER allocation, hit the same deterministic clash every attempt, and told
+    the operator "Could not allocate a unique invoice number after N attempts".
+    """
+    suite = "9. Item-description casing collision"
+    print(f"\n=== {suite} ===")
+    it_id = first_item_type_id(base, token)
+
+    # Unique per run: ItemDescriptions is a GLOBAL catalog (no CompanyId), so a
+    # fixed name would hit rows left by earlier runs and the "exactly one row"
+    # assertion below would prove nothing.
+    stamp = datetime.now(timezone.utc).strftime("%H%M%S%f")
+    upper  = f"CASING PIPE {stamp}"
+    mixed  = upper.title()   # same key under the CI collation
+    padded = upper + " "     # same key under ANSI PadSpace
+
+    def make_bill(desc: str):
+        return http("POST", "/api/invoices/standalone", base, token=token, body={
+            "date": pkt_date_iso(), "companyId": company["id"], "clientId": client["id"],
+            "gstRate": 18,
+            "items": [{"description": desc, "quantity": 1, "uom": "Pcs",
+                       "unitPrice": 100, "itemTypeId": it_id}],
+        })
+
+    # 9a — seeds the catalog with the UPPER-CASE spelling.
+    status, first = make_bill(upper)
+    check(suite, "9a first bill (UPPER) created", status in (200, 201), f"got {status} {first}")
+    if status not in (200, 201):
+        return
+
+    # 9b — the regression itself.
+    status, second = make_bill(mixed)
+    check(suite, "9b same name in a different case accepted",
+          status in (200, 201), f"got {status} {second}")
+    check(suite, "9b never misreported as a numbering collision",
+          "allocate a unique invoice number" not in json.dumps(second).lower(),
+          f"body = {second}")
+
+    # 9c — trailing space is the same index key too (challan #1101, 2026-05-25).
+    status, third = make_bill(padded)
+    check(suite, "9c same name with a trailing space accepted",
+          status in (200, 201), f"got {status} {third}")
+
+    # 9d — all three spellings collapse onto ONE catalog row, and the row keeps
+    # the casing it was created with (existing rows carry saved FBR defaults and
+    # must never be clobbered by a later differently-cased bill).
+    _, rows = http("GET", "/api/lookup/items?query=" + urllib.parse.quote(upper),
+                   base, token=token)
+    matches = [r for r in (rows or [])
+               if (r.get("name") or "").strip().lower() == upper.strip().lower()]
+    check(suite, "9d exactly one catalog row for the name", len(matches) == 1,
+          f"got {len(matches)}: {[r.get('name') for r in (rows or [])]}")
+    if len(matches) == 1:
+        check(suite, "9d original casing preserved",
+              (matches[0].get("name") or "").strip() == upper,
+              f"got '{matches[0].get('name')}'")
+
+
 # ── Main ───────────────────────────────────────────────────────────
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
@@ -621,6 +692,7 @@ def main() -> int:
         test_tax_calculations(args.base, token, company, client)
         test_future_date_guard(args.base, token, company, client, challan)
         test_withholding_tax_flow(args.base, token, company, client)
+        test_item_description_casing(args.base, token, company, client)
     finally:
         teardown(args.base, token, company, args.keep)
 

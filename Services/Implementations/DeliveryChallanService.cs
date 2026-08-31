@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -398,67 +398,14 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(created);
         }
 
-        private async Task EnsureItemDescriptionsAsync(IEnumerable<string?> descriptions)
-        {
-            var names = descriptions
-                .Select(d => d?.Trim() ?? "")
-                .Where(d => !string.IsNullOrWhiteSpace(d))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (names.Count == 0) return;
-
-            // Trim the projection result. SQL Server uses ANSI PadSpace
-            // semantics on (n)varchar, so 'X' = 'X ' is TRUE and the unique
-            // index on ItemDescriptions.Name treats them as the same key.
-            // Without the Trim() here, a stored "X " comes back un-trimmed,
-            // the HashSet (Ordinal+IgnoreCase but space-sensitive) misses
-            // the candidate "X", we try to INSERT "X", and SQL Server fires
-            // a duplicate-key violation against the padded row. Discovered
-            // 2026-05-25 editing challan #1101 — ItemDescriptions row for
-            // "WATER POSTER MARKING COLOUR 500ML" was stored with a trailing
-            // space, silently blocking every challan edit through this path.
-            var existing = (await _context.ItemDescriptions
-                .Where(it => names.Contains(it.Name))
-                .Select(it => it.Name)
-                .ToListAsync())
-                .Select(n => (n ?? "").Trim());
-            var existingSet = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
-            var toAdd = names.Where(n => !existingSet.Contains(n))
-                             .Select(n => new ItemDescription { Name = n })
-                             .ToList();
-            if (toAdd.Count == 0) return;
-
-            _context.ItemDescriptions.AddRange(toAdd);
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                // Lost the race with a concurrent insert OR PadSpace
-                // equality matched a row our in-memory check didn't.
-                // Same recovery pattern UnitRegistry.EnsureNamesAsync uses:
-                // detach the batch, fall back to per-row inserts so the
-                // genuinely-new names still land. Catalog staleness is
-                // recoverable; crashing the caller's edit is not.
-                foreach (var d in toAdd)
-                    _context.Entry(d).State = EntityState.Detached;
-
-                foreach (var d in toAdd)
-                {
-                    if (await _context.ItemDescriptions.AnyAsync(x => x.Name == d.Name)) continue;
-                    _context.ItemDescriptions.Add(d);
-                    try
-                    {
-                        await _context.SaveChangesAsync();
-                    }
-                    catch (DbUpdateException)
-                    {
-                        _context.Entry(d).State = EntityState.Detached;
-                    }
-                }
-            }
-        }
+        // Kept as a named method because three call sites reference it, but the
+        // logic now lives in Helpers/ItemDescriptionRegistry so the bill-create
+        // paths share one implementation. The registry carries the two lessons
+        // this method learned the hard way: match the unique index's CI collation,
+        // and Trim the projection because PadSpace makes "X " the same key as "X"
+        // (challan #1101, 2026-05-25).
+        private Task EnsureItemDescriptionsAsync(IEnumerable<string?> descriptions) =>
+            ItemDescriptionRegistry.EnsureNamesAsync(_context, descriptions);
 
         public async Task<DeliveryChallanDto?> UpdateItemsAsync(int challanId, List<DeliveryItemDto> items)
         {

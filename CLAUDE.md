@@ -318,6 +318,8 @@ The basic-flow script covers (see `scripts/test_basic_flows.py` for detail):
 - Invoice update (description / qty / unit-price → totals reflow)
 - Item Rate History (quantity-suggestion source on bill form)
 - Tax calculation correctness (standard 18% GST, exempt 0%, 3rd Schedule retail price)
+- Item-description casing collision (a typed item name that already exists in
+  the global catalog under another case, or with a trailing space, must still bill)
 
 The stock-reflow script (`scripts/test_stock_itemtype_reflow.py`) proves
 inventory stays settled when item types change — it spins up an ephemeral
@@ -398,6 +400,15 @@ migrations). This is a hard rule, on par with the test-discipline checks.
 - ❌ Retrying POSTs to FBR (can issue duplicate IRN)
 - ❌ Logging passwords / JWTs / FBR tokens (use `SensitiveDataRedactor`)
 - ❌ Cross-tenant entity links (`Invoice.ClientId` pointing at a `Client` whose `CompanyId` doesn't match)
+- ❌ De-duplicating against a UNIQUE index with a case-sensitive C# check.
+  SQL Server's default collation is **CI + ANSI PadSpace**, so `"X"`, `"x"` and
+  `"X "` are ONE key. A SQL probe that matches, followed by an ordinal
+  `existing.Contains(name)` that doesn't, inserts a row the index then rejects.
+  Route item names and unit names through `ItemDescriptionRegistry` /
+  `UnitRegistry`. Worse inside a create that carries a
+  `when (NumberAllocationRetry.IsUniqueViolation(ex))` handler: that predicate
+  matches 2601/2627 from *any* index, so the duplicate is misdiagnosed as a
+  document-number collision and the operator is told numbering failed.
 
 ---
 
@@ -412,6 +423,7 @@ migrations). This is a hard rule, on par with the test-discipline checks.
 | Add CSV-safe export | `Helpers/ExcelTemplateEngine.cs:CsvSafe` |
 | Validate an image upload | `Helpers/ImageUploadValidator.cs` |
 | Retry on number collision | `Helpers/NumberAllocationRetry.cs` |
+| Register a typed item name / unit | `Helpers/ItemDescriptionRegistry.cs`, `Helpers/UnitRegistry.cs` |
 | Encrypt at rest | `Helpers/FbrTokenProtector.cs` + EF value converter in `AppDbContext` |
 | Audit doc + phased fix plan | `AUDIT_2026_05_13_SECURITY.md` |
 | Verify all the above | `scripts/verify_audit_2026_05_13_security.py` |

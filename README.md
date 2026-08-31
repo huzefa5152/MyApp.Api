@@ -289,6 +289,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Fix: billing an item whose name already exists in another case
+
+- **Creating a bill no longer fails when a line's item name already exists in the catalog under different capitalisation.** Typing "Steel Pipe" where the catalog holds "STEEL PIPE" — or a name that was stored with a trailing space — used to make the save fail outright. The item catalog is deliberately case-insensitive (one entry per item, keeping the spelling it was first saved with), but the bill's own "is this name new?" check was case-sensitive, so it tried to add a second copy of the same item and the save was rejected.
+- **The message it produced pointed at the wrong thing.** The failure surfaced as "Could not allocate a unique invoice number", after several silent retries, sending anyone investigating towards bill numbering instead of the item name. Both bill paths were affected — with and without a delivery challan. Delivery challans themselves already handled this correctly.
+- Registering item names now goes through a single shared component used by the bill and challan screens, so they cannot drift apart on this again.
+
 ### 2026-08-31 — Accounting Reports: tax, control checks and management summaries
 
 - **Tax Summary, Output Tax, Input Tax, Tax Transaction Detail, Tax by Customer and Tax by Supplier.** All of them read the Output Tax and Input Tax accounts in the ledger rather than adding up GST on invoices — so tax paid on an expense, and any adjustment an accountant journalled, are included, and the tax reports always agree with the Balance Sheet.
