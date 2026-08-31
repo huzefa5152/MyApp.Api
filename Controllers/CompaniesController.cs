@@ -166,10 +166,11 @@ namespace MyApp.Api.Controllers
                 if (updatedCompany == null)
                     return NotFound();
 
-                // The IsTenantIsolated flag may have just changed, which
-                // affects who passes the "open mode" branch in the access
-                // guard. Bump the generation so cached accessible-company
-                // sets re-evaluate on next request.
+                // Defensive cache bump after any company edit. It is no longer
+                // required for IsTenantIsolated: under the fail-closed access
+                // rule that flag doesn't change who can reach a company, so
+                // there is nothing to re-evaluate. Kept because it is cheap and
+                // an edit could still touch something a cached set derives from.
                 _access.InvalidateAll();
 
                 return Ok(updatedCompany);

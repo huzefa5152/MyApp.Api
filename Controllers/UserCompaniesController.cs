@@ -12,11 +12,15 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Controllers
 {
     /// <summary>
-    /// Maintains the <see cref="UserCompany"/> join — the source of truth
-    /// for "which companies can this user reach when
-    /// <see cref="Company.IsTenantIsolated"/> is true". The seed admin and
-    /// every user with the open companies (IsTenantIsolated=false) bypass
-    /// this table; rows here only matter for isolated companies.
+    /// Maintains the <see cref="UserCompany"/> join — the source of truth for
+    /// "which companies can this user reach", for EVERY company. Access is
+    /// fail-closed: only the seed admin bypasses this table, and a user with no
+    /// rows here reaches nothing.
+    ///
+    /// <see cref="Company.IsTenantIsolated"/> does not exempt a company from
+    /// this. It once did, under the old "open companies fall through"
+    /// semantics; it is now informational only. So a user must be assigned a
+    /// company here even when that company is marked open.
     ///
     /// All endpoints are gated by <c>tenantaccess.manage.*</c> permissions
     /// — only the seed admin grants those to a role by default, but the
