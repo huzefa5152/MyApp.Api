@@ -332,12 +332,49 @@ tracking-enabled company and asserts on-hand after each edit:
 
 ## Git workflow
 
+### Commit identity — MANDATORY, every branch, every session
+
+**This project is PERSONAL work, not Kinetic work.** Every commit on every branch
+must be authored as the personal GitHub account `huzefa5152`, and every push must
+go from that account.
+
+```
+user.name  = Huzefa Hussain
+user.email = 45231321+huzefa5152@users.noreply.github.com
+```
+
+The noreply address is what makes GitHub attribute the commit to `huzefa5152`.
+It is set **repo-local** (`git config --local`), which covers every branch
+automatically. Verify before your first commit of a session:
+
+```bash
+git config user.email        # must be the 45231321+huzefa5152 address
+gh auth status               # active account must be huzefa5152
+```
+
+**Never fix this by changing the global config.** The machine's global identity is
+the Kinetic one (`huzefa.hussain@kineticsoftware.com`) and must stay that way for
+kx.payments / kinetic-software work. If a commit lands with the wrong author, fix
+it with `git commit --amend --reset-author` before pushing.
+
+**Cherry-picks preserve the ORIGINAL author.** Picking a commit that was made
+under the Kinetic identity carries that identity across, even with the repo-local
+config set. Follow with `git commit --amend --reset-author` when you want the
+branch's authorship uniform — or leave it deliberately and say so, since the
+original author is honest provenance for a transplanted commit.
+
+### Everything else
+
 - Branch from `origin/master`: `fix/...` or `feat/...`
 - Imperative commit subjects ("Fix dashboard duplicates", not "Fixed" / "This fixes")
 - Commit-per-phase for large changes
 - **Never** include `Co-Authored-By: Claude …` or any AI-attribution footer — global rule from user memory
 - Ask before commit AND push every time (each needs fresh confirmation)
-- Frontend bundle rebuild goes in the **same commit** as the source change that necessitated it
+- With several agents or sessions live in one tree, stage explicit paths —
+  `git commit -F <msgfile> -- <paths>`. A bare `git add -A` has already swept one
+  agent's work into another's commit and silently clobbered a third's edit.
+- `wwwroot/` is **gitignored** and has no tracked files on any branch; CI rebuilds
+  it on every deploy. Do not commit it, and do not `git add -f` it.
 
 ---
 
