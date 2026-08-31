@@ -579,6 +579,13 @@ def suite_6_tenant_isolation(base, token, cid, foreign):
     st, _ = http("GET", f"/api/reports/company/{cid}/client-ledger/excel?{qs}", base, token=otoken)
     check(suite, "the outsider is 403'd on the export too", st == 403, f"got {st}")
 
+    # The picker feed is the third route on this controller and leaks the customer
+    # list if it is not scoped — suite 7 proves it returns names, so prove here
+    # that it only returns them to someone who can see the company.
+    st, body = http("GET", f"/api/reports/company/{cid}/client-ledger/customers", base, token=otoken)
+    check(suite, "the outsider is 403'd on the customer picker feed too",
+          st == 403, f"got {st} {err_of(body)}")
+
     # And they CAN read their own company — proof the 403 is scope, not a broken route.
     st, own = ledger_report(base, otoken, foreign["company_id"], dateFrom=WIDE_FROM, dateTo=WIDE_TO)
     check(suite, "the outsider can still read their OWN company's report",
