@@ -180,6 +180,22 @@ namespace MyApp.Api.Helpers
             new("accounting.import.run", "Accounting", "Data Migration", "Run", "Run the legacy Data_2021 ETL into a company (non-prod only)"),
             new("accounting.import.manager", "Accounting", "Data Migration", "Manager Import", "Import a Manager.io business export (.zip of JSON) into a company — works on the live server"),
 
+            // ── Spreadsheet import (opening stock + customer ledger) ─────────
+            // Its own module, NOT accounting.import.*: those keys sit behind a
+            // non-Production gate (LegacyImportController) and this importer has
+            // to run against a live tenant during onboarding.
+            //
+            // reimport.force is separated on purpose. Every other key here can
+            // only ADD data the operator has reviewed; force is the one path
+            // that sets aside a completed import so the same file can be loaded
+            // over the top of it.
+            new("spreadsheetimport.profiles.view",   "SpreadsheetImport", "Layouts", "View",   "View saved spreadsheet layouts and their mapping history"),
+            new("spreadsheetimport.profiles.manage", "SpreadsheetImport", "Layouts", "Manage", "Save, edit and roll back a spreadsheet layout mapping"),
+            new("spreadsheetimport.stock.run",       "SpreadsheetImport", "Opening Stock", "Run", "Import an opening stock sheet into a company"),
+            new("spreadsheetimport.ledger.run",      "SpreadsheetImport", "Customer Ledger", "Run", "Import a customer outstanding ledger workbook into a company"),
+            new("spreadsheetimport.runs.view",       "SpreadsheetImport", "History", "View",  "View what has been imported into a company, and when"),
+            new("spreadsheetimport.reimport.force",  "SpreadsheetImport", "History", "Force Re-import", "Set aside a completed import so the same file can be imported again"),
+
             // ── Folders + Attachments (unified document management) ─────────
             // One shared system powers the Configuration → Folders library AND
             // the reusable attachment component on transaction modules. Folders

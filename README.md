@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Spreadsheet import: recognised layouts, file checks and re-import protection
+
+- **New Spreadsheet Import module** (Accounting → Spreadsheet Import) for onboarding a business from its own Excel books — an opening stock sheet and a customer outstanding ledger — instead of typing them in.
+- **A layout is described once and remembered.** The first upload of an unfamiliar workbook asks which column is which; that mapping is saved, fingerprinted and matched automatically next time, so a monthly re-upload needs no re-mapping. Layouts can be private to a company or shared installation-wide, and every mapping change is versioned and can be rolled back.
+- **Uploads are checked before anything is read** — extension, magic bytes, that the container matches the extension, and that the workbook actually opens and holds data. A renamed PDF, a `.xls` renamed `.xlsx`, and a password-protected or empty file each get their own plain-English message instead of an internal error.
+- **The same data cannot be imported twice.** A file already imported into that company is refused outright, naming when and by whom. A re-saved or re-exported copy — different bytes, identical content — is refused too. A workbook that has genuinely grown still imports, adding only its new rows. Deliberately re-importing over a completed run needs its own permission and a recorded reason.
+- New guide: `SPREADSHEET_IMPORT_GUIDE.md` — the step-by-step onboarding runbook covering what to create, on which screen, and how to prove the imported numbers agree with the source.
+
 ### 2026-08-31 — Fix: billing an item whose name already exists in another case
 
 - **Creating a bill no longer fails when a line's item name already exists in the catalog under different capitalisation.** Typing "Steel Pipe" where the catalog holds "STEEL PIPE" — or a name that was stored with a trailing space — used to make the save fail outright. The item catalog is deliberately case-insensitive (one entry per item, keeping the spelling it was first saved with), but the bill's own "is this name new?" check was case-sensitive, so it tried to add a second copy of the same item and the save was rejected.

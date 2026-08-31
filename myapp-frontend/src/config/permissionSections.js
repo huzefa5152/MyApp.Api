@@ -74,6 +74,12 @@ export const PERMISSION_SECTIONS = [
     modules: [
       { key: "Accounting" },
       { key: "CustomerLedger", label: "Customer Ledger" },
+      // Spreadsheet import (opening stock + customer ledger workbooks). Its
+      // own catalog module rather than "Accounting" because it is not gated
+      // to non-production the way accounting.import.* is — see
+      // PermissionCatalog.cs. Sits here since what it writes (clients,
+      // invoices, receipts, opening balances) lands in Accounting.
+      { key: "SpreadsheetImport", label: "Spreadsheet Import" },
     ],
   },
   {

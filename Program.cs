@@ -352,6 +352,9 @@ builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IHsCodeService, HsCodeService>();
 builder.Services.AddScoped<IClientImportService, ClientImportService>();
+// Spreadsheet import: saved workbook layouts, and the upload/identify/history side.
+builder.Services.AddScoped<IImportProfileService, ImportProfileService>();
+builder.Services.AddScoped<ISpreadsheetImportService, SpreadsheetImportService>();
 builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();

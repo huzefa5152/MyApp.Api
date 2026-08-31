@@ -129,6 +129,14 @@ namespace MyApp.Api.Data
         // NOT via a migration, so the whole feature cherry-picks across branches.
         public DbSet<ParserFeedback> ParserFeedbacks { get; set; }
 
+        // Spreadsheet import: recognised workbook layouts (ImportProfile), the
+        // append-only history of their mappings, and one audit row per committed
+        // import. ImportRun is also the dedupe key — see the filtered unique
+        // index in OnModelCreating.
+        public DbSet<ImportProfile> ImportProfiles { get; set; }
+        public DbSet<ImportProfileVersion> ImportProfileVersions { get; set; }
+        public DbSet<ImportRun> ImportRuns { get; set; }
+
         // RBAC
         public DbSet<Permission> Permissions { get; set; }
         public DbSet<Role> Roles { get; set; }
@@ -1351,6 +1359,98 @@ namespace MyApp.Api.Data
                 .WithMany()
                 .HasForeignKey(v => v.POFormatId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // ── Spreadsheet import ─────────────────────────────────────────
+            // ImportProfile mirrors POFormat: the signature hash is the routing
+            // key and is NOT unique, because two companies can privately save
+            // the same structural layout under their own names.
+            modelBuilder.Entity<ImportProfile>()
+                .HasIndex(p => new { p.Kind, p.SignatureHash });
+            modelBuilder.Entity<ImportProfile>()
+                .HasIndex(p => new { p.CompanyId, p.Kind, p.IsActive });
+            modelBuilder.Entity<ImportProfile>()
+                .Property(p => p.MappingJson)
+                .HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<ImportProfile>()
+                .Property(p => p.TokenSignature)
+                .HasMaxLength(4000);
+            modelBuilder.Entity<ImportProfile>()
+                .Property(p => p.SignatureHash)
+                .HasMaxLength(64);
+            modelBuilder.Entity<ImportProfile>()
+                .Property(p => p.Kind)
+                .HasMaxLength(40);
+            modelBuilder.Entity<ImportProfile>()
+                .Property(p => p.Layout)
+                .HasMaxLength(60);
+            modelBuilder.Entity<ImportProfile>()
+                .Property(p => p.Name)
+                .HasMaxLength(200);
+            modelBuilder.Entity<ImportProfile>()
+                .Property(p => p.Notes)
+                .HasMaxLength(2000);
+            // SetNull, not Cascade: deleting a company must not silently delete
+            // an installation-wide layout it happened to be scoped to.
+            modelBuilder.Entity<ImportProfile>()
+                .HasOne(p => p.Company)
+                .WithMany()
+                .HasForeignKey(p => p.CompanyId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<ImportProfileVersion>()
+                .HasIndex(v => new { v.ImportProfileId, v.Version })
+                .IsUnique();
+            modelBuilder.Entity<ImportProfileVersion>()
+                .Property(v => v.MappingJson)
+                .HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<ImportProfileVersion>()
+                .Property(v => v.Layout)
+                .HasMaxLength(60);
+            modelBuilder.Entity<ImportProfileVersion>()
+                .Property(v => v.ChangeNote)
+                .HasMaxLength(1000);
+            modelBuilder.Entity<ImportProfileVersion>()
+                .Property(v => v.CreatedBy)
+                .HasMaxLength(200);
+            modelBuilder.Entity<ImportProfileVersion>()
+                .HasOne(v => v.ImportProfile)
+                .WithMany()
+                .HasForeignKey(v => v.ImportProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The re-import guard. Filtered so a superseded run stops blocking
+            // while staying on the books for audit. This lives in the DATABASE
+            // on purpose: a service-level check loses to two concurrent commits
+            // of the same file, and a double import doubles a balance silently.
+            modelBuilder.Entity<ImportRun>()
+                .HasIndex(r => new { r.CompanyId, r.Kind, r.FileSha256 })
+                .IsUnique()
+                .HasFilter("[IsSuperseded] = 0");
+            modelBuilder.Entity<ImportRun>()
+                .HasIndex(r => new { r.CompanyId, r.ImportedAt });
+            modelBuilder.Entity<ImportRun>()
+                .Property(r => r.FileSha256)
+                .HasMaxLength(64);
+            modelBuilder.Entity<ImportRun>()
+                .Property(r => r.Kind)
+                .HasMaxLength(40);
+            modelBuilder.Entity<ImportRun>()
+                .Property(r => r.OriginalFileName)
+                .HasMaxLength(400);
+            modelBuilder.Entity<ImportRun>()
+                .Property(r => r.CountsJson)
+                .HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<ImportRun>()
+                .Property(r => r.SupersedeReason)
+                .HasMaxLength(1000);
+            // Restrict: an import run is the audit trail for rows that still
+            // exist in the company, so it must not vanish with a company delete
+            // without someone dealing with the imported data first.
+            modelBuilder.Entity<ImportRun>()
+                .HasOne(r => r.Company)
+                .WithMany()
+                .HasForeignKey(r => r.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // ── PoImportArchive ────────────────────────────────────────────
             // No FKs on CompanyId / UploadedByUserId — the archive must
