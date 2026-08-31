@@ -237,8 +237,8 @@ export default function ClientLedgerReportPage() {
 
         <Field label="Period">
           <div style={{ display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-            <button type="button" onClick={() => setMode("period")} style={segBtn(mode === "period")}>Month / Year</button>
-            <button type="button" onClick={() => setMode("custom")} style={segBtn(mode === "custom")}>Custom range</button>
+            <button type="button" onClick={() => setMode("period")} style={segBtn(mode === "period", isNarrow)}>Month / Year</button>
+            <button type="button" onClick={() => setMode("custom")} style={segBtn(mode === "custom", isNarrow)}>Custom range</button>
           </div>
         </Field>
 
@@ -298,11 +298,11 @@ export default function ClientLedgerReportPage() {
         </Field>
 
         <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
+          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue, isNarrow)}>
             <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
           </button>
           {canExport && (
-            <button onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid} style={btn(colors.teal)}>
+            <button onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid} style={btn(colors.teal, isNarrow)}>
               <MdDownload size={16} /> {exporting ? "Exporting…" : "Export Excel"}
             </button>
           )}
@@ -328,8 +328,8 @@ export default function ClientLedgerReportPage() {
             </div>
             {report.clients.length > 1 && (
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={expandAll} style={ghostBtn}><MdUnfoldMore size={15} /> Expand all</button>
-                <button onClick={collapseAll} style={ghostBtn}><MdUnfoldLess size={15} /> Collapse all</button>
+                <button onClick={expandAll} style={isNarrow ? ghostBtnNarrow : ghostBtn}><MdUnfoldMore size={15} /> Expand all</button>
+                <button onClick={collapseAll} style={isNarrow ? ghostBtnNarrow : ghostBtn}><MdUnfoldLess size={15} /> Collapse all</button>
               </div>
             )}
           </div>
@@ -504,10 +504,13 @@ const val = { display: "block", fontSize: "0.84rem", fontWeight: 600, color: col
 const entryCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.6rem 0.7rem", background: "#fff", display: "flex", flexDirection: "column", gap: 3 };
 const entryMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(90px, 100%), 1fr))", gap: "0.35rem 0.7rem", marginTop: 4 };
 
-const btn = (bg) => ({
+// `narrow` = the phone viewport, where every control has to clear 44px
+// (CLAUDE.md §3). Desktop keeps the tighter 40px toolbar height.
+const btn = (bg, narrow) => ({
   display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: "#fff",
-  border: "none", borderRadius: 8, padding: "9px 14px", fontSize: "0.85rem", fontWeight: 600,
-  cursor: "pointer", minHeight: 40,
+  border: "none", borderRadius: 8, padding: narrow ? "11px 16px" : "9px 14px",
+  fontSize: "0.85rem", fontWeight: 600,
+  cursor: "pointer", minHeight: narrow ? 44 : 40,
 });
 
 const ghostBtn = {
@@ -516,15 +519,17 @@ const ghostBtn = {
   border: `1px solid ${colors.inputBorder}`, borderRadius: 8,
   padding: "6px 10px", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
 };
+// Same control on a phone: 33px is under the 44px floor (CLAUDE.md §3).
+const ghostBtnNarrow = { ...ghostBtn, minHeight: 44, padding: "10px 14px" };
 
-const segBtn = (active) => ({
+const segBtn = (active, narrow) => ({
   border: "none",
   background: active ? colors.blue : "transparent",
   color: active ? "#fff" : colors.textSecondary,
-  padding: "9px 14px",
+  padding: narrow ? "11px 16px" : "9px 14px",
   fontSize: "0.82rem",
   fontWeight: 600,
   cursor: "pointer",
-  minHeight: 40,
+  minHeight: narrow ? 44 : 40,
   whiteSpace: "nowrap",
 });

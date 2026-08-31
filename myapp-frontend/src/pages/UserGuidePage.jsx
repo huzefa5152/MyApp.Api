@@ -42,14 +42,18 @@ export default function UserGuidePage() {
       <div style={st.searchWrap}>
         <MdSearch size={17} style={st.searchIcon} />
         <input
-          style={st.search}
+          style={{ ...st.search, ...(isNarrow ? st.searchNarrow : null) }}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search the guide…"
         />
         {query && (
-          <button style={st.searchClear} onClick={() => setQuery("")} aria-label="Clear search">
-            <MdClose size={15} />
+          <button
+            style={{ ...st.searchClear, ...(isNarrow ? st.searchClearNarrow : null) }}
+            onClick={() => setQuery("")}
+            aria-label="Clear search"
+          >
+            <MdClose size={isNarrow ? 18 : 15} />
           </button>
         )}
       </div>
@@ -70,7 +74,7 @@ export default function UserGuidePage() {
               <button
                 key={s.id}
                 onClick={() => pick(s.id)}
-                style={{ ...st.navItem, ...(s.id === active ? st.navItemActive : null) }}
+                style={{ ...st.navItem, ...(isNarrow ? st.navItemNarrow : null), ...(s.id === active ? st.navItemActive : null) }}
               >
                 {s.title}
               </button>
@@ -271,11 +275,18 @@ const st = {
   searchIcon: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary, pointerEvents: "none" },
   search: { width: "100%", minHeight: 40, padding: "0.45rem 2rem 0.45rem 2rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, background: colors.inputBg, color: colors.textPrimary, fontSize: "0.85rem" },
   searchClear: { position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: 26, height: 26, border: "none", borderRadius: 6, background: "transparent", color: colors.textSecondary, cursor: "pointer" },
+  // Phone (<768px): the search box and its clear button grow to real 44px tap
+  // targets (CLAUDE.md §3). Desktop keeps the tighter sidebar density.
+  searchNarrow: { minHeight: 44, padding: "0.6rem 2.9rem 0.6rem 2rem", fontSize: "0.95rem" },
+  searchClearNarrow: { right: 2, width: 44, height: 44 },
   matchCount: { padding: "0 0.35rem 0.5rem", color: colors.textSecondary, fontSize: "0.75rem" },
 
   navGroup: { marginBottom: "0.6rem" },
   navGroupTitle: { padding: "0.35rem", color: colors.textSecondary, fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" },
   navItem: { display: "block", width: "100%", minHeight: 36, padding: "0.4rem 0.5rem", border: "none", borderRadius: 7, background: "transparent", color: colors.textPrimary, fontSize: "0.84rem", textAlign: "left", cursor: "pointer", lineHeight: 1.35 },
+  // Phone: the contents list is the primary way to move around the guide, so
+  // every entry gets a full 44px row (CLAUDE.md §3).
+  navItemNarrow: { minHeight: 44, padding: "0.6rem 0.6rem" },
   navItemActive: { background: colors.blue, color: "#fff", fontWeight: 700 },
 
   article: { minWidth: 0, background: colors.cardBg, border: `1px solid ${colors.inputBorder}`, borderRadius: 12, padding: "1.25rem" },
