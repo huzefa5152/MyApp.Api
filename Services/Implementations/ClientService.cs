@@ -350,13 +350,24 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ClientId = g.Key, N = g.Count() })
                 .ToDictionaryAsync(x => x.ClientId, x => x.N);
 
-            // Money: AR = Σ(GrandTotal − AmountPaid) over sale invoices.
+            // Money: AR = Σ(GrandTotal − AmountPaid) over sale invoices, LESS any
+            // money held on account for the client.
+            //
+            // Invoice-settling receipts are already reflected in AmountPaid, so
+            // only the UNAPPLIED (on-account) movements are added here — counting
+            // every receipt would double-count them. An advance received puts the
+            // customer in credit and can legitimately take A/R negative; a refund
+            // paid back to them pushes it the other way. Without this the column
+            // disagrees with the client's own ledger, which has always carried a
+            // receipt at its full amount (ICustomerLedgerService).
             var arByClient = await _context.Invoices
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                             && i.DocumentType != 9 && i.DocumentType != 10)
                 .GroupBy(i => i.ClientId)
                 .Select(g => new { ClientId = g.Key, Bal = g.Sum(i => i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid) })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Bal);
+
+            var onAccountByClient = await PartyOnAccount.NetByPartyAsync(_context, companyId, receivables: true);
 
             var whtByClient = await _context.WithholdingTaxReceipts
                 .Where(r => r.CompanyId == companyId)
@@ -401,7 +412,7 @@ namespace MyApp.Api.Services.Implementations
             var list = new List<ClientSummaryDto>(clients.Count);
             foreach (var c in clients)
             {
-                var ar = arByClient.GetValueOrDefault(c.Id);
+                var ar = arByClient.GetValueOrDefault(c.Id) + onAccountByClient.GetValueOrDefault(c.Id);
                 var ordered = orderedByClient.GetValueOrDefault(c.Id);
                 var delivered = deliveredOnOrdersByClient.GetValueOrDefault(c.Id);
                 list.Add(new ClientSummaryDto

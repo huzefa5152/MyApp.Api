@@ -23,6 +23,9 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<List<Account>> GetAccountsAsync(int companyId) =>
             await _context.Accounts
                 .Where(a => a.CompanyId == companyId)
+                // Group comes along so every account picker can show which group
+                // an account sits in (AccountDto.AccountGroupName).
+                .Include(a => a.AccountGroup)
                 .OrderBy(a => a.Position).ThenBy(a => a.Id)
                 .AsNoTracking().ToListAsync();
 

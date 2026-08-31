@@ -202,6 +202,31 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<IEnumerable<SupplierDto>>> GetByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));
 
+        /// <summary>
+        /// Per-supplier Accounts payable + status for the Suppliers screen. The
+        /// payables mirror of the client summary.
+        /// </summary>
+        [HttpGet("company/{companyId}/summary")]
+        [HasPermission("suppliers.manage.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<SupplierSummaryDto>>> GetSummaryByCompany(int companyId)
+            => Ok(await _service.GetSummaryAsync(companyId));
+
+        /// <summary>
+        /// Supplier ledger — bills (credits), payments (debits), advances and
+        /// refunds with a running amount owed. Opened from the Accounts-payable
+        /// cell, like the customer statement.
+        /// </summary>
+        [HttpGet("{supplierId}/statement")]
+        [HasPermission("suppliers.manage.view")]
+        public async Task<ActionResult<SupplierStatementDto>> GetSupplierStatement(int supplierId)
+        {
+            var supplier = await _service.GetByIdAsync(supplierId);
+            if (supplier == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, supplier.CompanyId);
+            return Ok(await _service.GetStatementAsync(supplierId, supplier.Name));
+        }
+
         [HttpGet("{id}")]
         [HasPermission("suppliers.manage.view")]
         public async Task<ActionResult<SupplierDto>> GetById(int id)

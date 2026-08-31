@@ -1927,63 +1927,13 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // One-time: every company that already has a chart of accounts, but is
-    // missing the customer-advance control account added to CoaPresetSeeder
-    // (2026-08-29), gains exactly that one row — nothing else. This does NOT
-    // call SeedWholesaleAsync: re-running the full preset seeder would also
-    // recreate ANY other preset account a company happens to be missing
-    // (e.g. the Aug-7 settlement accounts for a tenant created before that
-    // commit, or one whose chart was customised since) — a behaviour change
-    // this task must not cause. Instead it inserts a single Account row
-    // directly, using the same "seed:*" ExternalRef convention as the
-    // seeder, so a later SeedWholesaleAsync recognises it and will not
-    // double-create it. Idempotent via the AuditLog marker below, same
-    // convention as the backfills above.
-    if (!db.AuditLogs.Any(a => a.ExceptionType == "CUSTOMER_ADVANCES_BACKFILL_V1"))
-    {
-        try
-        {
-            var accountRepo = scope.ServiceProvider.GetRequiredService<IAccountRepository>();
-            var companyIds = await db.Accounts.AsNoTracking()
-                .Select(a => a.CompanyId).Distinct().ToListAsync();
-            var added = 0;
-            foreach (var companyId in companyIds)
-            {
-                var existing = await accountRepo.GetAccountByExternalRefAsync(companyId, "seed:customer_advances");
-                if (existing != null) continue;
-
-                var liabilities = await accountRepo.GetGroupByExternalRefAsync(companyId, "seed:liabilities");
-                if (liabilities == null)
-                {
-                    Log.Warning("Customer-advances backfill: company {CompanyId} has no seed:liabilities group — skipped.", companyId);
-                    continue;
-                }
-
-                await accountRepo.AddAccountAsync(new Account
-                {
-                    CompanyId = companyId,
-                    Name = "Advance from Customers",
-                    AccountGroupId = liabilities.Id,
-                    AccountType = AccountType.Liability,
-                    IsControlAccount = true,
-                    ControlType = ControlType.CustomerAdvances,
-                    IsActive = true,
-                    Position = await accountRepo.NextAccountPositionAsync(liabilities.Id),
-                    ExternalRef = "seed:customer_advances",
-                });
-                added++;
-            }
-
-            db.Database.ExecuteSqlRaw(
-                "INSERT INTO AuditLogs (Level, ExceptionType, Message, HttpMethod, RequestPath, StatusCode, [Timestamp]) " +
-                "VALUES ('Info', 'CUSTOMER_ADVANCES_BACKFILL_V1', {0}, 'STARTUP', '/seed/accounts/customer-advances', 200, SYSUTCDATETIME())",
-                $"Customer-advances control account added for {added} of {companyIds.Count} {(companyIds.Count == 1 ? "company" : "companies")} with an existing chart.");
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Customer-advances account backfill failed (non-fatal).");
-        }
-    }
+    // REMOVED (2026-08-31): the one-time back-fill that added an "Advance from
+    // Customers" control account to every existing chart. An advance now posts
+    // to the party's own control account (A/R for a client, A/P for a supplier),
+    // so that account would be created and never posted to. Charts where the
+    // back-fill already ran keep the (inert) row — an account is the operator's
+    // to remove, and deleting one from startup code could take a real historical
+    // balance with it. See ControlType.CustomerAdvances.
 }
 
 // Configure the HTTP request pipeline.

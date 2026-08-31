@@ -14,8 +14,13 @@ Conflating them either rejects a valid 1000-cash receipt that clears an 1100
 invoice via a 100 write-off (suite 4), or silently misstates the advance.
 
 Suites:
-  1. Receipt with NO allocation  -> saves, unallocatedAmount == amount, posts to
-                                    "Advance from Customers"
+  1. Receipt with NO allocation  -> saves, unallocatedAmount == amount, and the
+                                    uncovered cash credits the CLIENT'S OWN
+                                    Accounts receivable (2026-08-31: money held
+                                    for a party lives on that party's control
+                                    account, not on a separate "Advance from
+                                    Customers" liability, which is no longer
+                                    seeded — see ControlType.CustomerAdvances)
   2. Invoice.AmountPaid          -> an unallocated receipt contributes NOTHING
   3. Partial allocation          -> remainder is the advance
   4. Cash vs settlement          -> cash + write-off clearing a bigger invoice is
@@ -32,7 +37,8 @@ Suites:
                                     "client" and "Client" must mean the same
                                     thing to BOTH the allocations-optional test
                                     and the belongs-to-this-company guard
-  9. Ledger integrity            -> trial balance balanced, advance account total
+  9. Ledger integrity            -> trial balance balanced, the run's advance
+                                    total, and A/R == the A/R column
   10. Allocate advance           -> POST /api/receipts/{id}/allocate applies part
                                     of an existing advance to invoices raised
                                     LATER; over-allocation past the remaining
@@ -48,11 +54,13 @@ Suites:
                                     cannot inflate it past Σ allocation cash on
                                     EITHER create or edit; PostingService would
                                     otherwise plug the gap to Suspense silently
-  12. Allocate GL integrity      -> allocating shrinks the advance leg and grows
-                                    the AR leg by exactly the cash moved, the
-                                    entry stays balanced, and a SECOND allocate
-                                    on the same receipt does not duplicate the
-                                    first call's journal lines (re-post REPLACES)
+  12. Allocate GL integrity      -> allocating moves NOTHING (the cash was
+                                    already on the client's A/R), the entry
+                                    stays balanced, a SECOND allocate on the
+                                    same receipt does not duplicate the first
+                                    call's journal lines (re-post REPLACES), and
+                                    each allocated slice is tagged to the invoice
+                                    it settled while the rest stays untagged
 
 Runs against a fresh ephemeral GL-enabled company + client, plus a second
 company used only as the "other tenant" in suite 8. Both torn down at the end.
@@ -211,7 +219,7 @@ def balance_of(base, token, cid, account_id):
 
 
 # ── Suites ─────────────────────────────────────────────────────────
-def suite_1_advance(base, token, cid, client_id, advance_acct):
+def suite_1_advance(base, token, cid, client_id, ar_acct, advance_acct):
     suite = "1. Receipt with no allocation"
     print(f"\n=== {suite} ===")
     st, r = post_receipt(base, token, cid, receipt_body(client_id, amount=100000))
@@ -232,13 +240,25 @@ def suite_1_advance(base, token, cid, client_id, advance_acct):
           and eq(again.get("unallocatedAmount"), 100000),
           f"got {st} amount={again.get('amount')} unallocated={again.get('unallocatedAmount')}")
 
-    if advance_acct:
-        bal = balance_of(base, token, cid, advance_acct["id"])
-        check(suite, "'Advance from Customers' carries the 100000",
-              bal is not None and eq(abs(bal), 100000), f"balance = {bal}")
+    # The advance sits on the CLIENT'S OWN Accounts receivable (2026-08-31), not
+    # on a separate liability: money held for a party belongs on that party's
+    # control account, where it nets against what they owe and is visible to
+    # their ledger, the A/R column and the aged reports. This is the first suite
+    # to run, so A/R starts at 0 and the credit is the whole balance. (The flat
+    # balance is debit-positive, so a credit reads negative.)
+    if ar_acct:
+        bal = balance_of(base, token, cid, ar_acct["id"])
+        check(suite, "the client's Accounts receivable carries the 100000 as a credit",
+              bal is not None and eq(bal, -100000), f"balance = {bal}")
     else:
-        check(suite, "'Advance from Customers' account exists", False,
-              "no CustomerAdvances account on this company's chart")
+        check(suite, "'Accounts receivable' account exists", False,
+              "no AccountsReceivable account on this company's chart")
+
+    # …and the superseded "Advance from Customers" account is not seeded at all
+    # any more, so nothing can quietly start posting there again.
+    check(suite, "no 'Advance from Customers' account on a freshly seeded chart",
+          advance_acct is None,
+          f"CustomerAdvances account still seeded: {advance_acct}")
     return r
 
 
@@ -507,7 +527,7 @@ def suite_8_contact_type(base, token, cid, client_id, own_supplier, foreign, dis
                   f"amount = {r.get('amount')}, contactName = {r.get('contactName')}")
 
 
-def suite_9_ledger(base, token, cid, advance_acct):
+def suite_9_ledger(base, token, cid, ar_acct):
     suite = "9. Ledger integrity"
     print(f"\n=== {suite} ===")
     st, tb = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance",
@@ -516,12 +536,38 @@ def suite_9_ledger(base, token, cid, advance_acct):
     check(suite, "trial balance is balanced", st == 200 and eq(tb.get("totalDebit"),
           tb.get("totalCredit")),
           f"got {st} debit={tb.get('totalDebit')} credit={tb.get('totalCredit')}")
-    if advance_acct:
-        # 100000 (suite 1) + 250000 (suite 2) + 700000 (suite 3)
-        # + 400000 (suite 7) + 60000 (suite 8)
-        bal = balance_of(base, token, cid, advance_acct["id"])
-        check(suite, "advance account totals 1,510,000 across the run",
-              bal is not None and eq(abs(bal), 1510000), f"balance = {bal}")
+
+    # The advances this run produces are unchanged — 100000 (suite 1) + 250000
+    # (suite 2) + 700000 (suite 3) + 400000 (suite 7) + 60000 (suite 8). What
+    # changed on 2026-08-31 is WHERE they live: on the party's own Accounts
+    # receivable instead of a dedicated liability. So the total is pinned from
+    # the receipts themselves…
+    st, page = http("GET", f"/api/payments/receipts/company/{cid}/paged?pageSize=200",
+                    base, token=token)
+    items = (page or {}).get("items") if isinstance(page, dict) else None
+    advances = sum(float(r.get("unallocatedAmount") or 0) for r in (items or []))
+    check(suite, "unallocated receipt cash totals 1,510,000 across the run",
+          st == 200 and eq(advances, 1510000), f"got {st} total = {advances}")
+
+    # …and that total is pinned INSIDE A/R, where it now nets against what the
+    # same customers owe. The run raises 1,606,100 of invoices (500,000 + 300,000
+    # + 1,100 + 500,000 + 200,000 + 5,000 + 100,000) and takes 1,931,100 of
+    # receipts against them — 421,100 settling documents and the 1,510,000 of
+    # advance cash above — leaving A/R at -325,000, i.e. in credit. Under the old
+    # treatment A/R would have read +1,185,000 with the advances parked on a
+    # separate liability, so this number is the change.
+    #
+    # KNOWN GAP, pre-existing and not part of this change: suite 6's zero-cash
+    # pure write-off (5,000) never reaches the ledger, because
+    # PostPaymentAsync skips a payment whose Amount is 0. That is why A/R is
+    # -325,000 here and the A/R column reads -330,000; test_expense_payee.py
+    # suite 17 pins the two agreeing on a run with no such write-off.
+    if ar_acct:
+        bal = balance_of(base, token, cid, ar_acct["id"])
+        check(suite, "A/R nets the run's invoices against its receipts (-325,000)",
+              bal is not None and eq(bal, -325000), f"balance = {bal}")
+        check(suite, "so A/R is in credit — the advances outweigh what is owed",
+              bal is not None and bal < 0, f"balance = {bal}")
 
 
 def suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc_acct, db):
@@ -667,27 +713,57 @@ def suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc_acct):
               f"got {st} amount={edited.get('amount') if isinstance(edited, dict) else edited}")
 
 
-def suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, advance_acct, ar_acct):
-    """GL proof for AllocateAsync's re-post (coordinator review, 2026-08-30):
-    suite 9's ledger check runs BEFORE suites 10/11, so nothing previously
-    pinned that allocating shrinks the advance leg by exactly the cash moved,
-    grows the AR leg by exactly the same, keeps the entry balanced, and — the
-    one only a SECOND allocate call can prove — that re-posting REPLACES the
-    payment's journal entry rather than appending to it. A fresh receipt is
-    used so before/after deltas are exact regardless of what earlier suites
-    already posted to these same control accounts."""
+def payment_entry(base, token, cid, payment_id):
+    """The journal entry the posting engine wrote for one payment."""
+    st, page = http("GET", f"/api/journal-entries/company/{cid}/paged?pageSize=200",
+                    base, token=token)
+    rows = (page or {}).get("items") if isinstance(page, dict) else None
+    for e in rows or []:
+        if e.get("sourceDocType") == "Payment" and e.get("sourceDocId") == payment_id:
+            st2, full = http("GET", f"/api/journal-entries/{e['id']}", base, token=token)
+            return full if st2 == 200 and isinstance(full, dict) else e
+    return None
+
+
+def suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ar_acct, bank_acct):
+    """GL proof for AllocateAsync's re-post (coordinator review, 2026-08-30;
+    reworked 2026-08-31 for the new posting target).
+
+    An advance now sits on the client's OWN Accounts receivable, so allocating it
+    to an invoice moves NOTHING in the ledger — the money was already on A/R and
+    the allocation only re-labels which invoice the credit belongs to. That is a
+    stronger claim than the "advance leg shrinks / AR leg grows" it replaces, and
+    it is pinned here together with the two things only a SECOND allocate call can
+    prove: that re-posting REPLACES the payment's journal entry rather than
+    appending to it (an appended entry would duplicate the 900,000 bank leg), and
+    that each allocated slice ends up tagged to the invoice it settled.
+
+    A fresh receipt is used so before/after deltas are exact regardless of what
+    earlier suites already posted to these same control accounts."""
     suite = "12. Allocate GL integrity"
     print(f"\n=== {suite} ===")
-    if not advance_acct or not ar_acct:
-        skip(suite, "advance/AR balance movement + no-duplicate-lines on re-post",
-             "'Advance from Customers' or 'Accounts Receivable' control account not found")
+    if not ar_acct or not bank_acct:
+        skip(suite, "A/R + bank balance movement and no-duplicate-lines on re-post",
+             "'Accounts receivable' or 'Bank & Cash' control account not found")
         return
 
+    before_ar_0 = balance_of(base, token, cid, ar_acct["id"])
+    before_bank_0 = balance_of(base, token, cid, bank_acct["id"])
     st, rcp = post_receipt(base, token, cid, receipt_body(client_id, amount=900000))
     if not check(suite, "900,000 advance receipt created", st in (200, 201),
                  f"got {st} {err_of(rcp)}"):
         return
     rid = rcp["id"]
+    after_create_ar = balance_of(base, token, cid, ar_acct["id"])
+    after_create_bank = balance_of(base, token, cid, bank_acct["id"])
+    check(suite, "the advance credits A/R by the full 900000 straight away",
+          before_ar_0 is not None and after_create_ar is not None
+          and eq(after_create_ar, before_ar_0 - 900000),
+          f"before={before_ar_0}, after={after_create_ar}")
+    check(suite, "and debits bank/cash by the same 900000",
+          before_bank_0 is not None and after_create_bank is not None
+          and eq(after_create_bank, before_bank_0 + 900000),
+          f"before={before_bank_0}, after={after_create_bank}")
 
     inv_a = make_invoice(base, token, cid, client_id, item_type_id, 200000)
     inv_b = make_invoice(base, token, cid, client_id, item_type_id, 150000)
@@ -696,21 +772,18 @@ def suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ad
         return
 
     # ── First allocate: 200,000 cash to inv_a ──────────────────────────
-    before_adv_1 = balance_of(base, token, cid, advance_acct["id"])
     before_ar_1 = balance_of(base, token, cid, ar_acct["id"])
     st, r = post_allocate(base, token, rid, [{"invoiceId": inv_a["id"], "amount": 200000}])
     if not check(suite, "first allocate (200000 cash) accepted", st == 200, f"got {st} {err_of(r)}"):
         return
-    after_adv_1 = balance_of(base, token, cid, advance_acct["id"])
     after_ar_1 = balance_of(base, token, cid, ar_acct["id"])
-    check(suite, "advance account moves by exactly the cash allocated (200000)",
-          before_adv_1 is not None and after_adv_1 is not None
-          and eq(abs(abs(before_adv_1) - abs(after_adv_1)), 200000),
-          f"before={before_adv_1}, after={after_adv_1}")
-    check(suite, "AR account moves by exactly the settled amount (200000)",
-          before_ar_1 is not None and after_ar_1 is not None
-          and eq(abs(abs(after_ar_1) - abs(before_ar_1)), 200000),
+    after_bank_1 = balance_of(base, token, cid, bank_acct["id"])
+    check(suite, "allocating moves A/R by nothing — the money was already there",
+          before_ar_1 is not None and after_ar_1 is not None and eq(after_ar_1, before_ar_1),
           f"before={before_ar_1}, after={after_ar_1}")
+    check(suite, "and moves no cash (the bank leg is not duplicated)",
+          after_bank_1 is not None and eq(after_bank_1, after_create_bank),
+          f"after create={after_create_bank}, after allocate={after_bank_1}")
     st_tb1, tb1 = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance", base, token=token)
     tb1 = tb1 if isinstance(tb1, dict) else {}
     check(suite, "trial balance still balanced after first allocate",
@@ -718,23 +791,20 @@ def suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ad
           f"got {st_tb1} debit={tb1.get('totalDebit')} credit={tb1.get('totalCredit')}")
 
     # ── Second allocate, SAME receipt, a DIFFERENT invoice: if PostPaymentAsync
-    #    appended instead of replacing the payment's journal entry, these deltas
-    #    would reflect the first call's effect a second time too (double), not
-    #    just this call's 150,000. ───────────────────────────────────────────
+    #    appended instead of replacing the payment's journal entry, the entry
+    #    below would carry the first call's legs a second time. ──────────────
     st, r2 = post_allocate(base, token, rid, [{"invoiceId": inv_b["id"], "amount": 150000}])
     if not check(suite, "second allocate (150000 cash, different invoice) accepted",
                  st == 200, f"got {st} {err_of(r2)}"):
         return
-    after_adv_2 = balance_of(base, token, cid, advance_acct["id"])
     after_ar_2 = balance_of(base, token, cid, ar_acct["id"])
-    check(suite, "advance account moves by exactly 150000 MORE (not duplicated)",
-          after_adv_1 is not None and after_adv_2 is not None
-          and eq(abs(abs(after_adv_1) - abs(after_adv_2)), 150000),
-          f"after first={after_adv_1}, after second={after_adv_2}")
-    check(suite, "AR account moves by exactly 150000 MORE (not duplicated)",
-          after_ar_1 is not None and after_ar_2 is not None
-          and eq(abs(abs(after_ar_2) - abs(after_ar_1)), 150000),
-          f"after first={after_ar_1}, after second={after_ar_2}")
+    after_bank_2 = balance_of(base, token, cid, bank_acct["id"])
+    check(suite, "A/R still unmoved after the second allocate",
+          after_ar_2 is not None and eq(after_ar_2, before_ar_1),
+          f"before any allocate={before_ar_1}, after second={after_ar_2}")
+    check(suite, "bank still unmoved after the second allocate",
+          after_bank_2 is not None and eq(after_bank_2, after_create_bank),
+          f"after create={after_create_bank}, after second={after_bank_2}")
     st_tb2, tb2 = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance", base, token=token)
     tb2 = tb2 if isinstance(tb2, dict) else {}
     check(suite, "trial balance still balanced after second allocate (no duplicate lines)",
@@ -742,6 +812,32 @@ def suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ad
           f"got {st_tb2} debit={tb2.get('totalDebit')} credit={tb2.get('totalCredit')}")
     check(suite, "unallocatedAmount reflects BOTH allocations (900000 - 350000 = 550000)",
           eq(r2.get("unallocatedAmount"), 550000), f"unallocatedAmount = {r2.get('unallocatedAmount')}")
+
+    # ── The entry itself: one bank leg, and the A/R credit split by invoice.
+    #    This is what "re-post REPLACES" means in the ledger, and it proves the
+    #    allocated slices are attributed rather than merely totalled. ─────────
+    entry = payment_entry(base, token, cid, rid)
+    if not check(suite, "the receipt's journal entry is readable", entry is not None,
+                 "no Payment entry found for this receipt"):
+        return
+    lines = entry.get("lines") or []
+    bank_legs = [l for l in lines if l.get("accountId") == bank_acct["id"]]
+    ar_legs = [l for l in lines if l.get("accountId") == ar_acct["id"]]
+    check(suite, "exactly ONE bank leg, for the full 900000",
+          len(bank_legs) == 1 and eq(bank_legs[0].get("debit"), 900000), str(bank_legs))
+    check(suite, "the A/R credits still sum to the full 900000",
+          eq(sum(float(l.get("credit") or 0) for l in ar_legs), 900000),
+          str([l.get("credit") for l in ar_legs]))
+    by_inv = {l.get("invoiceId"): float(l.get("credit") or 0) for l in ar_legs}
+    check(suite, "200000 of it is tagged to the first invoice",
+          eq(by_inv.get(inv_a["id"]), 200000), str(by_inv))
+    check(suite, "150000 of it is tagged to the second invoice",
+          eq(by_inv.get(inv_b["id"]), 150000), str(by_inv))
+    check(suite, "and the remaining 550000 carries no invoice — still an advance",
+          eq(by_inv.get(None), 550000), str(by_inv))
+    check(suite, "every A/R leg names the client",
+          all(l.get("partyType") == "Client" and l.get("partyId") == client_id for l in ar_legs),
+          str([(l.get("partyType"), l.get("partyId")) for l in ar_legs]))
 
 
 # ── Setup / teardown ───────────────────────────────────────────────
@@ -843,16 +939,21 @@ def main() -> int:
     def by_control(ct):
         return next((a for a in flat if a.get("controlType") == ct), None)
 
+    # Superseded 2026-08-31 — an advance posts to the party's own control
+    # account now, and the preset no longer creates this one. Looked up so
+    # suite 1 can assert it is GONE.
     advance = by_control("CustomerAdvances")
     ar = by_control("AccountsReceivable")
+    bank = by_control("BankCash")
     disc = (by_control("DiscountAllowed") or {}).get("id")
     bad_debt = (by_control("BadDebtWriteOff") or {}).get("id")
     print(f"\n== company={cid} client={client_id} supplier={supplier_id} "
-          f"itemType={item_type_id} advance={advance['id'] if advance else None} "
+          f"itemType={item_type_id} ar={ar['id'] if ar else None} "
+          f"bank={bank['id'] if bank else None} "
           f"disc={disc} badDebt={bad_debt} foreign={foreign} ==")
 
     try:
-        suite_1_advance(base, token, cid, client_id, advance)
+        suite_1_advance(base, token, cid, client_id, ar, advance)
         suite_2_amountpaid(base, token, cid, client_id, item_type_id)
         suite_3_partial(base, token, cid, client_id, item_type_id)
         suite_4_cash_vs_settlement(base, token, cid, client_id, item_type_id, disc)
@@ -860,10 +961,10 @@ def main() -> int:
         money_out = suite_6_backcompat(base, token, cid, client_id, item_type_id, bad_debt, disc)
         suite_7_edit(base, token, cid, client_id, item_type_id, money_out)
         suite_8_contact_type(base, token, cid, client_id, supplier_id, foreign, disc)
-        suite_9_ledger(base, token, cid, advance)
+        suite_9_ledger(base, token, cid, ar)
         suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc, args.db)
         suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc)
-        suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, advance, ar)
+        suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ar, bank)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 

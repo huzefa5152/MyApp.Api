@@ -11,6 +11,11 @@ namespace MyApp.Api.DTOs
         public string Name { get; set; } = "";
         public string? Code { get; set; }
         public int AccountGroupId { get; set; }
+        /// <summary>The group's display name ("Expenses", "Fixed assets", or a
+        /// group the operator created). Shown beside the account in every account
+        /// picker so two similarly-named accounts can be told apart without
+        /// opening the Chart of Accounts.</summary>
+        public string? AccountGroupName { get; set; }
         public string AccountType { get; set; } = "Asset";
         public string Statement { get; set; } = "BalanceSheet";  // from the group
         public string? CashFlowClass { get; set; }

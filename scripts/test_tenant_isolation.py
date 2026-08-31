@@ -292,6 +292,7 @@ endpoints_to_test = [
     ("GET",  "/api/clients/count?companyId={cid}"),
     ("GET",  "/api/clients/common?companyId={cid}"),
     ("GET",  "/api/suppliers/company/{cid}"),
+    ("GET",  "/api/suppliers/company/{cid}/summary"),
     ("GET",  "/api/suppliers/count?companyId={cid}"),
     ("GET",  "/api/suppliers/common?companyId={cid}"),
     ("GET",  "/api/invoices/company/{cid}"),
@@ -999,6 +1000,33 @@ check(suite14, "alice GET all-customers ledger for her own company", s == 200 an
       f"status {s}, body {body}")
 
 request("DELETE", f"/api/clients/{ledger_beta_client['id']}", token=admin)
+
+
+# ── Suite 15: supplier ledger tenant guard (2026-08-31) ──────
+# GET /api/suppliers/{id}/statement carries no companyId at all — the route is a
+# bare supplier id, so the ONLY thing between a user and another tenant's
+# purchase history is the AssertAccessAsync on the supplier's own CompanyId.
+# (The companyId-carrying half, /api/suppliers/company/{cid}/summary, is in
+# endpoints_to_test above.)
+print("\n  Suite 15 — supplier ledger tenant guard")
+suite15 = "supplier ledger tenant guard"
+status, beta_supplier = request("POST", "/api/suppliers", token=admin, body={
+    "companyId": beta["id"], "name": "Beta Ledger Supplier", "phone": "+92-00-0000000",
+    "site": "Karachi", "ntn": "0000006", "cnic": "0000006000006",
+    "strn": "0000006000006", "registrationType": "Registered",
+})
+assert status in (200, 201), f"seed beta supplier: {status} {beta_supplier}"
+
+s, _ = request("GET", f"/api/suppliers/{beta_supplier['id']}/statement", token=tokens["alice"])
+status_check(suite15, "alice GET /suppliers/{betaSupplierId}/statement", s, 403)
+
+# Sanity: someone with Beta access reads it, so the guard isn't refusing everyone.
+s, body = request("GET", f"/api/suppliers/{beta_supplier['id']}/statement", token=tokens["bob"])
+check(suite15, "bob GET the same supplier statement (has Beta access)",
+      s == 200 and isinstance(body, dict) and body.get("supplierId") == beta_supplier["id"],
+      f"status {s}, body {body}")
+
+request("DELETE", f"/api/suppliers/{beta_supplier['id']}", token=admin)
 
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────

@@ -80,29 +80,51 @@ namespace MyApp.Api.Services.Implementations
             await Account("inventory", "Inventory on hand", "assets", AccountType.Asset, ControlType.Inventory);
             await Account("input_tax", "Input Sales Tax", "assets", AccountType.Asset, ControlType.InputTax);
             await Account("wht_receivable", "WHT receivable", "assets", AccountType.Asset, ControlType.WithholdingReceivable);
+            await Account("prepaid", "Prepaid expenses", "assets", AccountType.Asset);
             await Group("fixed_assets", "Fixed assets", FinancialStatement.BalanceSheet, "assets", false);
 
             await Group("liabilities", "Liabilities", FinancialStatement.BalanceSheet, null, true);
             await Account("ap", "Accounts payable", "liabilities", AccountType.Liability, ControlType.AccountsPayable);
             await Account("output_tax", "Output Sales Tax", "liabilities", AccountType.Liability, ControlType.OutputTax);
             await Account("wht_payable", "WHT payable", "liabilities", AccountType.Liability, ControlType.WithholdingPayable);
-            await Account("customer_advances", "Advance from Customers", "liabilities", AccountType.Liability, ControlType.CustomerAdvances);
+            await Account("loans_payable", "Loans payable", "liabilities", AccountType.Liability);
+            // NOTE: "Advance from Customers" (seed:customer_advances,
+            // ControlType.CustomerAdvances) is deliberately NOT seeded any more.
+            // An advance now posts to the PARTY's own control account — A/R for a
+            // client, A/P for a supplier — so a dedicated liability account would
+            // be created, shown on every chart, and never posted to. See
+            // ControlType.CustomerAdvances for the full reasoning and what
+            // happens to charts that already carry the row.
 
             await Group("equity", "Equity", FinancialStatement.BalanceSheet, null, true);
+            // Owner's stake. Capital is control-typed because the posting engine
+            // resolves it by role; Drawings is a plain account the owner may rename.
             await Account("capital", "Owner's capital", "equity", AccountType.Equity, ControlType.Capital);
+            await Account("drawings", "Owner drawings", "equity", AccountType.Equity);
             await Account("retained", "Retained earnings", "equity", AccountType.Equity, ControlType.RetainedEarnings);
 
             // ── Profit & Loss ──
             await Group("income", "Income", FinancialStatement.ProfitAndLoss, null, true);
             await Account("sales", "Sales", "income", AccountType.Income);
+            await Account("service_revenue", "Service revenue", "income", AccountType.Income);
+            await Account("other_income", "Other income", "income", AccountType.Income);
 
             await Group("cogs_grp", "Cost of Sales", FinancialStatement.ProfitAndLoss, null, true);
             await Account("cogs", "Cost of goods sold", "cogs_grp", AccountType.Expense);
 
             await Group("expenses", "Expenses", FinancialStatement.ProfitAndLoss, null, true);
+            // The everyday spending categories, so "Record an expense" is usable the
+            // moment a company is seeded instead of sending the operator to the
+            // Chart of Accounts first. All plain (non-control) accounts: rename,
+            // deactivate or delete any that don't apply, and add your own.
             foreach (var (key, name) in new[]
             {
                 ("exp_salaries", "Salaries"), ("exp_rent", "Rent"), ("exp_utilities", "Utilities"),
+                ("exp_electricity", "Electricity"), ("exp_internet", "Internet"),
+                ("exp_telephone", "Telephone"), ("exp_office_supplies", "Office supplies"),
+                ("exp_travel", "Travel & conveyance"), ("exp_repairs", "Repairs & maintenance"),
+                ("exp_marketing", "Marketing & advertising"),
+                ("exp_professional", "Professional fees"),
                 ("exp_freight", "Freight / Cartage"), ("exp_commission", "Commission"),
                 ("exp_bank_charges", "Bank charges"),
                 ("exp_depreciation", "Depreciation"), ("exp_misc", "Miscellaneous"),

@@ -37,12 +37,25 @@ namespace MyApp.Api.Models.Accounting
 
         public DateTime Date { get; set; }
 
-        // ── Contact (who paid / was paid) ──
+        // ── Contact — the Payee (money out) / Payer (money in) ──
         // ContactType is "Client" | "Supplier" | "Other". For an invoice-settling
         // receipt this is the Client; for a bill-settling payment, the Supplier.
-        // "Other" (no ContactId) covers direct income/expense with no party.
+        // "Other" covers anyone not on the books — a landlord, a courier, an
+        // employee reimbursement — and names them in ContactName instead of
+        // pointing at a Client/Supplier row.
+        //
+        // Deliberately NOT the accounting driver: the contact scopes the pickers
+        // and gives the party subledger a name, while what actually posts is each
+        // allocation's Kind + target. A payment to a Supplier can settle their bill
+        // OR go straight to an expense account, and both are normal.
         public string ContactType { get; set; } = "Other";
         public int? ContactId { get; set; }
+
+        /// <summary>Free-text name for an "Other" payee/payer (no Client/Supplier
+        /// row). Null for Client/Supplier — their name is resolved from the FK so
+        /// it can never drift. Lets a one-off payee be recorded and printed without
+        /// polluting the Clients/Suppliers master data.</summary>
+        public string? ContactName { get; set; }
 
         /// <summary>Optional reporting tag — reuses the company's Divisions, the
         /// same optional dimension the transactional documents carry. When the

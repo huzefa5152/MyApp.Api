@@ -36,6 +36,9 @@ namespace MyApp.Api.Services.Implementations
         public const string TypeCreditNote = "Credit Note";
         public const string TypeReceipt = "Receipt";
         public const string TypeAdjustment = "Adjustment";
+        /// <summary>Money paid back OUT to a customer against their own balance.
+        /// See the refund block in <see cref="BuildEntriesAsync"/>.</summary>
+        public const string TypeRefund = "Refund";
 
         /// <inheritdoc/>
         public async Task<CustomerLedgerDto> GetForClientAsync(
@@ -300,6 +303,35 @@ namespace MyApp.Api.Services.Implementations
                     Description = r.Description,
                 });
 
+            // Money paid back OUT to this customer and held against their balance
+            // — a refund of an advance. NEW with the 2026-08-31 payee change and
+            // additive only: before it, a money-out payment naming a Client could
+            // only reach an income/expense account and never touched the client's
+            // balance, so a payment written earlier yields no row here (its
+            // on-account cash is 0). It now DEBITS the client's Accounts
+            // receivable in the GL (PostingService.PostPaymentAsync), so it has to
+            // appear on the trail too, or the closing balance stops agreeing with
+            // both the ledger and the A/R column on the Customers screen.
+            //
+            // Credit, not Debit: a refund undoes an advance, so it moves the
+            // balance the same way an invoice does — back towards "they owe us".
+            var refunds = (await PartyOnAccount.Query(_context, "Client", companyId, ids)
+                    .Where(r => r.Direction == PaymentDirection.Payment)
+                    .ToListAsync())
+                .Where(r => r.Amount != 0m);
+
+            foreach (var r in refunds)
+                entries.Add(new CustomerLedgerEntryDto
+                {
+                    Date = r.Date,
+                    Type = TypeRefund,
+                    Reference = "PMT-" + r.Number,
+                    DocId = r.PaymentId,
+                    Credit = r.Amount,
+                    BankAccount = r.BankAccountName,
+                    Description = r.Description,
+                });
+
             // Cash that settles THIS client's invoices from a receipt naming a
             // DIFFERENT contact. PaymentService.AssertInvoicesBelongToCompanyAsync
             // only checks that an allocation's invoice belongs to the same
@@ -450,6 +482,13 @@ namespace MyApp.Api.Services.Implementations
                 select new { inv.ClientId, p.Date, a.AdjustmentAmount }
             ).ToListAsync();
 
+            // Refunds paid back to a customer — the aggregate mirror of the refund
+            // block in BuildEntriesAsync, so a row and its drill-down agree.
+            var refunds = (await PartyOnAccount.Query(_context, "Client", companyId)
+                    .Where(r => r.Direction == PaymentDirection.Payment)
+                    .ToListAsync())
+                .Where(r => r.Amount != 0m);
+
             // (clientId → opening, credit, debit) for the window.
             var acc = clientIds.ToDictionary(id => id, _ => new Bucket());
             var start = from?.Date;
@@ -479,6 +518,7 @@ namespace MyApp.Api.Services.Implementations
                 Add(a.ClientId, a.Date, 0m, a.Amount);
             }
             foreach (var a in adjustments) Add(a.ClientId, a.Date, 0m, a.AdjustmentAmount);
+            foreach (var r in refunds) Add(r.PartyId, r.Date, r.Amount, 0m);
 
             return clients
                 .GroupBy(c => c.ClientGroupId ?? -c.Id)

@@ -82,36 +82,19 @@ namespace MyApp.Api.Services.Implementations
 
             AssertAllocationsPresent(direction, dto);
 
-            // Validate each line: exactly one target, positive amount, correct
-            // side for the direction. Collect the documents we'll need to touch.
+            // Shape + tax + direction validation, and fill in each line's Kind.
+            // Runs BEFORE AssertAllocationsFitAmount so a bad LINE is reported as
+            // such instead of as a bad document total.
+            NormalizeAllocations(dto, direction);
+
             var invoiceIds = new List<int>();
             var billIds = new List<int>();
             var glEnabled = await _posting.IsEnabledAsync(companyId);
             var adjAccountIds = new HashSet<int>();
             foreach (var a in dto.Allocations)
             {
-                var targets = new[] { a.InvoiceId.HasValue, a.PurchaseBillId.HasValue, a.AccountId.HasValue }
-                    .Count(x => x);
-                if (targets != 1)
-                    throw new InvalidOperationException("Each allocation line must target exactly one of: invoice, purchase bill, or account.");
-                if (a.Amount < 0 || a.AdjustmentAmount < 0)
-                    throw new InvalidOperationException("Allocation amounts cannot be negative.");
-                // A line may carry cash, a settle-remainder adjustment, or both —
-                // but the total applied must be positive.
-                if (a.Amount + a.AdjustmentAmount <= 0)
-                    throw new InvalidOperationException("Each allocation must apply a positive amount (cash and/or adjustment).");
-
-                if (direction == PaymentDirection.Receipt && a.PurchaseBillId.HasValue)
-                    throw new InvalidOperationException("A receipt cannot settle a purchase bill.");
-                if (direction == PaymentDirection.Payment && a.InvoiceId.HasValue)
-                    throw new InvalidOperationException("A payment cannot settle a sales invoice.");
-
                 if (a.AdjustmentAmount > 0)
                 {
-                    // The adjustment clears part of a settled invoice/bill — it has
-                    // no meaning on a direct account line.
-                    if (!a.InvoiceId.HasValue && !a.PurchaseBillId.HasValue)
-                        throw new InvalidOperationException("A settle-remainder adjustment can only be applied to an invoice or bill line.");
                     if (glEnabled && !a.AdjustmentAccountId.HasValue)
                         throw new InvalidOperationException("Choose the account the adjustment posts to (e.g. Discount allowed, Bad debts written off, or another account).");
                     if (a.AdjustmentAccountId.HasValue) adjAccountIds.Add(a.AdjustmentAccountId.Value);
@@ -168,16 +151,25 @@ namespace MyApp.Api.Services.Implementations
                 !await _context.Divisions.AnyAsync(d => d.Id == dto.DivisionId.Value && d.CompanyId == companyId))
                 throw new InvalidOperationException("Division does not belong to this company.");
 
+            // Payee/payer: validate the type, resolve the name source, and drop a
+            // stray id on an "Other" rather than leaving it half-linked. Runs
+            // AFTER AssertAllocationsPresent so a line-less money-out still
+            // reports the missing line rather than the missing party.
+            var contact = NormalizeContact(dto);
+
             // Contact must belong to the company too, when one is named.
-            if (dto.ContactId.HasValue)
+            if (contact.Id.HasValue)
             {
-                if (dto.ContactType == "Client" &&
-                    !await _context.Clients.AnyAsync(c => c.Id == dto.ContactId.Value && c.CompanyId == companyId))
+                if (contact.Type == "Client" &&
+                    !await _context.Clients.AnyAsync(c => c.Id == contact.Id.Value && c.CompanyId == companyId))
                     throw new InvalidOperationException("Client does not belong to this company.");
-                if (dto.ContactType == "Supplier" &&
-                    !await _context.Suppliers.AnyAsync(s => s.Id == dto.ContactId.Value && s.CompanyId == companyId))
+                if (contact.Type == "Supplier" &&
+                    !await _context.Suppliers.AnyAsync(s => s.Id == contact.Id.Value && s.CompanyId == companyId))
                     throw new InvalidOperationException("Supplier does not belong to this company.");
             }
+
+            // Every settled document must belong to the named party.
+            AssertDocumentsBelongToContact(contact, invoices, bills);
 
             // Over-allocation guard: a single document can't be paid beyond its
             // grand total. Sum this payment's lines per document, add to what's
@@ -221,8 +213,9 @@ namespace MyApp.Api.Services.Implementations
                 // Cleared-by-default (Manager-style): a new receipt/payment is
                 // reconciled as of its own date; "pending" is the opt-in exception.
                 ReconciledDate = paymentDate,
-                ContactType = dto.ContactType,   // canonical + trimmed already
-                ContactId = dto.ContactId,
+                ContactType = contact.Type,
+                ContactId = contact.Id,
+                ContactName = contact.Name,
                 DivisionId = divisionId,
                 BankAccountId = dto.BankAccountId,
                 BankAccountName = bankAccountName,
@@ -234,10 +227,13 @@ namespace MyApp.Api.Services.Implementations
                 ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber),
                 Allocations = dto.Allocations.Select(a => new PaymentAllocation
                 {
+                    Kind = ParseAllocationKind(a.Kind) ?? AllocationKind.Document,
                     InvoiceId = a.InvoiceId,
                     PurchaseBillId = a.PurchaseBillId,
                     AccountId = a.AccountId,
                     Amount = a.Amount,
+                    TaxRate = a.TaxRate,
+                    TaxAmount = a.TaxAmount ?? 0m,
                     AdjustmentAmount = a.AdjustmentAmount,
                     AdjustmentAccountId = a.AdjustmentAmount > 0 ? a.AdjustmentAccountId : null,
                 }).ToList(),
@@ -308,19 +304,12 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Date != default)
                 await _posting.AssertPeriodOpenAsync(companyId, dto.Date);
 
+            NormalizeAllocations(dto, direction);
+
             var invoiceIds = new List<int>();
             var billIds = new List<int>();
             foreach (var a in dto.Allocations)
             {
-                var targets = new[] { a.InvoiceId.HasValue, a.PurchaseBillId.HasValue, a.AccountId.HasValue }.Count(x => x);
-                if (targets != 1)
-                    throw new InvalidOperationException("Each allocation line must target exactly one of: invoice, purchase bill, or account.");
-                if (a.Amount <= 0)
-                    throw new InvalidOperationException("Allocation amounts must be greater than zero.");
-                if (direction == PaymentDirection.Receipt && a.PurchaseBillId.HasValue)
-                    throw new InvalidOperationException("A receipt cannot settle a purchase bill.");
-                if (direction == PaymentDirection.Payment && a.InvoiceId.HasValue)
-                    throw new InvalidOperationException("A payment cannot settle a sales invoice.");
                 if (a.InvoiceId.HasValue) invoiceIds.Add(a.InvoiceId.Value);
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
             }
@@ -346,15 +335,22 @@ namespace MyApp.Api.Services.Implementations
                 bankAccountName = bank.Name;
             }
 
-            if (dto.ContactId.HasValue)
+            var contact = NormalizeContact(dto);
+            if (contact.Id.HasValue)
             {
-                if (dto.ContactType == "Client" &&
-                    !await _context.Clients.AnyAsync(c => c.Id == dto.ContactId.Value && c.CompanyId == companyId))
+                if (contact.Type == "Client" &&
+                    !await _context.Clients.AnyAsync(c => c.Id == contact.Id.Value && c.CompanyId == companyId))
                     throw new InvalidOperationException("Client does not belong to this company.");
-                if (dto.ContactType == "Supplier" &&
-                    !await _context.Suppliers.AnyAsync(s => s.Id == dto.ContactId.Value && s.CompanyId == companyId))
+                if (contact.Type == "Supplier" &&
+                    !await _context.Suppliers.AnyAsync(s => s.Id == contact.Id.Value && s.CompanyId == companyId))
                     throw new InvalidOperationException("Supplier does not belong to this company.");
             }
+
+            // On an edit, a mismatch this payment already had stays allowed; a NEW
+            // one is rejected. Keeps legacy cross-party receipts editable.
+            AssertDocumentsBelongToContact(contact, invoices, bills, (
+                payment.Allocations.Where(a => a.InvoiceId.HasValue).Select(a => a.InvoiceId!.Value).ToHashSet(),
+                payment.Allocations.Where(a => a.PurchaseBillId.HasValue).Select(a => a.PurchaseBillId!.Value).ToHashSet()));
 
             // Over-allocation guard, EXCLUDING this payment's own current lines
             // (we're replacing them), so editing down/up stays within the total.
@@ -380,8 +376,9 @@ namespace MyApp.Api.Services.Implementations
             try
             {
                 payment.Date = dto.Date == default ? payment.Date : dto.Date;
-                payment.ContactType = dto.ContactType;   // canonical + trimmed already
-                payment.ContactId = dto.ContactId;
+                payment.ContactType = contact.Type;
+                payment.ContactId = contact.Id;
+                payment.ContactName = contact.Name;
                 payment.DivisionId = dto.DivisionId;
                 payment.BankAccountId = dto.BankAccountId;
                 payment.BankAccountName = bankAccountName;
@@ -398,10 +395,13 @@ namespace MyApp.Api.Services.Implementations
                 _context.PaymentAllocations.AddRange(dto.Allocations.Select(a => new PaymentAllocation
                 {
                     PaymentId = payment.Id,
+                    Kind = ParseAllocationKind(a.Kind) ?? AllocationKind.Document,
                     InvoiceId = a.InvoiceId,
                     PurchaseBillId = a.PurchaseBillId,
                     AccountId = a.AccountId,
                     Amount = a.Amount,
+                    TaxRate = a.TaxRate,
+                    TaxAmount = a.TaxAmount ?? 0m,
                     AdjustmentAmount = a.AdjustmentAmount,
                     AdjustmentAccountId = a.AdjustmentAmount > 0 ? a.AdjustmentAccountId : null,
                 }));
@@ -452,6 +452,12 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("Allocation amounts cannot be negative.");
             if (lines.Any(l => l.Amount + l.AdjustmentAmount <= 0))
                 throw new InvalidOperationException("Each allocation must apply a positive amount (cash and/or adjustment).");
+            // Every line here settles a document, whose own tax was posted when it
+            // was raised — same rule NormalizeAllocations applies to a Document
+            // line, stated explicitly so tax sent here is refused rather than
+            // silently dropped on the way to PaymentAllocation.
+            if (lines.Any(l => (l.TaxAmount ?? 0m) != 0m || (l.TaxRate ?? 0m) != 0m))
+                throw new InvalidOperationException("Tax belongs on the invoice or bill, not on the payment that settles it.");
 
             // CASH only against the RECEIPT — see Global Constraints / the
             // module docstring in test_customer_receipts_ledger.py.
@@ -497,6 +503,21 @@ namespace MyApp.Api.Services.Implementations
             // Same company, and no invoice pushed past its balance — shared with
             // Create/Update rather than a third copy of either guard.
             var invoices = await AssertInvoicesBelongToCompanyAsync(payment.CompanyId, lines);
+
+            // And the same cross-party rule, read from the STORED contact because
+            // an allocate body carries no party of its own. Without it this
+            // endpoint would be a way round the guard the create and edit paths
+            // apply: the receipt's A/R credit is tagged to ITS client, so applying
+            // it to another client's invoice would leave that invoice settled
+            // against the wrong subledger. Documents this receipt already settles
+            // are grandfathered, exactly as on the edit path.
+            AssertDocumentsBelongToContact(
+                (NormalizeContactType(payment.ContactType), payment.ContactId, null),
+                invoices, new List<PurchaseBill>(),
+                (payment.Allocations.Where(a => a.InvoiceId.HasValue)
+                     .Select(a => a.InvoiceId!.Value).ToHashSet(),
+                 new HashSet<int>()));
+
             await AssertNoInvoiceOverpayAsync(lines, invoices);
 
             await using var tx = await _context.Database.BeginTransactionAsync();
@@ -607,13 +628,18 @@ namespace MyApp.Api.Services.Implementations
             if (string.IsNullOrEmpty(t)) return "Other";
             if (string.Equals(t, "Client", StringComparison.OrdinalIgnoreCase)) return "Client";
             if (string.Equals(t, "Supplier", StringComparison.OrdinalIgnoreCase)) return "Supplier";
+            if (string.Equals(t, "Other", StringComparison.OrdinalIgnoreCase)) return "Other";
+            // Deliberately non-throwing: this also runs on READ paths over values
+            // already stored. NormalizeContact is what refuses an unknown type on
+            // the way IN.
             return t;
         }
 
         /// <summary>A receipt taken from a named customer — the only document
-        /// whose unapplied balance has somewhere to live (Advance from
-        /// Customers). Money-out and party-less "Other" receipts have no such
-        /// account, so they still need at least one allocation line.</summary>
+        /// whose unapplied balance has somewhere to live (the client's own
+        /// Accounts receivable, see PostingService.PostPaymentAsync). Money-out
+        /// and party-less "Other" receipts have no party to hold it, so they
+        /// still need at least one allocation line.</summary>
         private static bool IsCustomerReceipt(PaymentDirection direction, CreatePaymentDto dto) =>
             direction == PaymentDirection.Receipt
             && NormalizeContactType(dto.ContactType) == "Client"
@@ -671,17 +697,233 @@ namespace MyApp.Api.Services.Implementations
 
         /// <summary>Direct-line allocation accounts (PaymentAllocation.AccountId)
         /// must be active accounts of THIS company — the ids come from the
-        /// request body and now carry a real FK.</summary>
+        /// request body and now carry a real FK — and must not be control
+        /// accounts.</summary>
         private async Task AssertAllocationAccountsAsync(int companyId, CreatePaymentDto dto)
         {
             var accountIds = dto.Allocations!
                 .Where(a => a.AccountId.HasValue)
                 .Select(a => a.AccountId!.Value).Distinct().ToList();
             if (accountIds.Count == 0) return;
-            var ok = await _context.Accounts.AsNoTracking()
-                .CountAsync(a => accountIds.Contains(a.Id) && a.CompanyId == companyId && a.IsActive);
-            if (ok != accountIds.Count)
+            var rows = await _context.Accounts.AsNoTracking()
+                .Where(a => accountIds.Contains(a.Id) && a.CompanyId == companyId && a.IsActive)
+                .Select(a => new { a.Id, a.Name, a.IsControlAccount, a.ControlType })
+                .ToListAsync();
+            if (rows.Count != accountIds.Count)
                 throw new InvalidOperationException("One or more allocation accounts do not belong to this company.");
+
+            // A subledger-maintained control account is fed by its own subledger
+            // (Accounts receivable by receipts, Accounts payable by payments, Bank
+            // & Cash by the bank register, Inventory by stock movements…). Posting
+            // an expense straight at one would double-count and silently corrupt
+            // that party's, bank's or stock's balance — Account.cs says as much.
+            // The legitimate route to AR/AP is an "OnAccount" line, which carries
+            // the party with it.
+            var control = rows.FirstOrDefault(r => r.IsControlAccount && !OperatorPickable(r.ControlType));
+            if (control != null)
+                throw new InvalidOperationException(
+                    $"\"{control.Name}\" is a control account maintained by the system, so it can't be chosen here. " +
+                    "For an advance, set the line to \"Advance / on account\" instead; otherwise pick an income or expense account.");
+        }
+
+        /// <summary>Control ROLES that are nonetheless ordinary accounts an operator
+        /// posts to by hand, so the guard above must not refuse them:
+        /// <list type="bullet">
+        ///   <item>the settle-remainder quick-picks (Discount allowed/received, Bad
+        ///   debts, Write-back) — plain P&amp;L accounts that carry a role only so the
+        ///   receipt/payment form can offer them first, and which this same service
+        ///   already accepts as AdjustmentAccountId;</item>
+        ///   <item>Owner's capital — "the owner put money in" is a receipt straight
+        ///   to capital, and Drawings is its plain-account counterpart;</item>
+        ///   <item>Rounding — a P&amp;L difference bucket, not a subledger.</item>
+        /// </list>
+        /// Everything else flagged IsControlAccount is fed by a subledger the
+        /// system maintains and is off limits.</summary>
+        private static bool OperatorPickable(ControlType t) => t is
+            ControlType.DiscountAllowed or ControlType.DiscountReceived or
+            ControlType.BadDebtWriteOff or ControlType.WriteBackIncome or
+            ControlType.Capital or ControlType.Rounding;
+
+        /// <summary>
+        /// Put the allocation lines into canonical form and reject impossible ones,
+        /// BEFORE any database work. Shared by create and update so both agree —
+        /// an edit must not be able to make a document a create could not have made.
+        ///
+        /// Fills in <c>Kind</c> when the caller didn't send it (inferred from which
+        /// id is set, which keeps the ETL importer and older clients working), and
+        /// derives the tax slice from a rate so the UI can send either.
+        /// </summary>
+        private static void NormalizeAllocations(CreatePaymentDto dto, PaymentDirection direction)
+        {
+            var isReceipt = direction == PaymentDirection.Receipt;
+            var contactType = NormalizeContactType(dto.ContactType);
+
+            foreach (var a in dto.Allocations!)
+            {
+                var kind = ParseAllocationKind(a.Kind)
+                    ?? (a.InvoiceId.HasValue || a.PurchaseBillId.HasValue ? AllocationKind.Document
+                        : a.AccountId.HasValue ? AllocationKind.Account
+                        : AllocationKind.OnAccount);
+                a.Kind = kind.ToString();
+
+                if (a.Amount < 0 || a.AdjustmentAmount < 0)
+                    throw new InvalidOperationException("Amounts cannot be negative.");
+
+                switch (kind)
+                {
+                    case AllocationKind.Document:
+                        if (!a.InvoiceId.HasValue && !a.PurchaseBillId.HasValue)
+                            throw new InvalidOperationException("Choose the invoice or bill this line settles.");
+                        if (a.InvoiceId.HasValue && a.PurchaseBillId.HasValue)
+                            throw new InvalidOperationException("A line can settle one document, not both.");
+                        if (a.AccountId.HasValue)
+                            throw new InvalidOperationException("A line that settles an invoice or bill can't also pick an account.");
+                        // The document's own tax was posted when it was raised.
+                        if ((a.TaxAmount ?? 0m) != 0m || (a.TaxRate ?? 0m) != 0m)
+                            throw new InvalidOperationException("Tax belongs on the invoice or bill, not on the payment that settles it.");
+                        break;
+
+                    case AllocationKind.Account:
+                        if (!a.AccountId.HasValue)
+                            throw new InvalidOperationException("Choose what this line was for (an income or expense account).");
+                        if (a.InvoiceId.HasValue || a.PurchaseBillId.HasValue)
+                            throw new InvalidOperationException("An income/expense line can't also settle a document.");
+                        if (a.AdjustmentAmount > 0)
+                            throw new InvalidOperationException("Writing off a difference only applies to a line that settles an invoice or bill.");
+                        NormalizeLineTax(a);
+                        break;
+
+                    case AllocationKind.OnAccount:
+                        if (a.InvoiceId.HasValue || a.PurchaseBillId.HasValue || a.AccountId.HasValue)
+                            throw new InvalidOperationException("An advance line has no document and no account — it sits against the party's balance.");
+                        if (a.AdjustmentAmount > 0)
+                            throw new InvalidOperationException("Writing off a difference only applies to a line that settles an invoice or bill.");
+                        if ((a.TaxAmount ?? 0m) != 0m || (a.TaxRate ?? 0m) != 0m)
+                            throw new InvalidOperationException("An advance carries no tax — the tax is recorded on the invoice or bill it is later applied to.");
+                        // A client sits in receivables, a supplier in payables — an
+                        // "Other" payee has neither, so there is nowhere to hold the
+                        // advance and it must be recorded as income/expense instead.
+                        if (contactType != "Client" && contactType != "Supplier")
+                            throw new InvalidOperationException(
+                                isReceipt ? "An advance has to come from a client or a supplier — choose one, or record it as income instead."
+                                          : "An advance has to go to a client or a supplier — choose one, or record it as an expense instead.");
+                        if (!dto.ContactId.HasValue)
+                            throw new InvalidOperationException("Choose the client or supplier this advance belongs to.");
+                        break;
+                }
+
+                if (a.Amount + a.AdjustmentAmount <= 0)
+                    throw new InvalidOperationException("Each line must apply a positive amount.");
+
+                if (kind != AllocationKind.Document && a.AdjustmentAccountId.HasValue)
+                    a.AdjustmentAccountId = null;   // only a settled document can carry the write-off
+            }
+
+            // Direction guards — unchanged rules, kept here so every caller gets them.
+            foreach (var a in dto.Allocations!)
+            {
+                if (isReceipt && a.PurchaseBillId.HasValue)
+                    throw new InvalidOperationException("A receipt cannot settle a purchase bill.");
+                if (!isReceipt && a.InvoiceId.HasValue)
+                    throw new InvalidOperationException("A payment cannot settle a sales invoice.");
+            }
+        }
+
+        /// <summary>Resolve a line's tax: an explicit amount wins, otherwise derive
+        /// it from the rate as the slice already inside the gross Amount (the same
+        /// tax-inclusive convention the invoice/bill totals use).</summary>
+        private static void NormalizeLineTax(CreatePaymentAllocationDto a)
+        {
+            var rate = a.TaxRate ?? 0m;
+            if (rate < 0m || rate > 100m)
+                throw new InvalidOperationException("Tax rate must be between 0 and 100.");
+
+            if (a.TaxAmount.HasValue)
+            {
+                if (a.TaxAmount.Value < 0m)
+                    throw new InvalidOperationException("Tax cannot be negative.");
+            }
+            else if (rate > 0m)
+            {
+                a.TaxAmount = Math.Round(a.Amount * rate / (100m + rate), 2, MidpointRounding.AwayFromZero);
+            }
+
+            var tax = a.TaxAmount ?? 0m;
+            if (tax > a.Amount)
+                throw new InvalidOperationException("Tax cannot be more than the amount of the line.");
+            a.TaxAmount = tax;
+            if (rate == 0m && tax == 0m) a.TaxRate = null;
+        }
+
+        private static AllocationKind? ParseAllocationKind(string? raw) =>
+            string.IsNullOrWhiteSpace(raw) ? null
+            : Enum.TryParse<AllocationKind>(raw.Trim(), ignoreCase: true, out var k) ? k
+            : throw new InvalidOperationException($"Unknown line type \"{raw}\".");
+
+        /// <summary>
+        /// The party named on the header must be the party who owns every document
+        /// being settled. Without this a payment could name Supplier A and clear
+        /// Supplier B's bill — the cash and the balance would both be right, but the
+        /// journal line would be tagged to the wrong supplier and their ledger would
+        /// be wrong for good.
+        ///
+        /// A party-less payee ("Other") is exempt by design: settling someone
+        /// else's invoice from an unnamed receipt is a supported shape, and
+        /// CustomerLedgerService carries those allocations onto the invoice
+        /// owner's trail (its de-duplication rule).
+        ///
+        /// <paramref name="grandfathered"/> exempts documents this payment was
+        /// ALREADY settling. Migrated data carries receipt lines whose invoice
+        /// belongs to a different client (a legacy grouping habit); enforcing on
+        /// them would make those records permanently uneditable, so an edit may
+        /// keep an existing mismatch while never introducing a new one.
+        /// </summary>
+        private static void AssertDocumentsBelongToContact(
+            (string Type, int? Id, string? Name) contact,
+            List<Invoice> invoices, List<PurchaseBill> bills,
+            (HashSet<int> Invoices, HashSet<int> Bills)? grandfathered = null)
+        {
+            if (!contact.Id.HasValue) return;
+
+            if (contact.Type == "Client")
+            {
+                var wrong = invoices.FirstOrDefault(i => i.ClientId != contact.Id.Value
+                    && !(grandfathered?.Invoices.Contains(i.Id) ?? false));
+                if (wrong != null)
+                    throw new InvalidOperationException(
+                        $"Invoice #{wrong.InvoiceNumber} belongs to a different client. Record a separate receipt for it.");
+            }
+            else if (contact.Type == "Supplier")
+            {
+                var wrong = bills.FirstOrDefault(b => b.SupplierId != contact.Id.Value
+                    && !(grandfathered?.Bills.Contains(b.Id) ?? false));
+                if (wrong != null)
+                    throw new InvalidOperationException(
+                        $"Bill #{wrong.PurchaseBillNumber} belongs to a different supplier. Record a separate payment for it.");
+            }
+        }
+
+        /// <summary>Normalise the payee/payer: a Client/Supplier gets its name from
+        /// the FK (so it can't drift), an "Other" keeps the typed name, and a stray
+        /// ContactId on an "Other" is dropped rather than half-linked.
+        ///
+        /// The type is canonicalised first (see <see cref="NormalizeContactType"/>),
+        /// so "client"/" Client " and "Client" mean the same thing here as they do
+        /// to every other branch in this file; anything that is still not one of the
+        /// three known types is rejected rather than stored.</summary>
+        private static (string Type, int? Id, string? Name) NormalizeContact(CreatePaymentDto dto)
+        {
+            var type = NormalizeContactType(dto.ContactType);
+            if (type != "Client" && type != "Supplier" && type != "Other")
+                throw new InvalidOperationException($"Unknown payee type \"{type}\".");
+
+            if (type == "Other")
+                return (type, null, Trimmed(dto.ContactName));
+
+            if (!dto.ContactId.HasValue)
+                throw new InvalidOperationException(
+                    type == "Client" ? "Choose the client." : "Choose the supplier.");
+            return (type, dto.ContactId, null);
         }
 
         /// <summary>Cross-tenant guard: every invoice an allocation line targets
@@ -768,7 +1010,9 @@ namespace MyApp.Api.Services.Implementations
             IReadOnlyDictionary<int, (int? Id, string Name)> banks)
         {
             var prefix = p.Direction == PaymentDirection.Receipt ? "RCP" : "PMT";
-            string? contactName = null;
+            // A Client/Supplier name comes from the FK (never drifts); an "Other"
+            // payee has no row to join, so its typed name is what we stored.
+            string? contactName = p.ContactName;
             if (p.ContactId.HasValue
                 && names.TryGetValue((NormalizeContactType(p.ContactType), p.ContactId.Value), out var n))
                 contactName = n;
@@ -811,16 +1055,23 @@ namespace MyApp.Api.Services.Implementations
                 Allocations = p.Allocations.Select(a => new PaymentAllocationDto
                 {
                     Id = a.Id,
+                    Kind = a.Kind.ToString(),
                     InvoiceId = a.InvoiceId,
                     InvoiceNumber = a.Invoice?.InvoiceNumber,
                     PurchaseBillId = a.PurchaseBillId,
                     PurchaseBillNumber = a.PurchaseBill?.PurchaseBillNumber,
                     AccountId = a.AccountId,
+                    AccountName = a.Account?.Name,
                     DocumentLabel = a.Invoice != null ? $"Invoice #{a.Invoice.InvoiceNumber}"
                                   : a.PurchaseBill != null ? $"Bill #{a.PurchaseBill.PurchaseBillNumber}"
+                                  : a.Account != null ? a.Account.Name
+                                  : a.Kind == AllocationKind.OnAccount ? "Advance / on account"
                                   : a.AccountId.HasValue ? "Direct"
                                   : null,
                     Amount = a.Amount,
+                    TaxRate = a.TaxRate,
+                    TaxAmount = a.TaxAmount,
+                    NetAmount = a.Amount - a.TaxAmount,
                     AdjustmentAmount = a.AdjustmentAmount,
                     AdjustmentAccountId = a.AdjustmentAccountId,
                     AdjustmentAccountName = a.AdjustmentAccount != null ? a.AdjustmentAccount.Name : null,
@@ -927,7 +1178,9 @@ namespace MyApp.Api.Services.Implementations
             if (p == null) return null;
 
             // Contact is a soft ref (ContactType + ContactId), resolve its name.
-            string contactName = "";
+            // An "Other" payee has no row to resolve, so the free-text name typed
+            // on the document is what the voucher prints.
+            string contactName = p.ContactName ?? "";
             string? contactAddress = null, contactPhone = null;
             // Normalised comparison + tenant-scoped lookup: the voucher prints a
             // name, address AND phone, so a ContactId belonging to another

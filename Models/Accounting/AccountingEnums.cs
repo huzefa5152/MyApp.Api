@@ -53,9 +53,25 @@ namespace MyApp.Api.Models.Accounting
         /// <summary>Payment-side write-back of an amount no longer owed to a supplier (P&amp;L income).</summary>
         WriteBackIncome = 18,
 
-        /// <summary>Customer money received but not yet applied to an invoice —
-        /// a liability, NOT negative A/R. The customer owes nothing for it yet,
-        /// so it must not net against Accounts Receivable. (2026-08-29)</summary>
+        /// <summary>SUPERSEDED (2026-08-31) — reserved, never assign 19 to
+        /// anything else.
+        ///
+        /// Briefly (2026-08-29) an unapplied customer receipt posted to a
+        /// dedicated "Advance from Customers" liability. That was replaced by
+        /// posting an advance to the PARTY's own control account — Accounts
+        /// receivable for a client, Accounts payable for a supplier — with the
+        /// direction picking the side, which handles customer advances, supplier
+        /// advances and both refunds with one rule and keeps the money on the
+        /// party's balance where the ledger, the A/R column and the aged reports
+        /// can all see it. See PostingService.PostPaymentAsync.
+        ///
+        /// The member stays because <c>Accounts.ControlType</c> rows stamped with
+        /// 19 already exist wherever the seeder or the one-time back-fill ran;
+        /// dropping it would leave those rows mapping to an undefined enum value.
+        /// Nothing posts here any more and the preset no longer creates the
+        /// account, so on an existing chart it is an inert, zero-movement row the
+        /// operator can deactivate or delete once its historical balance has been
+        /// re-posted (Accounting → rebuild the ledger).</summary>
         CustomerAdvances = 19,
     }
 }

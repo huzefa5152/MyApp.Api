@@ -88,6 +88,40 @@ namespace MyApp.Api.Services.Implementations
             AddLine(lines, bank.Id, debit: isReceipt ? payment.Amount : 0m,
                 credit: isReceipt ? 0m : payment.Amount, payment.DivisionId, reference);
 
+            // The party named on the document, carried onto EVERY line — not just
+            // the ones that settle an invoice/bill. Paying a supplier for a cash
+            // expense is a normal thing to do, and that spend has to be visible in
+            // that supplier's ledger, so an income/expense line gets tagged too.
+            // "Other" payees have no row to point at, so they stay untagged.
+            string? headerPartyType = payment.ContactType is "Client" or "Supplier" ? payment.ContactType : null;
+            int? headerPartyId = headerPartyType != null ? payment.ContactId : null;
+
+            // Where money held ON ACCOUNT for the party sits: the party's OWN
+            // control account. Which one follows the PARTY, not the direction — a
+            // client always sits in receivables and a supplier always in payables
+            // — while the direction decides the side. One rule covers all four:
+            //   receipt + client   Dr Bank / Cr AR   customer paid in advance
+            //   payment + client   Dr AR   / Cr Bank refund to a customer
+            //   payment + supplier Dr AP   / Cr Bank advance to a supplier
+            //   receipt + supplier Dr Bank / Cr AP   refund from a supplier
+            // Keeping it on the party's balance is what makes an advance visible
+            // to their ledger, the A/R / A/P column and the aged reports; a
+            // separate "Advance from Customers" liability (2026-08-29, superseded)
+            // could not net against what the same party owes.
+            //
+            // Null for an "Other" payee — nobody's subledger can hold it, so the
+            // caller falls back to Suspense. PaymentService rejects an OnAccount
+            // line without a Client/Supplier, so this is a guard for legacy rows
+            // re-posted by a GL enable/rebuild, not a reachable API shape.
+            async Task<Account?> PartyControlAsync() => headerPartyType switch
+            {
+                "Client" => await ResolveAsync(payment.CompanyId, accounts,
+                    ControlType.AccountsReceivable, "accounts receivable"),
+                "Supplier" => await ResolveAsync(payment.CompanyId, accounts,
+                    ControlType.AccountsPayable, "accounts payable"),
+                _ => null,
+            };
+
             // The settlement legs, one per allocation.
             foreach (var a in payment.Allocations)
             {
@@ -95,32 +129,52 @@ namespace MyApp.Api.Services.Implementations
                 // Settled against the document = cash + settle-remainder adjustment.
                 var settled = a.Amount + a.AdjustmentAmount;
                 Account target;
-                string? partyType = null; int? partyId = null;
+                var partyType = headerPartyType; var partyId = headerPartyId;
+                // Recoverable tax inside a direct income/expense line: the account
+                // takes the net, the tax control account takes the rest.
+                decimal lineTax = 0m;
+                Account? taxAccount = null;
+
                 if (a.InvoiceId.HasValue)
                 {
                     target = await ResolveAsync(payment.CompanyId, accounts, ControlType.AccountsReceivable, "accounts receivable");
-                    partyType = payment.ContactType == "Client" ? "Client" : null;
-                    partyId = partyType != null ? payment.ContactId : null;
+                    // AR is a Client subledger — a supplier can't own an AR balance.
+                    if (partyType != "Client") { partyType = null; partyId = null; }
                 }
                 else if (a.PurchaseBillId.HasValue)
                 {
                     target = await ResolveAsync(payment.CompanyId, accounts, ControlType.AccountsPayable, "accounts payable");
-                    partyType = payment.ContactType == "Supplier" ? "Supplier" : null;
-                    partyId = partyType != null ? payment.ContactId : null;
+                    if (partyType != "Supplier") { partyType = null; partyId = null; }
+                }
+                else if (a.Kind == AllocationKind.OnAccount)
+                {
+                    // Advance / on account: the party's own control account, no
+                    // document. See PartyControlAsync for the rule.
+                    target = await PartyControlAsync()
+                        ?? await SuspenseAsync(payment.CompanyId, accounts);
                 }
                 else if (a.AccountId.HasValue)
                 {
                     // Direct income/expense line — post straight to the picked account.
                     target = accounts.FirstOrDefault(x => x.Id == a.AccountId.Value)
                         ?? await SuspenseAsync(payment.CompanyId, accounts);
+                    if (a.TaxAmount != 0m)
+                    {
+                        // Money out → tax we paid a supplier, recoverable (Input Tax).
+                        // Money in  → tax we charged a customer, payable (Output Tax).
+                        taxAccount = await ResolveAsync(payment.CompanyId, accounts,
+                            isReceipt ? ControlType.OutputTax : ControlType.InputTax,
+                            isReceipt ? "output tax" : "input tax");
+                        lineTax = a.TaxAmount;
+                    }
                 }
                 else continue;
 
                 lines.Add(new JournalLine
                 {
                     AccountId = target.Id,
-                    Debit = isReceipt ? 0m : settled,
-                    Credit = isReceipt ? settled : 0m,
+                    Debit = isReceipt ? 0m : settled - lineTax,
+                    Credit = isReceipt ? settled - lineTax : 0m,
                     PartyType = partyType,
                     PartyId = partyId,
                     InvoiceId = a.InvoiceId,
@@ -128,6 +182,14 @@ namespace MyApp.Api.Services.Implementations
                     DivisionId = payment.DivisionId,
                     Description = payment.Description,
                 });
+
+                if (taxAccount != null && lineTax != 0m)
+                {
+                    AddLine(lines, taxAccount.Id,
+                        debit: isReceipt ? 0m : lineTax,
+                        credit: isReceipt ? lineTax : 0m,
+                        payment.DivisionId, payment.Description);
+                }
 
                 // Settle-remainder adjustment (discount / write-off / any account):
                 // sits on the same side as the bank leg (Dr on a receipt, Cr on a
@@ -146,10 +208,16 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            // Unallocated remainder of a customer receipt — CASH in hand that
-            // settles no invoice yet. A liability, not negative A/R (see
-            // ControlType.CustomerAdvances). Money-out has no supplier
-            // equivalent, so this only ever fires for a Receipt.
+            // Unallocated remainder of a receipt — CASH in hand that settles no
+            // document and carries no explicit AllocationKind.OnAccount line. It
+            // is the SAME thing as that line and gets the same treatment: money
+            // held for the party, sitting on the party's own control account.
+            // It stays an implicit rule because Payment.Amount is authoritative
+            // for a customer receipt (2026-08-29) — a receipt may legitimately be
+            // saved with no allocation lines at all, and inventing a line for it
+            // would change the document the operator saved. Money-out has no
+            // implicit remainder (PaymentService.ResolveAmount derives a payment's
+            // Amount from its lines), so this only ever fires for a Receipt.
             //
             // Cash only, deliberately: a.Amount is what the customer actually
             // paid; a.AdjustmentAmount is a non-cash write-off that already
@@ -160,37 +228,43 @@ namespace MyApp.Api.Services.Implementations
             // Suspense plug below instead — that still balances, so nothing
             // would catch it.
             //
-            // Must run BEFORE that Suspense plug so a genuine customer
-            // advance lands on its own control account instead of pooling on
-            // Suspense. With this cash-only formula, drSum/crSum already
-            // balance by the time we reach it, so the Suspense plug is
-            // provably a no-op here — a consequence of using cash, not a
-            // separate assumption.
+            // Must run BEFORE that Suspense plug so a genuine advance lands on
+            // the party's control account instead of pooling on Suspense. With
+            // this cash-only formula, drSum/crSum already balance by the time we
+            // reach it, so the Suspense plug is provably a no-op here — a
+            // consequence of using cash, not a separate assumption.
             var allocatedCash = payment.Allocations.Sum(a => a.Amount);
             var unallocated = payment.Amount - allocatedCash;
             if (isReceipt && unallocated > 0m)
             {
-                var advances = await ResolveAsync(payment.CompanyId, accounts,
-                    ControlType.CustomerAdvances, "customer advances");
-                lines.Add(new JournalLine
+                // No Client/Supplier on the header → no subledger can hold it, so
+                // it falls through to the Suspense plug below, visible on the CoA.
+                var party = await PartyControlAsync();
+                if (party != null)
                 {
-                    AccountId = advances.Id,
-                    Debit = 0m,
-                    Credit = unallocated,
-                    PartyType = payment.ContactType == "Client" ? "Client" : null,
-                    PartyId = payment.ContactType == "Client" ? payment.ContactId : null,
-                    DivisionId = payment.DivisionId,
-                    Description = reference,
-                });
+                    lines.Add(new JournalLine
+                    {
+                        AccountId = party.Id,
+                        Debit = 0m,
+                        Credit = unallocated,
+                        PartyType = headerPartyType,
+                        PartyId = headerPartyId,
+                        DivisionId = payment.DivisionId,
+                        Description = reference,
+                    });
+                }
             }
 
-            // On-account remainder: money moved but not fully matched by settlement
-            // legs — an advance/prepayment, a receipt/payment on account, or a
-            // migrated document whose income/expense lines aren't mapped to
-            // accounts. Plug the difference to Suspense so the entry balances,
-            // honouring this engine's "unresolved amounts land on Suspense"
-            // contract. Without it the lone bank leg throws "unbalanced posting"
-            // and aborts a GL enable/rebuild.
+            // Last-resort balance guard. An advance is NOT this case: it has its
+            // own control-account leg above, whether it arrived as an
+            // AllocationKind.OnAccount line or as a receipt's unallocated
+            // remainder. What can still land here is a payee with no
+            // Client/Supplier row holding money on account, or a migrated document
+            // whose income/expense lines were never mapped to accounts. Plugging
+            // it to Suspense honours this engine's "unresolved amounts land on
+            // Suspense" contract and keeps a GL enable/rebuild from aborting on a
+            // lone bank leg — the imbalance stays visible in Suspense instead of
+            // failing the business operation.
             var drSum = lines.Sum(l => l.Debit);
             var crSum = lines.Sum(l => l.Credit);
             if (drSum != crSum)
