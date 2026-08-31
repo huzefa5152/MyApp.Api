@@ -180,6 +180,40 @@ Rules:
   with FBR off). `UpdateCompanyDto` still defaults true on purpose — an update
   that omits the field must not switch a live tenant's FBR off.
 
+### 5b-3. Spreadsheet import — layouts are data, not code (2026-09-01)
+
+`Services/Implementations/OpeningStockImportService.cs` and
+`CustomerLedgerImportService*.cs` read a workbook through an `ImportProfile`:
+a saved, versioned JSON mapping matched by a structural fingerprint, exactly as
+`POFormat` does for PO PDFs. A new workbook shape is a new PROFILE, never a new
+branch in the parser.
+
+- **Preview takes the file; commit takes the reviewed rows.** Commit never
+  re-reads the upload, so what the operator approved is what lands.
+- **Two duplicate defences, because they catch different things.** Identical
+  bytes are stopped by the filtered unique index on
+  `ImportRun (CompanyId, Kind, FileSha256) WHERE IsSuperseded = 0` — in the
+  database, so two concurrent commits cannot both win. A re-exported copy has
+  different bytes and identical content, so preview also compares what is
+  already there and refuses a run where nothing is new. A file that has
+  genuinely GAINED rows must still import.
+- **Amounts are rounded to stored precision (2dp) while building the preview.**
+  Otherwise the reconciliation compares a figure at a precision the system
+  cannot keep, and paisa-level differences appear only after the import. The
+  ledger's per-customer tolerance therefore scales with document count
+  (`ToleranceFor`) — one paisa per document, since each stored document can
+  differ from the sheet by up to half a paisa.
+- **The ledger will not import a customer that does not reconcile** against the
+  workbook's own index sheet. A reporting import fails as a plausible wrong
+  number rather than a crash, so this check is the feature, not a nicety.
+- **Receipts import as a single `OnAccount` allocation.** These workbooks never
+  record which invoice a payment settled; linking them would invent an
+  unauditable fact.
+- Commit sets `Company.GlLockDate`. Without it `GeneralLedgerService.EnableAsync`
+  refuses to enable the GL on the company afterwards (migrated invoices +
+  non-zero openings + no lock date).
+- Operator runbook: `SPREADSHEET_IMPORT_GUIDE.md`.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -301,6 +335,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py --fbr-token <token>` | `all PASS` (15 checks) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
+| Spreadsheet import (layouts, file checks, stock, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (83 checks, 1 skipped without the HS master) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
