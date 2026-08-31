@@ -2110,9 +2110,47 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Serve React frontend static files from wwwroot
+// Serve React frontend static files from wwwroot.
+//
+// index.html MUST NOT be cached. Vite fingerprints every bundle
+// (assets/index-<hash>.js) and a deploy replaces the whole assets folder, so a
+// browser holding yesterday's index.html asks for a bundle that no longer
+// exists, gets a 404 and renders nothing at all — the app does not boot, and
+// the operator simply sees no new features. Without an explicit header the
+// response carried only an ETag, which lets a browser reuse it heuristically
+// without ever revalidating.
+//
+// The fingerprinted assets are the opposite case: their names change whenever
+// their contents do, so they can be cached hard and for a long time.
+static bool IsHtmlShell(string? path) =>
+    path != null && path.EndsWith(".html", StringComparison.OrdinalIgnoreCase);
+
+var noCacheHtml = new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var headers = ctx.Context.Response.GetTypedHeaders();
+        if (IsHtmlShell(ctx.File.Name))
+        {
+            headers.CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+            {
+                NoCache = true,
+                MustRevalidate = true,
+            };
+        }
+        else if (ctx.Context.Request.Path.StartsWithSegments("/assets"))
+        {
+            headers.CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+            {
+                Public = true,
+                MaxAge = TimeSpan.FromDays(365),
+            };
+        }
+    },
+};
+
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(noCacheHtml);
 
 // Serve user-uploaded files (logos, avatars) from persistent data/ folder
 var dataPath = Path.Combine(app.Environment.ContentRootPath, "data");
@@ -2175,7 +2213,7 @@ app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 // The :nonfile constraint is LOAD-BEARING: without it this endpoint also
 // matches /admin/assets/*.js, and StaticFileMiddleware skips any request
 // that already matched an endpoint — serving HTML for every asset.
-app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html", noCacheHtml);
 
 // Public Customer Portal deep links: /portal/<token> must serve the React app
 // shell, not the marketing landing page. Which file that is depends on the
@@ -2190,7 +2228,9 @@ var portalShell = File.Exists(Path.Combine(portalShellRoot, "admin", "index.html
 app.MapFallbackToFile("portal/{*path:nonfile}", portalShell);
 
 // Everything else — including "/" — serves the public landing page.
-app.MapFallbackToFile("index.html");
+// Same no-cache rule on the SPA fallback: this is the path a deep link takes,
+// and it serves the very shell that must never be stale.
+app.MapFallbackToFile("index.html", noCacheHtml);
 
 Log.Information("MyApp.Api starting up — environment={Env}", app.Environment.EnvironmentName);
 app.Run();

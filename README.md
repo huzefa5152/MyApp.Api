@@ -289,6 +289,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-01 — Fix: the browser kept showing the previous version after a deploy
+
+- **A deploy is now picked up on the next page load.** `index.html` was served with no cache instruction, so browsers were free to reuse a stored copy without checking. Because each deploy replaces the fingerprinted bundle it points at, that stored copy asked for a file that no longer existed — the app then failed to start and the site looked unchanged, or blank.
+- `index.html` is now sent as no-cache and must be revalidated; the fingerprinted assets under `/assets` are cached for a year, which is safe because their names change whenever their contents do.
+- Anyone still holding the old page needs one hard refresh (Ctrl+Shift+R). After that it corrects itself.
+
 ### 2026-09-01 — Spreadsheet import: built-in layouts
 
 - **Two layouts now ship with the product** — a standard stock sheet and a standard customer ledger — so a first import starts from a described layout instead of a blank mapping form. They are installation-wide, cannot be deleted, and a layout you save for your own company is used ahead of them.
