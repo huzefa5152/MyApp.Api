@@ -289,6 +289,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — An advance reads the same on every screen
+
+- **The customer portal shows an advance again.** An advance recorded as its own "advance / on account" line was being netted away to nothing on the portal, so a customer who had paid ahead saw no credit and a balance overstated by the whole amount they had paid. Advances entered the other way — a receipt saved without picking an invoice — were always shown correctly; both now read the same.
+- **A cash sale recorded against a customer no longer lands on their ledger.** Money received against a customer's name but booked straight to an income account is not payment of anything they owe, and the Customers screen never counted it as such. The customer ledger did, so the same customer could show two different balances on two screens and appear to hold an advance they had never paid. The ledger, its summary row, the customer statement and the A/R column now agree.
+
 ### 2026-08-31 — Record any payment or receipt against a payee
 
 - **Recording an ordinary expense no longer needs a purchase bill.** A payment line can now point straight at an income or expense account — electricity, rent, freight, professional fees — so paying a bill you were never invoiced for is a two-field job instead of an invented document or a hand-written journal entry.
@@ -332,7 +337,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - **Apply an advance to invoices later.** An existing advance can be settled against one or more of that customer's invoices whenever you choose, without re-entering the receipt.
 - **Customer ledger.** Each customer now has a full chronological trail — invoices, receipts, credit and debit notes, write-offs, opening balance and a running balance — instead of a list of invoices only. Amounts follow the familiar ledger layout: invoices in the Credit column, money received in the Debit column.
 - **Fixes a statement that could disagree with the balance owed.** Where a receipt settled an invoice partly in cash and partly by writing off the remainder, the old statement counted only the cash, so its closing figure drifted from the customer's real balance. Credit and debit notes were missing from it altogether, and it silently stopped after 200 rows.
-- **Advance from Customers account.** New companies get it automatically and existing companies gain it on next start-up. Unapplied money is held there rather than reducing what customers owe, so receivables, aged receivables and the trial balance stay correct while the customer holds a credit.
+- **Where unapplied money sits.** Money received but not applied to an invoice is held against the customer's own account, so it nets against what they owe while still showing as a credit on their ledger, in the A/R column and on the aged reports. (This first used a separate "Advance from Customers" account; that was replaced on 2026-08-31 — see that entry. A chart that already carries the account keeps it, unused.)
 - **New companies start with access restricted to assigned users.** The option is on by default when creating a company, and the wording beside it now describes what it actually does.
 
 ### 2026-08-30 — Refreshing a page keeps you on that page
