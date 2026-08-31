@@ -379,6 +379,12 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
+    // Belt-and-suspenders: the Save button is disabled during this same
+    // window (see the footer's `notReadyToSubmit`) so this shouldn't be
+    // reachable via a click, but guard the handler itself too in case
+    // submission is ever triggered another way (e.g. an implicit Enter
+    // submit slipping past a disabled default button in some browser).
+    if (isEdit && loadingDocs) return;
     setError("");
 
     const allocations = docs
@@ -732,10 +738,23 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               const hasSomething = isReceipt
                 ? (amountNum > 0 || (cashTotal + adjTotal) > 0)
                 : (cashTotal + adjTotal) > 0;
-              const blocked = saving || !hasSomething || bankMissing;
+              // An edit's OWN allocations aren't in `alloc` yet until the docs
+              // fetch for its contact resolves (see the docs-fetch effect) —
+              // but `amount` is seeded from editPayment.amount at mount, so
+              // `hasSomething` above is already true before that fetch
+              // settles. Without this gate a fast click (or a slow network)
+              // submits an empty allocations array and wipes the receipt's
+              // real ones — the exact failure class Task 7 exists to close,
+              // just via a race instead of a missing field (review fix round
+              // 2). A fresh CREATE has nothing to lose in that same window
+              // (its alloc was already correctly cleared, not "not yet
+              // loaded" — see the docs-fetch effect), so this only gates the
+              // edit path; it must never make a brand-new receipt wait.
+              const notReadyToSubmit = isEdit && loadingDocs;
+              const blocked = saving || !hasSomething || bankMissing || notReadyToSubmit;
               return (
                 <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: blocked ? 0.6 : 1 }} disabled={blocked}>
-                  {saving ? "Saving…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
+                  {saving ? "Saving…" : notReadyToSubmit ? "Loading…" : isEdit ? "Save Changes" : isReceipt ? "Save Receipt" : "Save Payment"}
                 </button>
               );
             })()}
