@@ -140,8 +140,33 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const accountName = (id) => accounts.find((a) => String(a.id) === String(id))?.name || "";
 
   // When a contact is picked, fetch their open documents (balance due > 0).
+  //
+  // `alloc` is cleared unconditionally on every run of this effect, BEFORE
+  // the `contactId` guard — not just when contactId goes empty. Previously
+  // it was only cleared on empty, so ticking invoices for Client A and then
+  // switching the picker to Client B (without submitting) left Client A's
+  // entries in `alloc`: invisible in the new `docs` list (keyed by a docId
+  // that no longer appears), but still summed into cashTotal/advance/
+  // overAllocated below, and able to false-fire the over-allocation guard —
+  // a wrong Advance figure with nothing on screen to explain it (review
+  // finding, Task 7 fix round 1).
+  //
+  // This does NOT special-case "just mounted for an edit" vs. "user changed
+  // the contact" — it doesn't need to. Both are just "this effect ran (for
+  // whatever reason)": clear first, then the SAME repopulate logic below
+  // (editPayment branch / preset branch) recomputes the right allocations
+  // against whatever the CURRENT contactId's docs turn out to be. On mount
+  // for an edit, `pre` is rebuilt from editPayment.allocations and matches
+  // immediately after the clear — the clear is followed by the correct
+  // refill within the same effect, so the edit's own allocations are never
+  // actually lost, only (very briefly, same window `loadingDocs` already
+  // covers with "Loading…") absent from `alloc` until the fetch resolves.
+  // Switching to a DIFFERENT contact mid-edit correctly ends up `{}` (none
+  // of editPayment's old invoice ids match the new contact's docs); switching
+  // back to the original contact correctly restores the original pre-fill.
   useEffect(() => {
-    if (!contactId) { setDocs([]); setAlloc({}); return; }
+    setAlloc({});
+    if (!contactId) { setDocs([]); return; }
     let cancelled = false;
     setLoadingDocs(true);
     const fetcher = isReceipt

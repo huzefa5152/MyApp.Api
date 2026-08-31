@@ -275,6 +275,14 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
   const [open, setOpen] = useState(false);
   const allocs = p.allocations || [];
   const count = allocs.length;
+  // Cash the receipt carries that no allocation line spent — the customer's
+  // advance (Task 7). Always 0 for money-out (Payment.Amount is derived from
+  // Σ allocations there), so this never renders on a Payment card. Gating the
+  // whole breakdown block on `hasAdvance` too (not just `count > 0`) matters
+  // for the zero-invoice receipt Task 7 introduces: with no allocation lines
+  // at all, the OLD `count > 0` gate hid the section entirely, so a receipt
+  // that is 100% advance showed no trace of it anywhere on the card.
+  const hasAdvance = (p.unallocatedAmount || 0) > 0.005;
   const isCheque = (p.method || "").toLowerCase().includes("cheque");
   const chequeStatusTone =
     p.chequeStatus === "Bounced" ? "danger" : p.chequeStatus === "Cleared" ? "success" : "warning";
@@ -332,8 +340,10 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
           </div>
         )}
 
-        {/* Allocations — collapsed summary that expands to a clean breakdown */}
-        {count > 0 && (
+        {/* Allocations — collapsed summary that expands to a clean breakdown.
+            Gated on count OR an advance so a fully-unallocated receipt (Task 7:
+            zero invoices ticked) still shows where its money is. */}
+        {(count > 0 || hasAdvance) && (
           <div style={st.allocWrap}>
             <button
               style={st.allocToggle}
@@ -345,7 +355,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
                   size={18}
                   style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: accent }}
                 />
-                {count} {docNoun}{count !== 1 ? "s" : ""} settled
+                {count > 0 ? `${count} ${docNoun}${count !== 1 ? "s" : ""} settled` : `Not yet applied to any ${docNoun}`}
               </span>
               {!open && <span style={st.allocToggleHint}>view details</span>}
             </button>
@@ -358,6 +368,15 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
                     <span style={st.allocAmt}>Rs {fmtMoney(a.amount)}</span>
                   </div>
                 ))}
+                {/* Cash no allocation line spent — shown so this list plus
+                    Total always adds up (review finding: Total used to render
+                    p.amount even when it exceeded Σ allocs). */}
+                {hasAdvance && (
+                  <div style={st.allocRow}>
+                    <span style={st.allocLabel}>Advance</span>
+                    <span style={st.allocAmt}>Rs {fmtMoney(p.unallocatedAmount)}</span>
+                  </div>
+                )}
                 <div style={st.allocTotalRow}>
                   <span>Total</span>
                   <span style={{ color: accent }}>Rs {fmtMoney(p.amount)}</span>
