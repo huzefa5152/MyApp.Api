@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -424,35 +424,66 @@ namespace MyApp.Api.Services.Implementations
 
         // ── AR / AP aging (subledger — available with or without the GL) ──────
 
-        public Task<AgedReportDto> GetAgedReceivablesAsync(int companyId) =>
-            BuildAgingAsync(companyId, receivables: true);
+        public Task<AgedReportDto> GetAgedReceivablesAsync(int companyId, DateTime? asOf = null) =>
+            BuildAgingAsync(companyId, receivables: true, asOf: asOf);
 
-        public Task<AgedReportDto> GetAgedPayablesAsync(int companyId) =>
-            BuildAgingAsync(companyId, receivables: false);
+        public Task<AgedReportDto> GetAgedPayablesAsync(int companyId, DateTime? asOf = null) =>
+            BuildAgingAsync(companyId, receivables: false, asOf: asOf);
 
-        private async Task<AgedReportDto> BuildAgingAsync(int companyId, bool receivables)
+        private async Task<AgedReportDto> BuildAgingAsync(int companyId, bool receivables,
+            DateTime? asOf = null)
         {
-            var today = PakistanClock.Today;
+            // "Today" for aging purposes. A past asOf ages the balances as they
+            // stood then, so the buckets are measured from that date, not now.
+            var today = (asOf ?? PakistanClock.Today).Date;
             var report = new AgedReportDto { Kind = receivables ? "Receivables" : "Payables", AsOf = today };
 
             List<(int PartyId, string Name, DateTime Anchor, decimal Due)> open;
             if (receivables)
             {
-                open = (await _context.Invoices.AsNoTracking()
+                var rows = await _context.Invoices.AsNoTracking()
                     .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                              && i.DocumentType != 9 && i.DocumentType != 10
-                             && i.GrandTotal - i.WithholdingTaxAmount > i.AmountPaid)
-                    .Select(i => new { i.ClientId, ClientName = i.Client!.Name, i.Date, i.DueDate, Due = i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid })
-                    .ToListAsync())
-                    .Select(x => (x.ClientId, x.ClientName, (x.DueDate ?? x.Date).Date, x.Due)).ToList();
+                             && (asOf == null || i.Date <= today))
+                    .Select(i => new
+                    {
+                        i.Id, i.ClientId, ClientName = i.Client!.Name, i.Date, i.DueDate,
+                        Gross = i.GrandTotal - i.WithholdingTaxAmount, i.AmountPaid,
+                    })
+                    .ToListAsync();
+
+                var paid = await PaidAsOfAsync(companyId, today, asOf, receivables: true);
+                open = rows
+                    .Select(x => new
+                    {
+                        x.ClientId, x.ClientName, x.Date, x.DueDate,
+                        Due = x.Gross - (asOf == null ? x.AmountPaid : paid.GetValueOrDefault(x.Id)),
+                    })
+                    .Where(x => x.Due > 0m)
+                    .Select(x => (x.ClientId, x.ClientName, (x.DueDate ?? x.Date).Date, x.Due))
+                    .ToList();
             }
             else
             {
-                open = (await _context.PurchaseBills.AsNoTracking()
-                    .Where(b => b.CompanyId == companyId && b.GrandTotal - b.WithholdingTaxAmount > b.AmountPaid)
-                    .Select(b => new { b.SupplierId, SupplierName = b.Supplier!.Name, b.Date, b.DueDate, Due = b.GrandTotal - b.WithholdingTaxAmount - b.AmountPaid })
-                    .ToListAsync())
-                    .Select(x => (x.SupplierId, x.SupplierName, (x.DueDate ?? x.Date).Date, x.Due)).ToList();
+                var rows = await _context.PurchaseBills.AsNoTracking()
+                    .Where(b => b.CompanyId == companyId && (asOf == null || b.Date <= today))
+                    .Select(b => new
+                    {
+                        b.Id, b.SupplierId, SupplierName = b.Supplier!.Name, b.Date, b.DueDate,
+                        Gross = b.GrandTotal - b.WithholdingTaxAmount, b.AmountPaid,
+                    })
+                    .ToListAsync();
+
+                var paid = await PaidAsOfAsync(companyId, today, asOf, receivables: false);
+                open = rows
+                    .Select(x => new
+                    {
+                        x.SupplierId, x.SupplierName, x.Date, x.DueDate,
+                        Due = x.Gross - (asOf == null ? x.AmountPaid : paid.GetValueOrDefault(x.Id)),
+                    })
+                    .Where(x => x.Due > 0m)
+                    .Select(x => (x.SupplierId, x.SupplierName, (x.DueDate ?? x.Date).Date, x.Due))
+                    .ToList();
             }
 
             // Money held on account — an advance with no document yet (see
@@ -460,7 +491,12 @@ namespace MyApp.Api.Services.Implementations
             // invoice/bill to age against and is not overdue, so it belongs in
             // Current; but it must be here, or a party sitting entirely in credit
             // is missing from the report while their balance is real in the ledger.
-            var onAccount = await PartyOnAccount.NetByPartyAsync(_context, companyId, receivables);
+            // Our PartyOnAccount helper is the single definition of this
+            // quantity (it also counts a receipt's unallocated remainder, which
+            // has no OnAccount row of its own); asOf gives it the same
+            // historical cut the document legs above use.
+            var onAccount = await PartyOnAccount.NetByPartyAsync(
+                _context, companyId, receivables, asOf: asOf == null ? null : today);
 
             // Scoped to the company, like every other read here: the ids come from
             // Payment.ContactId, a soft reference, so an unscoped lookup would
@@ -512,6 +548,44 @@ namespace MyApp.Api.Services.Implementations
             report.Days61To90 = report.Rows.Sum(r => r.Days61To90);
             report.Over90 = report.Rows.Sum(r => r.Over90);
             return report;
+        }
+
+        /// <summary>
+        /// Amount settled per document as at <paramref name="asOf"/>, from the
+        /// allocations rather than the stored AmountPaid.
+        ///
+        /// Why it exists: AmountPaid is a CURRENT snapshot. Ageing "as of 30 June"
+        /// off AmountPaid would subtract payments made in July and report an
+        /// invoice as settled when, on 30 June, it was 90 days overdue. Returns
+        /// empty when asOf is null — the caller then uses AmountPaid and this costs
+        /// nothing on the common path.
+        ///
+        /// Includes AdjustmentAmount because a settle-remainder write-off clears
+        /// the document exactly as cash does (Invoice.AmountPaid counts it).
+        /// </summary>
+        private async Task<Dictionary<int, decimal>> PaidAsOfAsync(
+            int companyId, DateTime asOfDate, DateTime? asOf, bool receivables)
+        {
+            if (asOf == null) return new Dictionary<int, decimal>();
+
+            var direction = receivables ? PaymentDirection.Receipt : PaymentDirection.Payment;
+            var q = from a in _context.PaymentAllocations.AsNoTracking()
+                    join p in _context.Payments.AsNoTracking() on a.PaymentId equals p.Id
+                    where p.CompanyId == companyId && !p.IsCancelled
+                          && p.Direction == direction && p.Date <= asOfDate
+                    select new { a.InvoiceId, a.PurchaseBillId, a.Amount, a.AdjustmentAmount };
+
+            var rows = receivables
+                ? await q.Where(x => x.InvoiceId != null)
+                    .GroupBy(x => x.InvoiceId!.Value)
+                    .Select(g => new { Id = g.Key, Paid = g.Sum(x => x.Amount + x.AdjustmentAmount) })
+                    .ToListAsync()
+                : await q.Where(x => x.PurchaseBillId != null)
+                    .GroupBy(x => x.PurchaseBillId!.Value)
+                    .Select(g => new { Id = g.Key, Paid = g.Sum(x => x.Amount + x.AdjustmentAmount) })
+                    .ToListAsync();
+
+            return rows.ToDictionary(x => x.Id, x => x.Paid);
         }
 
         // ── Accounting summary (dashboard) ─────────────────────────────────────

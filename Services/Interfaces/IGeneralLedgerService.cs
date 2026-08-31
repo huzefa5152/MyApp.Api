@@ -25,8 +25,16 @@ namespace MyApp.Api.Services.Interfaces
 
         Task<TrialBalanceDto> GetTrialBalanceAsync(int companyId, DateTime? from, DateTime? to);
 
-        Task<AgedReportDto> GetAgedReceivablesAsync(int companyId);
-        Task<AgedReportDto> GetAgedPayablesAsync(int companyId);
+        /// <summary>
+        /// AR/AP aging. <paramref name="asOf"/> null = as of today, the original
+        /// behaviour. Supplying a past date gives a HISTORICAL aging: documents
+        /// dated after it are excluded, and the amount paid is re-derived from the
+        /// allocations up to that date rather than taken from the stored
+        /// AmountPaid, which is a current snapshot and would otherwise make a past
+        /// aging look already-settled.
+        /// </summary>
+        Task<AgedReportDto> GetAgedReceivablesAsync(int companyId, DateTime? asOf = null);
+        Task<AgedReportDto> GetAgedPayablesAsync(int companyId, DateTime? asOf = null);
 
         Task<AccountingSummaryDto> GetSummaryAsync(int companyId, DateTime? from, DateTime? to);
 

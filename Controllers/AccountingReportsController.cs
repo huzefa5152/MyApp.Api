@@ -194,6 +194,144 @@ namespace MyApp.Api.Controllers
             return Ok(await _reports.GetUnallocatedPaymentsAsync(companyId, filter));
         }
 
+        // ── Customers ─────────────────────────────────────────────────────────────
+
+        /// <summary>Customer Ledger — one customer or all, any period including
+        /// all-time. Ledger-sourced, so notes, advances and journals are in.</summary>
+        [HttpGet("company/{companyId}/customer-ledger")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<PartyLedgerResultDto>> CustomerLedger(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyLedgerAsync(companyId, filter, customers: true));
+        }
+
+        /// <summary>Customer Statement — the same figures laid out to send to the
+        /// customer, with an age breakdown of what they owe.</summary>
+        [HttpGet("company/{companyId}/customer-statement")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<PartyLedgerResultDto>> CustomerStatement(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyLedgerAsync(companyId, filter,
+                customers: true, asStatement: true));
+        }
+
+        [HttpGet("company/{companyId}/customer-balances")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<PartyBalanceSummaryDto>> CustomerBalances(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyBalanceSummaryAsync(companyId, filter, customers: true));
+        }
+
+        // Named receivables-aging, not aged-receivables: AccountingController
+        // already serves api/accounting/reports/company/{id}/aged-receivables as
+        // the raw primitive (the dashboard and the GL tests use it), and two
+        // controllers claiming one route is an AmbiguousMatchException at runtime.
+        [HttpGet("company/{companyId}/receivables-aging")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> AgedReceivables(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetAgingReportAsync(companyId, filter, customers: true));
+        }
+
+        [HttpGet("company/{companyId}/customer-outstanding")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> CustomerOutstanding(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetOutstandingDocumentsAsync(companyId, filter, customers: true));
+        }
+
+        /// <summary>Customer Sales — what each customer bought, by item and item
+        /// type. Also the honest answer to "customer purchase history": what they
+        /// purchased FROM US, since customers do not raise purchases here.</summary>
+        [HttpGet("company/{companyId}/customer-sales")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> CustomerSales(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyTradeAsync(companyId, filter, customers: true));
+        }
+
+        // ── Suppliers ─────────────────────────────────────────────────────────────
+
+        [HttpGet("company/{companyId}/supplier-ledger")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<PartyLedgerResultDto>> SupplierLedger(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyLedgerAsync(companyId, filter, customers: false));
+        }
+
+        [HttpGet("company/{companyId}/supplier-statement")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<PartyLedgerResultDto>> SupplierStatement(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyLedgerAsync(companyId, filter,
+                customers: false, asStatement: true));
+        }
+
+        [HttpGet("company/{companyId}/supplier-balances")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<PartyBalanceSummaryDto>> SupplierBalances(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyBalanceSummaryAsync(companyId, filter, customers: false));
+        }
+
+        // See the note on receivables-aging above.
+        [HttpGet("company/{companyId}/payables-aging")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> AgedPayables(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetAgingReportAsync(companyId, filter, customers: false));
+        }
+
+        [HttpGet("company/{companyId}/supplier-outstanding")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> SupplierOutstanding(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetOutstandingDocumentsAsync(companyId, filter, customers: false));
+        }
+
+        [HttpGet("company/{companyId}/supplier-purchases")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> SupplierPurchases(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPartyTradeAsync(companyId, filter, customers: false));
+        }
+
         // ── Export ────────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -240,6 +378,30 @@ namespace MyApp.Api.Controllers
                     report = await _reports.GetChequeRegisterAsync(companyId, filter, true); break;
                 case "unallocated":
                     report = await _reports.GetUnallocatedPaymentsAsync(companyId, filter); break;
+                case "customer-ledger":
+                    report = await _reports.GetPartyLedgerAsync(companyId, filter, true); break;
+                case "customer-statement":
+                    report = await _reports.GetPartyLedgerAsync(companyId, filter, true, true); break;
+                case "customer-balances":
+                    report = await _reports.GetPartyBalanceSummaryAsync(companyId, filter, true); break;
+                case "aged-receivables":
+                    report = await _reports.GetAgingReportAsync(companyId, filter, true); break;
+                case "customer-outstanding":
+                    report = await _reports.GetOutstandingDocumentsAsync(companyId, filter, true); break;
+                case "customer-sales":
+                    report = await _reports.GetPartyTradeAsync(companyId, filter, true); break;
+                case "supplier-ledger":
+                    report = await _reports.GetPartyLedgerAsync(companyId, filter, false); break;
+                case "supplier-statement":
+                    report = await _reports.GetPartyLedgerAsync(companyId, filter, false, true); break;
+                case "supplier-balances":
+                    report = await _reports.GetPartyBalanceSummaryAsync(companyId, filter, false); break;
+                case "aged-payables":
+                    report = await _reports.GetAgingReportAsync(companyId, filter, false); break;
+                case "supplier-outstanding":
+                    report = await _reports.GetOutstandingDocumentsAsync(companyId, filter, false); break;
+                case "supplier-purchases":
+                    report = await _reports.GetPartyTradeAsync(companyId, filter, false); break;
                 default:
                     return BadRequest(new { message = "Unknown report." });
             }

@@ -59,6 +59,22 @@ const EXPENSE_FILTERS = [
   FILTERS.search,
 ];
 
+const CUSTOMER_FILTERS = [
+  FILTERS.period,
+  FILTERS.division,
+  FILTERS.client,
+  FILTERS.status,
+  FILTERS.search,
+];
+
+const SUPPLIER_FILTERS = [
+  FILTERS.period,
+  FILTERS.division,
+  FILTERS.supplier,
+  FILTERS.status,
+  FILTERS.search,
+];
+
 const MONEY_FILTERS = [
   FILTERS.period,
   FILTERS.division,
@@ -303,16 +319,63 @@ export const REPORT_CATEGORIES = [
     reports: [
       {
         id: "aged-receivables",
+        path: "receivables-aging",
         title: "Accounts Receivable Aging",
-        blurb: "Outstanding customer balances bucketed by age.",
-        legacy: "receivables",
+        blurb: "Outstanding customer balances bucketed by age. Click a customer for the invoices behind it.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client, FILTERS.status, FILTERS.search],
+        featured: true,
+        drill: { filter: "clientId", to: "customer-outstanding" },
+      },
+      {
+        id: "customer-ledger",
+        path: "customer-ledger",
+        title: "Customer Ledger",
+        blurb: "Every transaction on a customer's account, any period including all-time.",
+        filters: CUSTOMER_FILTERS,
         featured: true,
       },
-      { id: "customer-ledger", title: "Customer Ledger", blurb: "Every transaction on one customer's account, all periods.", status: "planned" },
-      { id: "customer-statement", title: "Customer Statement", blurb: "A statement you can send to the customer.", status: "planned" },
-      { id: "customer-balances", title: "Customer Balance Summary", blurb: "One line per customer with the balance owed.", status: "planned" },
-      { id: "customer-sales", title: "Customer Sales", blurb: "What each customer bought, by item and item type.", status: "planned" },
-      { id: "customer-outstanding", title: "Outstanding Invoices", blurb: "Unpaid sales invoices by customer.", status: "planned" },
+      {
+        id: "customer-statement",
+        path: "customer-statement",
+        title: "Customer Statement",
+        blurb: "The same figures laid out to send to the customer, with an age breakdown.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client],
+        statement: true,
+      },
+      {
+        id: "customer-balances",
+        path: "customer-balances",
+        title: "Customer Balance Summary",
+        blurb: "One line per customer: opening, invoiced, received, owed.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.search],
+        drill: { filter: "clientId", to: "customer-ledger" },
+      },
+      {
+        id: "customer-sales",
+        path: "customer-sales",
+        title: "Customer Sales",
+        blurb: "What each customer bought, by item and item type.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client, FILTERS.search],
+      },
+      {
+        id: "customer-outstanding",
+        path: "customer-outstanding",
+        title: "Outstanding Invoices",
+        blurb: "Unpaid sales invoices, oldest debt first, with an age bucket each.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client, FILTERS.search],
+        drill: { filter: "clientId", to: "customer-ledger" },
+      },
+      {
+        // Not a new report: the Receipt Register already answers this, scoped to
+        // one customer. A duplicate implementation would be a second place for
+        // the same figures to drift.
+        id: "customer-receipts",
+        path: "receipts-register",
+        title: "Customer Receipts",
+        blurb: "Every receipt taken from a customer — the Receipt Register, scoped to them.",
+        filters: MONEY_FILTERS,
+        exportId: "receipts-register",
+      },
     ],
   },
   {
@@ -322,16 +385,72 @@ export const REPORT_CATEGORIES = [
     reports: [
       {
         id: "aged-payables",
+        path: "payables-aging",
         title: "Accounts Payable Aging",
-        blurb: "Outstanding supplier balances bucketed by age.",
-        legacy: "payables",
+        blurb: "Outstanding supplier balances bucketed by age. Click a supplier for the bills behind it.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier, FILTERS.status, FILTERS.search],
+        featured: true,
+        drill: { filter: "supplierId", to: "supplier-outstanding" },
+      },
+      {
+        id: "supplier-ledger",
+        path: "supplier-ledger",
+        title: "Supplier Ledger",
+        blurb: "Every transaction on a supplier's account, any period including all-time.",
+        filters: SUPPLIER_FILTERS,
         featured: true,
       },
-      { id: "supplier-ledger", title: "Supplier Ledger", blurb: "Every transaction on one supplier's account, all periods.", status: "planned" },
-      { id: "supplier-statement", title: "Supplier Statement", blurb: "A reconcilable statement of one supplier's account.", status: "planned" },
-      { id: "supplier-balances", title: "Supplier Balance Summary", blurb: "One line per supplier with the balance owed.", status: "planned" },
-      { id: "supplier-purchases", title: "Supplier Purchases", blurb: "What was bought from each supplier.", status: "planned" },
-      { id: "supplier-outstanding", title: "Outstanding Bills", blurb: "Unpaid purchase bills by supplier.", status: "planned" },
+      {
+        id: "supplier-statement",
+        path: "supplier-statement",
+        title: "Supplier Statement",
+        blurb: "A reconcilable statement of one supplier's account, with an age breakdown.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier],
+        statement: true,
+      },
+      {
+        id: "supplier-balances",
+        path: "supplier-balances",
+        title: "Supplier Balance Summary",
+        blurb: "One line per supplier: opening, billed, paid, owed.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.search],
+        drill: { filter: "supplierId", to: "supplier-ledger" },
+      },
+      {
+        id: "supplier-purchases",
+        path: "supplier-purchases",
+        title: "Supplier Purchases",
+        blurb: "What was bought from each supplier, by item and item type.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier, FILTERS.search],
+      },
+      {
+        id: "supplier-outstanding",
+        path: "supplier-outstanding",
+        title: "Outstanding Bills",
+        blurb: "Unpaid purchase bills, oldest debt first, with an age bucket each.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier, FILTERS.search],
+        drill: { filter: "supplierId", to: "supplier-ledger" },
+      },
+      {
+        id: "supplier-payments",
+        path: "payments-register",
+        title: "Supplier Payments",
+        blurb: "Every payment made to a supplier — the Payment Register, scoped to them.",
+        filters: MONEY_FILTERS,
+        exportId: "payments-register",
+      },
+      {
+        id: "supplier-sales",
+        title: "Supplier Sales",
+        blurb: "Sales made to a supplier.",
+        status: "blocked",
+        // Stated on the card rather than quietly omitted, because it was asked
+        // for explicitly.
+        blockedReason:
+          "Not applicable in this system: a sales invoice is always raised to a Client, "
+          + "and suppliers are purchase-side only. If you ever sell to a supplier, add them "
+          + "as a customer too and they will appear in the customer reports.",
+      },
     ],
   },
   {
@@ -340,7 +459,14 @@ export const REPORT_CATEGORIES = [
     blurb: "What sold, to whom, and whether it has been paid.",
     reports: [
       { id: "sales-invoice-register", title: "Sales Invoice Register", blurb: "Every invoice with tax, paid and outstanding.", status: "planned" },
-      { id: "sales-by-customer", title: "Sales by Customer", blurb: "Revenue per customer for the period.", status: "planned" },
+      {
+        id: "sales-by-customer",
+        path: "customer-sales",
+        title: "Sales by Customer",
+        blurb: "Revenue per customer, with the item detail behind it.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client, FILTERS.search],
+        exportId: "customer-sales",
+      },
       { id: "sales-by-item", title: "Sales by Item", blurb: "Revenue and quantity per item.", status: "planned" },
       { id: "sales-by-item-type", title: "Sales by Item Type", blurb: "Revenue rolled up by item type.", status: "planned" },
       { id: "sales-payment-status", title: "Sales Payment Status", blurb: "Paid, part-paid and unpaid invoices at a glance.", status: "planned" },
@@ -352,7 +478,14 @@ export const REPORT_CATEGORIES = [
     blurb: "What was bought, from whom, and what is still owed.",
     reports: [
       { id: "purchase-bill-register", title: "Purchase Bill Register", blurb: "Every bill with tax, paid and outstanding.", status: "planned" },
-      { id: "purchases-by-supplier", title: "Purchases by Supplier", blurb: "Spend per supplier for the period.", status: "planned" },
+      {
+        id: "purchases-by-supplier",
+        path: "supplier-purchases",
+        title: "Purchases by Supplier",
+        blurb: "Spend per supplier, with the item detail behind it.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier, FILTERS.search],
+        exportId: "supplier-purchases",
+      },
       { id: "purchases-by-item", title: "Purchases by Item", blurb: "Quantity and value per item purchased.", status: "planned" },
       { id: "purchase-payment-status", title: "Purchase Payment Status", blurb: "Paid, part-paid and unpaid bills.", status: "planned" },
     ],

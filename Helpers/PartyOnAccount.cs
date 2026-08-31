@@ -84,10 +84,14 @@ namespace MyApp.Api.Helpers
         /// call site silently lost its scope once already.</param>
         /// <param name="partyIds">Narrow to these parties. Pass the whole set a
         /// ClientGroup covers rather than querying once per member.</param>
+        /// <param name="asOf">Historical cut: count only payments dated on or
+        /// before this date, so a view can ask what a party held on account as at
+        /// a past date. Null (the default) means "as things stand now", which is
+        /// what every live-balance caller wants.</param>
         public static IQueryable<Row> Query(
             AppDbContext ctx, string contactType, int companyId,
-            ICollection<int>? partyIds = null) =>
-            Scoped(ctx, contactType, companyId, partyIds)
+            ICollection<int>? partyIds = null, DateTime? asOf = null) =>
+            Scoped(ctx, contactType, companyId, partyIds, asOf)
                 .Select(p => new Row
                 {
                     PaymentId = p.Id,
@@ -187,12 +191,16 @@ namespace MyApp.Api.Helpers
         /// One place, so a call site cannot pick up a different payment set by
         /// accident.</summary>
         private static IQueryable<Payment> Scoped(
-            AppDbContext ctx, string contactType, int companyId, ICollection<int>? partyIds)
+            AppDbContext ctx, string contactType, int companyId, ICollection<int>? partyIds,
+            DateTime? asOf = null)
         {
             var q = ctx.Payments.AsNoTracking()
                 .Where(p => !p.IsCancelled && p.ContactId != null
                             && p.ContactType == contactType && p.CompanyId == companyId);
             if (partyIds != null) q = q.Where(p => partyIds.Contains(p.ContactId!.Value));
+            // Historical cut. Applied here rather than at each call site so a
+            // caller cannot ask for an as-at balance and silently get today's.
+            if (asOf != null) { var cut = asOf.Value.Date; q = q.Where(p => p.Date <= cut); }
             return q;
         }
 
@@ -205,10 +213,14 @@ namespace MyApp.Api.Helpers
         /// we owe, so a payment is negative. "Reduces the balance" is the opposite
         /// direction of cash on each side, which is the whole reason for the flag.
         /// </param>
+        /// <param name="asOf">Historical cut — see <see cref="Query"/>. The aging
+        /// reports pass a past date so an advance recorded after it is not
+        /// counted against a balance that predates it.</param>
         public static async Task<Dictionary<int, decimal>> NetByPartyAsync(
-            AppDbContext ctx, int companyId, bool receivables)
+            AppDbContext ctx, int companyId, bool receivables, DateTime? asOf = null)
         {
-            var rows = await Query(ctx, receivables ? "Client" : "Supplier", companyId).ToListAsync();
+            var rows = await Query(ctx, receivables ? "Client" : "Supplier", companyId, asOf: asOf)
+                .ToListAsync();
             return rows
                 .Where(r => r.Amount != 0m)
                 .GroupBy(r => r.PartyId)
