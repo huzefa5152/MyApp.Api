@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
-  MdArrowBack, MdChevronRight, MdInfoOutline, MdOpenInNew,
-  MdPictureAsPdf, MdPrint, MdTableChart,
+  MdArrowBack, MdCheckCircle, MdChevronRight, MdInfoOutline, MdOpenInNew,
+  MdPictureAsPdf, MdPrint, MdTableChart, MdWarning,
 } from "react-icons/md";
 import { colors } from "../theme";
 import useIsNarrow from "../hooks/useIsNarrow";
@@ -41,6 +41,7 @@ export default function ReportShell({
   canExport = false,
   onDrill,          // (filterKey, value, targetReportId) => void
   onOpenRow,        // (row) => void — jump to the source document
+  onOpenAccount,    // (accountId) => void — statement line -> that account's ledger
   categoryTitle,
 }) {
   const narrow = useIsNarrow(820);
@@ -156,6 +157,16 @@ export default function ReportShell({
         </Notice>
       )}
 
+      {/* A balance sheet that does not balance has to say so where it cannot be
+          missed, and one that does should reassure at a glance. */}
+      {report?.statement === "BalanceSheet" && report.difference !== undefined && (
+        <div style={report.isBalanced ? st.balancedChip : st.imbalanceChip}>
+          {report.isBalanced
+            ? <><MdCheckCircle size={17} /> Assets = Liabilities + Equity</>
+            : <><MdWarning size={17} /> Out of balance by {fmtMoney(report.difference)}</>}
+        </div>
+      )}
+
       {/* ── 2. The answer ─────────────────────────────────────────────────── */}
       {report && Object.keys(totals).length > 0 && (
         <div style={st.totalsStrip}>
@@ -200,6 +211,11 @@ export default function ReportShell({
         <div style={st.stateBox}>
           Nothing to show for this period and filter combination.
         </div>
+      ) : report?.statement ? (
+        // A statement is a hierarchy, not a grid: indented groups, subtotals at
+        // every level, and one figure per line. It reads the same on a phone as on
+        // a desktop, so there is no separate narrow layout.
+        <StatementTable report={report} rows={rows} onDrill={onOpenAccount} />
       ) : narrow ? (
         <div style={st.cardList}>
           {rows.map((row, i) => (
@@ -484,6 +500,106 @@ function RowCard({ row, columns, leadCol, amountCol, onOpenRow }) {
   );
 }
 
+/**
+ * A financial statement.
+ *
+ * The server flattens the account-group hierarchy into lines carrying a `level`
+ * and a `kind`, so this draws indentation and weight without knowing anything
+ * about charts of accounts. Account lines are clickable — a statement figure you
+ * cannot open is a dead end, and "why is this account this number" is the whole
+ * reason to look at one.
+ */
+function StatementTable({ report, rows, onDrill }) {
+  const hasComparative = (report.columns || []).some((c) => c.key === "comparative");
+
+  return (
+    <div style={st.tableWrap}>
+      <table style={{ ...st.table, minWidth: hasComparative ? 620 : 380 }}>
+        <thead>
+          <tr>
+            <th style={st.th} />
+            <th style={st.thNum}>{report.periodLabel}</th>
+            {hasComparative && <th style={st.thNum}>{report.comparativeLabel}</th>}
+            {hasComparative && <th style={st.thNum}>Change</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((line, i) => {
+            if (line.kind === "spacer") {
+              return <tr key={i}><td colSpan={hasComparative ? 4 : 2} style={st.stmtSpacer} /></tr>;
+            }
+            const tone = STMT_TONE[line.kind] || {};
+            const clickable = line.kind === "account" && line.accountId && onDrill;
+            return (
+              <tr
+                key={i}
+                style={{ ...st.stmtRow, ...(clickable ? { cursor: "pointer" } : {}) }}
+                onClick={clickable ? () => onDrill(line.accountId) : undefined}
+                title={clickable ? `Open the ledger for ${line.label}` : undefined}
+              >
+                <td style={{
+                  ...st.stmtLabel,
+                  paddingLeft: `calc(0.8rem + ${line.level * 1.1}rem)`,
+                  ...tone.label,
+                }}>
+                  {line.label}
+                  {line.code && <span style={st.stmtCode}>{line.code}</span>}
+                </td>
+                <td style={{ ...st.stmtNum, ...tone.amount }}>{fmtMoney(line.amount)}</td>
+                {hasComparative && (
+                  <td style={{ ...st.stmtNum, ...tone.amount, color: colors.textSecondary }}>
+                    {line.comparative === null || line.comparative === undefined
+                      ? "" : fmtMoney(line.comparative)}
+                  </td>
+                )}
+                {hasComparative && (
+                  <td style={{ ...st.stmtNum, ...changeTone(line.change) }}>
+                    {line.change === null || line.change === undefined ? "" : (
+                      <>
+                        {fmtMoney(line.change)}
+                        {line.changePercent !== null && line.changePercent !== undefined && (
+                          <span style={st.stmtPct}>
+                            {line.changePercent > 0 ? "+" : ""}{line.changePercent}%
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const STMT_TONE = {
+  group: {
+    label: { fontWeight: 800, color: colors.blue, textTransform: "uppercase",
+             fontSize: "0.72rem", letterSpacing: "0.05em", paddingTop: "0.9rem" },
+    amount: { paddingTop: "0.9rem" },
+  },
+  account: { label: { color: colors.textPrimary }, amount: {} },
+  subtotal: {
+    label: { fontWeight: 700, color: colors.textPrimary },
+    amount: { fontWeight: 700, borderTop: `1px solid ${colors.cardBorder}` },
+  },
+  total: {
+    label: { fontWeight: 800, color: colors.textPrimary, fontSize: "0.92rem" },
+    amount: { fontWeight: 800, fontSize: "0.92rem", borderTop: `2px solid ${colors.blue}` },
+  },
+};
+
+/** A negative change is not automatically bad — it depends on the line — so the
+ *  tint is deliberately neutral-leaning: red only for a real decline. */
+function changeTone(change) {
+  const n = Number(change || 0);
+  if (!change) return { color: colors.textSecondary };
+  return n < 0 ? { color: colors.danger } : { color: colors.success };
+}
+
 /** A grouped breakdown with a proportion bar, so the biggest lines read instantly. */
 function GroupSummary({ group, onDrill }) {
   const rows = group.rows || [];
@@ -617,6 +733,59 @@ function buildReportHtml(report) {
 
   const head = cols.map((c) =>
     `<th class="${isNumeric(c.format) ? "num" : ""}">${esc(c.label)}</th>`).join("");
+
+  // A statement prints as its hierarchy. Running it through the generic grid
+  // would lose the indentation that carries the meaning.
+  if (report.statement) {
+    const hasComp = (report.columns || []).some((c) => c.key === "comparative");
+    const stmtRows = (report.rows || []).map((l) => {
+      if (l.kind === "spacer") return `<tr><td colspan="${hasComp ? 4 : 2}" style="height:8px"></td></tr>`;
+      const cls = l.kind === "group" ? "g" : l.kind === "subtotal" ? "s"
+                : l.kind === "total" ? "t" : "";
+      const indent = 2 + (l.level || 0) * 10;
+      return `<tr class="${cls}">`
+        + `<td style="padding-left:${indent}px">${esc(l.label)}</td>`
+        + `<td class="num">${esc(fmtMoney(l.amount))}</td>`
+        + (hasComp ? `<td class="num">${l.comparative == null ? "" : esc(fmtMoney(l.comparative))}</td>` : "")
+        + (hasComp ? `<td class="num">${l.change == null ? "" : esc(fmtMoney(l.change))}</td>` : "")
+        + `</tr>`;
+    }).join("");
+
+    const check = report.statement === "BalanceSheet"
+      ? `<div class="chk">${report.isBalanced
+          ? "Assets = Liabilities + Equity"
+          : "OUT OF BALANCE BY " + esc(fmtMoney(report.difference))}</div>`
+      : "";
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(report.title)}</title>
+<style>
+  @page { size: A4 portrait; margin: 14mm 12mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1a2332; font-size: 11px; margin: 0; }
+  .co { font-size: 19px; font-weight: 700; }
+  .ttl { font-size: 15px; font-weight: 600; color: #0d47a1; margin-top: 2px; }
+  .meta { font-size: 10px; color: #5f6d7e; margin-top: 4px; }
+  .rule { border-bottom: 2px solid #0d47a1; margin: 8px 0 12px; }
+  .chk { font-size: 10px; font-weight: 700; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 3px 6px; }
+  th { background: #f1f4f8; font-size: 9px; text-transform: uppercase; color: #0d47a1; text-align: right; }
+  th.l { text-align: left; }
+  .num { text-align: right; white-space: nowrap; }
+  tr.g td { font-weight: 700; color: #0d47a1; text-transform: uppercase; font-size: 9px; padding-top: 9px; }
+  tr.s td { font-weight: 700; border-top: 1px solid #e8edf3; }
+  tr.t td { font-weight: 700; border-top: 2px solid #0d47a1; font-size: 12px; }
+  thead { display: table-header-group; }
+</style></head><body>
+  <div class="co">${esc(report.companyName)}</div>
+  <div class="ttl">${esc(report.title)}</div>
+  <div class="meta">${esc(report.periodLabel)}  ·  Generated ${esc(fmtDateTime(report.generatedAt))}</div>
+  <div class="rule"></div>
+  ${check}
+  <table><thead><tr><th class="l"></th><th>${esc(report.periodLabel)}</th>
+    ${hasComp ? `<th>${esc(report.comparativeLabel || "")}</th><th>Change</th>` : ""}</tr></thead>
+    <tbody>${stmtRows}</tbody></table>
+</body></html>`;
+  }
 
   const body = (report.rows || []).map((row) => {
     const tds = cols.map((c) => {
@@ -794,6 +963,31 @@ const st = {
   },
   totalValue: { fontSize: "1.35rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums" },
   totalValueCount: { color: colors.textPrimary, fontSize: "1.2rem" },
+
+  // Statement lines: indentation carries the hierarchy, weight carries the level.
+  stmtRow: { borderBottom: `1px solid ${colors.cardBorder}22` },
+  stmtLabel: {
+    padding: "0.4rem 0.8rem", color: colors.textPrimary, fontSize: "0.85rem",
+    display: "flex", alignItems: "baseline", gap: 8, minWidth: 200,
+  },
+  stmtCode: { fontFamily: "monospace", fontSize: "0.7rem", color: colors.textSecondary },
+  stmtNum: {
+    padding: "0.4rem 0.8rem", textAlign: "right", whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums", fontSize: "0.85rem", color: colors.textPrimary,
+  },
+  stmtPct: { marginLeft: 6, fontSize: "0.72rem", opacity: 0.85 },
+  stmtSpacer: { height: 10 },
+
+  balancedChip: {
+    display: "inline-flex", alignItems: "center", gap: 6, marginBottom: "1rem",
+    padding: "0.45rem 0.85rem", borderRadius: 22, background: "#e8f5e9",
+    color: colors.success, border: "1px solid #c8e6c9", fontSize: "0.84rem", fontWeight: 700,
+  },
+  imbalanceChip: {
+    display: "inline-flex", alignItems: "center", gap: 6, marginBottom: "1rem",
+    padding: "0.45rem 0.85rem", borderRadius: 22, background: colors.dangerLight,
+    color: colors.danger, border: "1px solid #f5c6cb", fontSize: "0.84rem", fontWeight: 700,
+  },
 
   // Statement letterhead: three columns that collapse to one on a phone.
   statement: {

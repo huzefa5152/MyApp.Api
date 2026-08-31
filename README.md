@@ -289,6 +289,17 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Accounting Reports: Balance Sheet, Profit & Loss and the General Ledger
+
+- **A real Balance Sheet.** Assets, liabilities and equity as at a date, laid out as a proper statement — indented groups, subtotals at every level, totals in bold — with the same date one year earlier beside it and the change. Until now the product only had the Chart of Accounts split into two statement sections with all-time balances; there was no statement, no period and no comparative.
+- **A real Profit & Loss** for a period, against the period immediately before it of the same length. Income shows positive, a Gross Profit line appears where a Cost of Sales group actually has activity, and Net Profit ties exactly to the Trial Balance.
+- **The Balance Sheet states whether it balances.** A green *Assets = Liabilities + Equity* confirmation at the top, or a red banner naming the difference. Equity carries a **Current-Year Earnings** line — the profit that would otherwise be stranded in the income and expense accounts — using the same rule the Chart of Accounts already applies, so the two can never disagree.
+- **General Ledger** — every posting, chronological, across all accounts or one, with the document and party behind each line. Scope it to a single account and a running balance appears; across mixed accounts it does not, because that total would be meaningless. The report checks that debits equal credits and says so if they ever do not.
+- **Account Balance Summary** — opening, movement and closing per account, filterable by group and by account type, built on the Trial Balance so the two cannot drift apart.
+- **Trial Balance** now also available as a full report with the shared header, Print, PDF and Excel.
+- Click any account on a statement to open its ledger. Statements print as their hierarchy rather than as a generic grid.
+- If a company tracks stock, the Profit & Loss says on its face that a sale does not yet relieve inventory, so the profit shown is before cost of sales.
+
 ### 2026-08-31 — Accounting Reports: customers and suppliers
 
 - **Customer Ledger and Supplier Ledger.** Every transaction on a party's account in date order with a running balance — invoices, credit and debit notes, receipts, payments, advances and journal entries. Set Period to **All Periods** and the ledger answers "how did this balance arise?" from the very first entry. Pick one party, or leave it empty to see everyone in one stream.

@@ -139,5 +139,46 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<ReportResultDto> GetAgingReportAsync(int companyId, ReportFilterDto filter,
             bool customers);
+
+        // -- Financial statements -------------------------------------------------
+
+        /// <summary>
+        /// Balance Sheet at the period END (a position, so "from" is ignored), with
+        /// the group hierarchy flattened into indented lines. Reuses the Chart of
+        /// Accounts' synthetic Current-Year Earnings rule, without which assets
+        /// would exceed liabilities plus equity by the net profit. Reports the
+        /// balance check on the statement itself.
+        ///
+        /// <paramref name="comparative"/> adds the same date one year earlier.
+        /// </summary>
+        Task<StatementResultDto> GetBalanceSheetAsync(int companyId, ReportFilterDto filter,
+            bool comparative);
+
+        /// <summary>
+        /// Profit &amp; Loss for the period (a flow, so per-account movement rather
+        /// than balances). Income is shown positive. A Gross Profit line appears only
+        /// when a Cost of Sales group carries activity.
+        ///
+        /// <paramref name="comparative"/> adds the immediately preceding period of
+        /// the same length.
+        /// </summary>
+        Task<StatementResultDto> GetProfitAndLossAsync(int companyId, ReportFilterDto filter,
+            bool comparative);
+
+        /// <summary>
+        /// General Ledger — every posting, chronological, across all accounts or one.
+        /// A running balance is populated only when scoped to a single account,
+        /// because a running total over mixed accounts is meaningless.
+        /// </summary>
+        Task<ReportResultDto> GetGeneralLedgerAsync(int companyId, ReportFilterDto filter);
+
+        /// <summary>Opening, movement and closing per account, filterable by group
+        /// and type. Built on <c>GetTrialBalanceAsync</c> so it cannot disagree with
+        /// the Trial Balance.</summary>
+        Task<ReportResultDto> GetAccountBalanceSummaryAsync(int companyId, ReportFilterDto filter);
+
+        /// <summary>The existing trial balance, wrapped in the report envelope so it
+        /// gains the shared header, print, PDF and Excel.</summary>
+        Task<ReportResultDto> GetTrialBalanceReportAsync(int companyId, ReportFilterDto filter);
     }
 }

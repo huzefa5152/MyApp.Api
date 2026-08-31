@@ -296,7 +296,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Customer ledger | `python scripts/test_customer_ledger.py` | `79/79 checks passed` |
 | Customer ledger grouping | `python scripts/test_customer_ledger_groups.py` | `47/47 checks passed` |
 | Client Ledger report | `python scripts/test_client_ledger_report.py` | `97/97 checks passed` |
-| Accounting reports | `python scripts/test_accounting_reports.py` | `171/171 checks passed` |
+| Accounting reports | `python scripts/test_accounting_reports.py` | `210/210 checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py --fbr-token <token>` | `all PASS` (15 checks) |

@@ -556,4 +556,135 @@ namespace MyApp.Api.DTOs
         public string PaymentStatus { get; set; } = "";
         public string? Division { get; set; }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Financial statements
+    //
+    //  A Balance Sheet and a P&L are hierarchies, not flat tables: groups inside
+    //  groups, accounts inside those, subtotals at every level. They are flattened
+    //  to a list of lines carrying an indent LEVEL and a KIND, so the one generic
+    //  renderer draws them without needing to know what a statement is.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>One line of a financial statement.</summary>
+    public class StatementLineDto
+    {
+        /// <summary>Indent depth. 0 = a top-level group ("Assets").</summary>
+        public int Level { get; set; }
+
+        /// <summary>"group" (a heading), "account" (a postable line),
+        /// "subtotal" (a group's total), "total" (a statement total),
+        /// "spacer" (blank separator).</summary>
+        public string Kind { get; set; } = "account";
+
+        public string Label { get; set; } = "";
+
+        /// <summary>Set on an account line, so clicking it opens that ledger.
+        /// Null on headings, subtotals and the synthetic earnings line.</summary>
+        public int? AccountId { get; set; }
+        public string? Code { get; set; }
+
+        /// <summary>The figure, already in its natural reading direction: assets
+        /// and expenses positive as debits, liabilities, equity and income positive
+        /// as credits. A reader should never have to mentally flip a sign.</summary>
+        public decimal Amount { get; set; }
+
+        /// <summary>Same figure for the comparative period/date. Null when no
+        /// comparative was requested.</summary>
+        public decimal? Comparative { get; set; }
+
+        /// <summary>Change against the comparative, and that change as a percentage.
+        /// Null when there is no comparative, or when the comparative was zero (a
+        /// percentage against zero is not a number worth printing).</summary>
+        public decimal? Change { get; set; }
+        public decimal? ChangePercent { get; set; }
+    }
+
+    /// <summary>
+    /// A Balance Sheet or Profit &amp; Loss. Carries the balance check on the
+    /// statement itself: a balance sheet that does not balance must say so on its
+    /// face rather than leaving the reader to add up the columns.
+    /// </summary>
+    public class StatementResultDto : ReportResultDto
+    {
+        /// <summary>"BalanceSheet" | "ProfitAndLoss".</summary>
+        public string Statement { get; set; } = "";
+
+        /// <summary>Balance sheet: the date it is drawn at. P&amp;L: the period end.</summary>
+        public DateTime? AsOf { get; set; }
+        public string? ComparativeLabel { get; set; }
+
+        /// <summary>Balance sheet only: assets vs liabilities + equity.</summary>
+        public decimal? TotalAssets { get; set; }
+        public decimal? TotalLiabilities { get; set; }
+        public decimal? TotalEquity { get; set; }
+        /// <summary>Assets − (liabilities + equity). Zero when the books balance.</summary>
+        public decimal? Difference { get; set; }
+        public bool IsBalanced { get; set; } = true;
+
+        /// <summary>P&amp;L only.</summary>
+        public decimal? TotalIncome { get; set; }
+        public decimal? TotalCostOfSales { get; set; }
+        public decimal? GrossProfit { get; set; }
+        public decimal? TotalExpenses { get; set; }
+        public decimal? NetProfit { get; set; }
+
+        /// <summary>
+        /// True when a Cost of Sales group carries activity, so a Gross Profit line
+        /// is meaningful. False when it does not — a Gross Profit of "income minus
+        /// nothing" is just income wearing a different label, so the line is left
+        /// out rather than shown as a flattering number.
+        /// </summary>
+        public bool GrossProfitMeaningful { get; set; }
+    }
+
+    /// <summary>
+    /// One posting in the General Ledger. Flat and chronological across every
+    /// account — the report you open to answer "where did this entry come from".
+    /// </summary>
+    public class GeneralLedgerRowDto
+    {
+        public DateTime Date { get; set; }
+        public int JournalEntryId { get; set; }
+        public int EntryNo { get; set; }
+        public string EntryRef { get; set; } = "";
+
+        public int AccountId { get; set; }
+        public string Account { get; set; } = "";
+        public string? Code { get; set; }
+        public string AccountType { get; set; } = "";
+
+        public string SourceType { get; set; } = "";
+        public int? SourceId { get; set; }
+        /// <summary>Document number of the source, when it has one.</summary>
+        public string? Reference { get; set; }
+        public string? Description { get; set; }
+        public string? Party { get; set; }
+
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        /// <summary>Running balance — only meaningful, and only populated, when the
+        /// report is scoped to one account. Null across all accounts, because a
+        /// running total over mixed accounts would be a meaningless number.</summary>
+        public decimal? Balance { get; set; }
+
+        public string? Division { get; set; }
+    }
+
+    /// <summary>One account's position, for Account Balance Summary.</summary>
+    public class AccountBalanceRowDto
+    {
+        public int AccountId { get; set; }
+        public string? Code { get; set; }
+        public string Account { get; set; } = "";
+        public string AccountType { get; set; } = "";
+        public string? AccountGroup { get; set; }
+        public int? AccountGroupId { get; set; }
+        /// <summary>Signed, debit-positive — the ledger's own convention, matching
+        /// the Trial Balance and the Chart of Accounts.</summary>
+        public decimal Opening { get; set; }
+        public decimal Debit { get; set; }
+        public decimal Credit { get; set; }
+        public decimal Closing { get; set; }
+    }
 }
