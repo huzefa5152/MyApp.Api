@@ -465,11 +465,19 @@ namespace MyApp.Api.Services.Implementations
             // not the receipt, so it plays no part in "how much of this receipt
             // is still unallocated" (using the settlement figure here would
             // wrongly reject a legitimate allocation that carries a write-off).
-            var appliedCash = payment.Allocations.Sum(a => a.Amount);
+            //
+            // An OnAccount line is PARKED cash, not cash applied to a document,
+            // so it is spendable here and must not count against the balance —
+            // see OnAccountCash. Counting it (as this did until 2026-08-31) made
+            // an advance recorded as an explicit "advance / on account" line
+            // report zero free cash and refuse every allocation, so that advance
+            // could never be applied to a later invoice: the one thing the
+            // feature exists for.
+            var free = OnAccountCash(payment);
             var addingCash = lines.Sum(l => l.Amount);
-            if (appliedCash + addingCash > payment.Amount)
+            if (addingCash > free)
                 throw new InvalidOperationException(
-                    $"Only {payment.Amount - appliedCash:0.00} of this receipt is unallocated.");
+                    $"Only {free:0.00} of this receipt is unallocated.");
 
             // A settle-remainder adjustment needs a GL account (when the ledger
             // is on), and that account must belong to this company — the same
@@ -532,13 +540,44 @@ namespace MyApp.Api.Services.Implementations
                         AdjustmentAmount = l.AdjustmentAmount,
                         AdjustmentAccountId = l.AdjustmentAmount > 0 ? l.AdjustmentAccountId : null,
                     });
+
+                // Draw the applied cash down out of the parked balance, so the
+                // document still adds up: Payment.Amount must stay equal to the
+                // sum of its parts, and the same cash cannot be both parked on
+                // the party's account AND settling an invoice. Allocating 200,000
+                // of a 500,000 advance leaves a 300,000 OnAccount line beside the
+                // new 200,000 invoice line; allocating the last of it removes the
+                // line rather than leaving a zero-amount row behind.
+                //
+                // Capped at what the OnAccount lines actually hold: a receipt can
+                // also be carrying an IMPLICIT remainder (Amount above the sum of
+                // its lines), and that part needs no drawdown — it stops being a
+                // remainder the moment the new invoice line exists.
+                var toDraw = Math.Min(addingCash, payment.Allocations
+                    .Where(a => a.Kind == AllocationKind.OnAccount).Sum(a => a.Amount));
+                var spent = new List<PaymentAllocation>();
+                foreach (var parked in payment.Allocations
+                             .Where(a => a.Kind == AllocationKind.OnAccount)
+                             .OrderBy(a => a.Id).ToList())
+                {
+                    if (toDraw <= 0m) break;
+                    var take = Math.Min(toDraw, parked.Amount);
+                    parked.Amount -= take;
+                    toDraw -= take;
+                    if (parked.Amount == 0m) spent.Add(parked);
+                }
+                foreach (var s in spent) payment.Allocations.Remove(s);
+                if (spent.Count > 0) _context.PaymentAllocations.RemoveRange(spent);
+
                 await _context.SaveChangesAsync();
 
                 foreach (var invId in lines.Select(l => l.InvoiceId!.Value).Distinct())
                     await RecomputeInvoiceAsync(invId);
                 await _context.SaveChangesAsync();
 
-                // Re-post: the advance leg shrinks by exactly what A/R gains.
+                // Re-post: the party-control leg shrinks by exactly what the
+                // invoice-tagged leg on the same account gains, so the entry is
+                // re-labelled rather than re-valued.
                 await _posting.PostPaymentAsync(payment);
                 await tx.CommitAsync();
             }
@@ -653,6 +692,30 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("A payment needs at least one allocation line.");
             dto.Allocations ??= new List<CreatePaymentAllocationDto>();
         }
+
+        /// <summary>Cash this receipt is holding on account — money received that
+        /// settles no document yet, and is therefore still free to be applied to
+        /// one. It arrives in two shapes and both count:
+        /// <list type="bullet">
+        ///   <item>an explicit <see cref="AllocationKind.OnAccount"/> line, and</item>
+        ///   <item>the IMPLICIT remainder — Payment.Amount above the sum of its
+        ///   lines, which is how a receipt saved with no lines at all records an
+        ///   advance (Payment.Amount is authoritative, 2026-08-29).</item>
+        /// </list>
+        /// Hence the subtraction is over NON-OnAccount lines only:
+        /// <c>Amount − Σ(line.Amount where Kind != OnAccount)</c>, which equals
+        /// <c>Σ(OnAccount cash) + the implicit remainder</c> and reduces to the old
+        /// <c>Amount − Σ all lines</c> for every shape that predates OnAccount.
+        /// The in-memory twin of <see cref="Helpers.PartyOnAccount"/>, which
+        /// applies the identical rule in SQL for the ledger and the A/R column;
+        /// keep the two in step.
+        ///
+        /// Cash only — AdjustmentAmount is a non-cash write-off that settles the
+        /// INVOICE, not the receipt.</summary>
+        private static decimal OnAccountCash(Payment p) =>
+            p.Amount - p.Allocations
+                .Where(a => a.Kind != AllocationKind.OnAccount)
+                .Sum(a => a.Amount);
 
         /// <summary>Cash total of the document. For a RECEIPT, explicit when
         /// supplied — that's the whole point of the 2026-08-29 change: an
@@ -1043,9 +1106,12 @@ namespace MyApp.Api.Services.Implementations
                 Method = p.Method,
                 Description = p.Description,
                 Amount = p.Amount,
-                // CASH only — AdjustmentAmount is non-cash: it settles the
-                // invoice, not the receipt, and already has its own GL leg.
-                UnallocatedAmount = p.Amount - p.Allocations.Sum(a => a.Amount),
+                // What is still free to be applied to a document — the same
+                // figure AllocateAsync spends from, so the number the screen shows
+                // is the number the allocate call will accept. An OnAccount line
+                // is parked, not applied, so it stays counted here; a 500,000
+                // advance recorded as such must not read "0 unallocated".
+                UnallocatedAmount = OnAccountCash(p),
                 ChequeNumber = p.ChequeNumber,
                 ChequeDate = p.ChequeDate,
                 ChequeStatus = p.ChequeStatus.ToString(),

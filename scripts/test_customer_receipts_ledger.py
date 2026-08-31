@@ -61,6 +61,14 @@ Suites:
                                     call's journal lines (re-post REPLACES), and
                                     each allocated slice is tagged to the invoice
                                     it settled while the rest stays untagged
+  13. Allocate an explicit
+      on-account advance         -> the OTHER way to record an advance (an
+                                    AllocationKind.OnAccount line rather than a
+                                    line-less receipt) is spendable too:
+                                    allocating draws the parked line down by the
+                                    cash applied, removes it once spent, leaves
+                                    Payment.Amount untouched, and re-labels the
+                                    party-control leg instead of re-valuing it
 
 Runs against a fresh ephemeral GL-enabled company + client, plus a second
 company used only as the "other tenant" in suite 8. Both torn down at the end.
@@ -840,6 +848,152 @@ def suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ar
           str([(l.get("partyType"), l.get("partyId")) for l in ar_legs]))
 
 
+def suite_13_allocate_on_account_line(base, token, cid, client_id, item_type_id, ar_acct, bank_acct):
+    """An advance recorded as an EXPLICIT "advance / on account" line must be
+    spendable, exactly like the line-less shape suites 10 and 12 cover.
+
+    Two shapes record the same thing — a receipt saved with no allocation lines
+    (Payment.Amount is authoritative, 2026-08-29) and a receipt carrying an
+    AllocationKind.OnAccount line (2026-08-31) — and they are indistinguishable
+    to the operator. Until this suite existed, AllocateAsync counted the
+    OnAccount line as cash already applied, so the second shape reported zero
+    free cash and refused every allocation: that customer's advance could never
+    settle a later invoice, which is the whole point of holding it.
+
+    Allocating must therefore DRAW DOWN the parked line by the cash applied,
+    leaving the remainder parked and removing the line once it is spent, so
+    Payment.Amount still equals the sum of its parts and the re-post stays
+    balanced."""
+    suite = "13. Allocate an explicit on-account advance"
+    print(f"\n=== {suite} ===")
+    if not ar_acct or not bank_acct:
+        skip(suite, "explicit OnAccount advance is spendable",
+             "'Accounts receivable' or 'Bank & Cash' control account not found")
+        return
+
+    before_ar = balance_of(base, token, cid, ar_acct["id"])
+    before_bank = balance_of(base, token, cid, bank_acct["id"])
+    st, rcp = post_receipt(base, token, cid, receipt_body(
+        client_id, amount=500000, allocations=[{"kind": "OnAccount", "amount": 500000}]))
+    if not check(suite, "500,000 receipt with an explicit OnAccount line created",
+                 st in (200, 201), f"got {st} {err_of(rcp)}"):
+        return
+    rid = rcp["id"]
+    allocs = rcp.get("allocations") or []
+    check(suite, "it carries exactly one OnAccount line for the full 500,000",
+          len(allocs) == 1 and allocs[0].get("kind") == "OnAccount"
+          and eq(allocs[0].get("amount"), 500000), str(allocs))
+    check(suite, "unallocatedAmount reports the parked 500,000, not 0",
+          eq(rcp.get("unallocatedAmount"), 500000),
+          f"unallocatedAmount = {rcp.get('unallocatedAmount')}")
+    check(suite, "A/R is credited the full 500,000 straight away",
+          before_ar is not None and eq(balance_of(base, token, cid, ar_acct["id"]), before_ar - 500000),
+          f"before={before_ar}, after={balance_of(base, token, cid, ar_acct['id'])}")
+    after_create_bank = balance_of(base, token, cid, bank_acct["id"])
+    check(suite, "and bank/cash debited the same 500,000",
+          before_bank is not None and eq(after_create_bank, before_bank + 500000),
+          f"before={before_bank}, after={after_create_bank}")
+
+    # ── Partial: 200,000 of the 500,000 ────────────────────────────────
+    inv_a = make_invoice(base, token, cid, client_id, item_type_id, 200000)
+    if not check(suite, "200,000 invoice created (after the advance)", inv_a is not None,
+                 "invoice create failed"):
+        return
+    ar_before_alloc = balance_of(base, token, cid, ar_acct["id"])
+    st, r = post_allocate(base, token, rid, [{"invoiceId": inv_a["id"], "amount": 200000}])
+    if not check(suite, "allocating 200,000 of the parked advance is ACCEPTED",
+                 st == 200, f"got {st} {err_of(r)} - an explicit advance must be spendable"):
+        return
+    check(suite, "the invoice is settled for the 200,000",
+          eq(get_invoice(base, token, inv_a["id"]).get("amountPaid"), 200000),
+          f"amountPaid = {get_invoice(base, token, inv_a['id']).get('amountPaid')}")
+    check(suite, "Payment.Amount is untouched at 500,000", eq(r.get("amount"), 500000),
+          f"amount = {r.get('amount')}")
+
+    allocs = r.get("allocations") or []
+    parked = [a for a in allocs if a.get("kind") == "OnAccount"]
+    applied = [a for a in allocs if a.get("invoiceId") == inv_a["id"]]
+    check(suite, "the OnAccount line SHRANK to 300,000 (drawn down, not duplicated)",
+          len(parked) == 1 and eq(parked[0].get("amount"), 300000), str(allocs))
+    check(suite, "and a 200,000 invoice line sits beside it",
+          len(applied) == 1 and eq(applied[0].get("amount"), 200000), str(allocs))
+    check(suite, "the lines still sum to Payment.Amount (300,000 + 200,000)",
+          eq(sum(float(a.get("amount") or 0) for a in allocs), 500000), str(allocs))
+    check(suite, "unallocatedAmount follows the parked line down to 300,000",
+          eq(r.get("unallocatedAmount"), 300000), f"unallocatedAmount = {r.get('unallocatedAmount')}")
+
+    check(suite, "A/R total is unmoved — the cash was already on the client's account",
+          eq(balance_of(base, token, cid, ar_acct["id"]), ar_before_alloc),
+          f"before={ar_before_alloc}, after={balance_of(base, token, cid, ar_acct['id'])}")
+    check(suite, "and no cash moved (the bank leg is not duplicated)",
+          eq(balance_of(base, token, cid, bank_acct["id"]), after_create_bank),
+          f"after create={after_create_bank}, after allocate={balance_of(base, token, cid, bank_acct['id'])}")
+
+    entry = payment_entry(base, token, cid, rid)
+    if entry:
+        lines = entry.get("lines") or []
+        ar_legs = [l for l in lines if l.get("accountId") == ar_acct["id"]]
+        by_inv = {l.get("invoiceId"): float(l.get("credit") or 0) for l in ar_legs}
+        check(suite, "the party-control leg shrank by exactly what the invoice leg gained",
+              eq(by_inv.get(None), 300000) and eq(by_inv.get(inv_a["id"]), 200000), str(by_inv))
+        check(suite, "one bank leg only, and the entry balances",
+              len([l for l in lines if l.get("accountId") == bank_acct["id"]]) == 1
+              and eq(sum(float(l.get("debit") or 0) for l in lines),
+                     sum(float(l.get("credit") or 0) for l in lines)), str(lines))
+
+    # ── Over-allocating past what is left is refused ───────────────────
+    inv_over = make_invoice(base, token, cid, client_id, item_type_id, 400000)
+    if inv_over:
+        st, r_over = post_allocate(base, token, rid, [{"invoiceId": inv_over["id"], "amount": 400000}])
+        check(suite, "allocating more than the remaining 300,000 is rejected (400)",
+              st == 400 and "unallocated" in err_of(r_over).lower(), f"got {st} {err_of(r_over)}")
+
+    # ── Full: the last 300,000 ─────────────────────────────────────────
+    inv_b = make_invoice(base, token, cid, client_id, item_type_id, 300000)
+    if not check(suite, "300,000 invoice created", inv_b is not None, "invoice create failed"):
+        return
+    # Bracket the second allocate on its own: inv_over and inv_b were raised
+    # since the first one and legitimately DEBIT A/R, so the "unmoved" claim is
+    # about what allocating does, not about the whole stretch.
+    ar_before_alloc2 = balance_of(base, token, cid, ar_acct["id"])
+    st, r2 = post_allocate(base, token, rid, [{"invoiceId": inv_b["id"], "amount": 300000}])
+    if not check(suite, "allocating the whole remaining balance is accepted", st == 200,
+                 f"got {st} {err_of(r2)}"):
+        return
+    allocs2 = r2.get("allocations") or []
+    check(suite, "the spent OnAccount line is GONE, not left at zero",
+          not any(a.get("kind") == "OnAccount" for a in allocs2), str(allocs2))
+    check(suite, "only the two invoice lines remain, summing to 500,000",
+          len(allocs2) == 2 and eq(sum(float(a.get("amount") or 0) for a in allocs2), 500000),
+          str(allocs2))
+    check(suite, "unallocatedAmount is 0 — the advance is fully spent",
+          eq(r2.get("unallocatedAmount"), 0), f"unallocatedAmount = {r2.get('unallocatedAmount')}")
+    check(suite, "the second allocate moves A/R by nothing either (no duplicate legs)",
+          eq(balance_of(base, token, cid, ar_acct["id"]), ar_before_alloc2),
+          f"before={ar_before_alloc2}, after={balance_of(base, token, cid, ar_acct['id'])}")
+    check(suite, "bank still unmoved after the second allocate",
+          eq(balance_of(base, token, cid, bank_acct["id"]), after_create_bank),
+          f"after create={after_create_bank}, now={balance_of(base, token, cid, bank_acct['id'])}")
+
+    entry2 = payment_entry(base, token, cid, rid)
+    if entry2:
+        lines2 = entry2.get("lines") or []
+        ar_legs2 = [l for l in lines2 if l.get("accountId") == ar_acct["id"]]
+        by_inv2 = {l.get("invoiceId"): float(l.get("credit") or 0) for l in ar_legs2}
+        check(suite, "no untagged party-control leg is left — every rupee names an invoice",
+              None not in by_inv2 and eq(by_inv2.get(inv_a["id"]), 200000)
+              and eq(by_inv2.get(inv_b["id"]), 300000), str(by_inv2))
+        check(suite, "one bank leg only, and the entry still balances",
+              len([l for l in lines2 if l.get("accountId") == bank_acct["id"]]) == 1
+              and eq(sum(float(l.get("debit") or 0) for l in lines2),
+                     sum(float(l.get("credit") or 0) for l in lines2)), str(lines2))
+
+    st, tb = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance", base, token=token)
+    tb = tb if isinstance(tb, dict) else {}
+    check(suite, "trial balance still balanced", st == 200 and eq(tb.get("totalDebit"), tb.get("totalCredit")),
+          f"got {st} debit={tb.get('totalDebit')} credit={tb.get('totalCredit')}")
+
+
 # ── Setup / teardown ───────────────────────────────────────────────
 def make_company(base, token, name, gl=True):
     st, company = http("POST", "/api/companies", base, token=token, body={
@@ -965,6 +1119,7 @@ def main() -> int:
         suite_10_allocate(base, token, cid, client_id, item_type_id, foreign, disc, args.db)
         suite_11_moneyout_amount_gate(base, token, cid, supplier_id, disc)
         suite_12_allocate_gl_integrity(base, token, cid, client_id, item_type_id, ar, bank)
+        suite_13_allocate_on_account_line(base, token, cid, client_id, item_type_id, ar, bank)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 
