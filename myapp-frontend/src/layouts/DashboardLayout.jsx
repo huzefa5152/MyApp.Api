@@ -47,6 +47,7 @@ import {
   MdInsights,
   MdAssessment,
   MdFactCheck,
+  MdSummarize,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
@@ -214,6 +215,7 @@ export default function DashboardLayout() {
   const reportsKeys = [
     "reports.sales.view",
     "reports.taxsheet.view",
+    "reports.clientledger.view",
     "accounting.reports.view",
   ];
   const adminKeys = visibleNavPermissions([
@@ -568,6 +570,15 @@ export default function DashboardLayout() {
                 <NavLink to="/reports/tax-sheet" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFactCheck className="dl-subitem__icon" aria-hidden="true" />
                   <span>Tax Sheet</span>
+                </NavLink>
+              </Can>
+              {/* Company-wide customer statements for a period. Distinct from
+                  Accounting → Customer Ledger, which is the per-customer
+                  drill-down; these are two surfaces on the same trail. */}
+              <Can permission="reports.clientledger.view">
+                <NavLink to="/reports/client-ledger" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdSummarize className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Client Ledger</span>
                 </NavLink>
               </Can>
               {/* Accounting reports (trial balance / AR-AP aging) live here with

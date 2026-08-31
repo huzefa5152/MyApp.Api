@@ -32,6 +32,9 @@ export const NAV_ITEMS = [
   // ── Accounting ───────────────────────────────────────────────────────────
   { path: "/customer-ledger",           permission: "customerledger.list.view",    label: "Customer Ledger",    visible: true },
 
+  // ── Reports ──────────────────────────────────────────────────────────────
+  { path: "/reports/client-ledger",     permission: "reports.clientledger.view",   label: "Client Ledger",      visible: true },
+
   // ── Settings ─────────────────────────────────────────────────────────────
   { path: "/fbr-settings",              permission: "fbr.config.update",           label: "FBR Settings",       visible: false },
   { path: "/fbr-sandbox",               permission: "fbr.sandbox.view",            label: "FBR Sandbox",        visible: false },
