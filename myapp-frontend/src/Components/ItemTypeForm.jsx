@@ -512,7 +512,14 @@ export default function ItemTypeForm({
 
               {showRichHints && hsHints && (
                 <div style={styles.hintBox}>
-                  <div style={styles.hintBoxTitle}>FBR suggestions for this HS code</div>
+                  {/* Titled by what the panel actually IS for this company. On
+                      one with FBR off the rate still matters — it pre-fills GST
+                      on bills — but nothing here comes from FBR, so calling it
+                      "FBR suggestions" invites the operator to go and configure
+                      an integration they have deliberately switched off. */}
+                  <div style={styles.hintBoxTitle}>
+                    {fbrOn ? "FBR suggestions for this HS code" : "Suggestions for this HS code"}
+                  </div>
                   {hsHints.defaultRate != null && (
                     <div style={styles.hintRow}>
                       <span style={styles.hintLabel}>Recommended rate:</span>
@@ -522,7 +529,9 @@ export default function ItemTypeForm({
                       </span>
                     </div>
                   )}
-                  {hsHints.defaultSaleType && (
+                  {/* Sale type is the one genuinely FBR-only field on this form
+                      (CLAUDE.md 5b-2), so it stays out of an FBR-off company's view. */}
+                  {fbrOn && hsHints.defaultSaleType && (
                     <div style={styles.hintRow}>
                       <span style={styles.hintLabel}>Suggested sale type:</span>
                       <em>{hsHints.defaultSaleType}</em>
@@ -544,11 +553,16 @@ export default function ItemTypeForm({
                       <span><em>
                         {hsHints.uomLookupRan
                           ? "FBR places no UOM restriction on this HS code — any unit from your Units catalog is accepted."
-                          : "FBR's UOM list couldn't be loaded (this company has no FBR token set). Your selected UOM below is what gets used."}
+                          : fbrOn
+                            ? "FBR's UOM list couldn't be loaded (this company has no FBR token set). Your selected UOM below is what gets used."
+                            /* FBR is off for this company, so there is no list to
+                               fail to load. Say what is true instead of reporting
+                               a missing token they do not need. */
+                            : "Not restricted — the unit you choose below is what gets used."}
                       </em></span>
                     </div>
                   )}
-                  {hsHints.rateOptions?.length > 0 && (
+                  {fbrOn && hsHints.rateOptions?.length > 0 && (
                     <div style={styles.hintRow}>
                       <span style={styles.hintLabel}>All FBR rate options today:</span>
                       <span>{hsHints.rateOptions.map((r) => `${r.rateValue}%`).join(" · ")}</span>

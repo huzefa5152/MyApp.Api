@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-01 — Item Catalog: stop nagging companies that do not use FBR
+
+- **The Item Type form no longer reports FBR problems to a company with FBR switched off.** It was headed "FBR suggestions", offered a sale type, and complained that the FBR UOM list could not be loaded and that no FBR province was set — pushing the operator to configure an integration they had deliberately turned off.
+- It now reads "Suggestions for this HS code", drops the sale type (the one genuinely FBR-only field), and says the unit simply is not restricted. **The recommended rate stays** — it pre-fills GST on bills whether or not you submit to FBR.
+- A company that *does* use FBR still gets the missing-province warning, because for them it is a real omission.
+- **The Item Catalog screen now shows how many HS codes are loaded**, and says so plainly when there are none — with a pointer to the token-free tariff option. Previously that option was only visible after opening the import dialog, so the people who most needed it had no way to discover it.
+
 ### 2026-09-01 — HS codes without an FBR token
 
 - **The HS code master can now be filled with no FBR token at all.** FBR's catalog service refuses every request without OAuth credentials, so a business that has not been issued a token could not classify its items — which defeated the point of keeping classification independent of FBR.

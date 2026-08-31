@@ -288,11 +288,21 @@ namespace MyApp.Api.Services.Tax
                 }
                 catch
                 {
-                    notes.Add("Could not fetch live SaleTypeToRate (token / network) — falling back to company defaults.");
+                    // Only worth reporting to a company that actually submits:
+                    // telling one with FBR switched off that a PRAL call failed
+                    // is noise about a service it does not use.
+                    if (company?.FbrEnabled == true)
+                        notes.Add("Could not fetch live SaleTypeToRate (token / network) — falling back to company defaults.");
                 }
             }
-            else
+            else if (company?.FbrEnabled == true)
             {
+                // Same reasoning: this note asks the operator to go and set an
+                // FBR province. That is only an omission if they submit to FBR.
+                // A company with FBR off is correctly configured as it stands,
+                // and the HS path must never push them towards FBR setup
+                // (CLAUDE.md 5b-2: nothing in the HS path is gated on FbrEnabled,
+                // and equally nothing should nag about it).
                 notes.Add("Company has no FBR province set — cannot query SaleTypeToRate. Set Province on the Company form to get authoritative rate options.");
             }
 

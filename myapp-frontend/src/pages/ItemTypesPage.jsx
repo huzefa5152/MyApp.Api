@@ -7,6 +7,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import ItemTypeForm from "../Components/ItemTypeForm";
 import HsCodeImportModal from "../Components/HsCodeImportModal";
+import { getHsCodeCount } from "../api/hsCodeApi";
 
 const colors = {
   blue: "#0d47a1",
@@ -77,6 +78,11 @@ export default function ItemTypesPage() {
   const [itemTypes, setItemTypes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showHsImport, setShowHsImport] = useState(false);
+  // How many codes the HS master holds. Shown on the page, not left inside the
+  // import dialog: an empty master is exactly when an operator has to act, and
+  // until they open that dialog nothing tells them so — which is how the
+  // token-free tariff option stayed invisible to the people who needed it.
+  const [hsCodeCount, setHsCodeCount] = useState(null);
   // HS-code placeholders (auto-created by the tariff import) are kept out of
   // this list by default — there are thousands and the page renders every row.
   // Turning this on switches to a capped, server-side search over them so the
@@ -90,6 +96,17 @@ export default function ItemTypesPage() {
   // OVERLAY (division + GL account mapping) is what this screen edits — so it
   // needs a company context. Own selector, defaulting to the header's company.
   const [companyId, setCompanyId] = useState(selectedCompany?.id ?? companies?.[0]?.id ?? null);
+
+  const refreshHsCodeCount = async () => {
+    try {
+      const { data } = await getHsCodeCount();
+      setHsCodeCount(typeof data === "number" ? data : data?.count ?? null);
+    } catch {
+      setHsCodeCount(null);   // a count we cannot read is not worth a banner
+    }
+  }
+
+  useEffect(() => { if (canImportHsCodes) refreshHsCodeCount(); }, [canImportHsCodes]);;
   useEffect(() => {
     if (companyId == null && (selectedCompany?.id || companies?.[0]?.id))
       setCompanyId(selectedCompany?.id ?? companies?.[0]?.id);
@@ -198,9 +215,12 @@ export default function ItemTypesPage() {
             <button
               style={styles.importBtn}
               onClick={() => setShowHsImport(true)}
-              title="Pull FBR's HS / PCT tariff into the HS code master. Safe to run again — existing codes are kept."
+              title="Load the HS / PCT tariff into the HS code master. Pakistan's published tariff needs no FBR token; FBR's own catalog also brings units. Safe to run again — existing codes are kept."
             >
               <MdCloudDownload size={18} /> Import HS Codes
+              {hsCodeCount !== null && (
+                <span style={styles.hsCount}>{hsCodeCount.toLocaleString()}</span>
+              )}
             </button>
           )}
           {canCreate && (
@@ -210,6 +230,20 @@ export default function ItemTypesPage() {
           )}
         </div>
       </div>
+
+      {canImportHsCodes && hsCodeCount === 0 && (
+        <div style={styles.hsEmptyBox}>
+          <MdCloudDownload size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <strong>No HS codes loaded yet.</strong> Item types are classified
+            against the HS master, so load it first. Press <em>Import HS Codes</em>{" "}
+            and choose <em>Load from published tariff</em> — Pakistan's official
+            customs tariff, bundled with the product, <strong>no FBR token
+            needed</strong>. Importing from FBR instead also brings units, but
+            requires a token.
+          </div>
+        </div>
+      )}
 
       {!companyId && companies?.length > 0 && (
         <div style={styles.infoBox}>
@@ -445,7 +479,7 @@ export default function ItemTypesPage() {
           companyId={companyId}
           onClose={() => setShowHsImport(false)}
           /* Placeholder item types may have been created, so refresh the list. */
-          onImported={() => fetchAll()}
+          onImported={() => { fetchAll(); refreshHsCodeCount(); }}
         />
       )}
 
@@ -496,6 +530,8 @@ const styles = {
   subtitle: { fontSize: "0.82rem", color: colors.textSecondary, margin: 0 },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.2rem", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", border: "none", borderRadius: 10, fontSize: "0.88rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
   importBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1rem", background: "#fff", color: colors.blue, border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", fontWeight: 600, cursor: "pointer" },
+  hsCount: { marginLeft: 2, padding: "0.05rem 0.4rem", borderRadius: 999, backgroundColor: "#eef3fb", color: colors.textSecondary, fontSize: "0.74rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
+  hsEmptyBox: { display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.7rem 0.9rem", backgroundColor: "#fff8e6", border: "1px solid #f0d089", color: colors.textPrimary, borderRadius: 8, marginBottom: "1rem", fontSize: "0.84rem", lineHeight: 1.5, maxWidth: 820 },
   companySelect: { padding: "0.5rem 0.75rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.85rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", fontWeight: 600, minWidth: 160, maxWidth: 240 },
   infoBox: { display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.65rem 0.85rem", backgroundColor: "#e3f2fd", border: "1px solid #90caf9", color: colors.textPrimary, borderRadius: 8, marginBottom: "1rem", fontSize: "0.82rem", lineHeight: 1.4 },
   searchWrap: { position: "relative", marginBottom: "0.6rem", maxWidth: 420 },
