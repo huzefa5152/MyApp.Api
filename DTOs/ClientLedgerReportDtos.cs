@@ -121,6 +121,30 @@ namespace MyApp.Api.DTOs
         public List<ClientLedgerReportEntryDto> Entries { get; set; } = new();
     }
 
+    /// <summary>
+    /// One option in the Client Ledger report's customer filter: an id and a
+    /// name, and deliberately NOTHING else.
+    ///
+    /// It exists so the picker does not have to call the general client feed
+    /// (<c>GET /api/clients/company/{id}</c>). That endpoint returns the full
+    /// <see cref="ClientDto"/> — address, phone, email, NTN, STRN, CNIC,
+    /// registration type — so authorising a report viewer to read it would hand
+    /// them a company's entire customer PII and tax-identity set. That the
+    /// picker only reads two fields off the response is irrelevant: the exposure
+    /// is in the payload, not in what the caller chooses to use. A report viewer
+    /// gets exactly what the report already shows them — a customer's name.
+    ///
+    /// One entry per customer GROUP (<c>ClientGroupId ?? -ClientId</c>), keyed
+    /// by the group's anchor, so every option maps 1:1 onto a section the report
+    /// can render and matches the identity echoed back in
+    /// <see cref="ClientLedgerReportDto.ClientId"/>.
+    /// </summary>
+    public class ClientLedgerCustomerDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+
     /// <summary>One transaction line — workbook columns A..H, minus the
     /// Opening column which only ever carries the seed row's value.</summary>
     public class ClientLedgerReportEntryDto

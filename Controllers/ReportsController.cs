@@ -240,5 +240,41 @@ namespace MyApp.Api.Controllers
                 return StatusCode(500, new { message = "Could not export the client ledger report." });
             }
         }
+
+        /// <summary>
+        /// Options for the Client Ledger report's customer filter — <b>id and
+        /// name only</b>.
+        ///
+        /// The obvious alternative, pointing the picker at the general client
+        /// feed (<c>GET /api/clients/company/{id}</c>), would need
+        /// <c>reports.clientledger.view</c> added to that feed's
+        /// <see cref="ReferenceAccessPolicy"/> key set — and that feed returns
+        /// the full <c>ClientDto</c>: address, phone, email, NTN, STRN, CNIC,
+        /// registration type. Every report viewer would gain the company's
+        /// complete customer PII and tax-identity set. That the picker reads only
+        /// two fields off the response does not matter; the exposure is the
+        /// payload. This endpoint hands a report viewer exactly what the report
+        /// already shows them — a customer's name — and nothing more.
+        ///
+        /// It lists EVERY customer of the company, one per group, including the
+        /// dormant ones a company-wide run omits: the report renders an empty
+        /// statement for those when asked by id, so the filter has to be able to
+        /// reach them.
+        /// </summary>
+        [HttpGet("company/{companyId}/client-ledger/customers")]
+        [HasPermission("reports.clientledger.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<ClientLedgerCustomerDto>>> GetClientLedgerCustomers(int companyId)
+        {
+            try
+            {
+                return Ok(await _reports.GetClientLedgerCustomersAsync(companyId));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Client ledger customer list failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "Could not load the customer list." });
+            }
+        }
     }
 }

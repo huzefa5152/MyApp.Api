@@ -65,5 +65,14 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<byte[]> GetClientLedgerReportExcelAsync(int companyId, int? year, int? month,
             int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
+
+        /// <summary>
+        /// Options for the Client Ledger report's customer filter — id and name
+        /// only (see <see cref="ClientLedgerCustomerDto"/> for why it is not the
+        /// general client feed). Every customer of the company, including the
+        /// dormant ones the report omits from a company-wide run but still
+        /// renders an empty statement for when asked by id.
+        /// </summary>
+        Task<List<ClientLedgerCustomerDto>> GetClientLedgerCustomersAsync(int companyId);
     }
 }

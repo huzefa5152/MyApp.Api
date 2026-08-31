@@ -3,8 +3,9 @@ import {
   MdReceiptLong, MdBusiness, MdRefresh, MdDownload,
   MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess,
 } from "react-icons/md";
-import { getClientLedgerReport, getClientLedgerReportExcel } from "../api/reportApi";
-import { getClientsByCompany } from "../api/clientApi";
+import {
+  getClientLedgerReport, getClientLedgerReportExcel, getClientLedgerCustomers,
+} from "../api/reportApi";
 import SearchableSelect from "../Components/SearchableSelect";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
@@ -79,14 +80,15 @@ export default function ClientLedgerReportPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Customer options for the filter come from the COMPANY'S CLIENT LIST, not
-  // from the report payload. The report deliberately omits customers with no
-  // carried-in balance and no activity, but the server renders an empty
-  // statement happily when one is asked for by id — sourcing the picker from the
-  // report would make exactly those customers unreachable. The picker feed is
-  // co-authorized for `reports.clientledger.view` (ReferenceAccessPolicy), and
-  // if it fails anyway the report's own customers are used so the filter still
-  // works for everyone it can reach.
+  // Customer options come from the report's OWN picker feed, which returns
+  // { id, name } and nothing else. Not the report payload: that omits customers
+  // with no carried-in balance and no activity, yet the server renders an empty
+  // statement for them happily when asked by id, so sourcing the picker there
+  // would make exactly those customers unreachable. And not /clients/company/{id}
+  // either: that feed returns the full client record (address, phone, email,
+  // NTN, STRN, CNIC), so using it would mean every report viewer had to be
+  // granted the company's customer PII. If the feed fails, the report's own
+  // customers stand in so the filter still works for everyone it can reach.
   const [clientOptions, setClientOptions] = useState([]);
 
   const buildParams = useCallback(() => {
@@ -144,11 +146,9 @@ export default function ClientLedgerReportPage() {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await getClientsByCompany(companyId);
+        const { data } = await getClientLedgerCustomers(companyId);
         if (cancelled) return;
-        setClientOptions((data || [])
-          .map((c) => ({ id: c.id, name: c.name }))
-          .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })));
+        setClientOptions((data || []).map((c) => ({ id: c.id, name: c.name })));
       } catch {
         // No picker access — the report's own customers stand in (set by fetchReport).
       }

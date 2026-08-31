@@ -586,6 +586,79 @@ def suite_6_tenant_isolation(base, token, cid, foreign):
     return uid
 
 
+# ── Suite 7: the picker feed, and the PII line it must not cross ───
+def suite_7_picker_feed(base, token, cid, clients):
+    """The customer filter needs every customer — including the dormant ones a
+       company-wide run omits. It must get them WITHOUT gaining access to the
+       general client feed, which returns address / phone / email / NTN / STRN /
+       CNIC on top of the name."""
+    suite = "7. Picker feed + PII boundary"
+    print(f"\n=== {suite} ===")
+
+    st, opts = http("GET", f"/api/reports/company/{cid}/client-ledger/customers", base, token=token)
+    if not check(suite, "the picker feed loads", st == 200 and isinstance(opts, list),
+                 f"got {st} {err_of(opts)}"):
+        return None, None
+
+    # Only id + name may cross the wire. Anything else is a leak, whatever the
+    # frontend happens to read off it.
+    stray = sorted({k for o in opts for k in o.keys()} - {"id", "name"})
+    check(suite, "every option carries ONLY id and name", not stray, f"extra fields: {stray}")
+    PII = ("ntn", "strn", "cnic", "address", "phone", "email",
+           "registrationtype", "fbrprovincecode", "site")
+    leaked = sorted({k for o in opts for k in o.keys() if k.lower() in PII})
+    check(suite, "no PII or tax-identity field is present", not leaked, f"leaked: {leaked}")
+
+    ids = {o["id"] for o in opts}
+    check(suite, "the dormant customer the report omits IS selectable",
+          clients["dormant"] in ids, f"dormant={clients['dormant']} options={sorted(ids)}")
+    check(suite, "every customer of the company is offered",
+          all(clients[k] in ids for k in ("alpha", "beta", "gamma", "dormant", "inject")),
+          f"options={sorted(ids)}")
+    check(suite, "options are sorted by name", [o["name"] for o in opts]
+          == sorted((o["name"] for o in opts), key=lambda n: n.lower()),
+          f"{[o['name'] for o in opts]}")
+
+    # A role holding ONLY the report keys: it must reach the picker feed and be
+    # refused the PII-bearing client feed. This is the whole point of the split.
+    sfx = datetime.now().strftime("%H%M%S")
+    rname = f"_clr_reports_only_{sfx}"
+    st, role = http("POST", "/api/roles", base, token=token, body={
+        "name": rname, "description": "Client Ledger report viewer (test)",
+        "permissionKeys": ["reports.clientledger.view", "reports.clientledger.export"]})
+    if not check(suite, "a reports-only role is created", st in (200, 201) and isinstance(role, dict),
+                 f"got {st} {err_of(role)}"):
+        return None, None
+
+    uname = f"_clr_viewer_{sfx}"
+    st, u = http("POST", "/api/users", base, token=token, body={
+        "username": uname, "password": "Viewer!2345", "email": f"{uname}@example.test",
+        "fullName": "Client Ledger Viewer", "role": rname,
+        "roleIds": [role["id"]], "companyIds": [cid]})
+    if not check(suite, "a reports-only user is created", st in (200, 201) and isinstance(u, dict),
+                 f"got {st} {err_of(u)}"):
+        return None, role["id"]
+
+    st, data = http("POST", "/api/auth/login", base, body={"username": uname, "password": "Viewer!2345"})
+    if not check(suite, "the reports-only user can log in", st == 200 and isinstance(data, dict), f"got {st}"):
+        return u["id"], role["id"]
+    vtoken = data["token"]
+
+    st, vopts = http("GET", f"/api/reports/company/{cid}/client-ledger/customers", base, token=vtoken)
+    check(suite, "a reports-only viewer CAN read the picker feed",
+          st == 200 and isinstance(vopts, list) and len(vopts) == len(opts),
+          f"got {st} {err_of(vopts)}")
+
+    st, denied = http("GET", f"/api/clients/company/{cid}", base, token=vtoken)
+    check(suite, "a reports-only viewer CANNOT read the PII-bearing client feed",
+          st == 403, f"expected 403, got {st}")
+
+    st, report_ok = ledger_report(base, vtoken, cid, dateFrom=WIDE_FROM, dateTo=WIDE_TO)
+    check(suite, "…and can still read the report itself",
+          st == 200 and isinstance(report_ok, dict), f"got {st} {err_of(report_ok)}")
+    return u["id"], role["id"]
+
+
 # ── Static guard: the endpoints keep their guards ──────────────────
 def suite_0_static(repo_root):
     suite = "0. Endpoint guards (static)"
@@ -624,9 +697,35 @@ def suite_0_static(repo_root):
     check(suite, "no bare catch (InvalidOperationException) swallows unrelated failures",
           "catch (InvalidOperationException" not in code_only,
           "a broad InvalidOperationException catch is back")
-    check(suite, "every other failure is logged before its generic 500",
-          src.count("_logger.LogError(ex,") == 2,
-          f"found {src.count('_logger.LogError(ex,')} logged catch blocks of 2")
+    check(suite, "every catch-all block logs before returning its generic 500",
+          src.count("catch (Exception ex)") == src.count("_logger.LogError(ex,") > 0,
+          f"{src.count('catch (Exception ex)')} catch-alls vs "
+          f"{src.count('_logger.LogError(ex,')} LogError calls")
+    check(suite, "the picker feed carries the same permission + tenant guard",
+          '[HasPermission("reports.clientledger.view")]' in
+          src[max(0, src.find("GetClientLedgerCustomers(int companyId)") - 700):
+              src.find("GetClientLedgerCustomers(int companyId)")]
+          and "[AuthorizeCompany]" in
+          src[max(0, src.find("GetClientLedgerCustomers(int companyId)") - 700):
+              src.find("GetClientLedgerCustomers(int companyId)")],
+          "picker feed is missing a guard")
+
+    # The picker MUST NOT be pointed at the general client feed: that returns
+    # the full ClientDto (address, phone, email, NTN, STRN, CNIC), so granting a
+    # report viewer access to it would hand over the company's customer PII.
+    try:
+        policy = open(f"{repo_root}/Helpers/ReferenceAccessPolicy.cs", encoding="utf-8").read()
+        page = open(f"{repo_root}/myapp-frontend/src/pages/ClientLedgerReportPage.jsx",
+                    encoding="utf-8").read()
+    except OSError as e:
+        check(suite, "policy + page are readable", False, str(e))
+        return
+    check(suite, "no Reports key was granted access to the PII-bearing client feed",
+          "reports.clientledger" not in policy,
+          "a reports.* key is in ReferenceAccessPolicy — that feed returns NTN/STRN/CNIC")
+    check(suite, "the page does not call the general client feed",
+          "clientApi" not in page and "getClientsByCompany" not in page,
+          "the report page imports the PII-bearing client feed")
 
 
 # ── Setup / teardown ───────────────────────────────────────────────
@@ -715,15 +814,20 @@ def setup(base, user, pw):
     return token, cid, clients, item_type_id, foreign
 
 
-def teardown(base, token, cids, keep, user_id=None):
+def teardown(base, token, cids, keep, outsider=None, viewer=None, role=None):
+    """Users before roles — a role with users still assigned cannot be deleted."""
+    users = [i for i in (outsider, viewer) if i]
+    roles = [i for i in (role,) if i]
     if keep:
-        print(f"\n(kept companies {cids}, user {user_id})")
+        print(f"\n(kept companies {cids}, users {users}, roles {roles})")
         return
-    if user_id:
-        http("DELETE", f"/api/users/{user_id}", base, token=token)
+    for uid in users:
+        http("DELETE", f"/api/users/{uid}", base, token=token)
+    for rid in roles:
+        http("DELETE", f"/api/roles/{rid}", base, token=token)
     for cid in cids:
         http("DELETE", f"/api/companies/{cid}", base, token=token)
-    print(f"\n(cleaned up companies {cids}" + (f", user {user_id}" if user_id else "") + ")")
+    print(f"\n(cleaned up companies {cids}, users {users}, roles {roles})")
 
 
 def report() -> int:
@@ -751,7 +855,7 @@ def main() -> int:
     token, cid, clients, item_type_id, foreign = setup(base, args.admin_user, args.admin_pw)
     print(f"\n== company={cid} itemType={item_type_id} clients={clients} foreign={foreign} ==")
 
-    outsider = None
+    outsider = viewer = role = None
     try:
         suite_0_static(args.repo_root)
         wide = suite_1_worked_example(base, token, cid, clients, item_type_id)
@@ -761,8 +865,9 @@ def main() -> int:
             suite_4_excel(base, token, cid, clients)
             suite_5_composition(base, token, cid, clients, wide)
         outsider = suite_6_tenant_isolation(base, token, cid, foreign)
+        viewer, role = suite_7_picker_feed(base, token, cid, clients)
     finally:
-        teardown(base, token, [cid, foreign["company_id"]], args.keep, outsider)
+        teardown(base, token, [cid, foreign["company_id"]], args.keep, outsider, viewer, role)
 
     return report()
 

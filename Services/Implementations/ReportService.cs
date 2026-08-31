@@ -659,6 +659,30 @@ namespace MyApp.Api.Services.Implementations
             return report;
         }
 
+        /// <inheritdoc/>
+        // Projects id + name in the DATABASE query, so the PII on the Client row
+        // (address, phone, email, NTN, STRN, CNIC) is never even loaded, let
+        // alone serialised. One entry per customer group, keyed by the anchor —
+        // the same identity GetAllCustomersAsync and the report's filter echo use.
+        public async Task<List<ClientLedgerCustomerDto>> GetClientLedgerCustomersAsync(int companyId)
+        {
+            var clients = await _context.Clients.AsNoTracking()
+                .Where(c => c.CompanyId == companyId)
+                .Select(c => new { c.Id, c.Name, c.ClientGroupId })
+                .ToListAsync();
+
+            return clients
+                .GroupBy(c => c.ClientGroupId ?? -c.Id)
+                .Select(g =>
+                {
+                    var anchor = g.OrderBy(c => c.Id).First();
+                    return new ClientLedgerCustomerDto { Id = anchor.Id, Name = anchor.Name ?? "" };
+                })
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(c => c.Id)
+                .ToList();
+        }
+
         /// <summary>
         /// Every ledger row for one customer in the window. The ledger service
         /// is paged (capped at <see cref="PaginationHelper.AuditMax"/>) because

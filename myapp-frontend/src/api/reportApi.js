@@ -27,3 +27,10 @@ export const getClientLedgerReport = (companyId, params = {}) =>
 // Styled .xlsx of the same report: a Summary sheet plus one sheet per customer.
 export const getClientLedgerReportExcel = (companyId, params = {}) =>
   http.get(`/reports/company/${companyId}/client-ledger/excel`, { params, responseType: "blob" });
+
+// Options for the report's customer filter — [{ id, name }] and nothing else.
+// Deliberately NOT /clients/company/{id}: that feed returns the full client
+// record (address, phone, email, NTN, STRN, CNIC), so pointing the picker at it
+// would mean granting every report viewer the company's customer PII.
+export const getClientLedgerCustomers = (companyId) =>
+  http.get(`/reports/company/${companyId}/client-ledger/customers`);
