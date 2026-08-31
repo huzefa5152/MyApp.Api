@@ -31,6 +31,10 @@ export const NAV_ITEMS = [
 
   // ── Accounting ───────────────────────────────────────────────────────────
   { path: "/customer-ledger",           permission: "customerledger.list.view",    label: "Customer Ledger",    visible: true },
+  // No <Can> gate on this nav item (see DashboardLayout.jsx) — the guide
+  // explains the product and exposes no company data — so there is no
+  // permission key to pair it with here.
+  { path: "/help/accounting",           permission: null,                          label: "Accounting Guide",   visible: true },
 
   // ── Reports ──────────────────────────────────────────────────────────────
   { path: "/reports/client-ledger",     permission: "reports.clientledger.view",   label: "Client Ledger",      visible: true },
