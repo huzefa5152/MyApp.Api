@@ -342,6 +342,47 @@ def test_isolation(base, token, a, b, a1, a2, b1, portal_a, portal_a2, portal_b,
         f"/api/public/customer-portal/{'q' * 43}/invoices/{inv_a1['invoiceNumber']}", base)
     check(suite, "4h a bogus token on a real invoice number 404s", st == 404, f"got {st} {wrong_tok}")
 
+    # ── Advances must never cross the client boundary ────────────────
+    # A receipt recorded against client TWO (a2), with more cash than it
+    # allocates, leaves an advance sitting on client two's ledger
+    # (ICustomerLedgerService) — money portal A (client ONE) has no claim
+    # on. Task 9: the portal now nets a customer's own advance into its
+    # outstanding figure, so this is the one place that netting could leak
+    # across the tenant boundary if the scope were ever wrong.
+    st_adv, adv = http("POST", f"/api/payments/receipts/company/{a['id']}", base, token=token, body={
+        "direction": "Receipt", "date": TODAY_ISO,
+        "contactType": "Client", "contactId": a2["id"],
+        "method": "Cash", "amount": 5000, "allocations": [],
+    })
+    check(suite, "4j advance receipt recorded for client TWO", st_adv in (200, 201), f"got {st_adv} {adv}")
+
+    st_l2, ledger_a2 = http(
+        "GET", f"/api/customer-ledger/company/{a['id']}/client/{a2['id']}", base, token=token)
+    check(suite, "4j client TWO's own ledger shows the advance",
+          st_l2 == 200 and float((ledger_a2 or {}).get("advance") or 0) > 0,
+          f"got {st_l2} {ledger_a2}")
+
+    st_h1, head1 = public(f"/api/public/customer-portal/{tok_a}", base)
+    sum1 = (head1 or {}).get("summary") or {}
+    check(suite, "4k portal A's outstanding is unaffected by client TWO's advance",
+          st_h1 == 200 and abs(float(sum1.get("outstandingAmount") or 0) - 1111) < 0.01,
+          f"got {st_h1} {sum1}")
+    check(suite, "4l portal A shows no credit borrowed from client TWO's advance",
+          st_h1 == 200 and float(sum1.get("overpaidAmount") or 0) == 0, f"got {sum1}")
+    check(suite, "4m portal A's response carries no trace of client TWO's advance amount",
+          st_h1 == 200 and "5000" not in json.dumps(head1), f"got {head1}")
+
+    # And the flip side: client TWO's own (still-active) portal must show
+    # EXACTLY the advance the ledger recorded for client TWO — proving the
+    # zero above is a real tenant boundary, not the netting silently
+    # failing to find any advance at all.
+    st_h2, head2 = public(f"/api/public/customer-portal/{tok_a2}", base)
+    sum2 = (head2 or {}).get("summary") or {}
+    check(suite, "4n portal A2 (client TWO) shows its OWN advance, matching the ledger",
+          st_h2 == 200 and st_l2 == 200
+          and abs(float(sum2.get("overpaidAmount") or 0) - float(ledger_a2.get("advance") or 0)) < 0.01,
+          f"got portal={sum2.get('overpaidAmount')} ledger={ledger_a2.get('advance') if st_l2 == 200 else st_l2}")
+
     # ── Revoked portal is dead for good ─────────────────────────────
     http("DELETE", f"/api/customer-portals/{portal_a2['id']}", base, token=token)
     st, revoked = public(f"/api/public/customer-portal/{tok_a2}", base)
@@ -425,8 +466,21 @@ def test_payment_status(base, token, a, a1, portal_a, item_type_id):
         check(suite, "5h credit shows the overpayment, not a negative balance",
               abs(float(orow.get("credit") or 0) - 400) < 0.01
               and float(orow.get("balance") or 0) == 0, f"got {orow}")
-        check(suite, "5h summary reports the credit too",
-              True, "")
+
+        # Task 9: the summary must NOT just sum these per-invoice balances —
+        # that sum still clamps "over"'s own balance at 0 and stops there
+        # (2711: 1111 + 1000 + 600 + 0 + 0). The true account-wide position
+        # nets "over"'s 400 credit against what the OTHER invoices still owe,
+        # so summary.outstandingAmount comes in 400 LOWER than that naive sum
+        # — the credit is invisible nowhere, not even folded into a headline
+        # figure that used to be blind to it.
+        naive_outstanding = sum(float(r["balance"]) for r in by_num.values())
+        st_now, head_now = public(f"/api/public/customer-portal/{tok}", base)
+        sm_now = (head_now or {}).get("summary") or {}
+        check(suite, "5h summary nets the overpayment into the account-wide outstanding",
+              st_now == 200
+              and abs(float(sm_now.get("outstandingAmount") or 0) - (naive_outstanding - 400)) < 0.01,
+              f"got {sm_now.get('outstandingAmount')}, naive per-invoice sum was {naive_outstanding}")
     else:
         check(suite, "5h overpaid case could not be set up", False, "invoice edit-down failed")
 
@@ -453,9 +507,22 @@ def test_payment_status(base, token, a, a1, portal_a, item_type_id):
     check(suite, "5l summary total equals the sum of the rows",
           abs(float(sm.get("totalAmount") or 0) - sum(float(r["total"]) for r in by_num.values())) < 0.01,
           f"got {sm.get('totalAmount')}")
-    check(suite, "5m summary outstanding equals the sum of balances",
-          abs(float(sm.get("outstandingAmount") or 0) - sum(float(r["balance"]) for r in by_num.values())) < 0.01,
-          f"got {sm.get('outstandingAmount')}")
+
+    # Task 9: outstandingAmount/overpaidAmount no longer come from summing
+    # these per-invoice rows (see 5h) — they come from ICustomerLedgerService,
+    # netted across the whole client. Cross-check against the SAME endpoint
+    # the internal Customer Ledger page calls, so the portal and the office
+    # can never quietly disagree about what a customer owes.
+    st_ledger, ledger = http(
+        "GET", f"/api/customer-ledger/company/{a['id']}/client/{a1['id']}", base, token=token)
+    check(suite, "5m summary outstanding matches the customer ledger",
+          st_ledger == 200
+          and abs(float(sm.get("outstandingAmount") or 0) - float(ledger.get("outstanding") or 0)) < 0.01,
+          f"got portal={sm.get('outstandingAmount')} ledger={ledger.get('outstanding') if st_ledger == 200 else st_ledger}")
+    check(suite, "5n summary credit matches the customer ledger's advance",
+          st_ledger == 200
+          and abs(float(sm.get("overpaidAmount") or 0) - float(ledger.get("advance") or 0)) < 0.01,
+          f"got portal={sm.get('overpaidAmount')} ledger={ledger.get('advance') if st_ledger == 200 else st_ledger}")
 
 
 # ── Suite 6: detail, print payload, listing ────────────────────────

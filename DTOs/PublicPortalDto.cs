@@ -43,8 +43,22 @@ namespace MyApp.Api.DTOs
         public int TotalInvoices { get; set; }
         public decimal TotalAmount { get; set; }
         public decimal PaidAmount { get; set; }
+        /// <summary>
+        /// What the customer owes across the WHOLE account, net of any advance
+        /// they hold — the ledger's closing balance when positive, 0 when the
+        /// customer is in credit. NOT a sum of per-invoice balances: an advance
+        /// (unallocated receipt cash, or one invoice's overpayment) nets against
+        /// what other invoices still owe rather than being invisible to it. See
+        /// <see cref="MyApp.Api.Services.Interfaces.ICustomerLedgerService"/>.
+        /// </summary>
         public decimal OutstandingAmount { get; set; }
-        /// <summary>Sum of credit where payments exceeded a document's total.</summary>
+        /// <summary>
+        /// The advance the customer holds across the WHOLE account — the
+        /// ledger's closing balance when negative, expressed positive, 0 when
+        /// the customer owes. Mutually exclusive with <see cref="OutstandingAmount"/>:
+        /// exactly one of the two is non-zero at a time, because both derive
+        /// from the same single net position.
+        /// </summary>
         public decimal OverpaidAmount { get; set; }
 
         public int PaidCount { get; set; }
