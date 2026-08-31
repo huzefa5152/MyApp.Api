@@ -16,3 +16,14 @@ export const getTaxSheet = (companyId, params = {}) =>
 
 export const getTaxSheetExcel = (companyId, params = {}) =>
   http.get(`/reports/company/${companyId}/tax-sheet/excel`, { params, responseType: "blob" });
+
+// Client Ledger — every customer's statement for the period (opening balance,
+// full trail with a running balance, closing balance), composed from the same
+// customer-ledger service the Accounting screen uses.
+// params: { year, month?, dateFrom?, dateTo?, clientId? }  (clientId omitted = all customers)
+export const getClientLedgerReport = (companyId, params = {}) =>
+  http.get(`/reports/company/${companyId}/client-ledger`, { params });
+
+// Styled .xlsx of the same report: a Summary sheet plus one sheet per customer.
+export const getClientLedgerReportExcel = (companyId, params = {}) =>
+  http.get(`/reports/company/${companyId}/client-ledger/excel`, { params, responseType: "blob" });

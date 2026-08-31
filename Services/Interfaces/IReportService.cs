@@ -37,5 +37,29 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Styled .xlsx of <see cref="GetTaxSheetAsync"/>.</summary>
         Task<byte[]> GetTaxSheetExcelAsync(int companyId, int? year, int? month,
             DateTime? dateFrom = null, DateTime? dateTo = null);
+
+        /// <summary>
+        /// Client Ledger: every customer's money trail for the period, laid out
+        /// the way the operator's own workbook does (see
+        /// <see cref="ClientLedgerReportDto"/>). Composed entirely from
+        /// <c>ICustomerLedgerService</c> — the ledger itself is never re-derived
+        /// here; this only picks the window, chooses which customers to show and
+        /// orders the service's entries for the page.
+        /// </summary>
+        /// <param name="clientId">Optional single-customer filter, resolved
+        /// INSIDE the company. Null = every customer with activity or a
+        /// carried-in balance.</param>
+        /// <exception cref="InvalidOperationException">A <paramref name="clientId"/>
+        /// was supplied that does not exist in this company.</exception>
+        Task<ClientLedgerReportDto> GetClientLedgerReportAsync(int companyId, int? year, int? month,
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
+
+        /// <summary>
+        /// Styled .xlsx of <see cref="GetClientLedgerReportAsync"/> — a Summary
+        /// sheet followed by one sheet per customer, each in the reference
+        /// workbook's layout.
+        /// </summary>
+        Task<byte[]> GetClientLedgerReportExcelAsync(int companyId, int? year, int? month,
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null);
     }
 }

@@ -702,8 +702,13 @@ namespace MyApp.Api.Helpers
         /// Numbers / dates / cells that already routed through the
         /// numeric / date branches above never hit this path — we only
         /// neutralise string values.
+        ///
+        /// Public because every hand-built export must route its
+        /// operator-supplied strings through the SAME neutraliser — a second
+        /// copy of this rule would drift. Callers: this engine's template
+        /// renderer and <c>ReportService</c>'s Client Ledger workbook.
         /// </summary>
-        private static string CsvSafe(string? s)
+        public static string CsvSafe(string? s)
         {
             if (string.IsNullOrEmpty(s)) return s ?? "";
             var first = s[0];

@@ -18,10 +18,12 @@ namespace MyApp.Api.Controllers
     public class ReportsController : ControllerBase
     {
         private readonly IReportService _reports;
+        private readonly ILogger<ReportsController> _logger;
 
-        public ReportsController(IReportService reports)
+        public ReportsController(IReportService reports, ILogger<ReportsController> logger)
         {
             _reports = reports;
+            _logger = logger;
         }
 
         /// <summary>
@@ -142,6 +144,95 @@ namespace MyApp.Api.Controllers
             return File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 fileName);
+        }
+
+        /// <summary>
+        /// Client Ledger: every customer's statement for the period — opening
+        /// balance, the full transaction trail with a running balance, and a
+        /// closing balance, in the layout of the workbook the operator keeps.
+        /// Composed from <c>ICustomerLedgerService</c>, the single implementation
+        /// of a customer's money trail.
+        ///
+        /// Column convention follows that service (the operator's workbook, the
+        /// mirror of textbook A/R): invoices and DEBIT notes land in Credit;
+        /// receipts, CREDIT notes and adjustments land in Debit; balance =
+        /// Opening + Σ Credit − Σ Debit, positive meaning the customer owes.
+        /// </summary>
+        /// <param name="clientId">Optional single-customer filter; omit for every
+        /// customer. Resolved inside the company — a foreign id 404s exactly like
+        /// an unknown one.</param>
+        [HttpGet("company/{companyId}/client-ledger")]
+        [HasPermission("reports.clientledger.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ClientLedgerReportDto>> GetClientLedger(
+            int companyId,
+            [FromQuery] int? year = null,
+            [FromQuery] int? month = null,
+            [FromQuery] int? clientId = null,
+            [FromQuery] DateTime? dateFrom = null,
+            [FromQuery] DateTime? dateTo = null)
+        {
+            if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
+                return BadRequest(new { message = err });
+
+            try
+            {
+                return Ok(await _reports.GetClientLedgerReportAsync(companyId, year, month, clientId, dateFrom, dateTo));
+            }
+            catch (InvalidOperationException)
+            {
+                // The service resolves clientId INSIDE companyId and throws this
+                // when the pair doesn't match. One generic 404 for both "unknown"
+                // and "belongs to another company" — never confirm it exists
+                // elsewhere. Same contract as CustomerLedgerController.
+                return NotFound(new { message = "Customer not found." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Client ledger report failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "Could not load the client ledger report." });
+            }
+        }
+
+        /// <summary>
+        /// Same report as <see cref="GetClientLedger"/> as a styled .xlsx — a
+        /// Summary sheet plus one sheet per customer. Gated by the export
+        /// permission.
+        /// </summary>
+        [HttpGet("company/{companyId}/client-ledger/excel")]
+        [HasPermission("reports.clientledger.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetClientLedgerExcel(
+            int companyId,
+            [FromQuery] int? year = null,
+            [FromQuery] int? month = null,
+            [FromQuery] int? clientId = null,
+            [FromQuery] DateTime? dateFrom = null,
+            [FromQuery] DateTime? dateTo = null)
+        {
+            if (ValidatePeriod(year, month, dateFrom, dateTo) is { } err)
+                return BadRequest(new { message = err });
+
+            try
+            {
+                var bytes = await _reports.GetClientLedgerReportExcelAsync(companyId, year, month, clientId, dateFrom, dateTo);
+                var period = (dateFrom.HasValue && dateTo.HasValue)
+                    ? $"{dateFrom.Value:yyyy-MM-dd}_to_{dateTo.Value:yyyy-MM-dd}"
+                    : month.HasValue ? $"{year}-{month.Value:00}" : $"{year}";
+                var fileName = $"Client-Ledger-{period}.xlsx";
+                return File(bytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fileName);
+            }
+            catch (InvalidOperationException)
+            {
+                return NotFound(new { message = "Customer not found." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Client ledger export failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "Could not export the client ledger report." });
+            }
         }
     }
 }

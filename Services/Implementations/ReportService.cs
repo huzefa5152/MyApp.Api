@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -14,10 +15,42 @@ namespace MyApp.Api.Services.Implementations
     public class ReportService : IReportService
     {
         private readonly AppDbContext _context;
+        private readonly ICustomerLedgerService _ledger;
 
-        public ReportService(AppDbContext context)
+        public ReportService(AppDbContext context, ICustomerLedgerService ledger)
         {
             _context = context;
+            _ledger = ledger;
+        }
+
+        /// <summary>
+        /// The reporting period every endpoint on this service shares, resolved
+        /// once. <paramref name="toExclusive"/> is half-open so the last day is
+        /// fully included regardless of any time component on a document date:
+        ///   • custom range  → [dateFrom, dateTo]  (both required)
+        ///   • month + year  → that calendar month
+        ///   • year only     → the whole calendar year
+        /// The effective year/month come back out because a custom range clears
+        /// them (they are not applicable in that mode).
+        /// </summary>
+        private static (DateTime From, DateTime ToExclusive, string Label, int? Year, int? Month)
+            ResolvePeriod(int? year, int? month, DateTime? dateFrom, DateTime? dateTo)
+        {
+            if (dateFrom.HasValue && dateTo.HasValue)
+            {
+                var f = dateFrom.Value.Date;
+                var t = dateTo.Value.Date;
+                return (f, t.AddDays(1), $"{f:dd-MM-yyyy} – {t:dd-MM-yyyy}", null, null);
+            }
+
+            var y = year ?? DateTime.UtcNow.Year;
+            if (month.HasValue)
+            {
+                var f = new DateTime(y, month.Value, 1);
+                return (f, f.AddMonths(1), $"{f:MMMM yyyy}", y, month);
+            }
+            var start = new DateTime(y, 1, 1);
+            return (start, start.AddYears(1), $"Year {y}", y, null);
         }
 
         public async Task<SalesReportDto> GetSalesReportAsync(int companyId, int? year, int? month, string buyerType,
@@ -29,38 +62,9 @@ namespace MyApp.Api.Services.Implementations
                 .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == companyId);
 
-            // Date window. Half-open [from, toExclusive) so the last day is
-            // fully included regardless of any time component on Invoice.Date.
-            //   • custom range  → [dateFrom, dateTo]  (both required)
-            //   • month + year  → that calendar month
-            //   • year only     → the whole calendar year
-            var customRange = dateFrom.HasValue && dateTo.HasValue;
-            DateTime from, toExclusive;
-            string periodLabel;
-            if (customRange)
-            {
-                from = dateFrom!.Value.Date;
-                toExclusive = dateTo!.Value.Date.AddDays(1);
-                periodLabel = $"{from:dd-MM-yyyy} – {dateTo.Value.Date:dd-MM-yyyy}";
-                year = null; month = null;   // not applicable in custom mode
-            }
-            else
-            {
-                var y = year ?? DateTime.UtcNow.Year;
-                year = y;
-                if (month.HasValue)
-                {
-                    from = new DateTime(y, month.Value, 1);
-                    toExclusive = from.AddMonths(1);
-                    periodLabel = $"{from:MMMM yyyy}";
-                }
-                else
-                {
-                    from = new DateTime(y, 1, 1);
-                    toExclusive = from.AddYears(1);
-                    periodLabel = $"Year {y}";
-                }
-            }
+            var (from, toExclusive, periodLabel, effYear, effMonth) =
+                ResolvePeriod(year, month, dateFrom, dateTo);
+            year = effYear; month = effMonth;
 
             var query = _context.Invoices
                 .AsNoTracking()
@@ -341,23 +345,9 @@ namespace MyApp.Api.Services.Implementations
             var company = await _context.Companies.AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == companyId);
 
-            var customRange = dateFrom.HasValue && dateTo.HasValue;
-            DateTime from, toExclusive;
-            string periodLabel;
-            if (customRange)
-            {
-                from = dateFrom!.Value.Date;
-                toExclusive = dateTo!.Value.Date.AddDays(1);
-                periodLabel = $"{from:dd-MM-yyyy} – {dateTo.Value.Date:dd-MM-yyyy}";
-                year = null; month = null;
-            }
-            else
-            {
-                var y = year ?? DateTime.UtcNow.Year;
-                year = y;
-                if (month.HasValue) { from = new DateTime(y, month.Value, 1); toExclusive = from.AddMonths(1); periodLabel = $"{from:MMMM yyyy}"; }
-                else { from = new DateTime(y, 1, 1); toExclusive = from.AddYears(1); periodLabel = $"Year {y}"; }
-            }
+            var (from, toExclusive, periodLabel, effYear, effMonth) =
+                ResolvePeriod(year, month, dateFrom, dateTo);
+            year = effYear; month = effMonth;
 
             var invoices = await _context.Invoices
                 .AsNoTracking()
@@ -511,6 +501,386 @@ namespace MyApp.Api.Services.Implementations
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
             return ms.ToArray();
+        }
+
+        // ── Client Ledger — company-wide customer statements ─────────────
+        // Composed ENTIRELY from ICustomerLedgerService: it already computes
+        // entries, the opening balance, the running balance and the per-customer
+        // aggregates, and it is the single implementation of that trail. This
+        // method only (a) resolves the period, (b) decides which customers get a
+        // section, and (c) lays the service's own entries out oldest-first in
+        // the reference workbook's order. Nothing about the money is re-derived.
+        public async Task<ClientLedgerReportDto> GetClientLedgerReportAsync(int companyId, int? year, int? month,
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+        {
+            var (from, toExclusive, periodLabel, effYear, effMonth) =
+                ResolvePeriod(year, month, dateFrom, dateTo);
+            // The ledger service's window end is INCLUSIVE and date-granular
+            // (`e.Date.Date <= to`), so the half-open end becomes its last day.
+            var toInclusive = toExclusive.AddDays(-1);
+
+            var company = await _context.Companies.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == companyId);
+
+            // Customer identity is `ClientGroupId ?? -ClientId` — the same
+            // rollup DashboardService and CustomerLedgerService use, so a legal
+            // entity carried under two customer records reports once. We need
+            // the membership locally to (a) resolve the optional filter to its
+            // GROUP and (b) collect every member's entries into one section.
+            var clients = await _context.Clients.AsNoTracking()
+                .Where(c => c.CompanyId == companyId)
+                .Select(c => new { c.Id, c.Name, c.ClientGroupId })
+                .ToListAsync();
+
+            int? focusGroup = null;
+            string? focusName = null;
+            if (clientId.HasValue)
+            {
+                // Resolve the caller-supplied id INSIDE the company — never
+                // trust it. An id belonging to another company must fail exactly
+                // like an unknown one (the controller turns this into a 404).
+                var target = clients.FirstOrDefault(c => c.Id == clientId.Value)
+                    ?? throw new InvalidOperationException("Customer not found.");
+                focusGroup = target.ClientGroupId ?? -target.Id;
+                focusName = target.Name;
+            }
+
+            var groups = clients.GroupBy(c => c.ClientGroupId ?? -c.Id).ToList();
+            var membersByGroup = groups.ToDictionary(g => g.Key, g => g.Select(c => c.Id).OrderBy(id => id).ToList());
+            // CustomerLedgerRowDto.ClientId is the group's LOWEST member id
+            // (`g.Min(c => c.Id)`), so this maps an aggregate row back to its group.
+            var groupByRowId = groups.ToDictionary(g => g.Min(c => c.Id), g => g.Key);
+
+            var aggregates = await _ledger.GetAllCustomersAsync(companyId, from, toInclusive);
+
+            var report = new ClientLedgerReportDto
+            {
+                CompanyId = companyId,
+                CompanyName = company?.Name ?? "",
+                Year = effYear,
+                Month = effMonth,
+                DateFrom = from,
+                DateTo = toInclusive,
+                PeriodLabel = periodLabel,
+                ClientId = clientId,
+                ClientName = focusName,
+            };
+
+            foreach (var agg in aggregates)
+            {
+                if (!groupByRowId.TryGetValue(agg.ClientId, out var groupKey)) continue;
+                if (focusGroup.HasValue)
+                {
+                    if (groupKey != focusGroup.Value) continue;
+                }
+                // Company-wide view: a customer with no carried-in balance and
+                // nothing in the window has no statement to print. An explicit
+                // single-customer request still renders (an empty statement is
+                // itself an answer).
+                else if (agg.Opening == 0m && agg.Invoiced == 0m && agg.Received == 0m) continue;
+
+                var entries = new List<CustomerLedgerEntryDto>();
+                foreach (var memberId in membersByGroup[groupKey])
+                    entries.AddRange(await FetchLedgerEntriesAsync(companyId, memberId, from, toInclusive));
+
+                // Oldest-first, using the SAME tie-break the ledger service
+                // applies (document before the money that settles it on a shared
+                // date). For the ordinary one-member group that reproduces the
+                // service's own sequence exactly, just reversed for reading order.
+                var ordered = entries
+                    .OrderBy(e => e.Date)
+                    .ThenByDescending(e => e.Credit)
+                    .ThenBy(e => e.Type, StringComparer.Ordinal)
+                    .ThenBy(e => e.DocId ?? 0)
+                    .ThenBy(e => e.Reference, StringComparer.Ordinal)
+                    .ToList();
+
+                // Running balance seeded from the service's opening figure. A
+                // group with several members has no single service-side trail to
+                // read a balance off, so it is re-accumulated here from the
+                // service's own Debit/Credit values — presentation only, and
+                // identical to CustomerLedgerEntryDto.Balance in the one-member case.
+                var section = new ClientLedgerReportClientDto
+                {
+                    ClientId = agg.ClientId,
+                    ClientName = agg.ClientName,
+                    Opening = agg.Opening,
+                    TotalDebit = agg.Received,
+                    TotalCredit = agg.Invoiced,
+                    Closing = agg.Closing,
+                    Outstanding = agg.Outstanding,
+                    Advance = agg.Advance,
+                };
+
+                var running = agg.Opening;
+                var sr = 0;
+                foreach (var e in ordered)
+                {
+                    running += e.Credit - e.Debit;
+                    section.Entries.Add(new ClientLedgerReportEntryDto
+                    {
+                        Sr = ++sr,
+                        Date = e.Date.Date,
+                        Reference = e.Reference,
+                        Particulars = BuildParticulars(e),
+                        Debit = e.Debit,
+                        Credit = e.Credit,
+                        Balance = running,
+                        Type = e.Type,
+                        DocId = e.DocId,
+                    });
+                }
+
+                report.Clients.Add(section);
+            }
+
+            report.ClientCount = report.Clients.Count;
+            report.EntryCount = report.Clients.Sum(c => c.Entries.Count);
+            report.GrandOpening = report.Clients.Sum(c => c.Opening);
+            report.GrandDebit = report.Clients.Sum(c => c.TotalDebit);
+            report.GrandCredit = report.Clients.Sum(c => c.TotalCredit);
+            report.GrandClosing = report.Clients.Sum(c => c.Closing);
+            return report;
+        }
+
+        /// <summary>
+        /// Every ledger row for one customer in the window. The ledger service
+        /// is paged (capped at <see cref="PaginationHelper.AuditMax"/>) because
+        /// it feeds a screen; a statement must be whole, so we walk the pages.
+        /// </summary>
+        private async Task<List<CustomerLedgerEntryDto>> FetchLedgerEntriesAsync(
+            int companyId, int clientId, DateTime from, DateTime to)
+        {
+            const int pageSize = PaginationHelper.AuditMax;
+            const int pageCeiling = 500;                 // 100k rows — a runaway guard, not a limit anyone meets
+            var all = new List<CustomerLedgerEntryDto>();
+            for (var page = 1; page <= pageCeiling; page++)
+            {
+                var slice = await _ledger.GetForClientAsync(companyId, clientId, from, to, null, page, pageSize);
+                if (slice.Entries.Count == 0) break;
+                all.AddRange(slice.Entries);
+                if (all.Count >= slice.Total) break;
+            }
+            return all;
+        }
+
+        /// <summary>Workbook column D — what the row was, in words.</summary>
+        private static string BuildParticulars(CustomerLedgerEntryDto e)
+        {
+            var parts = new List<string> { e.Type };
+            if (!string.IsNullOrWhiteSpace(e.Method)) parts.Add(e.Method!.Trim());
+            if (!string.IsNullOrWhiteSpace(e.BankAccount)) parts.Add(e.BankAccount!.Trim());
+            if (!string.IsNullOrWhiteSpace(e.Description)) parts.Add(e.Description!.Trim());
+            return string.Join(" · ", parts);
+        }
+
+        // Styled .xlsx: a Summary sheet, then one sheet per customer in the
+        // reference workbook's layout (company / "Ledger" / customer name, a
+        // totals band on row 4, headers on row 5, the opening row on row 6,
+        // transactions from row 7 with a running balance in column H).
+        //
+        // EVERY operator-supplied string written here goes through
+        // ExcelTemplateEngine.CsvSafe — company and customer names, references
+        // and particulars are all operator-controlled, and a leading =/+/-/@
+        // would otherwise execute in the recipient's Excel (=WEBSERVICE → SSRF,
+        // =HYPERLINK → exfil). Numbers and dates are written as typed values and
+        // never take that path.
+        public async Task<byte[]> GetClientLedgerReportExcelAsync(int companyId, int? year, int? month,
+            int? clientId = null, DateTime? dateFrom = null, DateTime? dateTo = null)
+        {
+            var report = await GetClientLedgerReportAsync(companyId, year, month, clientId, dateFrom, dateTo);
+
+            const string MONEY = "#,##0.00";
+            var grey = XLColor.FromHtml("#EBEBEB");
+            var band = XLColor.FromHtml("#F0F7FF");
+
+            using var wb = new XLWorkbook();
+
+            // ── Summary sheet ────────────────────────────────────────────
+            var sum = wb.Worksheets.Add("Summary");
+            sum.Column(1).Width = 6; sum.Column(2).Width = 34;
+            for (var c = 3; c <= 6; c++) sum.Column(c).Width = 16;
+
+            var sr = 1;
+            sum.Cell(sr, 1).Value = ExcelTemplateEngine.CsvSafe(report.CompanyName);
+            var sTitle = sum.Range(sr, 1, sr, 6).Merge();
+            sTitle.Style.Font.FontSize = 20; sTitle.Style.Fill.BackgroundColor = grey;
+            sTitle.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            sum.Row(sr).Height = 28; sr++;
+
+            sum.Cell(sr, 1).Value = "Client Ledger";
+            var sSub = sum.Range(sr, 1, sr, 6).Merge();
+            sSub.Style.Font.FontSize = 14; sSub.Style.Fill.BackgroundColor = grey;
+            sSub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; sr++;
+
+            sum.Cell(sr, 1).Value = $"{report.PeriodLabel}  ·  {report.ClientCount} customer(s), {report.EntryCount} entry(s)";
+            var sMeta = sum.Range(sr, 1, sr, 6).Merge();
+            sMeta.Style.Font.Italic = true; sMeta.Style.Font.FontColor = XLColor.FromHtml("#5F6D7E");
+            sMeta.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; sr += 2;
+
+            var sumHeaders = new[] { "S.No", "Client", "Opening", "Debit", "Credit", "Balance" };
+            for (var c = 1; c <= sumHeaders.Length; c++)
+            {
+                var hc = sum.Cell(sr, c);
+                hc.Value = sumHeaders[c - 1];
+                hc.Style.Font.Bold = true;
+                hc.Style.Fill.BackgroundColor = grey;
+                hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                if (c >= 3) hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            }
+            var sumHeaderRow = sr; sr++;
+
+            var n = 0;
+            foreach (var c in report.Clients)
+            {
+                sum.Cell(sr, 1).Value = ++n;
+                sum.Cell(sr, 2).Value = ExcelTemplateEngine.CsvSafe(c.ClientName);
+                sum.Cell(sr, 3).Value = c.Opening;
+                sum.Cell(sr, 4).Value = c.TotalDebit;
+                sum.Cell(sr, 5).Value = c.TotalCredit;
+                sum.Cell(sr, 6).Value = c.Closing;
+                for (var col = 3; col <= 6; col++) sum.Cell(sr, col).Style.NumberFormat.Format = MONEY;
+                sr++;
+            }
+
+            sum.Cell(sr, 1).Value = "TOTAL:";
+            var sumLabel = sum.Range(sr, 1, sr, 2).Merge();
+            sumLabel.Style.Font.Bold = true;
+            sumLabel.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            sum.Cell(sr, 3).Value = report.GrandOpening;
+            sum.Cell(sr, 4).Value = report.GrandDebit;
+            sum.Cell(sr, 5).Value = report.GrandCredit;
+            sum.Cell(sr, 6).Value = report.GrandClosing;
+            for (var col = 3; col <= 6; col++) sum.Cell(sr, col).Style.NumberFormat.Format = MONEY;
+            var sumTotal = sum.Range(sr, 1, sr, 6);
+            sumTotal.Style.Font.Bold = true;
+            sumTotal.Style.Fill.BackgroundColor = grey;
+            sumTotal.Style.Border.TopBorder = XLBorderStyleValues.Double;
+            sum.SheetView.FreezeRows(sumHeaderRow);
+
+            // ── One sheet per customer, in the reference workbook's layout ──
+            const int COLS = 8;
+            var headers = new[] { "S.No", "Date", "Inv / Ref", "Particulars", "Opening", "Debit", "Credit", "Balance" };
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var c in report.Clients)
+            {
+                var ws = wb.Worksheets.Add(UniqueSheetName(c.ClientName, c.ClientId, used));
+                ws.Column(1).Width = 7; ws.Column(2).Width = 13; ws.Column(3).Width = 16; ws.Column(4).Width = 42;
+                for (var col = 5; col <= COLS; col++) ws.Column(col).Width = 16;
+
+                var r = 1;
+                ws.Cell(r, 1).Value = ExcelTemplateEngine.CsvSafe(report.CompanyName);        // A1
+                var title = ws.Range(r, 1, r, COLS).Merge();
+                title.Style.Font.FontSize = 20; title.Style.Fill.BackgroundColor = grey;
+                title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Row(r).Height = 28; r++;
+
+                ws.Cell(r, 1).Value = "Ledger";                                               // A2
+                var sub = ws.Range(r, 1, r, COLS).Merge();
+                sub.Style.Font.FontSize = 14; sub.Style.Fill.BackgroundColor = grey;
+                sub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center; r++;
+
+                ws.Cell(r, 1).Value = ExcelTemplateEngine.CsvSafe(c.ClientName);              // A3
+                var who = ws.Range(r, 1, r, 4).Merge();
+                who.Style.Font.Bold = true; who.Style.Font.FontSize = 12;
+                ws.Cell(r, 5).Value = report.PeriodLabel;
+                ws.Range(r, 5, r, COLS).Merge().Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                r++;
+
+                // Row 4 — the totals band: E = Opening, F = Σ Debit,
+                // G = Σ Credit (H = closing, the one addition to the reference).
+                ws.Cell(r, 4).Value = "Totals:";
+                ws.Cell(r, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                ws.Cell(r, 5).Value = c.Opening;
+                ws.Cell(r, 6).Value = c.TotalDebit;
+                ws.Cell(r, 7).Value = c.TotalCredit;
+                ws.Cell(r, 8).Value = c.Closing;
+                for (var col = 5; col <= COLS; col++) ws.Cell(r, col).Style.NumberFormat.Format = MONEY;
+                var totals = ws.Range(r, 4, r, COLS);
+                totals.Style.Font.Bold = true;
+                totals.Style.Fill.BackgroundColor = band;
+                r++;
+
+                // Row 5 — column headers.
+                for (var col = 1; col <= COLS; col++)
+                {
+                    var hc = ws.Cell(r, col);
+                    hc.Value = headers[col - 1];
+                    hc.Style.Font.Bold = true;
+                    hc.Style.Fill.BackgroundColor = grey;
+                    hc.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                    if (col >= 5) hc.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                }
+                var headerRow = r; r++;
+
+                // Row 6 — the opening row that seeds the running balance.
+                ws.Cell(r, 4).Value = "Opening Balance";
+                ws.Cell(r, 5).Value = c.Opening;
+                ws.Cell(r, 8).Value = c.Opening;
+                ws.Cell(r, 5).Style.NumberFormat.Format = MONEY;
+                ws.Cell(r, 8).Style.NumberFormat.Format = MONEY;
+                ws.Range(r, 1, r, COLS).Style.Font.Bold = true;
+                r++;
+
+                // Rows 7+ — the transactions.
+                foreach (var e in c.Entries)
+                {
+                    ws.Cell(r, 1).Value = e.Sr;
+                    ws.Cell(r, 2).Value = e.Date;
+                    ws.Cell(r, 2).Style.DateFormat.Format = "dd-MM-yyyy";
+                    ws.Cell(r, 3).Value = ExcelTemplateEngine.CsvSafe(e.Reference);
+                    ws.Cell(r, 4).Value = ExcelTemplateEngine.CsvSafe(e.Particulars);
+                    if (e.Debit != 0m) ws.Cell(r, 6).Value = e.Debit;
+                    if (e.Credit != 0m) ws.Cell(r, 7).Value = e.Credit;
+                    ws.Cell(r, 8).Value = e.Balance;
+                    for (var col = 5; col <= COLS; col++) ws.Cell(r, col).Style.NumberFormat.Format = MONEY;
+                    r++;
+                }
+
+                // Closing row.
+                ws.Cell(r, 4).Value = "Closing Balance";
+                ws.Cell(r, 4).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                ws.Cell(r, 6).Value = c.TotalDebit;
+                ws.Cell(r, 7).Value = c.TotalCredit;
+                ws.Cell(r, 8).Value = c.Closing;
+                for (var col = 5; col <= COLS; col++) ws.Cell(r, col).Style.NumberFormat.Format = MONEY;
+                var closing = ws.Range(r, 1, r, COLS);
+                closing.Style.Font.Bold = true;
+                closing.Style.Fill.BackgroundColor = grey;
+                closing.Style.Border.TopBorder = XLBorderStyleValues.Double;
+
+                ws.SheetView.FreezeRows(headerRow);
+            }
+
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            return ms.ToArray();
+        }
+
+        // Excel sheet names: max 31 chars, none of []:*?/\, must be unique and
+        // non-empty. The customer id disambiguates two customers whose names
+        // collide once truncated.
+        private static readonly char[] IllegalSheetChars = { '[', ']', ':', '*', '?', '/', '\\' };
+
+        private static string UniqueSheetName(string clientName, int clientId, HashSet<string> used)
+        {
+            var name = new string((clientName ?? "").Select(ch => IllegalSheetChars.Contains(ch) ? ' ' : ch).ToArray()).Trim();
+            if (name.Length == 0) name = $"Client {clientId}";
+            if (name.Length > 31) name = name[..31].Trim();
+            if (used.Add(name)) return name;
+
+            var suffix = $" ({clientId})";
+            var head = name.Length + suffix.Length > 31 ? name[..(31 - suffix.Length)].Trim() : name;
+            var candidate = head + suffix;
+            var i = 2;
+            while (!used.Add(candidate))
+            {
+                suffix = $" ({clientId}-{i++})";
+                head = name.Length + suffix.Length > 31 ? name[..(31 - suffix.Length)].Trim() : name;
+                candidate = head + suffix;
+            }
+            return candidate;
         }
 
         // Generic piece-type units we DON'T suffix onto the quantity label

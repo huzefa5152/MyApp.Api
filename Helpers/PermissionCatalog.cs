@@ -373,6 +373,11 @@ namespace MyApp.Api.Helpers
             new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),
             new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
             new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
+            // Company-wide customer statements. Distinct from customerledger.* —
+            // that module gates the per-customer Accounting screen; these gate
+            // the every-customer report in the Reports section.
+            new("reports.clientledger.view",   "Reports", "Client Ledger", "View",   "View the Client Ledger report (every customer's statement for a period)"),
+            new("reports.clientledger.export", "Reports", "Client Ledger", "Export", "Export the Client Ledger report to Excel"),
 
             // ── Audit Logs ──────────────────────────────────────────────────
             new("auditlogs.view",          "AuditLogs", "View", "View", "View application audit/exception logs"),

@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Client Ledger report
+
+- **Client Ledger** is a new report under Reports: every customer's statement for one period, on one screen. Each customer gets their own section — opening balance, the full trail with a running balance, and the balance carried out — laid out exactly like the ledger workbook you already keep.
+- **Same period controls as the other reports** — a month, a whole year, or a custom date range. Everything dated before the start of the period is rolled up into that customer's opening balance, so narrowing the window moves the split without changing what anyone owes.
+- **Filter to one customer** when you only need their statement, or leave it on "All customers" for the whole company. Customers with no activity and no carried-in balance are left out rather than padding the page.
+- **Export to Excel** gives you a Summary sheet followed by one sheet per customer, in the workbook's own layout (company name, "Ledger", customer, the totals band, then the numbered transaction rows).
+- Figures follow the same familiar ledger layout as the Customer Ledger screen — invoices and debit notes in the Credit column, receipts, credit notes and write-offs in the Debit column, a positive balance meaning the customer owes you — because both read the same underlying ledger.
+
 ### 2026-08-31 — Customer Ledger screen
 
 - **Customer Ledger** is a new tab under Accounting, beside Receipts and Payments. It lists every customer once with their Opening, Invoiced, Received, Outstanding, Advance and Closing figures, biggest debtor first.

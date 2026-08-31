@@ -29,6 +29,7 @@ import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import TaxSheetPage from "./pages/TaxSheetPage";
+import ClientLedgerReportPage from "./pages/ClientLedgerReportPage";
 import ClientsPage from "./pages/ClientsPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ItemTypesPage from "./pages/ItemTypesPage";
@@ -145,6 +146,10 @@ export default function App() {
           {/* Reports */}
           <Route path="/reports/sales" element={<RequirePermission anyPrefix="reports.sales"><SalesReportPage /></RequirePermission>} />
           <Route path="/reports/tax-sheet" element={<RequirePermission anyPrefix="reports.taxsheet"><TaxSheetPage /></RequirePermission>} />
+          {/* Client Ledger — company-wide customer statements for a period,
+              composed from the same customer-ledger service the Accounting
+              screen uses. Its own Reports-module keys (reports.clientledger.*). */}
+          <Route path="/reports/client-ledger" element={<RequirePermission anyPrefix="reports.clientledger"><ClientLedgerReportPage /></RequirePermission>} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<RequirePermission anyPrefix="users."><UsersPage /></RequirePermission>} />
           <Route path="/roles" element={<RequirePermission anyPrefix="rbac."><RolesPage /></RequirePermission>} />
