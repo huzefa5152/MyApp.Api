@@ -19,22 +19,39 @@ const PermissionsContext = createContext(null);
  * Refreshes whenever the authenticated user changes.
  */
 export function PermissionsProvider({ children }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState(new Set());
   const [isSeedAdmin, setIsSeedAdmin] = useState(false);
   const [divisionRestrictions, setDivisionRestrictions] = useState({});
-  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  // WHOSE permissions the set above holds — not a boolean flag, because a flag
+  // is only correct if effects have already run.
+  //
+  // The bug this replaces: `isAuthenticated` is `!!token && !!user`, so on a hard
+  // page load the token is present but `user` is still null until /auth/me
+  // resolves. The provider took its unauthenticated branch and reported
+  // "loading: false" with an EMPTY set. The instant /auth/me came back,
+  // ProtectedRoute rendered the page while permissions were still empty and no
+  // longer loading — RequirePermission denied for a single commit and fired
+  // `Navigate to="/dashboard"`. Result: reloading any page, or Ctrl+clicking a
+  // nav link into a new tab, landed on the dashboard. Clicking a link inside the
+  // app never showed it, because the set was already cached by then.
+  //
+  // Comparing identities instead makes "are these the right permissions?" a
+  // question about data rather than about effect ordering, so there is no window
+  // where the answer is wrong.
+  const [loadedFor, setLoadedFor] = useState(null);
+  const identity = isAuthenticated ? String(user?.id ?? user?.username ?? "me") : "anon";
+
+  const load = useCallback(async (who) => {
     if (!isAuthenticated) {
       setPermissions(new Set());
       setIsSeedAdmin(false);
       setDivisionRestrictions({});
-      setLoading(false);
+      setLoadedFor(who);
       return;
     }
     try {
-      setLoading(true);
       const res = await getMyPermissions();
       setPermissions(new Set(res.data.permissions || []));
       setIsSeedAdmin(res.data.isSeedAdmin === true);
@@ -44,11 +61,22 @@ export function PermissionsProvider({ children }) {
       setIsSeedAdmin(false);
       setDivisionRestrictions({});
     } finally {
-      setLoading(false);
+      // Marked settled even on failure, or the app would hang on a spinner
+      // forever when /permissions/me is unreachable.
+      setLoadedFor(who);
     }
   }, [isAuthenticated]);
 
-  useEffect(() => { load(); }, [load, user?.id, user?.username]);
+  useEffect(() => { load(identity); }, [load, identity]);
+
+  // Still loading while the session is being established, or while the set we
+  // hold belongs to someone other than the current user.
+  const loading = authLoading || loadedFor !== identity;
+
+  /// Re-fetch the current user's permissions (e.g. after their role changed).
+  /// Takes no argument so callers can't accidentally mark the set as belonging
+  /// to nobody, which would leave the app stuck on "loading".
+  const reload = useCallback(() => load(identity), [load, identity]);
 
   const has = useCallback(
     (key) => {
@@ -110,10 +138,10 @@ export function PermissionsProvider({ children }) {
     () => ({
       permissions, isSeedAdmin, loading, has, hasAny, hasAll,
       divisionRestrictions, isDivisionRestricted, getAccessibleDivisions, canAccessDivision,
-      reload: load,
+      reload,
     }),
     [permissions, isSeedAdmin, loading, has, hasAny, hasAll,
-     divisionRestrictions, isDivisionRestricted, getAccessibleDivisions, canAccessDivision, load]
+     divisionRestrictions, isDivisionRestricted, getAccessibleDivisions, canAccessDivision, reload]
   );
 
   return (
