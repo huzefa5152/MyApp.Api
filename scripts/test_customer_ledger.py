@@ -38,6 +38,12 @@ Suites:
                                COMPANY, not the contact), so it must show on the
                                trail — and an own-contact receipt reachable from
                                both sources must still be counted exactly once
+  8. Income line on a receipt -> an AllocationKind.Account line on a client's
+                               receipt posts to the chosen income account, never
+                               to A/R, so it must not debit their ledger: the
+                               drill-down, the aggregate row, the client-detail
+                               statement and the Customers-screen A/R column all
+                               have to report the same number
 
 KNOWN LIMITATION, deliberately not asserted: invoices are charged at full
 GrandTotal while `Invoice.BalanceDue` settles against
@@ -546,6 +552,103 @@ def suite_7_foreign_contact_cash(base, token, cid, client_id, item_type_id, disc
                   eq(s3.get("closingBalance"), -50000), f"got {s3.get('closingBalance')}")
 
 
+# ── Suite 8: an income line on a customer's receipt ────────────────
+def suite_8_income_line(base, token, cid, client_id, item_type_id, income_acct):
+    """A receipt naming a Client may carry an AllocationKind.Account line — a
+       cash sale, or any income booked straight to a GL account. That cash
+       NEVER touches the customer's Accounts receivable: PostingService sends
+       it to the account the operator picked (Cr Other income), and the A/R
+       column on the Customers screen (ClientService.GetSummaryAsync, via
+       Helpers.PartyOnAccount) correctly reports 0 for it.
+
+       So the ledger must not debit it either. Debiting the raw Payment.Amount
+       makes two authenticated screens show one customer two different numbers:
+       the ledger invents an advance the customer does not hold and understates
+       what they owe by the whole cash-sale amount.
+
+       Pinned on BOTH ledger surfaces — the drill-down and the aggregate row —
+       because they carry the rule separately and a row that disagrees with the
+       panel it expands into is the same defect seen from the other side."""
+    suite = "8. Income line on a client receipt"
+    print(f"\n=== {suite} ===")
+
+    if income_acct is None:
+        check(suite, "an income account exists in the seeded chart", False,
+              "no 'Other income' account found")
+        return
+
+    inv = make_invoice(base, token, cid, client_id, item_type_id, 100000)
+    if not check(suite, "100,000 invoice created", inv is not None, "create failed"):
+        return
+
+    # 50,000 cash sale recorded against this customer, booked to income.
+    st, r = make_receipt(base, token, cid, client_id, 50000,
+                         allocations=[{"kind": "Account", "accountId": income_acct,
+                                       "amount": 50000}])
+    if not check(suite, "50,000 cash-sale receipt with an income line accepted",
+                 st in (200, 201), f"got {st} {err_of(r)}"):
+        return
+    lines = (r or {}).get("allocations") or []
+    check(suite, "it really is the Account shape — one income line of 50,000",
+          len(lines) == 1 and lines[0].get("kind") == "Account"
+          and eq(lines[0].get("amount"), 50000), f"got {lines}")
+
+    # The invoice is untouched: an income line settles no document.
+    after = get_invoice(base, token, inv["id"])
+    check(suite, "the invoice is untouched — balanceDue still 100,000",
+          eq(after.get("balanceDue"), 100000), f"got {after.get('balanceDue')}")
+
+    # The Customers screen — the reference figure the ledger has to agree with.
+    st_sum, rows = http("GET", f"/api/clients/company/{cid}/summary", base, token=token)
+    ar_row = next((x for x in (rows or []) if x.get("clientId") == client_id), None) \
+        if st_sum == 200 and isinstance(rows, list) else None
+    if not check(suite, "the Customers-screen A/R row loads", ar_row is not None,
+                 f"got {st_sum}"):
+        return
+    ar = float(ar_row.get("accountsReceivable") or 0)
+    check(suite, "A/R column charges the customer 100,000 — the income line is not their money",
+          eq(ar, 100000), f"got {ar}")
+
+    # The drill-down — CustomerLedgerService.BuildEntriesAsync.
+    st_led, led = http("GET",
+                       f"/api/customer-ledger/company/{cid}/client/{client_id}?pageSize=200",
+                       base, token=token)
+    if not check(suite, "the customer's ledger loads", st_led == 200 and isinstance(led, dict),
+                 f"got {st_led} {led}"):
+        return
+    check(suite, "ledger closing agrees with the A/R column",
+          eq(led.get("closingBalance"), ar),
+          f"ledger={led.get('closingBalance')} A/R column={ar}")
+    check(suite, "ledger closing is 100,000 — no phantom 50,000 advance",
+          eq(led.get("closingBalance"), 100000), f"got {led.get('closingBalance')}")
+    check(suite, "the customer is not shown as holding an advance",
+          eq(led.get("advance"), 0), f"got advance={led.get('advance')}")
+    rcp = [e for e in (led.get("entries") or []) if e.get("type") == "Receipt"]
+    check(suite, "the receipt row debits 0 — none of that cash reduced what they owe",
+          len(rcp) == 1 and eq(rcp[0].get("debit"), 0),
+          f"rows={[(x.get('reference'), x.get('debit')) for x in rcp]}")
+
+    # And the same figure through ClientService.GetStatementAsync, the tab the
+    # client-detail modal renders.
+    s = statement(base, token, client_id)
+    check(suite, "the client-detail statement agrees too",
+          s is not None and eq(s.get("closingBalance"), 100000),
+          f"got {None if s is None else s.get('closingBalance')}")
+
+    # The aggregate row must say the same thing as the panel it expands into —
+    # GetAllCustomersAsync carries the rule separately from BuildEntriesAsync.
+    st_agg, agg = http("GET", f"/api/customer-ledger/company/{cid}", base, token=token)
+    rows_agg = agg if st_agg == 200 and isinstance(agg, list) else []
+    row = next((x for x in rows_agg if x.get("clientId") == client_id), None)
+    if not check(suite, "the aggregate ledger row loads", row is not None, f"got {st_agg}"):
+        return
+    check(suite, "the aggregate row closing matches the drill-down and the A/R column",
+          eq(row.get("closing"), 100000) and eq(row.get("closing"), ar),
+          f"row={row.get('closing')} drilldown={led.get('closingBalance')} A/R={ar}")
+    check(suite, "the aggregate 'received' column excludes the income line",
+          eq(row.get("received"), 0), f"got {row.get('received')}")
+
+
 # ── Setup / teardown ───────────────────────────────────────────────
 def make_company(base, token, name, gl=True):
     st, company = http("POST", "/api/companies", base, token=token, body={
@@ -586,7 +689,7 @@ def setup(base, user, pw):
     # One client per suite so the balances stay independent and readable.
     clients = {k: make_client(base, token, cid, f"Ledger {k} {sfx}")
                for k in ("scenario", "discount", "notes", "advance",
-                         "scopeA", "scopeB", "plain", "foreigncontact")}
+                         "scopeA", "scopeB", "plain", "foreigncontact", "cashsale")}
 
     other_cid = make_company(base, token, f"_test_customer_ledger_other {sfx}", gl=False)
     foreign = {
@@ -632,8 +735,10 @@ def main() -> int:
     st, flat = http("GET", f"/api/accounts/company/{cid}/flat", base, token=token)
     flat = flat if st == 200 and isinstance(flat, list) else []
     disc = next((a["id"] for a in flat if a.get("controlType") == "DiscountAllowed"), None)
+    income = next((a["id"] for a in flat
+                   if (a.get("name") or "").strip().lower() == "other income"), None)
     print(f"\n== company={cid} itemType={item_type_id} discountAccount={disc} "
-          f"clients={clients} foreign={foreign} ==")
+          f"incomeAccount={income} clients={clients} foreign={foreign} ==")
 
     try:
         suite_1_client_scenario(base, token, cid, clients["scenario"], item_type_id)
@@ -644,6 +749,7 @@ def main() -> int:
         suite_6_plain_ar(base, token, cid, clients["plain"], item_type_id)
         suite_7_foreign_contact_cash(base, token, cid, clients["foreigncontact"],
                                      item_type_id, disc)
+        suite_8_income_line(base, token, cid, clients["cashsale"], item_type_id, income)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 

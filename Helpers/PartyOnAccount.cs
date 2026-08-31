@@ -31,6 +31,27 @@ namespace MyApp.Api.Helpers
     /// accounts. Cash only: a settle-remainder AdjustmentAmount is non-cash, it
     /// clears the document rather than the payment, and it is not part of
     /// Payment.Amount.</para>
+    ///
+    /// <para>This file owns ONE question — how much of a payment's cash reaches
+    /// the party's own control account — in two flavours, because the two views
+    /// that ask it want different slices of the same answer:</para>
+    /// <list type="bullet">
+    ///   <item><see cref="Query"/> — the on-account part ALONE, for a view that
+    ///   already accounts for document settlement some other way (the A/R and
+    ///   A/P columns net it against invoice/bill balances; the customer portal
+    ///   nets it against the invoice balances it shows).</item>
+    ///   <item><see cref="ControlAccountQuery"/> — on-account cash PLUS the cash
+    ///   that settled the party's own documents, for a running-balance ledger
+    ///   that lists documents at their full value and shows the money received
+    ///   against them as its own row.</item>
+    /// </list>
+    /// <para>Four copies of the first formula is how two of them silently drifted
+    /// (the customer portal reported every explicit advance as zero; the customer
+    /// ledger charged customers for cash sales booked against their name). Add a
+    /// caller here rather than a fifth copy elsewhere — and if a genuinely
+    /// separate expression is ever unavoidable, pin it against this one with a
+    /// test, the way suite 16 of test_customer_receipts_ledger.py pins
+    /// PaymentService.OnAccountCash.</para>
     /// </summary>
     public static class PartyOnAccount
     {
@@ -47,6 +68,7 @@ namespace MyApp.Api.Helpers
             /// the caller's, because it depends on which ledger is being read —
             /// see <see cref="NetByPartyAsync"/>.</summary>
             public decimal Amount { get; set; }
+            public string? Method { get; set; }
             public string? BankAccountName { get; set; }
             public string? Description { get; set; }
         }
@@ -64,26 +86,114 @@ namespace MyApp.Api.Helpers
         /// ClientGroup covers rather than querying once per member.</param>
         public static IQueryable<Row> Query(
             AppDbContext ctx, string contactType, int companyId,
+            ICollection<int>? partyIds = null) =>
+            Scoped(ctx, contactType, companyId, partyIds)
+                .Select(p => new Row
+                {
+                    PaymentId = p.Id,
+                    Number = p.Number,
+                    Date = p.Date,
+                    Direction = p.Direction,
+                    PartyId = p.ContactId!.Value,
+                    Method = p.Method,
+                    BankAccountName = p.BankAccountName,
+                    Description = p.Description,
+                    Amount = p.Amount - (p.Allocations
+                        .Where(a => a.Kind != AllocationKind.OnAccount)
+                        .Sum(a => (decimal?)a.Amount) ?? 0m),
+                });
+
+        /// <summary>
+        /// Cash from one payment that lands on the party's OWN control account —
+        /// A/R for a client, A/P for a supplier. That is <see cref="Query"/>'s
+        /// on-account cash PLUS the cash that settled one of the party's own
+        /// documents, and it is what a party's running-balance ledger must show
+        /// against them:
+        /// <code>
+        /// controlCash = Payment.Amount − Σ(line.Amount that posts SOMEWHERE ELSE)
+        /// </code>
+        ///
+        /// <para>"Somewhere else" is read straight off
+        /// <c>PostingService.PostPaymentAsync</c>, which is the authority on where
+        /// each line's cash goes:</para>
+        /// <list type="bullet">
+        ///   <item>a document line for THIS party's side (a sales invoice for a
+        ///   client, a purchase bill for a supplier) → the party's control
+        ///   account. Counted.</item>
+        ///   <item><see cref="AllocationKind.OnAccount"/>, and the unallocated
+        ///   remainder of a receipt → the party's control account. Counted (this
+        ///   is <see cref="Query"/>'s quantity).</item>
+        ///   <item><see cref="AllocationKind.Account"/> — a direct income/expense
+        ///   line, the everyday cash sale or paid-in-cash expense → the account
+        ///   the operator picked, NEVER the subledger. NOT counted.</item>
+        ///   <item>a document line for the OTHER side (a purchase bill on a
+        ///   client's receipt) → that document's own control account, with the
+        ///   party tag dropped. NOT counted.</item>
+        /// </list>
+        ///
+        /// <para>Debiting the raw <c>Payment.Amount</c> instead — as the customer
+        /// ledger did until 2026-08-31 — books a cash sale recorded against a
+        /// customer as if the customer had paid it, so the ledger invents an
+        /// advance nobody holds and disagrees with the A/R column
+        /// (<c>ClientService.GetSummaryAsync</c>) for the same customer.</para>
+        ///
+        /// <para>Cash only, for the same reason as <see cref="Query"/>: an
+        /// AdjustmentAmount is a non-cash write-off that clears the DOCUMENT and
+        /// is not part of <c>Payment.Amount</c>. A ledger that shows adjustments
+        /// adds them as their own rows.</para>
+        /// </summary>
+        public static IQueryable<Row> ControlAccountQuery(
+            AppDbContext ctx, string contactType, int companyId,
             ICollection<int>? partyIds = null)
+        {
+            var scoped = Scoped(ctx, contactType, companyId, partyIds);
+
+            // Which document side belongs to this party. Kept explicit rather
+            // than "any document line", because a purchase bill settled from a
+            // client's receipt posts to Accounts payable and is not that
+            // client's money.
+            return contactType == "Supplier"
+                ? scoped.Select(p => new Row
+                {
+                    PaymentId = p.Id,
+                    Number = p.Number,
+                    Date = p.Date,
+                    Direction = p.Direction,
+                    PartyId = p.ContactId!.Value,
+                    Method = p.Method,
+                    BankAccountName = p.BankAccountName,
+                    Description = p.Description,
+                    Amount = p.Amount - (p.Allocations
+                        .Where(a => a.PurchaseBillId == null && a.Kind != AllocationKind.OnAccount)
+                        .Sum(a => (decimal?)a.Amount) ?? 0m),
+                })
+                : scoped.Select(p => new Row
+                {
+                    PaymentId = p.Id,
+                    Number = p.Number,
+                    Date = p.Date,
+                    Direction = p.Direction,
+                    PartyId = p.ContactId!.Value,
+                    Method = p.Method,
+                    BankAccountName = p.BankAccountName,
+                    Description = p.Description,
+                    Amount = p.Amount - (p.Allocations
+                        .Where(a => a.InvoiceId == null && a.Kind != AllocationKind.OnAccount)
+                        .Sum(a => (decimal?)a.Amount) ?? 0m),
+                });
+        }
+
+        /// <summary>The party/company/cancelled scope both projections share.
+        /// One place, so a call site cannot pick up a different payment set by
+        /// accident.</summary>
+        private static IQueryable<Payment> Scoped(
+            AppDbContext ctx, string contactType, int companyId, ICollection<int>? partyIds)
         {
             var q = ctx.Payments.AsNoTracking()
                 .Where(p => !p.IsCancelled && p.ContactId != null
                             && p.ContactType == contactType && p.CompanyId == companyId);
             if (partyIds != null) q = q.Where(p => partyIds.Contains(p.ContactId!.Value));
-
-            return q.Select(p => new Row
-            {
-                PaymentId = p.Id,
-                Number = p.Number,
-                Date = p.Date,
-                Direction = p.Direction,
-                PartyId = p.ContactId!.Value,
-                BankAccountName = p.BankAccountName,
-                Description = p.Description,
-                Amount = p.Amount - (p.Allocations
-                    .Where(a => a.Kind != AllocationKind.OnAccount)
-                    .Sum(a => (decimal?)a.Amount) ?? 0m),
-            });
+            return q;
         }
 
         /// <summary>

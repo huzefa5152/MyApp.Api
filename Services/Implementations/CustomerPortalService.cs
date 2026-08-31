@@ -373,22 +373,36 @@ namespace MyApp.Api.Services.Implementations
             // instead, over Payments only — a query that never touches
             // Invoices and so cannot be shaped by which ones are hidden.
             //
-            // The filter mirrors the "contact-sourced receipt" shape in
-            // CustomerLedgerService.BuildEntriesAsync (same fields, same
-            // case-insensitive ContactType compare) so "advance" never drifts
-            // from what the rest of the app means by it — just narrowed to the
-            // one figure that's safe to net in here. Clamped at 0 so a stray
-            // negative row (imported/legacy data predating the modern
-            // allocation-fits-amount guard) can never inflate the outstanding
-            // figure beyond what the visible rows themselves show.
-            var rawAdvance = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == portal.CompanyId
-                         && p.Direction == PaymentDirection.Receipt
-                         && !p.IsCancelled
-                         && p.ContactId == portal.ClientId
-                         && p.ContactType != null
-                         && p.ContactType.Trim().ToLower() == "client")
-                .Select(p => p.Amount - p.Allocations.Sum(a => a.Amount))
+            // WHAT counts as parked cash is Helpers.PartyOnAccount's rule and
+            // must not be restated here — this endpoint had its own copy until
+            // 2026-08-31 and it had already drifted: it subtracted EVERY
+            // allocation line, so an advance recorded as an explicit
+            // AllocationKind.OnAccount line (the shape the operator picks as
+            // "advance / on account" in the receipts form) netted to exactly 0.
+            // The customer saw no credit and an outstanding balance overstated
+            // by their whole advance, on the one surface customers read.
+            //
+            // WHICH payments it runs over stays the portal's own decision, and
+            // is deliberately narrower than any ledger: the token's company AND
+            // the token's client (the query never takes an id from the caller),
+            // Receipt direction only, and Payments only — it never touches
+            // Invoices, so it cannot be shaped by which documents are hidden.
+            // That is the whole reason this figure is safe to net into a header
+            // built from VisibleInvoices; see the note above.
+            //
+            // Clamped at 0 so a stray negative row (imported/legacy data
+            // predating the modern allocation-fits-amount guard) can never
+            // inflate the outstanding figure beyond what the visible rows show.
+            //
+            // Money REFUNDED back to the customer is not netted off here, as
+            // before this change: a money-out payment naming a client debits
+            // their A/R and would reduce this credit, but the portal has never
+            // read that direction and widening it is a behaviour change of its
+            // own, not part of restating the rule.
+            var rawAdvance = await PartyOnAccount
+                .Query(_context, "Client", portal.CompanyId, new[] { portal.ClientId })
+                .Where(r => r.Direction == PaymentDirection.Receipt)
+                .Select(r => r.Amount)
                 .SumAsync();
             var advance = rawAdvance < 0 ? 0 : rawAdvance;
 

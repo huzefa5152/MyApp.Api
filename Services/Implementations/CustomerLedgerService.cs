@@ -273,21 +273,29 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            // Receipts, at their FULL Payment.Amount — the unallocated part is
-            // real money received and must show. Summing allocations instead (as
-            // the old statement did) hid every advance.
+            // Receipts, at the cash that actually reached this customer's
+            // Accounts receivable — Helpers.PartyOnAccount.ControlAccountQuery,
+            // the read-side mirror of where PostingService sends each line.
             //
-            // ContactType is normalised on write (trimmed, canonical case) but
-            // LEGACY rows may still hold "client"/" Client ", so compare
-            // case-insensitively after trimming.
-            var receipts = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId
-                            && p.Direction == PaymentDirection.Receipt
-                            && !p.IsCancelled
-                            && p.ContactId != null && ids.Contains(p.ContactId.Value)
-                            && p.ContactType != null
-                            && p.ContactType.Trim().ToLower() == "client")
-                .Select(p => new { p.Id, p.Number, p.Date, p.Amount, p.Method, p.BankAccountName, p.Description })
+            // That is normally the FULL Payment.Amount, and it must be: the
+            // unallocated part is real money received and has to show, and
+            // summing allocations instead (as the old statement did) hid every
+            // advance. The one thing it excludes is cash the receipt itself sent
+            // somewhere other than A/R — an AllocationKind.Account line, i.e. a
+            // cash sale or other income recorded against this customer's name.
+            // That money is never theirs to be credited with: the GL posts it to
+            // the income account the operator picked, and the A/R column on the
+            // Customers screen (ClientService.GetSummaryAsync, same helper)
+            // reports 0 for it. Debiting the raw Amount here — as this did until
+            // 2026-08-31 — showed one customer two different balances on two
+            // authenticated screens, and invented an advance nobody held.
+            //
+            // ContactType is matched by SQL under the database's case-insensitive
+            // collation, so a LEGACY row holding "client" still counts — the same
+            // comparison PostingService makes before it picks the target account.
+            var receipts = await PartyOnAccount
+                .ControlAccountQuery(_context, "Client", companyId, ids)
+                .Where(r => r.Direction == PaymentDirection.Receipt)
                 .ToListAsync();
 
             foreach (var r in receipts)
@@ -296,7 +304,7 @@ namespace MyApp.Api.Services.Implementations
                     Date = r.Date,
                     Type = TypeReceipt,
                     Reference = "RCP-" + r.Number,
-                    DocId = r.Id,
+                    DocId = r.PaymentId,
                     Debit = r.Amount,
                     Method = r.Method,
                     BankAccount = r.BankAccountName,
@@ -446,14 +454,12 @@ namespace MyApp.Api.Services.Implementations
                 .Select(i => new { i.ClientId, i.Date, i.GrandTotal, i.DocumentType })
                 .ToListAsync();
 
-            var receipts = await _context.Payments.AsNoTracking()
-                .Where(p => p.CompanyId == companyId
-                            && p.Direction == PaymentDirection.Receipt
-                            && !p.IsCancelled
-                            && p.ContactId != null
-                            && p.ContactType != null
-                            && p.ContactType.Trim().ToLower() == "client")
-                .Select(p => new { ClientId = p.ContactId!.Value, p.Date, p.Amount })
+            // Same rule as BuildEntriesAsync's receipt rows, from the same
+            // helper — a row and the panel it expands into must never disagree.
+            // See the note there for why an income line's cash is excluded.
+            var receipts = await PartyOnAccount
+                .ControlAccountQuery(_context, "Client", companyId)
+                .Where(r => r.Direction == PaymentDirection.Receipt)
                 .ToListAsync();
 
             // Cash allocated to a client's invoice from a receipt naming another
@@ -511,7 +517,7 @@ namespace MyApp.Api.Services.Implementations
                 if (d.DocumentType == CreditNoteType) Add(d.ClientId, d.Date, 0m, d.GrandTotal);
                 else Add(d.ClientId, d.Date, d.GrandTotal, 0m);
             }
-            foreach (var r in receipts) Add(r.ClientId, r.Date, 0m, r.Amount);
+            foreach (var r in receipts) Add(r.PartyId, r.Date, 0m, r.Amount);
             foreach (var a in allocatedCash)
             {
                 if (IsContactOf(a.ContactType, a.ContactId, a.ClientId)) continue;

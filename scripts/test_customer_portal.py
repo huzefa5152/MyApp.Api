@@ -591,6 +591,53 @@ def test_payment_status(base, token, a, a1, portal_a, item_type_id):
           st_ha == 200 and abs(float(sm_adv.get("overpaidAmount") or 0) - expected_overpaid) < 0.01,
           f"got {sm_adv.get('overpaidAmount')}, expected {expected_overpaid}")
 
+    # ── An advance recorded as an EXPLICIT OnAccount line counts too ──
+    # Money parked against a customer's balance reaches the books in TWO
+    # indistinguishable shapes (Helpers/PartyOnAccount): the unallocated
+    # remainder of a receipt — 5v above — and an explicit
+    # AllocationKind.OnAccount allocation line, which the receipts API has
+    # accepted since 2026-08-31 and the operator picks as "advance / on
+    # account" in the form. They are the same money and the portal must not
+    # tell the customer otherwise.
+    #
+    # The bug this pins: computing the parked cash as
+    #   Amount - SUM(every allocation line)
+    # sums the OnAccount line too, netting the advance to exactly 0. The
+    # customer sees no credit and an outstanding balance overstated by their
+    # whole advance, on the one surface customers actually read.
+    #
+    # Asserted as a DELTA against the header read immediately above so it
+    # cannot be satisfied by a coincidental total: nothing else moved between
+    # the two reads, so the header must shift by exactly 2000 and no other way.
+    before_out = float(sm_adv.get("outstandingAmount") or 0)
+    before_credit = float(sm_adv.get("overpaidAmount") or 0)
+    st_adv2, adv2 = http("POST", f"/api/payments/receipts/company/{a['id']}", base, token=token, body={
+        "direction": "Receipt", "date": TODAY_ISO,
+        "contactType": "Client", "contactId": a1["id"],
+        "method": "Cash", "amount": 2000,
+        "allocations": [{"kind": "OnAccount", "amount": 2000}],
+    })
+    check(suite, "5y a 2000 advance recorded as an explicit OnAccount line is accepted",
+          st_adv2 in (200, 201), f"got {st_adv2} {adv2}")
+    lines = (adv2 or {}).get("allocations") or [] if st_adv2 in (200, 201) else []
+    check(suite, "5y it really is the explicit shape — one OnAccount line of 2000",
+          len(lines) == 1 and lines[0].get("kind") == "OnAccount"
+          and abs(float(lines[0].get("amount") or 0) - 2000) < 0.01, f"got {lines}")
+
+    st_h2, head_adv2 = public(f"/api/public/customer-portal/{tok}", base)
+    sm_adv2 = (head_adv2 or {}).get("summary") or {}
+    moved = ((float(sm_adv2.get("overpaidAmount") or 0) - before_credit)
+             + (before_out - float(sm_adv2.get("outstandingAmount") or 0)))
+    check(suite, "5z the explicit advance moves the header by exactly 2000, not 0",
+          st_h2 == 200 and abs(moved - 2000.0) < 0.01,
+          f"header moved {moved}, expected 2000 "
+          f"(outstanding {before_out} -> {sm_adv2.get('outstandingAmount')}, "
+          f"credit {before_credit} -> {sm_adv2.get('overpaidAmount')})")
+    check(suite, "5z the customer sees the credit they hold, not a zeroed advance",
+          st_h2 == 200
+          and abs(float(sm_adv2.get("overpaidAmount") or 0) - (before_credit + 2000.0)) < 0.01,
+          f"got {sm_adv2.get('overpaidAmount')}, expected {before_credit + 2000.0}")
+
 
 # ── Suite 6: detail, print payload, listing ────────────────────────
 def test_detail_and_print(base, token, a, portal_a, inv_a1):
