@@ -692,7 +692,8 @@ def suite_isolation(base: str, token: str, cid: int, ctx: dict):
     for path in ["customer-ledger", "customer-statement", "customer-balances",
                  "supplier-ledger", "supplier-balances", "receivables-aging",
                  "customer-outstanding", "customer-sales", "general-ledger",
-                 "account-balances", "trial-balance-report"]:
+                 "account-balances", "trial-balance-report", "sales-register",
+                 "purchase-register", "sales-summary", "credit-debit-notes"]:
         r = report(base, token, other_id, path, period="allPeriods")
         rows = r.get("rows") or []
         check(S, f"{path} on a fresh company returns no other tenant's parties",
@@ -1150,6 +1151,132 @@ def suite_statements_financial(base: str, token: str, cid: int):
               f"status {st}, {len(blob) if isinstance(blob, bytes) else '?'} bytes")
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  Suite 15 — Sales & purchase registers and summaries
+# ═══════════════════════════════════════════════════════════════════════════
+def suite_documents(base: str, token: str, cid: int):
+    S = "15. Sales & purchases"
+    print(f"\n=== {S} ===")
+
+    for side, reg_path, aging_path, status_path, summary_path in [
+        ("sales", "sales-register", "receivables-aging", "sales-payment-status", "sales-summary"),
+        ("purchases", "purchase-register", "payables-aging", "purchase-payment-status", "purchase-summary"),
+    ]:
+        reg = report(base, token, cid, reg_path, period="allPeriods", pageSize=200)
+        t = reg["totals"]
+        check(S, f"{side} register returns documents", reg["totalCount"] > 0,
+              f"got {reg['totalCount']}")
+
+        # Document totals must be internally consistent, because they are read from
+        # the documents rather than recomputed from lines.
+        check(S, f"{side}: subtotal + tax == grand total",
+              eq(float(t["subtotal"]) + float(t["tax"]), t["grandTotal"]),
+              f"{t['subtotal']} + {t['tax']} vs {t['grandTotal']}")
+
+        # Every row: outstanding == collectible - paid.
+        bad = [r["documentNo"] for r in reg["rows"]
+               if not eq(float(r["grandTotal"]) - float(r["withholdingTax"]) - float(r["paid"]),
+                         r["outstanding"])]
+        check(S, f"{side}: outstanding == grand - withholding - paid on every row",
+              not bad, f"wrong on {bad[:4]}")
+        check(S, f"{side}: every row carries a payment status",
+              all(r.get("status") for r in reg["rows"]))
+        check(S, f"{side}: no discount column (the model stores none)",
+              not any("discount" in c["key"].lower() for c in reg["columns"]))
+
+        # Reconcile to aging. Three terms, each for a real reason:
+        #   register outstanding  documents, netting overpaid ones
+        #   + overpaid            add back what the register netted off
+        #   + net on-account      money against a party with no document, which a
+        #                         register of documents cannot show at all
+        #   == aging total
+        aging = report(base, token, cid, aging_path, period="allPeriods")
+        overpaid = float(t.get("overpaid") or 0)
+        unalloc = report(base, token, cid, "unallocated", period="allPeriods", pageSize=200)
+        want_receipt = (side == "sales")
+        on_account = 0.0
+        for r in unalloc["rows"]:
+            if (r["contactType"] == "Client") != want_receipt:
+                continue
+            on_account += (-float(r["amount"]) if (r["direction"] == "Receipt") == want_receipt
+                           else float(r["amount"]))
+        expected = float(t["outstanding"]) + overpaid + on_account
+        check(S, f"{side}: register outstanding + overpaid + on-account == aging total",
+              eq(expected, aging["totals"].get("total")),
+              f"{t['outstanding']} + {overpaid} + {on_account} = {expected} "
+              f"vs aging {aging['totals'].get('total')}")
+        if overpaid > 0.005:
+            check(S, f"{side}: the overpayment difference is explained in a notice",
+                  bool(reg.get("notice")), "overpaid total with no explanation")
+
+        # Payment status is the register reframed, so the figures must be identical.
+        ps = report(base, token, cid, status_path, period="allPeriods", pageSize=1)
+        check(S, f"{side}: payment status total == register total",
+              eq(ps["totals"].get("grandTotal"), t["grandTotal"]),
+              f"{ps['totals'].get('grandTotal')} vs {t['grandTotal']}")
+        check(S, f"{side}: payment status is titled as such",
+              "Payment Status" in ps["title"], f"got {ps['title']}")
+
+        # Every grouping must sum to the same grand figure it reports.
+        for gb in ["party", "item", "itemType", "account", "date", "month", "tax"]:
+            s = report(base, token, cid, summary_path, period="allPeriods", groupBy=gb)
+            rowsum = sum(float(r["amount"]) for r in s["rows"])
+            check(S, f"{side} by {gb}: rows sum to the report total",
+                  eq(rowsum, s["totals"].get("amount")),
+                  f"rows {rowsum:,.2f} vs total {s['totals'].get('amount')}")
+            check(S, f"{side} by {gb}: dimension column is labelled",
+                  any(c["key"] == "label" and c["label"] for c in s["columns"]))
+
+        # Party grouping must agree with the register it is grouping.
+        by_party = report(base, token, cid, summary_path, period="allPeriods", groupBy="party")
+        check(S, f"{side} by party total == register subtotal",
+              eq(by_party["totals"].get("amount"), t["subtotal"]),
+              f"{by_party['totals'].get('amount')} vs {t['subtotal']}")
+
+        # Date grouping must be chronological.
+        by_date = report(base, token, cid, summary_path, period="allPeriods", groupBy="date")
+        keys = [r["drillKey"] for r in by_date["rows"] if r.get("drillKey")]
+        check(S, f"{side} by date is in date order", keys == sorted(keys))
+
+    # ── Sales by account must agree with the P&L, since both read the ledger ──
+    by_acct = report(base, token, cid, "sales-summary", period="thisYear", groupBy="account")
+    pl = report(base, token, cid, "profit-loss", period="thisYear")
+    check(S, "sales by account total == P&L income",
+          eq(by_acct["totals"].get("amount"), pl["totalIncome"]),
+          f"by-account {by_acct['totals'].get('amount')} vs P&L income {pl['totalIncome']}")
+
+    # ── Notes ──
+    notes = report(base, token, cid, "credit-debit-notes", period="allPeriods", pageSize=100)
+    check(S, "credit/debit notes report is titled for notes",
+          "Notes" in notes["title"], f"got {notes['title']}")
+    check(S, "the notes report contains ONLY notes",
+          all(r["documentNo"].startswith(("CN-", "DN-")) for r in notes["rows"]),
+          f"found {[r['documentNo'] for r in notes['rows'][:4] if not r['documentNo'].startswith(('CN-','DN-'))]}")
+
+    # ...and the plain register must EXCLUDE them, or "what we sold" is wrong.
+    reg = report(base, token, cid, "sales-register", period="allPeriods", pageSize=200)
+    check(S, "the sales register excludes notes",
+          not any(r["documentNo"].startswith(("CN-", "DN-")) for r in reg["rows"]),
+          "a note appeared in the invoice register")
+
+    # ── Status filter ──
+    unpaid = report(base, token, cid, "sales-register", period="allPeriods",
+                    status="Unpaid", pageSize=100)
+    check(S, "register can be filtered to one payment status",
+          all(r["status"] == "Unpaid" for r in unpaid["rows"]),
+          f"got {set(r['status'] for r in unpaid['rows'])}")
+
+    # ── Exports ──
+    for rid in ["sales-register", "purchase-register", "sales-summary", "purchase-summary",
+                "sales-payment-status", "credit-debit-notes"]:
+        st, blob = http("GET",
+                        f"/api/accounting/reports/company/{cid}/export/{rid}?period=allPeriods",
+                        base, token=token, raw_bytes=True)
+        ok = st == 200 and isinstance(blob, bytes) and blob[:2] == b"PK" and len(blob) > 2000
+        check(S, f"export/{rid} returns a real .xlsx", ok,
+              f"status {st}, {len(blob) if isinstance(blob, bytes) else '?'} bytes")
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -1181,6 +1308,7 @@ def main() -> int:
         suite_party_balances(args.base, token, cid, client_id, supplier_id)
         suite_aging_outstanding(args.base, token, cid, client_id)
         suite_statements_financial(args.base, token, cid)
+        suite_documents(args.base, token, cid)
         other_id = suite_isolation(args.base, token, cid, ctx)
     except Fatal as e:
         print(f"\n!! FATAL: {e}")

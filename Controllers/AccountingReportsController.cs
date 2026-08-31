@@ -391,6 +391,80 @@ namespace MyApp.Api.Controllers
             return Ok(await _reports.GetTrialBalanceReportAsync(companyId, filter));
         }
 
+        // ── Sales & purchases ─────────────────────────────────────────────────────
+
+        [HttpGet("company/{companyId}/sales-register")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> SalesRegister(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetDocumentRegisterAsync(companyId, filter, sales: true));
+        }
+
+        [HttpGet("company/{companyId}/purchase-register")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> PurchaseRegister(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetDocumentRegisterAsync(companyId, filter, sales: false));
+        }
+
+        [HttpGet("company/{companyId}/sales-payment-status")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> SalesPaymentStatus(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPaymentStatusAsync(companyId, filter, sales: true));
+        }
+
+        [HttpGet("company/{companyId}/purchase-payment-status")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> PurchasePaymentStatus(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetPaymentStatusAsync(companyId, filter, sales: false));
+        }
+
+        /// <summary>Sales by customer | item | itemType | account | date | month | tax.</summary>
+        [HttpGet("company/{companyId}/sales-summary")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> SalesSummary(
+            int companyId, [FromQuery] ReportFilterDto filter, [FromQuery] string groupBy = "party")
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetDocumentSummaryAsync(companyId, filter, true, groupBy));
+        }
+
+        /// <summary>Purchases by supplier | item | itemType | account | date | month | tax.</summary>
+        [HttpGet("company/{companyId}/purchase-summary")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> PurchaseSummary(
+            int companyId, [FromQuery] ReportFilterDto filter, [FromQuery] string groupBy = "party")
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetDocumentSummaryAsync(companyId, filter, false, groupBy));
+        }
+
+        [HttpGet("company/{companyId}/credit-debit-notes")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> CreditDebitNotes(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetNotesReportAsync(companyId, filter));
+        }
+
         // ── Export ────────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -472,6 +546,20 @@ namespace MyApp.Api.Controllers
                 case "trial-balance":
                 case "trial-balance-report":
                     report = await _reports.GetTrialBalanceReportAsync(companyId, filter); break;
+                case "sales-register":
+                    report = await _reports.GetDocumentRegisterAsync(companyId, filter, true); break;
+                case "purchase-register":
+                    report = await _reports.GetDocumentRegisterAsync(companyId, filter, false); break;
+                case "sales-payment-status":
+                    report = await _reports.GetPaymentStatusAsync(companyId, filter, true); break;
+                case "purchase-payment-status":
+                    report = await _reports.GetPaymentStatusAsync(companyId, filter, false); break;
+                case "sales-summary":
+                    report = await _reports.GetDocumentSummaryAsync(companyId, filter, true, groupBy); break;
+                case "purchase-summary":
+                    report = await _reports.GetDocumentSummaryAsync(companyId, filter, false, groupBy); break;
+                case "credit-debit-notes":
+                    report = await _reports.GetNotesReportAsync(companyId, filter); break;
                 default:
                     return BadRequest(new { message = "Unknown report." });
             }

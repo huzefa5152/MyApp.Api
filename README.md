@@ -289,6 +289,16 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-08-31 — Accounting Reports: sales and purchase registers
+
+- **Sales Invoice Register and Purchase Bill Register** — every document with subtotal, tax, withholding, grand total, paid, outstanding and payment status, filterable by customer/supplier, tax and status, with a breakdown by status.
+- **Twelve groupings** off the same documents: sales and purchases by customer/supplier, item, item type, account, date, month and tax. **by Account reads the general ledger**, so it agrees with the Profit & Loss instead of re-deriving which account a line should have hit.
+- **Sales / Purchase Payment Status** — paid, part-paid, unpaid and overdue at a glance, tied exactly to the register.
+- **Credit & Debit Notes** report for sales returns and adjustments. Notes are kept out of the invoice register, so its total keeps meaning "what we sold".
+- **The register explains itself against the aging report.** A register nets overpaid documents; aging excludes them. Where that happens the register shows an *Overpaid* total so outstanding plus overpaid visibly equals the aging figure.
+- Status and payment figures come from `PaymentStatusCalculator` and the documents' own stored totals, so a register row can never disagree with the invoice it reports on.
+- Still no Discount column anywhere: the model stores no discount on a document or its lines, and an invented one would be worse than none.
+
 ### 2026-08-31 — Accounting Reports: Balance Sheet, Profit & Loss and the General Ledger
 
 - **A real Balance Sheet.** Assets, liabilities and equity as at a date, laid out as a proper statement — indented groups, subtotals at every level, totals in bold — with the same date one year earlier beside it and the change. Until now the product only had the Chart of Accounts split into two statement sections with all-time balances; there was no statement, no period and no comparative.

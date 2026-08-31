@@ -180,5 +180,34 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>The existing trial balance, wrapped in the report envelope so it
         /// gains the shared header, print, PDF and Excel.</summary>
         Task<ReportResultDto> GetTrialBalanceReportAsync(int companyId, ReportFilterDto filter);
+
+        // -- Sales & purchases ----------------------------------------------------
+
+        /// <summary>
+        /// Sales Invoice Register / Purchase Bill Register: every document with
+        /// subtotal, tax, withholding, grand total, paid, outstanding and status.
+        /// Figures come from the documents' own stored totals, and status from
+        /// <c>PaymentStatusCalculator</c>, so a register row can never disagree with
+        /// the document it reports on. <paramref name="sales"/> false = purchases.
+        /// </summary>
+        Task<ReportResultDto> GetDocumentRegisterAsync(int companyId, ReportFilterDto filter,
+            bool sales);
+
+        /// <summary>The register asked a narrower question — same rows, titled and
+        /// framed around payment status.</summary>
+        Task<ReportResultDto> GetPaymentStatusAsync(int companyId, ReportFilterDto filter,
+            bool sales);
+
+        /// <summary>
+        /// The "Sales/Purchases by X" family: party | item | itemType | account |
+        /// date | month | tax. Item groupings aggregate in SQL over the line tables;
+        /// account grouping reads the LEDGER, so it agrees with the P&amp;L rather than
+        /// re-deriving the posting engine's account resolution.
+        /// </summary>
+        Task<ReportResultDto> GetDocumentSummaryAsync(int companyId, ReportFilterDto filter,
+            bool sales, string groupBy);
+
+        /// <summary>Sales returns and adjustments — credit and debit notes.</summary>
+        Task<ReportResultDto> GetNotesReportAsync(int companyId, ReportFilterDto filter);
     }
 }
