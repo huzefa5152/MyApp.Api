@@ -44,20 +44,20 @@ namespace MyApp.Api.DTOs
         public decimal TotalAmount { get; set; }
         public decimal PaidAmount { get; set; }
         /// <summary>
-        /// What the customer owes across the WHOLE account, net of any advance
-        /// they hold — the ledger's closing balance when positive, 0 when the
-        /// customer is in credit. NOT a sum of per-invoice balances: an advance
-        /// (unallocated receipt cash, or one invoice's overpayment) nets against
-        /// what other invoices still owe rather than being invisible to it. See
-        /// <see cref="MyApp.Api.Services.Interfaces.ICustomerLedgerService"/>.
+        /// Σ BalanceDue over every VISIBLE invoice, reduced by any of the
+        /// customer's own cash that sits unallocated on a receipt (their
+        /// advance) — never by anything else. Always equals the sum of the
+        /// rows this portal actually lists, minus that advance, floored at 0;
+        /// nothing hidden (credit/debit notes, IsFbrExcluded, …) can move this
+        /// figure, by construction — see the comment in
+        /// <see cref="MyApp.Api.Services.Implementations.CustomerPortalService.GetHeaderAsync"/>.
         /// </summary>
         public decimal OutstandingAmount { get; set; }
         /// <summary>
-        /// The advance the customer holds across the WHOLE account — the
-        /// ledger's closing balance when negative, expressed positive, 0 when
-        /// the customer owes. Mutually exclusive with <see cref="OutstandingAmount"/>:
-        /// exactly one of the two is non-zero at a time, because both derive
-        /// from the same single net position.
+        /// Σ CreditBalance over every VISIBLE invoice (an individual invoice
+        /// paid beyond its own total), plus any of the customer's unallocated
+        /// advance left over once it has fully covered <see cref="OutstandingAmount"/>.
+        /// Same visibility guarantee as <see cref="OutstandingAmount"/>.
         /// </summary>
         public decimal OverpaidAmount { get; set; }
 

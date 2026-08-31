@@ -466,21 +466,6 @@ def test_payment_status(base, token, a, a1, portal_a, item_type_id):
         check(suite, "5h credit shows the overpayment, not a negative balance",
               abs(float(orow.get("credit") or 0) - 400) < 0.01
               and float(orow.get("balance") or 0) == 0, f"got {orow}")
-
-        # Task 9: the summary must NOT just sum these per-invoice balances —
-        # that sum still clamps "over"'s own balance at 0 and stops there
-        # (2711: 1111 + 1000 + 600 + 0 + 0). The true account-wide position
-        # nets "over"'s 400 credit against what the OTHER invoices still owe,
-        # so summary.outstandingAmount comes in 400 LOWER than that naive sum
-        # — the credit is invisible nowhere, not even folded into a headline
-        # figure that used to be blind to it.
-        naive_outstanding = sum(float(r["balance"]) for r in by_num.values())
-        st_now, head_now = public(f"/api/public/customer-portal/{tok}", base)
-        sm_now = (head_now or {}).get("summary") or {}
-        check(suite, "5h summary nets the overpayment into the account-wide outstanding",
-              st_now == 200
-              and abs(float(sm_now.get("outstandingAmount") or 0) - (naive_outstanding - 400)) < 0.01,
-              f"got {sm_now.get('outstandingAmount')}, naive per-invoice sum was {naive_outstanding}")
     else:
         check(suite, "5h overpaid case could not be set up", False, "invoice edit-down failed")
 
@@ -500,6 +485,15 @@ def test_payment_status(base, token, a, a1, portal_a, item_type_id):
           st == 200 and len((bogus or {}).get("items", [])) == 0, f"got {st} {bogus}")
 
     # ── Summary agrees with the rows ────────────────────────────────
+    # Security review (Task 9 fix): the invariant is that the header equals
+    # the sum of the VISIBLE rows, net only of the customer's own unallocated
+    # advance — never a whole-relationship figure from ICustomerLedgerService,
+    # which (by design) also carries credit/debit notes and IsFbrExcluded
+    # documents this portal deliberately withholds. With no advance recorded
+    # for a1 yet, that invariant reduces to the plain per-invoice sums —
+    # INCLUDING "over"'s 400 credit sitting where it belongs, not netted away
+    # against unrelated invoices' balances (an earlier version of this fix
+    # did exactly that; this pins the regression).
     st, head = public(f"/api/public/customer-portal/{tok}", base)
     sm = (head or {}).get("summary") or {}
     check(suite, "5k summary counts every visible invoice",
@@ -507,22 +501,95 @@ def test_payment_status(base, token, a, a1, portal_a, item_type_id):
     check(suite, "5l summary total equals the sum of the rows",
           abs(float(sm.get("totalAmount") or 0) - sum(float(r["total"]) for r in by_num.values())) < 0.01,
           f"got {sm.get('totalAmount')}")
+    naive_balance = sum(float(r["balance"]) for r in by_num.values())
+    naive_credit = sum(float(r["credit"]) for r in by_num.values())
+    check(suite, "5m summary outstanding equals the sum of visible balances (zero advance)",
+          abs(float(sm.get("outstandingAmount") or 0) - naive_balance) < 0.01,
+          f"got {sm.get('outstandingAmount')}, expected {naive_balance}")
+    check(suite, "5n summary credit equals the sum of visible credits, incl. the 400 overpay",
+          abs(float(sm.get("overpaidAmount") or 0) - naive_credit) < 0.01
+          and naive_credit >= 400 - 0.01,
+          f"got {sm.get('overpaidAmount')}, expected {naive_credit}")
 
-    # Task 9: outstandingAmount/overpaidAmount no longer come from summing
-    # these per-invoice rows (see 5h) — they come from ICustomerLedgerService,
-    # netted across the whole client. Cross-check against the SAME endpoint
-    # the internal Customer Ledger page calls, so the portal and the office
-    # can never quietly disagree about what a customer owes.
-    st_ledger, ledger = http(
-        "GET", f"/api/customer-ledger/company/{a['id']}/client/{a1['id']}", base, token=token)
-    check(suite, "5m summary outstanding matches the customer ledger",
-          st_ledger == 200
-          and abs(float(sm.get("outstandingAmount") or 0) - float(ledger.get("outstanding") or 0)) < 0.01,
-          f"got portal={sm.get('outstandingAmount')} ledger={ledger.get('outstanding') if st_ledger == 200 else st_ledger}")
-    check(suite, "5n summary credit matches the customer ledger's advance",
-          st_ledger == 200
-          and abs(float(sm.get("overpaidAmount") or 0) - float(ledger.get("advance") or 0)) < 0.01,
-          f"got portal={sm.get('overpaidAmount')} ledger={ledger.get('advance') if st_ledger == 200 else st_ledger}")
+    # ── CRITICAL fix regression: a hidden document must never move the
+    #    header ──────────────────────────────────────────────────────
+    # VisibleInvoices deliberately withholds credit/debit notes and
+    # IsFbrExcluded documents ("a customer has no business seeing them").
+    # An unpaid, excluded invoice's value must not appear in
+    # outstandingAmount, must not appear in the invoice list, and must leave
+    # no trace in the response at all — otherwise a customer who subtracts
+    # what they CAN see from the header infers both the existence and the
+    # magnitude of a bill the portal is refusing to show them.
+    _, hidden_inv = make_invoice(base, token, a["id"], a1["id"], item_type_id, 8888)
+    st_excl, _ = http("PUT", f"/api/invoices/{hidden_inv['id']}/fbr-excluded", base, token=token,
+                      body={"excluded": True})
+    check(suite, "5o hidden-doc setup: invoice marked FBR-excluded", st_excl == 200, f"got {st_excl}")
+
+    st_hid, page_hid = public(f"/api/public/customer-portal/{tok}/invoices?pageSize=100", base)
+    nums_hid = {i["invoiceNumber"] for i in (page_hid or {}).get("items", [])} if st_hid == 200 else set()
+    check(suite, "5p excluded invoice does not appear in the visible list",
+          st_hid == 200 and hidden_inv["invoiceNumber"] not in nums_hid, f"got {sorted(nums_hid)}")
+
+    st_hh, head_hid = public(f"/api/public/customer-portal/{tok}", base)
+    sm_hid = (head_hid or {}).get("summary") or {}
+    check(suite, "5q excluded invoice's 8888 does not move outstandingAmount",
+          st_hh == 200 and abs(float(sm_hid.get("outstandingAmount") or 0) - naive_balance) < 0.01,
+          f"got {sm_hid.get('outstandingAmount')}, expected unchanged {naive_balance}")
+    check(suite, "5q excluded invoice does not move totalInvoices",
+          sm_hid.get("totalInvoices") == sm.get("totalInvoices"), f"got {sm_hid.get('totalInvoices')}")
+    check(suite, "5r response carries no trace of the excluded invoice's amount",
+          st_hh == 200 and "8888" not in json.dumps(head_hid), f"got {head_hid}")
+
+    # ── WHT fixture: the header must stay Collectible-based, not GrandTotal ──
+    # No fixture in the suite carried WithholdingTaxAmount > 0 before this —
+    # add one and prove BOTH the row and the header charge the customer the
+    # collectible amount (GrandTotal - WithholdingTaxAmount), never the gross.
+    st_wht, wht_inv = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": TODAY_ISO, "companyId": a["id"], "clientId": a1["id"], "gstRate": 0,
+        "withholdingTaxAmount": 150,
+        "items": [{"description": "WHT Fixture Line", "quantity": 1, "uom": "Pcs",
+                   "unitPrice": 1000, "itemTypeId": item_type_id}],
+    })
+    check(suite, "5s WHT invoice created (grandTotal 1000, WHT 150)",
+          st_wht in (200, 201) and abs(float(wht_inv.get("grandTotal") or 0) - 1000) < 0.01
+          and abs(float(wht_inv.get("withholdingTaxAmount") or 0) - 150) < 0.01,
+          f"got {st_wht} {wht_inv}")
+
+    st_wp, page_wht = public(f"/api/public/customer-portal/{tok}/invoices?pageSize=100", base)
+    by_num_wht = {i["invoiceNumber"]: i for i in (page_wht or {}).get("items", [])} if st_wp == 200 else {}
+    wrow = by_num_wht.get(wht_inv.get("invoiceNumber")) or {}
+    check(suite, "5t WHT row total is collectible (1000 - 150 = 850), not gross",
+          abs(float(wrow.get("total") or 0) - 850) < 0.01, f"got {wrow}")
+
+    st_wh, head_wht = public(f"/api/public/customer-portal/{tok}", base)
+    sm_wht = (head_wht or {}).get("summary") or {}
+    naive_balance_wht = naive_balance + 850
+    check(suite, "5u header outstanding grows by the collectible 850, not the gross 1000",
+          st_wh == 200 and abs(float(sm_wht.get("outstandingAmount") or 0) - naive_balance_wht) < 0.01,
+          f"got {sm_wht.get('outstandingAmount')}, expected {naive_balance_wht}")
+
+    # ── Advance netting still applies once other things move the balance ──
+    # Pins the exact formula end to end: afterAdvance = outstanding - advance;
+    # outstanding floors at 0; any advance left over lands in overpaid ON TOP
+    # of the 400 the "over" invoice already contributed. 4000 is deliberately
+    # more than the 3561 now owed, so both branches of the floor are exercised.
+    st_adv1, _ = http("POST", f"/api/payments/receipts/company/{a['id']}", base, token=token, body={
+        "direction": "Receipt", "date": TODAY_ISO,
+        "contactType": "Client", "contactId": a1["id"],
+        "method": "Cash", "amount": 4000, "allocations": [],
+    })
+    check(suite, "5v advance receipt recorded for client ONE", st_adv1 in (200, 201), f"got {st_adv1}")
+
+    st_ha, head_adv = public(f"/api/public/customer-portal/{tok}", base)
+    sm_adv = (head_adv or {}).get("summary") or {}
+    expected_outstanding = max(0.0, naive_balance_wht - 4000.0)
+    expected_overpaid = naive_credit + max(0.0, 4000.0 - naive_balance_wht)
+    check(suite, "5w a 4000 advance fully covers the 3561 owed: outstanding floors at 0",
+          st_ha == 200 and abs(float(sm_adv.get("outstandingAmount") or 0) - expected_outstanding) < 0.01,
+          f"got {sm_adv.get('outstandingAmount')}, expected {expected_outstanding}")
+    check(suite, "5x the 439 leftover advance lands in overpaid on top of the 400 overpay",
+          st_ha == 200 and abs(float(sm_adv.get("overpaidAmount") or 0) - expected_overpaid) < 0.01,
+          f"got {sm_adv.get('overpaidAmount')}, expected {expected_overpaid}")
 
 
 # ── Suite 6: detail, print payload, listing ────────────────────────

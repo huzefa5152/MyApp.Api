@@ -4,6 +4,7 @@ using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
+using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -15,39 +16,41 @@ namespace MyApp.Api.Services.Implementations
     /// Two rules govern everything in this file:
     ///
     ///  1. TENANT SCOPE IS STRUCTURAL. Every public read starts from
-    ///     <see cref="VisibleInvoices"/> (invoice data) or is passed the
-    ///     resolved portal's CompanyId AND ClientId directly, as
-    ///     <see cref="Services.Interfaces.ICustomerLedgerService.GetForClientAsync"/>
-    ///     is in <see cref="GetHeaderAsync"/>. No public method takes a company
-    ///     or client id as an argument, so there is nothing for a caller to
-    ///     tamper with. The usual ICompanyAccessGuard is unusable here — it is
-    ///     user-based, and grants everything to the seed admin id.
+    ///     <see cref="VisibleInvoices"/> (invoice data) or is filtered on the
+    ///     resolved portal's CompanyId AND ClientId directly, as the advance
+    ///     query in <see cref="GetHeaderAsync"/> is. No public method takes a
+    ///     company or client id as an argument, so there is nothing for a
+    ///     caller to tamper with. The usual ICompanyAccessGuard is unusable
+    ///     here — it is user-based, and grants everything to the seed admin id.
     ///
-    ///  2. NOTHING IS RECALCULATED. Money and payment state come from
-    ///     <see cref="WithholdingTaxCalculator.Collectible"/>,
-    ///     <see cref="PaymentStatusCalculator"/> and
-    ///     <see cref="Services.Interfaces.ICustomerLedgerService"/> — the same
-    ///     helpers and the same derived ledger the internal invoice list and
-    ///     Customer Ledger page use. The one concession is the STATUS FILTER,
-    ///     which has to run in SQL to page correctly — see
-    ///     <see cref="ApplyStatusFilter"/> for why, and what pins it honest.
+    ///  2. NOTHING IS RECALCULATED, AND NOTHING WIDENS WHAT'S VISIBLE. Money
+    ///     and payment state come from
+    ///     <see cref="WithholdingTaxCalculator.Collectible"/> and
+    ///     <see cref="PaymentStatusCalculator"/>, the same helpers the internal
+    ///     invoice list uses — computed only over <see cref="VisibleInvoices"/>,
+    ///     never over a wider set. This file deliberately does NOT call
+    ///     <see cref="Services.Interfaces.ICustomerLedgerService"/>: that
+    ///     service's aggregates are a whole-relationship figure that includes
+    ///     documents VisibleInvoices withholds (credit/debit notes,
+    ///     IsFbrExcluded, …) — see the comment in <see cref="GetHeaderAsync"/>
+    ///     for why reusing it here would leak a hidden document's value. The
+    ///     one other concession is the STATUS FILTER, which has to run in SQL
+    ///     to page correctly — see <see cref="ApplyStatusFilter"/> for why, and
+    ///     what pins it honest.
     /// </summary>
     public class CustomerPortalService : ICustomerPortalService
     {
         private readonly AppDbContext _context;
         private readonly IInvoiceService _invoices;
-        private readonly ICustomerLedgerService _ledger;
         private readonly ILogger<CustomerPortalService> _logger;
 
         public CustomerPortalService(
             AppDbContext context,
             IInvoiceService invoices,
-            ICustomerLedgerService ledger,
             ILogger<CustomerPortalService> logger)
         {
             _context = context;
             _invoices = invoices;
-            _ledger = ledger;
             _logger = logger;
         }
 
@@ -331,6 +334,8 @@ namespace MyApp.Api.Services.Implementations
 
                 summary.TotalAmount += total;
                 summary.PaidAmount += r.AmountPaid;
+                summary.OutstandingAmount += PaymentStatusCalculator.BalanceDue(total, r.AmountPaid);
+                summary.OverpaidAmount += PaymentStatusCalculator.CreditBalance(total, r.AmountPaid);
 
                 switch (status)
                 {
@@ -342,22 +347,54 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            // OutstandingAmount / OverpaidAmount deliberately do NOT come from
-            // summing the per-invoice figures above. That sum is blind to a
-            // customer's ADVANCE — cash a receipt brought in that was never
-            // allocated to any invoice, or one invoice paid in full and then
-            // edited down while others still carry a balance — none of which
-            // shows in a per-invoice BalanceDue/CreditBalance total.
-            // ICustomerLedgerService derives the whole relationship's net
-            // position (same figure the internal Customer Ledger page shows),
-            // so a customer holding credit sees it netted against what they
-            // owe rather than a balance that ignores it. Scoped to the
-            // resolved portal's own CompanyId AND ClientId, same as every
-            // other query in this file — never a caller-supplied id.
-            var ledger = await _ledger.GetForClientAsync(
-                portal.CompanyId, portal.ClientId, from: null, to: null, type: null, page: 1, pageSize: 1);
-            summary.OutstandingAmount = ledger.Outstanding;
-            summary.OverpaidAmount = ledger.Advance;
+            // The two figures above are the sum of the rows this customer can
+            // actually see — WHT-correct (Collectible), visibility-correct
+            // (VisibleInvoices) by construction. Exactly ONE more thing is
+            // allowed to move them: cash the client has already paid in that
+            // sits UNALLOCATED on a receipt (their advance) — that money isn't
+            // tied to any invoice, visible or hidden, so surfacing its total
+            // cannot disclose what it isn't attached to.
+            //
+            // This is deliberately NOT sourced from
+            // ICustomerLedgerService.GetForClientAsync's Outstanding/Advance.
+            // That service's BuildEntriesAsync filters only IsDemo/IsCancelled
+            // (CustomerLedgerService.cs:137) — it intentionally carries credit
+            // and debit notes, IsFbrExcluded documents and anything else
+            // VisibleInvoices deliberately withholds ("documents a customer has
+            // no business seeing"). Netting that whole-relationship figure in
+            // here would let a customer who subtracts the rows they can see
+            // infer both the existence and the magnitude of a hidden document —
+            // new information disclosed on an anonymous endpoint. Fixing that
+            // by widening VisibleInvoices, or by widening the shared ledger
+            // service to take a visibility filter, would either leak the same
+            // hidden documents into the invoice list or change a service other
+            // callers (the authenticated Customer Ledger page) rely on staying
+            // whole-relationship. So the advance is queried directly here
+            // instead, over Payments only — a query that never touches
+            // Invoices and so cannot be shaped by which ones are hidden.
+            //
+            // The filter mirrors the "contact-sourced receipt" shape in
+            // CustomerLedgerService.BuildEntriesAsync (same fields, same
+            // case-insensitive ContactType compare) so "advance" never drifts
+            // from what the rest of the app means by it — just narrowed to the
+            // one figure that's safe to net in here. Clamped at 0 so a stray
+            // negative row (imported/legacy data predating the modern
+            // allocation-fits-amount guard) can never inflate the outstanding
+            // figure beyond what the visible rows themselves show.
+            var rawAdvance = await _context.Payments.AsNoTracking()
+                .Where(p => p.CompanyId == portal.CompanyId
+                         && p.Direction == PaymentDirection.Receipt
+                         && !p.IsCancelled
+                         && p.ContactId == portal.ClientId
+                         && p.ContactType != null
+                         && p.ContactType.Trim().ToLower() == "client")
+                .Select(p => p.Amount - p.Allocations.Sum(a => a.Amount))
+                .SumAsync();
+            var advance = rawAdvance < 0 ? 0 : rawAdvance;
+
+            var afterAdvance = summary.OutstandingAmount - advance;
+            summary.OutstandingAmount = afterAdvance > 0 ? afterAdvance : 0;
+            summary.OverpaidAmount += afterAdvance < 0 ? -afterAdvance : 0;
 
             // Whether printing is offered at all. A company with no Bill template
             // can't produce a document, and a customer should not meet a button
