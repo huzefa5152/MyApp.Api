@@ -705,8 +705,10 @@ namespace MyApp.Api.Helpers
         ///
         /// Public because every hand-built export must route its
         /// operator-supplied strings through the SAME neutraliser — a second
-        /// copy of this rule would drift. Callers: this engine's template
-        /// renderer and <c>ReportService</c>'s Client Ledger workbook.
+        /// copy of this rule would drift, and a fix to one copy would silently
+        /// leave the other vulnerable. Callers: this engine's template renderer,
+        /// <c>ReportService</c>'s Client Ledger workbook, and
+        /// <see cref="ReportExcelBuilder"/>'s accounting-report workbooks.
         /// </summary>
         public static string CsvSafe(string? s)
         {

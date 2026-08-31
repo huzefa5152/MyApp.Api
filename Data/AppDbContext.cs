@@ -972,6 +972,11 @@ namespace MyApp.Api.Data
             // create retries on this violation (NumberAllocationRetry).
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .HasIndex(p => new { p.CompanyId, p.Direction, p.Number }).IsUnique();
+            // Payment/Receipt registers, cheque registers and the dashboard's period
+            // totals all filter (company, direction) by DATE. The unique index above
+            // is ordered by Number, so it can't serve a date range.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .HasIndex(p => new { p.CompanyId, p.Direction, p.Date });
             // Optional Division tag. NoAction (not SetNull/Cascade): Company->Payment
             // is Restrict and Company->Division is Cascade, so a cascading
             // Division->Payment path would create multiple cascade paths. The app
@@ -1040,6 +1045,11 @@ namespace MyApp.Api.Data
                 .HasIndex(a => a.InvoiceId);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
                 .HasIndex(a => a.PurchaseBillId);
+            // Expense reporting: every "expenses by account" grouping and the
+            // per-(payment, account) tax lookup filter on Kind then AccountId.
+            // Without this the reports table-scan PaymentAllocations.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => new { a.Kind, a.AccountId });
 
             // ── Chart of Accounts (design §4) ──────────────────────────────────
             // AccountGroup → Company (Restrict: a company's CoA can't be

@@ -327,6 +327,25 @@ endpoints_to_test = [
     # Customer Ledger — derived money in/out trail (Task 6).
     ("GET",  "/api/customer-ledger/company/{cid}"),
     ("GET",  "/api/customer-ledger/company/{cid}/client/1"),
+    # Accounting reports. Every one reads the general ledger, so a leak here
+    # exposes another tenant's whole financial position — expenses, cash
+    # balances, who they pay — not just one document.
+    ("GET",  "/api/accounting/reports/company/{cid}/expenses"),
+    ("GET",  "/api/accounting/reports/company/{cid}/expenses/detail"),
+    ("GET",  "/api/accounting/reports/company/{cid}/expenses/summary"),
+    ("GET",  "/api/accounting/reports/company/{cid}/cash-book"),
+    ("GET",  "/api/accounting/reports/company/{cid}/bank-book"),
+    ("GET",  "/api/accounting/reports/company/{cid}/cash-bank-summary"),
+    ("GET",  "/api/accounting/reports/company/{cid}/receipts-register"),
+    ("GET",  "/api/accounting/reports/company/{cid}/payments-register"),
+    ("GET",  "/api/accounting/reports/company/{cid}/receipts-by-account"),
+    ("GET",  "/api/accounting/reports/company/{cid}/payments-by-account"),
+    ("GET",  "/api/accounting/reports/company/{cid}/cheques-in-hand"),
+    ("GET",  "/api/accounting/reports/company/{cid}/cheques-issued"),
+    ("GET",  "/api/accounting/reports/company/{cid}/unallocated"),
+    # The export path is a separate action with its own permission — it must be
+    # tenant-guarded too, or the data walks out as a spreadsheet.
+    ("GET",  "/api/accounting/reports/company/{cid}/export/expenses"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:

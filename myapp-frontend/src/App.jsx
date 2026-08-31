@@ -138,7 +138,11 @@ export default function App() {
           <Route path="/transfers" element={<RequirePermission anyPrefix="accounting.transfers"><TransfersPage /></RequirePermission>} />
           <Route path="/journal-entries" element={<RequirePermission anyPrefix="accounting.journal"><JournalEntriesPage /></RequirePermission>} />
           <Route path="/accounting/dashboard" element={<RequirePermission anyPrefix="accounting.dashboard"><AccountingDashboardPage /></RequirePermission>} />
+          {/* Accounting reports: the bare path is the categorised index, and
+              /:reportId opens one report. A separate route rather than an
+              optional param — react-router v7 dropped optional-param syntax. */}
           <Route path="/accounting/reports" element={<RequirePermission anyPrefix="accounting.reports"><AccountingReportsPage /></RequirePermission>} />
+          <Route path="/accounting/reports/:reportId" element={<RequirePermission anyPrefix="accounting.reports"><AccountingReportsPage /></RequirePermission>} />
           <Route path="/accounting/data-migration" element={<RequirePermission anyPrefix="accounting.import"><DataMigrationPage /></RequirePermission>} />
           <Route path="/accounting/manager-import" element={<RequirePermission anyPrefix="accounting.import"><ManagerImportPage /></RequirePermission>} />
           <Route path="/purchase-bills" element={<RequirePermission anyPrefix="purchasebills."><PurchaseBillsPage /></RequirePermission>} />

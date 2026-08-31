@@ -27,6 +27,7 @@
 // with negatives in parens. Long operator-supplied names line-clamp to
 // 2 lines (never nowrap-ellipsis). Interactive controls are ≥44px tall.
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MdBusiness, MdAccountBalanceWallet, MdReceiptLong, MdPayments, MdSwapVert,
   MdTrendingUp, MdTrendingDown, MdAttachMoney, MdAccountBalance, MdExpandMore,
@@ -38,6 +39,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
+import { MdChevronRight } from "react-icons/md";
 import { getAccountingSummary, getGlStatus, enableGl, rebuildGl } from "../api/accountingApi";
 
 // ── Formatting helpers ───────────────────────────────────────────────
@@ -85,6 +87,7 @@ export default function AccountingDashboardPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
   const confirm = useConfirm();
+  const navigate = useNavigate();
 
   const canView = has("accounting.dashboard.view");
   const canManageGl = has("accounting.gl.manage");
@@ -187,6 +190,19 @@ export default function AccountingDashboardPage() {
     );
   }
 
+  // Dashboard → report, carrying the dashboard's own period so the report opens
+  // on the numbers the card just showed. Without this the drill-down would
+  // silently re-scope to the report default and the figures would not match.
+  const canOpenReports = has("accounting.reports.view");
+  const reportLink = useCallback(
+    (reportId) => {
+      if (!canOpenReports) return null;
+      const qs = new URLSearchParams({ period: "custom", from: period.from, to: period.to });
+      return `/accounting/reports/${reportId}?${qs}`;
+    },
+    [canOpenReports, period]
+  );
+
   const netCashFlow = summary ? Number(summary.receiptsTotal || 0) - Number(summary.paymentsTotal || 0) : 0;
   const netPosition = summary ? Number(summary.receivables?.total || 0) - Number(summary.payables?.total || 0) : 0;
 
@@ -269,13 +285,21 @@ export default function AccountingDashboardPage() {
               {/* ── Row 1 · Cash & liquidity ─────────────────────────── */}
               <SectionLabel>Cash &amp; liquidity</SectionLabel>
               <div style={st.kpiGrid}>
-                <CashCard total={summary.cashAndBankTotal} accounts={summary.cashAccounts || []} glEnabled={summary.glEnabled} />
+                <CashCard
+                  total={summary.cashAndBankTotal}
+                  accounts={summary.cashAccounts || []}
+                  glEnabled={summary.glEnabled}
+                  to={reportLink("cash-bank-summary")}
+                  onOpen={navigate}
+                />
                 <MoneyCard
                   label="Receipts (period)"
                   icon={MdReceiptLong}
                   accent={colors.success}
                   value={fmtMoney(summary.receiptsTotal)}
                   sub={`${summary.receiptCount || 0} receipt${summary.receiptCount === 1 ? "" : "s"}`}
+                  to={reportLink("receipts-register")}
+                  onOpen={navigate}
                 />
                 <MoneyCard
                   label="Payments (period)"
@@ -283,6 +307,8 @@ export default function AccountingDashboardPage() {
                   accent={colors.blue}
                   value={fmtMoney(summary.paymentsTotal)}
                   sub={`${summary.paymentCount || 0} payment${summary.paymentCount === 1 ? "" : "s"}`}
+                  to={reportLink("payments-register")}
+                  onOpen={navigate}
                 />
                 <MoneyCard
                   label="Net cash flow"
@@ -291,14 +317,24 @@ export default function AccountingDashboardPage() {
                   value={fmtMoney(netCashFlow)}
                   valueColor={netCashFlow >= 0 ? "#2e7d32" : colors.danger}
                   sub="Receipts − payments"
+                  to={reportLink("cash-bank-summary")}
+                  onOpen={navigate}
                 />
               </div>
 
               {/* ── Row 2 · Working capital ──────────────────────────── */}
               <SectionLabel>Working capital</SectionLabel>
               <div style={st.kpiGrid}>
-                <AgingCard title="Receivables" icon={MdCallReceived} accent={colors.teal} data={summary.receivables} emptyText="Nothing outstanding from customers." />
-                <AgingCard title="Payables" icon={MdCallMade} accent="#e65100" data={summary.payables} emptyText="Nothing owed to suppliers." />
+                <AgingCard
+                  title="Receivables" icon={MdCallReceived} accent={colors.teal}
+                  data={summary.receivables} emptyText="Nothing outstanding from customers."
+                  to={reportLink("aged-receivables")} onOpen={navigate}
+                />
+                <AgingCard
+                  title="Payables" icon={MdCallMade} accent="#e65100"
+                  data={summary.payables} emptyText="Nothing owed to suppliers."
+                  to={reportLink("aged-payables")} onOpen={navigate}
+                />
                 <MoneyCard
                   label="Net position"
                   icon={MdAccountBalance}
@@ -306,6 +342,8 @@ export default function AccountingDashboardPage() {
                   value={fmtMoney(netPosition)}
                   valueColor={netPosition >= 0 ? "#2e7d32" : colors.danger}
                   sub="Receivables − payables"
+                  to={reportLink("aged-receivables")}
+                  onOpen={navigate}
                 />
               </div>
 
@@ -315,7 +353,11 @@ export default function AccountingDashboardPage() {
                   <SectionLabel>Profitability (period)</SectionLabel>
                   <div style={st.kpiGrid}>
                     <MoneyCard label="Income" icon={MdTrendingUp} accent={colors.success} value={fmtMoney(summary.income)} />
-                    <MoneyCard label="Expenses" icon={MdTrendingDown} accent={colors.danger} value={fmtMoney(summary.expenses)} />
+                    <MoneyCard
+                      label="Expenses" icon={MdTrendingDown} accent={colors.danger}
+                      value={fmtMoney(summary.expenses)}
+                      to={reportLink("expenses")} onOpen={navigate}
+                    />
                     <MoneyCard
                       label="Net profit"
                       icon={MdAttachMoney}
@@ -331,10 +373,24 @@ export default function AccountingDashboardPage() {
               {/* ── Row 4 · Cheques + recent money movement ──────────── */}
               <SectionLabel>Cheques &amp; recent activity</SectionLabel>
               <div style={st.listGrid}>
-                <PdcCard title="Cheques in hand" icon={MdCallReceived} accent={colors.success} data={summary.pdcIn} />
-                <PdcCard title="Cheques issued" icon={MdCallMade} accent={colors.blue} data={summary.pdcOut} />
-                <RecentCard title="Recent receipts" accent={colors.success} rows={summary.recentReceipts || []} emptyText="No receipts in this period." />
-                <RecentCard title="Recent payments" accent={colors.blue} rows={summary.recentPayments || []} emptyText="No payments in this period." />
+                <PdcCard
+                  title="Cheques in hand" icon={MdCallReceived} accent={colors.success} data={summary.pdcIn}
+                  to={reportLink("cheques-in-hand")} onOpen={navigate}
+                />
+                <PdcCard
+                  title="Cheques issued" icon={MdCallMade} accent={colors.blue} data={summary.pdcOut}
+                  to={reportLink("cheques-issued")} onOpen={navigate}
+                />
+                <RecentCard
+                  title="Recent receipts" accent={colors.success} rows={summary.recentReceipts || []}
+                  emptyText="No receipts in this period."
+                  onOpenRow={(r) => navigate(`/receipts?highlight=${r.id}`)}
+                />
+                <RecentCard
+                  title="Recent payments" accent={colors.blue} rows={summary.recentPayments || []}
+                  emptyText="No payments in this period."
+                  onOpenRow={(r) => navigate(`/payments?highlight=${r.id}`)}
+                />
               </div>
 
               {/* ── GL health footer ─────────────────────────────────── */}
@@ -355,10 +411,47 @@ function SectionLabel({ children }) {
   return <div style={st.sectionLabel}>{children}</div>;
 }
 
-/** Generic KPI card — accent strip, label, big money value, optional sub. */
-function MoneyCard({ label, icon: Icon, accent, value, valueColor, sub, children }) {
+/**
+ * Makes a KPI card open its report.
+ *
+ * The dashboard is the starting point for an investigation, so a figure the
+ * operator can question should be reachable in one click. Rendered as a real
+ * button when there is somewhere to go — keyboard and screen readers get the
+ * affordance too — and as a plain div when there isn't, so a card never looks
+ * clickable and then do nothing. `to` is null when the user lacks report
+ * permission, which is why the guard is here and not at the call sites.
+ */
+function Clickable({ to, onOpen, children }) {
+  const [hover, setHover] = useState(false);
+  if (!to) return <div style={st.card}>{children}</div>;
   return (
-    <div style={st.card}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(to)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(to); } }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        ...st.card,
+        cursor: "pointer",
+        transform: hover ? "translateY(-2px)" : "none",
+        boxShadow: hover ? "0 10px 24px rgba(13,71,161,0.14)" : st.card.boxShadow,
+        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+      }}
+    >
+      {children}
+      <span style={{ ...st.drillHint, opacity: hover ? 1 : 0.55 }}>
+        View report <MdChevronRight size={14} />
+      </span>
+    </div>
+  );
+}
+
+/** Generic KPI card — accent strip, label, big money value, optional sub. */
+function MoneyCard({ label, icon: Icon, accent, value, valueColor, sub, children, to, onOpen }) {
+  return (
+    <Clickable to={to} onOpen={onOpen}>
       <div style={{ ...st.accentStrip, background: accent }} />
       <div style={st.cardBody}>
         <div style={st.cardLabelRow}>
@@ -369,12 +462,12 @@ function MoneyCard({ label, icon: Icon, accent, value, valueColor, sub, children
         {sub && <div style={st.cardSub}>{sub}</div>}
         {children}
       </div>
-    </div>
+    </Clickable>
   );
 }
 
 /** Cash & Bank total with an expandable per-account balance list. */
-function CashCard({ total, accounts, glEnabled }) {
+function CashCard({ total, accounts, glEnabled, to, onOpen }) {
   const [open, setOpen] = useState(false);
   const count = accounts.length;
   return (
@@ -384,10 +477,18 @@ function CashCard({ total, accounts, glEnabled }) {
       accent={colors.teal}
       value={fmtMoney(total)}
       sub={glEnabled ? undefined : "Needs GL posting — enable it to see balances"}
+      to={to}
+      onOpen={onOpen}
     >
       {count > 0 && (
         <div style={{ marginTop: 8, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: 4 }}>
-          <button style={st.expandToggle} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {/* Inside a clickable card: expanding the balance list must not also
+              navigate away from the dashboard. */}
+          <button
+            style={st.expandToggle}
+            onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+            aria-expanded={open}
+          >
             <MdExpandMore
               size={18}
               style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none", color: colors.teal }}
@@ -414,11 +515,11 @@ function CashCard({ total, accounts, glEnabled }) {
 }
 
 /** Receivables / payables total + horizontal aging bucket bars. */
-function AgingCard({ title, icon: Icon, accent, data, emptyText }) {
+function AgingCard({ title, icon: Icon, accent, data, emptyText, to, onOpen }) {
   const buckets = data || {};
   const total = Number(buckets.total || 0);
   return (
-    <div style={st.card}>
+    <Clickable to={to} onOpen={onOpen}>
       <div style={{ ...st.accentStrip, background: accent }} />
       <div style={st.cardBody}>
         <div style={st.cardLabelRow}>
@@ -448,16 +549,16 @@ function AgingCard({ title, icon: Icon, accent, data, emptyText }) {
           </div>
         )}
       </div>
-    </div>
+    </Clickable>
   );
 }
 
 /** Post-dated cheque exposure card with a due-soon (next 7 days) highlight. */
-function PdcCard({ title, icon: Icon, accent, data }) {
+function PdcCard({ title, icon: Icon, accent, data, to, onOpen }) {
   const d = data || {};
   const count = d.count || 0;
   return (
-    <div style={st.card}>
+    <Clickable to={to} onOpen={onOpen}>
       <div style={{ ...st.accentStrip, background: accent }} />
       <div style={st.cardBody}>
         <div style={st.cardLabelRow}>
@@ -473,12 +574,12 @@ function PdcCard({ title, icon: Icon, accent, data }) {
           </div>
         )}
       </div>
-    </div>
+    </Clickable>
   );
 }
 
 /** Last 5 receipts / payments — reference, contact, amount, date. */
-function RecentCard({ title, accent, rows, emptyText }) {
+function RecentCard({ title, accent, rows, emptyText, onOpenRow }) {
   const items = rows.slice(0, 5);
   return (
     <div style={st.card}>
@@ -495,7 +596,17 @@ function RecentCard({ title, accent, rows, emptyText }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
             {items.map((r) => (
-              <div key={r.id} style={st.recentRow}>
+              <div
+                key={r.id}
+                style={{ ...st.recentRow, ...(onOpenRow ? { cursor: "pointer" } : {}) }}
+                onClick={onOpenRow ? () => onOpenRow(r) : undefined}
+                role={onOpenRow ? "button" : undefined}
+                tabIndex={onOpenRow ? 0 : undefined}
+                onKeyDown={onOpenRow ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenRow(r); }
+                } : undefined}
+                title={onOpenRow ? `Open ${r.reference}` : undefined}
+              >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ ...st.recentRef, color: accent }}>{r.reference}</div>
                   <div style={{ ...clamp2, fontSize: "0.78rem", color: colors.textPrimary, fontWeight: 600 }}>
@@ -661,6 +772,12 @@ const st = {
     alignItems: "start",
   },
 
+  // "View report" hint that fades in on hover — present but never shouting.
+  drillHint: {
+    display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2,
+    padding: "0 0.9rem 0.6rem", fontSize: "0.7rem", fontWeight: 700,
+    color: colors.blue, transition: "opacity 0.18s ease",
+  },
   card: {
     background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
     boxShadow: "0 2px 12px rgba(0,0,0,0.05)", position: "relative", overflow: "hidden",
