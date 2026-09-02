@@ -131,3 +131,10 @@ export const getAwaitingPurchase = (companyId) =>
 // ItemType so 28 "Medicines" entries collapse to one procurement row.
 export const getPurchaseTemplate = (invoiceId) =>
   httpClient.get(`/invoices/${invoiceId}/purchase-template`);
+
+// What the picked items' stock is worth, so a bill line's TOTAL can be turned
+// into a quantity. The unit price is the stock's weighted-average cost, read
+// from the server's one valuation walk -- the same figure the stock dashboard
+// shows. Gated by the bill-create permission, like getLastRatesForChallan.
+export const getStockPricing = (companyId, itemTypeIds) =>
+  httpClient.get(`/invoices/company/${companyId}/stock-pricing`, { params: { itemTypeIds } });

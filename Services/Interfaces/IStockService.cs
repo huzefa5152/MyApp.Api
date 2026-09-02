@@ -78,6 +78,20 @@ namespace MyApp.Api.Services.Interfaces
             decimal? salesTaxRate = null);
 
         /// <summary>
+        /// What the stock of each item is WORTH as well as how much there is,
+        /// through the one weighted-average walk in
+        /// <see cref="MyApp.Api.Helpers.StockValuation"/>. Nothing here
+        /// re-derives a valuation: callers that need a unit cost -- the bill
+        /// form deriving a quantity from a line total, the adjustment endpoint
+        /// measuring a correction -- read it from the same place the stock
+        /// dashboard does, so the three can never disagree.
+        /// </summary>
+        Task<Dictionary<int, MyApp.Api.Helpers.StockValuation.Position>> GetValuationsAsync(
+            int companyId,
+            IEnumerable<int> itemTypeIds,
+            HashSet<int>? allowedDivisionIds = null);
+
+        /// <summary>
         /// Current on-hand for one item under one company. Computed as
         /// opening balance + Σ In − Σ Out across all movements up to
         /// <paramref name="asOfDate"/> (default: now). Returns 0 when no

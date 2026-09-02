@@ -11,6 +11,7 @@ import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
+import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount } from "../config/advanceTax";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -121,6 +122,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Prefilled from the company's default rate below when one is configured.
   const [whtMode, setWhtMode] = useState("none");
   const [whtRate, setWhtRate] = useState("");
+  // Advance income tax (236G / 236H). One dropdown: the section and whether the
+  // buyer is on the Active Taxpayer List together pick the rate. Empty means
+  // none, which is the default -- it must never be charged by accident.
+  const [advTaxKey, setAdvTaxKey] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
@@ -703,6 +708,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
   const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
   const balanceDue = grandTotal - whtResolved;
+  // Charged on the total INCLUDING sales tax, and ADDED to it -- the opposite of
+  // withholding tax above, which is deducted. The server recomputes it from the
+  // same table (Helpers/AdvanceTaxRates); this is what the operator sees first.
+  const advTaxOption = findAdvanceTax(advTaxKey);
+  const advTaxResolved = advanceTaxAmount(grandTotal, advTaxOption?.rate);
+  const totalWithAdvTax = grandTotal + advTaxResolved;
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
   // Every line must be complete before the bill can be created: a classification
@@ -806,6 +817,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         // rate + the typed amount. Backend recomputes/clamps the amount.
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
+        advanceTaxSection: advTaxOption?.section ?? null,
+        advanceTaxFilerActive: advTaxOption ? advTaxOption.filerActive : null,
         paymentTerms: paymentTermsToSave,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
@@ -1240,6 +1253,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 <option value="none">None</option>
                                 <option value="rate">Rate %</option>
                                 <option value="amount">Fixed amount</option>
+                              </select>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 190 }}>
+                              <label style={styles.label}>Advance Income Tax</label>
+                              <select
+                                style={styles.input}
+                                value={advTaxKey}
+                                onChange={(e) => setAdvTaxKey(e.target.value)}
+                                title="Advance income tax collected from the buyer under s.236G / s.236H. Charged on the amount including sales tax and added to the total. Leave as None to charge nothing."
+                              >
+                                <option value="">None</option>
+                                {ADVANCE_TAX_OPTIONS.map((o) => (
+                                  <option key={o.key} value={o.key}>{advanceTaxLabel(o)}</option>
+                                ))}
                               </select>
                             </div>
                             {whtMode === "rate" && (
@@ -1735,6 +1762,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </div>
                               <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
                                 <span>Balance due:</span><span>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            </>
+                          )}
+                          {advTaxResolved > 0 && (
+                            <>
+                              <div style={styles.totalRow}>
+                                <span>
+                                  Advance income tax {advTaxOption.section} ({advTaxOption.rate}%):
+                                </span>
+                                <span>Rs. {advTaxResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              </div>
+                              <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
+                                <span>Total:</span>
+                                <span>Rs. {totalWithAdvTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                               </div>
                             </>
                           )}

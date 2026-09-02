@@ -55,6 +55,28 @@ namespace MyApp.Api.DTOs
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
+
+        // ── Advance income tax collected from the buyer (236G / 236H) ──
+        // Zero when the operator did not pick a section, so a template renders
+        // the row only when there is something to charge -- the same shape the
+        // withholding-tax line above uses.
+        public string? AdvanceTaxSection { get; set; }
+        public decimal? AdvanceTaxRate { get; set; }
+        public decimal AdvanceTaxAmount { get; set; }
+
+        /// <summary>
+        /// Ready-made row label, e.g. "Advanced Income Tax 236-G", so the
+        /// template does not have to assemble it. Empty when none applies.
+        /// </summary>
+        public string AdvanceTaxLabel { get; set; } = "";
+
+        /// <summary>
+        /// GrandTotal + AdvanceTaxAmount -- the client's "Total" row, which
+        /// comes after Including and the advance-tax line on their format.
+        /// Equal to GrandTotal when no advance tax applies.
+        /// </summary>
+        public decimal TotalWithAdvanceTax { get; set; }
+
         // Withholding tax (income-tax) — 0 when none. Templates render the WHT
         // line + net payable only when WithholdingTaxAmount > 0.
         public decimal? WithholdingTaxRate { get; set; }
@@ -130,6 +152,28 @@ namespace MyApp.Api.DTOs
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
+
+        // ── Advance income tax collected from the buyer (236G / 236H) ──
+        // Zero when the operator did not pick a section, so a template renders
+        // the row only when there is something to charge -- the same shape the
+        // withholding-tax line above uses.
+        public string? AdvanceTaxSection { get; set; }
+        public decimal? AdvanceTaxRate { get; set; }
+        public decimal AdvanceTaxAmount { get; set; }
+
+        /// <summary>
+        /// Ready-made row label, e.g. "Advanced Income Tax 236-G", so the
+        /// template does not have to assemble it. Empty when none applies.
+        /// </summary>
+        public string AdvanceTaxLabel { get; set; } = "";
+
+        /// <summary>
+        /// GrandTotal + AdvanceTaxAmount -- the client's "Total" row, which
+        /// comes after Including and the advance-tax line on their format.
+        /// Equal to GrandTotal when no advance tax applies.
+        /// </summary>
+        public decimal TotalWithAdvanceTax { get; set; }
+
 
         // FBR Digital Invoicing
         public string? FbrIRN { get; set; }

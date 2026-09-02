@@ -289,6 +289,31 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-02 — Bill / Sales Tax Invoice footer prints in the right order
+
+- **Fixed: on the printed bill and sales tax invoice the office address line
+  sat directly under the undertaking box, with the "For : ALPHA TRADERS"
+  signature alone at the foot of the page.** The bottom now reads undertaking,
+  then signature, then the address rule at the page edge, as on the original
+  stationery. Applied to the live templates.
+- The print layout treats a `print-signature` block as one unit when pinning
+  the footer to every page, as the template guide always described. Before, a
+  template that put the letterhead under the signature inside that block had
+  only the signature pinned.
+- Totals and the undertaking now move to the next page together when they
+  would not fit above the footer, instead of printing under it. A long bill
+  fits about fourteen lines on the first page.
+
+### 2026-09-02 — Bill by amount, and advance income tax on the invoice
+
+- **On a bill with no challan you can now enter the amount and let the system work out the quantity.** Pick the item, type what you are billing, and the quantity and rate fill in from what that stock is actually worth — `rate = stock value excluding tax ÷ stock quantity`. No more working out the units by hand. Quantity and rate stay read-only while the amount is driving the line; clear the amount to type them yourself.
+- The quantity respects the unit: kilogrammes take decimals, pieces do not. Where a whole-number unit cannot hold the amount exactly, the amount snaps to what the quantity and rate actually multiply to and the field shows the snapped figure — so the bill always adds up to the amounts on screen.
+- If an item has nothing on hand, or its stock carries no value, the line says so rather than pricing itself at zero.
+- **Advance income tax (236G / 236H) can be added to a bill**, on both the challan and no-challan paths. One dropdown picks the section and whether the buyer is on the Active Taxpayer List: 236G at 0.1% or 236H at 0.5% for an active filer, 2% and 2.5% otherwise. It is charged on the amount **including** sales tax and added to the total — 100,000 plus 18,000 sales tax is 118,000, and 236G collects 118. Leave it as None and nothing is charged.
+- The sales-tax invoice itself is untouched: excluding, sales tax and the invoice total are exactly what they were, and nothing extra is sent to FBR. Advance tax only changes what the customer pays, the same way withholding tax already does.
+- **The printed invoice carries it.** The advance-tax figure, its section and the new total are available to the Bill and Tax Invoice templates, so the "Advanced Income Tax 236-G" row on your own format prints its value and follows the section you picked.
+- The rate is recorded on the bill, not just the section, so an old bill keeps the rate it was issued at if the published rates change.
+
 ### 2026-09-02 — Stock import: items sharing one HS code are added together
 
 - **Fixed: an imported stock sheet could silently lose items.** Where several products share one tariff code — four machines under 8543.7090, three lights under 8513.1090 — only the last one's quantity and value survived; the rest were overwritten. On the client's own sheet that dropped 11 items and 2,312,996.50 of stock value, which is why the dashboard did not agree with the spreadsheet.

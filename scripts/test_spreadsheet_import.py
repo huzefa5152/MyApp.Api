@@ -739,9 +739,18 @@ def main():
         check("re-uploading the ledger is refused",
               any("already imported" in e for e in lp2.get("blockingErrors", [])),
               f"errors={lp2.get('blockingErrors')}")
-        check("the clash with existing invoice numbers is also reported",
-              any("already used in this company" in e for e in lp2.get("blockingErrors", [])),
+        # Imported documents are numbered from the reserved band and keep the
+        # workbook's reference, so the second defence is about the REFERENCES
+        # already present, not about invoice numbers -- re-importing would
+        # double those customers' balances rather than collide on a number.
+        check("the documents already imported are named, by their own reference",
+              any("already imported into this company" in e for e in lp2.get("blockingErrors", [])),
               f"errors={lp2.get('blockingErrors')}")
+        check("imported documents never take the company's invoice numbers",
+              all(int(i["invoiceNumber"]) >= 900001
+                  for i in requests.get(f"{api}/invoices/company/{other}",
+                                        headers=h, timeout=120).json()),
+              "an imported document landed in the operator's sequence")
 
         clash = ledger_workbook([
             {"name": f"One {tag}", "tab": f"ONE {tag}", "opening": 0.0,

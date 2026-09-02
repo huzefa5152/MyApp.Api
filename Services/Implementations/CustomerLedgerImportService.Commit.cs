@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Models.Accounting;
 
@@ -149,12 +150,19 @@ namespace MyApp.Api.Services.Implementations
         /// tax position lives in the opening balances — the same shape the
         /// Manager.io importer writes, and the reason the tax reports show no
         /// output tax for an imported period.
+        ///
+        /// Numbers come from <see cref="MigratedDocumentNumbers"/>, NOT from the
+        /// workbook. The workbook's own reference ("AA-51") is the document's
+        /// identity and is kept on <c>ExternalRef</c>; spending the company's
+        /// invoice sequence on imported history made the operator's configured
+        /// starting number unreachable and blocked re-importing the same file.
         /// </summary>
         private async Task WriteInvoicesAsync(
             CustomerLedgerCommitDto dto, Dictionary<int, int> clientIdByRow,
             CustomerLedgerCommitResultDto result)
         {
             var batch = new List<Invoice>();
+            var nextNumber = await MigratedDocumentNumbers.NextAsync(_db, dto.CompanyId);
 
             foreach (var inv in dto.Invoices.OrderBy(i => i.Date).ThenBy(i => i.InvoiceNumber))
             {
@@ -165,7 +173,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     CompanyId = dto.CompanyId,
                     ClientId = clientId,
-                    InvoiceNumber = inv.InvoiceNumber,
+                    InvoiceNumber = nextNumber++,
                     Date = inv.Date.Date,
                     Subtotal = inv.Amount,
                     GSTRate = 0m,
@@ -174,9 +182,11 @@ namespace MyApp.Api.Services.Implementations
                     AmountInWords = "",
                     IsMigrated = true,
                     IsFbrExcluded = true,
+                    // The workbook's own reference, so the operator recognises
+                    // the document, and so a re-import can match it again.
                     ExternalRef = inv.IsOpening
                         ? $"ledger-open:{dto.CompanyId}:{inv.IndexRow}"
-                        : $"ledger-inv:{dto.CompanyId}:{inv.InvoiceNumber}",
+                        : $"ledger-inv:{dto.CompanyId}:{inv.Reference ?? inv.InvoiceNumber.ToString()}",
                     CreatedAt = DateTime.UtcNow,
                 });
 

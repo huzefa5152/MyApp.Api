@@ -228,6 +228,16 @@ namespace MyApp.Api.Services.Implementations
             CreatedAt = inv.CreatedAt,
             IsEditable = IsInvoiceEditable(inv),
             IsFbrExcluded = inv.IsFbrExcluded,
+            IsMigrated = inv.IsMigrated,
+            AdvanceTaxSection = inv.AdvanceTaxSection,
+            AdvanceTaxFilerActive = inv.AdvanceTaxFilerActive,
+            AdvanceTaxRate = inv.AdvanceTaxRate,
+            AdvanceTaxAmount = inv.AdvanceTaxAmount,
+            // "ledger-inv:1:AA-51" -> "AA-51": the reference the document had in
+            // the books it came from, which is what the operator recognises.
+            MigratedReference = inv.IsMigrated && inv.ExternalRef != null
+                ? inv.ExternalRef.Split(':').Last()
+                : null,
             IsCancelled = inv.IsCancelled,
             CancelledAt = inv.CancelledAt,
             CancelReason = inv.CancelReason,
@@ -378,8 +388,11 @@ namespace MyApp.Api.Services.Implementations
             // bill from being marked IsLatest. Scoped to the requested group
             // (sale bills / debit notes / credit notes), which each run their
             // own sequence.
+            // Same exclusions the allocator itself uses, or the number shown to
+            // the operator disagrees with the one they get: demos and imported
+            // documents are not part of the company's sequence.
             var maxNumber = await _context.Invoices
-                .Where(i => i.CompanyId == companyId && !i.IsDemo
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsMigrated
                          && (noteType == null
                               ? (i.DocumentType != 9 && i.DocumentType != 10)
                               : i.DocumentType == noteType))
@@ -717,8 +730,13 @@ namespace MyApp.Api.Services.Implementations
                 var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
                 // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
                 // create (no gaps after deleting the last bill), scoped per division.
-                // IsDemo bills live in their own 900000+ range — excluded.
-                var maxQuery = _context.Invoices.Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo);
+                // IsDemo bills live in their own 900000+ range — excluded. So are
+                // MIGRATED ones: imported history is numbered from the reserved
+                // band (MigratedDocumentNumbers) and counting it here is what
+                // made a company whose StartingInvoiceNumber was 51 issue its
+                // next invoice as 950003.
+                var maxQuery = _context.Invoices
+                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo && !i.IsMigrated);
                 maxQuery = dto.DivisionId.HasValue
                     ? maxQuery.Where(i => i.DivisionId == dto.DivisionId.Value)
                     : maxQuery.Where(i => i.DivisionId == null);
@@ -755,6 +773,11 @@ namespace MyApp.Api.Services.Implementations
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
                     Items = invoiceItems
                 };
+
+                // Advance income tax (236G/236H) is charged on the amount
+                // INCLUDING sales tax and ADDS to what the customer pays. Source:
+                // the operator's choice on the bill form.
+                ApplyAdvanceTax(invoice, dto.AdvanceTaxSection, dto.AdvanceTaxFilerActive);
 
                 // Wrap invoice creation + challan transitions + company update in a single transaction
                 await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -1066,8 +1089,12 @@ namespace MyApp.Api.Services.Implementations
                 // division entity.
                 var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
                 // Share the regular numbering sequence — standalone bills are
-                // real bills, not demos — scoped per division.
-                var maxQuery = _context.Invoices.Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo);
+                // real bills, not demos — scoped per division. Migrated
+                // documents are excluded for the same reason as in CreateAsync:
+                // they live in the reserved band and are not part of the
+                // company's own sequence.
+                var maxQuery = _context.Invoices
+                    .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo && !i.IsMigrated);
                 maxQuery = dto.DivisionId.HasValue
                     ? maxQuery.Where(i => i.DivisionId == dto.DivisionId.Value)
                     : maxQuery.Where(i => i.DivisionId == null);
@@ -1104,6 +1131,11 @@ namespace MyApp.Api.Services.Implementations
                         : $"{company.InvoiceNumberPrefix}{nextInvoiceNumber}",
                     Items = invoiceItems
                 };
+
+                // Advance income tax (236G/236H) is charged on the amount
+                // INCLUDING sales tax and ADDS to what the customer pays. Source:
+                // the operator's choice on the bill form.
+                ApplyAdvanceTax(invoice, dto.AdvanceTaxSection, dto.AdvanceTaxFilerActive);
 
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
@@ -1426,10 +1458,21 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 // Recalculate totals
+                // An imported document has no line items by design, so
+                // recomputing its total from them would set it to zero and
+                // silently destroy the receivable. Refuse rather than mangle:
+                // there is nothing here an operator could usefully edit.
+                if (invoice.IsMigrated)
+                    throw new InvalidOperationException(
+                        "This invoice was brought in by an import and cannot be edited. "
+                      + "It records a total from the imported books and carries no line items.");
+
                 invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
                 invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
                 invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
                 invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
+                // The totals moved, so the tax charged on them moves too.
+                ApplyAdvanceTax(invoice, invoice.AdvanceTaxSection, invoice.AdvanceTaxFilerActive);
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
 
                 // Any edit invalidates a previous validation
@@ -1858,6 +1901,8 @@ namespace MyApp.Api.Services.Implementations
                         invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
                         invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
                         invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
+                // The totals moved, so the tax charged on them moves too.
+                ApplyAdvanceTax(invoice, invoice.AdvanceTaxSection, invoice.AdvanceTaxFilerActive);
                     }
                 }
 
@@ -2777,7 +2822,8 @@ namespace MyApp.Api.Services.Implementations
                 var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == original.CompanyId)
                     ?? throw new InvalidOperationException("Company not found for the original invoice.");
 
-                var maxQuery = _context.Invoices.Where(i => i.CompanyId == original.CompanyId && !i.IsDemo);
+                var maxQuery = _context.Invoices
+                    .Where(i => i.CompanyId == original.CompanyId && !i.IsDemo && !i.IsMigrated);
                 maxQuery = original.DivisionId.HasValue
                     ? maxQuery.Where(i => i.DivisionId == original.DivisionId.Value)
                     : maxQuery.Where(i => i.DivisionId == null);
@@ -2826,6 +2872,11 @@ namespace MyApp.Api.Services.Implementations
                         DeliveryItemId = null,
                     }).ToList(),
                 };
+
+                // Advance income tax (236G/236H) is charged on the amount
+                // INCLUDING sales tax and ADDS to what the customer pays. Source:
+                // the original bill's choice, recomputed on the corrected total.
+                ApplyAdvanceTax(invoice, original.AdvanceTaxSection, original.AdvanceTaxFilerActive);
 
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
@@ -2990,6 +3041,17 @@ namespace MyApp.Api.Services.Implementations
                 WithholdingTaxRate = inv.WithholdingTaxRate,
                 WithholdingTaxAmount = inv.WithholdingTaxAmount,
                 BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount),
+                // Advance income tax: the row the client's format calls
+                // "Advanced Income Tax 236-G", and their Total line beneath it.
+                // Zero and empty when no section was chosen, so the template
+                // can render the row only when it applies.
+                AdvanceTaxSection = inv.AdvanceTaxSection,
+                AdvanceTaxRate = inv.AdvanceTaxRate,
+                AdvanceTaxAmount = inv.AdvanceTaxAmount,
+                AdvanceTaxLabel = string.IsNullOrWhiteSpace(inv.AdvanceTaxSection)
+                    ? ""
+                    : $"Advanced Income Tax {AdvanceTaxRates.PrintLabel(inv.AdvanceTaxSection)}",
+                TotalWithAdvanceTax = inv.GrandTotal + inv.AdvanceTaxAmount,
                 PaymentTerms = inv.PaymentTerms,
                 Items = groupBill
                     ? inv.Items
@@ -3086,6 +3148,17 @@ namespace MyApp.Api.Services.Implementations
                 GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),
                 // Recompute words at print time so old bills stay in sync.
                 AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
+                // Advance income tax: the row the client's format calls
+                // "Advanced Income Tax 236-G", and their Total line beneath it.
+                // Zero and empty when no section was chosen, so the template
+                // can render the row only when it applies.
+                AdvanceTaxSection = inv.AdvanceTaxSection,
+                AdvanceTaxRate = inv.AdvanceTaxRate,
+                AdvanceTaxAmount = inv.AdvanceTaxAmount,
+                AdvanceTaxLabel = string.IsNullOrWhiteSpace(inv.AdvanceTaxSection)
+                    ? ""
+                    : $"Advanced Income Tax {AdvanceTaxRates.PrintLabel(inv.AdvanceTaxSection)}",
+                TotalWithAdvanceTax = inv.GrandTotal + inv.AdvanceTaxAmount,
                 FbrIRN = inv.FbrIRN,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,
@@ -3632,5 +3705,25 @@ namespace MyApp.Api.Services.Implementations
 
             invoice.DivisionId = newDivisionId;
         }
+        /// <summary>
+        /// Resolves and stamps the advance-tax fields from a section + filer
+        /// status, charged on the invoice's own GrandTotal (which already
+        /// includes sales tax). One place, so the bill-from-challan path, the
+        /// standalone path and a correction cannot compute it differently.
+        ///
+        /// GrandTotal and GSTAmount are NOT touched: advance tax sits outside
+        /// the sales-tax invoice, exactly as withholding tax does, and only
+        /// changes what is collectible.
+        /// </summary>
+        private static void ApplyAdvanceTax(Invoice invoice, string? section, bool? filerActive)
+        {
+            var resolved = AdvanceTaxRates.Resolve(section, filerActive, invoice.GrandTotal);
+            invoice.AdvanceTaxSection = resolved.Section;
+            invoice.AdvanceTaxFilerActive = resolved.FilerActive;
+            invoice.AdvanceTaxRate = resolved.Rate;
+            invoice.AdvanceTaxAmount = resolved.Amount;
+        }
+
+
     }
 }

@@ -141,6 +141,47 @@ namespace MyApp.Api.DTOs
         public const string Set = "set";
     }
 
+    /// <summary>
+    /// What one item's stock is worth, so a bill line can be priced from it.
+    ///
+    /// The unit price is the stock's WEIGHTED-AVERAGE cost — the same figure
+    /// the stock dashboard shows and the same walk that values every movement
+    /// (Helpers/StockValuation). Nothing here is a second valuation.
+    /// </summary>
+    public class StockLinePricingDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string? Uom { get; set; }
+
+        /// <summary>Quantity on hand.</summary>
+        public decimal AvailableQuantity { get; set; }
+
+        /// <summary>What that quantity is worth, excluding sales tax.</summary>
+        public decimal AvailableValueExcludingTax { get; set; }
+
+        /// <summary>
+        /// Value / quantity — the price a line is derived at. Zero when there
+        /// is no stock or no value to divide, in which case
+        /// <see cref="CanPrice"/> is false and the operator types the figures
+        /// themselves.
+        /// </summary>
+        public decimal UnitCost { get; set; }
+
+        /// <summary>Rate on the stock, as a percentage.</summary>
+        public decimal SalesTaxRate { get; set; }
+
+        /// <summary>
+        /// False when a unit price cannot be worked out: nothing on hand, or
+        /// stock carrying no value. Saying so beats returning a zero the form
+        /// would divide by.
+        /// </summary>
+        public bool CanPrice { get; set; }
+
+        /// <summary>Why pricing is unavailable, for the form to show.</summary>
+        public string? Note { get; set; }
+    }
+
     public class CreateStockAdjustmentDto
     {
         public int CompanyId { get; set; }

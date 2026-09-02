@@ -323,6 +323,53 @@ walked in date order (then by id, so same-day rows apply in the order written).
   the outward path keeps, refused with a message rather than silently dropped.
 - Suite: `scripts/test_stock_valuation_flow.py` (78 checks).
 
+### 5b-5. Advance tax, and pricing a bill line from stock (2026-09-02)
+
+**Advance income tax (s.236G / s.236H)** is the MIRROR of the withholding tax
+already on `Invoice`, and must keep that shape:
+
+- It sits ON TOP of sales tax and OUTSIDE the FBR sales-tax invoice.
+  `Subtotal`, `GSTAmount`, `GrandTotal` and the PRAL payload never move —
+  only what is collectible does:
+  `Collectible = GrandTotal − WithholdingTaxAmount + AdvanceTaxAmount`.
+- Rates live in ONE table, `Helpers/AdvanceTaxRates.cs`: 236G 0.1% / 236H 0.5%
+  for an ACTIVE filer, 2% / 2.5% for a non-active one. Charged on the amount
+  INCLUDING sales tax (118,000 at 0.1% collects 118).
+- The RESOLVED RATE is stored beside the section, so a bill keeps the rate it
+  was issued at when the published rates change.
+- A half-chosen selection (section with no filer status, or an unknown section)
+  resolves to NOTHING rather than charging the buyer on a guess.
+- Credit / debit notes are deliberately excluded — advance tax is charged on a
+  sale, not on a note adjusting one.
+- Print: `advanceTaxAmount`, `advanceTaxSection`, `advanceTaxLabel`
+  ("Advanced Income Tax 236-G") and `totalWithAdvanceTax` are on both
+  `PrintBillDto` and `PrintTaxInvoiceDto`; the merge fields are seeded at
+  RUNTIME by `Data/AdvanceTaxMergeFieldSeeder.cs`, not via `HasData`, because
+  the Bill/TaxInvoice merge fields carry hard-coded ids that collide with
+  operator-created rows.
+
+**A bill line priced from stock** — the STANDALONE bill only (a bill from a
+challan keeps unit-price entry, because the challan already fixed the
+quantity):
+
+- The operator enters the line AMOUNT; quantity and rate are derived and shown
+  read-only until the amount is cleared.
+- `UnitPrice = stock value excluding tax / stock quantity` comes from
+  `IStockService.GetValuationsAsync`, which is the ONE weighted-average walk in
+  `Helpers/StockValuation`. Never add a second valuation for this.
+- Two stored precisions decide the arithmetic, and both matter:
+  `InvoiceItem.UnitPrice` is `decimal(18,2)`, so the rate must BE a 2dp figure;
+  and a unit without `AllowsDecimalQuantity` can only hold a WHOLE quantity
+  (5.5 Pcs is not a thing). So the amount SNAPS to what quantity × rate
+  actually makes, and the field shows the snapped figure — that is what keeps
+  the bill summing exactly to the amounts on screen.
+- Nothing on hand, or stock with no value, reports `canPrice: false` with a
+  reason instead of returning a zero the form would divide by.
+- The endpoint is `GET /api/invoices/company/{id}/stock-pricing`, gated by
+  `bills.manage.create` — the same reasoning as `last-rates`: if you cannot
+  make a bill, you do not need its pricing.
+- Suite: `scripts/test_bill_pricing_advance_tax.py` (43 checks).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -445,7 +492,8 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Spreadsheet import (layouts, file checks, stock, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (91 checks) |
+| Spreadsheet import (layouts, file checks, stock, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (98 checks) |
+| Bill line pricing + advance tax (236G/236H) | `python scripts/test_bill_pricing_advance_tax.py` | `43/43 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |

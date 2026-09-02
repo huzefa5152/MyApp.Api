@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -17,14 +19,21 @@ namespace MyApp.Api.Controllers
         private readonly IInvoiceService _service;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
+        // Stock pricing for a bill line is READ from the stock service, so the
+        // bill form, the dashboard and an adjustment share one valuation.
+        private readonly IStockService _stock;
+        private readonly AppDbContext _context;
         private readonly int _defaultPageSize;
 
         public InvoicesController(IInvoiceService service, ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
+            IDivisionAccessGuard divisionAccess, IStockService stock,
+            AppDbContext context, IConfiguration configuration)
         {
             _service = service;
             _access = access;
             _divisionAccess = divisionAccess;
+            _stock = stock;
+            _context = context;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -165,6 +174,74 @@ namespace MyApp.Api.Controllers
             if (challanId <= 0)
                 return BadRequest(new { error = "challanId is required." });
             var rows = await _service.GetLastRatesForChallanAsync(companyId, challanId);
+            return Ok(rows);
+        }
+
+        /// <summary>
+        /// What the chosen items' stock is worth, so the bill form can turn a
+        /// line TOTAL into a quantity: the operator knows the amount they are
+        /// billing, not the number of units it works out to.
+        ///
+        ///     UnitPrice = stock value excluding tax / stock quantity
+        ///     Quantity  = line total / UnitPrice
+        ///
+        /// The unit price is the weighted-average cost from
+        /// <see cref="MyApp.Api.Helpers.StockValuation"/> — the figure the stock
+        /// dashboard shows. This endpoint only reads it; there is no second
+        /// valuation anywhere.
+        ///
+        /// Gated by the same permission needed to create a bill, exactly as
+        /// last-rates is: if you cannot make a bill, you do not need its
+        /// pricing.
+        /// </summary>
+        [HttpGet("company/{companyId}/stock-pricing")]
+        [HasPermission("bills.manage.create")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<StockLinePricingDto>>> GetStockPricing(
+            int companyId, [FromQuery] string? itemTypeIds)
+        {
+            var ids = (itemTypeIds ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => int.TryParse(x, out var v) ? v : 0)
+                .Where(x => x > 0)
+                .Distinct()
+                .Take(200)
+                .ToList();
+            if (ids.Count == 0)
+                return Ok(new List<StockLinePricingDto>());
+
+            // Division-restricted users see their own divisions' movements only,
+            // so they must be priced on the stock they can actually see.
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var positions = await _stock.GetValuationsAsync(companyId, ids, divScope);
+
+            var names = await _context.ItemTypes
+                .Where(it => ids.Contains(it.Id))
+                .Select(it => new { it.Id, it.Name, it.UOM })
+                .ToDictionaryAsync(x => x.Id, x => x);
+
+            var rows = new List<StockLinePricingDto>();
+            foreach (var id in ids)
+            {
+                positions.TryGetValue(id, out var pos);
+                var meta = names.GetValueOrDefault(id);
+                var canPrice = pos.Quantity > 0m && pos.ValueExcludingTax > 0m;
+                rows.Add(new StockLinePricingDto
+                {
+                    ItemTypeId = id,
+                    ItemTypeName = meta?.Name ?? "",
+                    Uom = meta?.UOM,
+                    AvailableQuantity = pos.Quantity,
+                    AvailableValueExcludingTax = pos.ValueExcludingTax,
+                    UnitCost = canPrice ? Math.Round(pos.UnitCost, 4, MidpointRounding.AwayFromZero) : 0m,
+                    SalesTaxRate = pos.SalesTaxRate,
+                    CanPrice = canPrice,
+                    Note = canPrice ? null
+                        : pos.Quantity <= 0m
+                            ? "Nothing on hand, so a unit price cannot be worked out."
+                            : "This stock carries no value yet, so a unit price cannot be worked out.",
+                });
+            }
             return Ok(rows);
         }
 

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -167,6 +168,48 @@ namespace MyApp.Api.Services.Implementations
                     companyId, itemTypeId, direction, quantity, sourceType, sourceId);
                 throw;
             }
+        }
+
+        public async Task<Dictionary<int, StockValuation.Position>> GetValuationsAsync(
+            int companyId,
+            IEnumerable<int> itemTypeIds,
+            HashSet<int>? allowedDivisionIds = null)
+        {
+            var ids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
+            if (ids.Count == 0) return new Dictionary<int, StockValuation.Position>();
+
+            var openings = await _context.OpeningStockBalances
+                .Where(o => o.CompanyId == companyId && ids.Contains(o.ItemTypeId))
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
+                })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x);
+
+            // The movements THEMSELVES, not a sum: an outward movement is costed
+            // at the average standing when it happened, which only exists if the
+            // walk sees them in order.
+            var query = _context.StockMovements
+                .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId));
+            if (allowedDivisionIds != null)
+                query = query.Where(m => m.DivisionId == null || allowedDivisionIds.Contains(m.DivisionId.Value));
+            var movements = await query.AsNoTracking().ToListAsync();
+            var byItem = movements.GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var result = new Dictionary<int, StockValuation.Position>();
+            foreach (var id in ids)
+            {
+                var open = openings.GetValueOrDefault(id);
+                result[id] = StockValuation.Compute(
+                    open?.Qty ?? 0m, open?.Value ?? 0m, open?.Rate ?? 0m,
+                    byItem.GetValueOrDefault(id) ?? new List<StockMovement>());
+            }
+            return result;
         }
 
         public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null,

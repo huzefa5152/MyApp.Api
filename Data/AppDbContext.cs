@@ -521,6 +521,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);
+            // Advance tax mirrors withholding tax, so it keeps the same precision.
+            modelBuilder.Entity<Invoice>().Property(i => i.AdvanceTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.AdvanceTaxAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.AdvanceTaxSection).HasMaxLength(8);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 

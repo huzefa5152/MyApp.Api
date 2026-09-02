@@ -301,18 +301,37 @@ namespace MyApp.Api.Services.Implementations
                     $"Invoice number {dup.Key} is used by more than one customer ({string.Join(", ", names)}). Give them distinct references in the workbook.");
             }
 
-            var numbers = preview.Invoices.Select(i => i.InvoiceNumber).Distinct().ToList();
-            if (numbers.Count == 0) return;
+            // The workbook's reference numbers are NOT used as invoice numbers
+            // any more -- imported documents are numbered from the reserved band
+            // (MigratedDocumentNumbers) and keep their reference on ExternalRef.
+            // So a company already holding invoice 51 no longer conflicts with a
+            // sheet that mentions AA-51, and re-importing a workbook no longer
+            // collides with the documents its own previous run created.
+            //
+            // What still has to be checked is whether THIS company already holds
+            // the same imported references, because that would double the
+            // customer's balance rather than update it.
+            var refs = preview.Invoices
+                .Where(i => !i.IsOpening && !string.IsNullOrWhiteSpace(i.Reference))
+                .Select(i => $"ledger-inv:{companyId}:{i.Reference}")
+                .Distinct()
+                .ToList();
+            if (refs.Count == 0) return;
 
-            var taken = await _db.Invoices.AsNoTracking()
-                .Where(i => i.CompanyId == companyId && numbers.Contains(i.InvoiceNumber))
-                .Select(i => i.InvoiceNumber)
+            var already = await _db.Invoices.AsNoTracking()
+                .Where(i => i.CompanyId == companyId && i.ExternalRef != null && refs.Contains(i.ExternalRef))
+                .Select(i => i.ExternalRef!)
                 .Distinct()
                 .ToListAsync();
 
-            if (taken.Count > 0)
+            if (already.Count > 0)
+            {
+                var shown = already.Take(5).Select(r => r.Split(':').Last());
                 preview.BlockingErrors.Add(
-                    $"{taken.Count} invoice number(s) are already used in this company (for example {string.Join(", ", taken.Take(5))}). Import into a fresh company, or renumber the workbook.");
+                    $"{already.Count} of these documents are already imported into this company "
+                  + $"(for example {string.Join(", ", shown)}). Importing again would double those "
+                  + "balances — remove the earlier import first, or import into a different company.");
+            }
         }
     }
 

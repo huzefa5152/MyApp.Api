@@ -24,6 +24,19 @@ namespace MyApp.Api.DTOs
         // WHT reduces BalanceDue (= GrandTotal − WithholdingTaxAmount − AmountPaid)
         // but never GrandTotal/GSTAmount or the FBR payload.
         public decimal? WithholdingTaxRate { get; set; }
+
+        // -- Advance income tax collected from the buyer (236G / 236H) --
+        // Optional. The section plus whether the buyer is on FBR's Active
+        // Taxpayer List picks the rate (Helpers/AdvanceTaxRates); the amount
+        // is charged on the total INCLUDING sales tax and ADDS to what is
+        // collectible. Both empty means no advance tax.
+        public string? AdvanceTaxSection { get; set; }
+        public bool? AdvanceTaxFilerActive { get; set; }
+
+        /// <summary>Server-computed rate, stored so a bill keeps the rate it
+        /// was issued at when the published rates change.</summary>
+        public decimal? AdvanceTaxRate { get; set; }
+        public decimal AdvanceTaxAmount { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
 
         // ── Payments / Receipts (design §11.5) ──
@@ -58,6 +71,22 @@ namespace MyApp.Api.DTOs
         /// is strictly about bulk opt-out.
         /// </summary>
         public bool IsFbrExcluded { get; set; }
+
+        /// <summary>
+        /// True for a document brought in by an import rather than issued here.
+        /// It carries totals but NO line items, so anything that recomputes a
+        /// total from its items would zero it -- which is why editing one is
+        /// refused, and why the view must show the stored figures.
+        /// </summary>
+        public bool IsMigrated { get; set; }
+
+        /// <summary>
+        /// The reference the document had in the books it came from ("AA-51").
+        /// That, not our invoice number, is what the operator recognises: an
+        /// imported document is numbered from a reserved band precisely so it
+        /// does not spend the company's own sequence.
+        /// </summary>
+        public string? MigratedReference { get; set; }
         /// <summary>
         /// True when this bill has been voided/cancelled. The bill keeps its
         /// number (no gap) but is excluded from KPIs and can no longer be
@@ -220,6 +249,14 @@ namespace MyApp.Api.DTOs
         public List<int> ChallanIds { get; set; } = new();
         /// <summary>Withholding-tax rate % (null = amount-mode or none). Reduces the customer's balance due; never sent to FBR.</summary>
         public decimal? WithholdingTaxRate { get; set; }
+
+        // -- Advance income tax collected from the buyer (236G / 236H) --
+        // Optional. The section plus whether the buyer is on FBR's Active
+        // Taxpayer List picks the rate (Helpers/AdvanceTaxRates); the amount
+        // is charged on the total INCLUDING sales tax and ADDS to what is
+        // collectible. Both empty means no advance tax.
+        public string? AdvanceTaxSection { get; set; }
+        public bool? AdvanceTaxFilerActive { get; set; }
         /// <summary>WHT amount (PKR) — used directly in fixed-amount mode; recomputed from rate on gross in rate mode.</summary>
         public decimal WithholdingTaxAmount { get; set; }
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
@@ -306,6 +343,14 @@ namespace MyApp.Api.DTOs
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
         public decimal? WithholdingTaxRate { get; set; }
+
+        // -- Advance income tax collected from the buyer (236G / 236H) --
+        // Optional. The section plus whether the buyer is on FBR's Active
+        // Taxpayer List picks the rate (Helpers/AdvanceTaxRates); the amount
+        // is charged on the total INCLUDING sales tax and ADDS to what is
+        // collectible. Both empty means no advance tax.
+        public string? AdvanceTaxSection { get; set; }
+        public bool? AdvanceTaxFilerActive { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
@@ -497,6 +542,14 @@ namespace MyApp.Api.DTOs
         public int? DivisionId { get; set; }
 
         public decimal? WithholdingTaxRate { get; set; }
+
+        // -- Advance income tax collected from the buyer (236G / 236H) --
+        // Optional. The section plus whether the buyer is on FBR's Active
+        // Taxpayer List picks the rate (Helpers/AdvanceTaxRates); the amount
+        // is charged on the total INCLUDING sales tax and ADDS to what is
+        // collectible. Both empty means no advance tax.
+        public string? AdvanceTaxSection { get; set; }
+        public bool? AdvanceTaxFilerActive { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }

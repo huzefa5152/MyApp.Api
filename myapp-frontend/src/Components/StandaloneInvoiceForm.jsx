@@ -1,14 +1,17 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
-import { createStandaloneInvoice } from "../api/invoiceApi";
+import { createStandaloneInvoice, getStockPricing } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getAccountsFlat } from "../api/accountApi";
+import { getAllUnits } from "../api/unitsApi";
+import { isDecimalUnit } from "../utils/formatQuantity";
 import { getSalesOrdersForPicker, getSalesOrderInvoicePrefill } from "../api/salesOrderApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
+import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount } from "../config/advanceTax";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -156,6 +159,26 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Prefilled from the company's default rate below when one is configured.
   const [whtMode, setWhtMode] = useState("none");
   const [whtRate, setWhtRate] = useState("");
+  // Advance income tax (236G / 236H). One dropdown: the section and whether the
+  // buyer is on the Active Taxpayer List together pick the rate. Empty means
+  // none, which is the default -- it must never be charged by accident.
+  const [advTaxKey, setAdvTaxKey] = useState("");
+
+  // What each picked item's stock is worth, so a line TOTAL can be turned into
+  // a quantity. The operator knows the amount they are billing, not the unit
+  // count. Keyed by item type id; the unit price is the stock's weighted-average
+  // cost, read from the server's one valuation walk -- nothing is recomputed
+  // here (see Helpers/StockValuation).
+  const [stockPricing, setStockPricing] = useState({});
+
+  // Whether a unit accepts fractional quantities is configured per Unit
+  // (AllowsDecimalQuantity), the same rule the challan and bill quantity
+  // inputs already follow. A derived quantity has to obey it: 5.5 Pcs is not
+  // a thing.
+  const [units, setUnits] = useState([]);
+  useEffect(() => {
+    getAllUnits().then((r) => setUnits(r.data || [])).catch(() => setUnits([]));
+  }, []);
   const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
@@ -619,6 +642,82 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
   const balanceDue = grandTotal - whtResolved;
 
+  // One request per change of the picked set, not per keystroke.
+  const pickedItemTypeIds = useMemo(
+    () => [...new Set(rows.map((r) => r.itemTypeId).filter(Boolean))].sort().join(","),
+    [rows]
+  );
+  useEffect(() => {
+    if (!companyId || !pickedItemTypeIds) return;
+    let cancelled = false;
+    getStockPricing(companyId, pickedItemTypeIds)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setStockPricing(Object.fromEntries((data || []).map((x) => [x.itemTypeId, x])));
+      })
+      .catch(() => { /* pricing is a convenience; the operator can still type */ });
+    return () => { cancelled = true; };
+  }, [companyId, pickedItemTypeIds]);
+
+  // Line total -> quantity, at the stock's own unit price:
+  //     UnitPrice = stock value excluding tax / stock quantity
+  //     Quantity  = line total / UnitPrice
+  // Refuses rather than divides by zero when the item has no stock or no value.
+  // The AMOUNT is what the operator enters; quantity and unit price are
+  // derived from it, and their product must equal it exactly.
+  //
+  // Two constraints make that arithmetic, not a rounding hope:
+  //   * InvoiceItem.UnitPrice is decimal(18,2), so the rate has to BE a 2dp
+  //     figure -- carrying the stock's 4dp average cost through would store a
+  //     rounded rate and the line would no longer multiply out.
+  //   * A unit that does not allow decimals can only hold a whole quantity
+  //     (AllowsDecimalQuantity per Unit -- 5.5 Pcs is not a thing).
+  //
+  // So: take the rate the system can store, derive the quantity the unit can
+  // hold, and snap the amount to what those two actually multiply to. The
+  // field shows the snapped figure, so what is on screen is what is stored.
+  const applyLineTotal = (localId, raw) => {
+    const row = rows.find((r) => r.localId === localId);
+    const price = row ? stockPricing[row.itemTypeId] : null;
+    const total = parseFloat(raw);
+
+    if (!price?.canPrice || !(total > 0)) {
+      updateRow(localId, { lineTotal: raw, quantity: "", unitPrice: "" });
+      return;
+    }
+
+    // The rate as it will be stored.
+    const rate = Math.round(Number(price.unitCost) * 100) / 100;
+    if (!(rate > 0)) {
+      updateRow(localId, { lineTotal: raw, quantity: "", unitPrice: "" });
+      return;
+    }
+
+    const uom = row.uom || price.uom || "";
+    const wholeOnly = !isDecimalUnit(uom, units);
+    const rawQty = total / rate;
+    const qty = wholeOnly
+      ? Math.max(1, Math.round(rawQty))
+      : Math.round(rawQty * 10000) / 10000;
+
+    // What those two multiply to, at the precision a line is stored in.
+    const exact = Math.round(qty * rate * 100) / 100;
+
+    updateRow(localId, {
+      lineTotal: String(exact),
+      quantity: String(qty),
+      unitPrice: String(rate),
+    });
+  };
+
+  // Charged on the total INCLUDING sales tax, and ADDED to it -- the opposite of
+  // withholding tax above, which is deducted. The server recomputes both from
+  // the same table (Helpers/AdvanceTaxRates), so this is only what the operator
+  // sees before saving.
+  const advTaxOption = findAdvanceTax(advTaxKey);
+  const advTaxResolved = advanceTaxAmount(grandTotal, advTaxOption?.rate);
+  const totalWithAdvTax = grandTotal + advTaxResolved;
+
   const rowErrors = (r) => {
     const errs = [];
     // Every bill line must be classified — an Item Type OR a Non-Inventory
@@ -673,6 +772,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // rate + the typed amount. Backend recomputes/clamps the amount.
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
+        advanceTaxSection: advTaxOption?.section ?? null,
+        advanceTaxFilerActive: advTaxOption ? advTaxOption.filerActive : null,
         paymentTerms: paymentTerms || null,
         scenarioId: scenarioCode || null,
         documentType: documentType || null,
@@ -1044,6 +1145,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 <option value="amount">Fixed amount</option>
                               </select>
                             </div>
+                            <div style={{ flex: 1, minWidth: 190 }}>
+                              <label style={styles.label}>Advance Income Tax</label>
+                              <select
+                                style={styles.input}
+                                value={advTaxKey}
+                                onChange={(e) => setAdvTaxKey(e.target.value)}
+                                title="Advance income tax collected from the buyer under s.236G / s.236H. Charged on the amount including sales tax and added to the total. Leave as None to charge nothing."
+                              >
+                                <option value="">None</option>
+                                {ADVANCE_TAX_OPTIONS.map((o) => (
+                                  <option key={o.key} value={o.key}>{advanceTaxLabel(o)}</option>
+                                ))}
+                              </select>
+                            </div>
                             {whtMode === "rate" && (
                               <div style={{ flex: 1, minWidth: 120 }}>
                                 <label style={styles.label}>WHT Rate (%)</label>
@@ -1246,8 +1361,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       type="number" min={0} step="any"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                       value={r.quantity}
-                                      onChange={(e) => updateRow(r.localId, { quantity: e.target.value })}
+                                      onChange={(e) => updateRow(r.localId, { quantity: e.target.value, lineTotal: "" })}
                                       placeholder="0"
+                                      readOnly={!!r.lineTotal}
+                                      title={r.lineTotal
+                                        ? "Worked out from the amount. Clear the amount to type a quantity yourself."
+                                        : ""}
                                     />
                                   </td>
                                   <td style={styles.unifiedTd}>
@@ -1288,13 +1407,65 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       type="number" min={0} step={0.01}
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                       value={r.unitPrice}
-                                      onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value })}
+                                      onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value, lineTotal: "" })}
                                       placeholder="0.00"
+                                      readOnly={!!r.lineTotal}
+                                      title={r.lineTotal
+                                        ? "Worked out from the amount. Clear the amount to type a rate yourself."
+                                        : ""}
                                     />
                                   </td>
-                                  <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
-                                    {(q * p).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                  </td>
+                                  {/* Enter the AMOUNT and the quantity follows, priced at
+                                      what the stock is worth. Typing a quantity or a
+                                      unit price instead clears this and the cell shows
+                                      quantity x price again, so neither way is a trap. */}
+                                  {(() => {
+                                    const price = stockPricing[r.itemTypeId];
+                                    const shown = r.lineTotal !== undefined && r.lineTotal !== ""
+                                      ? r.lineTotal
+                                      : (q * p ? (q * p).toFixed(2) : "");
+                                    const typed = parseFloat(r.lineTotal);
+                                    const overStock = price?.canPrice && typed > 0
+                                      && typed > Number(price.availableValueExcludingTax) + 0.005;
+                                    return (
+                                      <td style={{ ...styles.unifiedTd, textAlign: "right" }}>
+                                        <input
+                                          type="number" min={0} step="0.01"
+                                          style={{
+                                            ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem",
+                                            textAlign: "right", fontWeight: 600,
+                                            borderColor: overStock ? "#e65100" : undefined,
+                                          }}
+                                          value={shown}
+                                          onChange={(e) => applyLineTotal(r.localId, e.target.value)}
+                                          placeholder="0.00"
+                                          title={price?.canPrice
+                                            ? `Enter the amount; quantity is worked out at ${Number(price.unitCost).toLocaleString()} per ${price.uom || "unit"}`
+                                            : "Enter the amount, or type a quantity and unit price directly"}
+                                        />
+                                        {r.itemTypeId && price && !price.canPrice && (
+                                          <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2 }}>
+                                            {price.note}
+                                          </div>
+                                        )}
+                                        {price?.canPrice && (() => {
+                                          // A whole-number unit may have moved the rate off the
+                                          // stock cost to keep the entered amount exact; say so.
+                                          const rateMoved = typed > 0 && p > 0
+                                            && Math.abs(p - Number(price.unitCost)) > 0.005;
+                                          return (
+                                            <div style={{ fontSize: "0.68rem", color: overStock ? "#e65100" : colors.textSecondary, marginTop: 2 }}>
+                                              {overStock
+                                                ? `Only ${Number(price.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2 })} of stock at ${Number(price.unitCost).toLocaleString()} each`
+                                                : rateMoved
+                                                  ? `${q} × ${p.toLocaleString()} — ${price.uom || "unit"} takes whole numbers, so the rate absorbed the remainder (stock cost ${Number(price.unitCost).toLocaleString()})`
+                                                  : `${Number(price.unitCost).toLocaleString()} each · ${Number(price.availableQuantity).toLocaleString()} available`}
+                                            </div>
+                                          );
+                                        })()}
+                                      </td>
+                                    );
+                                  })()}
                                   {glOn && (
                                     <td style={styles.unifiedTd}>
                                       <AccountSelect
@@ -1411,6 +1582,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             </div>
                             <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
                               <span>Balance due:</span><span>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </>
+                        )}
+                        {advTaxResolved > 0 && (
+                          <>
+                            <div style={styles.totalRow}>
+                              <span>
+                                Advance income tax {advTaxOption.section} ({advTaxOption.rate}%):
+                              </span>
+                              <span>Rs. {advTaxResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
+                              <span>Total:</span>
+                              <span>Rs. {totalWithAdvTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                             </div>
                           </>
                         )}

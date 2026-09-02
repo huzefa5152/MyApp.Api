@@ -751,6 +751,9 @@ using (var scope = app.Services.CreateScope())
     // seed (keyed by TemplateType+FieldExpression). Not HasData: hard-coded
     // seed ids collide with operator-added merge fields on drifted databases.
     await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);
+    // Advance-income-tax fields for the Bill / Tax Invoice templates. Runtime
+    // seeded for the same reason as the sales ones -- see the seeder's remarks.
+    await MyApp.Api.Data.AdvanceTaxMergeFieldSeeder.SeedAsync(db);
 
     // Credit/Debit Note + Purchase Bill + Goods Receipt template merge
     // fields — same idempotent runtime-seed contract.

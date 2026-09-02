@@ -620,24 +620,10 @@ namespace MyApp.Api.Controllers
         /// </summary>
         private async Task<StockValuation.Position> CurrentPositionAsync(int companyId, int itemTypeId)
         {
-            var opening = await _context.OpeningStockBalances
-                .Where(o => o.CompanyId == companyId && o.ItemTypeId == itemTypeId)
-                .GroupBy(o => o.ItemTypeId)
-                .Select(g => new
-                {
-                    Qty = g.Sum(o => o.Quantity),
-                    Value = g.Sum(o => o.ValueExcludingTax),
-                    Rate = g.Max(o => o.SalesTaxRate),
-                })
-                .FirstOrDefaultAsync();
-
-            var movements = await _context.StockMovements
-                .Where(m => m.CompanyId == companyId && m.ItemTypeId == itemTypeId)
-                .AsNoTracking()
-                .ToListAsync();
-
-            return StockValuation.Compute(
-                opening?.Qty ?? 0m, opening?.Value ?? 0m, opening?.Rate ?? 0m, movements);
+            // Delegates: the valuation walk lives in the stock service so the
+            // dashboard, an adjustment and the bill form all read one figure.
+            var byItem = await _stock.GetValuationsAsync(companyId, new[] { itemTypeId });
+            return byItem.TryGetValue(itemTypeId, out var p) ? p : default;
         }
 
         private static decimal Money(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);

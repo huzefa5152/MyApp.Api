@@ -42,6 +42,24 @@ namespace MyApp.Api.Models
         public decimal? WithholdingTaxRate { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
 
+        // ── Advance income tax collected from the buyer (s.236G / s.236H) ──
+        // The mirror of the withholding tax above: same placement (on top of
+        // sales tax, outside the FBR sales-tax invoice, GrandTotal/GSTAmount and
+        // the PRAL payload untouched) but the opposite sign -- we COLLECT it,
+        // so it adds to what the customer pays:
+        //   Collectible = GrandTotal - WithholdingTaxAmount + AdvanceTaxAmount
+        //
+        // The rate depends on the section and on whether the buyer is on FBR's
+        // Active Taxpayer List; the table lives in Helpers/AdvanceTaxRates.cs.
+        // The resolved rate is STORED as well as the section, so a bill keeps
+        // the rate it was actually issued at when the published rates change.
+        // All three empty means no advance tax, which is how every existing row
+        // reads.
+        public string? AdvanceTaxSection { get; set; }
+        public bool? AdvanceTaxFilerActive { get; set; }
+        public decimal? AdvanceTaxRate { get; set; }
+        public decimal AdvanceTaxAmount { get; set; }
+
         // FBR Digital Invoicing
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }
