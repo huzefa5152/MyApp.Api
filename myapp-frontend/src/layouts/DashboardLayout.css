@@ -1263,6 +1263,16 @@ body.dl-body--locked {
   }
 }
 
+/* Between the card breakpoint and a wide desktop the sidebar leaves the table
+   under ~700px, which is about what its seven columns need at full size. Tighten
+   the cells rather than scroll: the money columns cannot wrap mid-figure, so the
+   space has to come from padding and type size. */
+@media (max-width: 1279.98px) {
+  .stock-table table { font-size: 0.8rem; }
+  .stock-table th,
+  .stock-table td { padding-left: 0.45rem !important; padding-right: 0.45rem !important; }
+}
+
 @media (max-width: 767.98px) {
   .stock-table { display: none; }
   .stock-cards {

@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-02 — Stock import: items sharing one HS code are added together
+
+- **Fixed: an imported stock sheet could silently lose items.** Where several products share one tariff code — four machines under 8543.7090, three lights under 8513.1090 — only the last one's quantity and value survived; the rest were overwritten. On the client's own sheet that dropped 11 items and 2,312,996.50 of stock value, which is why the dashboard did not agree with the spreadsheet.
+- Rows under one HS code are now **added together**, quantity and value, with the sales-tax rate weighted by value. The review screen names the products it folded into each line, so a four-into-one merge is visible before anything is written. Rows with no HS code still stand on their own name.
+- After this change the client's sheet reconciles exactly: 53 rows become 38 items, quantity 34,600.03, excluding 19,612,012.50, sales tax 3,580,362.97, including 23,192,375.47.
+- **If you already imported a stock sheet, clear that company's opening balances before importing again** — an import only rewrites the items it matches, so the old per-product rows would otherwise be counted alongside the new combined ones.
+
 ### 2026-09-02 — Stock dashboard fits the screen again
 
 - **The on-hand table no longer scrolls sideways.** Adding the five value columns had pushed it to fourteen columns, wider than any laptop. The figures are now grouped rather than dropped: an item's HS code, unit and last movement sit under its name, and the opening / in / out flow sits under the on-hand figure it explains. Every number that was there is still there.

@@ -236,6 +236,22 @@ branch in the parser.
 
 - **Preview takes the file; commit takes the reviewed rows.** Commit never
   re-reads the upload, so what the operator approved is what lands.
+- **Opening stock groups on the HS CODE, not the item name** (2026-09-02).
+  An `ItemType` is identified by its code, so every sheet row under one code
+  resolves to the SAME item type at commit — and `UpsertOpeningBalanceAsync`
+  SETS rather than adds (it must, or re-importing a corrected sheet would
+  double the figures). Grouping by name therefore produced one preview row per
+  name and the last one written silently overwrote its siblings' balance. On
+  the client's sheet that lost 11 items and 2,312,996.50 of stock value: 8
+  codes carried more than one product name (4 under 8543.7090, 3 under each of
+  8513.1090 / 8413.2000 / 8481.1000). Rows with NO code still group on the
+  name. The merged row names what it folded in, so a four-into-one merge is
+  visible rather than silent. Pinned by `scripts/test_spreadsheet_import.py`.
+- **A re-import does NOT remove balances it did not touch.** Changing the
+  grouping therefore strands the old rows: 41 per-name balances become 38
+  per-code ones, and the 3 orphaned `8481.1000` rows keep their values
+  alongside the merged one. Clear a company's opening balances before
+  re-importing after any grouping change.
 - **Two duplicate defences, because they catch different things.** Identical
   bytes are stopped by the filtered unique index on
   `ImportRun (CompanyId, Kind, FileSha256) WHERE IsSuperseded = 0` — in the

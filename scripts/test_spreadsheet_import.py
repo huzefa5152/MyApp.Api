@@ -396,6 +396,47 @@ def main():
               f"lots={merged.get('lotRefs') if merged else '-'}")
         check("the sub-category column is ignored",
               all("Electrical" not in (x.get("itemName") or "") for x in prev.get("rows", [])))
+
+        # Two DIFFERENT product names under ONE tariff code. An item type is
+        # identified by its code, so both rows resolve to the same catalog row
+        # at commit time -- they have to be ADDED. Grouping by name instead
+        # gave one preview row each and the last one written overwrote its
+        # sibling's opening balance, which silently lost 11 items and
+        # 2,312,996.50 of value from the client's real sheet (2026-09-02).
+        shared_rows = [
+            ("SHARED-1", "8513", "8513.1090:-", f"LED DISPLAY {tag}", "Electrical", "Pcs", 46, 30000),
+            ("SHARED-2", "8513", "8513.1090:-", f"LED CANDLE {tag}", "Electrical", "Pcs", 110, 71191),
+            ("SHARED-3", "8513", "8513.1090:-", f"LED CEILING {tag}", "Electrical", "Pcs", 150, 107274),
+        ]
+        r = upload(stock_preview, h, stock_workbook(shared_rows), "stock.xlsx", form, params)
+        ps = r.json() if r.ok else {}
+        check("three rows under one HS code become one item",
+              len(ps.get("rows", [])) == 1,
+              f"got {len(ps.get('rows', []))} items")
+        one = (ps.get("rows") or [{}])[0]
+        check("their quantities are added together",
+              abs(float(one.get("quantity") or 0) - 306) < 0.001,
+              f"qty={one.get('quantity')}")
+        check("their values are added together",
+              abs(float(one.get("value") or 0) - 208465) < 0.5,
+              f"value={one.get('value')}")
+        check("the total still equals the sheet",
+              abs(float(ps.get("totalValue") or 0) - 208465) < 0.5,
+              f"total={ps.get('totalValue')}")
+        check("the merged row says which names it folded in",
+              any("added together with" in m for m in (one.get("messages") or [])),
+              f"messages={one.get('messages')}")
+
+        # A row with NO code still groups on its name, so two unrelated
+        # un-coded items cannot collapse into each other.
+        noco = [
+            ("NC-1", "", "", f"NO CODE A {tag}", "X", "Pcs", 5, 500),
+            ("NC-2", "", "", f"NO CODE B {tag}", "X", "Pcs", 7, 700),
+        ]
+        r = upload(stock_preview, h, stock_workbook(noco), "stock.xlsx", form, params)
+        pn = r.json() if r.ok else {}
+        check("two un-coded items stay separate",
+              len(pn.get("rows", [])) == 2, f"got {len(pn.get('rows', []))}")
         check("the HS code suffix is stripped",
               all((x.get("hsCode") or "").replace(".", "").isdigit() for x in prev.get("rows", [])),
               f"codes={[x.get('hsCode') for x in prev.get('rows', [])][:4]}")

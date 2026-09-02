@@ -227,14 +227,28 @@ namespace MyApp.Api.Services.Implementations
 
         /// <summary>
         /// One item held across several customs lots is ONE item type whose
-        /// quantities add up. Grouping on the upper-cased name plus code matches
-        /// how SQL Server compares them, so the grouping here and the catalog's
-        /// unique index agree.
+        /// quantities add up.
+        ///
+        /// The grouping key is the HS CODE when the row carries one, and the
+        /// upper-cased name only when it does not. That is not a shortcut -- it
+        /// is what the destination can actually hold. An item type is identified
+        /// by its code, so several sheet rows under one code resolve to the SAME
+        /// item type at commit time; grouping by name instead produced one
+        /// preview row per name, and the last one to be written simply
+        /// overwrote its siblings' opening balance. On the client's sheet that
+        /// silently dropped 11 items and 2,312,996.50 of stock value: three
+        /// rows under 8513.1090, four under 8543.7090, and so on, each showing
+        /// only the last row's figures.
+        ///
+        /// Upper-casing the name matches how SQL Server compares it, so the
+        /// no-code grouping here and the catalog's unique index agree.
         /// </summary>
         private static List<OpeningStockRowDto> GroupLots(List<LotRow> lots)
         {
             return lots
-                .GroupBy(l => (Name: l.ItemName.Trim().ToUpperInvariant(), Code: l.HsCode ?? ""))
+                .GroupBy(l => string.IsNullOrWhiteSpace(l.HsCode)
+                    ? (Name: l.ItemName.Trim().ToUpperInvariant(), Code: "")
+                    : (Name: "", Code: l.HsCode!))
                 .Select(g =>
                 {
                     var first = g.First();
@@ -251,8 +265,22 @@ namespace MyApp.Api.Services.Implementations
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToList();
 
+                    // Several product names can share one tariff code, and they
+                    // become one stock line. Say so rather than quietly showing
+                    // the first name -- the operator has to be able to see that
+                    // four machines were added together under 8543.7090.
+                    var alsoNames = g.Select(x => x.ItemName.Trim())
+                        .Where(n => !string.IsNullOrWhiteSpace(n))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Skip(1)
+                        .ToList();
+                    var messages = new List<string>();
+                    if (alsoNames.Count > 0)
+                        messages.Add($"Same HS code, so added together with: {string.Join(", ", alsoNames)}.");
+
                     return new OpeningStockRowDto
                     {
+                        Messages = messages,
                         SourceRows = g.Select(x => x.SourceRow).OrderBy(x => x).ToList(),
                         // Keep the operator's own spelling from the first row,
                         // not the upper-cased grouping key.
