@@ -251,6 +251,13 @@ def main():
     check("an HS code missing from the master is rejected", r.status_code == 400,
           f"http {r.status_code}")
 
+    # ── Teardown ───────────────────────────────────────────────────────
+    # The company above really is a throwaway, but it used to be left behind:
+    # every run added another row to the company picker on the local database.
+    d = requests.delete(f"{api}/companies/{company_id}", headers=h, timeout=180)
+    check("the throwaway company is removed", d.status_code in (200, 204),
+          f"http {d.status_code}: {d.text[:160]}")
+
     return report()
 
 

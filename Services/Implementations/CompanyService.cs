@@ -503,6 +503,16 @@ namespace MyApp.Api.Services.Implementations
                 //     can go now — before the Accounts wipe.
                 await _context.NonInventoryItems.Where(n => n.CompanyId == id).ExecuteDeleteAsync();
 
+                // 7a-quater. Per-company item-type overlays point at this
+                //     company's own Accounts (SaleAccountId / PurchaseAccountId)
+                //     through NoAction FKs, so they block the Accounts delete
+                //     below. The whole overlay row belongs to this company and
+                //     goes with it, so delete rather than unlink.
+                //     (FK_CompanyItemTypeSettings_Accounts_SaleAccountId made any
+                //     company that had ever mapped a GL account to an item type
+                //     undeletable.)
+                await _context.CompanyItemTypeSettings.Where(x => x.CompanyId == id).ExecuteDeleteAsync();
+
                 // 7b. Chart of Accounts. Account -> AccountGroup is Restrict, so
                 //     accounts go first; AccountGroup self-FK is satisfied by the
                 //     set-based delete (all the company's groups go at once).
