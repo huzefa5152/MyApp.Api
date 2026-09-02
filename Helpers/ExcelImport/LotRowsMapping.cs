@@ -59,6 +59,15 @@ namespace MyApp.Api.Helpers.ExcelImport
             [JsonPropertyName("unit")] public int? Unit { get; set; }
             [JsonPropertyName("balanceQty")] public int BalanceQty { get; set; }
             [JsonPropertyName("balanceValue")] public int? BalanceValue { get; set; }
+
+            /// <summary>Sales tax RATE column. These sheets write it as a
+            /// fraction (0.18); the importer converts to a percentage.</summary>
+            [JsonPropertyName("balanceTaxRate")] public int? BalanceTaxRate { get; set; }
+
+            /// <summary>Sales tax AMOUNT column. Read only to check it against
+            /// value × rate — the amount itself is always derived, so importing
+            /// it as a third stored number would give it room to drift.</summary>
+            [JsonPropertyName("balanceTax")] public int? BalanceTax { get; set; }
             [JsonPropertyName("lotRef")] public int? LotRef { get; set; }
             [JsonPropertyName("lotDate")] public int? LotDate { get; set; }
         }

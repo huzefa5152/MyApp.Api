@@ -19,6 +19,30 @@ namespace MyApp.Api.DTOs
         public decimal TotalIn { get; set; }
         public decimal TotalOut { get; set; }
         public DateTime? LastMovementAt { get; set; }
+
+        // ── Value, alongside the quantity ────────────────────────────────
+        // The five figures the client's stock sheet is built from. Tax and the
+        // inclusive total are DERIVED from the value and the rate, never stored
+        // twice — the source sheet satisfies that identity on every row.
+
+        /// <summary>What the stock on hand is worth, excluding sales tax.</summary>
+        public decimal ValueExcludingTax { get; set; }
+
+        /// <summary>Rate applying to this item, as a percentage (18, 25).</summary>
+        public decimal SalesTaxRate { get; set; }
+
+        /// <summary>ValueExcludingTax × SalesTaxRate / 100.</summary>
+        public decimal SalesTax { get; set; }
+
+        /// <summary>ValueExcludingTax + SalesTax.</summary>
+        public decimal ValueIncludingTax { get; set; }
+
+        /// <summary>Weighted-average cost of a single unit on hand.</summary>
+        public decimal UnitCost { get; set; }
+
+        /// <summary>Value that came in, and went out, over the item's life.</summary>
+        public decimal ValueIn { get; set; }
+        public decimal ValueOut { get; set; }
     }
 
     /// <summary>
@@ -42,6 +66,24 @@ namespace MyApp.Api.DTOs
         public string? SourceDocNumber { get; set; }
         public DateTime MovementDate { get; set; }
         public string? Notes { get; set; }
+
+        // ── Money, worked out by walking the item's whole history ─────────
+        // A movement's cost is the weighted average standing when it happened,
+        // so these cannot be read off the row — they come from
+        // StockValuation's trace over every movement for that item.
+
+        /// <summary>Cost of one unit, as this movement was valued.</summary>
+        public decimal UnitCost { get; set; }
+
+        /// <summary>Quantity × UnitCost — what the movement added to, or took
+        /// out of, the stock's value.</summary>
+        public decimal Value { get; set; }
+
+        /// <summary>Quantity on hand immediately AFTER this movement.</summary>
+        public decimal RunningQuantity { get; set; }
+
+        /// <summary>Value on hand immediately after, excluding sales tax.</summary>
+        public decimal RunningValue { get; set; }
     }
 
     public class OpeningStockBalanceDto
@@ -51,6 +93,18 @@ namespace MyApp.Api.DTOs
         public int ItemTypeId { get; set; }
         public string ItemTypeName { get; set; } = "";
         public decimal Quantity { get; set; }
+
+        /// <summary>Value of that quantity excluding sales tax.</summary>
+        public decimal ValueExcludingTax { get; set; }
+
+        /// <summary>Rate as a percentage (18, 25) — matches Invoice.GSTRate.</summary>
+        public decimal SalesTaxRate { get; set; }
+
+        /// <summary>Derived, never stored: value × rate / 100.</summary>
+        public decimal SalesTax => Math.Round(ValueExcludingTax * SalesTaxRate / 100m, 2, MidpointRounding.AwayFromZero);
+
+        /// <summary>Derived: value + tax.</summary>
+        public decimal ValueIncludingTax => ValueExcludingTax + SalesTax;
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
     }
@@ -60,6 +114,14 @@ namespace MyApp.Api.DTOs
         public int CompanyId { get; set; }
         public int ItemTypeId { get; set; }
         public decimal Quantity { get; set; }
+
+        /// <summary>Value of that quantity excluding sales tax. Optional —
+        /// 0 keeps the pre-valuation behaviour of a quantity-only opening.</summary>
+        public decimal ValueExcludingTax { get; set; }
+
+        /// <summary>Rate as a percentage (18, 25).</summary>
+        public decimal SalesTaxRate { get; set; }
+
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
     }
@@ -72,5 +134,19 @@ namespace MyApp.Api.DTOs
         public decimal Delta { get; set; }
         public DateTime MovementDate { get; set; }
         public string? Notes { get; set; }
+
+        /// <summary>
+        /// What one unit is worth on an adjustment UP, excluding sales tax.
+        /// Optional: left null, the stock coming in is valued at the average
+        /// already on hand, which is right for a count correction and wrong
+        /// only when the operator knows the goods cost something else.
+        /// Ignored on an adjustment DOWN — stock leaving is always costed at
+        /// the running average.
+        /// </summary>
+        public decimal? UnitCostExcludingTax { get; set; }
+
+        /// <summary>Rate as a percentage (18, 25). Only read alongside a
+        /// stated unit cost.</summary>
+        public decimal? SalesTaxRate { get; set; }
     }
 }

@@ -1360,6 +1360,18 @@ namespace MyApp.Api.Data
                 .HasForeignKey(v => v.POFormatId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Stock valuation money columns. Explicit precision: PKR totals at
+            // 2dp, per-unit cost at 4dp so dividing a total by an awkward
+            // quantity does not lose paisa on the way back out.
+            modelBuilder.Entity<OpeningStockBalance>()
+                .Property(o => o.ValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<OpeningStockBalance>()
+                .Property(o => o.SalesTaxRate).HasColumnType("decimal(5,2)");
+            modelBuilder.Entity<StockMovement>()
+                .Property(m => m.UnitCostExcludingTax).HasColumnType("decimal(18,4)");
+            modelBuilder.Entity<StockMovement>()
+                .Property(m => m.SalesTaxRate).HasColumnType("decimal(5,2)");
+
             // ── Spreadsheet import ─────────────────────────────────────────
             // ImportProfile mirrors POFormat: the signature hash is the routing
             // key and is NOT unique, because two companies can privately save

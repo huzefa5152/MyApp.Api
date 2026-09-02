@@ -26,6 +26,11 @@ const colors = {
   bandBg: "#f0f7ff",
 };
 
+const money = (v) =>
+  Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const num = (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
+
 export default function StockDashboardPage() {
   const { companies, selectedCompany, setSelectedCompany, refreshCompanies, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
@@ -62,9 +67,9 @@ export default function StockDashboardPage() {
   const [drillLoading, setDrillLoading] = useState(null); // itemTypeId being fetched
 
   const [showOpening, setShowOpening] = useState(false);
-  const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, asOfDate: todayYmd(), notes: "" });
+  const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
   const [showAdjust, setShowAdjust] = useState(false);
-  const [adjustDraft, setAdjustDraft] = useState({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
+  const [adjustDraft, setAdjustDraft] = useState({ itemTypeId: "", delta: 0, unitCost: "", salesTaxRate: "", movementDate: todayYmd(), notes: "" });
   // Set when the Adjustment modal is launched from a grid row — the item
   // is fixed (read-only display) so the operator just types the delta.
   // Null when opened from the header button (free pick).
@@ -136,6 +141,16 @@ export default function StockDashboardPage() {
     (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
   );
 
+  // Totals follow the search, not the whole company — an operator filtering to
+  // one supplier's items wants that subset's worth, and the unfiltered figure
+  // is one keystroke away.
+  const onhandTotals = filteredOnhand.reduce((acc, r) => ({
+    qty: acc.qty + (r.onHand || 0),
+    excl: acc.excl + (r.valueExcludingTax || 0),
+    tax: acc.tax + (r.salesTax || 0),
+    incl: acc.incl + (r.valueIncludingTax || 0),
+  }), { qty: 0, excl: 0, tax: 0, incl: 0 });
+
   const filteredSummary = summary.filter(r =>
     !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
     (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
@@ -173,12 +188,14 @@ export default function StockDashboardPage() {
         companyId: selectedCompany.id,
         itemTypeId: parseInt(openingDraft.itemTypeId),
         quantity: parseFloat(openingDraft.quantity) || 0,
+        valueExcludingTax: parseFloat(openingDraft.valueExcludingTax) || 0,
+        salesTaxRate: parseFloat(openingDraft.salesTaxRate) || 0,
         asOfDate: openingDraft.asOfDate,
         notes: openingDraft.notes || null,
       });
       notify("Opening balance saved.", "success");
       setShowOpening(false);
-      setOpeningDraft({ itemTypeId: "", quantity: 0, asOfDate: todayYmd(), notes: "" });
+      setOpeningDraft({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to save opening balance.", "error");
@@ -214,7 +231,7 @@ export default function StockDashboardPage() {
   // delta. Header "Adjustment" button keeps the free item pick.
   const openAdjustForRow = (r) => {
     setAdjustLockedItem({ id: r.itemTypeId, name: r.itemTypeName, hsCode: r.hsCode, uom: r.uom });
-    setAdjustDraft({ itemTypeId: String(r.itemTypeId), delta: 0, movementDate: todayYmd(), notes: "" });
+    setAdjustDraft({ itemTypeId: String(r.itemTypeId), delta: 0, unitCost: "", salesTaxRate: r.salesTaxRate ? String(r.salesTaxRate) : "", movementDate: todayYmd(), notes: "" });
     setShowAdjust(true);
   };
 
@@ -265,6 +282,8 @@ export default function StockDashboardPage() {
         companyId: selectedCompany.id,
         itemTypeId: parseInt(adjustDraft.itemTypeId),
         delta: parseFloat(adjustDraft.delta),
+        unitCostExcludingTax: parseFloat(adjustDraft.unitCost) || null,
+        salesTaxRate: parseFloat(adjustDraft.salesTaxRate) || null,
         movementDate: adjustDraft.movementDate,
         notes: adjustDraft.notes || null,
       });
@@ -280,6 +299,16 @@ export default function StockDashboardPage() {
   // carries a UOM string; whether that unit allows fractional quantities is
   // configured per-Unit (AllowsDecimalQuantity) on the Units page. Unknown
   // UOMs fall back to whole-numbers-only, same as the bill / challan forms.
+  // Live read-back of the two derived figures, so the operator sees the same
+  // Sales Tax / Including numbers the grid will show before saving.
+  const openingValuePreview = (() => {
+    const excl = parseFloat(openingDraft.valueExcludingTax);
+    const rate = parseFloat(openingDraft.salesTaxRate);
+    if (!(excl > 0) || !(rate > 0)) return null;
+    const tax = Math.round(excl * rate) / 100;
+    return { tax: money(tax), incl: money(excl + tax) };
+  })();
+
   const openingItem = itemTypes.find(it => String(it.id) === String(openingDraft.itemTypeId));
   const openingUom = openingItem?.uom || "";
   const openingAllowsDecimal = isDecimalUnit(openingUom, units);
@@ -388,6 +417,14 @@ export default function StockDashboardPage() {
                   )}
                 </div>
               )}
+              {!loading && filteredOnhand.length > 0 && (
+                <div style={styles.valueStrip}>
+                  <ValueTile label="Quantity" value={num(onhandTotals.qty)} />
+                  <ValueTile label="Excluding tax" value={money(onhandTotals.excl)} />
+                  <ValueTile label="Sales tax" value={money(onhandTotals.tax)} />
+                  <ValueTile label="Including tax" value={money(onhandTotals.incl)} strong />
+                </div>
+              )}
               {loading ? (
                 <div style={styles.loading}><div style={styles.spinner} /></div>
               ) : filteredOnhand.length === 0 ? (
@@ -423,6 +460,10 @@ export default function StockDashboardPage() {
                           <th style={{ ...styles.th, textAlign: "right" }}>Total IN</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Total OUT</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>S.Tax %</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
                           <th style={styles.th}>Last Movement</th>
                           {canAdjust && <th style={{ ...styles.th, width: 92 }} aria-label="Actions"></th>}
                         </tr>
@@ -431,7 +472,7 @@ export default function StockDashboardPage() {
                         {filteredOnhand.map((r, idx) => {
                           const isOpen = expandedId === r.itemTypeId;
                           const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 8 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
+                          const colCount = 12 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
@@ -450,6 +491,12 @@ export default function StockDashboardPage() {
                             <td style={{ ...styles.td, textAlign: "right", color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</td>
                             <td style={{ ...styles.td, textAlign: "right", color: "#c62828" }}>−{r.totalOut.toLocaleString()}</td>
                             <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{r.onHand.toLocaleString()}</td>
+                            <td style={styles.tdMoney}>{money(r.valueExcludingTax)}</td>
+                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
+                              {r.salesTaxRate ? `${num(r.salesTaxRate)}%` : "—"}
+                            </td>
+                            <td style={styles.tdMoney}>{money(r.salesTax)}</td>
+                            <td style={{ ...styles.tdMoney, fontWeight: 600 }}>{money(r.valueIncludingTax)}</td>
                             <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>
                               {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
                             </td>
@@ -515,6 +562,18 @@ export default function StockDashboardPage() {
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Total OUT</span>
                             <span className="stock-card__stat-value" style={{ color: "#c62828" }}>−{r.totalOut.toLocaleString()}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Excluding</span>
+                            <span className="stock-card__stat-value">{money(r.valueExcludingTax)}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Sales Tax{r.salesTaxRate ? ` (${num(r.salesTaxRate)}%)` : ""}</span>
+                            <span className="stock-card__stat-value">{money(r.salesTax)}</span>
+                          </div>
+                          <div className="stock-card__stat">
+                            <span className="stock-card__stat-label">Including</span>
+                            <span className="stock-card__stat-value" style={{ fontWeight: 700 }}>{money(r.valueIncludingTax)}</span>
                           </div>
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Last Move</span>
@@ -694,6 +753,10 @@ export default function StockDashboardPage() {
                         <tr>
                           <th style={styles.th}>Item</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Quantity</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>S.Tax %</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
                           <th style={styles.th}>As Of</th>
                           <th style={styles.th}>Notes</th>
                           <th style={{ ...styles.th, width: 60 }}></th>
@@ -704,6 +767,10 @@ export default function StockDashboardPage() {
                           <tr key={o.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
                             <td style={styles.td}><strong>{o.itemTypeName}</strong></td>
                             <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>
+                            <td style={styles.tdMoney}>{money(o.valueExcludingTax)}</td>
+                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>
+                            <td style={styles.tdMoney}>{money(o.salesTax)}</td>
+                            <td style={{ ...styles.tdMoney, fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>
                             <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
                             <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
                             <td style={styles.td}>
@@ -766,6 +833,9 @@ export default function StockDashboardPage() {
                           <th style={styles.th}>Item</th>
                           <th style={styles.th}>Direction</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Unit Cost</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Value</th>
+                          <th style={{ ...styles.th, textAlign: "right" }}>Balance</th>
                           <th style={styles.th}>Source</th>
                           <th style={styles.th}>Notes</th>
                         </tr>
@@ -777,6 +847,11 @@ export default function StockDashboardPage() {
                             <td style={styles.td}>{m.itemTypeName}</td>
                             <td style={{ ...styles.td, color: m.direction === "In" ? "#2e7d32" : "#c62828", fontWeight: 600 }}>{m.direction}</td>
                             <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{m.quantity.toLocaleString()}</td>
+                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>{num(m.unitCost)}</td>
+                            <td style={{ ...styles.tdMoney, color: m.direction === "In" ? "#2e7d32" : "#c62828" }}>
+                              {m.direction === "In" ? "+" : "−"}{money(m.value)}
+                            </td>
+                            <td style={styles.tdMoney}>{num(m.runningQuantity)} · {money(m.runningValue)}</td>
                             <td style={{ ...styles.td, fontSize: "0.78rem" }}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>
                             <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{m.notes || "—"}</td>
                           </tr>
@@ -803,6 +878,16 @@ export default function StockDashboardPage() {
                             </span>
                             <span className="stock-card__direction-label">{m.direction}</span>
                           </div>
+                        </div>
+                        <div className="stock-card__source">
+                          <span className="stock-card__stat-label">Value</span>
+                          <span className="stock-card__stat-value" style={{ color: m.direction === "In" ? "#2e7d32" : "#c62828" }}>
+                            {m.direction === "In" ? "+" : "−"}{money(m.value)}
+                          </span>
+                        </div>
+                        <div className="stock-card__source">
+                          <span className="stock-card__stat-label">Balance</span>
+                          <span className="stock-card__stat-value">{num(m.runningQuantity)} · {money(m.runningValue)}</span>
                         </div>
                         <div className="stock-card__source">
                           <span className="stock-card__stat-label">Source</span>
@@ -852,6 +937,18 @@ export default function StockDashboardPage() {
               <div style={qtyHint}>UOM: <strong>{openingUom || "—"}</strong> · {openingAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
             )}
           </Field>
+          <Field label="Value excluding sales tax">
+            <input type="number" min={0} step="0.01" style={mInput} value={openingDraft.valueExcludingTax} onChange={e => setOpeningDraft({ ...openingDraft, valueExcludingTax: e.target.value })} placeholder="0.00" />
+            <div style={qtyHint}>What the opening quantity is worth in total, not per unit.</div>
+          </Field>
+          <Field label="Sales tax rate %">
+            <input type="number" min={0} max={100} step="0.01" style={mInput} value={openingDraft.salesTaxRate} onChange={e => setOpeningDraft({ ...openingDraft, salesTaxRate: e.target.value })} placeholder="18" />
+            <div style={qtyHint}>
+              {openingValuePreview
+                ? `Sales tax ${openingValuePreview.tax} · including ${openingValuePreview.incl}`
+                : "Tax and the inclusive total are worked out from these two."}
+            </div>
+          </Field>
           <Field label="As Of"><input type="date" required style={mInput} value={openingDraft.asOfDate} onChange={e => setOpeningDraft({ ...openingDraft, asOfDate: e.target.value })} /></Field>
           <Field label="Notes"><input type="text" style={mInput} value={openingDraft.notes} onChange={e => setOpeningDraft({ ...openingDraft, notes: e.target.value })} placeholder="optional" /></Field>
         </SmallModal>
@@ -887,6 +984,19 @@ export default function StockDashboardPage() {
               <div style={qtyHint}>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
             )}
           </Field>
+          {parseFloat(adjustDraft.delta) > 0 && (
+            <>
+              <Field label="Unit cost excluding tax">
+                <input type="number" min={0} step="0.0001" style={mInput} value={adjustDraft.unitCost} onChange={e => setAdjustDraft({ ...adjustDraft, unitCost: e.target.value })} placeholder="leave blank to use the current average" />
+                <div style={qtyHint}>
+                  Blank values the stock coming in at the average already on hand — right for a count correction.
+                </div>
+              </Field>
+              <Field label="Sales tax rate %">
+                <input type="number" min={0} max={100} step="0.01" style={mInput} value={adjustDraft.salesTaxRate} onChange={e => setAdjustDraft({ ...adjustDraft, salesTaxRate: e.target.value })} placeholder="18" />
+              </Field>
+            </>
+          )}
           <Field label="Date"><input type="date" required style={mInput} value={adjustDraft.movementDate} onChange={e => setAdjustDraft({ ...adjustDraft, movementDate: e.target.value })} /></Field>
           <Field label="Notes"><input type="text" style={mInput} value={adjustDraft.notes} onChange={e => setAdjustDraft({ ...adjustDraft, notes: e.target.value })} placeholder="e.g. count correction, breakage" /></Field>
         </SmallModal>
@@ -919,21 +1029,34 @@ function DrillPanel({ rows, loading, uom }) {
   // document (+ direction, defensively) into one summed entry whose balance
   // is the on-hand AFTER the whole document. Rows without a SourceId
   // (adjustments, opening stock, deleted-document reversals) never merge.
+  // The API's runningQuantity already counts the opening balance in, so it is
+  // preferred over the local walk — which starts at zero and therefore reads
+  // low by exactly the opening for every item that has one.
   const oldestFirst = [...rows].reverse();
   let bal = 0;
   const grouped = [];
   for (const m of oldestFirst) {
     bal += m.direction === "In" ? Number(m.quantity) : -Number(m.quantity);
+    const runQty = m.runningQuantity != null ? Number(m.runningQuantity) : bal;
     const key = m.sourceId != null ? `${m.sourceType}:${m.sourceId}:${m.direction}` : `row:${m.id}`;
     const last = grouped[grouped.length - 1];
     if (last && last.groupKey === key) {
       last.quantity = Number(last.quantity) + Number(m.quantity);
-      last.balance = bal;
+      last.value = Number(last.value) + Number(m.value || 0);
+      last.balance = runQty;
+      last.runningValue = Number(m.runningValue || 0);
       last.lineCount += 1;
       last.id = m.id;                     // newest id keeps the React key stable
       last.movementDate = m.movementDate; // same document date; keep newest
     } else {
-      grouped.push({ ...m, groupKey: key, quantity: Number(m.quantity), balance: bal, lineCount: 1 });
+      grouped.push({
+        ...m, groupKey: key,
+        quantity: Number(m.quantity),
+        value: Number(m.value || 0),
+        balance: runQty,
+        runningValue: Number(m.runningValue || 0),
+        lineCount: 1,
+      });
     }
   }
   grouped.reverse();
@@ -965,14 +1088,33 @@ function DrillPanel({ rows, loading, uom }) {
                 <span style={{ ...drillStyles.srcChip, ...(isAdjust ? drillStyles.srcAdjust : null) }}>
                   {m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}
                 </span>
+                <span style={{ ...drillStyles.qty, color: isIn ? "#2e7d32" : "#c62828" }}>
+                  {isIn ? "+" : "−"}{money(m.value)}
+                </span>
                 <span style={drillStyles.date}>{new Date(m.movementDate).toLocaleDateString()}</span>
-                <span style={drillStyles.bal}>bal {fmtQty(m.balance)}</span>
+                <span style={drillStyles.bal}>bal {fmtQty(m.balance)} · {money(m.runningValue)}</span>
               </div>
               {noteText && <div style={drillStyles.notes}>{noteText}</div>}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function ValueTile({ label, value, strong }) {
+  return (
+    <div style={styles.valueTile}>
+      <span style={styles.valueTileLabel}>{label}</span>
+      <span style={{
+        display: "block",
+        marginTop: "0.15rem",
+        fontSize: strong ? "1.05rem" : "0.98rem",
+        fontWeight: strong ? 800 : 700,
+        color: strong ? colors.blue : colors.textPrimary,
+        fontVariantNumeric: "tabular-nums",
+      }}>{value}</span>
     </div>
   );
 }
@@ -1062,6 +1204,35 @@ const styles = {
   clearSearchBtn: { marginTop: "0.75rem", padding: "0.45rem 1rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, backgroundColor: "#fff" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
+  valueStrip: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
+    gap: "0.6rem",
+    margin: "0 0 0.9rem",
+  },
+  valueTile: {
+    border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 10,
+    padding: "0.6rem 0.8rem",
+    backgroundColor: colors.inputBg,
+  },
+  valueTileLabel: {
+    display: "block",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    color: colors.textSecondary,
+  },
+  tdMoney: {
+    padding: "0.55rem 0.85rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    color: colors.textPrimary,
+    verticalAlign: "top",
+    textAlign: "right",
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+  },
   th: { textAlign: "left", padding: "0.6rem 0.85rem", backgroundColor: "#f5f8fc", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.76rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" },
   td: { padding: "0.55rem 0.85rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary, verticalAlign: "top" },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "0.75rem 0" },

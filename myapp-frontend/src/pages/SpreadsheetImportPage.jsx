@@ -309,6 +309,7 @@ export default function SpreadsheetImportPage() {
           rows: preview.rows.map((r) => ({
             itemName: r.itemName, hsCode: r.hsCode, isHsCodePartial: r.isHsCodePartial,
             unit: r.unit, quantity: r.quantity, value: r.value,
+            salesTaxRate: r.salesTaxRate,
             lotRefs: r.lotRefs, itemTypeId: r.itemTypeId,
           })),
         });
@@ -675,7 +676,9 @@ function StockPreview({
         <Stat label="Sheet rows" value={preview.sourceRowCount} />
         <Stat label="Items" value={preview.rows.length} />
         <Stat label="Total quantity" value={qty(preview.totalQuantity)} />
-        <Stat label="Total value" value={money(preview.totalValue)} />
+        <Stat label="Excluding tax" value={money(preview.totalValue)} />
+        <Stat label="Sales tax" value={money(preview.totalSalesTax)} />
+        <Stat label="Including tax" value={money(preview.totalValueIncludingTax)} />
       </div>
 
       <div style={{ overflowX: "auto" }}>
@@ -684,7 +687,10 @@ function StockPreview({
             <tr>
               <th style={th}>Item</th><th style={th}>HS code</th><th style={th}>Unit</th>
               <th style={{ ...th, textAlign: "right" }}>Quantity</th>
-              <th style={{ ...th, textAlign: "right" }}>Value</th>
+              <th style={{ ...th, textAlign: "right" }}>Excluding</th>
+              <th style={{ ...th, textAlign: "right" }}>Rate</th>
+              <th style={{ ...th, textAlign: "right" }}>Sales tax</th>
+              <th style={{ ...th, textAlign: "right" }}>Including</th>
               <th style={th}>What happens</th>
             </tr>
           </thead>
@@ -696,6 +702,11 @@ function StockPreview({
                 <td style={td}>{r.unit || "—"}</td>
                 <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{qty(r.quantity)}</td>
                 <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(r.value)}</td>
+                <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                  {r.salesTaxRate ? `${r.salesTaxRate}%` : "—"}
+                </td>
+                <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(r.salesTax)}</td>
+                <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(r.valueIncludingTax)}</td>
                 <td style={td}>
                   <span style={{ color: STATUS_TONE[r.status], fontWeight: 600, fontSize: 13 }}>
                     {STATUS_LABEL[r.status] || r.status}

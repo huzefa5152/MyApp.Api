@@ -69,7 +69,8 @@ namespace MyApp.Api.Helpers
             "lotRef": 2, "lotDate": 3,
             "hsCodeShort": 4, "hsCodeFull": 5,
             "itemName": 6, "unit": 9,
-            "balanceQty": 18, "balanceValue": 19
+            "balanceQty": 18, "balanceValue": 19,
+            "balanceTaxRate": 20, "balanceTax": 21
           },
           "hsCodeStripSuffix": ":-",
           "ignoreColumns": [7]
@@ -100,10 +101,18 @@ namespace MyApp.Api.Helpers
         """;
 
         /// <summary>
-        /// Inserts any built-in layout that is missing. Idempotent, and never
-        /// touches one that already exists. Returns how many were created.
+        /// Inserts any built-in layout that is missing, and upgrades one that is
+        /// still exactly as shipped when the shipped mapping has moved on.
+        /// Idempotent. An operator-edited built-in (version above 1) is never
+        /// touched.
         /// </summary>
-        public static async Task<int> SeedAsync(AppDbContext db, CancellationToken ct = default)
+        /// <summary>Created and upgraded counts, so startup can say which happened.</summary>
+        public readonly record struct SeedOutcome(int Created, int Upgraded)
+        {
+            public int Total => Created + Upgraded;
+        }
+
+        public static async Task<SeedOutcome> SeedAsync(AppDbContext db, CancellationToken ct = default)
         {
             var wanted = new[]
             {
@@ -119,12 +128,52 @@ namespace MyApp.Api.Helpers
             };
 
             var created = 0;
+            var upgraded = 0;
 
             foreach (var w in wanted)
             {
-                var exists = await db.ImportProfiles
-                    .AnyAsync(p => p.CompanyId == null && p.Kind == w.Kind && p.IsDefault, ct);
-                if (exists) continue;
+                var existing = await db.ImportProfiles
+                    .FirstOrDefaultAsync(p => p.CompanyId == null && p.Kind == w.Kind && p.IsDefault, ct);
+
+                if (existing != null)
+                {
+                    // A built-in that already exists is normally left alone. But
+                    // create-only seeding froze the FIRST version an installation
+                    // ever saw: shipping an improved mapping — the stock layout
+                    // gaining its tax-rate columns, say — would then reach new
+                    // installations and never the ones that needed it.
+                    //
+                    // So: upgrade it, but only while it is still ours. Version 1
+                    // means nobody has edited it, since any operator edit bumps
+                    // the version and writes history. An edited built-in keeps
+                    // the operator's mapping.
+                    var untouched = existing.CurrentVersion == 1;
+                    var changed = !string.Equals(existing.MappingJson, w.Mapping, StringComparison.Ordinal);
+
+                    if (untouched && changed)
+                    {
+                        existing.MappingJson = w.Mapping;
+                        existing.Layout = w.Layout;
+                        existing.SignatureHash = w.Hash;
+                        existing.TokenSignature = w.Tokens;
+                        existing.Notes = w.Notes;
+                        existing.CurrentVersion = 2;
+                        existing.UpdatedAt = DateTime.UtcNow;
+
+                        db.ImportProfileVersions.Add(new ImportProfileVersion
+                        {
+                            ImportProfileId = existing.Id,
+                            Version = 2,
+                            Layout = w.Layout,
+                            MappingJson = w.Mapping,
+                            ChangeNote = "Updated to the version shipped with this release",
+                            CreatedBy = "system",
+                        });
+                        await db.SaveChangesAsync(ct);
+                        upgraded++;
+                    }
+                    continue;
+                }
 
                 var profile = new ImportProfile
                 {
@@ -160,7 +209,7 @@ namespace MyApp.Api.Helpers
                 created++;
             }
 
-            return created;
+            return new SeedOutcome(created, upgraded);
         }
     }
 }

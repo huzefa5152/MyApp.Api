@@ -223,7 +223,9 @@ namespace MyApp.Api.Services.Implementations
                         sourceId: bill.Id,
                         movementDate: bill.Date,
                         notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}",
-                        divisionId: divisionId);
+                        divisionId: divisionId,
+                        unitCostExcludingTax: line.ValueExclTax / line.Quantity,
+                        salesTaxRate: bill.GSTRate);
                     runningCounts.StockMovementsRecorded++;
                 }
 

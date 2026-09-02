@@ -66,6 +66,23 @@ namespace MyApp.Api.Models
         /// </summary>
         public decimal Quantity { get; set; }
 
+        /// <summary>
+        /// Cost per unit excluding tax, when the SOURCE knows one — a purchase
+        /// bill line does, because that is what was paid. decimal(18,4) so a
+        /// per-unit cost survives division by an awkward quantity.
+        ///
+        /// NULL means "value me at the running weighted average". That covers
+        /// every outward movement (a sale removes stock at cost, never at the
+        /// price it sold for) and stock adjustments, where no price exists at
+        /// all. Leaving it null rather than guessing is what lets the sale and
+        /// challan paths stay untouched.
+        /// </summary>
+        public decimal? UnitCostExcludingTax { get; set; }
+
+        /// <summary>Sales tax rate for this movement as a PERCENTAGE, when the
+        /// source knows one. Null falls back to the item's opening rate.</summary>
+        public decimal? SalesTaxRate { get; set; }
+
         public StockMovementSourceType SourceType { get; set; }
 
         /// <summary>

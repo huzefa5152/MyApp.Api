@@ -56,6 +56,14 @@ namespace MyApp.Api.Services.Interfaces
         /// callers pass document.DivisionId so division-restricted stock
         /// views can scope the ledger. Null for company-level documents,
         /// opening balances, and adjustments.</param>
+        /// <param name="unitCostExcludingTax">What one unit cost on the way
+        /// IN, excluding sales tax. Only an inward movement can state a cost;
+        /// leave it null everywhere else and the valuation charges the
+        /// outward movement at the weighted average standing at that moment,
+        /// which is the only figure a sale can honestly be costed at.</param>
+        /// <param name="salesTaxRate">Rate as a percentage (18, 25). Carried
+        /// so an item bought at a different rate re-prices the stock it
+        /// joins, rather than inheriting whatever the opening balance said.</param>
         Task RecordMovementAsync(
             int companyId,
             int itemTypeId,
@@ -65,7 +73,9 @@ namespace MyApp.Api.Services.Interfaces
             int? sourceId,
             DateTime movementDate,
             string? notes = null,
-            int? divisionId = null);
+            int? divisionId = null,
+            decimal? unitCostExcludingTax = null,
+            decimal? salesTaxRate = null);
 
         /// <summary>
         /// Current on-hand for one item under one company. Computed as

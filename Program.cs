@@ -766,9 +766,11 @@ using (var scope = app.Services.CreateScope())
     // never overwritten on restart.
     try
     {
-        var seededLayouts = await MyApp.Api.Helpers.DefaultImportLayouts.SeedAsync(db);
-        if (seededLayouts > 0)
-            app.Logger.LogInformation("Seeded {Count} built-in spreadsheet import layout(s).", seededLayouts);
+        var layouts = await MyApp.Api.Helpers.DefaultImportLayouts.SeedAsync(db);
+        if (layouts.Total > 0)
+            app.Logger.LogInformation(
+                "Built-in spreadsheet import layouts: {Created} created, {Upgraded} upgraded.",
+                layouts.Created, layouts.Upgraded);
     }
     catch (Exception ex)
     {

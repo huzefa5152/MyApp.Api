@@ -69,6 +69,17 @@ namespace MyApp.Api.Services.Implementations
             preview.Rows = rows;
             preview.TotalQuantity = rows.Sum(r => r.Quantity);
             preview.TotalValue = rows.Sum(r => r.Value);
+            preview.TotalSalesTax = rows.Sum(r => r.SalesTax);
+            preview.TotalValueIncludingTax = rows.Sum(r => r.ValueIncludingTax);
+
+            // The sheet states the tax as well as the rate, so recomputing it
+            // and comparing is the cheapest possible proof the rate column was
+            // read from the right place — a rate out by a factor of a hundred
+            // still looks perfectly plausible on its own.
+            var statedTax = lots.Where(l => l.StatedTax.HasValue).Sum(l => l.StatedTax!.Value);
+            if (statedTax > 0m && Math.Abs(statedTax - preview.TotalSalesTax) > 1m)
+                preview.Warnings.Add(
+                    $"The sheet's sales-tax column totals {statedTax:N2}, but value x rate gives {preview.TotalSalesTax:N2}. Check the rate and tax columns are mapped to the right places.");
             preview.StatusCounts = rows.GroupBy(r => r.Status)
                 .ToDictionary(g => g.Key, g => g.Count());
 
@@ -106,7 +117,8 @@ namespace MyApp.Api.Services.Implementations
 
         private sealed record LotRow(
             int SourceRow, string ItemName, string? HsCode, bool Partial,
-            string? Unit, decimal Quantity, decimal Value, string? LotRef);
+            string? Unit, decimal Quantity, decimal Value,
+            decimal TaxRate, decimal? StatedTax, string? LotRef);
 
         private List<LotRow> ReadLots(
             byte[] bytes, string extension, LotRowsMapping mapping, OpeningStockPreviewDto preview)
@@ -165,6 +177,10 @@ namespace MyApp.Api.Services.Implementations
                     Unit: cols.Unit is > 0 ? wb.GetString(sheet, row, cols.Unit.Value).Trim() : null,
                     Quantity: qty ?? 0m,
                     Value: cols.BalanceValue is > 0 ? wb.GetDecimal(sheet, row, cols.BalanceValue.Value) ?? 0m : 0m,
+                    TaxRate: AsPercentage(cols.BalanceTaxRate is > 0
+                        ? wb.GetDecimal(sheet, row, cols.BalanceTaxRate.Value) : null),
+                    StatedTax: cols.BalanceTax is > 0
+                        ? wb.GetDecimal(sheet, row, cols.BalanceTax.Value) : null,
                     LotRef: cols.LotRef is > 0 ? wb.GetString(sheet, row, cols.LotRef.Value).Trim() : null));
             }
 
@@ -173,6 +189,23 @@ namespace MyApp.Api.Services.Implementations
                     $"Only the first {MaxSourceRows} rows were read. If the sheet is genuinely longer, split it.");
 
             return lots;
+        }
+
+        private static decimal Money(decimal value) =>
+            Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+        /// <summary>
+        /// These sheets write a tax rate as a fraction (0.18) but the system
+        /// stores percentages everywhere (18, matching Invoice.GSTRate). Treat
+        /// anything at or below 1 as a fraction: no real sales-tax rate is 1%,
+        /// and 0.18 read as a percentage would be a rate of almost nothing, so
+        /// the ambiguity is only theoretical.
+        /// </summary>
+        private static decimal AsPercentage(decimal? raw)
+        {
+            var v = raw ?? 0m;
+            if (v <= 0m) return 0m;
+            return v <= 1m ? Math.Round(v * 100m, 2) : Math.Round(v, 2);
         }
 
         /// <summary>
@@ -205,6 +238,14 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g =>
                 {
                     var first = g.First();
+                    var value = Money(g.Sum(x => x.Value));
+                    // One item across two lots can carry two rates. Weight by
+                    // value rather than taking the first, so a merged item's tax
+                    // still matches what the sheet's own rows add up to.
+                    var rate = value > 0m
+                        ? Math.Round(g.Sum(x => x.Value * x.TaxRate) / g.Sum(x => x.Value), 2)
+                        : g.Select(x => x.TaxRate).FirstOrDefault(r => r > 0m);
+                    var tax = Money(value * rate / 100m);
                     var refs = g.Select(x => x.LotRef)
                         .Where(r => !string.IsNullOrWhiteSpace(r))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -220,7 +261,10 @@ namespace MyApp.Api.Services.Implementations
                         IsHsCodePartial = g.All(x => x.Partial),
                         Unit = g.Select(x => x.Unit).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)),
                         Quantity = g.Sum(x => x.Quantity),
-                        Value = g.Sum(x => x.Value),
+                        Value = value,
+                        SalesTaxRate = rate,
+                        SalesTax = tax,
+                        ValueIncludingTax = value + tax,
                         LotRefs = refs.Count == 0 ? null : string.Join(", ", refs),
                     };
                 })
@@ -443,6 +487,8 @@ namespace MyApp.Api.Services.Implementations
                     await UpsertOpeningBalanceAsync(dto, row, itemTypeId);
                     result.OpeningBalancesWritten++;
                     result.TotalQuantity += row.Quantity;
+                    result.TotalValueExcludingTax += Money(row.Value);
+                    result.TotalSalesTax += Money(row.Value * row.SalesTaxRate / 100m);
                 }
 
                 if (dto.EnableInventoryTracking)
@@ -608,6 +654,8 @@ namespace MyApp.Api.Services.Implementations
                     CompanyId = dto.CompanyId,
                     ItemTypeId = itemTypeId,
                     Quantity = row.Quantity,
+                    ValueExcludingTax = Money(row.Value),
+                    SalesTaxRate = row.SalesTaxRate,
                     AsOfDate = dto.AsOfDate.Date,
                     Notes = Trim(note, 500),
                     CreatedAt = DateTime.UtcNow,
@@ -618,6 +666,8 @@ namespace MyApp.Api.Services.Implementations
                 // Set, not add. Re-importing a corrected sheet has to REPLACE
                 // the opening figure; accumulating would silently double it.
                 existing.Quantity = row.Quantity;
+                existing.ValueExcludingTax = Money(row.Value);
+                existing.SalesTaxRate = row.SalesTaxRate;
                 existing.AsOfDate = dto.AsOfDate.Date;
                 existing.Notes = Trim(note, 500);
             }

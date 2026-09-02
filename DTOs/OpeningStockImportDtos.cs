@@ -58,7 +58,19 @@ namespace MyApp.Api.DTOs
 
         public string? Unit { get; set; }
         public decimal Quantity { get; set; }
+
+        /// <summary>Value excluding sales tax — the sheet's "Balance Excl".</summary>
         public decimal Value { get; set; }
+
+        /// <summary>Rate as a PERCENTAGE. The sheet writes 0.18; this is 18.</summary>
+        public decimal SalesTaxRate { get; set; }
+
+        /// <summary>Derived: value × rate / 100. Shown so the preview can be
+        /// read against the sheet's own S.Tax column.</summary>
+        public decimal SalesTax { get; set; }
+
+        /// <summary>Derived: value + tax.</summary>
+        public decimal ValueIncludingTax { get; set; }
 
         /// <summary>Lot references behind this item, kept as the opening
         /// balance's note.</summary>
@@ -92,6 +104,8 @@ namespace MyApp.Api.DTOs
 
         public decimal TotalQuantity { get; set; }
         public decimal TotalValue { get; set; }
+        public decimal TotalSalesTax { get; set; }
+        public decimal TotalValueIncludingTax { get; set; }
 
         /// <summary>Source rows read, before grouping. Differs from
         /// <c>Rows.Count</c> exactly when an item spans several lots, which is
@@ -114,6 +128,7 @@ namespace MyApp.Api.DTOs
         public string? Unit { get; set; }
         public decimal Quantity { get; set; }
         public decimal Value { get; set; }
+        public decimal SalesTaxRate { get; set; }
         public string? LotRefs { get; set; }
 
         /// <summary>Set to reuse that item type; null to create a new one. On an
@@ -165,6 +180,8 @@ namespace MyApp.Api.DTOs
         public int OpeningBalancesWritten { get; set; }
         public int RowsSkippedAlreadyImported { get; set; }
         public decimal TotalQuantity { get; set; }
+        public decimal TotalValueExcludingTax { get; set; }
+        public decimal TotalSalesTax { get; set; }
         public decimal InventoryValuePosted { get; set; }
         public bool InventoryTrackingEnabled { get; set; }
         public List<string> Messages { get; set; } = new();

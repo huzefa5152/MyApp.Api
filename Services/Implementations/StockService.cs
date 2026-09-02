@@ -120,10 +120,22 @@ namespace MyApp.Api.Services.Implementations
             int? sourceId,
             DateTime movementDate,
             string? notes = null,
-            int? divisionId = null)
+            int? divisionId = null,
+            decimal? unitCostExcludingTax = null,
+            decimal? salesTaxRate = null)
         {
             if (quantity <= 0m) return;
             if (!await IsTrackingEnabledAsync(companyId)) return;
+
+            // A cost only means something on the way in. Storing one against
+            // an outward movement would let a sale set its own cost of goods,
+            // so it is dropped here rather than trusted from the caller.
+            var costIn = direction == StockMovementDirection.In && unitCostExcludingTax is > 0m
+                ? Math.Round(unitCostExcludingTax.Value, 4, MidpointRounding.AwayFromZero)
+                : (decimal?)null;
+            var rateIn = direction == StockMovementDirection.In && salesTaxRate is >= 0m and <= 100m && costIn.HasValue
+                ? Math.Round(salesTaxRate.Value, 2, MidpointRounding.AwayFromZero)
+                : (decimal?)null;
 
             _context.StockMovements.Add(new StockMovement
             {
@@ -136,6 +148,8 @@ namespace MyApp.Api.Services.Implementations
                 SourceId = sourceId,
                 MovementDate = movementDate,
                 Notes = notes,
+                UnitCostExcludingTax = costIn,
+                SalesTaxRate = rateIn,
                 CreatedAt = DateTime.UtcNow,
             });
 

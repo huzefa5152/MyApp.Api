@@ -93,14 +93,25 @@ namespace MyApp.Api.Controllers
             var openings = await _context.OpeningStockBalances
                 .Where(o => o.CompanyId == companyId && ids.Contains(o.ItemTypeId))
                 .GroupBy(o => o.ItemTypeId)
-                .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity) })
-                .ToDictionaryAsync(x => x.ItemTypeId, x => x.Qty);
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
+                })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x);
 
-            var moveAggs = await ScopedMovements()
+            // Valuation needs the movements THEMSELVES, in order, not a sum per
+            // direction: an outward movement is costed at the weighted average
+            // standing at that moment, which only exists if you walk them.
+            var movements = await ScopedMovements()
                 .Where(m => ids.Contains(m.ItemTypeId))
-                .GroupBy(m => new { m.ItemTypeId, m.Direction })
-                .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
+                .AsNoTracking()
                 .ToListAsync();
+            var movementsByItem = movements
+                .GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
             var lastDates = await ScopedMovements()
                 .Where(m => ids.Contains(m.ItemTypeId))
@@ -115,9 +126,15 @@ namespace MyApp.Api.Controllers
                 if (it == null) continue;
                 // 2026-05-12: decimal opening + totalIn/Out matches the
                 // promoted StockMovement / OpeningStockBalance columns.
-                decimal opening = openings.GetValueOrDefault(id);
-                decimal totalIn = moveAggs.Where(x => x.ItemTypeId == id && x.Direction == StockMovementDirection.In).Sum(x => x.Qty);
-                decimal totalOut = moveAggs.Where(x => x.ItemTypeId == id && x.Direction == StockMovementDirection.Out).Sum(x => x.Qty);
+                var open = openings.GetValueOrDefault(id);
+                decimal opening = open?.Qty ?? 0m;
+
+                var position = StockValuation.Compute(
+                    opening,
+                    open?.Value ?? 0m,
+                    open?.Rate ?? 0m,
+                    movementsByItem.GetValueOrDefault(id) ?? new List<StockMovement>());
+
                 rows.Add(new StockOnHandRowDto
                 {
                     ItemTypeId = id,
@@ -125,9 +142,16 @@ namespace MyApp.Api.Controllers
                     HSCode = it.HSCode,
                     UOM = it.UOM,
                     OpeningBalance = opening,
-                    TotalIn = totalIn,
-                    TotalOut = totalOut,
-                    OnHand = opening + totalIn - totalOut,
+                    TotalIn = position.TotalIn,
+                    TotalOut = position.TotalOut,
+                    OnHand = position.Quantity,
+                    ValueExcludingTax = position.ValueExcludingTax,
+                    SalesTaxRate = position.SalesTaxRate,
+                    SalesTax = position.SalesTax,
+                    ValueIncludingTax = position.ValueIncludingTax,
+                    UnitCost = Math.Round(position.UnitCost, 4),
+                    ValueIn = position.ValueIn,
+                    ValueOut = position.ValueOut,
                     LastMovementAt = lastDates.TryGetValue(id, out var d) ? d : null,
                 });
             }
@@ -216,6 +240,53 @@ namespace MyApp.Api.Controllers
                     .Select(g => new { g.Id, g.GoodsReceiptNumber })
                     .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
 
+            // Money per movement. The cost of any one movement is the average
+            // standing at that instant, so the only way to fill these in is to
+            // replay each item's full history — the page's rows alone can't say
+            // what a sale cost. Bounded by the page's distinct items.
+            var pageItemIds = rows.Select(r => r.ItemTypeId).Distinct().ToList();
+            if (pageItemIds.Count > 0)
+            {
+                var histOpenings = await _context.OpeningStockBalances
+                    .Where(o => o.CompanyId == companyId && pageItemIds.Contains(o.ItemTypeId))
+                    .GroupBy(o => o.ItemTypeId)
+                    .Select(g => new
+                    {
+                        ItemTypeId = g.Key,
+                        Qty = g.Sum(o => o.Quantity),
+                        Value = g.Sum(o => o.ValueExcludingTax),
+                        Rate = g.Max(o => o.SalesTaxRate),
+                    })
+                    .ToDictionaryAsync(x => x.ItemTypeId, x => x);
+
+                // Same division scope as the listing itself, or the running
+                // totals would be computed over rows the caller cannot see.
+                var histQuery = _context.StockMovements
+                    .Where(m => m.CompanyId == companyId && pageItemIds.Contains(m.ItemTypeId));
+                if (divScope != null)
+                    histQuery = histQuery.Where(m => m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
+                var history = await histQuery.AsNoTracking().ToListAsync();
+
+                var steps = new Dictionary<int, StockValuation.Step>();
+                foreach (var grp in history.GroupBy(m => m.ItemTypeId))
+                {
+                    var open = histOpenings.GetValueOrDefault(grp.Key);
+                    var trace = new List<StockValuation.Step>();
+                    StockValuation.Compute(open?.Qty ?? 0m, open?.Value ?? 0m, open?.Rate ?? 0m,
+                                           grp.ToList(), trace);
+                    foreach (var st in trace) steps[st.MovementId] = st;
+                }
+
+                foreach (var r in rows)
+                {
+                    if (!steps.TryGetValue(r.Id, out var st)) continue;
+                    r.UnitCost = Math.Round(st.UnitCost, 4, MidpointRounding.AwayFromZero);
+                    r.Value = st.Amount;
+                    r.RunningQuantity = st.RunningQuantity;
+                    r.RunningValue = st.RunningValue;
+                }
+            }
+
             foreach (var r in rows)
             {
                 if (!r.SourceId.HasValue) continue;
@@ -253,6 +324,8 @@ namespace MyApp.Api.Controllers
                     ItemTypeId = o.ItemTypeId,
                     ItemTypeName = o.ItemType!.Name,
                     Quantity = o.Quantity,
+                    ValueExcludingTax = o.ValueExcludingTax,
+                    SalesTaxRate = o.SalesTaxRate,
                     AsOfDate = o.AsOfDate,
                     Notes = o.Notes,
                 })
@@ -285,6 +358,8 @@ namespace MyApp.Api.Controllers
                     CompanyId = dto.CompanyId,
                     ItemTypeId = dto.ItemTypeId,
                     Quantity = dto.Quantity,
+                    ValueExcludingTax = dto.ValueExcludingTax,
+                    SalesTaxRate = dto.SalesTaxRate,
                     AsOfDate = dto.AsOfDate.Date,
                     Notes = dto.Notes,
                     CreatedAt = DateTime.UtcNow,
@@ -294,6 +369,8 @@ namespace MyApp.Api.Controllers
             else
             {
                 existing.Quantity = dto.Quantity;
+                existing.ValueExcludingTax = dto.ValueExcludingTax;
+                existing.SalesTaxRate = dto.SalesTaxRate;
                 existing.AsOfDate = dto.AsOfDate.Date;
                 existing.Notes = dto.Notes;
             }
@@ -307,6 +384,8 @@ namespace MyApp.Api.Controllers
                 ItemTypeId = existing.ItemTypeId,
                 ItemTypeName = it?.Name ?? "",
                 Quantity = existing.Quantity,
+                ValueExcludingTax = existing.ValueExcludingTax,
+                SalesTaxRate = existing.SalesTaxRate,
                 AsOfDate = existing.AsOfDate,
                 Notes = existing.Notes,
             });
@@ -374,6 +453,15 @@ namespace MyApp.Api.Controllers
                 SourceId = null,
                 MovementDate = dto.MovementDate.Date,
                 Notes = dto.Notes,
+                // Only an adjustment UP can carry a cost. Everything else is
+                // valued at the running average — see StockValuation.
+                UnitCostExcludingTax = dto.Delta > 0 && dto.UnitCostExcludingTax is > 0m
+                    ? Math.Round(dto.UnitCostExcludingTax.Value, 4, MidpointRounding.AwayFromZero)
+                    : null,
+                SalesTaxRate = dto.Delta > 0 && dto.UnitCostExcludingTax is > 0m
+                               && dto.SalesTaxRate is >= 0m and <= 100m
+                    ? Math.Round(dto.SalesTaxRate.Value, 2, MidpointRounding.AwayFromZero)
+                    : null,
                 CreatedAt = DateTime.UtcNow,
             });
             await _context.SaveChangesAsync();

@@ -513,7 +513,12 @@ namespace MyApp.Api.Services.Implementations
                     sourceId: bill.Id,
                     movementDate: bill.Date,
                     notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}",
-                    divisionId: bill.DivisionId);
+                    divisionId: bill.DivisionId,
+                    // What the goods actually cost, so stock is valued at what
+                    // was paid for it rather than at whatever the opening
+                    // balance happened to average out to.
+                    unitCostExcludingTax: it.UnitPrice,
+                    salesTaxRate: bill.GSTRate);
             }
 
             // GL posting (Dr Inventory/Purchases + Input tax / Cr AP) — same tx.
@@ -696,13 +701,23 @@ namespace MyApp.Api.Services.Implementations
                 bill.CompanyId,
                 newItems.Where(n => n.ItemTypeId.HasValue).Select(n => n.ItemTypeId!.Value));
             var desired = new Dictionary<int, decimal>();
+            var lineValue = new Dictionary<int, decimal>();
             foreach (var ni in newItems)
             {
                 if (!ni.ItemTypeId.HasValue || ni.Quantity <= 0) continue;
                 if (!trackedNew.Contains(ni.ItemTypeId.Value)) continue;
                 desired.TryGetValue(ni.ItemTypeId.Value, out var cur);
                 desired[ni.ItemTypeId.Value] = cur + ni.Quantity;
+
+                // Quantity-weighted, so an item split across two lines at two
+                // prices costs the top-up at what the lines actually average.
+                lineValue.TryGetValue(ni.ItemTypeId.Value, out var val);
+                lineValue[ni.ItemTypeId.Value] = val + (ni.Quantity * ni.UnitPrice);
             }
+
+            var unitCosts = desired
+                .Where(d => d.Value > 0m && lineValue.ContainsKey(d.Key))
+                .ToDictionary(d => d.Key, d => lineValue[d.Key] / d.Value);
 
             // Currently posted net per ItemType, read back from the ledger.
             var posted = (await _context.StockMovements
@@ -734,7 +749,9 @@ namespace MyApp.Api.Services.Implementations
                     sourceId: bill.Id,
                     movementDate: bill.Date,
                     notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edit — stock {(delta > 0m ? "increased" : "decreased")} by {Math.Abs(delta):0.####})",
-                    divisionId: bill.DivisionId);
+                    divisionId: bill.DivisionId,
+                    unitCostExcludingTax: unitCosts.GetValueOrDefault(itemTypeId),
+                    salesTaxRate: bill.GSTRate);
             }
         }
 
