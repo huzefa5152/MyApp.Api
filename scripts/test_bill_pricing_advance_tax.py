@@ -349,6 +349,85 @@ def main():
                   and near(after.get("advanceTaxAmount"), 1180.0, 0.02),
                   f"gt={after.get('grandTotal')} adv={after.get('advanceTaxAmount')}")
 
+        # An edit can SET advance tax on a bill that was issued without it,
+        # and can take it off again. Both were impossible: UpdateAsync never
+        # read the field, so it recomputed from whatever the bill already
+        # carried and the edit form's dropdown had nothing to write to.
+        edit_item = make_item(f"AdvEdit {tag}")
+        set_stock(edit_item, 3000, 300000)
+
+        def plain_bill(qty=1000, price=100):
+            return requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+                "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
+                "items": [{"description": f"AdvEdit {tag}", "itemTypeId": edit_item,
+                           "quantity": qty, "uom": "Pcs", "unitPrice": price}]})
+
+        plain = plain_bill()
+        if check("a bill is issued with no advance tax",
+                 plain.ok and not plain.json().get("advanceTaxSection"),
+                 f"http {plain.status_code}: {plain.text[:160]}"):
+            pid = plain.json()["id"]
+            base_body = {
+                "id": pid, "companyId": cid, "clientId": client["id"], "date": today,
+                "gstRate": 18,
+                "items": [{"description": f"AdvEdit {tag}", "itemTypeId": edit_item,
+                           "quantity": 1000, "uom": "Pcs", "unitPrice": 100}],
+            }
+
+            # SET it: 118,000 including sales tax, 236G active at 0.1% = 118.
+            requests.put(f"{api}/invoices/{pid}", headers=h, timeout=120,
+                         json={**base_body, "advanceTaxSection": "236G",
+                               "advanceTaxFilerActive": True})
+            got = requests.get(f"{api}/invoices/{pid}", headers=h, timeout=60).json()
+            check("an edit can add advance tax to a bill that had none",
+                  got.get("advanceTaxSection") == "236G"
+                  and near(got.get("advanceTaxRate"), 0.1)
+                  and near(got.get("advanceTaxAmount"), 118.0, 0.02),
+                  f"section={got.get('advanceTaxSection')} rate={got.get('advanceTaxRate')} amt={got.get('advanceTaxAmount')}")
+            check("and the sales-tax invoice itself does not move",
+                  near(got.get("grandTotal"), 118000, 0.02),
+                  f"gt={got.get('grandTotal')}")
+
+            # An edit that does not MENTION advance tax keeps it -- an API
+            # client editing only the lines must not silently drop a charge.
+            requests.put(f"{api}/invoices/{pid}", headers=h, timeout=120, json=base_body)
+            kept = requests.get(f"{api}/invoices/{pid}", headers=h, timeout=60).json()
+            check("an edit that omits advance tax leaves it alone",
+                  kept.get("advanceTaxSection") == "236G"
+                  and near(kept.get("advanceTaxAmount"), 118.0, 0.02),
+                  f"section={kept.get('advanceTaxSection')} amt={kept.get('advanceTaxAmount')}")
+
+            # "" is how the form says None, and it clears the charge.
+            requests.put(f"{api}/invoices/{pid}", headers=h, timeout=120,
+                         json={**base_body, "advanceTaxSection": "",
+                               "advanceTaxFilerActive": None})
+            off = requests.get(f"{api}/invoices/{pid}", headers=h, timeout=60).json()
+            check("an explicit None takes advance tax off the bill",
+                  not off.get("advanceTaxSection") and near(off.get("advanceTaxAmount"), 0.0),
+                  f"section={off.get('advanceTaxSection')} amt={off.get('advanceTaxAmount')}")
+
+            # Editing a bill must move the stock it sold, in QUANTITY and in
+            # VALUE -- an outward movement is valued by the weighted-average
+            # walk, so halving the line has to hand half the value back.
+            def on_hand():
+                rr = requests.get(f"{api}/invoices/company/{cid}/stock-pricing", headers=h,
+                                  timeout=120, params={"itemTypeIds": str(edit_item)})
+                row = (rr.json() or [{}])[0] if rr.ok else {}
+                return float(row.get("availableQuantity") or 0), float(row.get("availableValueExcludingTax") or 0)
+
+            q_before, v_before = on_hand()
+            requests.put(f"{api}/invoices/{pid}", headers=h, timeout=120, json={
+                **base_body,
+                "items": [{"description": f"AdvEdit {tag}", "itemTypeId": edit_item,
+                           "quantity": 400, "uom": "Pcs", "unitPrice": 100}]})
+            q_after, v_after = on_hand()
+            check("cutting a bill's quantity gives the stock back",
+                  near(q_after - q_before, 600.0, 0.01),
+                  f"on hand {q_before} -> {q_after} (expected +600)")
+            check("and gives its VALUE back at the average cost",
+                  v_after > v_before,
+                  f"value {v_before} -> {v_after}")
+
         # ── Both bill flows ───────────────────────────────────────────────
         print("\n-- B. From a delivery challan --")
         ch = requests.post(f"{api}/deliverychallans/company/{cid}", headers=h, timeout=120,

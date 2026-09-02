@@ -1333,6 +1333,22 @@ namespace MyApp.Api.Services.Implementations
                 invoice.GSTRate = dto.GSTRate;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
+                // Advance income tax on an EDIT. Until now the recompute further
+                // down re-derived the amount from the invoice's existing choice,
+                // so the section could never be set or cleared once the bill
+                // existed and the edit form's dropdown had nothing to write to.
+                //
+                // Absent and "None" are different things here, so they are sent
+                // differently: null means the caller did not mention advance tax
+                // and the bill keeps whatever it had (an API client editing only
+                // the items must not silently drop a charge), while an empty
+                // string is how the form says None.
+                if (dto.AdvanceTaxSection != null)
+                {
+                    var clearAdvanceTax = dto.AdvanceTaxSection.Length == 0;
+                    invoice.AdvanceTaxSection = clearAdvanceTax ? null : dto.AdvanceTaxSection;
+                    invoice.AdvanceTaxFilerActive = clearAdvanceTax ? null : dto.AdvanceTaxFilerActive;
+                }
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;

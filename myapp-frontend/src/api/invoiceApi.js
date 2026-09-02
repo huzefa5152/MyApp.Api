@@ -137,7 +137,13 @@ export const getPurchaseTemplate = (invoiceId) =>
 // from the server's one valuation walk -- the same figure the stock dashboard
 // shows. Gated by the bill-create permission, like getLastRatesForChallan.
 export const getStockPricing = (companyId, itemTypeIds) =>
-  httpClient.get(`/invoices/company/${companyId}/stock-pricing`, { params: { itemTypeIds } });
+  httpClient.get(`/invoices/company/${companyId}/stock-pricing`, {
+    // The endpoint binds ONE comma-separated string. Handing it an array made
+    // axios send `itemTypeIds[]=84`, which binds to nothing and comes back as
+    // an empty list with a 200 -- so a line amount silently stopped pricing
+    // itself from stock, with no error anywhere to say why.
+    params: { itemTypeIds: Array.isArray(itemTypeIds) ? itemTypeIds.join(",") : itemTypeIds },
+  });
 
 // A bill's lines with how much of each is still to be delivered, and the
 // challans already raised from it.

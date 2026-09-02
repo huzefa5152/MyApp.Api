@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome, MdDelete } from "react-icons/md";
-import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty, setPrintGrouping } from "../api/invoiceApi";
+import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty, setPrintGrouping, getStockPricing } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getClientsByCompany } from "../api/clientApi";
@@ -12,6 +12,7 @@ import QuantityInput from "./QuantityInput";
 import { isDecimalUnit } from "../utils/formatQuantity";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { formStyles, modalSizes } from "../theme";
+import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount, advanceTaxKeyOf } from "../config/advanceTax";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -54,8 +55,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // stock. Implemented by shadowing readOnly (reuses the proven read-only render:
   // locked cells, hidden Save, "Close" footer). The grouping selector is rendered
   // interactive regardless and persists via the dedicated print-grouping endpoint.
-  const groupingOnly = forceItemTypeAndQty && !billsMode && !fbrEnabled;
-  const readOnly = readOnlyProp || groupingOnly;
+  // 2026-09-02: the FBR-off Invoices tab is NO LONGER read-only. It used to
+  // shadow readOnly so that nothing there could move stock, which left the
+  // operator with a "View Bill" screen and no Save at all -- the only way to
+  // correct a classification or redistribute a line was the Bills tab. The tab
+  // now behaves as it always did with FBR on: Item Type, Qty, Unit Price and
+  // the line amount are editable, and the total-preservation guard keeps the
+  // bill's own total where it was, so a stock movement can only be re-pointed,
+  // never invented. Kept as a constant so the grouping-only copy below still
+  // has something to hang off if the policy is ever restored.
+  const groupingOnly = false;
+  const readOnly = readOnlyProp;
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
   // classification is the Invoices tab's responsibility). Existing item-
@@ -153,6 +163,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // subtotal / GST / grand total). "none" | "rate" (a %) | "amount" (fixed PKR).
   // Prefilled from the loaded bill below.
   const [whtMode, setWhtMode] = useState("none");
+  // Advance income tax (236G/236H) is the mirror of withholding tax, so it is
+  // edited the same way. It was on the create forms but not here, which meant
+  // a bill issued without it could never have it added -- and one issued with
+  // it could not have it corrected.
+  const [advTaxKey, setAdvTaxKey] = useState("");
+  // What each line's item type is worth on hand, so the LINE AMOUNT can be
+  // entered here exactly as it is on the create form: type the amount, and the
+  // quantity follows at the stock's own weighted-average cost.
+  const [stockPricing, setStockPricing] = useState({});
   const [whtRate, setWhtRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
   const [billDate, setBillDate] = useState("");
@@ -263,6 +282,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         } else {
           setWhtMode("none");
         }
+        // Show the choice the bill was issued with, not an empty box.
+        setAdvTaxKey(advanceTaxKeyOf(data.advanceTaxSection, data.advanceTaxFilerActive));
         // Date arrives as ISO string; the <input type="date"> control wants
         // YYYY-MM-DD in LOCAL time. Pre-fix (.toISOString().slice(0,10))
         // converted to UTC first, which rolled the calendar day forward in
@@ -482,6 +503,26 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     setShowAddItemType(false);
   };
 
+  // Prices for the item types actually on this bill. Fetched in Bills mode
+  // only: on the Invoices tab the amount is redistributed across lines at a
+  // FIXED quantity, so no stock cost is involved.
+  const pricedItemTypeIds = useMemo(
+    () => [...new Set(items.map((i) => i.itemTypeId).filter(Boolean))].sort().join(","),
+    [items]
+  );
+  useEffect(() => {
+    const companyId = invoice?.companyId;
+    if (!companyId || !billsMode || !pricedItemTypeIds) return;
+    let cancelled = false;
+    getStockPricing(companyId, pricedItemTypeIds)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setStockPricing(Object.fromEntries((data || []).map((x) => [x.itemTypeId, x])));
+      })
+      .catch(() => { /* pricing is a convenience; qty and rate stay typeable */ });
+    return () => { cancelled = true; };
+  }, [invoice?.companyId, billsMode, pricedItemTypeIds]);
+
   const updateItem = (index, field, value) => {
     setItems((prev) => {
       const next = [...prev];
@@ -490,6 +531,61 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       const qty = parseFloat(next[index].quantity) || 0;
       const price = parseFloat(next[index].unitPrice) || 0;
       next[index].lineTotal = Math.round(qty * price * 100) / 100;
+      return next;
+    });
+  };
+
+  // Enter the line AMOUNT and let the rest follow. Two derivations, because
+  // the two tabs mean different things by it:
+  //
+  //   Bills tab, plain standalone bill  -- the amount buys stock, so the
+  //     quantity follows at the stock's weighted-average cost, exactly as on
+  //     the create form (whole units unless the UOM allows decimals, and the
+  //     amount snaps to what quantity x rate actually makes, so the bill sums
+  //     to the figures on screen).
+  //
+  //   Anything else (Invoices tab, a challan-driven bill, an item with no
+  //     stock) -- the QUANTITY is fixed and the rate absorbs the change. That
+  //     is what redistributing a bill across lines means, and the
+  //     total-preservation guard still watches the bill's own total.
+  const updateLineTotal = (index, raw) => {
+    setItems((prev) => {
+      const next = [...prev];
+      const row = { ...next[index], lineTotal: raw };
+      const total = parseFloat(raw);
+      if (!(total > 0)) { next[index] = row; return next; }
+
+      const price = stockPricing[row.itemTypeId];
+      const cost = Number(price?.unitCost);
+      if (billsMode && isPlainStandalone && price?.canPrice && cost > 0) {
+        const rawQty = total / cost;
+        const qty = isDecimalUnit(row.uom || price.uom || "", units)
+          ? Math.round(rawQty * 1e4) / 1e4
+          : Math.max(1, Math.round(rawQty));
+        const rate = Math.round((total / qty) * 1e12) / 1e12;
+        next[index] = {
+          ...row,
+          quantity: String(qty),
+          unitPrice: String(rate),
+          // What quantity x rate actually comes to, so the line and the bill
+          // agree to the paisa.
+          lineTotal: String(Math.round(qty * rate * 100) / 100),
+        };
+        return next;
+      }
+
+      const qty = parseFloat(row.quantity) || 0;
+      if (qty > 0) {
+        const rate = Math.round((total / qty) * 1e12) / 1e12;
+        next[index] = {
+          ...row,
+          unitPrice: String(rate),
+          lineTotal: String(Math.round(qty * rate * 100) / 100),
+        };
+      } else {
+        // No quantity to divide by: one unit at the typed amount.
+        next[index] = { ...row, quantity: "1", unitPrice: String(total), lineTotal: String(total) };
+      }
       return next;
     });
   };
@@ -869,7 +965,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
   const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
-  const balanceDue = grandTotal - whtResolved;
+
+  // Advance income tax: charged on the amount INCLUDING sales tax, and ADDED to
+  // what the customer pays. It never moves Subtotal / GST / Grand Total -- those
+  // are the sales-tax invoice, and the FBR payload must not shift.
+  const advTaxOption = findAdvanceTax(advTaxKey);
+  const grandTotalPreview = grandTotal;
+  const advTaxPreview = advanceTaxAmount(grandTotal, advTaxOption?.rate);
+
+  // What the customer actually owes: the bill, less tax withheld, plus advance
+  // tax collected. Same identity the server keeps.
+  const balanceDue = grandTotal - whtResolved + advTaxPreview;
 
   // Field-level gating booleans, derived once for clarity:
   //   • lockNonItemType — locks every BILL-level field outside the
@@ -1082,7 +1188,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // linked challan) AND only in full-edit mode. Challan-linked bills
   // would diverge from their challan if the buyer changed, so the
   // backend rejects the change and we lock it client-side.
-  const isChallanLinked = !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
+  // A bill BUILT FROM a challan has each of its lines linked back to a challan
+  // line (InvoiceItem.DeliveryItemId). A challan RAISED FROM the bill -- the
+  // reverse flow -- leaves those null and only adds a challan number. Judging
+  // by the challan NUMBERS alone therefore locked a plain standalone bill's
+  // buyer and its add/remove-items the moment a delivery was recorded against
+  // it, and told the operator to go and edit the challan instead. The bill is
+  // still the source document; it stays editable.
+  const isChallanLinked = !!(invoice?.items?.some((i) => i.deliveryItemId));
+  const hasChallansRaisedFromBill = !isChallanLinked
+    && !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
   const lockClient      = lockNonItemType || isChallanLinked;
 
   // Item add/remove policy (2026-08-08). A bill's items belong to whatever it was
@@ -1204,6 +1319,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           // rate + the typed amount. Backend recomputes/clamps the amount.
           withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
           withholdingTaxAmount: whtResolved,
+          // The server owns the rate and the amount (Helpers/AdvanceTaxRates);
+          // the form only states the section and the filer status. A null
+          // section is "None" and clears it.
+          // "" is how this form says None; null would mean "not mentioned",
+          // which leaves the bill's existing choice alone.
+          advanceTaxSection: advTaxOption?.section ?? "",
+          advanceTaxFilerActive: advTaxOption ? advTaxOption.filerActive : null,
           paymentTerms: ptToSave,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
@@ -1278,6 +1400,19 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     </div>
                   </div>
                 )}
+                {/* Deliveries recorded AGAINST this bill. Informational: the
+                    bill is the source document, so its lines stay editable
+                    here. Reducing a line below what has already gone out is
+                    what the challan plan's remaining figure guards. */}
+                {!readOnly && hasChallansRaisedFromBill && (
+                  <div style={styles.infoBox}>
+                    <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      Delivered on <b>DC#{invoice.challanNumbers.join(", DC#")}</b>, raised from
+                      this bill. Editing the lines here does not change those challans.
+                    </div>
+                  </div>
+                )}
                 {!readOnly && !isChallanLinked && isSoLinked && (
                   <div style={styles.infoBox}>
                     <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
@@ -1322,9 +1457,23 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   <div style={styles.narrowPermissionBanner}>
                     <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
                     <div>
-                      <b>Item Type + Quantity only</b> — your role lets you re-classify lines and
-                      adjust quantity. Prices, dates, payment terms, and other fields are read-only.
-                      Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                      {forceItemTypeAndQty ? (
+                        <>
+                          {/* Set by the Invoices TAB, not by the role -- telling a
+                              full administrator to go and ask an administrator for
+                              a permission they already hold was nonsense. */}
+                          <b>Classification view</b> — item type, quantity, unit price and the
+                          line amount are editable here, and the bill's own total is held to
+                          what it was. Dates, GST rate, payment terms and the buyer belong to
+                          the bill: edit those on the <b>Bills</b> tab.
+                        </>
+                      ) : (
+                        <>
+                          <b>Item Type + Quantity only</b> — your role lets you re-classify lines and
+                          adjust quantity. Prices, dates, payment terms, and other fields are read-only.
+                          Ask an administrator to grant <code>invoices.manage.update</code> for full edit access.
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1499,6 +1648,32 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                       />
                     </div>
                   )}
+                  {/* Advance Income Tax — sits beside Withholding Tax because
+                      it is the same shape of charge, in the opposite direction:
+                      withholding REDUCES what is collectible, advance tax ADDS
+                      to it. Neither moves the bill's own total. */}
+                  <div style={{ flex: 1, minWidth: 170 }}>
+                    <label style={styles.label}>Advance Income Tax</label>
+                    <select
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                      value={advTaxKey}
+                      onChange={(e) => setAdvTaxKey(e.target.value)}
+                      disabled={lockNonItemType}
+                      title="Section 236G / 236H, charged on the amount INCLUDING sales tax and added to what the customer pays"
+                    >
+                      <option value="">None</option>
+                      {ADVANCE_TAX_OPTIONS.map((o) => (
+                        <option key={o.key} value={o.key}>{advanceTaxLabel(o)}</option>
+                      ))}
+                    </select>
+                    {advTaxOption && (
+                      <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: 3 }}>
+                        {advTaxOption.rate}% of {Number(grandTotalPreview).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        {" = "}
+                        <b>Rs. {Number(advTaxPreview).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+                      </div>
+                    )}
+                  </div>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Payment Terms</label>
                     <input
@@ -1575,7 +1750,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     informational — the operator can save the bill even
                     when a row reports "no purchase on record" and
                     record the matching purchase later. */}
-                {forceItemTypeAndQty && billHsAggregate.length > 0 && (
+                {/* Hidden at the operator's request (2026-09-02): it is purely
+                    informational and took over the top of the Invoices-tab edit
+                    screen. The panel and its endpoint are kept so it can be
+                    switched back on. */}
+                {false && forceItemTypeAndQty && billHsAggregate.length > 0 && (
                   <TaxClaimPanel
                     summary={claimSummary}
                     loading={claimLoading}
@@ -1826,9 +2005,42 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                 readOnly={lockPrice}
                               />
                             </td>
-                            <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
-                              {(parseFloat(item.lineTotal) || 0).toLocaleString()}
-                            </td>
+                            {/* The line AMOUNT is an input wherever the price
+                                is editable -- on the Bills tab it is the way a
+                                standalone bill is priced, and on the Invoices
+                                tab it is how an amount is moved between lines.
+                                A text input, not type=number: the spinner ate
+                                a narrow money column, and nobody steps a bill
+                                line by 0.01. */}
+                            {lockPrice ? (
+                              <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
+                                {(parseFloat(item.lineTotal) || 0).toLocaleString()}
+                              </td>
+                            ) : (() => {
+                              const price = stockPricing[item.itemTypeId];
+                              const fromStock = billsMode && isPlainStandalone && !!price?.canPrice;
+                              return (
+                                <td style={styles.td}>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    style={{ ...styles.tableInput, textAlign: "right", fontWeight: 700 }}
+                                    value={item.lineTotal ?? ""}
+                                    onChange={(e) => updateLineTotal(idx, e.target.value
+                                      .replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1"))}
+                                    placeholder="0.00"
+                                    title={fromStock
+                                      ? `Enter the amount; the quantity follows at ${Number(price.unitCost).toLocaleString()} per ${price.uom || item.uom || "unit"}`
+                                      : "Enter the amount; the quantity stays and the rate follows"}
+                                  />
+                                  {fromStock && (
+                                    <div style={{ fontSize: "0.66rem", color: colors.textSecondary, marginTop: 2 }}>
+                                      {Number(price.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })()}
                             {!billsMode && fbrEnabled && (
                               <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
                                 {item.hsCode || <span style={styles.muted}>—</span>}
@@ -1879,12 +2091,23 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
                     <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
                   </div>
-                  {whtResolved > 0 && (
+                  {/* Collectible = grand total - tax withheld + advance tax.
+                      Advance tax alone used to show nothing here, because this
+                      whole block hung off the withholding amount. */}
+                  {(whtResolved > 0 || advTaxPreview > 0) && (
                     <>
-                      <div style={styles.totalsRow}>
-                        <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
-                        <strong>Rs. {whtResolved.toLocaleString()}</strong>
-                      </div>
+                      {whtResolved > 0 && (
+                        <div style={styles.totalsRow}>
+                          <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
+                          <strong>- Rs. {whtResolved.toLocaleString()}</strong>
+                        </div>
+                      )}
+                      {advTaxPreview > 0 && (
+                        <div style={styles.totalsRow}>
+                          <span>Advanced Income Tax {advTaxOption.section.replace("236", "236-")} ({advTaxOption.rate}%):</span>
+                          <strong>+ Rs. {advTaxPreview.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        </div>
+                      )}
                       <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
                         <span style={{ fontWeight: 700 }}>Balance due:</span>
                         <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {balanceDue.toLocaleString()}</strong>

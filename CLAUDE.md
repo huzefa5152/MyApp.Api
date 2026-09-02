@@ -370,6 +370,83 @@ quantity):
   make a bill, you do not need its pricing.
 - Suite: `scripts/test_bill_pricing_advance_tax.py` (43 checks).
 
+### 5b-6. Delivering a bill: challans raised AFTER the invoice (2026-09-02)
+
+The reverse of the long-standing challan-then-bill flow, and it must not be
+confused with it.
+
+- **`DeliveryItem.InvoiceItemId`** is the per-line link, mirroring
+  `SalesOrderItemId` exactly. Delivered = `SUM(Quantity)` over challan lines
+  pointing at a billed line, ignoring cancelled challans; remaining = billed −
+  delivered. That one sum is what makes all four shapes work: every line on one
+  challan, one line in instalments, a single line alone, or a mix.
+- **A challan writes NO stock movements.** Outward stock belongs to the invoice
+  and V2's buckets are derived from live documents, so raising a challan
+  against an already-billed invoice cannot double-count inventory. Do not
+  "fix" this by emitting movements here.
+- **`DeliveryChallan.InvoiceId` is set on the created challan**, which links it
+  to the bill AND keeps it out of the "pending challans to bill" picker — it is
+  already billed. The generic challan create path deliberately does not write
+  that field (it belongs to the billed-once flow), so
+  `CreateChallanFromInvoiceAsync` sets it after creating.
+- **An empty `Lines` list means "everything still outstanding"** — the one-click
+  case. Otherwise only the lines given, at the quantities given. Over-delivery
+  is refused server-side with the figures in the message, whatever the form
+  sends.
+- **`InvoiceDto.ChallanRemainingQuantity`** is a QUANTITY, not a flag, and is
+  filled by a batched query on the paged list (`AttachChallanRemainingAsync`).
+  The card and the table both hide the action when it reaches zero; a partly
+  delivered bill keeps it for the rest. A migrated bill reports zero — it has
+  no line items to deliver.
+- The new FK is `Restrict`, so `CompanyService.DeleteAsync` unlinks
+  `DeliveryItems.InvoiceItemId` before deleting invoice items. Without that,
+  deleting a company that ever delivered a bill fails with a 500 — the same
+  trap `CompanyItemTypeSettings` had.
+- Suite: `scripts/test_challan_from_bill.py` (27 checks).
+
+### 5b-7. Editing a bill, and what each tab may change (2026-09-03)
+
+`EditBillForm.jsx` serves BOTH tabs and the read-only view. Four rules it must
+keep:
+
+- **A bill list is ordered by when the row was WRITTEN**
+  (`CreatedAt desc, Id desc` in `InvoiceRepository`), not by invoice number.
+  Imported history sits in the reserved 900001+ band, so ordering on the number
+  put every migrated document ahead of the bill raised a minute ago — on a real
+  import that is hundreds of rows, i.e. the operator's own bill on the last page.
+- **A challan raised FROM a bill does not make that bill challan-driven.**
+  The direction is read from the LINES: a bill BUILT from a challan has
+  `InvoiceItem.DeliveryItemId` set, while the reverse flow sets
+  `DeliveryItem.InvoiceItemId` and only adds a challan number. Judging by
+  `challanNumbers` alone locked a plain standalone bill's buyer and its
+  add/remove-items the moment a delivery was recorded, and told the operator to
+  go and edit the challan instead.
+- **The Invoices tab is not read-only when FBR is off.** It used to shadow
+  `readOnly` (`groupingOnly`), which left a "View Bill" screen with no Save at
+  all — a misclassified line could only be fixed from the Bills tab. It now
+  behaves as it does with FBR on: item type, quantity, unit price and the line
+  amount are editable, and the total-preservation guard holds the bill's own
+  total, so a stock movement can be re-pointed but never invented.
+- **The line AMOUNT is an input on both tabs, and means different things:**
+  on the Bills tab for a plain standalone bill the quantity follows at the
+  stock's weighted-average cost (same contract as the create form — whole units
+  unless the UOM allows decimals, amount snapped to quantity x rate); anywhere
+  else the QUANTITY is fixed and the rate absorbs the change, which is what
+  redistributing a bill across lines means.
+
+**Advance tax on an EDIT distinguishes absent from None.** `UpdateInvoiceDto.
+AdvanceTaxSection` `null` = the caller did not mention it, so the bill keeps
+what it had (an API client editing only items must not silently drop a charge);
+`""` = the form's "None", which clears it. Before this, `UpdateAsync` never read
+the field at all and recomputed from the stored choice, so the section could
+never be set or cleared once the bill existed.
+
+**`getStockPricing(companyId, ids)` takes a COMMA-SEPARATED STRING.** Handing it
+an array makes axios send `itemTypeIds[]=84`, which binds to nothing on
+`[FromQuery] string?` and returns an empty list with a 200 — the line amount
+then silently stops pricing from stock with no error anywhere. The helper now
+joins an array itself.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -492,8 +569,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Spreadsheet import (layouts, file checks, stock, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (98 checks) |
-| Bill line pricing + advance tax (236G/236H) | `python scripts/test_bill_pricing_advance_tax.py` | `43/43 checks passed` |
+| Spreadsheet import (layouts, file checks, stock, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (101 checks) |
+| Bill line pricing + advance tax (236G/236H, incl. edit) | `python scripts/test_bill_pricing_advance_tax.py` | `50/50 checks passed` |
+| Delivery challans raised from a bill | `python scripts/test_challan_from_bill.py` | `27/27 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |

@@ -304,6 +304,24 @@ Publish output optimized from 79 MB to 37 MB via:
   would not fit above the footer, instead of printing under it. A long bill
   fits about fourteen lines on the first page.
 
+### 2026-09-03 — Bills you can actually edit, and lists that show your own work first
+
+- **Your newest bill is the first row again.** The bill and invoice lists (cards and table) now order by when a document was created, not by its number. Imported history is numbered from a reserved high band, so a single ledger import used to push the bill you raised minutes ago onto the last page.
+- **The Invoices tab can be edited when FBR is off.** It had become a view-only screen with no Save, so a wrongly classified line could only be fixed from the Bills tab. Item type, quantity, unit price and the line amount are editable there again, with the bill's own total held to what it was.
+- **Advance income tax can be set, changed and removed after a bill is issued.** The dropdown was on the create screens only; on edit the charge could not be added to a bill that went out without it, nor taken off one that should not have carried it.
+- **A bill stays editable after you deliver it.** Raising a delivery challan from a bill used to make the bill behave as though the challan came first: the buyer locked, items could not be added or removed, and the screen told you to go and edit the challan. It now says which challans were raised from the bill and leaves the bill editable.
+- **Enter the line amount when editing, not just when creating.** On a bill without a challan the quantity follows from what the stock is worth, exactly as on the create screen; elsewhere the quantity stays and the rate follows.
+- **A no-stock item no longer dead-ends the bill screen.** Picking an item with nothing on hand used to leave the amount box accepting numbers that produced nothing, with quantity and rate locked empty — the line could not be completed at all. The row now says "No stock — type the quantity and rate", turns the amount box into a running total, and leaves both fields typeable.
+- **Smaller things on the same screens:** the item picker shows what is on hand and the unit cost as soon as you pick an item; the cursor lands on the field you need next; the items table no longer scrolls sideways for 32 unused pixels; a buyer with no NTN reads as a plain name instead of "Name (—)"; the footer note no longer claims item type is optional when the form refuses to save without one; and the Tax Claim Snapshot panel is hidden.
+
+### 2026-09-02 — Deliver a bill: raise challans from an invoice
+
+- **A bill can now raise its own delivery challans.** Until now a challan came first and the bill followed; for a bill raised without one, there was no way to record what actually went out. The bill list and the bill cards gain a **Challan** action that opens the lines with what is still to deliver.
+- **Deliver it however it goes out.** Everything on one challan, a single line on its own, part of a line now and the rest later, or a mix of full and partial lines on one challan — all from the same screen. Each line shows what was billed, what has already gone, and what is left, and you cannot send more than remains.
+- **The action disappears when the bill is fully delivered**, on both the card and the table. A partly delivered bill keeps it, for the remainder. Cancelling a challan puts its quantity back, and the action returns.
+- Challans raised this way are linked to their bill, so they do not come round again in the "pending challans to bill" list.
+- Stock is untouched by this: the outward movement already belongs to the bill, so recording the delivery cannot double-count inventory.
+
 ### 2026-09-02 — Bill by amount, and advance income tax on the invoice
 
 - **On a bill with no challan you can now enter the amount and let the system work out the quantity.** Pick the item, type what you are billing, and the quantity and rate fill in from what that stock is actually worth — `rate = stock value excluding tax ÷ stock quantity`. No more working out the units by hand. Quantity and rate stay read-only while the amount is driving the line; clear the amount to type them yourself.
