@@ -170,6 +170,22 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // cost, read from the server's one valuation walk -- nothing is recomputed
   // here (see Helpers/StockValuation).
   const [stockPricing, setStockPricing] = useState({});
+  // The row whose item type was just picked. The next field to fill depends on
+  // whether that item can be priced from stock, and pricing arrives one fetch
+  // later -- so the focus is placed by an effect once the answer is in, not at
+  // the moment of the pick.
+  const [focusRow, setFocusRow] = useState(null);
+  useEffect(() => {
+    if (!focusRow) return;
+    const priced = stockPricing[focusRow.itemTypeId];
+    // undefined = the pricing for this item has not come back yet; wait for it
+    // rather than guessing and focusing the wrong box.
+    if (priced === undefined) return;
+    const key = priced.canPrice ? "amount" : "qty";
+    const el = document.querySelector(`[data-row-${key}="${focusRow.localId}"]`);
+    if (el) { el.focus(); el.select?.(); }
+    setFocusRow(null);
+  }, [focusRow, stockPricing]);
 
   // Whether a unit accepts fractional quantities is configured per Unit
   // (AllowsDecimalQuantity), the same rule the challan and bill quantity
@@ -511,6 +527,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
       };
     }));
+    // The operator's next step is the amount (or the quantity, when there is
+    // no stock to price from), so put the cursor there.
+    setFocusRow({ localId, itemTypeId: picked.id });
   };
 
   // Non-Inventory pick — mutually exclusive with an item type. Clears the
@@ -1071,7 +1090,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             ) : (
                               <div style={{ flex: 1 }}>
                                 <SearchableSelect
-                                  items={filteredClients.map((cl) => ({ ...cl, _label: `${cl.name} (${cl.registrationType || "—"}${cl.ntn ? ` · NTN ${cl.ntn}` : cl.cnic ? ` · CNIC ${cl.cnic}` : ""})` }))}
+                                  items={filteredClients.map((cl) => {
+                                    // A client with neither a registration type
+                                    // nor an NTN/CNIC used to read "Name (—)",
+                                    // so every row in the list carried an empty
+                                    // bracket. Show the bracket only when there
+                                    // is something to put in it.
+                                    const bits = [
+                                      cl.registrationType,
+                                      cl.ntn ? `NTN ${cl.ntn}` : cl.cnic ? `CNIC ${cl.cnic}` : null,
+                                    ].filter(Boolean);
+                                    return { ...cl, _label: bits.length ? `${cl.name} (${bits.join(" · ")})` : cl.name };
+                                  })}
                                   value={selectedClientId}
                                   onChange={(id) => setSelectedClientId(id ? String(id) : "")}
                                   labelKey="_label"
@@ -1303,7 +1333,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       />
 
                       <div style={styles.unifiedTableWrap}>
-                        <table style={styles.unifiedTable}>
+                        {/* Sideways scroll only when the table genuinely needs
+                            it. A flat 1200px floor forced a scrollbar for 32
+                            unused pixels on a 1280 desktop; the OPTIONAL
+                            columns (GL account, MRP, SRO) are what actually
+                            make it wide, so they are what raise the floor. */}
+                        <table style={{ ...styles.unifiedTable, minWidth: 900 + (glOn ? 120 : 0) + (showMRP ? 110 : 0) + (showSRO ? 240 : 0) }}>
                           <thead>
                             <tr style={styles.unifiedThead}>
                               {/* Optional in Bills mode — a type picked at
@@ -1337,6 +1372,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                             {rows.map((r) => {
                               const q = parseFloat(r.quantity) || 0;
                               const p = parseFloat(r.unitPrice) || 0;
+                              // Pricing from stock needs BOTH a quantity and a
+                              // value on hand. When the item has neither, the
+                              // amount box cannot work anything out -- so the
+                              // quantity and rate have to stay typeable.
+                              // Locking them on the mere presence of text in
+                              // the amount box left the row unfillable: the
+                              // operator typed 5,000, nothing was derived, and
+                              // both fields went read-only and empty.
+                              const priced = stockPricing[r.itemTypeId];
+                              const canDerive = !!r.itemTypeId && !!priced?.canPrice;
+                              const noStock = !!r.itemTypeId && !!priced && !priced.canPrice;
+                              const derivedFromAmount = canDerive && !!r.lineTotal;
                               return (
                                 <tr key={r.localId} style={styles.unifiedRow}>
                                   <td style={styles.unifiedTd}>
@@ -1351,6 +1398,23 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       placeholder="Required — pick item or non-inventory…"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                     />
+                                    {/* What this item is worth, right where it
+                                        was picked. Without it the operator only
+                                        found out that a line could not be priced
+                                        after typing an amount into a box that
+                                        then did nothing. */}
+                                    {canDerive && (
+                                      <div style={styles.stockChipOk}>
+                                        {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 2 })} {priced.uom || r.uom || ""} on hand
+                                        {" · "}
+                                        {Number(priced.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
+                                      </div>
+                                    )}
+                                    {noStock && (
+                                      <div style={styles.stockChipNone}>
+                                        No stock — type the quantity and rate
+                                      </div>
+                                    )}
                                   </td>
                                   {/* Description: in Invoices mode it stays locked to the
                                       picked item type's name (text display). In Bills mode
@@ -1384,12 +1448,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       type="number" min={0} step="any"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                       value={r.quantity}
+                                      data-row-qty={r.localId}
                                       onChange={(e) => updateRow(r.localId, { quantity: e.target.value, lineTotal: "" })}
                                       placeholder="0"
-                                      readOnly={!!r.lineTotal}
-                                      title={r.lineTotal
+                                      readOnly={derivedFromAmount}
+                                      title={derivedFromAmount
                                         ? "Worked out from the amount. Clear the amount to type a quantity yourself."
-                                        : ""}
+                                        : noStock
+                                          ? "Nothing on hand to price from — type the quantity here."
+                                          : ""}
                                     />
                                   </td>
                                   <td style={styles.unifiedTd}>
@@ -1432,10 +1499,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       value={r.unitPrice}
                                       onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value, lineTotal: "" })}
                                       placeholder="0.00"
-                                      readOnly={!!r.lineTotal}
-                                      title={r.lineTotal
+                                      readOnly={derivedFromAmount}
+                                      title={derivedFromAmount
                                         ? "Worked out from the amount. Clear the amount to type a rate yourself."
-                                        : ""}
+                                        : noStock
+                                          ? "Nothing on hand to price from — type the rate here."
+                                          : ""}
                                     />
                                   </td>
                                   {/* Enter the AMOUNT and the quantity follows,
@@ -1450,8 +1519,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       unreadable, and this is a money field nobody
                                       wants to step by 0.01. */}
                                   {(() => {
-                                    const price = stockPricing[r.itemTypeId];
-                                    const ready = !!r.itemTypeId && !!price?.canPrice;
+                                    const price = priced;
+                                    const ready = canDerive;
                                     const shown = r.lineTotal !== undefined && r.lineTotal !== ""
                                       ? r.lineTotal
                                       : (q * p ? (q * p).toFixed(2) : "");
@@ -1465,7 +1534,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         <input
                                           type="text"
                                           inputMode="decimal"
-                                          disabled={!r.itemTypeId}
+                                          data-row-amount={r.localId}
+                                          // Off until there is stock to price
+                                          // against. An enabled box that can
+                                          // never work anything out is the
+                                          // dead end this replaces.
+                                          disabled={!r.itemTypeId || noStock}
                                           style={{
                                             ...styles.input,
                                             padding: "0.35rem 0.5rem",
@@ -1474,8 +1548,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                             textAlign: "right",
                                             minWidth: 108,
                                             fontVariantNumeric: "tabular-nums",
-                                            backgroundColor: !r.itemTypeId ? "#f1f3f6" : colors.inputBg,
-                                            cursor: !r.itemTypeId ? "not-allowed" : "text",
+                                            backgroundColor: (!r.itemTypeId || noStock) ? "#f1f3f6" : colors.inputBg,
+                                            cursor: (!r.itemTypeId || noStock) ? "not-allowed" : "text",
                                             borderColor: overStock ? "#e65100" : undefined,
                                           }}
                                           value={shown}
@@ -1488,16 +1562,21 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                             applyLineTotal(r.localId, cleaned);
                                           }}
                                           onBlur={() => commitLineTotal(r.localId)}
-                                          placeholder={r.itemTypeId ? "0.00" : "pick an item"}
+                                          placeholder={!r.itemTypeId ? "pick an item" : noStock ? "n/a" : "0.00"}
                                           title={!r.itemTypeId
                                             ? "Pick an item type first — the quantity is worked out from what that stock is worth"
                                             : ready
                                               ? `Enter the amount; quantity is worked out at ${Number(price.unitCost).toLocaleString()} per ${price.uom || "unit"}`
-                                              : "Enter the amount, or type a quantity and unit price directly"}
+                                              : price?.note || "Type a quantity and unit price instead"}
                                         />
-                                        {r.itemTypeId && price && !price.canPrice && (
-                                          <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
-                                            {price.note}
+                                        {/* The reason lives on the chip under the
+                                            item picker; five wrapped lines of it
+                                            in this narrow column only crushed the
+                                            row. Here the box just reports what
+                                            quantity x rate came to. */}
+                                        {noStock && (
+                                          <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
+                                            qty × rate
                                           </div>
                                         )}
                                         {ready && (
@@ -1605,7 +1684,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <p style={styles.fbrToggleHint}>
                         <b>*</b> required ·
                         {billsMode ? (
-                          <> <b>Item Type</b> is optional — picking one classifies the line (HS Code / UOM / Sale Type ride along) and shows on the Invoices tab</>
+                          <> every line needs an <b>item type</b> or a <b>non-inventory item</b> — an item type also classifies the line (HS Code / UOM / Sale Type ride along) and shows it on the Invoices tab</>
                         ) : (
                           <> <b>Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type</>
                         )}
@@ -1720,6 +1799,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 // so InvoiceForm (with-challan) can import the same pieces.
 
 const styles = {
+  // Stock at a glance under the item picker: what is on hand and what it is
+  // worth per unit, or that there is none.
+  stockChipOk: {
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#00695c",
+    fontVariantNumeric: "tabular-nums",
+  },
+  stockChipNone: {
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#8d6e00",
+    fontWeight: 600,
+  },
+
   row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
@@ -1738,7 +1828,7 @@ const styles = {
   tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
   removeRowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.3rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", color: colors.danger, cursor: "pointer" },
   unifiedTableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
-  unifiedTable: { width: "100%", borderCollapse: "collapse", minWidth: 1200 },
+  unifiedTable: { width: "100%", borderCollapse: "collapse" },   // minWidth is computed at the call site
   unifiedThead: { backgroundColor: "#eff3f8" },
   unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   unifiedRow: { backgroundColor: "#fff" },
