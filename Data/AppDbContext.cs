@@ -1371,6 +1371,9 @@ namespace MyApp.Api.Data
                 .Property(m => m.UnitCostExcludingTax).HasColumnType("decimal(18,4)");
             modelBuilder.Entity<StockMovement>()
                 .Property(m => m.SalesTaxRate).HasColumnType("decimal(5,2)");
+            // A signed money correction, so 2dp like every other stored amount.
+            modelBuilder.Entity<StockMovement>()
+                .Property(m => m.ValueAdjustmentExcludingTax).HasColumnType("decimal(18,2)");
 
             // ── Spreadsheet import ─────────────────────────────────────────
             // ImportProfile mirrors POFormat: the signature hash is the routing

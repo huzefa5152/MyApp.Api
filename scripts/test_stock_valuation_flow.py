@@ -15,12 +15,17 @@ the way through a purchase, a sale and both directions of adjustment:
                        margin must not drain more value than the goods cost.
     4. Adjustments     up with a stated cost, up without one (valued at the
                        average), and down.
-    5. Movements feed  every row carries its own unit cost, value and running
+    5. Corrections     putting a mistake right: a wrong value on a right
+                       quantity, a wrong count, or both. "set" mode takes the
+                       truth and works out the change; "delta" mode takes the
+                       change. Neither figure may go negative, and zero
+                       quantity may not be left holding money.
+    6. Movements feed  every row carries its own unit cost, value and running
                        balance, and the last running value is the grid's value.
-    6. Emptying        selling the last unit leaves value at exactly zero, with
-                       no stray paisa left behind by rounding.
     7. Rate change     a purchase at a different rate re-prices the item, so
                        sales tax and the inclusive total follow it.
+    8. Emptying        selling the last unit leaves value at exactly zero, with
+                       no stray paisa left behind by rounding.
 
 The workbook is synthetic by default so the suite runs anywhere. Pass
 --stock-file to run the same flow against a real sheet through the SHIPPED
@@ -293,6 +298,15 @@ def suite_import(api, h, cid, workbook, mapping, expect, label):
     check("the commit reports the sheet's sales tax",
           near(res.get("totalSalesTax"), e_tax, 0.5),
           f"got {res.get('totalSalesTax')} want {e_tax}")
+    # The import has to be able to CREATE the catalog row, not only update an
+    # existing one -- an onboarding import is the case where nothing exists yet.
+    touched = (res.get("itemTypesCreated") or 0) + (res.get("itemTypesUpdated") or 0)
+    check("the import creates or adopts an item type per row",
+          touched >= 1 or (res.get("openingBalancesWritten") or 0) >= 1,
+          f"created={res.get('itemTypesCreated')} updated={res.get('itemTypesUpdated')}")
+    check("an opening balance is written for every row",
+          (res.get("openingBalancesWritten") or 0) == len(body["rows"]),
+          f"wrote {res.get('openingBalancesWritten')} of {len(body['rows'])}")
 
     print("\n-- 1b. The stock dashboard reads back the same five figures --")
     t = onhand_totals(api, h, cid)
@@ -437,16 +451,145 @@ def suite_adjustments(api, h, cid, item, before):
     return c
 
 
+def suite_correction(api, h, cid, item, before):
+    """The case the feature exists for: the operator got it wrong and has to
+    put it right -- a wrong value on a right quantity, a wrong count, or both.
+
+    Two modes. "set" takes the TRUTH and works out the change (the default,
+    because someone fixing a mistake knows the right answer, not the size of
+    their error); "delta" takes the change itself."""
+    print("\n-- 5. Correcting a mistake: quantity, value, or both --")
+    today = date.today().isoformat()
+    qty0 = float(before["onHand"])
+    val0 = float(before["valueExcludingTax"])
+
+    # 5a. Value wrong, quantity right -- impossible before this existed, since
+    #     value could only move when quantity moved.
+    target = round(val0 - 5000, 2)
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetValueExcludingTax": target,
+        "movementDate": today, "notes": "value was mistyped"})
+    check("a value-only correction is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+    a = onhand_row(api, h, cid, item["itemTypeId"])
+    check("the quantity is untouched by a value-only correction",
+          near(a["onHand"], qty0, QTY_TOL), f"{qty0} became {a['onHand']}")
+    check("the value becomes exactly what was asked for",
+          near(a["valueExcludingTax"], target, 0.02),
+          f"wanted {target}, got {a['valueExcludingTax']}")
+    check("the average cost follows the corrected value",
+          near(a["unitCost"], target / qty0, 0.001), f"{a['unitCost']}")
+    check("sales tax is recomputed on the corrected value",
+          near(a["salesTax"], round(float(a["valueExcludingTax"]) * float(a["salesTaxRate"]) / 100, 2), 0.02))
+
+    # 5b. Both wrong at once.
+    tq, tv = round(qty0 - 4, 4), round(target - 3000, 2)
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetQuantity": tq, "targetValueExcludingTax": tv,
+        "movementDate": today, "notes": "recount and revalue"})
+    check("a quantity + value correction is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+    b = onhand_row(api, h, cid, item["itemTypeId"])
+    check("the quantity becomes what was asked for", near(b["onHand"], tq, QTY_TOL), f"{b['onHand']}")
+    check("the value becomes what was asked for",
+          near(b["valueExcludingTax"], tv, 0.02), f"wanted {tv}, got {b['valueExcludingTax']}")
+
+    # 5c. Correcting UP: the two figures the operator gave imply the cost of
+    #     what is being added, so the average must land where they said.
+    tq2, tv2 = round(tq + 10, 4), round(tv + 8000, 2)
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetQuantity": tq2, "targetValueExcludingTax": tv2,
+        "movementDate": today, "notes": "found more, worth more"})
+    check("correcting both figures upward is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+    c = onhand_row(api, h, cid, item["itemTypeId"])
+    check("an upward correction lands on both figures exactly",
+          near(c["onHand"], tq2, QTY_TOL) and near(c["valueExcludingTax"], tv2, 0.02),
+          f"qty {c['onHand']} value {c['valueExcludingTax']}")
+
+    # 5d. Setting the same figures again is refused rather than writing a
+    #     no-op movement into the audit trail.
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetQuantity": tq2, "targetValueExcludingTax": tv2,
+        "movementDate": today, "notes": "again"})
+    check("re-stating the figures already on record is refused", r.status_code == 400,
+          f"http {r.status_code}")
+
+    # 5e. Money behind an empty bin is refused -- the invariant the outward
+    #     path keeps has to hold for a correction too.
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetQuantity": 0, "targetValueExcludingTax": 500,
+        "movementDate": today, "notes": "impossible"})
+    check("zero quantity with a value left over is refused", r.status_code == 400,
+          f"http {r.status_code}: {r.text[:160]}")
+
+    # 5f. Neither figure may go negative.
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "set",
+        "targetValueExcludingTax": -1, "movementDate": today, "notes": "negative"})
+    check("a negative target value is refused", r.status_code == 400, f"http {r.status_code}")
+
+    # 5g. The delta mode gains a value change of its own -- a write-down.
+    d0 = onhand_row(api, h, cid, item["itemTypeId"])
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "delta",
+        "delta": 0, "valueDelta": -2500,
+        "movementDate": today, "notes": "write-down, goods unchanged"})
+    check("a value-only write-down is accepted in delta mode", r.ok,
+          f"http {r.status_code}: {r.text[:200]}")
+    d1 = onhand_row(api, h, cid, item["itemTypeId"])
+    check("the write-down moves value and not quantity",
+          near(d1["onHand"], d0["onHand"], QTY_TOL)
+          and near(d1["valueExcludingTax"], float(d0["valueExcludingTax"]) - 2500, 0.02),
+          f"qty {d1['onHand']} value {d1['valueExcludingTax']}")
+
+    # 5h. A write-down cannot take the value below zero.
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "delta",
+        "delta": 0, "valueDelta": -(float(d1["valueExcludingTax"]) + 10_000),
+        "movementDate": today, "notes": "too far"})
+    check("a write-down below zero is refused", r.status_code == 400, f"http {r.status_code}")
+
+    # 5i. An empty adjustment is still refused in both modes.
+    r = api_call("POST", f"{api}/stock/adjust", h, json={
+        "companyId": cid, "itemTypeId": item["itemTypeId"], "mode": "delta",
+        "delta": 0, "movementDate": today, "notes": "nothing"})
+    check("an adjustment that changes nothing is refused", r.status_code == 400,
+          f"http {r.status_code}")
+
+    # 5j. The correction shows up in the feed as a revaluation, with no
+    #     quantity and the money on it.
+    rows = movements(api, h, cid, item["itemTypeId"])
+    revals = [m for m in rows if m["sourceType"] == "Revaluation"]
+    check("the corrections are recorded as revaluation movements", len(revals) >= 2,
+          f"found {len(revals)}")
+    check("a revaluation carries no quantity",
+          all(near(m["quantity"], 0, QTY_TOL) for m in revals))
+    check("a revaluation carries the money that moved",
+          all(abs(float(m["value"])) > 0 for m in revals))
+    last = rows[-1]
+    check("the feed's running value still ends at the grid's value",
+          near(last["runningValue"], d1["valueExcludingTax"], 0.02),
+          f"feed {last['runningValue']} vs grid {d1['valueExcludingTax']}")
+    return d1
+
+
 def suite_feed(api, h, cid, item, grid):
-    print("\n-- 5. The movement feed carries the money, row by row --")
+    print("\n-- 6. The movement feed carries the money, row by row --")
     rows = movements(api, h, cid, item["itemTypeId"])
     if not check("the feed returns this item's movements", len(rows) > 0):
         return
-    check("every movement is priced", all(float(m.get("unitCost") or 0) > 0 for m in rows),
-          f"{sum(1 for m in rows if not float(m.get('unitCost') or 0))} rows without a cost")
+    # A revaluation moves money with no goods, so it has no quantity and no
+    # unit cost -- these two checks are about movements that carry stock.
+    flows = [m for m in rows if m["sourceType"] != "Revaluation"]
+    check("every stock movement is priced",
+          all(float(m.get("unitCost") or 0) > 0 for m in flows),
+          f"{sum(1 for m in flows if not float(m.get('unitCost') or 0))} rows without a cost")
     check("each movement's value is its quantity x its unit cost",
           all(near(m["value"], round(float(m["quantity"]) * float(m["unitCost"]), 2), 0.05)
-              for m in rows),
+              for m in flows),
           "a row's value does not match its own quantity and cost")
     last = rows[-1]
     check("the last running quantity is the grid's on-hand",
@@ -458,10 +601,14 @@ def suite_feed(api, h, cid, item, grid):
     check("ins and outs reconcile with the opening to the grid's quantity",
           near(sum(float(m["quantity"]) * (1 if m["direction"] == "In" else -1) for m in rows)
                + float(grid["openingBalance"]), grid["onHand"], QTY_TOL))
-    check("total value in minus total value out is the grid's value",
-          near(sum(float(m["value"]) * (1 if m["direction"] == "In" else -1) for m in rows)
-               + float(grid["valueIn"]) - float(grid["valueIn"]),
-               float(grid["valueExcludingTax"]) - _opening_value(api, h, cid, item), 0.05))
+    # Every row's signed money, plus the opening, is the value on the grid.
+    # Revaluations count here -- they are part of how the value got where it is.
+    signed = sum(float(m["value"]) * (1 if m["direction"] == "In" else -1) for m in rows)
+    check("the opening plus every movement's money is the grid's value",
+          near(_opening_value(api, h, cid, item) + signed,
+               float(grid["valueExcludingTax"]), 0.05),
+          f"opening+moves {_opening_value(api, h, cid, item) + signed} "
+          f"vs grid {grid['valueExcludingTax']}")
 
 
 def _opening_value(api, h, cid, item):
@@ -473,7 +620,7 @@ def _opening_value(api, h, cid, item):
 
 
 def suite_rate_change(api, h, cid, supplier_id, item):
-    print("\n-- 6. A purchase at a different rate re-prices the item --")
+    print("\n-- 7. A purchase at a different rate re-prices the item --")
     before = onhand_row(api, h, cid, item["itemTypeId"])
     r = api_call("POST", f"{api}/purchasebills", h, json={
         "date": datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z"),
@@ -494,7 +641,7 @@ def suite_rate_change(api, h, cid, supplier_id, item):
 
 
 def suite_empty(api, h, cid, client_id, item, grid):
-    print("\n-- 7. Selling the last unit leaves value at exactly zero --")
+    print("\n-- 8. Selling the last unit leaves value at exactly zero --")
     qty = float(grid["onHand"])
     if qty <= 0:
         skip("stock empties to a value of zero", "nothing left to sell")
@@ -598,7 +745,8 @@ def main():
         if after_sell is None:
             return report()
         after_adj = suite_adjustments(api, h, cid, item, after_sell)
-        suite_feed(api, h, cid, item, after_adj)
+        after_fix = suite_correction(api, h, cid, item, after_adj)
+        suite_feed(api, h, cid, item, after_fix)
         suite_rate_change(api, h, cid, supplier_id, item)
         suite_empty(api, h, cid, client_id, item,
                     onhand_row(api, h, cid, item["itemTypeId"]))

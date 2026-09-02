@@ -69,7 +69,16 @@ export default function StockDashboardPage() {
   const [showOpening, setShowOpening] = useState(false);
   const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
   const [showAdjust, setShowAdjust] = useState(false);
-  const [adjustDraft, setAdjustDraft] = useState({ itemTypeId: "", delta: 0, unitCost: "", salesTaxRate: "", movementDate: todayYmd(), notes: "" });
+  // "set" is the default: someone fixing a mistake knows what the figures
+  // SHOULD be, not the size of their error, so the form takes the truth and
+  // the server works out the change. "delta" is still there for a genuine
+  // movement ("10 more arrived", "3 broke").
+  const [adjustDraft, setAdjustDraft] = useState({
+    itemTypeId: "", mode: "set",
+    delta: 0, valueDelta: "", unitCost: "",
+    targetQuantity: "", targetValue: "",
+    salesTaxRate: "", movementDate: todayYmd(), notes: "",
+  });
   // Set when the Adjustment modal is launched from a grid row — the item
   // is fixed (read-only display) so the operator just types the delta.
   // Null when opened from the header button (free pick).
@@ -223,7 +232,11 @@ export default function StockDashboardPage() {
   const closeAdjust = () => {
     setShowAdjust(false);
     setAdjustLockedItem(null);
-    setAdjustDraft({ itemTypeId: "", delta: 0, movementDate: todayYmd(), notes: "" });
+    setAdjustDraft({
+      itemTypeId: "", mode: "set", delta: 0, valueDelta: "", unitCost: "",
+      targetQuantity: "", targetValue: "", salesTaxRate: "",
+      movementDate: todayYmd(), notes: "",
+    });
   };
 
   // Per-row "Adjust" action on the on-hand grid: open the Adjustment modal
@@ -231,7 +244,16 @@ export default function StockDashboardPage() {
   // delta. Header "Adjustment" button keeps the free item pick.
   const openAdjustForRow = (r) => {
     setAdjustLockedItem({ id: r.itemTypeId, name: r.itemTypeName, hsCode: r.hsCode, uom: r.uom });
-    setAdjustDraft({ itemTypeId: String(r.itemTypeId), delta: 0, unitCost: "", salesTaxRate: r.salesTaxRate ? String(r.salesTaxRate) : "", movementDate: todayYmd(), notes: "" });
+    setAdjustDraft({
+      itemTypeId: String(r.itemTypeId), mode: "set",
+      delta: 0, valueDelta: "", unitCost: "",
+      // Prefilled with what is on record, so the operator edits the figure
+      // that is wrong and leaves the rest alone.
+      targetQuantity: String(r.onHand ?? ""),
+      targetValue: r.valueExcludingTax != null ? String(r.valueExcludingTax) : "",
+      salesTaxRate: r.salesTaxRate ? String(r.salesTaxRate) : "",
+      movementDate: todayYmd(), notes: "",
+    });
     setShowAdjust(true);
   };
 
@@ -276,18 +298,31 @@ export default function StockDashboardPage() {
 
   const submitAdjust = async (e) => {
     e.preventDefault();
-    if (!adjustDraft.itemTypeId || !adjustDraft.delta) return notify("Pick an item and a non-zero delta.", "error");
+    if (!adjustDraft.itemTypeId) return notify("Pick an item.", "error");
+    if (adjustDraft.mode === "set"
+        && adjustDraft.targetQuantity === "" && adjustDraft.targetValue === "")
+      return notify("Say what the quantity or the value should be.", "error");
+    if (adjustDraft.mode === "delta"
+        && !parseFloat(adjustDraft.delta) && !parseFloat(adjustDraft.valueDelta))
+      return notify("Give a quantity change, a value change, or both.", "error");
     try {
-      await adjustStock({
+      const setMode = adjustDraft.mode === "set";
+      const { data } = await adjustStock({
         companyId: selectedCompany.id,
         itemTypeId: parseInt(adjustDraft.itemTypeId),
-        delta: parseFloat(adjustDraft.delta),
-        unitCostExcludingTax: parseFloat(adjustDraft.unitCost) || null,
+        mode: adjustDraft.mode,
+        delta: setMode ? 0 : parseFloat(adjustDraft.delta) || 0,
+        valueDelta: setMode ? null : parseFloat(adjustDraft.valueDelta) || null,
+        targetQuantity: setMode && adjustDraft.targetQuantity !== ""
+          ? parseFloat(adjustDraft.targetQuantity) : null,
+        targetValueExcludingTax: setMode && adjustDraft.targetValue !== ""
+          ? parseFloat(adjustDraft.targetValue) : null,
+        unitCostExcludingTax: setMode ? null : parseFloat(adjustDraft.unitCost) || null,
         salesTaxRate: parseFloat(adjustDraft.salesTaxRate) || null,
         movementDate: adjustDraft.movementDate,
         notes: adjustDraft.notes || null,
       });
-      notify("Adjustment recorded.", "success");
+      notify(data?.message || "Adjustment recorded.", "success");
       closeAdjust();
       fetchAll();
     } catch (err) {
@@ -314,6 +349,33 @@ export default function StockDashboardPage() {
   const openingAllowsDecimal = isDecimalUnit(openingUom, units);
   // Fall back to the locked row's UOM when the catalog lookup misses
   // (e.g. soft-deleted item type still present in the grid).
+  // What the grid currently says about the picked item. The dialog needs it
+  // to show "currently x, worth y" and to compute the change it is about to
+  // make; an item with no stock yet simply has no row and reads as zeros.
+  const adjustCurrent = onhand.find(r => String(r.itemTypeId) === String(adjustDraft.itemTypeId)) || null;
+
+  // Spell out the change the server is about to make, in the operator's own
+  // figures, so "correct it to" never feels like a guess.
+  const adjustPlan = (() => {
+    if (adjustDraft.mode !== "set" || !adjustCurrent) return null;
+    const curQty = Number(adjustCurrent.onHand || 0);
+    const curVal = Number(adjustCurrent.valueExcludingTax || 0);
+    const tQty = adjustDraft.targetQuantity === "" ? curQty : parseFloat(adjustDraft.targetQuantity);
+    const tVal = adjustDraft.targetValue === "" ? curVal : parseFloat(adjustDraft.targetValue);
+    if (Number.isNaN(tQty) || Number.isNaN(tVal)) return null;
+    const dQty = tQty - curQty;
+    const dVal = tVal - curVal;
+    const rate = parseFloat(adjustDraft.salesTaxRate) || Number(adjustCurrent.salesTaxRate || 0);
+    const tax = Math.round(tVal * rate) / 100;
+    return {
+      qtyText: dQty === 0 ? "No change to the quantity."
+        : `${dQty > 0 ? "Adds" : "Removes"} ${num(Math.abs(dQty))}.`,
+      valueText: dVal === 0 ? "No change to the value."
+        : `${dVal > 0 ? "Adds" : "Removes"} ${money(Math.abs(dVal))}.`,
+      result: `Result: ${num(tQty)} · ${money(tVal)} excl · tax ${money(tax)} · including ${money(tVal + tax)}`,
+    };
+  })();
+
   const adjustItem = itemTypes.find(it => String(it.id) === String(adjustDraft.itemTypeId)) || adjustLockedItem;
   const adjustUom = adjustItem?.uom || "";
   const adjustAllowsDecimal = isDecimalUnit(adjustUom, units);
@@ -846,8 +908,12 @@ export default function StockDashboardPage() {
                             <td style={styles.td}>{new Date(m.movementDate).toLocaleDateString()}</td>
                             <td style={styles.td}>{m.itemTypeName}</td>
                             <td style={{ ...styles.td, color: m.direction === "In" ? "#2e7d32" : "#c62828", fontWeight: 600 }}>{m.direction}</td>
-                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{m.quantity.toLocaleString()}</td>
-                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>{num(m.unitCost)}</td>
+                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
+                              {m.sourceType === "Revaluation" ? "—" : m.quantity.toLocaleString()}
+                            </td>
+                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
+                              {m.sourceType === "Revaluation" ? "—" : num(m.unitCost)}
+                            </td>
                             <td style={{ ...styles.tdMoney, color: m.direction === "In" ? "#2e7d32" : "#c62828" }}>
                               {m.direction === "In" ? "+" : "−"}{money(m.value)}
                             </td>
@@ -978,22 +1044,102 @@ export default function StockDashboardPage() {
               </>
             )}
           </Field>
-          <Field label="Delta (positive = up, negative = down)">
-            <input type="number" step={adjustAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={adjustDraft.delta} onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} />
-            {adjustItem && (
-              <div style={qtyHint}>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
-            )}
-          </Field>
-          {parseFloat(adjustDraft.delta) > 0 && (
+          {adjustCurrent && (
+            <div style={adjustNow}>
+              <span style={adjustNowLabel}>On record now</span>
+              <span>
+                <strong>{num(adjustCurrent.onHand)}</strong>{adjustUom ? ` ${adjustUom}` : ""}
+                {" · "}<strong>{money(adjustCurrent.valueExcludingTax)}</strong> excl
+                {adjustCurrent.salesTaxRate ? ` · ${num(adjustCurrent.salesTaxRate)}%` : ""}
+              </span>
+            </div>
+          )}
+
+          <div style={modeRow}>
+            {[["set", "Correct it to"], ["delta", "Adjust by"]].map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setAdjustDraft({ ...adjustDraft, mode: m })}
+                style={{
+                  ...modeBtn,
+                  backgroundColor: adjustDraft.mode === m ? colors.blue : "#fff",
+                  color: adjustDraft.mode === m ? "#fff" : colors.textPrimary,
+                  borderColor: adjustDraft.mode === m ? colors.blue : colors.inputBorder,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div style={{ ...qtyHint, marginBottom: "0.6rem" }}>
+            {adjustDraft.mode === "set"
+              ? "Type what the figures should actually be — the change is worked out for you. Use this to fix a wrong count or a wrong value."
+              : "Type the change itself — for goods that genuinely arrived or were lost."}
+          </div>
+
+          {adjustDraft.mode === "set" ? (
             <>
-              <Field label="Unit cost excluding tax">
-                <input type="number" min={0} step="0.0001" style={mInput} value={adjustDraft.unitCost} onChange={e => setAdjustDraft({ ...adjustDraft, unitCost: e.target.value })} placeholder="leave blank to use the current average" />
+              <Field label="Quantity it should be">
+                <input type="number" min={0} step={adjustAllowsDecimal ? "0.0001" : "1"} style={mInput}
+                       value={adjustDraft.targetQuantity}
+                       onChange={e => setAdjustDraft({ ...adjustDraft, targetQuantity: e.target.value })} />
                 <div style={qtyHint}>
-                  Blank values the stock coming in at the average already on hand — right for a count correction.
+                  {adjustItem && <>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}. </>}
+                  {adjustPlan?.qtyText}
+                </div>
+              </Field>
+              <Field label="Value excluding sales tax it should be">
+                <input type="number" min={0} step="0.01" style={mInput}
+                       value={adjustDraft.targetValue}
+                       onChange={e => setAdjustDraft({ ...adjustDraft, targetValue: e.target.value })} />
+                <div style={qtyHint}>
+                  Total worth of that quantity, not per unit. {adjustPlan?.valueText}
                 </div>
               </Field>
               <Field label="Sales tax rate %">
-                <input type="number" min={0} max={100} step="0.01" style={mInput} value={adjustDraft.salesTaxRate} onChange={e => setAdjustDraft({ ...adjustDraft, salesTaxRate: e.target.value })} placeholder="18" />
+                <input type="number" min={0} max={100} step="0.01" style={mInput}
+                       value={adjustDraft.salesTaxRate}
+                       onChange={e => setAdjustDraft({ ...adjustDraft, salesTaxRate: e.target.value })}
+                       placeholder="18" />
+                <div style={qtyHint}>{adjustPlan?.result}</div>
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="Quantity change (positive = up, negative = down)">
+                <input type="number" step={adjustAllowsDecimal ? "0.0001" : "1"} style={mInput}
+                       value={adjustDraft.delta}
+                       onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} />
+                {adjustItem && (
+                  <div style={qtyHint}>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
+                )}
+              </Field>
+              <Field label="Value change excluding tax (optional)">
+                <input type="number" step="0.01" style={mInput}
+                       value={adjustDraft.valueDelta}
+                       onChange={e => setAdjustDraft({ ...adjustDraft, valueDelta: e.target.value })}
+                       placeholder="e.g. -5000 to write stock down" />
+                <div style={qtyHint}>
+                  Changes what the stock is worth without moving any of it. Leave blank when only the quantity changed.
+                </div>
+              </Field>
+              {parseFloat(adjustDraft.delta) > 0 && (
+                <Field label="Unit cost excluding tax">
+                  <input type="number" min={0} step="0.0001" style={mInput}
+                         value={adjustDraft.unitCost}
+                         onChange={e => setAdjustDraft({ ...adjustDraft, unitCost: e.target.value })}
+                         placeholder="leave blank to use the current average" />
+                  <div style={qtyHint}>
+                    Blank values the stock coming in at the average already on hand — right for a count correction.
+                  </div>
+                </Field>
+              )}
+              <Field label="Sales tax rate %">
+                <input type="number" min={0} max={100} step="0.01" style={mInput}
+                       value={adjustDraft.salesTaxRate}
+                       onChange={e => setAdjustDraft({ ...adjustDraft, salesTaxRate: e.target.value })}
+                       placeholder="18" />
               </Field>
             </>
           )}
@@ -1160,6 +1306,23 @@ function Field({ label, children }) {
 
 const mInput = { width: "100%", padding: "0.45rem 0.65rem", border: "1px solid #d0d7e2", borderRadius: 8, fontSize: "0.85rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
 const qtyHint = { fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.35rem" };
+// "On record now" strip + the mode switch at the top of the Adjustment dialog.
+const adjustNow = {
+  display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "baseline",
+  padding: "0.5rem 0.7rem", marginBottom: "0.7rem",
+  border: "1px solid #e8edf3", borderRadius: 8,
+  backgroundColor: "#f0f7ff", fontSize: "0.85rem", color: "#1a2332",
+};
+const adjustNowLabel = {
+  fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.04em",
+  textTransform: "uppercase", color: "#5f6d7e", marginRight: "0.3rem",
+};
+const modeRow = { display: "flex", gap: "0.4rem", marginBottom: "0.35rem" };
+// 40px tall so the pair stays a comfortable tap target on a phone.
+const modeBtn = {
+  flex: 1, minHeight: 40, padding: "0.45rem 0.6rem", borderRadius: 8,
+  border: "1px solid", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600,
+};
 const rowAdjustBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" };
 const cardAdjustBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 const cardDrillBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", width: "100%", minHeight: 40, marginTop: "0.6rem", padding: "0.45rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };

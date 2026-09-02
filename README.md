@@ -289,6 +289,32 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-02 — Fixing a stock mistake: quantity, value, or both
+
+- **A wrong value can now be corrected on its own.** Until now stock value only
+  moved when quantity moved, so an item counted correctly but valued wrongly —
+  an imported figure, a mistyped opening — could not be put right at all.
+- **The adjustment dialog asks what the figures *should be*, not what to change
+  them by.** It shows what is on record, prefills the current quantity, value
+  and rate, and spells out the change it is about to make and the result,
+  including the sales tax and inclusive total. "Adjust by" is still there for
+  goods that genuinely arrived or were lost, and it can now carry a value change
+  of its own — a write-down that leaves the quantity alone.
+- Corrections are recorded as ordinary movements, so the stock ledger shows what
+  was changed and when. A value correction appears as a *revaluation* with no
+  quantity against it.
+- Two things a correction will refuse: taking either figure below zero, and
+  leaving an on-hand of zero still holding money.
+- **Fixed: a company that had ever mapped a GL account to an item type could not
+  be deleted.** The per-company item-type overlay held a reference to the
+  company's own chart of accounts, which blocked the delete with a database
+  error.
+
+### 2026-09-02 — Opening value on the item form
+
+- **The New / Edit Item Type form now takes the opening value and its sales-tax rate**, beside the opening quantity it already accepted. Sales tax and the inclusive total are shown as you type and are always worked out from those two figures — they are never entered or stored separately. Editing an item reads back whatever its opening balance already holds.
+- The spreadsheet import fills the same two figures for every item it brings in, so an item created by hand and an item created by an import now carry their value the same way.
+
 ### 2026-09-02 — Stock is worth something: value alongside quantity
 
 - **Opening stock now carries its value.** The stock spreadsheet import reads the Balance block's value, rate and sales-tax columns, not just the quantity, and the preview shows all five figures so they can be read against the sheet before anything is written. A rate written as `0.18` is stored as 18%, and the sheet's own tax column is recomputed and compared as a check that the columns were mapped to the right place.

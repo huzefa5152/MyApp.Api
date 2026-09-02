@@ -126,12 +126,48 @@ namespace MyApp.Api.DTOs
         public string? Notes { get; set; }
     }
 
+    /// <summary>How an adjustment states itself.</summary>
+    public static class StockAdjustmentModes
+    {
+        /// <summary>The operator gives the CHANGE: "+10", "-3".</summary>
+        public const string Delta = "delta";
+
+        /// <summary>
+        /// The operator gives the TRUTH: "it is actually 109 units worth
+        /// 80,000". The server works out the change from where the item
+        /// currently stands. This is the default, because someone fixing a
+        /// mistake knows the right answer, not the size of their error.
+        /// </summary>
+        public const string Set = "set";
+    }
+
     public class CreateStockAdjustmentDto
     {
         public int CompanyId { get; set; }
         public int ItemTypeId { get; set; }
-        /// <summary>Signed quantity — positive = adjust up, negative = down.</summary>
+
+        /// <summary>One of <see cref="StockAdjustmentModes"/>. Defaults to
+        /// <c>delta</c> so existing callers are unaffected.</summary>
+        public string? Mode { get; set; }
+
+        /// <summary>Signed quantity — positive = adjust up, negative = down.
+        /// Used in <c>delta</c> mode.</summary>
         public decimal Delta { get; set; }
+
+        /// <summary>
+        /// Signed money correction, applied WITHOUT moving any quantity, in
+        /// <c>delta</c> mode. This is what makes a wrong value fixable at all:
+        /// before it, value could only change when quantity changed, so an
+        /// operator who had counted right and valued wrong had nowhere to go.
+        /// </summary>
+        public decimal? ValueDelta { get; set; }
+
+        /// <summary>In <c>set</c> mode: what the on-hand quantity really is.</summary>
+        public decimal? TargetQuantity { get; set; }
+
+        /// <summary>In <c>set</c> mode: what that quantity is really worth,
+        /// excluding sales tax.</summary>
+        public decimal? TargetValueExcludingTax { get; set; }
         public DateTime MovementDate { get; set; }
         public string? Notes { get; set; }
 

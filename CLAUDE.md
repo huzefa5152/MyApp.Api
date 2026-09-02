@@ -284,7 +284,28 @@ walked in date order (then by id, so same-day rows apply in the order written).
   Including) and the per-movement money in the movements feed all come from
   `StockValuation` — the feed's figures via its `Step` trace, since a movement's
   cost only exists as part of the walk. Never recompute either elsewhere.
-- Suite: `scripts/test_stock_valuation_flow.py`.
+- **A wrong VALUE is fixable without moving goods** (2026-09-02).
+  `StockMovementSourceType.Revaluation` is a movement with `Quantity = 0`
+  carrying a signed `StockMovement.ValueAdjustmentExcludingTax`. Before it,
+  value could only change when quantity changed, so an operator who had counted
+  right and valued wrong had nowhere to go.
+- **`POST /api/stock/adjust` has two modes**, and `set` is the default the UI
+  uses. `set` takes the TRUTH (`targetQuantity`, `targetValueExcludingTax`) and
+  the server derives the change from the current position; `delta` takes the
+  change itself (`delta`, `valueDelta`). Someone fixing a mistake knows the
+  right answer, not the size of their error — the arithmetic is the system's job.
+- **In `set` mode the value delta must net off what the quantity movement will
+  itself do.** A quantity movement is valued by the walk (outward at the
+  average, a cost-less inward at the average), so measuring the money against
+  the CURRENT value took it down twice when a correction lowered both figures.
+  Predict the post-movement value first, then let the revaluation close the gap.
+- **The revaluation's traced amount is POSITIVE and its Direction carries the
+  sign**, as with every other movement. Signing it in both places made a
+  write-down read as a write-up in the feed and in the reconciliation.
+- Two invariants a correction may not break: neither quantity nor value may go
+  negative, and **zero quantity may not be left holding money** — the same rule
+  the outward path keeps, refused with a message rather than silently dropped.
+- Suite: `scripts/test_stock_valuation_flow.py` (78 checks).
 
 ### 5c. Customer Portal — the only anonymous surface
 
@@ -409,7 +430,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Spreadsheet import (layouts, file checks, stock, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (91 checks) |
-| Stock valuation flow (import -> purchase -> sale -> adjustment) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `55/55 checks passed` |
+| Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |

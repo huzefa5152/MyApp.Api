@@ -17,6 +17,15 @@ namespace MyApp.Api.Models
         // as its own source so reverse/reconcile filters don't collide with a
         // PurchaseBill/Invoice of the same integer id.
         PurchaseDebitNote = 5,
+
+        /// <summary>
+        /// A correction to what the stock is WORTH, with no goods moving. The
+        /// quantity was right and the value was not -- a mistyped opening
+        /// figure, a write-down, an import that carried the wrong money.
+        /// Its own source type so the movement feed can say "revaluation"
+        /// rather than showing a quantity movement of zero.
+        /// </summary>
+        Revaluation = 6,
     }
 
     public enum StockMovementDirection
@@ -82,6 +91,19 @@ namespace MyApp.Api.Models
         /// <summary>Sales tax rate for this movement as a PERCENTAGE, when the
         /// source knows one. Null falls back to the item's opening rate.</summary>
         public decimal? SalesTaxRate { get; set; }
+
+        /// <summary>
+        /// A SIGNED correction to the stock's value, applied without moving any
+        /// quantity. Set only on a <see cref="StockMovementSourceType.Revaluation"/>
+        /// row, whose <see cref="Quantity"/> is 0.
+        ///
+        /// This exists because value could otherwise only change when quantity
+        /// changed: an operator who entered the right count against the wrong
+        /// money had no way to fix it. A revaluation is an immutable row like
+        /// every other movement, so the correction is auditable and the
+        /// weighted-average walk stays the single source of valuation.
+        /// </summary>
+        public decimal? ValueAdjustmentExcludingTax { get; set; }
 
         public StockMovementSourceType SourceType { get; set; }
 

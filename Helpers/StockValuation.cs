@@ -92,6 +92,29 @@ namespace MyApp.Api.Helpers
             // costed at depends on how the rows happened to come back.
             foreach (var m in movements.OrderBy(m => m.MovementDate).ThenBy(m => m.Id))
             {
+                // A revaluation changes the money and nothing else, so it is
+                // handled before the quantity guard below -- its quantity is 0
+                // by definition and it would otherwise be skipped entirely.
+                if (m.ValueAdjustmentExcludingTax is decimal valueDelta && valueDelta != 0m)
+                {
+                    if (m.SalesTaxRate is > 0m) rate = m.SalesTaxRate.Value;
+
+                    // Value cannot go below zero, and stock that has run out is
+                    // worth exactly nothing -- the same invariant the outward
+                    // path keeps, enforced here too so a correction cannot
+                    // leave money behind an empty bin.
+                    value = qty <= 0m ? 0m : Math.Max(0m, value + valueDelta);
+
+                    if (valueDelta > 0m) valueIn += Round(valueDelta);
+                    else valueOut += Round(-valueDelta);
+
+                    // The amount is stored POSITIVE and the direction carries
+                    // the sign, exactly as a quantity movement does. Signing it
+                    // twice made a write-down read as a write-up.
+                    trace?.Add(new Step(m.Id, 0m, Round(Math.Abs(valueDelta)), qty, Round(value)));
+                    continue;
+                }
+
                 if (m.Quantity <= 0m) continue;
 
                 // A later movement that states its own rate wins — a purchase at

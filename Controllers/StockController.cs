@@ -415,58 +415,233 @@ namespace MyApp.Api.Controllers
         [HasPermission("stock.adjust.create")]
         public async Task<IActionResult> AdjustStock([FromBody] CreateStockAdjustmentDto dto)
         {
-            if (dto.Delta == 0) return BadRequest(new { error = "Delta cannot be zero." });
             await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
             // Adjustments correct company-level inventory — blocked for
             // division-restricted users (policy D2).
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
 
-            // Negative deltas can't drive stock below zero. The previous
-            // version of this endpoint allowed any signed delta — useful
-            // when seeding ledgers but a footgun once tracking is on.
-            // Tracking-disabled companies still bypass the check (their
-            // dashboard can be in a half-set state until they turn it on).
-            if (dto.Delta < 0 && await _stock.IsTrackingEnabledAsync(dto.CompanyId))
+            var mode = string.Equals(dto.Mode, StockAdjustmentModes.Set, StringComparison.OrdinalIgnoreCase)
+                ? StockAdjustmentModes.Set
+                : StockAdjustmentModes.Delta;
+
+            // Where the item stands right now, valued the one way stock is ever
+            // valued. Needed by BOTH modes: "set" subtracts from it to find the
+            // change, and "delta" checks the result against it.
+            var current = await CurrentPositionAsync(dto.CompanyId, dto.ItemTypeId);
+
+            decimal qtyDelta;
+            decimal valueDelta;
+            decimal? unitCost = null;
+            decimal? rate = null;
+
+            if (mode == StockAdjustmentModes.Set)
             {
-                var onHand = await _stock.GetOnHandAsync(dto.CompanyId, dto.ItemTypeId);
-                if (onHand + dto.Delta < 0)
-                {
+                if (dto.TargetQuantity is null && dto.TargetValueExcludingTax is null)
+                    return BadRequest(new { error = "Say what the quantity or the value should be." });
+
+                var targetQty = dto.TargetQuantity ?? current.Quantity;
+                var targetValue = dto.TargetValueExcludingTax ?? current.ValueExcludingTax;
+
+                if (targetQty < 0) return BadRequest(new { error = "On-hand cannot be negative." });
+                if (targetValue < 0) return BadRequest(new { error = "Stock value cannot be negative." });
+
+                // Stock that has run out is worth exactly nothing, so a target
+                // pairing zero quantity with money left over is refused rather
+                // than silently discarded (CLAUDE.md 5b-4).
+                if (targetQty == 0 && targetValue > 0)
                     return BadRequest(new
                     {
-                        error = $"Adjustment would drive on-hand to {onHand + dto.Delta} (current {onHand}). " +
-                                "Increase the on-hand first or reduce the negative delta."
+                        error = "An on-hand of zero must be worth zero. Set the value to 0 as well, "
+                              + "or give the quantity that is actually there."
                     });
+
+                qtyDelta = Round4(targetQty - current.Quantity);
+
+                // A quantity movement changes the VALUE too, so the money the
+                // revaluation still has to make up is measured against where
+                // the quantity movement will leave things — not against where
+                // they stand now. Getting this wrong took the value down twice
+                // when a correction lowered both figures at once.
+                var average = current.Quantity > 0m
+                    ? current.ValueExcludingTax / current.Quantity
+                    : 0m;
+                decimal predictedValue;
+
+                if (qtyDelta > 0m && targetValue > current.ValueExcludingTax)
+                {
+                    // Adding stock AND value: the operator's own two figures say
+                    // what the addition cost, so carry it on the movement and the
+                    // average lands exactly where they said it should.
+                    unitCost = (targetValue - current.ValueExcludingTax) / qtyDelta;
+                    predictedValue = targetValue;
                 }
+                else if (qtyDelta > 0m)
+                {
+                    // Adding stock while the value stays put or falls: the
+                    // movement states no cost, so the walk values it at the
+                    // running average and the revaluation corrects the rest.
+                    predictedValue = current.ValueExcludingTax + (qtyDelta * average);
+                }
+                else if (qtyDelta < 0m)
+                {
+                    // Stock leaving is costed at the average, and an emptied bin
+                    // is worth exactly zero — the same rule the walk applies.
+                    predictedValue = targetQty <= 0m
+                        ? 0m
+                        : current.ValueExcludingTax - (-qtyDelta * average);
+                }
+                else
+                {
+                    predictedValue = current.ValueExcludingTax;
+                }
+
+                valueDelta = Money(targetValue - Money(predictedValue));
+
+                if (qtyDelta == 0m && valueDelta == 0m
+                    && !(dto.SalesTaxRate is >= 0m and <= 100m && dto.SalesTaxRate != current.SalesTaxRate))
+                    return BadRequest(new { error = "Those are already the figures on record — nothing to correct." });
+            }
+            else
+            {
+                qtyDelta = dto.Delta;
+                valueDelta = Money(dto.ValueDelta ?? 0m);
+
+                if (qtyDelta == 0m && valueDelta == 0m)
+                    return BadRequest(new { error = "Give a quantity change, a value change, or both." });
+
+                if (qtyDelta > 0m && dto.UnitCostExcludingTax is > 0m)
+                    unitCost = dto.UnitCostExcludingTax.Value;
             }
 
-            // Bypass the IsTrackingEnabled gate by writing directly: an
-            // explicit adjustment is the operator's deliberate act, and we
-            // want it to land on the ledger so it shows up as soon as
-            // tracking is turned on.
-            _context.StockMovements.Add(new StockMovement
+            var tracking = await _stock.IsTrackingEnabledAsync(dto.CompanyId);
+
+            // A negative quantity change cannot drive on-hand below zero. A
+            // tracking-disabled company still bypasses this: its dashboard is
+            // allowed to be half-set until the flag goes on.
+            if (qtyDelta < 0m && tracking && current.Quantity + qtyDelta < 0m)
             {
-                CompanyId = dto.CompanyId,
-                ItemTypeId = dto.ItemTypeId,
-                Direction = dto.Delta > 0 ? StockMovementDirection.In : StockMovementDirection.Out,
-                Quantity = Math.Abs(dto.Delta),
-                SourceType = StockMovementSourceType.Adjustment,
-                SourceId = null,
-                MovementDate = dto.MovementDate.Date,
-                Notes = dto.Notes,
-                // Only an adjustment UP can carry a cost. Everything else is
-                // valued at the running average — see StockValuation.
-                UnitCostExcludingTax = dto.Delta > 0 && dto.UnitCostExcludingTax is > 0m
-                    ? Math.Round(dto.UnitCostExcludingTax.Value, 4, MidpointRounding.AwayFromZero)
-                    : null,
-                SalesTaxRate = dto.Delta > 0 && dto.UnitCostExcludingTax is > 0m
-                               && dto.SalesTaxRate is >= 0m and <= 100m
-                    ? Math.Round(dto.SalesTaxRate.Value, 2, MidpointRounding.AwayFromZero)
-                    : null,
-                CreatedAt = DateTime.UtcNow,
-            });
+                return BadRequest(new
+                {
+                    error = $"Adjustment would drive on-hand to {current.Quantity + qtyDelta} "
+                          + $"(current {current.Quantity}). Increase the on-hand first, or reduce the decrease."
+                });
+            }
+
+            // Nor may a value change drive the stock value below zero.
+            if (valueDelta < 0m && current.ValueExcludingTax + valueDelta < -0.005m)
+            {
+                return BadRequest(new
+                {
+                    error = $"That would take the stock value below zero (currently "
+                          + $"{current.ValueExcludingTax:N2}). Reduce the decrease."
+                });
+            }
+
+            if (dto.SalesTaxRate is >= 0m and <= 100m)
+                rate = Math.Round(dto.SalesTaxRate.Value, 2, MidpointRounding.AwayFromZero);
+
+            var written = new List<string>();
+
+            // Bypass the IsTrackingEnabled gate by writing directly: an explicit
+            // adjustment is the operator's deliberate act, and it should land on
+            // the ledger so it shows up as soon as tracking is turned on.
+            if (qtyDelta != 0m)
+            {
+                _context.StockMovements.Add(new StockMovement
+                {
+                    CompanyId = dto.CompanyId,
+                    ItemTypeId = dto.ItemTypeId,
+                    Direction = qtyDelta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                    Quantity = Math.Abs(qtyDelta),
+                    SourceType = StockMovementSourceType.Adjustment,
+                    SourceId = null,
+                    MovementDate = dto.MovementDate.Date,
+                    Notes = dto.Notes,
+                    // Only an increase can state a cost. Stock leaving is always
+                    // costed at the running average — see StockValuation.
+                    UnitCostExcludingTax = qtyDelta > 0m && unitCost is > 0m
+                        ? Math.Round(unitCost.Value, 4, MidpointRounding.AwayFromZero)
+                        : null,
+                    SalesTaxRate = qtyDelta > 0m && unitCost is > 0m ? rate : null,
+                    CreatedAt = DateTime.UtcNow,
+                });
+                written.Add(qtyDelta > 0m
+                    ? $"quantity up {Math.Abs(qtyDelta):0.####}"
+                    : $"quantity down {Math.Abs(qtyDelta):0.####}");
+            }
+
+            // A value-only correction: no goods moved, so it is a revaluation
+            // row with zero quantity carrying the signed money.
+            if (valueDelta != 0m || (qtyDelta == 0m && rate.HasValue && rate != current.SalesTaxRate))
+            {
+                _context.StockMovements.Add(new StockMovement
+                {
+                    CompanyId = dto.CompanyId,
+                    ItemTypeId = dto.ItemTypeId,
+                    // The enum has no "neither" and the row carries no quantity,
+                    // so the direction simply records which way the money went.
+                    Direction = valueDelta >= 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                    Quantity = 0m,
+                    SourceType = StockMovementSourceType.Revaluation,
+                    SourceId = null,
+                    MovementDate = dto.MovementDate.Date,
+                    Notes = dto.Notes,
+                    ValueAdjustmentExcludingTax = valueDelta,
+                    SalesTaxRate = rate,
+                    CreatedAt = DateTime.UtcNow,
+                });
+                if (valueDelta != 0m)
+                    written.Add($"value {(valueDelta > 0m ? "up" : "down")} {Math.Abs(valueDelta):N2}");
+                else
+                    written.Add($"rate set to {rate:0.##}%");
+            }
+
+            if (written.Count == 0)
+                return BadRequest(new { error = "Nothing to record." });
+
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Adjustment recorded." });
+
+            var after = await CurrentPositionAsync(dto.CompanyId, dto.ItemTypeId);
+            return Ok(new
+            {
+                message = "Adjustment recorded: " + string.Join(", ", written) + ".",
+                quantity = after.Quantity,
+                valueExcludingTax = after.ValueExcludingTax,
+                salesTaxRate = after.SalesTaxRate,
+                salesTax = after.SalesTax,
+                valueIncludingTax = after.ValueIncludingTax,
+            });
         }
+
+        /// <summary>
+        /// Where one item stands right now — quantity and money — through the
+        /// same weighted-average walk the dashboard uses, so an adjustment is
+        /// measured against exactly what the operator can see.
+        /// </summary>
+        private async Task<StockValuation.Position> CurrentPositionAsync(int companyId, int itemTypeId)
+        {
+            var opening = await _context.OpeningStockBalances
+                .Where(o => o.CompanyId == companyId && o.ItemTypeId == itemTypeId)
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
+                })
+                .FirstOrDefaultAsync();
+
+            var movements = await _context.StockMovements
+                .Where(m => m.CompanyId == companyId && m.ItemTypeId == itemTypeId)
+                .AsNoTracking()
+                .ToListAsync();
+
+            return StockValuation.Compute(
+                opening?.Qty ?? 0m, opening?.Value ?? 0m, opening?.Rate ?? 0m, movements);
+        }
+
+        private static decimal Money(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+        private static decimal Round4(decimal v) => Math.Round(v, 4, MidpointRounding.AwayFromZero);
 
         /// <summary>
         /// Inventory summary (V2 derived read model): one row per item type with
