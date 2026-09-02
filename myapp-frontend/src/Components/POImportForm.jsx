@@ -615,7 +615,7 @@ export default function POImportForm({ companyId, target = "salesorder", onClose
                             <input
                               type="number"
                               min="0"
-                              step="0.01"
+                              step="any"
                               value={item.unitPrice}
                               onChange={(e) => handleItemChange(idx, "unitPrice", e.target.value)}
                               style={{ ...styles.input, padding: "0.35rem 0.5rem", fontSize: "0.85rem", textAlign: "right" }}

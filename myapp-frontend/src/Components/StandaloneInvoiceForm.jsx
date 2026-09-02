@@ -673,42 +673,65 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   //   * A unit that does not allow decimals can only hold a whole quantity
   //     (AllowsDecimalQuantity per Unit -- 5.5 Pcs is not a thing).
   //
-  // So: take the rate the system can store, derive the quantity the unit can
-  // hold, and snap the amount to what those two actually multiply to. The
-  // field shows the snapped figure, so what is on screen is what is stored.
+  // WHILE TYPING the field keeps exactly what was typed. Rewriting it on every
+  // keystroke made the box impossible to use: typing the "5" of 5000 derived a
+  // quantity of 1, snapped the amount to one unit's cost and replaced the text,
+  // so the remaining digits had nothing to land on. The snap happens on blur
+  // instead, once the operator has finished the number.
+  const deriveFromTotal = (row, total) => {
+    const price = stockPricing[row.itemTypeId];
+    if (!price?.canPrice || !(total > 0)) return null;
+    const cost = Number(price.unitCost);
+    if (!(cost > 0)) return null;
+
+    // The quantity the unit can actually hold: whole numbers unless the Unit
+    // says otherwise (AllowsDecimalQuantity -- 5.5 Pcs is not a thing).
+    const uom = row.uom || price.uom || "";
+    const rawQty = total / cost;
+    const qty = isDecimalUnit(uom, units)
+      ? Math.round(rawQty * 1e4) / 1e4
+      : Math.max(1, Math.round(rawQty));
+
+    // The rate then carries the remainder, to the 12 decimals UnitPrice now
+    // stores. That is what makes the ENTERED amount exact: 50,000 over 2196
+    // whole units is 22.768670309654 each, and 2196 x that books as exactly
+    // 50,000.00. While the rate was capped at 2dp the best it could do was
+    // 22.77, which came to 50,002.92 -- the 2.92 the operator saw.
+    const rate = Math.round((total / qty) * 1e12) / 1e12;
+    return { qty, rate, exact: Math.round(qty * rate * 100) / 100 };
+  };
+
   const applyLineTotal = (localId, raw) => {
     const row = rows.find((r) => r.localId === localId);
-    const price = row ? stockPricing[row.itemTypeId] : null;
-    const total = parseFloat(raw);
+    if (!row?.itemTypeId) return;          // the field is disabled until one is picked
 
-    if (!price?.canPrice || !(total > 0)) {
+    const d = deriveFromTotal(row, parseFloat(raw));
+    if (!d) {
+      // Keep the keystrokes; clear the derived pair until the amount is usable.
       updateRow(localId, { lineTotal: raw, quantity: "", unitPrice: "" });
       return;
     }
-
-    // The rate as it will be stored.
-    const rate = Math.round(Number(price.unitCost) * 100) / 100;
-    if (!(rate > 0)) {
-      updateRow(localId, { lineTotal: raw, quantity: "", unitPrice: "" });
-      return;
-    }
-
-    const uom = row.uom || price.uom || "";
-    const wholeOnly = !isDecimalUnit(uom, units);
-    const rawQty = total / rate;
-    const qty = wholeOnly
-      ? Math.max(1, Math.round(rawQty))
-      : Math.round(rawQty * 10000) / 10000;
-
-    // What those two multiply to, at the precision a line is stored in.
-    const exact = Math.round(qty * rate * 100) / 100;
-
     updateRow(localId, {
-      lineTotal: String(exact),
-      quantity: String(qty),
-      unitPrice: String(rate),
+      lineTotal: raw,                      // verbatim, so typing works
+      quantity: String(d.qty),
+      unitPrice: String(d.rate),
     });
   };
+
+  // On blur, settle the amount on what quantity x rate actually makes, so what
+  // is on screen is what gets stored and the bill sums to the amounts shown.
+  const commitLineTotal = (localId) => {
+    const row = rows.find((r) => r.localId === localId);
+    if (!row?.itemTypeId || !row.lineTotal) return;
+    const d = deriveFromTotal(row, parseFloat(row.lineTotal));
+    if (!d) return;
+    updateRow(localId, {
+      lineTotal: String(d.exact),
+      quantity: String(d.qty),
+      unitPrice: String(d.rate),
+    });
+  };
+
 
   // Charged on the total INCLUDING sales tax, and ADDED to it -- the opposite of
   // withholding tax above, which is deducted. The server recomputes both from
@@ -1404,7 +1427,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   </td>
                                   <td style={styles.unifiedTd}>
                                     <input
-                                      type="number" min={0} step={0.01}
+                                      type="number" min={0} step="any"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                       value={r.unitPrice}
                                       onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value, lineTotal: "" })}
@@ -1415,54 +1438,77 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         : ""}
                                     />
                                   </td>
-                                  {/* Enter the AMOUNT and the quantity follows, priced at
-                                      what the stock is worth. Typing a quantity or a
-                                      unit price instead clears this and the cell shows
-                                      quantity x price again, so neither way is a trap. */}
+                                  {/* Enter the AMOUNT and the quantity follows,
+                                      priced at what the stock is worth. Typing a
+                                      quantity or a unit price instead clears this and
+                                      the cell shows quantity x price again, so neither
+                                      way is a trap.
+
+                                      A text input with inputMode="decimal", not
+                                      type="number": the browser's spinner arrows ate
+                                      enough of a narrow column to make the figure
+                                      unreadable, and this is a money field nobody
+                                      wants to step by 0.01. */}
                                   {(() => {
                                     const price = stockPricing[r.itemTypeId];
+                                    const ready = !!r.itemTypeId && !!price?.canPrice;
                                     const shown = r.lineTotal !== undefined && r.lineTotal !== ""
                                       ? r.lineTotal
                                       : (q * p ? (q * p).toFixed(2) : "");
                                     const typed = parseFloat(r.lineTotal);
-                                    const overStock = price?.canPrice && typed > 0
+                                    const overStock = ready && typed > 0
                                       && typed > Number(price.availableValueExcludingTax) + 0.005;
+                                    const rateMoved = ready && typed > 0 && p > 0
+                                      && Math.abs(p - Number(price.unitCost)) > 0.005;
                                     return (
                                       <td style={{ ...styles.unifiedTd, textAlign: "right" }}>
                                         <input
-                                          type="number" min={0} step="0.01"
+                                          type="text"
+                                          inputMode="decimal"
+                                          disabled={!r.itemTypeId}
                                           style={{
-                                            ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.82rem",
-                                            textAlign: "right", fontWeight: 600,
+                                            ...styles.input,
+                                            padding: "0.35rem 0.5rem",
+                                            fontSize: "0.92rem",
+                                            fontWeight: 700,
+                                            textAlign: "right",
+                                            minWidth: 108,
+                                            fontVariantNumeric: "tabular-nums",
+                                            backgroundColor: !r.itemTypeId ? "#f1f3f6" : colors.inputBg,
+                                            cursor: !r.itemTypeId ? "not-allowed" : "text",
                                             borderColor: overStock ? "#e65100" : undefined,
                                           }}
                                           value={shown}
-                                          onChange={(e) => applyLineTotal(r.localId, e.target.value)}
-                                          placeholder="0.00"
-                                          title={price?.canPrice
-                                            ? `Enter the amount; quantity is worked out at ${Number(price.unitCost).toLocaleString()} per ${price.uom || "unit"}`
-                                            : "Enter the amount, or type a quantity and unit price directly"}
+                                          // Digits and a single decimal point only, so a
+                                          // stray character cannot reach the arithmetic.
+                                          onChange={(e) => {
+                                            const cleaned = e.target.value
+                                              .replace(/[^\d.]/g, "")
+                                              .replace(/(\..*)\./g, "$1");
+                                            applyLineTotal(r.localId, cleaned);
+                                          }}
+                                          onBlur={() => commitLineTotal(r.localId)}
+                                          placeholder={r.itemTypeId ? "0.00" : "pick an item"}
+                                          title={!r.itemTypeId
+                                            ? "Pick an item type first — the quantity is worked out from what that stock is worth"
+                                            : ready
+                                              ? `Enter the amount; quantity is worked out at ${Number(price.unitCost).toLocaleString()} per ${price.uom || "unit"}`
+                                              : "Enter the amount, or type a quantity and unit price directly"}
                                         />
                                         {r.itemTypeId && price && !price.canPrice && (
-                                          <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2 }}>
+                                          <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
                                             {price.note}
                                           </div>
                                         )}
-                                        {price?.canPrice && (() => {
-                                          // A whole-number unit may have moved the rate off the
-                                          // stock cost to keep the entered amount exact; say so.
-                                          const rateMoved = typed > 0 && p > 0
-                                            && Math.abs(p - Number(price.unitCost)) > 0.005;
-                                          return (
-                                            <div style={{ fontSize: "0.68rem", color: overStock ? "#e65100" : colors.textSecondary, marginTop: 2 }}>
-                                              {overStock
-                                                ? `Only ${Number(price.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2 })} of stock at ${Number(price.unitCost).toLocaleString()} each`
-                                                : rateMoved
-                                                  ? `${q} × ${p.toLocaleString()} — ${price.uom || "unit"} takes whole numbers, so the rate absorbed the remainder (stock cost ${Number(price.unitCost).toLocaleString()})`
-                                                  : `${Number(price.unitCost).toLocaleString()} each · ${Number(price.availableQuantity).toLocaleString()} available`}
-                                            </div>
-                                          );
-                                        })()}
+                                        {ready && (
+                                          <div style={{ fontSize: "0.7rem", color: overStock ? "#e65100" : colors.textSecondary, marginTop: 3, lineHeight: 1.3 }}>
+                                            {overStock
+                                              ? `only ${Number(price.availableValueExcludingTax).toLocaleString(undefined, { maximumFractionDigits: 0 })} in stock`
+                                              : rateMoved
+                                                ? `${q} x ${p.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
+                                                : `${Number(price.unitCost).toLocaleString()} each`}
+                                          </div>
+                                        )}
                                       </td>
                                     );
                                   })()}
@@ -1497,7 +1543,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   {showMRP && (
                                     <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5" }}>
                                       <input
-                                        type="number" min={0} step={0.01}
+                                        type="number" min={0} step="any"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                         value={r.mrp}
                                         onChange={(e) => updateRow(r.localId, { mrp: e.target.value })}

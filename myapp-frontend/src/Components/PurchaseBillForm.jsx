@@ -609,7 +609,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                         </div>
                         <div>
                           <label style={mStyles.label}>Unit Price *</label>
-                          <input type="number" min={0} step={0.01} style={{ ...mStyles.input, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                          <input type="number" min={0} step="any" style={{ ...mStyles.input, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                         </div>
                         <div>
                           <label style={mStyles.label}>UOM</label>
@@ -691,7 +691,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
                             />
                           </td>
                           <td style={td}>
-                            <input type="number" min={0} step={0.01} style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
+                            <input type="number" min={0} step="any" style={{ ...cellInput, textAlign: "right" }} value={it.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                           </td>
                           <td style={td}>
                             <input type="text" style={cellInput} value={it.uom} onChange={e => updateItem(idx, "uom", e.target.value)} />

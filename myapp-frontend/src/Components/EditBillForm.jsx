@@ -1737,7 +1737,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                 value={group.unitPrice}
                                 onChange={(e) => setGroupUnitPrice(group, e.target.value)}
                                 min={0}
-                                step={0.01}
+                                step="any"
                                 readOnly={lockPrice}
                               />
                               {multi && !lockPrice && (
@@ -1822,7 +1822,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                 value={item.unitPrice ?? 0}
                                 onChange={(e) => updateItem(idx, "unitPrice", e.target.value)}
                                 min={0}
-                                step={0.01}
+                                step="any"
                                 readOnly={lockPrice}
                               />
                             </td>

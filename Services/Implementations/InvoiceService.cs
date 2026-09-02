@@ -3069,7 +3069,7 @@ namespace MyApp.Api.Services.Implementations
                                 Description = g.Key,
                                 Quantity = qty,
                                 UOM = g.First().UOM,
-                                UnitPrice = qty != 0 ? Math.Round(amount / qty, 2) : 0m,
+                                UnitPrice = qty != 0 ? Math.Round(amount / qty, 12) : 0m,
                                 LineTotal = amount
                             };
                         }).ToList()
@@ -3224,7 +3224,7 @@ namespace MyApp.Api.Services.Implementations
                                 // grouping key). Individual mode shows each line's
                                 // real Description instead.
                                 Description = g.Key,
-                                UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
+                                UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 12) : 0m,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,

@@ -73,14 +73,14 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
     const rows = lines.map((l) => {
       if (mode === "supp") {
         const c = parseFloat(l.qty);
-        const delta = Number.isFinite(c) ? +(c - l.billedQty).toFixed(4) : 0;
+        const delta = Number.isFinite(c) ? +(c - l.billedQty).toFixed(12) : 0;
         const q = delta > 0 ? delta : 0;
         return { ...l, use: q, unit: l.unitPrice, amount: +(q * l.unitPrice).toFixed(2), show: q > 0 };
       }
       if (mode === "credit") {
         const c = parseFloat(l.qty);
         const ret = Number.isFinite(c) ? Math.min(Math.max(l.billedQty - c, 0), l.billedQty) : 0; // reduction
-        return { ...l, use: +ret.toFixed(4), unit: l.unitPrice, amount: +(ret * l.unitPrice).toFixed(2), show: ret > 0 };
+        return { ...l, use: +ret.toFixed(12), unit: l.unitPrice, amount: +(ret * l.unitPrice).toFixed(2), show: ret > 0 };
       }
       // debit — per-unit rate delta on the full billed qty
       const r = parseFloat(l.rate);
@@ -189,12 +189,12 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
                     <tr key={r.invoiceItemId}>
                       <td style={s.td}>{r.description}</td>
                       <td style={{ ...s.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.billedQty}</td>
-                      <td style={{ ...s.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.unitPrice.toLocaleString()}</td>
+                      <td style={{ ...s.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.unitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 12 })}</td>
                       <td style={{ ...s.td, textAlign: "right" }}>
                         {mode === "debit" ? (
-                          <input style={s.qty} type="number" min={r.unitPrice} step="1" inputMode="decimal" value={r.rate} onChange={(e) => setField(i, "rate", e.target.value)} />
+                          <input style={s.qty} type="number" min={r.unitPrice} step="any" inputMode="decimal" value={r.rate} onChange={(e) => setField(i, "rate", e.target.value)} />
                         ) : (
-                          <input style={s.qty} type="number" min={mode === "credit" ? 0 : r.billedQty} max={mode === "credit" ? r.billedQty : undefined} step="0.5" inputMode="decimal" value={r.qty} onChange={(e) => setField(i, "qty", e.target.value)} />
+                          <input style={s.qty} type="number" min={mode === "credit" ? 0 : r.billedQty} max={mode === "credit" ? r.billedQty : undefined} step="any" inputMode="decimal" value={r.qty} onChange={(e) => setField(i, "qty", e.target.value)} />
                         )}
                       </td>
                       <td style={{ ...s.td, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: r.show ? M.tint : "#90a4ae" }}>

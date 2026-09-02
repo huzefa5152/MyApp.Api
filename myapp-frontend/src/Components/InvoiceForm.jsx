@@ -1602,7 +1602,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontSize: "0.82rem", paddingRight: "0.5rem" }}>
                                       {/* Strip trailing zeros so 1.0000 → "1",
                                           12.5000 → "12.5", 0.0004 → "0.0004". */}
-                                      {parseFloat(Number(item.quantity || 0).toFixed(4)).toString()}
+                                      {parseFloat(Number(item.quantity || 0).toFixed(12)).toString()}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* UOM autocomplete (same backing endpoint
@@ -1620,7 +1620,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       <input
                                         type="number"
                                         min={0}
-                                        step={0.01}
+                                        step="any"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                         value={itemPrices[item.id] || ""}
                                         onChange={(e) => handlePriceChange(item.id, e.target.value)}

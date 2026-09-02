@@ -192,7 +192,7 @@ const Meta = ({ label, value }) => (
 );
 
 const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d); const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`; };
-const fmtQty = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString(); };
+const fmtQty = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(12)).toString(); };
 
 const st = {
   // zIndex 1100 matches the app's modal layer (theme.js formStyles.backdrop)

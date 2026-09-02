@@ -118,11 +118,11 @@ export default function NonInventoryItemForm({ companyId, item, onClose, onSaved
           <div style={row2}>
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Default sale price</label>
-              <input type="number" step="0.01" style={formStyles.input} value={form.defaultSalePrice} onChange={(e) => set("defaultSalePrice", e.target.value)} placeholder="Optional" />
+              <input type="number" step="any" style={formStyles.input} value={form.defaultSalePrice} onChange={(e) => set("defaultSalePrice", e.target.value)} placeholder="Optional" />
             </div>
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Default purchase price</label>
-              <input type="number" step="0.01" style={formStyles.input} value={form.defaultPurchasePrice} onChange={(e) => set("defaultPurchasePrice", e.target.value)} placeholder="Optional" />
+              <input type="number" step="any" style={formStyles.input} value={form.defaultPurchasePrice} onChange={(e) => set("defaultPurchasePrice", e.target.value)} placeholder="Optional" />
             </div>
           </div>
 

@@ -104,7 +104,7 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
   const fmtMoney = (n) =>
     `Rs. ${Number(n || 0).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
   const fmtNum = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtQty = (n) => parseFloat(Number(n || 0).toFixed(4)).toString();
+  const fmtQty = (n) => parseFloat(Number(n || 0).toFixed(12)).toString();
 
   return (
     <div style={formStyles.backdrop}>

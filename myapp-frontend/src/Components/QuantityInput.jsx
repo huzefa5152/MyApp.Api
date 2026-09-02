@@ -4,7 +4,7 @@ import { isDecimalUnit } from "../utils/formatQuantity";
  * Shared quantity input for bill / challan / PO-import forms.
  *
  * Reacts to the picked UOM:
- *   - decimal-allowed UOM (KG, Liter, Carat) → step="0.0001", up to 4 places
+ *   - decimal-allowed UOM (KG, Liter, Carat) → step="any", up to 12 places
  *   - integer-only UOM (Pcs, SET, Pair)      → step="1", whole numbers
  *
  * `units` is the array from /api/units (or the lookup search). The lookup
@@ -35,7 +35,7 @@ export default function QuantityInput({
     <input
       type="number"
       min={allowsDecimal ? 0 : 1}
-      step={allowsDecimal ? "0.0001" : "1"}
+      step={allowsDecimal ? "any" : "1"}
       value={value ?? ""}
       onChange={(e) => {
         const raw = e.target.value;

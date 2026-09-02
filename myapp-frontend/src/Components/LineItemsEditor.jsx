@@ -288,7 +288,7 @@ export default function LineItemsEditor({
       type="number"
       inputMode="decimal"
       min="0"
-      step="0.01"
+      step="any"
       placeholder={priceOptional ? "—" : undefined}
       title={unitPriceTitle}
       style={{ ...s.cellInput, textAlign: "right", ...styleExtra }}

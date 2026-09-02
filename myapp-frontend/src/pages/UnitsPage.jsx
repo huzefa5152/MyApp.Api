@@ -20,7 +20,7 @@ const colors = {
 /**
  * Units configuration — admin grid for the AllowsDecimalQuantity flag on
  * each unit of measure. Drives whether the bill / challan / PO-import
- * forms render the Quantity input as `step="0.0001"` (decimal) or
+ * forms render the Quantity input as `step="any"` (decimal, 12 places) or
  * `step="1"` (integer-only).
  *
  * Source of units (assembled by the backend Program.cs backfill):

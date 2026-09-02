@@ -436,7 +436,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                             <td style={{ ...styles.soTd, textAlign: "center", fontWeight: 700, color: colors.blue }}>{i.remainingQuantity}</td>
                             <td style={{ ...styles.soTd, textAlign: "right" }}>
                               <input
-                                type="number" min="0" max={i.remainingQuantity} step="0.0001"
+                                type="number" min="0" max={i.remainingQuantity} step="any"
                                 style={{ ...styles.input, textAlign: "right", padding: "0.4rem 0.45rem" }}
                                 value={orderQtys[i.id] ?? 0}
                                 onChange={(e) => setOrderQty(i.id, i.remainingQuantity, e.target.value)}

@@ -759,7 +759,7 @@ export default function ItemTypeForm({
                 </label>
                 <input
                   type="number"
-                  step="0.0001"
+                  step="any"
                   style={formStyles.input}
                   value={openingBalance}
                   onChange={(e) => setOpeningBalance(e.target.value)}

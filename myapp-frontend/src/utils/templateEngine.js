@@ -34,7 +34,15 @@ Handlebars.registerHelper("fmtDec", (n) =>
 // (1000 -> "1,000", 500 -> "500", 2.5 -> "2.5"). Use for item quantities so
 // whole units read like Manager's "1,000" yet fractional units aren't rounded.
 Handlebars.registerHelper("fmtQty", (n) =>
-  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 12 })
+);
+
+// Unit-price format: at least 2 decimals so it still reads as money, but up
+// to 12 so a back-computed rate (39,400 / 12 = 3,283.333333333333) prints as
+// typed instead of being silently rounded. Use for unit price / rate cells.
+// Money TOTALS keep fmtDec (exactly 2) — they are currency, not rates.
+Handlebars.registerHelper("fmtPrice", (n) =>
+  Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 12 })
 );
 
 // Audit H-13 (2026-05-13): pre-fix, nl2br only replaced \n with <br>
@@ -216,6 +224,7 @@ export const MERGE_FIELDS = {
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
     { field: "{{this.itemTypeName}}", label: "Item Type Name (in loop)" },
     { field: "{{fmt this.unitPrice}}", label: "Item Unit Price (in loop)" },
+    { field: "{{fmtPrice this.unitPrice}}", label: "Item Unit Price — keeps up to 12 decimals" },
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
   ],
   TaxInvoice: [

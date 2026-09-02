@@ -1048,7 +1048,7 @@ export default function StockDashboardPage() {
             </div>
           </Field>
           <Field label="Quantity">
-            <input type="number" min={0} step={openingAllowsDecimal ? "0.0001" : "1"} required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} />
+            <input type="number" min={0} step={openingAllowsDecimal ? "any" : "1"} required style={mInput} value={openingDraft.quantity} onChange={e => setOpeningDraft({ ...openingDraft, quantity: e.target.value })} />
             {openingItem && (
               <div style={qtyHint}>UOM: <strong>{openingUom || "—"}</strong> · {openingAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
             )}
@@ -1131,7 +1131,7 @@ export default function StockDashboardPage() {
           {adjustDraft.mode === "set" ? (
             <>
               <Field label="Quantity it should be">
-                <input type="number" min={0} step={adjustAllowsDecimal ? "0.0001" : "1"} style={mInput}
+                <input type="number" min={0} step={adjustAllowsDecimal ? "any" : "1"} style={mInput}
                        value={adjustDraft.targetQuantity}
                        onChange={e => setAdjustDraft({ ...adjustDraft, targetQuantity: e.target.value })} />
                 <div style={qtyHint}>
@@ -1158,7 +1158,7 @@ export default function StockDashboardPage() {
           ) : (
             <>
               <Field label="Quantity change (positive = up, negative = down)">
-                <input type="number" step={adjustAllowsDecimal ? "0.0001" : "1"} style={mInput}
+                <input type="number" step={adjustAllowsDecimal ? "any" : "1"} style={mInput}
                        value={adjustDraft.delta}
                        onChange={e => setAdjustDraft({ ...adjustDraft, delta: e.target.value })} />
                 {adjustItem && (

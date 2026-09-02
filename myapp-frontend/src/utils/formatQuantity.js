@@ -2,8 +2,8 @@
 // read-only (challan card, bill row, print templates, list pages).
 //
 // Rules:
-//  • DB stores up to 4 decimal places (decimal(18,4)).
-//  • Display shows the SHORTEST faithful representation, capped at 4
+//  • DB stores up to 12 decimal places (decimal(28,12)).
+//  • Display shows the SHORTEST faithful representation, capped at 12
 //    decimal places, with trailing zeros and trailing dot stripped:
 //        12        → "12"
 //        12.5      → "12.5"
@@ -12,6 +12,7 @@
 //        0.0004    → "0.0004"
 //        12.555    → "12.555"        (3 places kept because there's signal)
 //        12.5555   → "12.5555"
+//        3.333333333333 → "3.333333333333"  (up to 12 places)
 //  • For integer-only UOMs the value is rounded to a whole number.
 //
 // `units` is the array returned by /api/units (or the search variant). We
@@ -44,10 +45,10 @@ export function formatQuantity(qty, unitName, units) {
     return Math.round(n).toLocaleString();
   }
 
-  // Decimal-allowed (or unknown unit): toFixed(4) cleans up float
+  // Decimal-allowed (or unknown unit): toFixed(12) cleans up float
   // artefacts (0.1 + 0.2 → 0.30000000000000004), then parseFloat
   // strips trailing zeros and a trailing dot. Result is the natural
   // shortest form.
-  const trimmed = parseFloat(n.toFixed(4));
+  const trimmed = parseFloat(n.toFixed(12));
   return trimmed.toString();
 }

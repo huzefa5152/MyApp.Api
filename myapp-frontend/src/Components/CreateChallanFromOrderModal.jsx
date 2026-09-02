@@ -83,7 +83,7 @@ export default function CreateChallanFromOrderModal({ order, onClose, onCreated 
               <div style={s.col}>{i.deliveredQuantity}</div>
               <div style={{ ...s.col, fontWeight: 700, color: i.remainingQuantity > 0 ? colors.blue : colors.teal }}>{i.remainingQuantity}</div>
               <div style={s.col}>
-                <input type="number" min="0" step="0.0001" style={{ ...s.input, textAlign: "right", padding: "0.4rem 0.45rem" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
+                <input type="number" min="0" step="any" style={{ ...s.input, textAlign: "right", padding: "0.4rem 0.45rem" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
               </div>
             </div>
           ))}
