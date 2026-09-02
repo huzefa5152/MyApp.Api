@@ -1301,17 +1301,52 @@ namespace MyApp.Api.Services.Implementations
             var removedItemIds = existingIds.Except(incomingIds).ToList();
             var structuralChange = addedItemDtos.Count > 0 || removedItemIds.Count > 0;
 
-            var hasChallan = invoice.DeliveryChallans != null && invoice.DeliveryChallans.Any();
+            // Challan-DRIVEN means the bill was BUILT from a challan, which shows on
+            // the lines (InvoiceItem.DeliveryItemId). A challan RAISED FROM the bill
+            // sets DeliveryItem.InvoiceItemId instead and leaves the bill the source
+            // document — testing DeliveryChallans.Any() treated both the same and
+            // froze a standalone bill's items the moment a delivery was recorded.
+            var isChallanDriven = invoice.Items.Any(ii => ii.DeliveryItemId != null);
             var hasSalesOrder = invoice.SalesOrderId != null;
             if (structuralChange)
             {
-                if (hasChallan)
+                if (isChallanDriven)
                     throw new InvalidOperationException(
                         "Items on a challan-linked bill can't be added or removed here. Change them on the linked delivery challan — the bill updates automatically.");
                 if (hasSalesOrder)
                     throw new InvalidOperationException(
                         $"This bill is linked to Sales Order #{invoice.SalesOrderId}. Add or remove items on the sales order.");
                 // else: plain standalone → allowed; reconciled in the item loop below.
+            }
+
+            // What HAS already gone out on a challan raised from this bill cannot be
+            // un-billed: the goods left the building. This is also what keeps the
+            // Restrict FK on DeliveryItems.InvoiceItemId from turning a legitimate
+            // edit into a 500 — a delivered line may not be deleted at all, and a
+            // kept line may not drop below what was delivered.
+            if (!isChallanDriven)
+            {
+                var delivered = await DeliveredByInvoiceItemAsync(
+                    invoice.Items.Select(ii => ii.Id).ToList());
+                if (delivered.Count > 0)
+                {
+                    foreach (var line in invoice.Items)
+                    {
+                        var gone = delivered.GetValueOrDefault(line.Id, 0m);
+                        if (gone <= 0m) continue;
+
+                        if (removedItemIds.Contains(line.Id))
+                            throw new InvalidOperationException(
+                                $"\"{line.Description}\" has already been delivered ({gone:0.####}) on a challan raised from this bill, "
+                                + "so it can't be removed. Cancel that challan first.");
+
+                        var incoming = dto.Items.FirstOrDefault(i => i.Id == line.Id);
+                        if (incoming != null && incoming.Quantity < gone)
+                            throw new InvalidOperationException(
+                                $"\"{line.Description}\" already has {gone:0.####} delivered on a challan raised from this bill, "
+                                + $"so its quantity can't go below that. Cancel that challan first to bill less.");
+                    }
+                }
             }
 
             // A positive id in the payload that isn't one of this bill's lines is

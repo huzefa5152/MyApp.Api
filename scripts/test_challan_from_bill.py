@@ -233,6 +233,70 @@ def main():
         check("challans raised from a bill carry the bill's id",
               len(rows) > 0 and len(linked) > 0,
               f"{len(rows)} challans, {len(linked)} linked")
+        # ── 6. A delivered bill is still the source document ──────────────
+        #
+        # Raising a challan FROM a bill must not make the bill behave as though
+        # the challan came first. Before this, the server tested
+        # DeliveryChallans.Any() and froze a plain standalone bill's items the
+        # moment a delivery was recorded against it, and the edit form locked
+        # the buyer and told the operator to go and edit the challan instead.
+        #
+        # What HAS gone out is protected -- that is also what keeps the Restrict
+        # FK on DeliveryItems.InvoiceItemId from turning an edit into a 500.
+        print("\n-- 6. Editing a bill that has been delivered --")
+        ed = make_bill([(a, f"Edit A {tag}", 100, 10), (b, f"Edit B {tag}", 60, 20)])
+        if check("a two-line bill is created", ed is not None):
+            eid = ed["id"]
+            pe = plan(eid)
+            l1, l2 = pe["lines"][0], pe["lines"][1]
+            r6 = deliver(eid, [(l1["invoiceItemId"], 40)])
+            check("40 of the first line is delivered", r6.ok, f"http {r6.status_code}: {r6.text[:140]}")
+
+            def put(items, client_id=None):
+                rr = requests.put(f"{api}/invoices/{eid}", headers=h, timeout=120, json={
+                    "id": eid, "companyId": cid, "clientId": client_id or client["id"],
+                    "date": today, "gstRate": 18, "items": items})
+                return rr.status_code, rr.text
+
+            both = [
+                {"id": l1["invoiceItemId"], "description": f"Edit A {tag}", "itemTypeId": a,
+                 "quantity": 100, "uom": "Pcs", "unitPrice": 10},
+                {"id": l2["invoiceItemId"], "description": f"Edit B {tag}", "itemTypeId": b,
+                 "quantity": 60, "uom": "Pcs", "unitPrice": 20},
+            ]
+
+            st, txt = put(both)
+            check("an ordinary edit is still accepted after a delivery",
+                  st in (200, 204), f"got {st} {txt[:160]}")
+
+            # A line with NOTHING delivered can still be removed -- the whole
+            # bill used to be frozen.
+            st, txt = put([both[0]])
+            check("a line with nothing delivered can still be removed",
+                  st in (200, 204), f"got {st} {txt[:160]}")
+
+            # Add it back for the remaining checks (id 0 = a new line).
+            put([both[0], {"description": f"Edit B {tag}", "itemTypeId": b,
+                           "quantity": 60, "uom": "Pcs", "unitPrice": 20}])
+
+            # Below what has gone out is refused, and the message says so.
+            st, txt = put([{"id": l1["invoiceItemId"], "description": f"Edit A {tag}",
+                            "itemTypeId": a, "quantity": 30, "uom": "Pcs", "unitPrice": 10}])
+            check("billing less than was delivered is refused",
+                  st == 400 and "delivered" in txt.lower(), f"got {st} {txt[:180]}")
+
+            # So is deleting the delivered line itself.
+            st, txt = put([{"description": f"Edit B {tag}", "itemTypeId": b,
+                            "quantity": 60, "uom": "Pcs", "unitPrice": 20}])
+            check("removing a delivered line is refused",
+                  st == 400 and "delivered" in txt.lower(), f"got {st} {txt[:180]}")
+
+            # Down to EXACTLY what was delivered is legitimate.
+            st, txt = put([{"id": l1["invoiceItemId"], "description": f"Edit A {tag}",
+                            "itemTypeId": a, "quantity": 40, "uom": "Pcs", "unitPrice": 10}])
+            check("billing exactly what was delivered is allowed",
+                  st in (200, 204), f"got {st} {txt[:180]}")
+
     finally:
         if args.keep:
             print(f"\nkeeping company {cid}")

@@ -414,7 +414,15 @@ keep:
   Imported history sits in the reserved 900001+ band, so ordering on the number
   put every migrated document ahead of the bill raised a minute ago — on a real
   import that is hundreds of rows, i.e. the operator's own bill on the last page.
-- **A challan raised FROM a bill does not make that bill challan-driven.**
+- **A challan raised FROM a bill does not make that bill challan-driven** — on
+  the SERVER as well as in the form. `UpdateAsync` tested
+  `invoice.DeliveryChallans.Any()` and froze a plain standalone bill's items the
+  moment a delivery was recorded; it now tests the lines. What has already gone
+  out is protected instead: a delivered line may not be removed, and a kept line
+  may not drop below its delivered quantity (which is also what keeps the
+  `Restrict` FK on `DeliveryItems.InvoiceItemId` from turning an edit into a
+  500). Billing exactly what was delivered is allowed.
+- **The same direction test, in the form.**
   The direction is read from the LINES: a bill BUILT from a challan has
   `InvoiceItem.DeliveryItemId` set, while the reverse flow sets
   `DeliveryItem.InvoiceItemId` and only adds a challan number. Judging by
@@ -571,7 +579,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Spreadsheet import (layouts, file checks, stock, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (101 checks) |
 | Bill line pricing + advance tax (236G/236H, incl. edit) | `python scripts/test_bill_pricing_advance_tax.py` | `50/50 checks passed` |
-| Delivery challans raised from a bill | `python scripts/test_challan_from_bill.py` | `27/27 checks passed` |
+| Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
