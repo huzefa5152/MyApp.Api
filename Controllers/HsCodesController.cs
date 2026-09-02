@@ -138,6 +138,35 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Fill in missing units on the HS master, in bounded batches.
+        ///
+        /// The published tariff carries no unit column, so codes loaded from it
+        /// start unit-less and the Item Type form has nothing to pre-fill. FBR
+        /// publishes units one code per call, so this walks the master a batch
+        /// at a time — call it until <c>moreToDo</c> is false.
+        /// </summary>
+        [HttpPost("backfill-uoms")]
+        [HasPermission("hscodes.import.run")]
+        public async Task<ActionResult<HsUomBackfillResultDto>> BackfillUoms(
+            [FromBody] HsUomBackfillRequestDto? dto)
+        {
+            dto ??= new HsUomBackfillRequestDto();
+            if (dto.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
+
+            try
+            {
+                return Ok(await _service.BackfillUomsAsync(
+                    dto.CompanyId, dto.Max, dto.OnlyInUse, CurrentUserId));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "UOM backfill failed for user {UserId}", CurrentUserId);
+                return StatusCode(500, new { message = "The unit backfill could not be completed. Anything already filled in was saved." });
+            }
+        }
+
+        /// <summary>
         /// Masked status of the installation-wide FBR reference token. Never
         /// returns the token itself.
         /// </summary>

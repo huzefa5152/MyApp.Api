@@ -43,6 +43,11 @@ namespace MyApp.Api.Services.Implementations
         // feed must not turn into a megabyte of JSON.
         private const int MaxReportedErrors = 25;
 
+        /// <summary>Codes looked up per backfill call. FBR answers one code per
+        /// request, so a bigger batch just means a longer-running request and
+        /// more chance of tripping PRAL's throttling.</summary>
+        private const int MaxUomBackfillBatch = 300;
+
         public HsCodeService(
             AppDbContext db,
             IFbrService fbr,
@@ -376,6 +381,82 @@ namespace MyApp.Api.Services.Implementations
                                    + "Run the import again to finish that step.");
                 }
             }
+        }
+
+        /// <inheritdoc/>
+        public async Task<HsUomBackfillResultDto> BackfillUomsAsync(
+            int? companyId, int max, bool onlyInUse, int userId)
+        {
+            var result = new HsUomBackfillResultDto();
+
+            var (token, _) = await ResolveImportTokenAsync(companyId);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                result.Errors.Add(
+                    "No FBR token is available, so units cannot be looked up. Paste an FBR reference token on this screen first — it is used only to read reference data.");
+                return result;
+            }
+
+            var pending = _db.HsCodes.Where(h => h.IsActive && (h.Uom == null || h.Uom == ""));
+
+            // "Only the codes actually in use" is the cheap, high-value subset:
+            // the ones an item type already references. A full walk is thousands
+            // of calls; this is usually a few dozen.
+            if (onlyInUse)
+            {
+                var used = _db.ItemTypes
+                    .Where(t => !t.IsDeleted && t.HSCode != null && t.HSCode != "")
+                    .Select(t => t.HSCode!);
+                pending = pending.Where(h => used.Contains(h.Code));
+            }
+
+            result.Missing = await pending.CountAsync();
+
+            var batch = await pending
+                .OrderBy(h => h.Code)
+                .Take(Math.Clamp(max, 1, MaxUomBackfillBatch))
+                .ToListAsync();
+
+            foreach (var row in batch)
+            {
+                result.Attempted++;
+                try
+                {
+                    var uoms = await _fbr.FetchHsCodeUomWithTokenAsync(token!, row.Code, DefaultAnnexureId);
+                    if (uoms is { Count: > 0 })
+                    {
+                        var first = uoms[0];
+                        row.Uom = first.Description;
+                        row.FbrUomId = first.UOM_ID;
+                        row.UpdatedAt = DateTime.UtcNow;
+                        await UnitRegistry.EnsureNamesAsync(_db, new[] { first.Description });
+                        result.Filled++;
+                    }
+                    else
+                    {
+                        // A real answer: FBR restricts no unit for this code.
+                        result.NoUnitPublished++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    result.Failed++;
+                    if (result.Errors.Count < 5)
+                        result.Errors.Add($"{row.Code}: {ex.GetType().Name}");
+                    _logger.LogWarning(ex, "UOM backfill failed for {HsCode}", row.Code);
+                }
+            }
+
+            if (result.Filled > 0) await _db.SaveChangesAsync();
+
+            result.RemainingWithoutUom = Math.Max(0, result.Missing - result.Filled - result.NoUnitPublished);
+            result.CompletedAt = DateTime.UtcNow;
+
+            _logger.LogInformation(
+                "UOM backfill by user {UserId}: attempted {Attempted}, filled {Filled}, no-unit {NoUnit}, failed {Failed}, remaining {Remaining}",
+                userId, result.Attempted, result.Filled, result.NoUnitPublished, result.Failed, result.RemainingWithoutUom);
+
+            return result;
         }
 
         /// <summary>

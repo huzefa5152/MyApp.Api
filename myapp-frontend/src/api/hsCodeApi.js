@@ -45,6 +45,11 @@ export const importHsCodesFromTariff = ({ createItemTypes = true } = {}) =>
   http.post("/hscodes/import-tariff", { createItemTypes }, { timeout: 300000 });
 
 /** Masked status of the reference token — never returns the token itself. */
+// Fill in units the published tariff does not carry. FBR answers one code per
+// call, so this runs in batches — keep calling while `moreToDo` is true.
+export const backfillHsUoms = ({ companyId, max = 100, onlyInUse = true } = {}) =>
+  http.post("/hscodes/backfill-uoms", { companyId, max, onlyInUse }, { timeout: 600000 });
+
 export const getFbrReferenceToken = () => http.get("/hscodes/reference-token");
 
 export const setFbrReferenceToken = (token, environment) =>

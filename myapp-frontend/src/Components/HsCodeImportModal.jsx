@@ -3,6 +3,7 @@ import { MdClose, MdCloudDownload, MdCheckCircle, MdWarning, MdKey } from "react
 import {
   importHsCodes,
   importHsCodesFromTariff,
+  backfillHsUoms,
   getFbrReferenceToken,
   setFbrReferenceToken,
 } from "../api/hsCodeApi";
@@ -123,6 +124,40 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
       }
     } catch (err) {
       notify(err?.response?.data?.message || "The import failed. Please try again.", "error");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  // Units are the one thing the published tariff cannot give us, so they are
+  // fetched separately — one call per code, in batches, until done.
+  const runUomBackfill = async () => {
+    setRunning(true);
+    let filled = 0, attempted = 0, rounds = 0;
+    try {
+      for (;;) {
+        const { data } = await backfillHsUoms({ companyId, max: 100, onlyInUse: true });
+        if (data?.errors?.length && data.attempted === 0) {
+          notify(data.errors[0], "error");
+          return;
+        }
+        filled += data.filled || 0;
+        attempted += data.attempted || 0;
+        rounds += 1;
+        // Stop when there is nothing left, nothing moved, or we have run long
+        // enough that the operator deserves an answer rather than a spinner.
+        if (!data.moreToDo || data.attempted === 0 || rounds >= 12) {
+          notify(
+            `Units filled for ${filled} of ${attempted} code(s) checked` +
+            (data.moreToDo ? " — press again to continue." : "."),
+            "success",
+          );
+          onImported?.(data);
+          return;
+        }
+      }
+    } catch (err) {
+      notify(err?.response?.data?.message || "The unit backfill failed.", "error");
     } finally {
       setRunning(false);
     }
@@ -324,6 +359,17 @@ export default function HsCodeImportModal({ companyId, onClose, onImported }) {
         <div style={styles.foot}>
           <button type="button" onClick={onClose} disabled={running} style={styles.secondaryBtn}>
             {result ? "Close" : "Cancel"}
+          </button>
+          <button
+            type="button"
+            onClick={runUomBackfill}
+            disabled={running || !canRun}
+            title={canRun
+              ? "Asks FBR for the unit of each code that has none. The published tariff carries no units, so this is what fills them in."
+              : "Needs an FBR reference token."}
+            style={{ ...styles.secondaryBtn, opacity: running || !canRun ? 0.6 : 1 }}
+          >
+            {running ? "Working…" : "Fill missing units"}
           </button>
           <button
             type="button"

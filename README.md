@@ -289,6 +289,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-02 — Item Catalog: the unit now fills in, and imported codes are reachable
+
+- **Picking an HS code fills the unit again.** The Item Type form asked for units down a path that only ever tried the company's own FBR token — so a company with FBR off got nothing back, even when the system already knew the unit and the HS code screen was happy to show it. It now reads the local HS master first, then falls back to the installation's reference token.
+- **This is also why the form could not be saved.** Update is disabled while the unit is blank, so a unit that never arrived meant a permanently greyed button. With the unit filling in, the button works — and when something genuinely does block saving, the reason is now printed next to the button instead of hidden in a tooltip.
+- **Imported HS codes can be found in every item picker.** Pickers were handed the short curated list, so thousands of imported codes were unreachable on invoices, challans, bills, stock adjustments and everywhere else. Typing two characters now searches the full catalog. The curated list is still what you see before you type, so the dropdown does not fill with thousands of rows.
+- **New "Fill missing units" action** on Import HS Codes. The published tariff carries no units at all, so codes loaded from it start blank; this asks FBR for them a batch at a time. Defaults to only the codes your items actually use — a few dozen rather than thousands.
+
 ### 2026-09-01 — Item Catalog: stop nagging companies that do not use FBR
 
 - **The Item Type form no longer reports FBR problems to a company with FBR switched off.** It was headed "FBR suggestions", offered a sale type, and complained that the FBR UOM list could not be loaded and that no FBR province was set — pushing the operator to configure an integration they had deliberately turned off.

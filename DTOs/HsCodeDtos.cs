@@ -41,6 +41,54 @@ namespace MyApp.Api.DTOs
     }
 
     /// <summary>The summary shown to the operator after an import.</summary>
+    /// <summary>
+    /// Outcome of filling in the UOM on master rows that have none.
+    ///
+    /// FBR publishes units through a per-code endpoint, one call per code, so
+    /// this walks the master rather than pulling a list. It exists because the
+    /// published customs tariff carries no unit column at all: without it every
+    /// imported code starts unit-less, and the Item Type form cannot pre-fill.
+    /// </summary>
+    public class HsUomBackfillRequestDto
+    {
+        /// <summary>Optional: fall back to this company's own FBR token when the
+        /// installation has no reference token. Never another tenant's.</summary>
+        public int? CompanyId { get; set; }
+
+        /// <summary>Codes to look up in this call. Server-clamped.</summary>
+        public int Max { get; set; } = 100;
+
+        /// <summary>Only codes an item type already references — a few dozen
+        /// rather than thousands, and the ones that actually matter.</summary>
+        public bool OnlyInUse { get; set; } = true;
+    }
+
+    public class HsUomBackfillResultDto
+    {
+        /// <summary>Rows that had no UOM when the run started.</summary>
+        public int Missing { get; set; }
+
+        /// <summary>Rows this run actually looked up.</summary>
+        public int Attempted { get; set; }
+
+        /// <summary>Rows that came back with a unit and were saved.</summary>
+        public int Filled { get; set; }
+
+        /// <summary>Looked up, but FBR places no unit restriction on the code.</summary>
+        public int NoUnitPublished { get; set; }
+
+        /// <summary>Lookups that failed (network, throttling).</summary>
+        public int Failed { get; set; }
+
+        /// <summary>Rows still without a unit once this run finished — run again to continue.</summary>
+        public int RemainingWithoutUom { get; set; }
+
+        public bool MoreToDo => RemainingWithoutUom > 0;
+
+        public List<string> Errors { get; set; } = new();
+        public DateTime? CompletedAt { get; set; }
+    }
+
     public class HsCodeImportResultDto
     {
         /// <summary>Rows FBR returned (before de-duplication).</summary>

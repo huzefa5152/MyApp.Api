@@ -41,6 +41,18 @@ namespace MyApp.Api.Services.Interfaces
         Task<HsCodeImportResultDto> ImportFromTariffAsync(bool createItemTypes, int userId);
 
         /// <summary>
+        /// Fill in the UOM on master rows that have none, asking FBR one code at
+        /// a time (its HS_UOM endpoint takes a single code per call).
+        ///
+        /// Runs in bounded batches — <paramref name="max"/> codes per call — so
+        /// a request cannot hang for thousands of round trips and PRAL is not
+        /// hammered. Re-run until <c>MoreToDo</c> is false. Needs a token:
+        /// without one there is nothing to ask, and the result says so rather
+        /// than reporting a silent success.
+        /// </summary>
+        Task<HsUomBackfillResultDto> BackfillUomsAsync(int? companyId, int max, bool onlyInUse, int userId);
+
+        /// <summary>
         /// UOMs applicable to one HS code. Answers from the master when it knows
         /// them; otherwise asks FBR (when a token is available) and caches the
         /// answer back onto the master row so the next caller needs no FBR at all.

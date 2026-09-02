@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
+using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Tax
@@ -16,6 +18,7 @@ namespace MyApp.Api.Services.Tax
     {
         private readonly IFbrService _fbr;
         private readonly AppDbContext _db;
+        private readonly IFbrTokenProtector? _protector;
         private readonly ILogger<TaxMappingEngine>? _logger;
 
         // Cache keys are scoped per company because the FBR token is
@@ -45,7 +48,11 @@ namespace MyApp.Api.Services.Tax
         // override when other sectors come online (services, exports).
         private const int DefaultTransactionTypeId = 18;
 
-        public TaxMappingEngine(IFbrService fbr, AppDbContext db, ILogger<TaxMappingEngine>? logger = null)
+        public TaxMappingEngine(
+            IFbrService fbr,
+            AppDbContext db,
+            IFbrTokenProtector? protector = null,
+            ILogger<TaxMappingEngine>? logger = null)
         {
             _fbr = fbr;
             _db = db;
@@ -61,6 +68,26 @@ namespace MyApp.Api.Services.Tax
             var trimmed = hsCode.Trim();
             var key = $"{companyId}:{trimmed}";
             if (_hsUomCache.TryGetValue(key, out var cached)) return cached;
+
+            // ── The local HS master first ────────────────────────────────────
+            // This used to go straight to PRAL with the COMPANY's token, which
+            // meant a company with FBR off (the normal case here) never got a
+            // UOM back — even when the master already knew it. The Item Type
+            // form reads its UOM through this method, so the field stayed empty
+            // and the Update button, gated on a non-empty UOM, was permanently
+            // disabled. Meanwhile /hscodes/{code}/uoms answered correctly from
+            // the same master. Two lookups, one of them wrong.
+            var master = await _db.HsCodes.AsNoTracking()
+                .Where(h => h.Code == trimmed)
+                .Select(h => new { h.Uom, h.FbrUomId })
+                .FirstOrDefaultAsync();
+
+            if (master?.FbrUomId != null && !string.IsNullOrWhiteSpace(master.Uom))
+            {
+                var known = new List<FbrUOMDto> { new() { UOM_ID = master.FbrUomId.Value, Description = master.Uom! } };
+                _hsUomCache.TryAdd(key, known);
+                return known;
+            }
 
             // Retry-on-empty: PRAL occasionally returns an empty array on the
             // first call for a real HS code (operator-reported, see comment
@@ -84,7 +111,52 @@ namespace MyApp.Api.Services.Tax
                     return fresh;
                 }
             }
+
+            // ── Installation reference token ─────────────────────────────────
+            // The company may legitimately have no token of its own; the
+            // installation-wide read-only token exists precisely so reference
+            // data still resolves. Never another tenant's token (audit H-9).
+            var reference = await GetReferenceTokenAsync();
+            if (!string.IsNullOrWhiteSpace(reference))
+            {
+                try
+                {
+                    var viaReference = await _fbr.FetchHsCodeUomWithTokenAsync(
+                        reference!, trimmed, DefaultAnnexureId);
+                    if (viaReference is { Count: > 0 })
+                    {
+                        _hsUomCache.TryAdd(key, viaReference);
+                        return viaReference;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Non-fatal — the operator can still choose a unit by hand.
+                    _logger?.LogWarning(ex, "Reference-token HS_UOM lookup failed for {HsCode}", trimmed);
+                }
+            }
+
             return fresh ?? new();
+        }
+
+        /// <summary>True when an installation-wide reference token exists, so a
+        /// UOM lookup that came back empty really did reach FBR.</summary>
+        private async Task<bool> HasReferenceTokenAsync()
+            => !string.IsNullOrWhiteSpace(await GetReferenceTokenAsync());
+
+        /// <summary>
+        /// The installation-wide read-only FBR token, or null. Read here rather
+        /// than through IHsCodeService because that service already depends on
+        /// this engine, and taking the dependency back would close a cycle.
+        /// </summary>
+        private async Task<string?> GetReferenceTokenAsync()
+        {
+            if (_protector == null) return null;
+            var row = await _db.SystemSettings.AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Key == SystemSettingKeys.FbrReferenceToken);
+            if (row == null || string.IsNullOrWhiteSpace(row.Value)) return null;
+            try { return _protector.Unprotect(row.Value); }
+            catch { return null; }
         }
 
         public async Task<FbrUOMDto?> SuggestDefaultUomAsync(int companyId, string hsCode)
@@ -353,11 +425,18 @@ namespace MyApp.Api.Services.Tax
                 DefaultRate: defaultRate,
                 DefaultSaleType: defaultSaleType,
                 Notes: notes,
-                // The HS_UOM lookup only reaches PRAL when the company has a
-                // token; an empty list then means FBR genuinely has no UOM
-                // restriction for this code (common for many codes), NOT a
-                // failure. Without a token the lookup never ran.
-                UomLookupRan: !string.IsNullOrEmpty(company?.FbrToken)
+                // Did we actually establish the UOM list for this code?
+                //
+                // This used to be "does the company hold an FBR token", which
+                // was never the real question and was wrong twice over: a
+                // company with no token can still get a definitive answer from
+                // the local HS master or the installation reference token, and
+                // a company WITH a token can still fail the call. What the flag
+                // feeds is a sentence to the operator — "no restriction" versus
+                // "we could not find out" — so it has to mean the second thing.
+                UomLookupRan: uoms.Count > 0
+                              || !string.IsNullOrEmpty(company?.FbrToken)
+                              || await HasReferenceTokenAsync()
             );
         }
     }

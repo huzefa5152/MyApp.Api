@@ -789,6 +789,12 @@ export default function ItemTypeForm({
               {submitLabel}
             </button>
           </div>
+          {/* Say WHY the button is dead. It was previously only a title
+              attribute, so an operator who could not save saw a greyed button
+              and no reason for it — reported as "unable to edit". */}
+          {blockReason && (
+            <div style={formStyles.blockReason} role="status">{blockReason}</div>
+          )}
         </form>
       </div>
     </div>

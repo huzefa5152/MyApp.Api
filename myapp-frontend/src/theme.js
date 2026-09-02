@@ -146,6 +146,9 @@ export const modalSizes = {
 };
 
 export const formStyles = {
+  // Why a disabled submit is disabled, shown next to it rather than hidden in a
+  // tooltip — a greyed button with no stated reason reads as a broken screen.
+  blockReason: { marginTop: "0.45rem", textAlign: "right", fontSize: "0.8rem", color: "#b26a00" },
   backdrop: {
     position: "fixed",
     inset: 0,
