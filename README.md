@@ -289,6 +289,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-02 — Unit price and quantity accept 12 decimal places
+
+- **Unit price and quantity now take up to 12 decimals everywhere they are typed** — sales invoice, standalone bill, purchase bill, purchase debit note, sales quote, sales order, delivery challan, PO import, stock opening balance and adjustment, and non-inventory default prices. Entering a back-computed rate such as `39,400 / 12 = 3283.333333333333` no longer shows "Please enter a valid value. The two nearest valid values are 3283.33 and 3283.34", and no longer gets silently rounded to two decimals when saved.
+- **Money totals stay at 2 decimals on purpose.** Line total, subtotal, GST, withholding, grand total, payments and journal lines are currency, so `12 x 3283.333333333333` still books as exactly `Rs 39,400.00`. The extra precision lives on the rate, not on the money.
+- **Quantities on integer-only units are unchanged** — a unit whose "allows decimal quantity" flag is off (Pcs, SET, Pair) still accepts whole numbers only.
+- Displays keep it readable: a price shows the decimals it actually has, so `250.00` still reads `250.00` while `3283.333333333333` reads in full. Print templates gain a `{{fmtPrice this.unitPrice}}` merge field for unit-price cells that should keep the typed precision; existing templates are untouched.
+- What FBR receives is deliberately unchanged: PRAL is not sent a unit price at all, and the quantity is still transmitted at the 4 decimals it has always accepted.
+
 ### 2026-08-31 — Fix: billing an item whose name already exists in another case
 
 - **Creating a bill no longer fails when a line's item name already exists in the catalog under different capitalisation.** Typing "Steel Pipe" where the catalog holds "STEEL PIPE" — or a name that was stored with a trailing space — used to make the save fail outright. The item catalog is deliberately case-insensitive (one entry per item, keeping the spelling it was first saved with), but the bill's own "is this name new?" check was case-sensitive, so it tried to add a second copy of the same item and the save was rejected.

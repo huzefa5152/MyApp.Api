@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -988,7 +988,13 @@ namespace MyApp.Api.Services.Implementations
                     ProductDescription = SanitizeForFbr(item.Description),
                     Rate = $"{invoice.GSTRate:0.##}%",
                     UoM = uomDesc,
-                    Quantity = item.Quantity,
+                    // Quantity is stored at 12dp since 2026-09-02, but PRAL has only ever
+                    // received <=4dp (the old decimal(18,4) column), so keep transmitting
+                    // that precision rather than changing a government API's payload as a
+                    // side effect of a UI change. The tax base is ValueSalesExcludingST
+                    // (money, 2dp) — FBR is not sent a unit price at all — so this only
+                    // affects the descriptive quantity, never a computed tax figure.
+                    Quantity = Math.Round(item.Quantity, 4, MidpointRounding.AwayFromZero),
                     TotalValues = 0,
                     ValueSalesExcludingST = item.LineTotal,
                     FixedNotifiedValueOrRetailPrice = retailPrice,

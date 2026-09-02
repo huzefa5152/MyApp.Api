@@ -482,9 +482,9 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<InvoiceItemAdjustment>()
                 .HasIndex(a => a.InvoiceId);
             modelBuilder.Entity<InvoiceItemAdjustment>()
-                .Property(a => a.AdjustedQuantity).HasPrecision(18, 4);
+                .Property(a => a.AdjustedQuantity).HasPrecision(28, 12);
             modelBuilder.Entity<InvoiceItemAdjustment>()
-                .Property(a => a.AdjustedUnitPrice).HasPrecision(18, 2);
+                .Property(a => a.AdjustedUnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<InvoiceItemAdjustment>()
                 .Property(a => a.AdjustedLineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItemAdjustment>()
@@ -508,14 +508,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.AmountPaid).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);
-            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(28, 12);
+            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.FixedNotifiedValueOrRetailPrice).HasPrecision(28, 12);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 
             // Quantity columns — decimal(18,4) so fractional UOMs (KG, Liter,
             // Carat) carry up to 4 places. Money is 2 places; quantity gets
             // 2 extra so e.g. 0.0004 Carat survives the round-trip.
-            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.Quantity).HasPrecision(18, 4);
-            modelBuilder.Entity<DeliveryItem>().Property(di => di.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.Quantity).HasPrecision(28, 12);
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.Quantity).HasPrecision(28, 12);
 
             // Optional: make ItemDescription.Name and Unit.Name unique
             modelBuilder.Entity<ItemDescription>()
@@ -615,8 +616,8 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<NonInventoryItem>().Property(n => n.UnitName).HasMaxLength(50);
             modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultLineDescription).HasMaxLength(1000);
             modelBuilder.Entity<NonInventoryItem>().Property(n => n.ExternalRef).HasMaxLength(80);
-            modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultSalePrice).HasPrecision(18, 2);
-            modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultPurchasePrice).HasPrecision(18, 2);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultSalePrice).HasPrecision(28, 12);
+            modelBuilder.Entity<NonInventoryItem>().Property(n => n.DefaultPurchasePrice).HasPrecision(28, 12);
             // One item per (company, name). Names don't collide across companies.
             modelBuilder.Entity<NonInventoryItem>()
                 .HasIndex(n => new { n.CompanyId, n.Name }).IsUnique();
@@ -854,13 +855,14 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesQuote>().Property(q => q.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<SalesQuote>().Property(q => q.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<SalesQuote>().Property(q => q.GrandTotal).HasPrecision(18, 2);
-            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
-            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(28, 12);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
             // Per-line product photo — relative URL only (see QuoteLineImages).
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.ImagePath)
                 .HasMaxLength(MyApp.Api.Helpers.QuoteLineImages.MaxUrlLength);
-            modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(28, 12);
+            modelBuilder.Entity<SalesOrderItem>().Property(i => i.UnitPrice).HasPrecision(28, 12);
 
             // Unique numbering per (company, division). A division has its own
             // Sales Quote sequence, so two divisions (or a division and the
@@ -1758,12 +1760,12 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.NoAction); // avoid SQL Server "multiple cascade paths"
             modelBuilder.Entity<PurchaseItemSourceLine>()
                 .HasIndex(x => x.InvoiceItemId);
-            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.UnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.LineTotal).HasPrecision(18, 2);
-            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.FixedNotifiedValueOrRetailPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.FixedNotifiedValueOrRetailPrice).HasPrecision(28, 12);
             // Decimal Quantity (was int) — matches DeliveryItem/InvoiceItem
             // precision so cross-module reports don't have a units mismatch.
-            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<PurchaseItem>().Property(pi => pi.Quantity).HasPrecision(28, 12);
             // FBR-source line taxes — both nullable, additive.
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.ExtraTax).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseItem>().Property(pi => pi.StWithheldAtSource).HasPrecision(18, 2);
@@ -1798,8 +1800,8 @@ namespace MyApp.Api.Data
                 .HasOne(i => i.PurchaseDebitNote).WithMany(d => d.Items)
                 .HasForeignKey(i => i.PurchaseDebitNoteId).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<PurchaseDebitNoteItem>().HasIndex(i => i.PurchaseDebitNoteId);
-            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
-            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.Quantity).HasPrecision(28, 12);
+            modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.UnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<PurchaseDebitNoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
             // Optional inventory + per-line GL classification for user-created notes.
             // NoAction FKs (the parent already cascades from Company; a second path
@@ -1913,8 +1915,8 @@ namespace MyApp.Api.Data
             // boundary, drifting on-hand upward over time. Now both
             // mirror InvoiceItem / DeliveryItem / PurchaseItem at
             // decimal(18,4).
-            modelBuilder.Entity<StockMovement>().Property(sm => sm.Quantity).HasPrecision(18, 4);
-            modelBuilder.Entity<OpeningStockBalance>().Property(osb => osb.Quantity).HasPrecision(18, 4);
+            modelBuilder.Entity<StockMovement>().Property(sm => sm.Quantity).HasPrecision(28, 12);
+            modelBuilder.Entity<OpeningStockBalance>().Property(osb => osb.Quantity).HasPrecision(28, 12);
 
             // ── Inventory V2 foundation (2026-07 redesign) ─────────────────────
             // Per-(company, item-type) tracking policy override + reorder level.
@@ -1933,7 +1935,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<CompanyItemTypeSetting>()
                 .Property(s => s.Mode).HasConversion<byte>();
             modelBuilder.Entity<CompanyItemTypeSetting>()
-                .Property(s => s.ReorderLevel).HasPrecision(18, 4);
+                .Property(s => s.ReorderLevel).HasPrecision(28, 12);
             // 2026-07-14: optional division scope + per-company GL account
             // mapping on the overlay. All NoAction — Division already cascades
             // from Company, and two Account FKs from one table (like

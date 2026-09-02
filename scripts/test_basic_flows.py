@@ -656,6 +656,78 @@ def test_item_description_casing(base: str, token: str, company: dict, client: d
               f"got '{matches[0].get('name')}'")
 
 
+# ── Suite 10: 12-decimal unit price / quantity ─────────────────
+def test_twelve_decimal_precision(base: str, token: str, company: dict, client: dict) -> None:
+    """Unit price and quantity accept 12 decimals; money totals stay at 2.
+
+    Operators back-compute a unit price from a known line total (39,400 over 12
+    units = 3283.333333333333). Pre-fix every UnitPrice column was
+    decimal(18,2), so SQL Server silently rounded the stored value to 3283.33
+    and the line no longer reconciled to the total the operator started from.
+    The columns are decimal(28,12) now; LineTotal / Subtotal / GrandTotal are
+    deliberately still rounded to 2 because they are currency.
+    """
+    suite = "10. 12-decimal price & quantity"
+    print(f"\n=== {suite} ===")
+    it_id = first_item_type_id(base, token)
+
+    # 10a — the screenshot's case: 39,400 / 12 units.
+    price = 3283.333333333333
+    status, bill = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(), "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 0,
+        "items": [{"description": "Bag Pack 12dp", "quantity": 12, "uom": "Pcs",
+                   "unitPrice": price, "itemTypeId": it_id}],
+    })
+    check(suite, "10a bill with a 12-decimal unit price accepted",
+          status in (200, 201), f"got {status} {bill}")
+    if status not in (200, 201):
+        return
+
+    _, fetched = http("GET", f"/api/invoices/{bill['id']}", base, token=token)
+    items = fetched.get("items") or []
+    check(suite, "10a one item round-tripped", len(items) == 1, f"got {len(items)}")
+    if items:
+        stored = float(items[0].get("unitPrice") or 0)
+        # The whole point: NOT truncated to 3283.33.
+        check(suite, "10a unit price kept its 12 decimals",
+              abs(stored - price) < 1e-9, f"sent {price}, stored {stored}")
+        check(suite, "10a unit price is not rounded to 2dp",
+              abs(stored - 3283.33) > 1e-6, f"stored {stored} — looks 2dp-rounded")
+
+    # 10b — money stays money: 12 x 3283.333333333333 = 39399.999999999996 -> 39,400.00
+    grand = float(fetched.get("grandTotal") or 0)
+    check(suite, "10b grand total rounds to 39400.00 (money still 2dp)",
+          abs(grand - 39400.00) < 0.005, f"got {grand}")
+
+    # 10c — quantity carries 12 decimals too. Needs a UOM whose
+    # AllowsDecimalQuantity flag is on: the integer-only guard (Pcs, SET, Pair)
+    # is a separate, intended rule and correctly refuses fractions.
+    _, units = http("GET", "/api/units", base, token=token)
+    dec_uom = next((u.get("name") for u in (units or [])
+                    if u.get("allowsDecimalQuantity") and u.get("name")), None)
+    if not dec_uom:
+        check(suite, "10c skipped — no decimal-allowed UOM configured", True)
+        return
+    status, b2 = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(), "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 0,
+        "items": [{"description": "Fractional Qty 12dp", "quantity": 1.234567890123,
+                   "uom": dec_uom, "unitPrice": 100, "itemTypeId": it_id}],
+    })
+    check(suite, f"10c 12-decimal quantity accepted (uom={dec_uom})",
+          status in (200, 201), f"got {status} {b2}")
+    if status in (200, 201):
+        _, f2 = http("GET", f"/api/invoices/{b2['id']}", base, token=token)
+        it2 = (f2.get("items") or [{}])[0]
+        q = float(it2.get("quantity") or 0)
+        check(suite, "10c quantity kept its 12 decimals",
+              abs(q - 1.234567890123) < 1e-11, f"stored {q}")
+        check(suite, "10c line total rounds to 123.46",
+              abs(float(f2.get("grandTotal") or 0) - 123.46) < 0.005,
+              f"got {f2.get('grandTotal')}")
+
+
 # ── Main ───────────────────────────────────────────────────────────
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
@@ -693,6 +765,7 @@ def main() -> int:
         test_future_date_guard(args.base, token, company, client, challan)
         test_withholding_tax_flow(args.base, token, company, client)
         test_item_description_casing(args.base, token, company, client)
+        test_twelve_decimal_precision(args.base, token, company, client)
     finally:
         teardown(args.base, token, company, args.keep)
 

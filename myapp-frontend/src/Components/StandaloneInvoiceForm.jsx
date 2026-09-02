@@ -1285,7 +1285,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   </td>
                                   <td style={styles.unifiedTd}>
                                     <input
-                                      type="number" min={0} step={0.01}
+                                      type="number" min={0} step="any"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                       value={r.unitPrice}
                                       onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value })}
@@ -1326,7 +1326,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   {showMRP && (
                                     <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5" }}>
                                       <input
-                                        type="number" min={0} step={0.01}
+                                        type="number" min={0} step="any"
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                         value={r.mrp}
                                         onChange={(e) => updateRow(r.localId, { mrp: e.target.value })}

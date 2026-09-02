@@ -87,7 +87,7 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
   const fmtNum = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtQty = (n) => {
     // Strip trailing zeros, cap at 4 places — same rule as the rest of the app.
-    return parseFloat(Number(n || 0).toFixed(4)).toString();
+    return parseFloat(Number(n || 0).toFixed(12)).toString();
   };
 
   const copyJson = async () => {

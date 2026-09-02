@@ -15,7 +15,7 @@ const colors = {
   teal: "#00897b", blue: "#0d47a1", warn: "#e65100", warnLight: "#fff8e1", bg: "#f7f9fc",
 };
 
-const fmtQty = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString(); };
+const fmtQty = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(12)).toString(); };
 const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d); const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`; };
 
 const EXTRA = ""; // mapping value for "not an ordered line"

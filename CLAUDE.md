@@ -125,6 +125,23 @@ in the sidebar. `python scripts/verify_permission_sections.py` enforces this
 - Multi-step writes use `BeginTransactionAsync` with explicit commit/rollback.
 - Cross-tenant link guard: when writing a record that references a `Client`/`Supplier`/`Invoice`, verify `child.CompanyId == parent.CompanyId`.
 - Demo invoices (`IsDemo = true`) are **excluded** from every dashboard KPI and from the real numbering sequence.
+- **Decimal precision is split by MEANING, not by column (2026-09-02).**
+  *Rates* — `UnitPrice`, `AdjustedUnitPrice`, `FixedNotifiedValueOrRetailPrice`,
+  `Default{Sale,Purchase}Price`, every `Quantity`, `ReorderLevel` — are
+  `decimal(28,12)` (20 columns, migration `20260902084604`). *Money* —
+  `LineTotal`, `Subtotal`, `GSTAmount`, `WithholdingTaxAmount`, `GrandTotal`,
+  `AmountPaid`, `Payments.Amount`, `JournalLines.Debit/Credit` — stays 2dp
+  (4dp on journal lines). So `Math.Round(qty * unitPrice, 2)` on a line total is
+  CORRECT and must not be "fixed" to 12: that rounding is what makes
+  `12 x 3283.333333333333` book as exactly `39,400.00`.
+  - 28, not 30: C# `decimal` carries only 28-29 significant digits, so a wider
+    column would not round-trip.
+  - A new price/qty input uses `step="any"`. Integer-only UOMs keep `step="1"`
+    (`QuantityInput` sanitises fractions away, and the server rejects them).
+  - Money inputs keep `step="0.01"`. Do not widen them.
+  - FBR is never sent a unit price; the transmitted `Quantity` is pinned to 4dp
+    in `FbrService` because that is all PRAL has ever received. Do not widen it
+    without testing against PRAL.
 
 ### 5. Dashboard / aggregation grouping
 
@@ -435,6 +452,10 @@ migrations). This is a hard rule, on par with the test-discipline checks.
 - ❌ `whiteSpace: "nowrap"` + `textOverflow: "ellipsis"` on user-supplied names (collapses similar-prefix names visually)
 - ❌ Shipping a UI change without confirming it renders (green build ≠ visual proof — DOM-measure `svg`/element or reload the page; e.g. the "invisible icons" report)
 - ❌ Retrying POSTs to FBR (can issue duplicate IRN)
+- ❌ Widening a MONEY column or money input to 12dp because a price needed it.
+  Money is currency; a sub-paisa total breaks the GL, aging, reconciliation and
+  the accounting reports that cross-check to the paisa. Precision belongs on the
+  rate, and the line total rounds it back to money.
 - ❌ Logging passwords / JWTs / FBR tokens (use `SensitiveDataRedactor`)
 - ❌ Cross-tenant entity links (`Invoice.ClientId` pointing at a `Client` whose `CompanyId` doesn't match)
 - ❌ De-duplicating against a UNIQUE index with a case-sensitive C# check.
