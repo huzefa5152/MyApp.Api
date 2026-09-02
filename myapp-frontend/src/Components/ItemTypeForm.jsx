@@ -133,6 +133,15 @@ export default function ItemTypeForm({
   const canManageOpening = has("stock.opening.manage");
   const [openingBalance, setOpeningBalance] = useState("");
   const [openingInitial, setOpeningInitial] = useState("");
+  // What that opening quantity is WORTH, and at which sales-tax rate. Stock
+  // carries a value as well as a count (see Helpers/StockValuation.cs), so an
+  // item created by hand can state its opening value here exactly as the
+  // spreadsheet import does for an imported one. Tax and the inclusive total
+  // are always derived from these two, never entered.
+  const [openingValue, setOpeningValue] = useState("");
+  const [openingValueInitial, setOpeningValueInitial] = useState("");
+  const [openingRate, setOpeningRate] = useState("");
+  const [openingRateInitial, setOpeningRateInitial] = useState("");
 
   // ── Per-company overlay (division + GL account mapping) ──
   // Only the Item Catalog screen passes showGlMapping; the bill-form quick-add
@@ -163,10 +172,28 @@ export default function ItemTypeForm({
         const v = row ? String(row.quantity) : "";
         setOpeningBalance(v);
         setOpeningInitial(v);
+        const val = row && Number(row.valueExcludingTax) ? String(row.valueExcludingTax) : "";
+        setOpeningValue(val);
+        setOpeningValueInitial(val);
+        const rate = row && Number(row.salesTaxRate) ? String(row.salesTaxRate) : "";
+        setOpeningRate(rate);
+        setOpeningRateInitial(rate);
       })
       .catch(() => { /* opening balance is optional context */ });
     return () => { cancelled = true; };
   }, [canManageOpening, companyId, mode, editItem?.id]);
+
+  // The two figures the system DERIVES, shown live so the operator sees the
+  // same Sales Tax / Including numbers the stock grid will show.
+  const openingPreview = (() => {
+    const excl = parseFloat(openingValue);
+    const rate = parseFloat(openingRate);
+    if (!(excl > 0) || !(rate > 0)) return null;
+    const tax = Math.round(excl * rate) / 100;
+    const money = (v) => Number(v).toLocaleString(undefined,
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return { tax: money(tax), incl: money(excl + tax) };
+  })();
 
   // FBR hint bundle for the currently-typed HS code: valid UOMs,
   // suggested sale type, suggested rate %, live SaleTypeToRate options.
@@ -404,12 +431,17 @@ export default function ItemTypeForm({
 
       // Optional opening stock balance for the current company. Only when the
       // operator can manage opening stock and the value actually changed.
-      if (canManageOpening && companyId && saved?.id && openingBalance.trim() !== openingInitial.trim()) {
+      const openingChanged = openingBalance.trim() !== openingInitial.trim()
+        || openingValue.trim() !== openingValueInitial.trim()
+        || openingRate.trim() !== openingRateInitial.trim();
+      if (canManageOpening && companyId && saved?.id && openingChanged) {
         try {
           await upsertOpeningBalance({
             companyId,
             itemTypeId: saved.id,
             quantity: parseFloat(openingBalance) || 0,
+            valueExcludingTax: parseFloat(openingValue) || 0,
+            salesTaxRate: parseFloat(openingRate) || 0,
             asOfDate: new Date().toISOString().slice(0, 10),
             notes: "Set from item type form",
           });
@@ -736,6 +768,48 @@ export default function ItemTypeForm({
                 <small style={{ color: "#5f6d7e" }}>
                   Sets this item's opening stock for the selected company. Leave blank to skip.
                 </small>
+
+                <div style={{ ...styles.row, marginTop: "0.7rem" }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={formStyles.label}>
+                      Value excluding sales tax{" "}
+                      <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      style={formStyles.input}
+                      value={openingValue}
+                      onChange={(e) => setOpeningValue(e.target.value)}
+                      placeholder="0.00"
+                    />
+                    <small style={{ color: "#5f6d7e" }}>
+                      What the opening quantity is worth in total, not per unit.
+                    </small>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={formStyles.label}>
+                      Sales tax rate %{" "}
+                      <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      style={formStyles.input}
+                      value={openingRate}
+                      onChange={(e) => setOpeningRate(e.target.value)}
+                      placeholder={hsHints?.defaultRate ? String(hsHints.defaultRate) : "18"}
+                    />
+                    <small style={{ color: "#5f6d7e" }}>
+                      {openingPreview
+                        ? `Sales tax ${openingPreview.tax} · including ${openingPreview.incl}`
+                        : "Sales tax and the inclusive total are worked out from these two."}
+                    </small>
+                  </div>
+                </div>
               </div>
             )}
 
