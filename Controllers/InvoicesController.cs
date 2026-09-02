@@ -178,6 +178,50 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// A bill's lines with how much of each is still to be delivered, and
+        /// the challans already raised from it. Powers the "Create Delivery
+        /// Challan" dialog. Gated by the challan-create permission, since that
+        /// is the artifact the dialog goes on to produce.
+        /// </summary>
+        [HttpGet("{id:int}/challan-plan")]
+        [HasPermission("challans.manage.create")]
+        public async Task<ActionResult<InvoiceChallanPlanDto>> GetChallanPlan(int id)
+        {
+            var plan = await _service.GetChallanPlanAsync(id);
+            if (plan == null) return NotFound();
+            var invoice = await _service.GetByIdAsync(id);
+            if (invoice == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, invoice.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, invoice.CompanyId, invoice.DivisionId);
+            return Ok(plan);
+        }
+
+        /// <summary>
+        /// Raise a delivery challan against this bill. An empty line list
+        /// delivers everything still outstanding; otherwise the given lines at
+        /// the given quantities -- so one line can be delivered across several
+        /// challans, and one challan can cover every line.
+        /// </summary>
+        [HttpPost("{id:int}/create-challan")]
+        [HasPermission("challans.manage.create")]
+        public async Task<ActionResult<DeliveryChallanDto>> CreateChallanFromInvoice(
+            int id, [FromBody] CreateChallanFromInvoiceDto dto)
+        {
+            var invoice = await _service.GetByIdAsync(id);
+            if (invoice == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, invoice.CompanyId);
+            // The challan inherits the bill's division, so write access to that
+            // division is the right gate for raising it.
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, invoice.CompanyId, invoice.DivisionId);
+            try
+            {
+                return Ok(await _service.CreateChallanFromInvoiceAsync(id, dto));
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (KeyNotFoundException) { return NotFound(); }
+        }
+
+        /// <summary>
         /// What the chosen items' stock is worth, so the bill form can turn a
         /// line TOTAL into a quantity: the operator knows the amount they are
         /// billing, not the number of units it works out to.

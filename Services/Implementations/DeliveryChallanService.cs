@@ -146,7 +146,8 @@ namespace MyApp.Api.Services.Implementations
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
-                    SalesOrderItemId = i.SalesOrderItemId
+                    SalesOrderItemId = i.SalesOrderItemId,
+                    InvoiceItemId = i.InvoiceItemId
                 }).ToList()
             };
 
@@ -362,7 +363,8 @@ namespace MyApp.Api.Services.Implementations
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
-                    SalesOrderItemId = i.SalesOrderItemId
+                    SalesOrderItemId = i.SalesOrderItemId,
+                    InvoiceItemId = i.InvoiceItemId
                 }).ToList()
             };
 

@@ -145,5 +145,21 @@ namespace MyApp.Api.Services.Interfaces
         /// missing HSCode plus their sold/procured/remaining qty.
         /// </summary>
         Task<PurchaseTemplateDto?> GetPurchaseTemplateAsync(int invoiceId);
+
+        /// <summary>
+        /// A bill's lines with how much of each is still to be delivered, plus
+        /// the challans already raised from it. Null when the bill is gone.
+        /// </summary>
+        Task<InvoiceChallanPlanDto?> GetChallanPlanAsync(int invoiceId);
+
+        /// <summary>
+        /// Raises a delivery challan against a bill. An empty line list means
+        /// everything still outstanding; otherwise the given lines at the given
+        /// quantities, so one line can be delivered across several challans and
+        /// one challan can cover every line.
+        /// </summary>
+        Task<DeliveryChallanDto> CreateChallanFromInvoiceAsync(
+            int invoiceId, CreateChallanFromInvoiceDto dto);
+
     }
 }

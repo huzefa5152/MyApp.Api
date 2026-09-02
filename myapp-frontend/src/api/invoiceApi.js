@@ -138,3 +138,14 @@ export const getPurchaseTemplate = (invoiceId) =>
 // shows. Gated by the bill-create permission, like getLastRatesForChallan.
 export const getStockPricing = (companyId, itemTypeIds) =>
   httpClient.get(`/invoices/company/${companyId}/stock-pricing`, { params: { itemTypeIds } });
+
+// A bill's lines with how much of each is still to be delivered, and the
+// challans already raised from it.
+export const getInvoiceChallanPlan = (invoiceId) =>
+  httpClient.get(`/invoices/${invoiceId}/challan-plan`);
+
+// Raise a delivery challan against a bill. Omit `lines` to deliver everything
+// still outstanding; pass [{ invoiceItemId, quantity }] to deliver part of it,
+// which is what lets one line be delivered across several challans.
+export const createChallanFromInvoice = (invoiceId, payload) =>
+  httpClient.post(`/invoices/${invoiceId}/create-challan`, payload);

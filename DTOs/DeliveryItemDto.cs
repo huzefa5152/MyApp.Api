@@ -23,5 +23,11 @@
         /// existing flows never set it.
         /// </summary>
         public int? SalesOrderItemId { get; set; }
+
+        /// <summary>
+        /// Set when this challan line delivers part of a BILLED line, so the
+        /// bill knows how much is left to deliver. Mirrors SalesOrderItemId.
+        /// </summary>
+        public int? InvoiceItemId { get; set; }
     }
 }

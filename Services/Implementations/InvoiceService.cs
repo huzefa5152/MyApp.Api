@@ -14,6 +14,10 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IInvoiceRepository _invoiceRepo;
         private readonly IDeliveryChallanRepository _challanRepo;
+        // Raising a challan against a bill reuses the one challan create path
+        // (numbering, status, item-catalog upsert) rather than duplicating it.
+        // Safe to inject: DeliveryChallanService has no dependency on invoices.
+        private readonly IDeliveryChallanService _challanService;
         private readonly ICompanyRepository _companyRepo;
         private readonly IClientRepository _clientRepo;
         private readonly AppDbContext _context;
@@ -40,6 +44,7 @@ namespace MyApp.Api.Services.Implementations
         public InvoiceService(
             IInvoiceRepository invoiceRepo,
             IDeliveryChallanRepository challanRepo,
+            IDeliveryChallanService challanService,
             ICompanyRepository companyRepo,
             IClientRepository clientRepo,
             AppDbContext context,
@@ -52,6 +57,7 @@ namespace MyApp.Api.Services.Implementations
         {
             _invoiceRepo = invoiceRepo;
             _challanRepo = challanRepo;
+            _challanService = challanService;
             _companyRepo = companyRepo;
             _clientRepo = clientRepo;
             _context = context;
@@ -402,6 +408,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var d in dtos)
                 d.IsLatest = d.InvoiceNumber == maxNumber;
             await AttachReversalInfoAsync(dtos);
+            await AttachChallanRemainingAsync(dtos);
 
             return new PagedResult<InvoiceDto>
             {
@@ -3724,6 +3731,217 @@ namespace MyApp.Api.Services.Implementations
             invoice.AdvanceTaxAmount = resolved.Amount;
         }
 
+
+
+        // ── Delivering a bill: challans raised AFTER the bill ───────────────
+        //
+        // The reverse of the long-standing challan-then-bill flow. A bill can be
+        // delivered in one challan or several, a single line can be split across
+        // challans, and one challan can cover every line -- all four cases fall
+        // out of tracking DeliveryItem.InvoiceItemId and summing it, exactly as
+        // the sales-order fulfilment flow does with SalesOrderItemId.
+        //
+        // A challan writes NO stock movements (outward stock belongs to the
+        // bill, and V2's buckets are derived from live documents), so raising
+        // one here cannot double-count inventory.
+
+        /// <summary>
+        /// Delivered quantity per billed line, over challans raised from this
+        /// bill. Cancelled challans do not count -- their goods never went.
+        /// </summary>
+        private async Task<Dictionary<int, decimal>> DeliveredByInvoiceItemAsync(List<int> invoiceItemIds)
+        {
+            if (invoiceItemIds.Count == 0) return new Dictionary<int, decimal>();
+            return await _context.DeliveryItems
+                .Where(di => di.InvoiceItemId != null
+                          && invoiceItemIds.Contains(di.InvoiceItemId.Value)
+                          && di.DeliveryChallan.Status != "Cancelled")
+                .GroupBy(di => di.InvoiceItemId!.Value)
+                .Select(g => new { Key = g.Key, Qty = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.Key, x => x.Qty);
+        }
+
+        /// <summary>
+        /// Fills <see cref="InvoiceDto.ChallanRemainingQuantity"/> for a page of
+        /// bills: how much of each is still not covered by a challan raised from
+        /// it. Batched -- one query for the page, not one per row -- because the
+        /// bill list renders it on every card and table row to decide whether
+        /// the "Create Delivery Challan" action appears at all.
+        /// </summary>
+        private async Task AttachChallanRemainingAsync(List<InvoiceDto> dtos)
+        {
+            if (dtos.Count == 0) return;
+            var invoiceIds = dtos.Select(d => d.Id).ToList();
+
+            var billed = await _context.InvoiceItems
+                .Where(ii => invoiceIds.Contains(ii.InvoiceId))
+                .GroupBy(ii => ii.InvoiceId)
+                .Select(g => new { InvoiceId = g.Key, Qty = g.Sum(x => x.Quantity) })
+                .ToDictionaryAsync(x => x.InvoiceId, x => x.Qty);
+
+            // Cancelled challans do not count -- their goods never went.
+            var deliveredRows = await _context.DeliveryItems
+                .Where(di => di.InvoiceItemId != null
+                          && invoiceIds.Contains(di.InvoiceItem!.InvoiceId)
+                          && di.DeliveryChallan.Status != "Cancelled")
+                .Select(di => new { di.InvoiceItem!.InvoiceId, di.Quantity })
+                .ToListAsync();
+            var delivered = deliveredRows
+                .GroupBy(x => x.InvoiceId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
+            foreach (var d in dtos)
+            {
+                // A migrated bill has no line items to deliver, so nothing is
+                // outstanding on it -- the action must not appear.
+                var total = d.IsMigrated ? 0m : billed.GetValueOrDefault(d.Id, 0m);
+                var done = delivered.GetValueOrDefault(d.Id, 0m);
+                var left = total - done;
+                d.ChallanRemainingQuantity = left > 0m ? left : 0m;
+            }
+        }
+
+        public async Task<InvoiceChallanPlanDto?> GetChallanPlanAsync(int invoiceId)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.Items)
+                .Include(i => i.Client)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+            if (invoice == null) return null;
+
+            var ids = invoice.Items.Select(i => i.Id).ToList();
+            var delivered = await DeliveredByInvoiceItemAsync(ids);
+
+            var lines = invoice.Items.Select(ii =>
+            {
+                var done = delivered.GetValueOrDefault(ii.Id, 0m);
+                var left = ii.Quantity - done;
+                return new InvoiceChallanLineDto
+                {
+                    InvoiceItemId = ii.Id,
+                    ItemTypeId = ii.ItemTypeId,
+                    NonInventoryItemId = ii.NonInventoryItemId,
+                    Description = ii.Description,
+                    Unit = ii.UOM ?? "",
+                    BilledQuantity = ii.Quantity,
+                    DeliveredQuantity = done,
+                    RemainingQuantity = left > 0m ? left : 0m,
+                };
+            }).ToList();
+
+            var challanNumbers = await _context.DeliveryChallans
+                .Where(dc => dc.InvoiceId == invoiceId && dc.Status != "Cancelled")
+                .Select(dc => dc.ChallanNumber)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+
+            return new InvoiceChallanPlanDto
+            {
+                InvoiceId = invoice.Id,
+                InvoiceNumber = invoice.InvoiceNumber,
+                ClientName = invoice.Client?.Name ?? "",
+                Lines = lines,
+                ExistingChallanNumbers = challanNumbers,
+                FullyDelivered = lines.All(l => l.RemainingQuantity <= 0m),
+            };
+        }
+
+        public async Task<DeliveryChallanDto> CreateChallanFromInvoiceAsync(
+            int invoiceId, CreateChallanFromInvoiceDto dto)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId)
+                ?? throw new KeyNotFoundException("Bill not found.");
+
+            if (invoice.IsMigrated)
+                throw new InvalidOperationException(
+                    "This bill was brought in by an import and has no line items to deliver.");
+
+            var ids = invoice.Items.Select(i => i.Id).ToList();
+            var delivered = await DeliveredByInvoiceItemAsync(ids);
+
+            // An empty selection means "everything still outstanding" -- the
+            // one-click case. Otherwise only the lines given, at the quantities
+            // given, so a line can be delivered in instalments.
+            var requested = (dto.Lines ?? new List<DeliverInvoiceLineDto>())
+                .Where(l => l.Quantity > 0m)
+                .GroupBy(l => l.InvoiceItemId)
+                .ToDictionary(g => g.Key, g => g.Sum(x => x.Quantity));
+
+            var items = new List<DeliveryItemDto>();
+            foreach (var line in invoice.Items)
+            {
+                var done = delivered.GetValueOrDefault(line.Id, 0m);
+                var left = line.Quantity - done;
+
+                decimal qty;
+                if (requested.Count > 0)
+                {
+                    if (!requested.TryGetValue(line.Id, out qty) || qty <= 0m) continue;
+                    // Never deliver more than was billed, however the caller asks.
+                    if (qty > left)
+                        throw new InvalidOperationException(
+                            $"\"{line.Description}\" has {left:0.####} left to deliver, but {qty:0.####} was requested.");
+                }
+                else
+                {
+                    qty = left;
+                    if (qty <= 0m) continue;
+                }
+
+                items.Add(new DeliveryItemDto
+                {
+                    ItemTypeId = line.NonInventoryItemId.HasValue ? null : line.ItemTypeId,
+                    NonInventoryItemId = line.NonInventoryItemId,
+                    Description = line.Description,
+                    Quantity = qty,
+                    Unit = line.UOM ?? "",
+                    InvoiceItemId = line.Id,
+                });
+            }
+
+            if (items.Count == 0)
+                throw new InvalidOperationException(
+                    "Nothing left to deliver on this bill (or no quantities were given).");
+
+            var challanDto = new DeliveryChallanDto
+            {
+                ClientId = invoice.ClientId,
+                // Same division as the bill, so it numbers from that division's
+                // sequence and prints with its branding.
+                DivisionId = invoice.DivisionId,
+                DeliveryDate = dto.DeliveryDate ?? DateTime.UtcNow.Date,
+                PoNumber = invoice.PoNumber ?? "",
+                PoDate = invoice.PoDate,
+                Site = dto.Site,
+                // Links the challan to the bill it delivers. It also keeps the
+                // challan out of the "pending challans to bill" picker, which is
+                // right: it is already billed.
+                InvoiceId = invoice.Id,
+                Items = items,
+            };
+
+            // Reuse the one challan create path -- numbering, status, item
+            // catalog upsert -- which now persists the InvoiceItem links too.
+            var created = await _challanService.CreateDeliveryChallanAsync(invoice.CompanyId, challanDto);
+
+            // The generic create path deliberately does not write InvoiceId --
+            // it belongs to the billed-once challan flow -- so the link is set
+            // here, where the bill is known. It marks the challan as already
+            // billed, which is what keeps it out of the "pending challans to
+            // bill" picker.
+            var row = await _context.DeliveryChallans.FirstOrDefaultAsync(dc => dc.Id == created.Id);
+            if (row != null && row.InvoiceId == null)
+            {
+                row.InvoiceId = invoice.Id;
+                await _context.SaveChangesAsync();
+                created.InvoiceId = invoice.Id;
+            }
+            return created;
+        }
 
     }
 }

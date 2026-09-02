@@ -3,6 +3,7 @@ import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
   MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd, MdCopyAll,
+  MdLocalShipping,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -92,6 +93,7 @@ export default function InvoiceTable({
   onFbrSubmit,
   onEdit,
   onCopy,
+  onCreateChallan,
   onToggleFbrExcluded,
   onDelete,
   onVoid,
@@ -378,6 +380,20 @@ export default function InvoiceTable({
             <MdCopyAll size={14} />
           </button>
         )}
+        {/* Deliver what was billed. Hidden once every line is covered by a
+            challan raised from this bill -- challanRemainingQuantity is the
+            quantity still outstanding, so a PARTLY delivered bill keeps the
+            action for the rest. */}
+        {perms.canCreateChallan && onCreateChallan && !inv.isCancelled
+          && Number(inv.challanRemainingQuantity || 0) > 0 && (
+          <button
+            style={btn.challan}
+            onClick={() => onCreateChallan(inv)}
+            title={`Create a delivery challan — ${Number(inv.challanRemainingQuantity).toLocaleString()} still to deliver`}
+          >
+            <MdLocalShipping size={14} />
+          </button>
+        )}
         {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
           <button
             style={btn.edit}
@@ -492,6 +508,7 @@ const btn = {
   excel:       { ...baseBtn, backgroundColor: "#e8f5e9", color: "#2e7d32" },
   edit:        { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
   copy:        { ...baseBtn, backgroundColor: "#e8eaf6", color: "#283593" },
+  challan:     { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },
   delete:      { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
   void:        { ...baseBtn, backgroundColor: "#fff8e1", color: "#b26a00" },
   receipt:     { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },

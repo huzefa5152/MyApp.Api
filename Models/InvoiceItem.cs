@@ -5,6 +5,13 @@ namespace MyApp.Api.Models
     public class InvoiceItem
     {
         public int Id { get; set; }
+
+        /// <summary>
+        /// Challan lines raised against this billed line. Their quantities sum
+        /// to what has been delivered, so the bill knows what is left to
+        /// deliver -- see DeliveryItem.InvoiceItemId.
+        /// </summary>
+        public ICollection<DeliveryItem> DeliveryItems { get; set; } = new List<DeliveryItem>();
         public int InvoiceId { get; set; }
         public int? DeliveryItemId { get; set; }
 

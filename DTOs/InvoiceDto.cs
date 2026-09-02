@@ -1,5 +1,68 @@
 namespace MyApp.Api.DTOs
 {
+    /// <summary>
+    /// One billed line and how much of it is still to be delivered. Powers the
+    /// "Create Delivery Challan" dialog on a bill.
+    /// </summary>
+    public class InvoiceChallanLineDto
+    {
+        public int InvoiceItemId { get; set; }
+        public int? ItemTypeId { get; set; }
+        public int? NonInventoryItemId { get; set; }
+        public string Description { get; set; } = "";
+        public string Unit { get; set; } = "";
+
+        /// <summary>Quantity on the bill.</summary>
+        public decimal BilledQuantity { get; set; }
+
+        /// <summary>Already covered by challans raised from this bill.</summary>
+        public decimal DeliveredQuantity { get; set; }
+
+        /// <summary>Billed minus delivered, floored at zero.</summary>
+        public decimal RemainingQuantity { get; set; }
+    }
+
+    /// <summary>
+    /// What the dialog needs to open: the bill's lines with their remaining
+    /// quantities, and the challans already raised against it.
+    /// </summary>
+    public class InvoiceChallanPlanDto
+    {
+        public int InvoiceId { get; set; }
+        public int InvoiceNumber { get; set; }
+        public string ClientName { get; set; } = "";
+        public List<InvoiceChallanLineDto> Lines { get; set; } = new();
+
+        /// <summary>Challan numbers already raised from this bill.</summary>
+        public List<int> ExistingChallanNumbers { get; set; } = new();
+
+        /// <summary>True when every line is fully delivered — the button hides.</summary>
+        public bool FullyDelivered { get; set; }
+    }
+
+    /// <summary>One line to put on the challan being created.</summary>
+    public class DeliverInvoiceLineDto
+    {
+        public int InvoiceItemId { get; set; }
+        public decimal Quantity { get; set; }
+    }
+
+    /// <summary>
+    /// Create a delivery challan covering some or all of a bill's remaining
+    /// quantity. An EMPTY line list means "everything still outstanding", which
+    /// is the one-click case; otherwise only the lines given are delivered, at
+    /// the quantities given. Mirrors CreateChallanFromOrderDto.
+    /// </summary>
+    public class CreateChallanFromInvoiceDto
+    {
+        public DateTime? DeliveryDate { get; set; }
+
+        /// <summary>Delivery site; falls through to the challan as-is.</summary>
+        public string? Site { get; set; }
+
+        public List<DeliverInvoiceLineDto>? Lines { get; set; }
+    }
+
     public class InvoiceDto
     {
         public int Id { get; set; }
@@ -79,6 +142,15 @@ namespace MyApp.Api.DTOs
         /// refused, and why the view must show the stored figures.
         /// </summary>
         public bool IsMigrated { get; set; }
+
+        /// <summary>
+        /// Total quantity on this bill still not covered by a challan raised
+        /// from it. Zero means every line is delivered, which is when the
+        /// "Create Delivery Challan" action disappears from the card and the
+        /// table. A quantity rather than a flag, so a PARTIALLY delivered bill
+        /// still offers the action for what is left.
+        /// </summary>
+        public decimal ChallanRemainingQuantity { get; set; }
 
         /// <summary>
         /// The reference the document had in the books it came from ("AA-51").

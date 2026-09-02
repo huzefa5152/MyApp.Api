@@ -939,6 +939,15 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+            // DeliveryItem -> InvoiceItem (optional; restrict -- a billed line
+            // cannot be removed while challan lines reference it). Indexed
+            // because the remaining-to-deliver figure groups on it.
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.InvoiceItem).WithMany(ii => ii.DeliveryItems)
+                .HasForeignKey(di => di.InvoiceItemId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.InvoiceItemId);
 
             // ── Withholding Tax Receipts ────────────────────────────────────
             // Company / Client restrict (a company or client with receipts

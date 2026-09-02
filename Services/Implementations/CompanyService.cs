@@ -375,6 +375,15 @@ namespace MyApp.Api.Services.Implementations
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
                     .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
 
+                // 1b. Challan lines that point at a billed line (DeliveryItem ->
+                //     InvoiceItem is Restrict, so it blocks the invoice-item
+                //     delete below). Unlink rather than delete: the challan is a
+                //     delivery record in its own right and is removed with its
+                //     own company rows further down.
+                await _context.DeliveryItems
+                    .Where(di => di.InvoiceItemId != null && di.DeliveryChallan.CompanyId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(di => di.InvoiceItemId, (int?)null));
+
                 // 2. Delete invoice items, then invoices
                 var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();
                 if (invoiceIds.Count > 0)

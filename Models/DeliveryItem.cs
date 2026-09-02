@@ -19,6 +19,20 @@
         // DeliveryItems pointing at it.
         public int? SalesOrderItemId { get; set; }
 
+        // Set only when the challan was created FROM a bill; null for every
+        // other challan (additive -- existing rows stay null). Mirrors
+        // SalesOrderItemId exactly, and for the same reason: the billed line's
+        // delivered quantity is SUM(Quantity) over all DeliveryItems pointing
+        // at it, which is what lets one line be delivered across several
+        // challans and still know how much is left.
+        //
+        // The reverse link already existed (InvoiceItem.DeliveryItemId, set
+        // when a BILL is raised from a challan). This is the other direction:
+        // bill first, deliver after.
+        public int? InvoiceItemId { get; set; }
+
+        public InvoiceItem? InvoiceItem { get; set; }
+
         public string Description { get; set; } = "";
         /// <summary>
         /// Stored as decimal(18,4) so fractional UOMs (KG, Liter, Carat, etc.)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdLocalShipping } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -32,6 +32,7 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
+import CreateChallanFromBillModal from "../Components/CreateChallanFromBillModal";
 import { isFutureDocDate } from "../utils/dateInput";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
 import { DOC_COPY_TYPES } from "../api/documentCopyApi";
@@ -575,6 +576,11 @@ export default function InvoicePage({ mode = "invoices" }) {
   // standalone-create key and hidden in the Credit / Debit Note tabs (a note
   // only exists against the invoice it adjusts).
   const canCopyBill = !isNotesMode && has("bills.manage.create.standalone");
+  // Raising a delivery challan against a bill produces a challan, so the
+  // challan-create permission is the right gate -- same reasoning the sales
+  // order fulfilment action uses.
+  const canCreateChallan = !isNotesMode && has("challans.manage.create");
+  const [challanFor, setChallanFor] = useState(null);
   const copy = useDocumentCopy({
     sourceType: DOC_COPY_TYPES.bill,
     onRefresh: () => selectedCompany && fetchInvoices(selectedCompany.id, page),
@@ -983,11 +989,13 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canViewReceipts,
                 canReverse,
                 canCopy: canCopyBill,
+                canCreateChallan,
                 // Block Print / PDF when no template resolves for this scope —
                 // mirrors the card view so the table can't silently no-op.
                 noTemplate: tplPicker.noTemplate,
                 noTemplateReason: tplPicker.noTemplateReason,
               }}
+              onCreateChallan={(inv) => setChallanFor(inv)}
               hasExcelBill={hasExcelBill}
               hasExcelTax={hasExcelTax}
               selectedCompanyHasFbrToken={!!selectedCompany?.hasFbrToken}
@@ -1345,6 +1353,19 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdCopyAll size={14} /> Copy
                       </button>
                     )}
+                    {/* Deliver what was billed. Disappears once every line is
+                        covered by a challan raised from this bill; a PARTLY
+                        delivered bill keeps it for the remainder. */}
+                    {canCreateChallan && !inv.isCancelled
+                      && Number(inv.challanRemainingQuantity || 0) > 0 && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" }}
+                        onClick={() => setChallanFor(inv)}
+                        title={`Create a delivery challan — ${Number(inv.challanRemainingQuantity).toLocaleString()} still to deliver`}
+                      >
+                        <MdLocalShipping size={14} /> Challan
+                      </button>
+                    )}
                     {/* Edit on Invoices tab (invoice-mode edit): item type, qty
                         and unit price — kept as an adjustment OVERLAY over the
                         bill (base bill untouched; total reconciles to it). Shown
@@ -1592,6 +1613,19 @@ export default function InvoicePage({ mode = "invoices" }) {
         <BulkFbrPreviewDialog
           invoices={unsubmittedInvoices}
           onClose={() => setShowBulkFbrPreview(false)}
+        />
+      )}
+
+      {challanFor && (
+        <CreateChallanFromBillModal
+          invoice={challanFor}
+          onClose={() => setChallanFor(null)}
+          onCreated={() => {
+            setChallanFor(null);
+            // Re-read the list so the action disappears once the bill is fully
+            // delivered, and the remaining figure drops when it is partly.
+            if (selectedCompany?.id) fetchInvoices(selectedCompany.id, page);
+          }}
         />
       )}
     </div>
