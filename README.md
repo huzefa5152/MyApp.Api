@@ -289,6 +289,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-02 — Stock dashboard fits the screen again
+
+- **The on-hand table no longer scrolls sideways.** Adding the five value columns had pushed it to fourteen columns, wider than any laptop. The figures are now grouped rather than dropped: an item's HS code, unit and last movement sit under its name, and the opening / in / out flow sits under the on-hand figure it explains. Every number that was there is still there.
+- **Pagination and a rows-per-page control**, the same as the other grids, remembered per screen. The totals above the table still cover everything the search matched, not just the page you are looking at.
+- Checked at phone, tablet and desktop widths; the movement drill-down still opens in place.
+
 ### 2026-09-02 — Fixing a stock mistake: quantity, value, or both
 
 - **A wrong value can now be corrected on its own.** Until now stock value only

@@ -41,6 +41,9 @@ export default function StockDashboardPage() {
   const canManagePolicy = has("stock.policy.manage");
   const flowVersion = Number(selectedCompany?.inventoryFlowVersion) === 2 ? 2 : 1;
 
+  const [onhandPage, setOnhandPage] = useState(1);
+  const [onhandPageSize, setOnhandPageSize] = usePageSize("stockOnhand");
+
   const [tab, setTab] = useState("onhand");
   const [onhand, setOnhand] = useState([]);
   // V2 derived inventory buckets (Available/Committed/ToDeliver/Delivered/
@@ -148,6 +151,19 @@ export default function StockDashboardPage() {
   const filteredOnhand = onhand.filter(r =>
     !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
     (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Paging is client-side here, unlike the item catalog. This endpoint only
+  // returns items that actually have stock or an opening balance -- hundreds,
+  // not the whole catalog -- and it is fetched in one request whose valuation
+  // walk already covers every row. Slicing what is loaded keeps the totals
+  // below honest across the WHOLE filtered set; server-side paging would only
+  // be able to total the page.
+  const onhandSize = onhandPageSize ?? 10;
+  const onhandTotalPages = Math.max(1, Math.ceil(filteredOnhand.length / onhandSize));
+  const onhandPageRows = filteredOnhand.slice(
+    (onhandPage - 1) * onhandSize,
+    (onhandPage - 1) * onhandSize + onhandSize,
   );
 
   // Totals follow the search, not the whole company — an operator filtering to
@@ -295,6 +311,10 @@ export default function StockDashboardPage() {
 
   // Drop the drill cache + collapse whenever the company changes.
   useEffect(() => { setExpandedId(null); setDrill({}); }, [selectedCompany]);
+
+  // A narrower search, a different company or a smaller page can all strand
+  // the operator past the last page.
+  useEffect(() => { setOnhandPage(1); }, [search, selectedCompany, onhandPageSize]);
 
   const submitAdjust = async (e) => {
     e.preventDefault();
@@ -510,31 +530,30 @@ export default function StockDashboardPage() {
               ) : (
                 <>
                   {/* Desktop / tablet — table */}
+                  {/* Fourteen columns did not fit any laptop, so the figures
+                      are grouped instead of dropped: the code, unit and last
+                      movement sit under the item name, and the opening / IN /
+                      OUT flow sits under the on-hand figure it explains.
+                      Nothing is hidden, and the table stops scrolling
+                      sideways. */}
                   <div className="stock-table" style={styles.tableWrap}>
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          {canViewMovements && <th style={{ ...styles.th, width: 34 }} aria-label="Expand"></th>}
+                          {canViewMovements && <th style={styles.th} aria-label="Expand"></th>}
                           <th style={styles.th}>Item</th>
-                          <th style={styles.th}>HS Code</th>
-                          <th style={styles.th}>UOM</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Opening</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Total IN</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Total OUT</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>S.Tax %</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
-                          <th style={styles.th}>Last Movement</th>
-                          {canAdjust && <th style={{ ...styles.th, width: 92 }} aria-label="Actions"></th>}
+                          {canAdjust && <th style={styles.th} aria-label="Actions"></th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredOnhand.map((r, idx) => {
+                        {onhandPageRows.map((r, idx) => {
                           const isOpen = expandedId === r.itemTypeId;
                           const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 12 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
+                          const colCount = 5 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
@@ -546,22 +565,40 @@ export default function StockDashboardPage() {
                                 {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                               </td>
                             )}
-                            <td style={styles.td}><strong>{r.itemTypeName}</strong></td>
-                            <td style={{ ...styles.td, fontFamily: "monospace", fontSize: "0.78rem" }}>{r.hsCode || "—"}</td>
-                            <td style={styles.td}>{r.uom || "—"}</td>
-                            <td style={{ ...styles.td, textAlign: "right" }}>{r.openingBalance.toLocaleString()}</td>
-                            <td style={{ ...styles.td, textAlign: "right", color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</td>
-                            <td style={{ ...styles.td, textAlign: "right", color: "#c62828" }}>−{r.totalOut.toLocaleString()}</td>
-                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{r.onHand.toLocaleString()}</td>
+                            <td style={styles.td}>
+                              {/* Clamped, never ellipsised on one line: two
+                                  item names sharing a prefix must stay
+                                  distinguishable (dashboard incident
+                                  2026-05-13). */}
+                              <div style={styles.itemName}>{r.itemTypeName}</div>
+                              <div style={styles.itemMeta}>
+                                <span style={styles.hsChip}>{r.hsCode || "no HS code"}</span>
+                                {r.uom && <span>{r.uom}</span>}
+                                <span>
+                                  {r.lastMovementAt
+                                    ? `moved ${new Date(r.lastMovementAt).toLocaleDateString()}`
+                                    : "no movements"}
+                                </span>
+                              </div>
+                            </td>
+                            <td style={styles.tdMoney}>
+                              <div style={{ fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>
+                                {num(r.onHand)}
+                              </div>
+                              <div style={styles.flowMeta}>
+                                <span title="Opening balance">{num(r.openingBalance)}</span>
+                                <span style={{ color: "#2e7d32" }} title="Total in">+{num(r.totalIn)}</span>
+                                <span style={{ color: "#c62828" }} title="Total out">−{num(r.totalOut)}</span>
+                              </div>
+                            </td>
                             <td style={styles.tdMoney}>{money(r.valueExcludingTax)}</td>
-                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
-                              {r.salesTaxRate ? `${num(r.salesTaxRate)}%` : "—"}
+                            <td style={styles.tdMoney}>
+                              <div>{money(r.salesTax)}</div>
+                              <div style={styles.rateChip}>
+                                {r.salesTaxRate ? `${num(r.salesTaxRate)}%` : "no rate"}
+                              </div>
                             </td>
-                            <td style={styles.tdMoney}>{money(r.salesTax)}</td>
-                            <td style={{ ...styles.tdMoney, fontWeight: 600 }}>{money(r.valueIncludingTax)}</td>
-                            <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>
-                              {r.lastMovementAt ? new Date(r.lastMovementAt).toLocaleDateString() : "—"}
-                            </td>
+                            <td style={{ ...styles.tdMoney, fontWeight: 700 }}>{money(r.valueIncludingTax)}</td>
                             {canAdjust && (
                               <td style={styles.td} onClick={e => e.stopPropagation()}>
                                 <button type="button" style={rowAdjustBtn} onClick={() => openAdjustForRow(r)} title={`Record a stock adjustment for ${r.itemTypeName}`}>
@@ -592,7 +629,7 @@ export default function StockDashboardPage() {
                       show is on-hand quantity, so it goes top-right at large
                       size. IN / OUT / Opening are secondary stats below. */}
                   <div className="stock-cards">
-                    {filteredOnhand.map((r) => {
+                    {onhandPageRows.map((r) => {
                       const isOpen = expandedId === r.itemTypeId;
                       return (
                       <div key={r.itemTypeId} className="stock-card">
@@ -662,6 +699,19 @@ export default function StockDashboardPage() {
                       );
                     })}
                   </div>
+
+                  {/* One pager below both renders -- they are the desktop and
+                      phone views of the same page. The totals strip above
+                      still covers the whole filtered set, not this page. */}
+                  <Pagination
+                    page={onhandPage}
+                    totalPages={onhandTotalPages}
+                    total={filteredOnhand.length}
+                    onPage={setOnhandPage}
+                    pageSize={onhandSize}
+                    onPageSize={setOnhandPageSize}
+                    unit="items"
+                  />
                 </>
               )}
             </>
@@ -1367,6 +1417,24 @@ const styles = {
   clearSearchBtn: { marginTop: "0.75rem", padding: "0.45rem 1rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, backgroundColor: "#fff" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
+  itemName: {
+    fontWeight: 700, color: colors.textPrimary, lineHeight: 1.3, overflowWrap: "anywhere",
+    minWidth: 0,
+    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  itemMeta: {
+    display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.2rem",
+    fontSize: "0.72rem", color: colors.textSecondary,
+  },
+  hsChip: { fontFamily: "monospace", color: colors.blue },
+  // The flow behind the on-hand figure: opening, everything in, everything out.
+  flowMeta: {
+    display: "flex", justifyContent: "flex-end", gap: "0.35rem",
+    marginTop: "0.15rem", fontSize: "0.72rem", color: colors.textSecondary,
+    fontVariantNumeric: "tabular-nums",
+  },
+  rateChip: { marginTop: "0.15rem", fontSize: "0.72rem", color: colors.textSecondary },
   valueStrip: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
