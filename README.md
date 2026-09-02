@@ -295,6 +295,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - **This is also why the form could not be saved.** Update is disabled while the unit is blank, so a unit that never arrived meant a permanently greyed button. With the unit filling in, the button works — and when something genuinely does block saving, the reason is now printed next to the button instead of hidden in a tooltip.
 - **Imported HS codes can be found in every item picker.** Pickers were handed the short curated list, so thousands of imported codes were unreachable on invoices, challans, bills, stock adjustments and everywhere else. Typing two characters now searches the full catalog. The curated list is still what you see before you type, so the dropdown does not fill with thousands of rows.
 - **New "Fill missing units" action** on Import HS Codes. The published tariff carries no units at all, so codes loaded from it start blank; this asks FBR for them a batch at a time. Defaults to only the codes your items actually use — a few dozen rather than thousands.
+- **Adopting an imported code now works.** Renaming a placeholder, giving it a unit and ticking "show in dropdowns" left it hidden anyway — the flag marking it as import-created is never cleared, and the list filtered on that flag alone. So an imported catalogue could never be brought into use at all. The filter now hides only placeholders nobody has adopted yet.
 
 ### 2026-09-01 — Item Catalog: stop nagging companies that do not use FBR
 
