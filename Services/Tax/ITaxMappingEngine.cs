@@ -73,7 +73,19 @@ namespace MyApp.Api.Services.Tax
         // queried PRAL. Lets the UI tell "FBR returned no UOM restriction for
         // this code" (empty + ran) apart from "couldn't ask FBR" (empty + no
         // token). Optional/defaulted so existing callers/tests still compile.
-        bool UomLookupRan = false
+        bool UomLookupRan = false,
+        // A unit taken from the installation's OWN catalog: the one other item
+        // types under the same 4-digit heading already use. Filled only when
+        // nothing authoritative was found, because the published customs
+        // tariff carries no unit column at all -- so on an installation that
+        // loaded the tariff (the token-free path, and the normal one here)
+        // there is otherwise nothing to pre-fill the UOM with, and the form
+        // promised an auto-fill it could never perform.
+        //
+        // It is a suggestion, not a rule: the form pre-fills an EMPTY UOM with
+        // it and says where it came from. Never treated as an FBR answer, so
+        // it carries no UOM_ID.
+        string? CatalogUomSuggestion = null
     );
 
     public record RateOption(

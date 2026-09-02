@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Services.Interfaces;
 using MyApp.Api.Services.Tax;
@@ -21,17 +22,20 @@ namespace MyApp.Api.Controllers
         private readonly ITaxMappingEngine _taxEngine;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly int _defaultPageSize;
 
         public ItemTypesController(
             IItemTypeService service,
             ITaxMappingEngine taxEngine,
             ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess)
+            IDivisionAccessGuard divisionAccess,
+            IConfiguration configuration)
         {
             _service = service;
             _taxEngine = taxEngine;
             _access = access;
             _divisionAccess = divisionAccess;
+            _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
         private int CurrentUserId =>
@@ -130,6 +134,48 @@ namespace MyApp.Api.Controllers
                     take: take);
             }
             return Ok(items);
+        }
+
+        /// <summary>
+        /// One page of the WHOLE catalog, for the Item Catalog screen.
+        ///
+        /// Everything is in this list: items typed in by hand, the placeholder
+        /// rows the HS tariff import creates, and items brought in by a
+        /// spreadsheet import. The un-paged <c>GET /api/itemtypes</c> still
+        /// hides un-adopted HS placeholders because it feeds the document
+        /// pickers, which render every row they are given — but a screen that
+        /// pages server-side has no such limit, and a catalog that hid part of
+        /// itself is what made imported items look missing.
+        /// </summary>
+        [HttpGet("paged")]
+        public async Task<ActionResult<PagedResult<ItemTypeDto>>> GetPaged(
+            [FromQuery] int? companyId = null,
+            [FromQuery] string? search = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int? pageSize = null)
+        {
+            var size = PaginationHelper.Clamp(pageSize, _defaultPageSize);
+            var clampedPage = PaginationHelper.ClampPage(page);
+
+            var divisionRestrictions = await _divisionAccess.GetRestrictionsAsync(CurrentUserId);
+            if (companyId.HasValue)
+            {
+                // Tenant guard — the rows carry that company's on-hand and its
+                // overlay, so an arbitrary companyId would read another
+                // tenant's stock figures.
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+                return Ok(await _service.GetPagedAsync(
+                    search, clampedPage, size,
+                    companyId: companyId,
+                    divisionRestrictionsByCompany: divisionRestrictions));
+            }
+
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            return Ok(await _service.GetPagedAsync(
+                search, clampedPage, size,
+                companyId: null,
+                aggregateAcrossCompanyIds: accessible,
+                divisionRestrictionsByCompany: divisionRestrictions));
         }
 
         /// <summary>

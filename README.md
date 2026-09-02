@@ -289,6 +289,22 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-02 — Stock is worth something: value alongside quantity
+
+- **Opening stock now carries its value.** The stock spreadsheet import reads the Balance block's value, rate and sales-tax columns, not just the quantity, and the preview shows all five figures so they can be read against the sheet before anything is written. A rate written as `0.18` is stored as 18%, and the sheet's own tax column is recomputed and compared as a check that the columns were mapped to the right place.
+- **The stock dashboard shows the five figures you asked for** — quantity, excluding tax, sales-tax rate, sales tax and including tax — per item and as totals across whatever the search has left on screen. Opening balances show them too, and both can be entered by hand.
+- **Purchases, sales and adjustments now move the value as well as the quantity.** A purchase adds stock at what was actually paid for it and re-averages the item. A sale takes value off at the average cost, never at the sale price — selling at a margin must not drain more value than the goods cost. An adjustment up can state what the goods are worth, or be left blank to use the current average; an adjustment down always uses the average. Selling the last unit leaves the value at exactly zero rather than a stray paisa.
+- **Every movement shows its own money.** The movements list and the per-item history now carry unit cost, the value in or out, and a running quantity-and-value balance — so a stock ledger reads like a bank statement.
+- **A purchase at a different sales-tax rate re-prices the item**, and the tax and inclusive figures follow it.
+- Verified end to end against the client's stock sheet: `scripts/test_stock_valuation_flow.py` (55 checks) imports the sheet, confirms the dashboard reproduces its quantity and all three money columns, then runs a purchase, a sale and three adjustments and asserts both quantity and value after each.
+
+### 2026-09-02 — Item Catalog: one list, and proper paging
+
+- **Every item type is in one list now.** Items typed in by hand, the placeholder rows the HS code import creates, and items brought in by a spreadsheet import all appear together — the "Show HS-code placeholders" switch is gone. Splitting the catalog in two is what made an imported item look missing.
+- **The list pages on the server**, with the same rows-per-page choice as the other grids (10 / 20 / 50 / 100 / 200, remembered per screen), so a catalog of several thousand items loads a page at a time instead of all at once. Searching happens on the server too, across the whole catalog rather than the page in front of you.
+- **A row created by the HS import is badged** until someone adopts it, so a name like "HS Code 6109.1000" is recognisable for what it is.
+- **The item form no longer promises a unit it cannot supply.** The published customs tariff has no unit column, so codes loaded from it have no unit to offer. Where nothing is published, the form now suggests the unit your other items under the same heading already use, and says so — and where there is nothing to suggest, it says that plainly instead of leaving an empty required field unexplained.
+
 ### 2026-09-02 — Item Catalog: the unit now fills in, and imported codes are reachable
 
 - **Picking an HS code fills the unit again.** The Item Type form asked for units down a path that only ever tried the company's own FBR token — so a company with FBR off got nothing back, even when the system already knew the unit and the HS code screen was happy to show it. It now reads the local HS master first, then falls back to the installation's reference token.

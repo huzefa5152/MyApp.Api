@@ -19,6 +19,22 @@ export const getItemTypes = (companyId, opts = {}) =>
       ...(opts.take ? { take: opts.take } : {}),
     },
   });
+// One page of the WHOLE catalog — hand-created items, HS-import placeholders
+// and spreadsheet-imported items together. The Item Catalog screen uses this
+// instead of getItemTypes: it pages server-side, so it has no reason to hide
+// any of them, and a catalog that hid part of itself is what made imported
+// items look missing. Document pickers keep using getItemTypes, which still
+// filters, because they render every row they are given.
+export const getItemTypesPaged = (companyId, opts = {}) =>
+  http.get("/itemtypes/paged", {
+    params: {
+      ...(companyId ? { companyId } : {}),
+      ...(opts.search ? { search: opts.search } : {}),
+      page: opts.page || 1,
+      ...(opts.pageSize ? { pageSize: opts.pageSize } : {}),
+    },
+  });
+
 export const getItemTypeById = (id) => http.get(`/itemtypes/${id}`);
 export const createItemType = (payload, companyId) =>
   http.post("/itemtypes", payload, { params: companyId ? { companyId } : {} });

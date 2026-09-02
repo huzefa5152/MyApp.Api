@@ -1172,6 +1172,31 @@ status_check(suite16, "alice POST an installation-wide layout", s, 403)
 request("DELETE", f"/api/import-profiles/{beta_profile['id']}", token=admin)
 
 
+# -- Suite 17: the paged item catalog ------------------------------
+# GET /api/itemtypes/paged takes a companyId and each row carries THAT company's
+# on-hand quantity and its division / GL overlay. The catalog rows themselves
+# are global, so the guard is what keeps another tenant's stock figures out.
+print("\n  Suite 17 -- item catalog (paged)")
+suite17 = "item catalog paged"
+
+s_, _ = request("GET", f"/api/itemtypes/paged?companyId={beta['id']}", token=tokens["alice"])
+status_check(suite17, "alice GET /itemtypes/paged?companyId=Beta", s_, 403)
+
+# Without a companyId the endpoint aggregates on-hand across the CALLER's own
+# accessible companies, so it must answer -- and must not leak Beta's stock.
+s_, paged17 = request("GET", "/api/itemtypes/paged?pageSize=5", token=tokens["alice"])
+status_check(suite17, "alice GET /itemtypes/paged (no company) is allowed", s_, 200)
+check(suite17, "the page is capped to what was asked for",
+      isinstance(paged17, dict) and len(paged17.get("items") or []) <= 5,
+      f"got {len(((paged17 or {}).get('items')) or [])} rows")
+
+# A caller-supplied page size cannot escape the clamp.
+s_, big17 = request("GET", "/api/itemtypes/paged?pageSize=999999", token=tokens["alice"])
+check(suite17, "pageSize=999999 is clamped",
+      s_ == 200 and (big17 or {}).get("pageSize", 0) <= 200,
+      f"pageSize={(big17 or {}).get('pageSize')}")
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

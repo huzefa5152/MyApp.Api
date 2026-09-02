@@ -111,6 +111,12 @@ export default function ItemTypeForm({
   const [name, setName] = useState(editItem?.name || "");
   const [hsCode, setHsCode] = useState(editItem?.hsCode || "");
   const [uom, setUom] = useState(editItem?.uom || "");
+  // Who last filled the UOM: "auto" = an HS-code lookup put it there, "manual"
+  // = the operator chose it (or it is a saved value being edited). A suggested
+  // unit may replace an auto-filled one -- otherwise changing the HS code
+  // leaves the PREVIOUS code's unit sitting in the field while the panel
+  // advertises a different suggestion -- but must never overwrite a choice.
+  const uomSourceRef = useRef(editItem?.uom ? "manual" : "auto");
   const [fbrUOMId, setFbrUOMId] = useState(editItem?.fbrUOMId || null);
   const [saleType, setSaleType] = useState(
     scenarioSaleType || editItem?.saleType || "Goods at standard rate (default)"
@@ -319,7 +325,7 @@ export default function ItemTypeForm({
       // badge would otherwise linger on the now-editable field).
       setFbrUOMId(null);
       setHintLoading(false);
-      return;
+      return;   // uomSource is left as-is: a hand-picked unit stays the operator's
     }
 
     debounceRef.current = setTimeout(async () => {
@@ -328,6 +334,19 @@ export default function ItemTypeForm({
       if (data?.defaultUom?.description) {
         setUom(data.defaultUom.description);
         setFbrUOMId(data.defaultUom.uoM_ID || null);
+        uomSourceRef.current = "auto";
+      } else if (data?.catalogUomSuggestion) {
+        // The published tariff carries no unit column, so on a tariff-loaded
+        // installation this is the only thing there is to fill the field with:
+        // the unit the operator already uses for neighbouring codes. It leaves
+        // fbrUOMId null -- it is not an FBR answer and the field stays
+        // editable -- and it replaces an empty or previously auto-filled unit
+        // while leaving a hand-picked one alone.
+        setUom((cur) => (uomSourceRef.current === "manual" && cur && cur.trim()
+          ? cur
+          : data.catalogUomSuggestion));
+        setFbrUOMId(null);
+        if (uomSourceRef.current !== "manual") uomSourceRef.current = "auto";
       }
       if (!lockedSaleType && data?.defaultSaleType) {
         if (!saleType || saleType === "Goods at standard rate (default)") {
@@ -465,8 +484,8 @@ export default function ItemTypeForm({
               {scenarioCode
                 ? `Sale Type is locked to ${scenarioCode}'s rule; UOM auto-fills from FBR's HS-UOM mapping.`
                 : fbrOn
-                  ? "Pick an HS code to auto-fill UOM, sale type, and rate."
-                  : "Pick an HS code to auto-fill its UOM. This company has FBR integration off — nothing here is submitted to FBR."}
+                  ? "Pick an HS code to fill in sale type and rate, and the UOM where one is published."
+                  : "Pick an HS code to classify the item. This company has FBR integration off — nothing here is submitted to FBR."}
             </p>
 
             <div style={formStyles.formGroup}>
@@ -559,6 +578,9 @@ export default function ItemTypeForm({
                                fail to load. Say what is true instead of reporting
                                a missing token they do not need. */
                             : "Not restricted — the unit you choose below is what gets used."}
+                        {hsHints.catalogUomSuggestion
+                          ? ` Suggested “${hsHints.catalogUomSuggestion}” — the unit your other items under this heading use.`
+                          : " No unit is published for this code (the customs tariff has no unit column), so pick one below."}
                       </em></span>
                     </div>
                   )}
@@ -633,7 +655,11 @@ export default function ItemTypeForm({
                     endpoint="/lookup/units"
                     label="type to pick from your units"
                     value={uom}
-                    onChange={(val) => { setUom(val); setFbrUOMId(null); }}
+                    onChange={(val) => {
+                      setUom(val);
+                      setFbrUOMId(null);
+                      uomSourceRef.current = val && val.trim() ? "manual" : "auto";
+                    }}
                     inputClassName=""
                     inputStyle={styles.input}
                   />

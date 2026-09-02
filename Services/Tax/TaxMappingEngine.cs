@@ -56,6 +56,7 @@ namespace MyApp.Api.Services.Tax
         {
             _fbr = fbr;
             _db = db;
+            _protector = protector;
             _logger = logger;
         }
 
@@ -345,6 +346,15 @@ namespace MyApp.Api.Services.Tax
             var uoms = await GetValidUomsForHsCodeAsync(companyId, hsCode);
             var defaultUom = uoms.FirstOrDefault();
 
+            // Nothing authoritative? Fall back to what this installation
+            // already uses for neighbouring codes. That is the operator's own
+            // data, not a guess about the tariff.
+            var catalogUom = defaultUom == null
+                ? await SuggestUomFromCatalogAsync(hsCode)
+                : null;
+            if (catalogUom != null)
+                notes.Add($"No published unit for this code. Other items under heading {Heading(hsCode)} use \"{catalogUom}\", so that is suggested below.");
+
             var rateOptions = new List<RateOption>();
             if (company?.FbrProvinceCode != null)
             {
@@ -436,8 +446,45 @@ namespace MyApp.Api.Services.Tax
                 // "we could not find out" — so it has to mean the second thing.
                 UomLookupRan: uoms.Count > 0
                               || !string.IsNullOrEmpty(company?.FbrToken)
-                              || await HasReferenceTokenAsync()
+                              || await HasReferenceTokenAsync(),
+                CatalogUomSuggestion: catalogUom
             );
+        }
+
+        /// <summary>First four digits -- the WCO heading two codes share.</summary>
+        private static string Heading(string hsCode)
+        {
+            var digits = new string((hsCode ?? "").Where(char.IsDigit).ToArray());
+            return digits.Length >= 4 ? digits[..4] : digits;
+        }
+
+        /// <summary>
+        /// The unit most of this installation's OTHER item types under the same
+        /// 4-digit heading already carry. Placeholders from the HS import are
+        /// excluded -- they have no unit, and counting them would just return
+        /// nothing. Ties break on the alphabetically first unit so the same
+        /// code always suggests the same thing.
+        /// </summary>
+        private async Task<string?> SuggestUomFromCatalogAsync(string hsCode)
+        {
+            var heading = Heading(hsCode);
+            if (heading.Length < 4) return null;
+
+            var rows = await _db.ItemTypes.AsNoTracking()
+                .Where(it => !it.IsDeleted
+                          && it.HSCode != null
+                          && it.UOM != null && it.UOM != ""
+                          && it.HSCode.StartsWith(heading))
+                .Select(it => it.UOM!)
+                .ToListAsync();
+
+            return rows
+                .GroupBy(u => u.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+                .OrderByDescending(g => g.Count())
+                .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First().Trim())
+                .FirstOrDefault();
         }
     }
 }
