@@ -752,6 +752,37 @@ def main():
                                         headers=h, timeout=120).json()),
               "an imported document landed in the operator's sequence")
 
+        # The operator's own bill must be the FIRST row, not buried behind the
+        # migrated history. Imported documents are numbered from the reserved
+        # 900001+ band, so a list ordered by invoice number put every one of
+        # them ahead of a bill raised a minute ago -- on a real import that is
+        # hundreds of rows, i.e. the operator's bill on the last page.
+        cl = requests.get(f"{api}/clients/company/{other}", headers=h, timeout=60).json()
+        it = requests.get(f"{api}/itemtypes", headers=h, timeout=60).json()
+        if cl and it:
+            r = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+                # Dated TODAY, not in the workbook's period: the ledger commit
+                # sets Company.GlLockDate, so a bill back-dated into the
+                # imported period is refused -- correctly.
+                "date": datetime.now().strftime("%Y-%m-%d"), "companyId": other, "clientId": cl[0]["id"], "gstRate": 0,
+                "items": [{"description": f"AFTER IMPORT {tag}", "quantity": 1,
+                           "uom": "Pcs", "unitPrice": 100, "itemTypeId": it[0]["id"]}],
+            })
+            fresh = r.json() if r.ok else {}
+            check("a bill raised after the import is accepted", r.ok, f"{r.status_code} {r.text[:200]}")
+            page1 = requests.get(f"{api}/invoices/company/{other}/paged",
+                                 headers=h, timeout=120,
+                                 params={"page": 1, "pageSize": 10}).json()
+            rows = page1.get("items") or page1.get("data") or []
+            check("the newest bill is the first row on page 1",
+                  bool(rows) and rows[0].get("id") == fresh.get("id"),
+                  f"first row = {rows[0] if rows else None}")
+            check("it is not ordered by invoice number",
+                  bool(rows) and int(rows[0].get("invoiceNumber") or 0) < 900001,
+                  f"first row number = {rows[0].get('invoiceNumber') if rows else None}")
+        else:
+            skip("the newest bill is the first row on page 1", "no client or item type available")
+
         clash = ledger_workbook([
             {"name": f"One {tag}", "tab": f"ONE {tag}", "opening": 0.0,
              "rows": [(d1, None, "ZZ-77", 0, 1000.0)]},

@@ -31,7 +31,12 @@ namespace MyApp.Api.Repositories.Implementations
             if (allowedDivisionIds != null)
                 query = query.Where(i => i.DivisionId == null || allowedDivisionIds.Contains(i.DivisionId.Value));
             return await query
-                .OrderByDescending(i => i.InvoiceNumber)
+                // Newest first by when the row was WRITTEN, not by number.
+                // Imported history sits in the reserved 900001+ band, so
+                // ordering on the number buried today's bill behind every
+                // migrated one. Id breaks ties inside the same instant.
+                .OrderByDescending(i => i.CreatedAt)
+                .ThenByDescending(i => i.Id)
                 .ToListAsync();
         }
 
@@ -88,7 +93,12 @@ namespace MyApp.Api.Repositories.Implementations
 
             var totalCount = await query.CountAsync();
             var items = await query
-                .OrderByDescending(i => i.InvoiceNumber)
+                // Newest first by when the row was WRITTEN, not by number.
+                // Imported history sits in the reserved 900001+ band, so
+                // ordering on the number buried today's bill behind every
+                // migrated one. Id breaks ties inside the same instant.
+                .OrderByDescending(i => i.CreatedAt)
+                .ThenByDescending(i => i.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
