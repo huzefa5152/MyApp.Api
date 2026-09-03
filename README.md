@@ -304,6 +304,12 @@ Publish output optimized from 79 MB to 37 MB via:
   would not fit above the footer, instead of printing under it. A long bill
   fits about fourteen lines on the first page.
 
+### 2026-09-03 — The amount you type on a bill line is the amount you get
+
+- **Enter a line amount and the quantity is rounded to a whole number, with the rate carrying the remainder** — so the line comes to exactly the figure you entered. Type 100 against stock costing 40 and you get 3 units at 33.333333333333, not 2.5 units; 500 against 119.05 gives 4 at 125; 1,000 against 270 gives 4 at 250.
+- **The unit of measure no longer decides this.** A unit that allows fractional quantities used to keep one (1.7038 Kg), and the amount was then re-derived from it, so the figure you typed could move. Typing a quantity directly is still governed by the unit — that rule belongs there, not here.
+- **Picking an item type no longer overwrites a description you wrote.** It fills the description only when the line has none. On the Invoices tab the save used to replace a typed description — or one carried in from a sales order — with the catalog name.
+
 ### 2026-09-03 — Payment status is gone, and notes work on any bill
 
 - **A credit or debit note, and a bill correction, can now be raised against any valid bill — paid or not.** Both used to demand a fully paid invoice. Since receipts here are taken on account rather than against a particular invoice, no invoice ever reached "paid", so a return or an undercharge could not be recorded at all; the only way out was voiding a real document.

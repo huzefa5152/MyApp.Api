@@ -435,6 +435,21 @@ keep:
   behaves as it does with FBR on: item type, quantity, unit price and the line
   amount are editable, and the total-preservation guard holds the bill's own
   total, so a stock movement can be re-pointed but never invented.
+- **An entered line AMOUNT is the source of truth, and the UOM does not touch
+  it** (2026-09-03). The quantity is rounded to a WHOLE number and the rate
+  carries the remainder at `UnitPrice`'s 12 decimals, so `Quantity x UnitPrice`
+  rounds to the typed figure at `LineTotal`'s 2dp — 100 over 3 units is
+  33.333333333333 each and books as exactly 100.00. `isDecimalUnit` is
+  deliberately NOT consulted here: a decimal-capable unit used to keep 2.5, and
+  the amount was then re-snapped to quantity x rate, so the operator's own
+  number could move. It still governs a quantity the operator TYPES
+  (`QuantityInput`), which is where that rule belongs. The server always
+  recomputes `LineTotal = Quantity x UnitPrice`, so the 12-decimal rate is what
+  makes the round trip exact.
+- **Picking an item type seeds the description ONLY when the line has none**, in
+  both modes. The create form's save used to ship `itemTypeName || description`
+  for the Invoices tab, which replaced a typed description — or one prefilled
+  from a sales order — with the catalog name on the way to the server.
 - **The line AMOUNT is an input on both tabs, and means different things:**
   on the Bills tab for a plain standalone bill the quantity follows at the
   stock's weighted-average cost (same contract as the create form — whole units
@@ -603,7 +618,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
-| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
+| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (65 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
@@ -621,7 +636,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Spreadsheet import (layouts, file checks, stock, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (101 checks) |
-| Bill line pricing + advance tax (236G/236H, incl. edit) | `python scripts/test_bill_pricing_advance_tax.py` | `50/50 checks passed` |
+| Bill line pricing + advance tax (236G/236H, incl. edit) | `python scripts/test_bill_pricing_advance_tax.py` | `75/75 checks passed` |
 | Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |

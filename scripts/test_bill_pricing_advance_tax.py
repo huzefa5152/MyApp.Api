@@ -29,6 +29,7 @@ Usage:
 """
 
 import argparse
+import math
 import sys
 from datetime import datetime, timezone
 
@@ -143,6 +144,110 @@ def main():
         check("a bill built from the derived quantity totals what was entered",
               inv.ok and near(inv.json().get("subtotal"), 500, 0.02),
               f"subtotal={inv.json().get('subtotal') if inv.ok else inv.text[:120]}")
+
+        # ── The entered amount is the source of truth ─────────────────────
+        #
+        # The quantity derived from an amount is ALWAYS a whole number, whatever
+        # the unit allows, and the rate absorbs the rounding so the line comes to
+        # exactly the amount that was typed. Before this, a decimal-capable unit
+        # kept a fractional quantity (2.5) and the amount was re-snapped to
+        # quantity x rate, so the operator's own figure could move.
+        #
+        # This mirrors the arithmetic the form does, then proves the SERVER
+        # stores a line worth exactly the entered amount -- the server always
+        # recomputes LineTotal = Quantity x UnitPrice into decimal(18,2), so a
+        # 12-decimal rate is what makes it land exactly.
+        print("\n-- A. The entered amount is authoritative --")
+
+        def js_round(x):
+            """JavaScript's Math.round: HALF UP, always.
+
+            Python's round() is banker's rounding, so round(2.5) is 2 while
+            Math.round(2.5) is 3. The form runs in the browser, so a mirror that
+            used Python's rule would disagree with the shipped behaviour on
+            exactly the .5 cases this feature is about (100 at a cost of 40 is
+            2.5 units, and the requirement says that becomes 3).
+            """
+            return math.floor(x + 0.5)
+
+        def derive(total, unit_cost):
+            """What the form does: whole quantity, 12dp rate."""
+            qty = max(1, js_round(total / unit_cost))
+            rate = round(total / qty, 12)
+            return qty, rate
+
+        # A decimal-capable unit must behave the same as a whole-unit one.
+        dec_uom = next((u["name"] for u in requests.get(f"{api}/units", headers=h, timeout=60).json()
+                        if u.get("allowsDecimalQuantity")), None)
+
+        # The requirement's worked examples: (line total, unit cost, wanted qty,
+        # wanted rate). Each is a case where the old rule kept a fraction.
+        cases = [
+            (100.0,   40.0,  3, 100.0 / 3),      # 2.5  -> 3  @ 33.333333333333
+            (500.0,   119.05, 4, 125.0),         # 4.2  -> 4  @ 125
+            (1000.0,  270.0,  4, 250.0),         # 3.7  -> 4  @ 250
+        ]
+        for total, cost, want_qty, want_rate in cases:
+            qty, rate = derive(total, cost)
+            check(f"{total:,.0f} at a cost of {cost} gives {want_qty} units",
+                  qty == want_qty, f"got {qty}")
+            check(f"  and a rate of {want_rate:.6f}", near(rate, want_rate, 1e-9),
+                  f"got {rate}")
+            check(f"  and quantity x rate comes back to {total:,.2f}",
+                  near(round(qty * rate, 2), total, 0.005),
+                  f"got {round(qty * rate, 2)}")
+
+        # Now through the API, on a unit that ALLOWS decimals -- the UOM must not
+        # change the outcome.
+        auth = make_item(f"Authoritative {tag}", uom=dec_uom or "Pcs")
+        set_stock(auth, 100, 4000)                      # 40.00 each
+        for total, want_qty in ((100.0, 3), (500.0, 13), (1000.0, 25)):
+            qty, rate = derive(total, 40.0)
+            check(f"{total:,.0f} on a '{dec_uom or 'Pcs'}' line still gives a whole {want_qty}",
+                  qty == want_qty, f"got {qty}")
+            rr = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+                "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 0,
+                "items": [{"description": f"Authoritative {tag}", "itemTypeId": auth,
+                           "quantity": qty, "uom": dec_uom or "Pcs", "unitPrice": rate}]})
+            j = rr.json() if rr.ok else {}
+            check(f"  the saved bill is worth exactly {total:,.2f}",
+                  rr.ok and near(j.get("subtotal"), total, 0.005),
+                  f"subtotal={j.get('subtotal') if rr.ok else rr.text[:140]}")
+            # Reopen it: the stored line must still read back at the same money.
+            if rr.ok:
+                back = requests.get(f"{api}/invoices/{j['id']}", headers=h, timeout=60).json()
+                line = (back.get("items") or [{}])[0]
+                check(f"  and reopens with a line total of {total:,.2f}",
+                      near(line.get("lineTotal"), total, 0.005),
+                      f"lineTotal={line.get('lineTotal')}")
+                check("  with the quantity still whole",
+                      float(line.get("quantity") or 0) == float(qty),
+                      f"quantity={line.get('quantity')}")
+
+        # Very small: an amount worth less than one unit still bills one unit,
+        # priced at the amount -- never a zero quantity, which would bill nothing.
+        tiny_qty, tiny_rate = derive(10.0, 1000.0)
+        check("an amount below one unit's cost bills a single unit",
+              tiny_qty == 1 and near(tiny_rate, 10.0, 1e-9),
+              f"qty={tiny_qty} rate={tiny_rate}")
+
+        # Very large, and an amount with paisa in it.
+        big_qty, big_rate = derive(9_999_999.99, 3.0)
+        check("a very large amount stays exact to the paisa",
+              near(round(big_qty * big_rate, 2), 9_999_999.99, 0.005),
+              f"qty={big_qty} rate={big_rate} -> {round(big_qty * big_rate, 2)}")
+
+        odd_qty, odd_rate = derive(1234.56, 7.0)
+        check("an amount with paisa stays exact",
+              near(round(odd_qty * odd_rate, 2), 1234.56, 0.005),
+              f"qty={odd_qty} rate={odd_rate} -> {round(odd_qty * odd_rate, 2)}")
+
+        # A third that cannot be written exactly in 2dp: this is the case the
+        # 12-decimal unit price exists for.
+        third_qty, third_rate = derive(100.0, 33.34)
+        check("100 over 3 units books as exactly 100.00, not 99.99",
+              third_qty == 3 and near(round(third_qty * third_rate, 2), 100.0, 0.005),
+              f"qty={third_qty} rate={third_rate} -> {round(third_qty * third_rate, 2)}")
 
         # ── Edge cases ────────────────────────────────────────────────────
         print("\n-- A. Edge cases --")

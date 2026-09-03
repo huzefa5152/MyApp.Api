@@ -565,29 +565,31 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       const price = stockPricing[row.itemTypeId];
       const cost = Number(price?.unitCost);
       if (billsMode && isPlainStandalone && price?.canPrice && cost > 0) {
-        const rawQty = total / cost;
-        const qty = isDecimalUnit(row.uom || price.uom || "", units)
-          ? Math.round(rawQty * 1e4) / 1e4
-          : Math.max(1, Math.round(rawQty));
+        // The typed amount is the source of truth: quantity rounds to a WHOLE
+        // number and the rate absorbs the rounding, so the line comes to
+        // exactly what was entered. The UOM does not decide the precision here
+        // -- see the note in StandaloneInvoiceForm.deriveFromTotal.
+        const qty = Math.max(1, Math.round(total / cost));
         const rate = Math.round((total / qty) * 1e12) / 1e12;
         next[index] = {
           ...row,
           quantity: String(qty),
           unitPrice: String(rate),
-          // What quantity x rate actually comes to, so the line and the bill
-          // agree to the paisa.
-          lineTotal: String(Math.round(qty * rate * 100) / 100),
+          lineTotal: String(Math.round(total * 100) / 100),
         };
         return next;
       }
 
+      // Quantity fixed, rate absorbs the change (redistributing across lines).
+      // The quantity is whatever the line already carries, so it is left alone;
+      // only the rate moves, and the line still comes to the typed amount.
       const qty = parseFloat(row.quantity) || 0;
       if (qty > 0) {
         const rate = Math.round((total / qty) * 1e12) / 1e12;
         next[index] = {
           ...row,
           unitPrice: String(rate),
-          lineTotal: String(Math.round(qty * rate * 100) / 100),
+          lineTotal: String(Math.round(total * 100) / 100),
         };
       } else {
         // No quantity to divide by: one unit at the typed amount.

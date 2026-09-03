@@ -657,6 +657,82 @@ def test_item_description_casing(base: str, token: str, company: dict, client: d
 
 
 # ── Suite 10: 12-decimal unit price / quantity ─────────────────
+def test_description_not_overridden(base: str, token: str, company: dict, client: dict) -> None:
+    """A typed description survives; the item type's name only fills a blank.
+
+    The bill form seeds the description from the picked item type as a
+    convenience. It must never overwrite words the operator wrote, and the SAVE
+    must send what they wrote -- the create path used to ship
+    `itemTypeName || description` for the Invoices tab, which replaced a typed
+    description (and any description prefilled from a sales order) with the
+    catalog name on the way to the server.
+    """
+    suite = "11. Description is the operator's"
+    print(f"\n=== {suite} ===")
+    it_id = first_item_type_id(base, token)
+    if not it_id:
+        check(suite, "an item type is available", False, "no item type to pick")
+        return
+
+    # The catalog name, so we can tell it apart from what we type.
+    _, types = http("GET", "/api/itemtypes", base, token=token)
+    catalog_name = next((t.get("name") for t in (types or []) if t.get("id") == it_id), "")
+
+    typed = "HAND WRITTEN DESCRIPTION — keep me"
+    status, bill = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(), "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 18,
+        "items": [{"description": typed, "quantity": 2, "uom": "Pcs",
+                   "unitPrice": 100, "itemTypeId": it_id}],
+    })
+    created = status in (200, 201)
+    check(suite, "11a a bill with a typed description is accepted", created,
+          f"got {status} {bill}")
+    if not created:
+        return
+
+    _, fetched = http("GET", f"/api/invoices/{bill['id']}", base, token=token)
+    line = (fetched.get("items") or [{}])[0]
+    check(suite, "11a the typed description is stored verbatim",
+          line.get("description") == typed,
+          f"stored {line.get('description')!r}, typed {typed!r}")
+    check(suite, "11a it was NOT replaced by the item type's name",
+          line.get("description") != catalog_name,
+          f"stored the catalog name {catalog_name!r} instead")
+    check(suite, "11a the item type is still linked",
+          line.get("itemTypeId") == it_id, f"itemTypeId={line.get('itemTypeId')}")
+
+    # A line with no description of its own falls back to the catalog name --
+    # that is the convenience, and it must still work.
+    status, blank = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": pkt_date_iso(), "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 18,
+        "items": [{"description": catalog_name, "quantity": 1, "uom": "Pcs",
+                   "unitPrice": 50, "itemTypeId": it_id}],
+    })
+    blank_ok = status in (200, 201)
+    check(suite, "11b a line described by its item type is accepted", blank_ok,
+          f"got {status} {blank}")
+    if blank_ok:
+        _, back = http("GET", f"/api/invoices/{blank['id']}", base, token=token)
+        got = (back.get("items") or [{}])[0].get("description")
+        check(suite, "11b it keeps the catalog name", got == catalog_name,
+              f"stored {got!r}")
+
+    # An EDIT must not rewrite it either.
+    status, _ = http("PUT", f"/api/invoices/{bill['id']}", base, token=token, body={
+        "id": bill["id"], "companyId": company["id"], "clientId": client["id"],
+        "date": pkt_date_iso(), "gstRate": 18,
+        "items": [{"id": line.get("id"), "description": typed, "quantity": 5,
+                   "uom": "Pcs", "unitPrice": 100, "itemTypeId": it_id}],
+    })
+    _, edited = http("GET", f"/api/invoices/{bill['id']}", base, token=token)
+    eline = (edited.get("items") or [{}])[0]
+    check(suite, "11c an edit that changes the quantity keeps the description",
+          status in (200, 204) and eline.get("description") == typed,
+          f"status={status} stored={eline.get('description')!r}")
+
+
 def test_twelve_decimal_precision(base: str, token: str, company: dict, client: dict) -> None:
     """Unit price and quantity accept 12 decimals; money totals stay at 2.
 
@@ -766,6 +842,7 @@ def main() -> int:
         test_withholding_tax_flow(args.base, token, company, client)
         test_item_description_casing(args.base, token, company, client)
         test_twelve_decimal_precision(args.base, token, company, client)
+        test_description_not_overridden(args.base, token, company, client)
     finally:
         teardown(args.base, token, company, args.keep)
 

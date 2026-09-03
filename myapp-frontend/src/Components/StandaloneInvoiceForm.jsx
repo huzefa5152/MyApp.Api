@@ -6,8 +6,6 @@ import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getAccountsFlat } from "../api/accountApi";
-import { getAllUnits } from "../api/unitsApi";
-import { isDecimalUnit } from "../utils/formatQuantity";
 import { getSalesOrdersForPicker, getSalesOrderInvoicePrefill } from "../api/salesOrderApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
@@ -187,14 +185,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     setFocusRow(null);
   }, [focusRow, stockPricing]);
 
-  // Whether a unit accepts fractional quantities is configured per Unit
-  // (AllowsDecimalQuantity), the same rule the challan and bill quantity
-  // inputs already follow. A derived quantity has to obey it: 5.5 Pcs is not
-  // a thing.
-  const [units, setUnits] = useState([]);
-  useEffect(() => {
-    getAllUnits().then((r) => setUnits(r.data || [])).catch(() => setUnits([]));
-  }, []);
+  // The Unit table is no longer read here. A quantity DERIVED from an entered
+  // amount is always a whole number now, so AllowsDecimalQuantity has nothing
+  // to decide on this screen -- it still governs a quantity the operator types,
+  // which QuantityInput handles wherever that happens.
   const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
@@ -524,7 +518,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         nonInventoryItemId: "",
         // Bills mode types the description directly — seed it from the
         // picked type's name only when the operator hasn't typed one yet.
-        description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
+        // Seed the description from the item type ONLY when the operator has not
+        // written one -- in either mode. Picking (or re-picking) an item type
+        // must never overwrite words someone typed, or a prefill carried in
+        // from a sales order.
+        description: r.description?.trim() ? r.description : (picked.name || ""),
       };
     }));
     // The operator's next step is the amount (or the quantity, when there is
@@ -573,7 +571,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // Stamping an item type clears any non-inventory binding.
         nonInventoryItemId: "",
         // Same Bills-mode seeding rule as the per-row pick.
-        description: billsMode && !r.description?.trim() ? picked.name || "" : r.description,
+        // Seed the description from the item type ONLY when the operator has not
+        // written one -- in either mode. Picking (or re-picking) an item type
+        // must never overwrite words someone typed, or a prefill carried in
+        // from a sales order.
+        description: r.description?.trim() ? r.description : (picked.name || ""),
       };
     }));
   };
@@ -703,21 +705,30 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     const cost = Number(price.unitCost);
     if (!(cost > 0)) return null;
 
-    // The quantity the unit can actually hold: whole numbers unless the Unit
-    // says otherwise (AllowsDecimalQuantity -- 5.5 Pcs is not a thing).
-    const uom = row.uom || price.uom || "";
+    // The AMOUNT the operator typed is the source of truth (2026-09-03). The
+    // quantity is rounded to a WHOLE number and the rate absorbs whatever that
+    // rounding costs, so the line comes to exactly the figure they entered.
+    //
+    // The UOM deliberately does NOT decide the precision here. It used to: a
+    // decimal-capable unit kept a fractional quantity like 2.5, which is
+    // tidy arithmetic but not what someone asking for "100 worth" means, and
+    // it made the answer depend on a unit setting the operator cannot see from
+    // this field. Entering an amount now always yields a whole quantity --
+    // typing a quantity directly is still governed by the unit (QuantityInput),
+    // which is where that rule belongs.
     const rawQty = total / cost;
-    const qty = isDecimalUnit(uom, units)
-      ? Math.round(rawQty * 1e4) / 1e4
-      : Math.max(1, Math.round(rawQty));
+    const qty = Math.max(1, Math.round(rawQty));
 
-    // The rate then carries the remainder, to the 12 decimals UnitPrice now
-    // stores. That is what makes the ENTERED amount exact: 50,000 over 2196
-    // whole units is 22.768670309654 each, and 2196 x that books as exactly
-    // 50,000.00. While the rate was capped at 2dp the best it could do was
-    // 22.77, which came to 50,002.92 -- the 2.92 the operator saw.
+    // The rate carries the remainder, to the 12 decimals UnitPrice stores:
+    // 100 over 3 units is 33.333333333333 each, and 3 x that books as exactly
+    // 100.00 once LineTotal is rounded to its 2dp money precision. While the
+    // rate was capped at 2dp the best it could do was 33.33, i.e. 99.99.
     const rate = Math.round((total / qty) * 1e12) / 1e12;
-    return { qty, rate, exact: Math.round(qty * rate * 100) / 100 };
+    // What the LINE is worth is the amount that was typed, not qty x rate
+    // re-rounded -- the two agree to the paisa by construction, and quoting the
+    // typed figure back is what guarantees the operator never sees their own
+    // number change.
+    return { qty, rate, exact: Math.round(total * 100) / 100 };
   };
 
   const applyLineTotal = (localId, raw) => {
@@ -833,12 +844,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
           // Per-line GL income account (auto-filled from the item type's overlay,
           // overridable). Server validates against the company CoA; null → derived.
           accountId: r.accountId || null,
-          // Description in Invoices mode is the item type's name (locked).
-          // In Bills mode the operator types it directly into r.description
-          // (or an optional Item Type pick seeds it). A non-inv line has no
-          // item type name, so fall back to its free-text description. Either
-          // way it lands on InvoiceItem.Description.
-          description: (billsMode ? r.description : (r.itemTypeName || r.description))?.trim() || "",
+          // Whatever the operator wrote wins. In Invoices mode this used to send
+          // `r.itemTypeName || r.description`, which threw away a typed
+          // description -- and any description prefilled from a sales order --
+          // and replaced it with the catalog name on save. The item type's name
+          // is now only a FALLBACK for a line that carries no description of its
+          // own. Either way it lands on InvoiceItem.Description.
+          description: r.description?.trim() || r.itemTypeName?.trim() || "",
           quantity: parseFloat(r.quantity),
           uom: r.uom?.trim() || null,
           unitPrice: parseFloat(r.unitPrice),
@@ -1434,9 +1446,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       />
                                     </td>
                                   ) : (() => {
-                                    // Invoices-mode description is read-only: the item type's
-                                    // name, or (for a non-inv charge line) its free-text description.
-                                    const display = r.itemTypeName || (r.nonInventoryItemId ? r.description : "");
+                                    // Invoices-mode description is read-only, and it shows what
+                                    // will actually be SAVED: the line's own description, falling
+                                    // back to the item type's name. It used to show itemTypeName
+                                    // first, which disagreed with the saved value for any line that
+                                    // carried a description of its own -- one prefilled from a sales
+                                    // order, for instance.
+                                    const display = r.description?.trim()
+                                      || r.itemTypeName
+                                      || "";
                                     return (
                                       <td style={{ ...styles.unifiedTd, color: display ? colors.textPrimary : colors.textSecondary, fontStyle: display ? "normal" : "italic" }}>
                                         {display || "(pick an item type)"}
