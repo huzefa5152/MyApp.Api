@@ -158,6 +158,11 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
     } finally { setSaving(false); }
   }
 
+  // Cancelling at FBR is about the WHOLE bill: there is nothing per-line to
+  // adjust, so `computed.valid` (which asks "has any line a figure?") is always
+  // false for it and would leave the button permanently dead.
+  const canSubmit = mode === "cancel" ? true : computed.valid;
+
   const M = mode ? MODES[mode] : null;
 
   return (
@@ -297,11 +302,21 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
                   </span>
                 </label>
               )}
-              <div style={s.totals}>
-                <span>Subtotal <b>{computed.subtotal.toLocaleString()}</b></span>
-                <span>GST {gstRate}% <b>{gstAmount.toLocaleString()}</b></span>
-                <span style={{ fontSize: 16 }}>{mode === "credit" ? "Refund" : "Total"} <b>Rs {grand.toLocaleString()}</b></span>
-              </div>
+              {mode === "cancel" ? (
+                // A whole-bill withdrawal has no per-line figures, so Subtotal /
+                // GST / Total of zero said nothing. State what stops being a sale.
+                <div style={s.totals}>
+                  <span style={{ fontSize: 16 }}>
+                    No longer a sale <b>Rs {Number(invoice?.grandTotal || 0).toLocaleString()}</b>
+                  </span>
+                </div>
+              ) : (
+                <div style={s.totals}>
+                  <span>Subtotal <b>{computed.subtotal.toLocaleString()}</b></span>
+                  <span>GST {gstRate}% <b>{gstAmount.toLocaleString()}</b></span>
+                  <span style={{ fontSize: 16 }}>{mode === "credit" ? "Refund" : "Total"} <b>Rs {grand.toLocaleString()}</b></span>
+                </div>
+              )}
             </div>
 
             <div style={s.grid2}>
@@ -322,10 +337,10 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
             <div style={s.actions}>
               <button style={s.btnGhost} onClick={() => setStep("diagnose")} disabled={saving}><MdArrowBack size={16} /> Back</button>
               <button
-                style={{ ...s.btnPrimary, background: M.tint, opacity: !computed.valid || saving ? 0.5 : 1, cursor: !computed.valid || saving ? "not-allowed" : "pointer" }}
+                style={{ ...s.btnPrimary, background: M.tint, opacity: !canSubmit || saving ? 0.5 : 1, cursor: !canSubmit || saving ? "not-allowed" : "pointer" }}
                 onClick={submit}
-                disabled={!computed.valid || saving}
-                title={!computed.valid ? "Adjust a line to create the correction." : `Create the ${M.doc}`}
+                disabled={!canSubmit || saving}
+                title={!canSubmit ? "Adjust a line to create the correction." : `Create the ${M.doc}`}
               >
                 <MdPostAdd size={18} />
                 {saving ? "Creating…" : `Create ${M.doc}`}

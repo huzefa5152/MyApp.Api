@@ -103,7 +103,16 @@ namespace MyApp.Api.Repositories.Implementations
                 switch (fbrFilter.Trim().ToLowerInvariant())
                 {
                     case "submitted":
-                        query = query.Where(i => i.FbrStatus == "Submitted");
+                        // A withdrawn filing is no longer submitted in any useful
+                        // sense: the IRN was cancelled at FBR. It has its own
+                        // option below rather than sitting in this list.
+                        query = query.Where(i => i.FbrStatus == "Submitted" && i.FbrCancelledAt == null);
+                        break;
+                    // Filed, then withdrawn on the FBR portal within their
+                    // 72-hour window. The bill keeps its number and IRN and is
+                    // NOT voided, so nothing else would separate it out.
+                    case "fbrcancelled":
+                        query = query.Where(i => i.FbrCancelledAt != null);
                         break;
                     // Dual-book: judge each line on its EFFECTIVE value
                     // (overlay AdjustedXxx when present, else the bill row) so a

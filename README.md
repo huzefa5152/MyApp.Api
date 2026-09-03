@@ -287,6 +287,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - **You can record that an invoice was cancelled on the FBR portal.** FBR allows a filed invoice to be withdrawn there within 72 hours. The bill → **Correct** dialog has a new option for it, showing the IRN, when it was filed and how much of the 72 hours is left. Recording it releases the challans and returns the stock, and needs **no credit note** — useful when the customer never received the invoice.
 - **It is a marker, not a void.** The bill keeps its number and its IRN and stays in the list with a red **FBR CANCELLED** badge. It is not hidden, because it was genuinely filed and then withdrawn, and that history matters.
 - **Stock comes back exactly once.** If a credit note with "affects stock" already returned the goods, recording the FBR cancellation afterwards will not return them a second time.
+- **Filter the invoice list by "Cancelled at FBR."** It sits with the other FBR statuses. A withdrawn bill also drops out of "Submitted to FBR" — the IRN was cancelled, so it is no longer a live filing.
 - **The Sales Report no longer counts a reversed sale.** An FBR-cancelled bill, and one that a credit note has reversed in full, both drop out. That report lists sale invoices only and never shows the offsetting note, so leaving them in reported revenue that had been given back in its entirety. A partly reversed bill still appears.
 
 ### 2026-08-09 — Customer Document Handover status
