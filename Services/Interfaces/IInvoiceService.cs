@@ -52,6 +52,15 @@ namespace MyApp.Api.Services.Interfaces
         /// the updated bill, or null if not found.
         /// </summary>
         Task<InvoiceDto?> CancelAsync(int id, string? reason, string? actorUserName = null);
+
+        /// <summary>
+        /// Records that the operator cancelled a filed invoice on the FBR portal
+        /// (their 72-hour window). Not a void: the bill stays visible with its
+        /// number and IRN, stops counting as a sale, hands its delivery challans
+        /// back for re-billing, and gets its stock back unless a credit note has
+        /// already returned it. No note document is created.
+        /// </summary>
+        Task<InvoiceDto?> MarkFbrCancelledAsync(int id, string? reason, string? actorUserName = null);
         /// <summary>
         /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
         /// adjustment note as a new, UNSUBMITTED invoice row:

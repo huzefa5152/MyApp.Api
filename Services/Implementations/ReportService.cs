@@ -80,7 +80,23 @@ namespace MyApp.Api.Services.Implementations
                          && i.NoteKind == 0
                          && i.FbrSubmittedAt != null
                          && !i.IsCancelled
-                         && !i.IsDemo);
+                         && !i.IsDemo
+                         // A filing withdrawn at the FBR portal within their
+                         // 72-hour window is no longer a sale. The row stays
+                         // visible elsewhere with its marker; it just stops
+                         // counting here.
+                         && i.FbrCancelledAt == null
+                         // Nor is a bill that a credit note has reversed IN
+                         // FULL. This report lists sale invoices only
+                         // (NoteKind == 0), so the note itself never appears to
+                         // net it off — leaving the invoice in would report a
+                         // sale that was given back in its entirety. A PARTIAL
+                         // reversal stays: part of that bill still stands.
+                         && !_context.Invoices.Any(cn =>
+                                cn.OriginalInvoiceId == i.Id
+                             && cn.DocumentType == 10
+                             && !cn.IsCancelled
+                             && cn.GrandTotal >= i.GrandTotal));
 
             // Buyer-type filter. Walk-in / counter sales are Unregistered
             // buyers (no NTN). "registered" = has a registered NTN buyer.

@@ -72,6 +72,13 @@ function renderFbrPill(inv, isBillsMode) {
 function renderNotePill(inv) {
   if (inv.documentType === 10) return statusPill("purple", MdUndo, inv.originalInvoiceNumber ? `CN ↩#${inv.originalInvoiceNumber}` : "Credit Note", inv.originalInvoiceNumber ? `Credit Note against Bill #${inv.originalInvoiceNumber}${inv.originalInvoiceRefIRN ? ` (IRN ${inv.originalInvoiceRefIRN})` : ""}` : "Credit Note");
   if (inv.documentType === 9) return statusPill("teal", MdUndo, inv.originalInvoiceNumber ? `DN ↩#${inv.originalInvoiceNumber}` : "Debit Note", inv.originalInvoiceNumber ? `Debit Note against Bill #${inv.originalInvoiceNumber}` : "Debit Note");
+  // Withdrawn at the FBR portal. Shown BEFORE the reversal pill: when a bill is
+  // both cancelled at FBR and credit-noted, the cancellation is the stronger
+  // fact — the filing no longer exists.
+  if (inv.fbrCancelledAt) return statusPill("red", MdBlock, "FBR CANCELLED",
+    `Cancelled on the FBR portal on ${new Date(inv.fbrCancelledAt).toLocaleDateString()}`
+    + (inv.fbrCancelledReason ? ` — ${inv.fbrCancelledReason}` : "")
+    + ". The bill keeps its number and IRN but no longer counts as a sale.");
   if (inv.reversedByCreditNoteNumber) return statusPill("purple", MdUndo, "Reversed", `Reversed by Credit Note #${inv.reversedByCreditNoteNumber}`);
   if (inv.adjustedByDebitNoteNumber) return statusPill("teal", MdUndo, "Adjusted", `Adjusted by Debit Note #${inv.adjustedByDebitNoteNumber}`);
   return null;
@@ -1466,7 +1473,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         note) can be reversed → generates a Credit Note as a new
                         unsubmitted bill to Validate + Submit. Replaces Void once
                         the bill has reached FBR. */}
-                    {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
+                    {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled && !inv.fbrCancelledAt &&
                      inv.documentType !== 9 && inv.documentType !== 10 && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb" }}

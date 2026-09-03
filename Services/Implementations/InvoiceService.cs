@@ -267,6 +267,10 @@ namespace MyApp.Api.Services.Implementations
             IsCancelled = inv.IsCancelled,
             CancelledAt = inv.CancelledAt,
             CancelReason = inv.CancelReason,
+            FbrCancelledAt = inv.FbrCancelledAt,
+            FbrCancelledReason = inv.FbrCancelledReason,
+            // IsFullyReversed is filled by AttachReversalInfoAsync, which
+            // already fetches this bill's notes in one batched query.
             OriginalInvoiceId = inv.OriginalInvoiceId,
             OriginalInvoiceNumber = inv.OriginalInvoice?.InvoiceNumber,
             OriginalInvoiceRefIRN = inv.OriginalInvoiceRefIRN,
@@ -386,7 +390,7 @@ namespace MyApp.Api.Services.Implementations
             var noteMap = await _context.Invoices
                 .Where(n => (n.DocumentType == 9 || n.DocumentType == 10) && !n.IsCancelled
                          && n.OriginalInvoiceId != null && ids.Contains(n.OriginalInvoiceId.Value))
-                .Select(n => new { OriginalId = n.OriginalInvoiceId!.Value, n.DocumentType, n.InvoiceNumber })
+                .Select(n => new { OriginalId = n.OriginalInvoiceId!.Value, n.DocumentType, n.InvoiceNumber, n.GrandTotal })
                 .ToListAsync();
             foreach (var d in dtos)
             {
@@ -396,6 +400,12 @@ namespace MyApp.Api.Services.Implementations
                 d.AdjustedByDebitNoteNumber = noteMap
                     .Where(n => n.OriginalId == d.Id && n.DocumentType == 9)
                     .Select(n => (int?)n.InvoiceNumber).Max();
+                // Reversed IN FULL: a credit note for at least the bill's own
+                // total. Same test the Sales Report uses to drop the bill, so
+                // the marker on screen and the report always agree.
+                d.IsFullyReversed = d.GrandTotal > 0 && noteMap
+                    .Where(n => n.OriginalId == d.Id && n.DocumentType == 10)
+                    .Any(n => n.GrandTotal >= d.GrandTotal);
             }
         }
 
@@ -1999,6 +2009,150 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        /// <summary>
+        /// Puts a bill's delivery challans back into the billable pool and
+        /// returns their numbers.
+        ///
+        /// The transition is not simply "Pending": an imported challan goes back
+        /// to "Imported" and one with no PO to "No PO", which is the same table
+        /// DeleteAsync and CancelAsync have always used. The InvoiceId must be
+        /// cleared too — the bill form's picker filters on BOTH the status and
+        /// a null InvoiceId, so a challan with either one still set never
+        /// reappears.
+        ///
+        /// Caller owns the transaction and the SaveChanges.
+        /// </summary>
+        private List<int> ReleaseChallans(Invoice invoice)
+        {
+            var released = new List<int>();
+            foreach (var dc in invoice.DeliveryChallans)
+            {
+                var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
+                dc.Status = hasPo ? (dc.IsImported ? "Imported" : "Pending") : "No PO";
+                dc.InvoiceId = null;
+                _context.DeliveryChallans.Update(dc);
+                released.Add(dc.ChallanNumber);
+            }
+            return released;
+        }
+
+        /// <summary>
+        /// True when a LIVE credit note against this bill has already put the
+        /// goods back — i.e. it was raised with "affects stock" ticked, so its
+        /// inward movements already cancel the bill's outward ones.
+        ///
+        /// This is what stops the stock being returned twice: withdrawing the
+        /// filing after such a note must NOT also purge the bill's movements,
+        /// or the note's inward half would be left unmatched and on-hand would
+        /// climb by the quantity sold.
+        /// </summary>
+        private async Task<bool> StockAlreadyReturnedByNoteAsync(int invoiceId)
+            => await _context.Invoices.AnyAsync(cn =>
+                   cn.OriginalInvoiceId == invoiceId
+                && cn.DocumentType == 10
+                && !cn.IsCancelled
+                && cn.NoteAffectsStock == true);
+
+        /// <summary>
+        /// Records that the operator cancelled this invoice on the FBR portal.
+        ///
+        /// FBR allows a submitted invoice to be withdrawn there within 72 hours
+        /// of filing. That action happens on THEIR portal; this records it, and
+        /// then does the three things the withdrawal implies here:
+        ///
+        ///   * the bill stops counting as a sale (the Sales Report drops it)
+        ///   * its delivery challans go back into the billable pool, so the
+        ///     goods can be re-billed on a fresh number
+        ///   * the stock it consumed comes back — unless a credit note with
+        ///     "affects stock" has already returned it
+        ///
+        /// It is NOT a void. The row keeps its number, its IRN and its history
+        /// and stays visible, carrying a marker that says the filing was
+        /// withdrawn. Voiding a filed bill is refused precisely because it would
+        /// desync us from what FBR recorded; this is the honest alternative.
+        ///
+        /// No credit note is created. That is the point: inside the 72-hour
+        /// window the filing is withdrawn outright and the customer never
+        /// receives a note.
+        /// </summary>
+        public async Task<InvoiceDto?> MarkFbrCancelledAsync(
+            int id, string? reason, string? actorUserName = null)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.DeliveryChallans)
+                .FirstOrDefaultAsync(i => i.Id == id);
+            if (invoice == null) return null;
+
+            if (invoice.DocumentType == 9 || invoice.DocumentType == 10)
+                throw new InvalidOperationException(
+                    "A Credit/Debit Note cannot be marked cancelled at FBR here. "
+                  + "Withdraw the note itself, or the invoice it adjusts.");
+
+            if (invoice.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(invoice.FbrIRN))
+                throw new InvalidOperationException(
+                    "This bill was never filed with FBR, so there is nothing to cancel there. "
+                  + "Void it instead.");
+
+            if (invoice.IsCancelled)
+                throw new InvalidOperationException("This bill is already cancelled.");
+
+            if (invoice.FbrCancelledAt != null)
+                throw new InvalidOperationException(
+                    $"This bill was already marked cancelled at FBR on {invoice.FbrCancelledAt:d MMM yyyy}.");
+
+            var released = new List<int>();
+            var stockReturned = false;
+
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                released.AddRange(ReleaseChallans(invoice));
+
+                // Give the goods back, unless a credit note already did.
+                if (!await StockAlreadyReturnedByNoteAsync(invoice.Id))
+                {
+                    var movements = await _context.StockMovements
+                        .Where(m => m.CompanyId == invoice.CompanyId
+                                 && m.SourceType == StockMovementSourceType.Invoice
+                                 && m.SourceId == invoice.Id)
+                        .ToListAsync();
+                    if (movements.Count > 0)
+                    {
+                        _context.StockMovements.RemoveRange(movements);
+                        stockReturned = true;
+                    }
+                }
+
+                invoice.FbrCancelledAt = DateTime.UtcNow;
+                invoice.FbrCancelledReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+                invoice.FbrCancelledBy = actorUserName;
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            await _auditLog.LogAsync(new AuditLog
+            {
+                Level         = "Info",
+                UserName      = actorUserName,
+                HttpMethod    = "POST",
+                RequestPath   = $"/invoices/{invoice.Id}/fbr-cancelled",
+                StatusCode    = 200,
+                ExceptionType = "Invoice.FbrCancelled",
+                Message       = $"Bill #{invoice.InvoiceNumber} (IRN {invoice.FbrIRN}) marked cancelled at the FBR portal"
+                              + (released.Count > 0 ? $"; challans {string.Join(", ", released)} released for re-billing" : "")
+                              + (stockReturned ? "; stock returned" : "; stock already returned by a credit note")
+                              + (string.IsNullOrWhiteSpace(reason) ? "" : $"; reason: {reason.Trim()}"),
+            });
+
+            return await GetByIdAsync(invoice.Id);
+        }
+
         public async Task<InvoiceDto?> SetFbrExcludedAsync(int id, bool excluded)
         {
             // Tracked fetch via DbContext so EF picks up the flag change —
@@ -2366,14 +2520,7 @@ namespace MyApp.Api.Services.Implementations
                 // Same transition table as DeleteAsync — imported challans
                 // revert to "Imported", native ones to "Pending", and any
                 // PO-less challan to "No PO".
-                foreach (var dc in invoice.DeliveryChallans)
-                {
-                    var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
-                    dc.Status = hasPo ? (dc.IsImported ? "Imported" : "Pending") : "No PO";
-                    dc.InvoiceId = null;
-                    _context.DeliveryChallans.Update(dc);
-                    revertedChallans.Add(dc.ChallanNumber);
-                }
+                revertedChallans.AddRange(ReleaseChallans(invoice));
 
                 // A voided bill must stop deducting stock — purge its movements
                 // so on-hand reflects reality and the re-bill can re-deduct
@@ -2525,6 +2672,8 @@ namespace MyApp.Api.Services.Implementations
 
             var noteItems = new List<InvoiceItem>();
             var partial = dto.Lines != null && dto.Lines.Count > 0;
+            // Filled when a full credit note hands the bill's challans back.
+            var releasedChallans = new List<int>();
             if (!partial)
             {
                 // Full reversal — every line at its full effective quantity.
@@ -2686,6 +2835,30 @@ namespace MyApp.Api.Services.Implementations
                     // move) — Credit Note → IN (return), Debit Note → OUT
                     // (extra goods). Value-only notes leave inventory alone.
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+
+                    // A CREDIT note that reverses the bill IN FULL puts the goods
+                    // back, so the delivery challans behind it are undelivered
+                    // business again and must return to the billable pool —
+                    // otherwise the goods can never be re-billed on a fresh
+                    // number and the challans sit "Invoiced" against a bill that
+                    // has been reversed to nothing. (Found on Hakimi bills 3912
+                    // and 3913: three challans stranded that way.)
+                    //
+                    // Only a FULL credit note, and only a credit note: a partial
+                    // reversal still leaves part of the bill standing, and a
+                    // DEBIT note increases the bill rather than reversing it.
+                    if (docType == 10 && !partial)
+                    {
+                        var originalWithChallans = await _context.Invoices
+                            .Include(i => i.DeliveryChallans)
+                            .FirstOrDefaultAsync(i => i.Id == original.Id);
+                        if (originalWithChallans != null)
+                        {
+                            releasedChallans = ReleaseChallans(originalWithChallans);
+                            if (releasedChallans.Count > 0) await _context.SaveChangesAsync();
+                        }
+                    }
+
                     await transaction.CommitAsync();
 
                     try
@@ -2700,6 +2873,9 @@ namespace MyApp.Api.Services.Implementations
                             ExceptionType = "Invoice.ReversalNote",
                             Message       = $"{label} #{nextInvoiceNumber} ({(partial ? "partial" : "full")}) created against bill #{original.InvoiceNumber} (IRN {original.FbrIRN}). "
                                           + (string.IsNullOrWhiteSpace(reason) ? "" : $"Reason: {reason!.Trim()}. ")
+                                          + (releasedChallans.Count > 0
+                                              ? $"Challans {string.Join(", ", releasedChallans)} released for re-billing. "
+                                              : "")
                                           + "Awaiting FBR validate/submit.",
                         });
                     }

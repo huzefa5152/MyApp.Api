@@ -200,6 +200,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `140/140`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
@@ -305,6 +306,42 @@ original author is honest provenance for a transplanted commit.
 - Two real tenants currently: **Hakimi Traders** (CompanyId=1) and **Roshan Traders** (CompanyId=2). Do not modify their existing data without explicit say-so.
 
 ---
+
+## Reversing a sale: challans, stock and what stops being a sale (2026-09-04)
+
+A filed sale stops being a sale in exactly two ways, and BOTH must hand the
+goods back. Getting this wrong stranded three of Hakimi's challans (4387, 4391,
+4393) behind reversed bills 3912 and 3913 — the goods could not be re-billed
+because the challans stayed `Invoiced` against a bill reversed to nothing.
+
+- **A challan is billable again only when BOTH are true:** `Status IN
+  ('Pending','Imported')` (`DeliveryChallanRepository.GetPendingChallansByCompanyAsync`)
+  AND `InvoiceId IS NULL` (the bill form's own filter). Setting one without the
+  other leaves it invisible. `InvoiceService.ReleaseChallans` is the ONE place
+  that does it — and the transition is not simply "Pending": an imported challan
+  goes back to `Imported` and a PO-less one to `No PO`.
+- **A FULL credit note releases the challans; a PARTIAL one does not.** Part of
+  the bill still stands. A DEBIT note never releases anything — it increases the
+  bill rather than reversing it.
+- **`Invoice.FbrCancelledAt` is NOT `IsCancelled`.** FBR lets a filed invoice be
+  withdrawn on their portal within 72 hours; this records that the operator did
+  so. The bill keeps its number and its IRN and stays visible with a marker,
+  because it really was filed and then withdrawn. Voiding a filed bill is
+  refused precisely because it would desync us from FBR; this is the honest
+  alternative. No note document is created.
+- **Stock comes back ONCE.** `StockAlreadyReturnedByNoteAsync` is the guard: a
+  live credit note with `NoteAffectsStock = true` has already booked the inward
+  half, so the FBR-cancel path must NOT also purge the bill's movements — doing
+  both leaves the note's inward half unmatched and on-hand climbs by the
+  quantity sold.
+- **The Sales Report drops a withdrawn bill AND one reversed in full.** That
+  report lists sale invoices only (`NoteKind == 0`) and never shows the
+  offsetting note, so leaving them in reports revenue that was given back
+  entirely. A partly reversed bill stays. The Tax Sheet and the pending-FBR list
+  need no such filter: both select `FbrSubmittedAt == null`, so a filed-then-
+  withdrawn bill cannot appear in either.
+- Suite: `scripts/test_fbr_cancellation.py` (26 checks). It needs `--db` to fake
+  the filing, because none of these paths is reachable on an unfiled bill.
 
 ## Anti-patterns I keep finding (don't repeat them)
 
