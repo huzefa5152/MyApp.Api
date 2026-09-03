@@ -375,7 +375,7 @@ export default function InvoiceTable({
             )}
           </>
         )}
-        {perms.canCopy && onCopy && (
+        {perms.canCopy && onCopy && !inv.isMigrated && (
           <button style={btn.copy} onClick={() => onCopy(inv)} title="Copy this bill">
             <MdCopyAll size={14} />
           </button>
@@ -394,7 +394,9 @@ export default function InvoiceTable({
             <MdLocalShipping size={14} />
           </button>
         )}
-        {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
+        {/* An imported ledger document carries a total and no line items, and
+            the server refuses to edit one -- so no Edit button on those rows. */}
+        {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && !inv.isMigrated && (
           <button
             style={btn.edit}
             onClick={() => onEdit?.(inv)}

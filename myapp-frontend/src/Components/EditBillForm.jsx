@@ -65,7 +65,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // never invented. Kept as a constant so the grouping-only copy below still
   // has something to hang off if the policy is ever restored.
   const groupingOnly = false;
-  const readOnly = readOnlyProp;
+  // A document brought in by a ledger import carries a TOTAL from the books it
+  // came from and no line items -- the workbook records a reference and an
+  // amount, never which products were sold, and inventing lines would invent an
+  // unauditable fact. UpdateAsync refuses to edit one, so the form must not
+  // offer a Save that is certain to fail.
+  const [isMigrated, setIsMigrated] = useState(false);
+  const readOnly = readOnlyProp || isMigrated;
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
   // classification is the Invoices tab's responsibility). Existing item-
@@ -282,6 +288,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         } else {
           setWhtMode("none");
         }
+        setIsMigrated(!!data.isMigrated);
         // Show the choice the bill was issued with, not an empty box.
         setAdvTaxKey(advanceTaxKeyOf(data.advanceTaxSection, data.advanceTaxFilerActive));
         // Date arrives as ISO string; the <input type="date"> control wants
@@ -956,9 +963,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     return items.every((r) => r.itemTypeId === first) ? String(first) : "";
   }, [items]);
 
-  const subtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
-  const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
-  const grandTotal = subtotal + gstAmount;
+  // An imported document has no lines to add up, so summing items[] showed
+  // Rs. 0 on a document whose card correctly showed its real total -- it read
+  // as data loss. Use what is stored.
+  const computedSubtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
+  const subtotal = isMigrated ? Number(invoice?.subtotal || 0) : computedSubtotal;
+  const gstAmount = isMigrated
+    ? Number(invoice?.gstAmount || 0)
+    : Math.round(computedSubtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
+  const grandTotal = isMigrated ? Number(invoice?.grandTotal || 0) : subtotal + gstAmount;
 
   // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
@@ -1387,6 +1400,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
             ) : (
               <>
                 {error && <div style={styles.errorAlert}>{error}</div>}
+
+                {isMigrated && (
+                  <div style={styles.infoBox}>
+                    <MdInfo size={16} style={{ color: colors.blue, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <b>Imported from your books</b>
+                      {invoice?.migratedReference && <> — reference <b>{invoice.migratedReference}</b></>}.
+                      It records the document's <b>total</b>, which is what the ledger import
+                      carried; the workbook does not say which items were sold, so there are no
+                      lines to show. It counts towards the customer's balance and can be
+                      receipted, but it cannot be edited.
+                    </div>
+                  </div>
+                )}
 
                 {!readOnly && isChallanLinked && (
                   <div style={styles.infoBox}>

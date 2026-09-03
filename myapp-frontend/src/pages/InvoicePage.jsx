@@ -1064,6 +1064,20 @@ export default function InvoicePage({ mode = "invoices" }) {
                         style={{ all: "unset", marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, cursor: canViewReceipts ? "pointer" : "default" }}
                       >
                         {paymentStatusBadge(inv)}
+                        {/* Says why the row has no items before the operator
+                            opens it and finds an empty table. */}
+                        {inv.isMigrated && (
+                          <span
+                            title={`Brought in by a ledger import${inv.migratedReference ? ` — reference ${inv.migratedReference}` : ""}. Carries a total, not line items.`}
+                            style={{
+                              fontSize: "0.68rem", fontWeight: 700, padding: "1px 6px",
+                              borderRadius: 999, backgroundColor: "#ede7f6", color: "#4527a0",
+                              letterSpacing: "0.02em",
+                            }}
+                          >
+                            IMPORTED
+                          </span>
+                        )}
                         {inv.balanceDue > 0 && (
                           <span style={{ fontSize: "0.74rem", color: colors.textSecondary, fontWeight: 600 }}>
                             Bal: Rs {inv.balanceDue?.toLocaleString()}
@@ -1333,7 +1347,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         column is hidden so classification only happens on
                         the Invoices tab. Hidden once FBR-submitted (locks
                         edits permanently). */}
-                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
@@ -1344,7 +1358,10 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdEdit size={14} /> Edit
                       </button>
                     )}
-                    {canCopyBill && !inv.isCancelled && (
+                    {/* An imported ledger document has no line items, so a copy
+                        would have nothing to create and an edit is refused by
+                        the server. Offering either was a button that 400s. */}
+                    {canCopyBill && !inv.isCancelled && !inv.isMigrated && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#e8eaf6", color: "#283593", border: "1px solid #9fa8da" }}
                         onClick={() => copy.openCopy(inv.id, `Bill #${inv.invoiceNumber}`)}
@@ -1372,7 +1389,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         for FBR-off companies too: they have no Bills-tab FBR
                         step, so this is their line-adjust surface. Hidden once
                         FBR-submitted or cancelled. */}
-                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
+                    {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && !inv.isMigrated && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
                         onClick={() => setEditingId(inv.id)}
