@@ -289,6 +289,16 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-04 — Editing a line amount rounds the quantity, on a decimal line too
+
+- **Fixed: typing a line amount on a bill or invoice that already carried a
+  fractional quantity left the quantity fractional.** A line holding 2099.9998
+  Kg kept all four decimals and only the rate moved, so the quantity on the
+  document was never the round figure the amount implied. The quantity now
+  rounds to a whole number and the rate absorbs the remainder, exactly as it
+  already did when the amount was priced from stock — 2100 x 553.550557142857
+  books as the 1,162,456.17 that was typed.
+
 ### 2026-09-02 — Bill / Sales Tax Invoice footer prints in the right order
 
 - **Fixed: on the printed bill and sales tax invoice the office address line

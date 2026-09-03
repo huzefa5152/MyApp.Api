@@ -580,21 +580,26 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         return next;
       }
 
-      // Quantity fixed, rate absorbs the change (redistributing across lines).
-      // The quantity is whatever the line already carries, so it is left alone;
-      // only the rate moves, and the line still comes to the typed amount.
-      const qty = parseFloat(row.quantity) || 0;
-      if (qty > 0) {
-        const rate = Math.round((total / qty) * 1e12) / 1e12;
-        next[index] = {
-          ...row,
-          unitPrice: String(rate),
-          lineTotal: String(Math.round(total * 100) / 100),
-        };
-      } else {
-        // No quantity to divide by: one unit at the typed amount.
-        next[index] = { ...row, quantity: "1", unitPrice: String(total), lineTotal: String(total) };
-      }
+      // No stock to price from (a challan-driven bill, the Invoices tab, or an
+      // item with nothing on hand). The line's OWN quantity is the base, and it
+      // is rounded to a whole number for the same reason as above: an entered
+      // amount always yields a whole quantity, whatever the unit allows. The
+      // rate then absorbs the rounding, so the line still comes to exactly what
+      // was typed.
+      //
+      // Leaving the quantity alone here was the gap: a bill carrying 2099.9998
+      // KG kept all four decimals and only the rate moved, so entering an
+      // amount on an existing line never tidied the quantity the way the create
+      // form does.
+      const baseQty = parseFloat(row.quantity) || 0;
+      const qty = baseQty > 0 ? Math.max(1, Math.round(baseQty)) : 1;
+      const rate = Math.round((total / qty) * 1e12) / 1e12;
+      next[index] = {
+        ...row,
+        quantity: String(qty),
+        unitPrice: String(rate),
+        lineTotal: String(Math.round(total * 100) / 100),
+      };
       return next;
     });
   };
