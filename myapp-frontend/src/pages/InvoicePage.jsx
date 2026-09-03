@@ -52,13 +52,12 @@ const colors = {
 };
 
 // Payment-status pill (mirrors InvoiceTable's) for the card view.
-function paymentStatusBadge(inv) {
-  const s = inv.paymentStatus;
-  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
-  if (s === "Overdue") return <StatusBadge tone="danger">Overdue{inv.daysOverdue ? ` ${inv.daysOverdue}d` : ""}</StatusBadge>;
-  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
-  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
-}
+// Per-document payment status is NOT shown (2026-09-03). Receipts in these
+// books are taken ON ACCOUNT rather than against an invoice, so an individual
+// document's "Unpaid" / "Overdue" pill described the allocation rather than the
+// customer, and read as a debt that was in fact settled. The customer's real
+// position is the Customer Ledger. The receipts drill-down stays: it shows what
+// HAS been applied to this document, which is a fact rather than a verdict.
 
 export default function InvoicePage({ mode = "invoices" }) {
   // Tab split: `bills` mode is pre-FBR data entry — no item-type column
@@ -1063,7 +1062,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         title={canViewReceipts ? "View receipts & balance" : undefined}
                         style={{ all: "unset", marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, cursor: canViewReceipts ? "pointer" : "default" }}
                       >
-                        {paymentStatusBadge(inv)}
+                        <span style={{ fontSize: "0.74rem", color: colors.blue, fontWeight: 700 }}>Receipts</span>
                         {/* Says why the row has no items before the operator
                             opens it and finds an empty table. */}
                         {inv.isMigrated && (
@@ -1464,9 +1463,9 @@ export default function InvoicePage({ mode = "invoices" }) {
                         submitted, OR FBR is off AND the bill is fully paid.
                         Hidden once a live supplement already exists so no
                         duplicate correction can be created. */}
-                    {canReverse && !inv.isCancelled && !inv.hasSupplement &&
+                    {canReverse && !inv.isCancelled && !inv.hasSupplement && !inv.isMigrated &&
                      inv.documentType !== 9 && inv.documentType !== 10 &&
-                     (fbrEnabled ? inv.fbrStatus === "Submitted" : inv.paymentStatus === "Paid") && (
+                     (fbrEnabled ? inv.fbrStatus === "Submitted" : true) && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#d6eee8", color: "#0a5d50", border: "1px solid #b6ddd3" }}
                         onClick={() => setCorrectTarget(inv)}

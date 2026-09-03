@@ -304,6 +304,14 @@ Publish output optimized from 79 MB to 37 MB via:
   would not fit above the footer, instead of printing under it. A long bill
   fits about fourteen lines on the first page.
 
+### 2026-09-03 — Payment status is gone, and notes work on any bill
+
+- **A credit or debit note, and a bill correction, can now be raised against any valid bill — paid or not.** Both used to demand a fully paid invoice. Since receipts here are taken on account rather than against a particular invoice, no invoice ever reached "paid", so a return or an undercharge could not be recorded at all; the only way out was voiding a real document.
+- **Payment status has been removed from the system.** It described whether cash had been *allocated to a document*, not whether the customer had paid, so it marked settled customers as unpaid and overdue. Gone from: invoice, bill and note cards and tables (replaced by a Receipts link that shows what was actually applied), purchase bills, the note picker, the payment history dialog, the Sales and Purchase Payment Status reports, the accounting dashboard's aging bars, and the customer portal.
+- **Accounts Receivable / Payable Aging is now Customer / Supplier Outstanding Balances.** The age buckets and the Past Due total measured each document against what had been allocated to it, so a customer who had paid still showed their whole balance as more than 90 days overdue. What each party owes as at a date is unaffected by how cash was allocated, so that is what the report states.
+- This also fixed a figure that could not be true: the old report showed Past Due of 346,340,796 against Total Receivable of 233,005,315. The total now agrees with the Accounts receivable balance in the Chart of Accounts.
+- Your customers no longer see a Paid/Unpaid verdict on their portal — they see each document, its total, and what has been applied to it.
+
 ### 2026-09-03 — Big figures stay inside their boxes
 
 - **A nine-figure total no longer spills out of its tile.** On the receivables report a negative balance like `(226,670,962.34)` ran straight through the edge of its box. Money has no upper bound but a tile has a fixed width, so a figure now sets its own type size from its length and wraps rather than overflowing. Applied to every screen with the same shape: the report headline tiles, aging and card amounts, the reconcile summary, bank and cash balances, the receipt and payment dialogs, client statements and the client import tally.

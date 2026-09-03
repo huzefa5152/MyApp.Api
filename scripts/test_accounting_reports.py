@@ -118,6 +118,33 @@ class Fatal(Exception):
     """A prerequisite failed — stop asserting, but still tear down and report."""
 
 
+def report_is_gone(base: str, token: str, cid: int, path: str) -> tuple[bool, str]:
+    """True when `path` no longer serves a report.
+
+    Not simply a 404 check: this app's SPA fallback answers an unmatched /api
+    path with the shell (200 text/html), so a removed endpoint stops returning
+    JSON rather than starting to return 404. What matters is that no report
+    comes back.
+    """
+    req = urllib.request.Request(
+        f"{base}/api/accounting/reports/company/{cid}/{path}",
+        headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            body = r.read().decode("utf-8", "replace")
+            status = r.status
+    except urllib.error.HTTPError as e:
+        return True, f"http {e.code}"
+    except Exception as e:                      # network-level failure
+        return False, f"request failed: {e}"
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        return True, f"http {status}, not JSON ({body[:24].strip()!r})"
+    looks_like_report = isinstance(parsed, dict) and "totals" in parsed and "columns" in parsed
+    return (not looks_like_report), f"http {status}, report={looks_like_report}"
+
+
 def report(base: str, token: str, cid: int, path: str, **params) -> dict:
     """GET one report. Empty params are dropped, like the client does."""
     clean = {k: v for k, v in params.items() if v is not None and v != ""}
@@ -938,19 +965,22 @@ def suite_aging_outstanding(base: str, token: str, cid: int, client_id: int | No
               eq(aging["totals"].get("total"), expected),
               f"aging {aging['totals'].get('total')} vs outstanding+advances {expected}")
 
-        buckets = sum(float(aging["totals"].get(k) or 0) for k in
-                      ["current", "days1To30", "days31To60", "days61To90", "over90"])
-        check(S, f"{side}: buckets sum to the aging total",
-              eq(buckets, aging["totals"].get("total")),
-              f"buckets {buckets} vs total {aging['totals'].get('total')}")
-        check(S, f"{side}: aging states an as-of date",
+        # Age buckets and the Past Due total were removed (2026-09-03): each was
+        # measured against what had been ALLOCATED to a document, and receipts
+        # here are taken on account, so a settled customer's whole balance
+        # showed as 90+ overdue. What remains is the party's balance as at a
+        # date, which does not depend on how cash was allocated.
+        gone = [k for k in ("current", "days1To30", "days31To60", "days61To90",
+                            "over90", "overdueAmount")
+                if k in (aging.get("totals") or {})]
+        check(S, f"{side}: the balances report carries no age buckets or Past Due",
+              not gone, f"still present: {gone}")
+        check(S, f"{side}: no bucket columns remain",
+              not [c for c in aging["columns"] if c["key"] in
+                   ("current", "days1To30", "days31To60", "days61To90", "over90")],
+              f"columns {[c['key'] for c in aging['columns']]}")
+        check(S, f"{side}: it still states an as-of date",
               "As of" in aging.get("periodLabel", ""), f"got '{aging.get('periodLabel')}'")
-
-        # Every outstanding row must carry a bucket, and it must match its own age.
-        bad = [r["documentNo"] for r in out["rows"]
-               if r["ageBucket"] != expected_bucket(int(r["daysOverdue"]))]
-        check(S, f"{side}: each document's age bucket matches its days overdue",
-              not bad, f"wrong on {bad[:4]}")
         check(S, f"{side}: outstanding == total - paid on every row",
               all(eq(float(r["outstanding"]),
                      float(r["grandTotal"]) - float(r["withholdingTax"]) - float(r["paid"]))
@@ -982,7 +1012,7 @@ def suite_aging_outstanding(base: str, token: str, cid: int, client_id: int | No
     # ── Drill-down: aging -> that party's outstanding documents ──
     aging = report(base, token, cid, "receivables-aging", period="allPeriods")
     grp = next((g for g in aging["groupSummaries"] if g.get("drillFilter") == "clientId"), None)
-    if check(S, "aging offers a per-customer drill-down", grp is not None and grp["rows"]):
+    if check(S, "the balances report offers a per-customer drill-down", grp is not None and grp["rows"]):
         # Pick a party whose aging balance is made of documents ONLY. A party
         # carrying an on-account advance nets that into its aging row, so its
         # aging figure legitimately differs from its list of open documents.
@@ -998,13 +1028,6 @@ def suite_aging_outstanding(base: str, token: str, cid: int, client_id: int | No
                   eq(detail["totals"].get("outstanding"), docs_party["amount"]),
                   f"aging {docs_party['amount']} vs outstanding {detail['totals'].get('outstanding')}")
 
-
-def expected_bucket(days: int) -> str:
-    if days <= 0: return "Current"
-    if days <= 30: return "1-30"
-    if days <= 60: return "31-60"
-    if days <= 90: return "61-90"
-    return "90+"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1160,9 +1183,9 @@ def suite_documents(base: str, token: str, cid: int):
     S = "15. Sales & purchases"
     print(f"\n=== {S} ===")
 
-    for side, reg_path, aging_path, status_path, summary_path in [
-        ("sales", "sales-register", "receivables-aging", "sales-payment-status", "sales-summary"),
-        ("purchases", "purchase-register", "payables-aging", "purchase-payment-status", "purchase-summary"),
+    for side, reg_path, aging_path, summary_path in [
+        ("sales", "sales-register", "receivables-aging", "sales-summary"),
+        ("purchases", "purchase-register", "payables-aging", "purchase-summary"),
     ]:
         reg = report(base, token, cid, reg_path, period="allPeriods", pageSize=200)
         t = reg["totals"]
@@ -1181,8 +1204,6 @@ def suite_documents(base: str, token: str, cid: int):
                          r["outstanding"])]
         check(S, f"{side}: outstanding == grand - withholding - paid on every row",
               not bad, f"wrong on {bad[:4]}")
-        check(S, f"{side}: every row carries a payment status",
-              all(r.get("status") for r in reg["rows"]))
         check(S, f"{side}: no discount column (the model stores none)",
               not any("discount" in c["key"].lower() for c in reg["columns"]))
 
@@ -1211,13 +1232,15 @@ def suite_documents(base: str, token: str, cid: int):
             check(S, f"{side}: the overpayment difference is explained in a notice",
                   bool(reg.get("notice")), "overpaid total with no explanation")
 
-        # Payment status is the register reframed, so the figures must be identical.
-        ps = report(base, token, cid, status_path, period="allPeriods", pageSize=1)
-        check(S, f"{side}: payment status total == register total",
-              eq(ps["totals"].get("grandTotal"), t["grandTotal"]),
-              f"{ps['totals'].get('grandTotal')} vs {t['grandTotal']}")
-        check(S, f"{side}: payment status is titled as such",
-              "Payment Status" in ps["title"], f"got {ps['title']}")
+        # The Payment Status report was removed (2026-09-03) -- its whole subject
+        # was paid / part-paid / unpaid / overdue, and a receipt here is taken on
+        # account rather than allocated to a document, so it reported the state
+        # of the allocation rather than of the customer. The route must be gone,
+        # not merely unlisted, or a bookmark would still reach it.
+        gone_path = "sales-payment-status" if side == "sales" else "purchase-payment-status"
+        gone, how = report_is_gone(base, token, cid, gone_path)
+        check(S, f"{side}: the payment status report no longer returns a report",
+              gone, f"GET {gone_path} still answered: {how}")
 
         # Every grouping must sum to the same grand figure it reports.
         for gb in ["party", "item", "itemType", "account", "date", "month", "tax"]:
@@ -1270,7 +1293,7 @@ def suite_documents(base: str, token: str, cid: int):
 
     # ── Exports ──
     for rid in ["sales-register", "purchase-register", "sales-summary", "purchase-summary",
-                "sales-payment-status", "credit-debit-notes"]:
+                "credit-debit-notes"]:
         st, blob = http("GET",
                         f"/api/accounting/reports/company/{cid}/export/{rid}?period=allPeriods",
                         base, token=token, raw_bytes=True)

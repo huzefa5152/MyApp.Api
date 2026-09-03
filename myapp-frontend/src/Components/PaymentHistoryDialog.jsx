@@ -1,17 +1,14 @@
 import { useState, useEffect } from "react";
 import { MdClose } from "react-icons/md";
 import { formStyles, modalSizes, colors } from "../theme";
-import StatusBadge from "./StatusBadge";
 import { getPaymentsForInvoice, getPaymentsForBill } from "../api/paymentApi";
 
 const money = (n) => `Rs ${(Number(n) || 0).toLocaleString()}`;
 
-function paymentStatusBadge(status, daysOverdue) {
-  if (status === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
-  if (status === "Overdue") return <StatusBadge tone="danger">Overdue{daysOverdue ? ` ${daysOverdue}d` : ""}</StatusBadge>;
-  if (status === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
-  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
-}
+// No status verdict here either (2026-09-03). This dialog states FACTS about
+// one document -- what was applied to it and what is left -- and a "Overdue"
+// pill turned that into a judgement about a customer whose money may well have
+// arrived on account against a different document.
 
 /**
  * Read-only history of the receipts (sales invoice) or payments (purchase bill)
@@ -69,10 +66,6 @@ export default function PaymentHistoryDialog({ mode, companyId, doc, onClose }) 
             <div style={summaryCell}>
               <span style={summaryLabel}>Balance due</span>
               <span style={{ ...summaryValue, color: (doc.balanceDue || 0) > 0 ? "#c62828" : colors.textPrimary }}>{money(doc.balanceDue)}</span>
-            </div>
-            <div style={{ ...summaryCell, alignItems: "flex-start", justifyContent: "center" }}>
-              <span style={summaryLabel}>Status</span>
-              {paymentStatusBadge(doc.paymentStatus, doc.daysOverdue)}
             </div>
           </div>
 

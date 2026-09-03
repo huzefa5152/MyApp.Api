@@ -413,25 +413,12 @@ namespace MyApp.Api.Controllers
             return Ok(await _reports.GetDocumentRegisterAsync(companyId, filter, sales: false));
         }
 
-        [HttpGet("company/{companyId}/sales-payment-status")]
-        [HasPermission("accounting.reports.view")]
-        [AuthorizeCompany]
-        public async Task<ActionResult<ReportResultDto>> SalesPaymentStatus(
-            int companyId, [FromQuery] ReportFilterDto filter)
-        {
-            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
-            return Ok(await _reports.GetPaymentStatusAsync(companyId, filter, sales: true));
-        }
-
-        [HttpGet("company/{companyId}/purchase-payment-status")]
-        [HasPermission("accounting.reports.view")]
-        [AuthorizeCompany]
-        public async Task<ActionResult<ReportResultDto>> PurchasePaymentStatus(
-            int companyId, [FromQuery] ReportFilterDto filter)
-        {
-            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
-            return Ok(await _reports.GetPaymentStatusAsync(companyId, filter, sales: false));
-        }
+        // The Sales / Purchase Payment Status reports were removed (2026-09-03).
+        // Their whole subject was paid / part-paid / unpaid / overdue, and a
+        // receipt here is taken ON ACCOUNT rather than allocated to a document,
+        // so both reported the state of the allocation rather than the state of
+        // the customer. The customer's real position is the Customer Ledger and
+        // the Client Ledger report.
 
         /// <summary>Sales by customer | item | itemType | account | date | month | tax.</summary>
         [HttpGet("company/{companyId}/sales-summary")]
@@ -666,10 +653,6 @@ namespace MyApp.Api.Controllers
                     report = await _reports.GetDocumentRegisterAsync(companyId, filter, true); break;
                 case "purchase-register":
                     report = await _reports.GetDocumentRegisterAsync(companyId, filter, false); break;
-                case "sales-payment-status":
-                    report = await _reports.GetPaymentStatusAsync(companyId, filter, true); break;
-                case "purchase-payment-status":
-                    report = await _reports.GetPaymentStatusAsync(companyId, filter, false); break;
                 case "sales-summary":
                     report = await _reports.GetDocumentSummaryAsync(companyId, filter, true, groupBy); break;
                 case "purchase-summary":

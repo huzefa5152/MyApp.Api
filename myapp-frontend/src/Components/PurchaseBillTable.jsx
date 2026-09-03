@@ -3,13 +3,9 @@ import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
 // Payment-status pill (mirror of InvoiceTable's): Paid / Partial / Overdue / Unpaid.
-function paymentStatusBadge(b) {
-  const s = b.paymentStatus;
-  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
-  if (s === "Overdue") return <StatusBadge tone="danger" title={b.daysOverdue ? `${b.daysOverdue} day(s) overdue` : undefined}>Overdue{b.daysOverdue ? ` ${b.daysOverdue}d` : ""}</StatusBadge>;
-  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
-  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
-}
+// No per-document payment status (2026-09-03) — payments here are recorded
+// against the supplier, not allocated per bill, so the pill described the
+// allocation rather than the supplier. The payments drill-down stays.
 
 export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDelete, onCopy, onRecordPayment, onShowPayments, onPrint, onExportPdf, exportingId, printDisabled = false, printDisabledReason = "" }) {
   const columns = [
@@ -62,16 +58,16 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       render: (b) => `Rs. ${(b.balanceDue ?? 0).toLocaleString()}`,
     },
     {
-      key: "paymentStatus",
-      header: "Payment",
-      width: 110,
-      accessor: (b) => b.paymentStatus || "",
+      key: "payments",
+      header: "Payments",
+      width: 100,
+      accessor: () => "",
       render: (b) => (perms.canViewPayments && onShowPayments) ? (
-        <button type="button" onClick={() => onShowPayments(b)} title="View payments & balance"
-          style={{ all: "unset", cursor: "pointer" }}>
-          {paymentStatusBadge(b)}
+        <button type="button" onClick={() => onShowPayments(b)} title="What has been applied to this bill"
+          style={{ all: "unset", cursor: "pointer", color: colors.blue, fontWeight: 700, fontSize: "0.78rem" }}>
+          View
         </button>
-      ) : paymentStatusBadge(b),
+      ) : "—",
     },
     {
       key: "reconciliationStatus",

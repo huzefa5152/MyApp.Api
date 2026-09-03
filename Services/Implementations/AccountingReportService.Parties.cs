@@ -1019,9 +1019,12 @@ namespace MyApp.Api.Services.Implementations
                 Col("grandTotal", "Total", "money", totalled: true),
                 Col("paid", "Paid", "money", totalled: true),
                 Col("outstanding", "Outstanding", "money", totalled: true),
-                Col("daysOverdue", "Days overdue", "int"),
-                Col("ageBucket", "Age"),
-                Col("status", "Status", "status"),
+                // Days overdue, the age bucket and the payment status went with
+                // the rest of the payment-status work (2026-09-03): all three
+                // are derived from what has been ALLOCATED to this document,
+                // and receipts here are taken on account. The row still states
+                // the document, its total, what was applied to it, and what is
+                // left -- facts that do not depend on the allocation.
             };
 
             var today = PakistanClock.Today;
@@ -1099,8 +1102,11 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
             }
 
-            // Oldest debt first — this report exists to drive collection.
-            rows = rows.OrderByDescending(r => r.DaysOverdue).ThenByDescending(r => r.Outstanding).ToList();
+            // Largest debt first. It used to be oldest-first by DaysOverdue, which
+            // is measured against what was allocated to each document — unreliable
+            // when receipts are taken on account (see the note in the balances
+            // report above).
+            rows = rows.OrderByDescending(r => r.Outstanding).ToList();
 
             report.TotalCount = rows.Count;
             var (page, size) = ResolvePaging(filter, forExport: false);
@@ -1116,8 +1122,6 @@ namespace MyApp.Api.Services.Implementations
             report.TotalLabels["grandTotal"] = "Documents Total";
             report.TotalLabels["paid"] = "Already Paid";
             report.TotalLabels["transactionCount"] = customers ? "Open Invoices" : "Open Bills";
-            report.Totals["overdueAmount"] = rows.Where(r => r.DaysOverdue > 0).Sum(r => r.Outstanding);
-            report.TotalLabels["overdueAmount"] = "Past Due";
 
             report.GroupSummaries.Add(new ReportGroupSummaryDto
             {
@@ -1491,8 +1495,15 @@ namespace MyApp.Api.Services.Implementations
             // Aging is a point-in-time view, so only the END of the window matters.
             var asOf = window.To;
 
+            // Aging — and the Past Due total that went with it — was removed
+            // (2026-09-03). Every bucket is measured from a document's own due
+            // date against what has been ALLOCATED to that document, and this
+            // business takes receipts on account, so a customer who had paid
+            // showed their whole balance sitting in "90+". The report now states
+            // each party's outstanding balance as at a date, which is the part
+            // that does not depend on how cash was allocated. The title says so.
             var report = await NewReportAsync(companyId,
-                customers ? "Accounts Receivable Aging" : "Accounts Payable Aging",
+                customers ? "Customer Outstanding Balances" : "Supplier Outstanding Balances",
                 window, filter, ledgerSourced: true);
             report.PeriodLabel = asOf.HasValue
                 ? $"As of {asOf.Value:d MMM yyyy}"
@@ -1501,12 +1512,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 Col("party", customers ? "Customer" : "Supplier"),
                 Col("openDocuments", "Open docs", "int"),
-                Col("current", "Current", "money", totalled: true),
-                Col("days1To30", "1–30", "money", totalled: true),
-                Col("days31To60", "31–60", "money", totalled: true),
-                Col("days61To90", "61–90", "money", totalled: true),
-                Col("over90", "90+", "money", totalled: true),
-                Col("total", "Total", "money", totalled: true),
+                Col("total", "Balance", "money", totalled: true),
             };
 
             // Reuse the existing aging outright — no second bucket calculation.
@@ -1524,38 +1530,24 @@ namespace MyApp.Api.Services.Implementations
                 var s = filter.Search.Trim();
                 rows = rows.Where(r => r.Name.Contains(s, StringComparison.OrdinalIgnoreCase));
             }
-            // "Only overdue" — the collection worklist.
-            if (string.Equals(filter.Status, "overdue", StringComparison.OrdinalIgnoreCase))
-                rows = rows.Where(r => r.Days1To30 + r.Days31To60 + r.Days61To90 + r.Over90 > 0m);
-
-            var list = rows.ToList();
+            // Largest balance first: with no aging to sort by, size is what the
+            // reader is scanning for.
+            var list = rows.OrderByDescending(r => r.Total).ToList();
             report.Rows = list.Select(r => (object)new
             {
                 partyId = r.PartyId,
                 party = r.Name,
                 openDocuments = r.OpenDocuments,
-                current = r.Current,
-                days1To30 = r.Days1To30,
-                days31To60 = r.Days31To60,
-                days61To90 = r.Days61To90,
-                over90 = r.Over90,
                 total = r.Total,
             }).ToList();
 
             report.TotalCount = list.Count;
             report.Page = 1;
             report.PageSize = list.Count;
-            report.Totals["current"] = list.Sum(r => r.Current);
-            report.Totals["days1To30"] = list.Sum(r => r.Days1To30);
-            report.Totals["days31To60"] = list.Sum(r => r.Days31To60);
-            report.Totals["days61To90"] = list.Sum(r => r.Days61To90);
-            report.Totals["over90"] = list.Sum(r => r.Over90);
             report.Totals["total"] = list.Sum(r => r.Total);
             report.TotalLabels["total"] = customers ? "Total Receivable" : "Total Payable";
-            report.TotalLabels["over90"] = "Over 90 Days";
-            report.Totals["overdueAmount"] = list.Sum(r =>
-                r.Days1To30 + r.Days31To60 + r.Days61To90 + r.Over90);
-            report.TotalLabels["overdueAmount"] = "Past Due";
+            report.Totals["transactionCount"] = list.Sum(r => r.OpenDocuments);
+            report.TotalLabels["transactionCount"] = customers ? "Open Invoices" : "Open Bills";
 
             // Clicking a party goes to their outstanding documents — the invoices
             // or bills the balance is actually made of.

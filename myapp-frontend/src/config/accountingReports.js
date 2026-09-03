@@ -362,9 +362,13 @@ export const REPORT_CATEGORIES = [
       {
         id: "aged-receivables",
         path: "receivables-aging",
-        title: "Accounts Receivable Aging",
-        blurb: "Outstanding customer balances bucketed by age. Click a customer for the invoices behind it.",
-        filters: [FILTERS.period, FILTERS.division, FILTERS.client, FILTERS.status, FILTERS.search],
+        // No longer bucketed by age (2026-09-03): every bucket was measured
+        // against what had been ALLOCATED to each document, and receipts here
+        // are taken on account, so a customer who had paid still showed their
+        // whole balance in "90+". The status filter went with it.
+        title: "Customer Outstanding Balances",
+        blurb: "What each customer owes as at a date. Click a customer for the invoices behind it.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client, FILTERS.search],
         featured: true,
         drill: { filter: "clientId", to: "customer-outstanding" },
       },
@@ -423,14 +427,14 @@ export const REPORT_CATEGORIES = [
   {
     id: "suppliers",
     title: "Suppliers",
-    blurb: "What you owe, to whom, and for how long.",
+    blurb: "What you owe and to whom.",
     reports: [
       {
         id: "aged-payables",
         path: "payables-aging",
-        title: "Accounts Payable Aging",
-        blurb: "Outstanding supplier balances bucketed by age. Click a supplier for the bills behind it.",
-        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier, FILTERS.status, FILTERS.search],
+        title: "Supplier Outstanding Balances",
+        blurb: "What you owe each supplier as at a date. Click a supplier for the bills behind it.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.supplier, FILTERS.search],
         featured: true,
         drill: { filter: "supplierId", to: "supplier-outstanding" },
       },
@@ -574,14 +578,6 @@ export const REPORT_CATEGORIES = [
         exportId: "sales-summary",
       },
       {
-        id: "sales-payment-status",
-        path: "sales-payment-status",
-        title: "Sales Payment Status",
-        blurb: "Paid, part-paid, unpaid and overdue invoices at a glance.",
-        filters: SALES_FILTERS,
-        exportId: "sales-payment-status",
-      },
-      {
         id: "credit-debit-notes",
         path: "credit-debit-notes",
         title: "Credit & Debit Notes",
@@ -676,14 +672,6 @@ export const REPORT_CATEGORIES = [
         filters: PURCHASE_FILTERS,
         query: { groupBy: "tax" },
         exportId: "purchase-summary",
-      },
-      {
-        id: "purchase-payment-status",
-        path: "purchase-payment-status",
-        title: "Purchase Payment Status",
-        blurb: "Paid, part-paid, unpaid and overdue bills.",
-        filters: PURCHASE_FILTERS,
-        exportId: "purchase-payment-status",
       },
       {
         id: "purchases-outstanding",

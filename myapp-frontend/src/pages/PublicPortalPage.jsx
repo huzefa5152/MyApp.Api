@@ -194,14 +194,15 @@ export default function PublicPortalPage() {
   // A chip with nothing behind it is a dead control — and six of them push the
   // filter bar onto a second line, which costs a row of invoices. "All" always
   // shows, and so does whatever is currently selected even once it empties.
+  // Payment status is not shown on the portal (2026-09-03). A status here is
+  // derived from receipts ALLOCATED to a specific invoice, and this business
+  // takes receipts on account -- so a customer who had paid in full still saw
+  // every document marked "Unpaid", or worse "Overdue". Telling a customer they
+  // owe money they have already sent is the most damaging place to get this
+  // wrong, so the document list states the figures and leaves the verdict out.
   const filters = useMemo(() => ([
     { key: "", label: "All", count: sum.totalInvoices },
-    { key: "Unpaid", label: "Unpaid", count: sum.unpaidCount },
-    { key: "PartiallyPaid", label: "Partial", count: sum.partiallyPaidCount },
-    { key: "Overdue", label: "Overdue", count: sum.overdueCount },
-    { key: "Paid", label: "Paid", count: sum.paidCount },
-    { key: "Overpaid", label: "Credit", count: sum.overpaidCount },
-  ]).filter((f) => !f.key || f.key === status || (f.count || 0) > 0), [sum, status]);
+  ]), [sum]);
 
   if (loading) {
     return <Frame><div style={s.centre}><Spinner /><p style={s.centreText}>Loading your account…</p></div></Frame>;
@@ -365,7 +366,6 @@ export default function PublicPortalPage() {
                     <Th align="right">Amount</Th>
                     <Th align="right">Paid</Th>
                     <Th align="right">Balance</Th>
-                    <Th>Status</Th>
                     <Th align="right"><span style={s.srOnly}>Actions</span></Th>
                   </tr>
                 </thead>
@@ -385,7 +385,6 @@ export default function PublicPortalPage() {
                       <td style={{ ...s.num, ...s.numStrong, color: balanceColour(r) }}>
                         {r.credit > 0 ? `+${money(r.credit)}` : money(r.balance)}
                       </td>
-                      <td style={s.cell}><Pill status={r.status} days={r.daysOverdue} /></td>
                       <td style={{ ...s.cell, textAlign: "right", whiteSpace: "nowrap" }}>
                         <Actions r={r} busy={busy} canPrint={header.canPrint}
                                  onView={openDetail} onPdf={handlePdf} onPrint={handlePrint} />
@@ -404,7 +403,6 @@ export default function PublicPortalPage() {
                             onClick={() => openDetail(r.invoiceNumber)} style={s.invLinkLg}>
                       #{r.invoiceNumber}
                     </button>
-                    <Pill status={r.status} days={r.daysOverdue} />
                   </div>
                   <div style={s.cardDates}>
                     Issued {fmtDate(r.date)}{r.dueDate ? ` · Due ${fmtDate(r.dueDate)}` : ""}
@@ -513,16 +511,6 @@ function Stat({ label, value, tone }) {
   );
 }
 
-function Pill({ status, days }) {
-  const t = STATUS[status] || STATUS.Unpaid;
-  return (
-    <span style={{ ...s.pill, color: t.fg, background: t.bg }}>
-      <span style={{ ...s.dot, background: t.dot }} aria-hidden="true" />
-      {t.label}{status === "Overdue" && days > 0 ? ` · ${days}d` : ""}
-    </span>
-  );
-}
-
 function Actions({ r, busy, canPrint, wide, onView, onPdf, onPrint }) {
   const n = r.invoiceNumber;
   const base = wide ? s.actionWide : s.action;
@@ -619,7 +607,6 @@ function DetailModal({ detail, loading, busy, canPrint, onClose, onPdf, onPrint 
               <div style={s.metaGrid}>
                 <Meta label="Issued" value={fmtDate(detail.date)} />
                 <Meta label="Due" value={fmtDate(detail.dueDate)} />
-                <Meta label="Status" value={<Pill status={detail.status} />} />
                 {detail.poNumber && <Meta label="Your PO" value={detail.poNumber} />}
                 {detail.paymentTerms && <Meta label="Terms" value={detail.paymentTerms} />}
               </div>

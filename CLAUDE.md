@@ -455,6 +455,49 @@ an array makes axios send `itemTypeIds[]=84`, which binds to nothing on
 then silently stops pricing from stock with no error anywhere. The helper now
 joins an array itself.
 
+### 5b-8. Payment status is NOT shown anywhere (2026-09-03)
+
+Receipts in these books are taken **on account**, not allocated to an invoice.
+So an individual document's `AmountPaid` is usually zero and
+`PaymentStatusCalculator.Status` never reaches `Paid` — the status described the
+state of the ALLOCATION, not the state of the customer, and read as a debt that
+had in fact been settled.
+
+Removed, and not to be re-added without the operator asking:
+
+- the status pill on invoice / bill / note cards and tables (a **Receipts** or
+  **Payments** drill-down took its place — what HAS been applied is a fact),
+  and the same on purchase bills
+- the note picker's status chip and its "Paid only" filter
+- the Payment History dialog's Status cell
+- the **Sales / Purchase Payment Status** reports — route, export case, service
+  method and interface member, not merely unlisted
+- **aging**: `GetAgingReportAsync` is now *Customer / Supplier Outstanding
+  Balances*. The buckets and the Past Due total measured each document against
+  what had been allocated to it, so a settled customer's whole balance sat in
+  "90+". The Outstanding report lost its Days-overdue / Age / Status columns and
+  its overdue ordering for the same reason.
+- the accounting dashboard's aging bucket bars (the total stays — it is a real
+  balance — now with an open-document count)
+- the customer portal's Status column, detail pill and status filter chips.
+  Telling a customer they owe money they have already sent is the most damaging
+  place to get this wrong.
+
+**What deliberately REMAINS:** `PaymentStatus`, `BalanceDue` and `DaysOverdue`
+on the DTOs, and `PaymentStatusCalculator` itself. `BalanceDue` is load-bearing
+for recording a receipt and for the over-allocation guard — removing it breaks
+receipts. Nothing renders the status.
+
+A side effect worth knowing: the aging report used to show Past Due
+(346,340,796) exceeding Total Receivable (233,005,315), which is impossible.
+The buckets were the broken part; the report's total now ties to the Chart of
+Accounts A/R balance.
+
+**Eligibility never depends on payment.** A Credit/Debit Note
+(`CreateNoteAsync`) and a correction (`CreateSupplementAsync`) are gated at
+COMPANY level — FBR-submitted when FBR is on, any valid document when it is off.
+Do not reintroduce a "fully paid" test in either.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -566,12 +609,12 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
-| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `116/116 checks passed` |
+| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `120/120 checks passed` |
 | Customer receipts + advances | `python scripts/test_customer_receipts_ledger.py` | `87/87 checks passed` (1 skipped) |
-| Customer ledger | `python scripts/test_customer_ledger.py` | `79/79 checks passed` |
+| Customer ledger | `python scripts/test_customer_ledger.py` | `100/100 checks passed` |
 | Customer ledger grouping | `python scripts/test_customer_ledger_groups.py` | `47/47 checks passed` |
 | Client Ledger report | `python scripts/test_client_ledger_report.py` | `97/97 checks passed` |
-| Accounting reports | `python scripts/test_accounting_reports.py` | `315/315 checks passed` |
+| Accounting reports | `python scripts/test_accounting_reports.py` | `310/310 checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |

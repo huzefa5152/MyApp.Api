@@ -26,7 +26,6 @@ import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
 import { DOC_COPY_TYPES } from "../api/documentCopyApi";
 import { useDocumentCopy } from "../hooks/useDocumentCopy";
-import StatusBadge from "../Components/StatusBadge";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import Pagination from "../Components/Pagination";
@@ -44,13 +43,9 @@ const colors = {
 };
 
 // Payment-status pill (mirrors PurchaseBillTable's) for the card view.
-function paymentStatusBadge(b) {
-  const s = b.paymentStatus;
-  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
-  if (s === "Overdue") return <StatusBadge tone="danger" title={b.daysOverdue ? `${b.daysOverdue} day(s) overdue` : undefined}>Overdue{b.daysOverdue ? ` ${b.daysOverdue}d` : ""}</StatusBadge>;
-  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
-  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
-}
+// No per-document payment status (2026-09-03) — payments here are recorded
+// against the supplier, not allocated per bill, so the pill described the
+// allocation rather than the supplier. The payments drill-down stays.
 
 export default function PurchaseBillsPage() {
   const confirm = useConfirm();
@@ -509,7 +504,7 @@ export default function PurchaseBillsPage() {
                           title={canViewPayments ? "View payments & balance" : undefined}
                           style={{ all: "unset", margin: "2px 0", display: "inline-flex", alignItems: "center", gap: 6, cursor: canViewPayments ? "pointer" : "default" }}
                         >
-                          {paymentStatusBadge(b)}
+                          <span style={{ fontSize: "0.74rem", color: colors.blue, fontWeight: 700 }}>Payments</span>
                           {b.balanceDue > 0 && (
                             <span style={{ fontSize: "0.74rem", color: colors.textSecondary, fontWeight: 600 }}>
                               Bal: Rs {b.balanceDue?.toLocaleString()}

@@ -127,14 +127,6 @@ namespace MyApp.Api.Services.Implementations
 
         /// <summary>Payment Status is the register asked a narrower question, so it
         /// is the same rows with the status breakdown promoted to the front.</summary>
-        public async Task<ReportResultDto> GetPaymentStatusAsync(int companyId,
-            ReportFilterDto filter, bool sales)
-        {
-            var report = await GetDocumentRegisterAsync(companyId, filter, sales);
-            report.Title = sales ? "Sales Payment Status" : "Purchase Payment Status";
-            return report;
-        }
-
         private sealed class RegisterRow
         {
             public int DocumentId { get; init; }

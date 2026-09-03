@@ -54,14 +54,9 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
   return <StatusBadge tone="ready">Ready</StatusBadge>;
 }
 
-// Renders the payment-status pill (balance due / paid / overdue).
-function paymentStatusBadge(inv) {
-  const s = inv.paymentStatus;
-  if (s === "Paid") return <StatusBadge tone="success">Paid</StatusBadge>;
-  if (s === "Overdue") return <StatusBadge tone="danger" title={inv.daysOverdue ? `${inv.daysOverdue} day(s) overdue` : undefined}>Overdue{inv.daysOverdue ? ` ${inv.daysOverdue}d` : ""}</StatusBadge>;
-  if (s === "PartiallyPaid") return <StatusBadge tone="info">Partial</StatusBadge>;
-  return <StatusBadge tone="neutral">Unpaid</StatusBadge>;
-}
+// No per-document payment status column (2026-09-03) — see the note in
+// InvoicePage.jsx. Receipts are taken on account, so the pill described the
+// allocation rather than the customer.
 
 export default function InvoiceTable({
   invoices,
@@ -228,16 +223,16 @@ export default function InvoiceTable({
       render: (i) => `Rs. ${(i.balanceDue ?? 0).toLocaleString()}`,
     },
     {
-      key: "paymentStatus",
-      header: "Payment",
-      width: 110,
-      accessor: (i) => i.paymentStatus || "",
+      key: "receipts",
+      header: "Receipts",
+      width: 100,
+      accessor: () => "",
       render: (i) => (perms.canViewReceipts && onShowPayments && !i.isCancelled) ? (
-        <button type="button" onClick={() => onShowPayments(i)} title="View receipts & balance"
-          style={{ all: "unset", cursor: "pointer" }}>
-          {paymentStatusBadge(i)}
+        <button type="button" onClick={() => onShowPayments(i)} title="What has been applied to this document"
+          style={{ all: "unset", cursor: "pointer", color: colors.blue, fontWeight: 700, fontSize: "0.78rem" }}>
+          View
         </button>
-      ) : paymentStatusBadge(i),
+      ) : "—",
     },
     {
       key: "dueDate",
@@ -449,9 +444,9 @@ export default function InvoiceTable({
             Eligible when FBR is on AND the bill is submitted, OR FBR is off AND
             the bill is fully paid. Hidden once a live supplement already exists
             (inv.hasSupplement) so no duplicate correction is created. */}
-        {perms.canReverse && !inv.isCancelled && !inv.hasSupplement &&
+        {perms.canReverse && !inv.isCancelled && !inv.hasSupplement && !inv.isMigrated &&
          inv.documentType !== 9 && inv.documentType !== 10 &&
-         (fbrEnabled ? isSubmitted : inv.paymentStatus === "Paid") && (
+         (fbrEnabled ? isSubmitted : true) && (
           <button
             style={btn.teal}
             onClick={() => onCorrect?.(inv)}

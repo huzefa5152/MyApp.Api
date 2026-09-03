@@ -193,11 +193,6 @@ namespace MyApp.Api.Services.Interfaces
         Task<ReportResultDto> GetDocumentRegisterAsync(int companyId, ReportFilterDto filter,
             bool sales);
 
-        /// <summary>The register asked a narrower question — same rows, titled and
-        /// framed around payment status.</summary>
-        Task<ReportResultDto> GetPaymentStatusAsync(int companyId, ReportFilterDto filter,
-            bool sales);
-
         /// <summary>
         /// The "Sales/Purchases by X" family: party | item | itemType | account |
         /// date | month | tax. Item groupings aggregate in SQL over the line tables;

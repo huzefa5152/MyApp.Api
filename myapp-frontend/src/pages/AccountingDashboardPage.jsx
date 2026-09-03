@@ -66,15 +66,6 @@ const currentMonthRange = () => {
   };
 };
 
-// Aging buckets in display order — green (safe) → red (overdue).
-const AGING_BUCKETS = [
-  { key: "current",   label: "Current", color: "#2e7d32" },
-  { key: "days1To30", label: "1–30",    color: "#7cb342" },
-  { key: "days31To60", label: "31–60",  color: "#f9a825" },
-  { key: "days61To90", label: "61–90",  color: "#ef6c00" },
-  { key: "over90",    label: "90+",     color: "#c62828" },
-];
-
 // Line-clamp for user-supplied names — NEVER nowrap+ellipsis (see CLAUDE.md).
 const clamp2 = {
   display: "-webkit-box",
@@ -514,10 +505,18 @@ function CashCard({ total, accounts, glEnabled, to, onOpen }) {
   );
 }
 
-/** Receivables / payables total + horizontal aging bucket bars. */
+/**
+ * Receivables / payables total.
+ *
+ * The age-bucket bars were removed (2026-09-03) with the rest of the payment
+ * status work: each bucket is measured against what had been ALLOCATED to a
+ * document, and receipts here are taken on account, so a settled customer's
+ * whole balance sat in the red "90+" bar. The total is a real balance and stays.
+ */
 function AgingCard({ title, icon: Icon, accent, data, emptyText, to, onOpen }) {
   const buckets = data || {};
   const total = Number(buckets.total || 0);
+  const openDocs = Number(buckets.openDocuments || 0);
   return (
     <Clickable to={to} onOpen={onOpen}>
       <div style={{ ...st.accentStrip, background: accent }} />
@@ -527,27 +526,11 @@ function AgingCard({ title, icon: Icon, accent, data, emptyText, to, onOpen }) {
           <span style={st.cardLabel}>{title}</span>
         </div>
         <div style={{ ...st.cardValue, color: colors.textPrimary }}>{fmtMoney(total)}</div>
-        {total <= 0 ? (
-          <div style={st.cardSub}>{emptyText}</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            {AGING_BUCKETS.map((b) => {
-              const amount = Number(buckets[b.key] || 0);
-              const pct = Math.max(0, Math.min(100, (amount / total) * 100));
-              return (
-                <div key={b.key}>
-                  <div style={st.bucketHead}>
-                    <span style={{ fontWeight: 600 }}>{b.label}</span>
-                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{fmtMoney(amount)}</span>
-                  </div>
-                  <div style={st.bucketTrack} role="img" aria-label={`${b.label}: ${fmtMoney(amount)}`}>
-                    <div style={{ ...st.bucketFill, width: `${pct}%`, background: b.color }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <div style={st.cardSub}>
+          {total <= 0 ? emptyText : openDocs > 0
+            ? `Across ${openDocs.toLocaleString()} open ${openDocs === 1 ? "document" : "documents"}`
+            : "Outstanding balance"}
+        </div>
       </div>
     </Clickable>
   );
@@ -803,9 +786,6 @@ const st = {
   },
   accountBal: { fontWeight: 700, color: colors.textPrimary, fontVariantNumeric: "tabular-nums", flexShrink: 0 },
 
-  bucketHead: { display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.74rem", color: colors.textSecondary, marginBottom: 2 },
-  bucketTrack: { height: 8, borderRadius: 999, background: colors.inputBg, overflow: "hidden" },
-  bucketFill: { height: "100%", borderRadius: 999, transition: "width 0.3s ease" },
 
   dueSoonChip: {
     display: "inline-flex", alignItems: "center", gap: 5, marginTop: 8,
