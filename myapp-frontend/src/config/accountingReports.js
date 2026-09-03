@@ -515,6 +515,19 @@ export const REPORT_CATEGORIES = [
         drill: { filter: "clientId", to: "customer-ledger" },
       },
       {
+        // One row per invoice LINE, matching the operator's own "Sales Detail"
+        // workbook column for column so the two can be diffed. The register
+        // above is per DOCUMENT; this is the line detail behind it.
+        id: "sales-detail",
+        path: "sales-detail",
+        title: "Sales Detail",
+        blurb: "Every invoice line with its challan, HS code, quantity, rate and each tax — sales tax, 236-G and further tax.",
+        filters: [FILTERS.period, FILTERS.division, FILTERS.client, FILTERS.search],
+        featured: true,
+        exportId: "sales-detail",
+        drill: { filter: "clientId", to: "customer-ledger" },
+      },
+      {
         id: "sales-by-customer",
         path: "customer-sales",
         title: "Sales by Customer",

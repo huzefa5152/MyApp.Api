@@ -954,7 +954,7 @@ namespace MyApp.Api.Services.Implementations
                 : effectiveItems.ToList();
 
             // Resolve UOM descriptions + compute FBR-compliant tax numbers per
-            // (grouped) item. ComputeFbrTaxes encodes the three rules that
+            // (grouped) item. Helpers/FbrLineTax encodes the three rules that
             // differ from plain "line × rate":
             //   1) 3rd Schedule Goods: tax is BACKED OUT of tax-inclusive MRP
             //      salesTax = retailPrice × rate / (1 + rate)
@@ -963,7 +963,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var item in fbrItems)
             {
                 var (salesTax, furtherTax, retailPrice) =
-                    ComputeFbrTaxes(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
+                    MyApp.Api.Helpers.FbrLineTax.Compute(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
                 // Normalise the sale-type string to the §9 canonical form.
                 // Older seed rows + manually-entered bills sometimes carry
@@ -1345,65 +1345,9 @@ namespace MyApp.Api.Services.Implementations
         //  FBR tax computation — the math FBR validates against
         // ═══════════════════════════════════════════════════════════
         //
-        // Encodes three rules that differ from the naïve "line × rate":
-        //
-        //  (1) 3rd Schedule Goods (SN008, SN027)
-        //      salesTax = retailPrice × rate / (1 + rate)
-        //      (FBR treats the MRP as tax-INCLUSIVE; tax is backed out.
-        //       Without this, FBR error 0102 "Calculated tax not matched in 3rd schedule".)
-        //
-        //  (2) Standard-rate + Unregistered buyer (SN002)
-        //      furtherTax = lineTotal × 4%
-        //      (Section 236G of Income Tax Ordinance. Skipping this triggers
-        //       FBR error 0102.)
-        //
-        //  (3) End-consumer retail (SN026, SN027, SN028)
-        //      furtherTax = 0 even though buyer is Unregistered
-        //      (FBR exempts end-consumer retail from further tax — that's the
-        //       whole point of the SN026/27/28 scenario family.)
-        //
-        // Returns (salesTax, furtherTax, fixedNotifiedValueOrRetailPrice) — every
-        // caller needs all three to fill the FBR payload.
-        private static (decimal salesTax, decimal furtherTax, decimal retailPrice)
-            ComputeFbrTaxes(InvoiceItem item, decimal gstRate, string buyerRegType, string? scenarioId)
-        {
-            var rate = gstRate / 100m;
-            var retail = item.FixedNotifiedValueOrRetailPrice ?? 0m;
-            decimal salesTax;
-            decimal furtherTax = 0m;
-
-            var isThirdSchedule = string.Equals(
-                item.SaleType, "3rd Schedule Goods", StringComparison.OrdinalIgnoreCase);
-            var isStandardRate = string.Equals(
-                item.SaleType, "Goods at Standard Rate (default)", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(
-                    item.SaleType, "Goods at standard rate (default)", StringComparison.OrdinalIgnoreCase);
-
-            // (1) 3rd Schedule: tax = MRP × rate (forward). PRAL's sandbox
-            // rejects the backed-out formula with error [0102] even though
-            // some earlier docs described it the other way — the forward
-            // calculation is what SN008 / SN027 actually pass with.
-            if (isThirdSchedule && retail > 0m)
-            {
-                salesTax = Math.Round(retail * rate, 2, MidpointRounding.AwayFromZero);
-            }
-            else
-            {
-                salesTax = Math.Round(item.LineTotal * rate, 2, MidpointRounding.AwayFromZero);
-            }
-
-            // (2) Unregistered + standard-rate ⇒ 4% further tax
-            // (3) …except SN026/027/028 end-consumer retail (exempt)
-            var isEndConsumerRetail =
-                scenarioId is "SN026" or "SN027" or "SN028";
-
-            if (buyerRegType == "Unregistered" && isStandardRate && !isEndConsumerRetail)
-            {
-                furtherTax = Math.Round(item.LineTotal * 0.04m, 2, MidpointRounding.AwayFromZero);
-            }
-
-            return (salesTax, furtherTax, retail);
-        }
+        // Per-line sales tax / further tax / retail price now live in
+        // Helpers/FbrLineTax so the Sales Detail report states the same figures
+        // this payload carries. Same code, moved verbatim.
 
         private async Task AuditFbr(string level, string action, int invoiceId,
             string url, string? requestBody, string? responseBody, int httpStatus, string message,

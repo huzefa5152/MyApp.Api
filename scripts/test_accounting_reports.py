@@ -1179,6 +1179,131 @@ def suite_statements_financial(base: str, token: str, cid: int):
 # ═══════════════════════════════════════════════════════════════════════════
 #  Suite 15 — Sales & purchase registers and summaries
 # ═══════════════════════════════════════════════════════════════════════════
+def suite_sales_detail(base: str, token: str, cid: int):
+    """Sales Detail — one row per invoice LINE, in the operator's own shape.
+
+    Built to be diffed against their "Sales Detail" workbook, so the column set
+    and its order ARE the requirement. The cross-checks that matter:
+
+      * the money identities hold on every row (Incl = Excl + S.Tax, and
+        Total = Incl + 236-G + Further)
+      * the footer adds up the WHOLE result set, not the page
+      * a document's own reference is split into prefix / number / combined,
+        the three columns a spreadsheet needs to rebuild the label
+      * an OPENING BALANCE never appears: it is a figure brought forward from
+        the old books, not something that was sold
+      * sales tax comes from Helpers/FbrLineTax, the same helper that fills the
+        FBR payload, so the register and the filing cannot disagree
+    """
+    S = "16. Sales Detail"
+    print(f"\n=== {S} ===")
+
+    rep = report(base, token, cid, "sales-detail", period="allPeriods", pageSize=200)
+
+    # The workbook's columns, in the workbook's order.
+    want = ["S. No", "Date", "Month", "DC", "DC No:-", "DC #", "R", "No", "Inv #",
+            "Party Name", "Address", "Ntn", "HS CODE", "Description", "U", "Qty",
+            "Rate", "Excl", "Tax Rate", "S.Tax", "Incl", "236-G Tax",
+            "Further Tax", "Total Amt"]
+    got = [c["label"] for c in rep["columns"]]
+    check(S, "the columns match the operator's sheet, in order", got == want,
+          f"got {got}")
+    check(S, "it is titled Sales Detail", rep["title"] == "Sales Detail",
+          f"got {rep['title']}")
+
+    if not check(S, "the report returns lines", rep["totalCount"] > 0,
+                 f"got {rep['totalCount']}"):
+        return
+
+    rows = rep["rows"]
+
+    # Per-row money identities. These are what make the sheet add up.
+    bad_incl = [r["invRef"] for r in rows
+                if not eq(float(r["excl"]) + float(r["salesTax"]), r["incl"])]
+    check(S, "Incl == Excl + S.Tax on every row", not bad_incl,
+          f"wrong on {bad_incl[:4]}")
+
+    bad_total = [r["invRef"] for r in rows
+                 if not eq(float(r["incl"]) + float(r["advanceTax"]) + float(r["furtherTax"]),
+                           r["totalAmt"])]
+    check(S, "Total Amt == Incl + 236-G + Further on every row", not bad_total,
+          f"wrong on {bad_total[:4]}")
+
+    # The three reference columns must rebuild the label, which is the whole
+    # reason the sheet carries all three.
+    bad_ref = [r["invRef"] for r in rows
+               if r["invRef"] and f"{r['invPrefix']}{r['invNo'] if r['invNo'] is not None else ''}" != r["invRef"]]
+    check(S, "prefix + number rebuilds the invoice reference", not bad_ref,
+          f"wrong on {bad_ref[:4]}")
+
+    bad_dc = [r["dcRef"] for r in rows
+              if r["dcRef"] and f"{r['dcPrefix']}{r['dcNo'] if r['dcNo'] is not None else ''}" != r["dcRef"]]
+    check(S, "prefix + number rebuilds the challan reference", not bad_dc,
+          f"wrong on {bad_dc[:4]}")
+
+    # Month is the date's own month, spelled as the sheet spells it.
+    bad_month = [r["invRef"] for r in rows[:50]
+                 if r["date"] and r["month"] != _month_label(r["date"])]
+    check(S, "Month is the row's own month", not bad_month,
+          f"wrong on {bad_month[:4]}")
+
+    # S. No is a running number across the whole set, not per page.
+    check(S, "S. No starts at 1 on page 1",
+          rows and rows[0]["sNo"] == 1, f"got {rows[0]['sNo'] if rows else None}")
+    p2 = report(base, token, cid, "sales-detail", period="allPeriods", pageSize=2, page=2)
+    if p2["rows"]:
+        check(S, "S. No continues onto page 2 (3 with a page size of 2)",
+              p2["rows"][0]["sNo"] == 3, f"got {p2['rows'][0]['sNo']}")
+
+    # The footer sums the WHOLE set. With every row on one page the two agree,
+    # which is what makes this a usable check.
+    if rep["totalCount"] <= 200:
+        check(S, "the Excl total is the sum of every row",
+              eq(sum(float(r["excl"]) for r in rows), rep["totals"].get("excl")),
+              f"rows {sum(float(r['excl']) for r in rows)} vs total {rep['totals'].get('excl')}")
+        check(S, "the S.Tax total is the sum of every row",
+              eq(sum(float(r["salesTax"]) for r in rows), rep["totals"].get("salesTax")),
+              f"rows {sum(float(r['salesTax']) for r in rows)} vs total {rep['totals'].get('salesTax')}")
+        check(S, "the footer's Incl == Excl + S.Tax",
+              eq(float(rep["totals"].get("excl") or 0) + float(rep["totals"].get("salesTax") or 0),
+                 rep["totals"].get("incl")),
+              f"{rep['totals'].get('excl')} + {rep['totals'].get('salesTax')} vs {rep['totals'].get('incl')}")
+
+    # An opening balance is not a sale. The ledger import marks one with an
+    # ExternalRef of "ledger-open:…"; those rows must not be in a sales report.
+    # Their references are numeric row indexes, so a sales register showing one
+    # is easy to spot: it has no alphabetic prefix AND no line detail.
+    reg = report(base, token, cid, "sales-register", period="allPeriods", pageSize=200)
+    # The register is per DOCUMENT and states subtotal; Sales Detail is per LINE
+    # and its Excl sums to the same money, EXCEPT that the register includes
+    # opening balances (it reports every document) while Sales Detail does not.
+    check(S, "Sales Detail never totals MORE than the document register",
+          float(rep["totals"].get("excl") or 0) <= float(reg["totals"].get("subtotal") or 0) + 0.01,
+          f"detail {rep['totals'].get('excl')} vs register {reg['totals'].get('subtotal')}")
+
+    # A custom date window must narrow the register, and its footer must
+    # re-total for that window rather than reporting the whole file.
+    first = min(r["date"] for r in rows)[:10]
+    windowed = report(base, token, cid, "sales-detail", period="custom",
+                      **{"from": first, "to": first}, pageSize=200)
+    check(S, "a custom date range narrows the register",
+          windowed["totalCount"] <= rep["totalCount"],
+          f"{windowed['totalCount']} rows for one day vs {rep['totalCount']} for all time")
+    check(S, "and its footer re-totals for that window",
+          float(windowed["totals"].get("excl") or 0) <= float(rep["totals"].get("excl") or 0) + 0.01,
+          f"windowed {windowed['totals'].get('excl')} > all-time {rep['totals'].get('excl')}")
+    check(S, "every row in the window is on that date",
+          all(r["date"][:10] == first for r in windowed["rows"]),
+          f"dates {[r['date'][:10] for r in windowed['rows'][:4]]} vs {first}")
+
+
+def _month_label(iso: str) -> str:
+    """"2025-07-01T00:00:00" -> "Jul 2025" — the sheet's own spelling."""
+    from datetime import datetime
+    d = datetime.fromisoformat(iso.replace("Z", ""))
+    return f"{d.strftime('%b')} {d.year}"
+
+
 def suite_documents(base: str, token: str, cid: int):
     S = "15. Sales & purchases"
     print(f"\n=== {S} ===")
@@ -1790,6 +1915,7 @@ def main() -> int:
         suite_aging_outstanding(args.base, token, cid, client_id)
         suite_statements_financial(args.base, token, cid)
         suite_documents(args.base, token, cid)
+        suite_sales_detail(args.base, token, cid)
         suite_tax_control(args.base, token, cid)
         other_id = suite_isolation(args.base, token, cid, ctx)
     except Fatal as e:

@@ -304,6 +304,13 @@ Publish output optimized from 79 MB to 37 MB via:
   would not fit above the footer, instead of printing under it. A long bill
   fits about fourteen lines on the first page.
 
+### 2026-09-03 — Sales Detail report
+
+- **A new Sales Detail report** under Reports → Sales, laid out like the sales-detail workbook operators keep by hand: serial number, date, month, delivery challan and invoice references, party name, address and NTN, HS code, description, unit, quantity, rate, amount excluding tax, tax rate, sales tax, amount including tax, 236-G advance tax, further tax and the total. One row per invoice line, with the company selector and the same period filter (including a custom date range) the other reports use, and Excel / Print / PDF.
+- Sales tax and further tax are the same figures the FBR submission carries — both now come from one shared calculation, so a report and a filing cannot disagree.
+- **Opening balances are not counted as sales.** A customer's brought-forward balance from the ledger import is a starting position, not something that was sold; including it overstated this company's sales by 78.4 million.
+- Documents brought in by the ledger import show the amount, party, date and reference they carry. That import records a total per document, not the items behind it, so the item columns are empty for imported history and complete for anything raised in the system.
+
 ### 2026-09-03 — The amount you type on a bill line is the amount you get
 
 - **Enter a line amount and the quantity is rounded to a whole number, with the rate carrying the remainder** — so the line comes to exactly the figure you entered. Type 100 against stock costing 40 and you get 3 units at 33.333333333333, not 2.5 units; 500 against 119.05 gives 4 at 125; 1,000 against 270 gives 4 at 250.

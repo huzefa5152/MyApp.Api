@@ -194,6 +194,15 @@ namespace MyApp.Api.Services.Interfaces
             bool sales);
 
         /// <summary>
+        /// Sales Detail — one row per invoice LINE, reproducing the operator's own
+        /// workbook column for column: challan and invoice references split into
+        /// prefix / number / combined, the buyer's address and NTN, HS code, and
+        /// every tax the line carries. Sales and further tax come from
+        /// <c>Helpers/FbrLineTax</c>, the same helper the FBR payload uses.
+        /// </summary>
+        Task<ReportResultDto> GetSalesDetailAsync(int companyId, ReportFilterDto filter);
+
+        /// <summary>
         /// The "Sales/Purchases by X" family: party | item | itemType | account |
         /// date | month | tax. Item groupings aggregate in SQL over the line tables;
         /// account grouping reads the LEDGER, so it agrees with the P&amp;L rather than

@@ -420,6 +420,21 @@ namespace MyApp.Api.Controllers
         // the customer. The customer's real position is the Customer Ledger and
         // the Client Ledger report.
 
+        /// <summary>
+        /// Sales Detail — one row per invoice LINE, reproducing the operator's own
+        /// workbook: challan / invoice references, buyer address + NTN, HS code,
+        /// quantity, rate, and every tax the line carries.
+        /// </summary>
+        [HttpGet("company/{companyId}/sales-detail")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<ReportResultDto>> SalesDetail(
+            int companyId, [FromQuery] ReportFilterDto filter)
+        {
+            if (await PrepareAsync(companyId, filter) is { } bad) return bad;
+            return Ok(await _reports.GetSalesDetailAsync(companyId, filter));
+        }
+
         /// <summary>Sales by customer | item | itemType | account | date | month | tax.</summary>
         [HttpGet("company/{companyId}/sales-summary")]
         [HasPermission("accounting.reports.view")]
@@ -649,6 +664,8 @@ namespace MyApp.Api.Controllers
                 case "trial-balance":
                 case "trial-balance-report":
                     report = await _reports.GetTrialBalanceReportAsync(companyId, filter); break;
+                case "sales-detail":
+                    report = await _reports.GetSalesDetailAsync(companyId, filter); break;
                 case "sales-register":
                     report = await _reports.GetDocumentRegisterAsync(companyId, filter, true); break;
                 case "purchase-register":
