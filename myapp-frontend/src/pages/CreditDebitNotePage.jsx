@@ -65,12 +65,14 @@ export default function CreditDebitNotePage() {
   const [search, setSearch] = useState("");
   // Division + payment filters for the invoice picker. A note inherits its
   // original invoice's division (and numbers from that division's own note
-  // sequence), so the operator narrows the picker to one division's
-  // submitted invoices. Payment filter defaults to PAID — returns are
-  // normally raised against settled invoices; switch to All to widen.
+  // sequence), so the operator narrows the picker to one division's invoices.
+  // The payment filter is a VIEW preference now, not an eligibility rule, and
+  // it defaults to All: payment status is not meaningful per invoice when
+  // receipts are taken on account.
   const [divisions, setDivisions] = useState([]);
   const [divisionFilter, setDivisionFilter] = useState("all"); // all | company | <divisionId>
-  const [paymentFilter, setPaymentFilter] = useState("Paid");  // Paid | All | Unpaid | PartiallyPaid | Overdue
+  // Payment status is not shown anywhere in the system now, so there is nothing
+  // to filter the picker by either.
   const [selected, setSelected] = useState(null);   // the chosen original invoice
   const [lines, setLines] = useState([]);           // [{ id, include, noteQty, noteRate, ... }]
   const [reason, setReason] = useState(isCredit ? "Return of goods" : "");
@@ -103,15 +105,21 @@ export default function CreditDebitNotePage() {
         .then(r => setDivisions(r.data || []))
         .catch(() => setDivisions([]));
       const { data } = await getInvoicesByCompany(selectedCompany.id);
-      // Eligible = sale invoices (not notes, not cancelled) that don't already
-      // carry a live note of THIS type (FBR 0064 — one per type per invoice),
-      // AND that are billable for a note: FBR-submitted when FBR is on, fully
-      // PAID when FBR is off.
+      // Eligible = sale invoices (not notes, not cancelled, not imported) that
+      // don't already carry a live note of THIS type (FBR 0064 — one per type
+      // per invoice). With FBR ON the original must be filed to FBR, which is
+      // FBR's own rule. With FBR OFF every valid document of the company
+      // qualifies, PAID OR NOT: receipts here arrive on account rather than
+      // against an invoice, so an invoice's own paymentStatus is usually
+      // "Unpaid" and requiring "Paid" made a note impossible to raise.
+      // An imported document carries a total and no line items, so there is
+      // nothing for a note to reverse.
       const eligible = (data || []).filter((i) => {
         if (i.documentType === 9 || i.documentType === 10 || i.isCancelled) return false;
+        if (i.isMigrated) return false;
         const notAlreadyNoted = isCredit ? !i.reversedByCreditNoteNumber : !i.adjustedByDebitNoteNumber;
         if (!notAlreadyNoted) return false;
-        return fbrOn ? i.fbrStatus === "Submitted" : i.paymentStatus === "Paid";
+        return fbrOn ? i.fbrStatus === "Submitted" : true;
       });
       setInvoices(eligible);
       if (preselectId) {
@@ -119,7 +127,7 @@ export default function CreditDebitNotePage() {
         if (pre) pickInvoice(pre);
         else notify(fbrOn
           ? "That invoice is not eligible (not submitted, or it already has a note of this type)."
-          : "That invoice is not eligible (not fully paid, or it already has a note of this type).", "error");
+          : "That invoice is not eligible (cancelled, imported, or it already has a note of this type).", "error");
       }
     } catch {
       notify("Failed to load invoices.", "error");
@@ -140,7 +148,6 @@ export default function CreditDebitNotePage() {
     let list = invoices;
     if (divisionFilter === "company") list = list.filter((i) => !i.divisionId);
     else if (divisionFilter !== "all") list = list.filter((i) => String(i.divisionId) === String(divisionFilter));
-    if (paymentFilter !== "All") list = list.filter((i) => (i.paymentStatus || "Unpaid") === paymentFilter);
     if (q) {
       list = list.filter((i) =>
         String(i.invoiceNumber).includes(q) ||
@@ -148,7 +155,7 @@ export default function CreditDebitNotePage() {
         (i.fbrIRN || "").toLowerCase().includes(q));
     }
     return list.slice(0, 50);
-  }, [invoices, search, divisionFilter, paymentFilter]);
+  }, [invoices, search, divisionFilter]);
 
   const clearSelection = () => { setSelected(null); setLines([]); setRemarks(""); };
 
@@ -219,8 +226,8 @@ export default function CreditDebitNotePage() {
       </h2>
       <p style={{ color: colors.textSecondary, marginTop: 0 }}>
         {isCredit
-          ? `Reverse ${fbrOn ? "an FBR-submitted" : "a paid"} invoice — fully or partially. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back.`
-          : `Record an upward adjustment against ${fbrOn ? "an FBR-submitted" : "a paid"} invoice (undercharge, rate change, extra goods). A Debit Note increases the sale and normally leaves stock untouched.`}
+          ? `Reverse ${fbrOn ? "an FBR-submitted" : "any"} invoice — fully or partially, paid or not. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back.`
+          : `Record an upward adjustment against ${fbrOn ? "an FBR-submitted" : "any"} invoice (undercharge, rate change, extra goods), paid or not. A Debit Note increases the sale and normally leaves stock untouched.`}
         {fbrOn && " The note is created unsubmitted — validate and submit it to FBR from its tab."}
       </p>
 
@@ -239,34 +246,20 @@ export default function CreditDebitNotePage() {
                 {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </label>
-            <label style={{ fontSize: "0.82rem", color: colors.textSecondary }}>
-              Payment status
-              <select
-                value={paymentFilter}
-                onChange={(e) => setPaymentFilter(e.target.value)}
-                style={{ width: "100%", padding: 8, borderRadius: 8, border: `1px solid ${colors.border}`, marginTop: 4, background: "#fff" }}
-              >
-                <option value="Paid">Paid only</option>
-                <option value="All">All statuses</option>
-                <option value="PartiallyPaid">Partially paid</option>
-                <option value="Unpaid">Unpaid</option>
-                <option value="Overdue">Overdue</option>
-              </select>
-            </label>
           </div>
           <div style={{ position: "relative", margin: "12px 0" }}>
             <MdSearch style={{ position: "absolute", left: 10, top: 12, color: colors.textSecondary }} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={fbrOn ? "Search submitted invoices by #, client, or IRN…" : "Search paid invoices by #, client, or PO…"}
+              placeholder={fbrOn ? "Search submitted invoices by #, client, or IRN…" : "Search invoices by #, client, or PO…"}
               style={{ width: "100%", padding: "10px 10px 10px 34px", borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.inputBg, boxSizing: "border-box" }}
             />
           </div>
           {loading ? (
             <p style={{ color: colors.textSecondary }}>Loading…</p>
           ) : filtered.length === 0 ? (
-            <p style={{ color: colors.textSecondary }}>No eligible {fbrOn ? "FBR-submitted" : "paid"} invoices{paymentFilter !== "All" ? ` with status "${paymentFilter}"` : ""}{divisionFilter !== "all" ? " in the selected division" : ""}. Adjust the filters above to widen the list.</p>
+            <p style={{ color: colors.textSecondary }}>No eligible {fbrOn ? "FBR-submitted " : ""}invoices{divisionFilter !== "all" ? " in the selected division" : ""}. A cancelled bill, an imported document, or one that already carries a note of this type is not eligible.</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 10 }}>
               {filtered.map((inv) => (
@@ -282,13 +275,6 @@ export default function CreditDebitNotePage() {
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                     <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: "#e3f2fd", color: "#0d47a1" }}>
                       {inv.divisionName || "Company level"}
-                    </span>
-                    <span style={{
-                      fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: 10,
-                      background: inv.paymentStatus === "Paid" ? "#e8f5e9" : inv.paymentStatus === "PartiallyPaid" ? "#fff8e1" : "#ffebee",
-                      color:      inv.paymentStatus === "Paid" ? "#1b5e20" : inv.paymentStatus === "PartiallyPaid" ? "#b26a00" : "#b71c1c",
-                    }}>
-                      {inv.paymentStatus === "PartiallyPaid" ? "Partially paid" : (inv.paymentStatus || "Unpaid")}
                     </span>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>

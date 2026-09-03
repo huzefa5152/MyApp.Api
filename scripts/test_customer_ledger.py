@@ -297,7 +297,9 @@ def suite_3_notes(base, token, cid, client_id, item_type_id):
         return
     st, r = make_receipt(base, token, cid, client_id, 200000,
                          allocations=[{"invoiceId": inv["id"], "amount": 200000}])
-    if not check(suite, "invoice fully paid (note eligibility, FBR off)",
+    # Paying it in full is about the STATEMENT arithmetic below, not about note
+    # eligibility -- a note no longer requires a settled invoice.
+    if not check(suite, "invoice fully paid (statement arithmetic)",
                  st in (200, 201), f"got {st} {err_of(r)}"):
         return
 
@@ -343,6 +345,48 @@ def suite_3_notes(base, token, cid, client_id, item_type_id):
         check(suite, "debit note sits in the CREDIT column — it increases what is owed",
               eq(dn_rows[0].get("credit"), dn_total) and eq(dn_rows[0].get("debit"), 0),
               f"credit={dn_rows[0].get('credit')} debit={dn_rows[0].get('debit')} total={dn_total}")
+
+    # ── Eligibility is a COMPANY-level matter, not a per-invoice one ────────
+    #
+    # A note used to require the original to be fully PAID when FBR is off.
+    # Receipts in these books arrive ON ACCOUNT, so an invoice's own AmountPaid
+    # is usually zero and its status never reaches "Paid" -- which made a return
+    # or an undercharge impossible to record against a real document.
+    unpaid = make_invoice(base, token, cid, client_id, item_type_id, 75000)
+    if check(suite, "a second invoice is created and left UNPAID", unpaid is not None):
+        _, fetched = http("GET", f"/api/invoices/{unpaid['id']}", base, token=token)
+        check(suite, "it really is unpaid",
+              (fetched or {}).get("paymentStatus") != "Paid",
+              f"status={(fetched or {}).get('paymentStatus')}")
+
+        st, ucn = http("POST", "/api/invoices/notes", base, token=token, body={
+            "originalInvoiceId": unpaid["id"], "documentType": 10,
+            "reason": "Return of goods on an unpaid invoice", "affectsStock": False})
+        check(suite, "a credit note can be raised against an UNPAID invoice",
+              st in (200, 201), f"got {st} {err_of(ucn)}")
+
+        st, udn = http("POST", "/api/invoices/notes", base, token=token, body={
+            "originalInvoiceId": unpaid["id"], "documentType": 9,
+            "reason": "Undercharge on an unpaid invoice", "affectsStock": False})
+        check(suite, "and so can a debit note", st in (200, 201), f"got {st} {err_of(udn)}")
+
+        # One live note of each type per original still holds (FBR 0064).
+        st, dup = http("POST", "/api/invoices/notes", base, token=token, body={
+            "originalInvoiceId": unpaid["id"], "documentType": 10,
+            "reason": "Second credit note", "affectsStock": False})
+        check(suite, "a second credit note on the same invoice is still refused",
+              st == 400, f"got {st} {err_of(dup)}")
+
+        # A note cannot reference a note.
+        if st != 400 or True:
+            note_id = (ucn or {}).get("id")
+            if note_id:
+                st, onnote = http("POST", "/api/invoices/notes", base, token=token, body={
+                    "originalInvoiceId": note_id, "documentType": 10,
+                    "reason": "Note on a note", "affectsStock": False})
+                check(suite, "a note cannot be raised against another note",
+                      st == 400, f"got {st} {err_of(onnote)}")
+
         check(suite, "debit note reference is DN-prefixed",
               str(dn_rows[0].get("reference", "")).startswith("DN-"),
               f"reference={dn_rows[0].get('reference')}")

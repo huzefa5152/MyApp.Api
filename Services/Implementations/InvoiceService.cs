@@ -2466,25 +2466,38 @@ namespace MyApp.Api.Services.Implementations
             if (original.IsDemo)
                 throw new InvalidOperationException("Sandbox (demo) bills cannot be reversed — they exist only for FBR scenario testing.");
 
-            // Eligibility depends on whether the company runs FBR (2026-07-14):
+            // Eligibility is decided at COMPANY level (2026-09-03):
             //   • FBR-ON  — the invoice must be filed to FBR; a note is the
             //     formal IRIS adjustment (Credit/Debit Note against the IRN).
-            //   • FBR-OFF — no FBR document exists, so a note may be raised
-            //     against a fully PAID sale invoice instead. The note carries a
-            //     null OriginalInvoiceRefIRN and is never sent to FBR.
+            //     That is FBR's rule, not ours, so it stands.
+            //   • FBR-OFF — no FBR document exists, so ANY valid sale document
+            //     of the company qualifies. Valid means what the guards above
+            //     already say (a real sale bill, not a note, not cancelled, not
+            //     a sandbox row) plus the migrated check below, and one live
+            //     note of each type per original.
+            //
+            // It used to require the original to be fully PAID. That assumed a
+            // receipt is always allocated to an invoice, which is not how these
+            // books work: receipts arrive ON ACCOUNT, so AmountPaid on an
+            // individual invoice is usually zero and the status is never "Paid".
+            // A return or an undercharge on an unpaid invoice is an ordinary
+            // event, and the rule made it impossible to record one at all —
+            // there was nothing the operator could do but void a real document.
             var companyFbrEnabled = await _context.Companies.AsNoTracking()
                 .Where(c => c.Id == original.CompanyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
-            if (companyFbrEnabled)
-            {
-                if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
-                    throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
-            }
-            else
-            {
-                var status = PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount), original.AmountPaid, original.DueDate).ToString();
-                if (status != "Paid")
-                    throw new InvalidOperationException("Only a fully paid invoice can have a Credit/Debit Note issued against it (FBR is off for this company). Record the payment first, or void the bill instead.");
-            }
+            if (companyFbrEnabled
+                && (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN)))
+                throw new InvalidOperationException("Only an invoice that has been submitted to FBR can have a note issued against it. A non-submitted bill should be voided instead.");
+
+            // An imported document records a total from the old books and carries
+            // no line items, so there is nothing for a note to reverse. Without
+            // this the note is built with zero lines and fails further down as
+            // "At least one item is required", which tells the operator nothing.
+            if (original.IsMigrated)
+                throw new InvalidOperationException(
+                    "This invoice was brought in by an import. It records a total from the imported books "
+                  + "and carries no line items, so a Credit/Debit Note cannot be raised against it. "
+                  + "Record the adjustment as a receipt or a journal entry instead.");
 
             // 10 = CREDIT NOTE (return / reversal / reduction — the default);
             // 9 = DEBIT NOTE (upward adjustment: undercharge, rate change,
@@ -2802,22 +2815,25 @@ namespace MyApp.Api.Services.Implementations
             var companyInfo = await _context.Companies.AsNoTracking().FirstOrDefaultAsync(c => c.Id == original.CompanyId)
                 ?? throw new InvalidOperationException("Company not found for the original invoice.");
 
-            // Correction eligibility depends on the company's FBR setting:
+            // Correction eligibility is decided at COMPANY level (2026-09-03):
             //   • FBR ON  → the original must be FBR-submitted (an unsubmitted bill is
             //     just edited directly — nothing is locked yet).
-            //   • FBR OFF → there is no FBR filing to lock the bill, so "fully paid" is
-            //     the point at which it is treated as final and correctable.
-            if (companyInfo.FbrEnabled)
-            {
-                if (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN))
-                    throw new InvalidOperationException("Only an FBR-submitted invoice can be corrected. A bill that has not been submitted should be edited directly.");
-            }
-            else
-            {
-                if (MyApp.Api.Helpers.PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount), original.AmountPaid, original.DueDate)
-                    != MyApp.Api.Helpers.PaymentStatus.Paid)
-                    throw new InvalidOperationException("FBR integration is off for this company, so a bill can only be corrected once it is fully paid. Edit the bill directly, or record the remaining payment first.");
-            }
+            //   • FBR OFF → any valid sale bill of the company can be corrected.
+            //
+            // "Fully paid" used to stand in for "final" here, exactly as it did for
+            // Credit/Debit Notes, and it fails for the same reason: receipts arrive ON
+            // ACCOUNT, so an individual bill's AmountPaid is usually zero and its status
+            // never reaches Paid. The action was therefore unreachable — the operator
+            // could not record an under-reported quantity at all.
+            if (companyInfo.FbrEnabled
+                && (original.FbrStatus != "Submitted" || string.IsNullOrWhiteSpace(original.FbrIRN)))
+                throw new InvalidOperationException("Only an FBR-submitted invoice can be corrected. A bill that has not been submitted should be edited directly.");
+
+            // An imported document has no line items, so there is no quantity to correct.
+            if (original.IsMigrated)
+                throw new InvalidOperationException(
+                    "This invoice was brought in by an import. It records a total from the imported books "
+                  + "and carries no line items, so there is nothing to correct.");
 
             // No duplicate correction: block a second LIVE delta bill against the same original.
             if (await _context.Invoices.AnyAsync(i => i.SupplementsInvoiceId == original.Id && !i.IsCancelled))
