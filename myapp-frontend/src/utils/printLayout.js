@@ -95,6 +95,11 @@ const ANCHORS = [
 // strapline. Keeps `.types-footer` / `.bot-line` with the signature they were
 // drawn under.
 const CLIMBABLE = [
+  // The documented name for the whole block (PRINT_TEMPLATE_GUIDE.md §11).
+  // Without it, a template that put e.g. the address letterhead under the
+  // signature inside `.print-signature` had only its inner `.sig-row` pinned
+  // and the letterhead stayed in flow above it (Alpha Traders bill, 2026-09-02).
+  ".print-signature",
   ".footer-section", ".footer-sect", ".doc-footer", ".page-footer",
   ".footer-band", ".footer-lh", ".footer", ".foot",
   ".sigs", ".sig-row", ".signatures", ".sig-table",

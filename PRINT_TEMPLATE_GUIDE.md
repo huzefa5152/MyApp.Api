@@ -321,6 +321,24 @@ Name the signature block `class="print-signature"` in new templates. The legacy
 conventions (`.sig-row`, `.sigs`, `.sig-block`, `.sign`, `.footer-sect`, …) are
 still detected, but the explicit class removes the guesswork.
 
+`.print-signature` is pinned as a WHOLE (since 2026-09-02): put everything that
+belongs at the page foot inside it — signature line, caption, a letterhead
+strip under it — and nothing that must print once. Before that date only the
+innermost match (`.sig-row`) was pinned, so a letterhead placed after the
+signature inside the block stayed in flow above it (Alpha Traders bill). A
+template that must also work on a renderer older than that adds a climbable
+class alongside: `class="print-signature footer"`.
+
+**Content after the item table is not protected by the reservation.** The
+hidden clone lives in the table's `<tfoot>`, so it keeps LINE ITEMS off the
+footer band; totals, an undertaking or terms that follow the table can still
+flow under a tall pinned footer on a full last page. Where that content is
+more than a line or two, wrap it with an in-flow reserve of the footer's
+height in a `break-inside: avoid` container (see the Alpha Traders Bill /
+TaxInvoice templates: `.tail` + `.tail-reserve`, a hidden structural copy of
+the pinned block so it grows with a stamp). The tail then moves to the next
+page as one piece instead of printing under the signature.
+
 ### Verifying
 
 ```bash
