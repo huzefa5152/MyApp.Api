@@ -226,7 +226,7 @@ const s = {
   error: { padding: "1rem", color: "#c62828", background: "#ffebee", borderRadius: 8, fontSize: "0.88rem" },
   stmtHead: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.75rem", background: "#f8f9fb", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.9rem", marginBottom: "0.8rem" },
   stmtLbl: { fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, fontWeight: 700 },
-  stmtVal: { fontSize: "1.25rem", fontWeight: 800, fontVariantNumeric: "tabular-nums" },
+  stmtVal: { fontSize: "1.25rem", fontWeight: 800, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" },
   section: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, marginBottom: "0.6rem", overflow: "hidden" },
   secHeader: { width: "100%", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.6rem 0.75rem", background: "#fff", border: "none", cursor: "pointer", textAlign: "left" },
   secLabel: { flex: 1, fontWeight: 700, fontSize: "0.9rem", color: colors.textPrimary },

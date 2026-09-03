@@ -332,7 +332,7 @@ const styles = {
   tally: {
     border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.55rem 0.7rem",
   },
-  tallyValue: { fontSize: "1.15rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
+  tallyValue: { fontSize: "1.15rem", fontWeight: 700, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" },
   tallyLabel: { fontSize: "0.75rem", color: colors.textSecondary, marginTop: "0.1rem" },
   reviewNote: { margin: 0, fontSize: "0.83rem", color: colors.textPrimary, lineHeight: 1.5 },
   tableWrap: {

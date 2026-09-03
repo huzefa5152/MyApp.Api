@@ -140,7 +140,7 @@ const st = {
     background: colors.inputBg, border: `1px solid ${colors.inputBorder}`, borderRadius: 8,
   },
   summaryLabel: { color: colors.textSecondary, fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" },
-  summaryValue: { fontSize: "1.1rem", fontWeight: 800, color: colors.blue, fontVariantNumeric: "tabular-nums" },
+  summaryValue: { fontSize: "1.1rem", fontWeight: 800, color: colors.blue, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" },
 
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.83rem", minWidth: 560 },
   th: { padding: "0.45rem 0.55rem", borderBottom: `2px solid ${colors.inputBorder}`, color: colors.textSecondary, fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "left", whiteSpace: "nowrap" },

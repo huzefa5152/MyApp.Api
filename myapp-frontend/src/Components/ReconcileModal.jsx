@@ -255,7 +255,9 @@ const st = {
   summaryStrip: { display: "flex", flexWrap: "wrap", gap: "0.75rem", padding: "0.85rem 1rem", background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, marginBottom: "1rem" },
   summaryCell: { display: "flex", flexDirection: "column", gap: 3, flex: "1 1 140px", minWidth: 0 },
   summaryLabel: { fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary },
-  summaryValue: { fontSize: "1.05rem", fontWeight: 800, color: colors.textPrimary, whiteSpace: "nowrap" },
+  // The cell is flex-basis 140px, so nowrap on an unbounded balance pushed
+  // the figure past the strip. Let it wrap instead.
+  summaryValue: { fontSize: "1.05rem", fontWeight: 800, color: colors.textPrimary, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, minWidth: 0 },
 
   tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 12 },
   table: { width: "100%", borderCollapse: "collapse", minWidth: 520 },

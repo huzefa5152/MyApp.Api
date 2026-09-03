@@ -232,7 +232,7 @@ export default function BankCashAccountsPage() {
                 </div>
                 <div style={st.acctBalBox}>
                   <span style={st.acctBalLabel}>Actual balance</span>
-                  <span style={{ fontWeight: 800, fontSize: "1rem", color: bal < 0 ? "#b71c1c" : colors.textPrimary, whiteSpace: "nowrap" }}>{money(a.balance)}</span>
+                  <span style={{ fontWeight: 800, fontSize: "1rem", color: bal < 0 ? "#b71c1c" : colors.textPrimary, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, minWidth: 0 }}>{money(a.balance)}</span>
                 </div>
                 {canReconcile && (
                   <div style={st.acctMetaGrid}>
@@ -287,7 +287,7 @@ export default function BankCashAccountsPage() {
           <div style={st.acctTotalsCard}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
               <span style={st.acctMetaLabel}>{filtered.length} account{filtered.length === 1 ? "" : "s"}</span>
-              <span style={{ fontWeight: 800, color: total < 0 ? "#b71c1c" : colors.textPrimary, whiteSpace: "nowrap" }}>{money(total)}</span>
+              <span style={{ fontWeight: 800, color: total < 0 ? "#b71c1c" : colors.textPrimary, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, minWidth: 0 }}>{money(total)}</span>
             </div>
             {canReconcile && (
               <div style={st.acctMetaGrid}>

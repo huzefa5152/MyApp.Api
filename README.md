@@ -304,6 +304,11 @@ Publish output optimized from 79 MB to 37 MB via:
   would not fit above the footer, instead of printing under it. A long bill
   fits about fourteen lines on the first page.
 
+### 2026-09-03 — Big figures stay inside their boxes
+
+- **A nine-figure total no longer spills out of its tile.** On the receivables report a negative balance like `(226,670,962.34)` ran straight through the edge of its box. Money has no upper bound but a tile has a fixed width, so a figure now sets its own type size from its length and wraps rather than overflowing. Applied to every screen with the same shape: the report headline tiles, aging and card amounts, the reconcile summary, bank and cash balances, the receipt and payment dialogs, client statements and the client import tally.
+- Checked by measuring every rendered figure against its own box — nothing overflows at desktop or phone width, and the items table no longer forces a sideways scrollbar for 32 unused pixels.
+
 ### 2026-09-03 — Bills you can actually edit, and lists that show your own work first
 
 - **Your newest bill is the first row again.** The bill and invoice lists (cards and table) now order by when a document was created, not by its number. Imported history is numbered from a reserved high band, so a single ledger import used to push the bill you raised minutes ago onto the last page.

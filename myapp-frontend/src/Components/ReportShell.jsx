@@ -4,6 +4,7 @@ import {
   MdPictureAsPdf, MdPrint, MdTableChart, MdWarning,
 } from "react-icons/md";
 import { colors } from "../theme";
+import { fitFigure } from "../utils/figureFit";
 import useIsNarrow from "../hooks/useIsNarrow";
 import Pagination from "./Pagination";
 // Static, not dynamic: both already sit in the main bundle (every document page
@@ -170,14 +171,23 @@ export default function ReportShell({
       {/* ── 2. The answer ─────────────────────────────────────────────────── */}
       {report && Object.keys(totals).length > 0 && (
         <div style={st.totalsStrip}>
-          {Object.entries(totals).map(([key, value]) => (
-            <div key={key} style={st.totalTile}>
-              <span style={st.totalLabel}>{totalLabels[key] || humanise(key)}</span>
-              <span style={{ ...st.totalValue, ...(isCount(key) ? st.totalValueCount : {}) }}>
-                {isCount(key) ? fmtInt(value) : fmtMoney(value)}
-              </span>
-            </div>
-          ))}
+          {Object.entries(totals).map(([key, value]) => {
+            // The figure decides its own type size: an aged receivable can be
+            // "(226,670,962.34)" and used to spill straight out of the tile.
+            const shown = isCount(key) ? fmtInt(value) : fmtMoney(value);
+            return (
+              <div key={key} style={st.totalTile}>
+                <span style={st.totalLabel}>{totalLabels[key] || humanise(key)}</span>
+                <span style={{
+                  ...st.totalValue,
+                  ...(isCount(key) ? st.totalValueCount : {}),
+                  ...fitFigure(shown, isCount(key) ? 1.2 : 1.35),
+                }}>
+                  {shown}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -948,11 +958,15 @@ const st = {
   // The answer first: a responsive strip of figures above the detail.
   totalsStrip: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",
+    // 190, not 170: six money tiles on one row left each too narrow for a
+    // nine-figure total, and a grid track does not shrink its content.
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(190px, 100%), 1fr))",
     gap: "0.75rem", marginBottom: "1rem",
   },
   totalTile: {
-    display: "flex", flexDirection: "column", gap: 3,
+    // minWidth: 0 lets the tile shrink to its track; without it a long figure
+    // sets a min-content floor and pushes past the tile's own border.
+    display: "flex", flexDirection: "column", gap: 3, minWidth: 0,
     padding: "0.8rem 0.95rem", borderRadius: 12,
     background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
     border: `1px solid ${colors.cardBorder}`,
@@ -1027,7 +1041,7 @@ const st = {
     gap: "0.9rem", padding: "0.9rem 1rem",
   },
   agingCell: { display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
-  agingAmount: { fontSize: "1.02rem", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
+  agingAmount: { fontSize: "1.02rem", fontWeight: 700, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" },
 
   bookStrip: {
     display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",
@@ -1114,7 +1128,7 @@ const st = {
     padding: "0.5rem 0.7rem", borderRadius: 10, marginBottom: "0.6rem",
     background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
   },
-  cardAmount: { fontSize: "1.15rem", fontWeight: 800, color: colors.blue, fontVariantNumeric: "tabular-nums" },
+  cardAmount: { fontSize: "1.15rem", fontWeight: 800, color: colors.blue, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" },
   cardMetaGrid: {
     display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(130px, 100%), 1fr))",
     gap: "0.5rem 0.9rem",

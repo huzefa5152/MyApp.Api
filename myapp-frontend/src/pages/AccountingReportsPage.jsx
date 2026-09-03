@@ -8,6 +8,7 @@ import {
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { colors, dropdownStyles } from "../theme";
+import { fitFigure } from "../utils/figureFit";
 import useIsNarrow from "../hooks/useIsNarrow";
 import usePageSize from "../hooks/usePageSize";
 import ReportFilterBar from "../Components/ReportFilterBar";
@@ -625,14 +626,17 @@ function AgingReport({ companyId, kind }) {
 }
 
 function Tile({ label, value, strong, danger }) {
+  // The figure sets its own type size. A nine-figure total at a fixed 1.2rem
+  // (1.45 when strong) ran past the tile's border instead of shrinking.
+  const shown = money(value);
   return (
     <div style={st.totalTile}>
       <span style={st.fieldLabel}>{label}</span>
       <span style={{
         ...st.totalValue,
-        ...(strong ? { fontSize: "1.45rem" } : {}),
+        ...fitFigure(shown, strong ? 1.45 : 1.2),
         ...(danger && Number(value) > 0 ? { color: colors.danger } : {}),
-      }}>{money(value)}</span>
+      }}>{shown}</span>
     </div>
   );
 }
@@ -806,11 +810,11 @@ const st = {
   },
 
   totalsStrip: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(185px, 100%), 1fr))",
     gap: "0.7rem", marginBottom: "0.9rem",
   },
   totalTile: {
-    display: "flex", flexDirection: "column", gap: 3,
+    display: "flex", flexDirection: "column", gap: 3, minWidth: 0,
     padding: "0.75rem 0.9rem", borderRadius: 12,
     background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
     border: `1px solid ${colors.cardBorder}`,
@@ -851,7 +855,9 @@ const st = {
     fontSize: "0.92rem", fontWeight: 700, color: colors.textPrimary, lineHeight: 1.3,
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
   },
-  miniAmount: { fontSize: "1.05rem", fontWeight: 800, color: colors.blue, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  // No whiteSpace: nowrap -- that guaranteed an overflow on a long figure
+  // rather than letting it wrap onto a second line.
+  miniAmount: { fontSize: "1.05rem", fontWeight: 800, color: colors.blue, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.15, fontVariantNumeric: "tabular-nums" },
   miniMeta: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(110px, 100%), 1fr))", gap: "0.45rem 0.85rem" },
   metaLabel: {
     display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",

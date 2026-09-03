@@ -551,7 +551,8 @@ const vd = {
   ref: { fontWeight: 800, fontSize: "1rem" },
   close: { background: "transparent", border: "none", cursor: "pointer", color: colors.textSecondary, display: "grid", placeItems: "center" },
   body: { padding: "1rem 1.1rem", overflowY: "auto" },
-  amount: { fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.75rem" },
+  // Wraps rather than spills: a payment can be a nine-figure sum in a 460px modal.
+  amount: { fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.75rem", lineHeight: 1.15, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 },
   row: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.3rem 0", borderBottom: `1px solid ${colors.inputBg}`, fontSize: "0.86rem" },
   k: { color: colors.textSecondary, fontWeight: 600 },
   v: { color: colors.textPrimary, fontWeight: 600, textAlign: "right" },
