@@ -731,6 +731,18 @@ namespace MyApp.Api.DTOs
         /// total amount the buyer was actually billed.
         /// </summary>
         public decimal? UnitPrice { get; set; }
+        /// <summary>
+        /// Optional unit-of-measure update. Honoured ONLY on the .qty path.
+        ///
+        /// The UOM normally arrives with the item type and is not editable
+        /// inline, which is right for a catalogued item. It is editable on the
+        /// Invoices tab because that is where a line gets classified, and a
+        /// line can need a different unit from the one its catalog row carries
+        /// (the same goods billed by weight on one document and by piece on
+        /// another). Applied AFTER the item type has set its default, so an
+        /// explicit unit wins; blank or absent leaves the catalog unit alone.
+        /// </summary>
+        public string? Uom { get; set; }
     }
 
     /// <summary>

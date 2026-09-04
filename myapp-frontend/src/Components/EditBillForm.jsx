@@ -1014,7 +1014,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   //   • lockItemType — locks the Item Type picker (full read-only).
   const lockNonItemType = readOnly || itemTypeOnlyMode || itemTypeAndQtyMode;
   const lockQty         = readOnly || itemTypeOnlyMode;
-  const lockPrice       = readOnly || itemTypeOnlyMode;
+  // The Invoices tab classifies a bill; it does not re-price one. Item type,
+  // unit and quantity are open there and the money is not: the bill's own total
+  // is held to what it was (the server's total-preservation guard, within a
+  // rounding tolerance), so a line can be re-pointed, re-united or split and
+  // the buyer is still billed exactly what they were billed. Re-pricing belongs
+  // on the Bills tab, where the total is allowed to move.
+  const lockPrice       = readOnly || itemTypeOnlyMode || !billsMode;
+  // ...and the unit follows the opposite rule: it is editable exactly where the
+  // classification is, because a line can need a unit its catalog row does not
+  // carry (the same goods sold by weight on one document, by piece on another).
+  const lockUom         = readOnly || itemTypeOnlyMode || billsMode;
   const lockItemType    = readOnly;
 
   // ── Grouped-by-Item-Type view (invoice mode) ─────────────────────────
@@ -1089,6 +1099,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         const qty = parseFloat(next[i].quantity) || 0;
         next[i] = { ...next[i], unitPrice: price, lineTotal: Math.round(qty * price * 100) / 100 };
       });
+      return next;
+    });
+  };
+
+  // One unit for every line grouped under an item type. The group IS the item
+  // type, so the lines under it cannot honestly carry different units.
+  const setGroupUom = (group, newUom) => {
+    setItems((prev) => {
+      const next = [...prev];
+      group.lineIndices.forEach((i) => { next[i] = { ...next[i], uom: newUom }; });
       return next;
     });
   };
@@ -1358,6 +1378,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
             nonInventoryItemId: i.nonInventoryItemId || null,
             quantity: parseFloat(i.quantity) || 0,
             unitPrice: parseFloat(i.unitPrice) || 0,
+            // The unit the operator chose for this line. Sent even when it
+            // matches the catalog's: the server applies it after the item type
+            // has re-seeded UOM, so it is what keeps a deliberate unit from
+            // being reset by picking an item type.
+            uom: (i.uom || "").trim() || null,
           })),
           writeMode,
           divisionPayload,
@@ -1545,10 +1570,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                           {/* Set by the Invoices TAB, not by the role -- telling a
                               full administrator to go and ask an administrator for
                               a permission they already hold was nonsense. */}
-                          <b>Classification view</b> — item type, quantity, unit price and the
-                          line amount are editable here, and the bill's own total is held to
-                          what it was. Dates, GST rate, payment terms and the buyer belong to
-                          the bill: edit those on the <b>Bills</b> tab.
+                          <b>Classification view</b> — item type, unit and quantity are
+                          editable here, and the bill's own total is held to what it was, so a
+                          line can be re-pointed or split without changing what the buyer was
+                          billed. Prices and the line amount belong to the bill, along with
+                          dates, GST rate, payment terms and the buyer: edit those on the
+                          <b>Bills</b> tab.
                         </>
                       ) : (
                         <>
@@ -1987,8 +2014,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                 style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
                               />
                             </td>
-                            <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
-                              {group.uom || <span style={styles.muted}>—</span>}
+                            <td style={lockUom ? { ...styles.td, ...styles.readOnlyCell } : styles.td}
+                                title={lockUom ? "Comes from Item Type" : "Applies to every line grouped here"}>
+                              {lockUom ? (
+                                group.uom || <span style={styles.muted}>—</span>
+                              ) : (
+                                <LookupAutocomplete
+                                  label="Unit"
+                                  endpoint="/lookup/units"
+                                  value={group.uom || ""}
+                                  onChange={(v) => setGroupUom(group, v)}
+                                  inputClassName=""
+                                  inputStyle={styles.tableInput}
+                                />
+                              )}
                             </td>
                             <td style={styles.td}>
                               {/* Weighted-average unit price. Editing sets a
@@ -2074,8 +2113,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                 style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
                               />
                             </td>
-                            <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
-                              {item.uom || <span style={styles.muted}>—</span>}
+                            <td style={lockUom ? { ...styles.td, ...styles.readOnlyCell } : styles.td}
+                                title={lockUom ? "Comes from Item Type" : "Defaults from the Item Type; change it for this line only"}>
+                              {lockUom ? (
+                                item.uom || <span style={styles.muted}>—</span>
+                              ) : (
+                                <LookupAutocomplete
+                                  label="Unit"
+                                  endpoint="/lookup/units"
+                                  value={item.uom || ""}
+                                  onChange={(v) => updateItem(idx, "uom", v)}
+                                  inputClassName=""
+                                  inputStyle={styles.tableInput}
+                                />
+                              )}
                             </td>
                             <td style={styles.td}>
                               <input
@@ -2305,7 +2356,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     : itemTypeOnlyMode
                       ? "Save Item Types"
                       : itemTypeAndQtyMode
-                        ? "Save Item Types, Qty & Price"
+                        ? "Save Item Types, Unit & Qty"
                         : "Save Changes"}
                 </button>
               );

@@ -1601,17 +1601,22 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     "A Debit/Credit Note cannot be edited. Void it and create a new return from the Return Invoices screen.");
 
-            // Invoices-tab item-type/qty edit is an FBR-classification flow. When
-            // the company's FBR integration is OFF there's nothing to classify and
-            // qty edits here would move stock via the adjustment overlay — so this
-            // path stays blocked for FBR-off. The Invoices tab still lets FBR-off
-            // operators change the print GROUPING (Bill/Tax Invoice) via the
-            // dedicated print-grouping endpoint, which never touches items or stock.
+            // Whether this edit lands on the bill itself or on the FBR overlay.
+            //
+            // Until 2026-09-04 an FBR-off company was refused outright here, which
+            // matched a front end offering nothing but the print grouping on this
+            // tab. The form has since made the tab editable, so the refusal became
+            // a Save button that could only ever 400.
+            //
+            // It is allowed now, but NOT as an overlay: InvoiceItemAdjustment
+            // exists solely so the FBR claim can differ from the bill, so on a
+            // company that files nothing it would be a record no code ever reads.
+            // A physical write is the honest reading of the same gesture -- the
+            // line really is re-classified -- and the total-preservation guard
+            // below still holds the bill's own money exactly where it was, so a
+            // stock movement can be re-pointed but never invented.
             var fbrOn = await _context.Companies.AsNoTracking()
                 .Where(c => c.Id == invoice.CompanyId).Select(c => c.FbrEnabled).FirstOrDefaultAsync();
-            if (!fbrOn)
-                throw new InvalidOperationException(
-                    "This company's FBR integration is off — edit item type & quantity on the Bills tab. Only the print grouping can be changed on the Invoices tab.");
 
             if (dto.Items == null || dto.Items.Count == 0)
                 throw new InvalidOperationException("At least one item is required.");
@@ -1737,6 +1742,7 @@ namespace MyApp.Api.Services.Implementations
             // false — Item Type re-classification belongs on the bill
             // proper, not in a tax-filing overlay.
             var asAdjustment = allowQuantityEdit
+                && fbrOn
                 && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase);
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -1796,6 +1802,16 @@ namespace MyApp.Api.Services.Implementations
                             existing.FbrUOMId     = null;
                             existing.HSCode       = null;
                             existing.SaleType     = null;
+                        }
+
+                        // An explicit unit overrides the catalog's, exactly as on
+                        // the physical path. It belongs on InvoiceItem, not the
+                        // overlay: a unit describes WHAT was sold, and the
+                        // overlay carries only the qty/price decomposition.
+                        if (row.Uom != null)
+                        {
+                            var uomAdj = row.Uom.Trim();
+                            if (uomAdj.Length > 0) existing.UOM = uomAdj;
                         }
 
                         // Numerical decomposition → overlay.
@@ -1902,6 +1918,16 @@ namespace MyApp.Api.Services.Implementations
                         existing.FbrUOMId = null;
                         existing.HSCode = null;
                         existing.SaleType = null;
+                    }
+
+                    // An explicit unit overrides the one the item type brought.
+                    // Applied after the branches above precisely so it wins:
+                    // picking an item type re-seeds UOM from the catalog, and a
+                    // unit the operator chose for THIS line must survive that.
+                    if (allowQuantityEdit && row.Uom != null)
+                    {
+                        var uom = row.Uom.Trim();
+                        if (uom.Length > 0) existing.UOM = uom;
                     }
 
                     // Quantity / UnitPrice edits only on the .qty perm path.

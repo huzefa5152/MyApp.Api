@@ -312,6 +312,23 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-04 — The Invoices tab classifies a bill; it no longer re-prices one
+
+- **Fixed: saving on the Invoices tab failed outright when a company had FBR
+  turned off** — "This company's FBR integration is off". The tab had been made
+  editable without the server following, so the form offered fields and a Save
+  that could only ever fail. It saves now, and the edit lands on the bill
+  itself: the tax-claim overlay exists so an FBR claim can differ from the bill,
+  which means nothing on a company that files nothing.
+- **Item type, unit and quantity are what that tab edits.** Unit price and the
+  line amount are read-only there and belong to the Bills tab. The bill's own
+  total is held to what it was, within a rounding tolerance, so a line can be
+  re-pointed, re-united or split across item types without changing a rupee of
+  what the buyer was billed.
+- **The unit is editable per line**, defaulting from the item type as before.
+  The same goods are sometimes billed by weight and sometimes by piece, and the
+  catalog carries only one of those.
+
 ### 2026-09-04 — Report PDFs print on the right sheet, with a margin
 
 - **A report PDF now uses the page its own layout asks for.** Every report was
