@@ -289,6 +289,22 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-04 — A bill line says when it would take stock negative
+
+- **A bill line that asks for more than is on hand now says so, with both
+  figures.** Entering a line amount is where this bites: on a weighted-average
+  cost of 5.50, an amount of 1,162,456.17 quietly asks for 211,356 of an item
+  holding 2,100, and nothing said a word until the stock dashboard showed
+  −209,256. The line now reads "3,450.41 Kg on hand, this line needs 8,519 Kg
+  (5,068.59 short)" and gives the largest amount that fits.
+- Whether that **stops** the save follows the company's own stock policy, so the
+  form agrees with the server either way: with the hard block on it refuses and
+  names the item; with it off the bill still saves and the warning stands.
+- On an edit, the quantity the line has already taken is added back before the
+  comparison — otherwise a bill that had over-issued could never be corrected.
+- Shown on both the Bills and Invoices tabs, and when creating a bill without a
+  challan.
+
 ### 2026-09-04 — Editing a line amount rounds the quantity, on a decimal line too
 
 - **Fixed: typing a line amount on a bill or invoice that already carried a

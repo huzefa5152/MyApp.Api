@@ -49,7 +49,7 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: readOnlyProp = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: readOnlyProp = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true, stockHardBlock = false }) {
   // FBR-off Invoices tab (2026-08-11): print-grouping selection ONLY — item type,
   // quantity and every other field are read-only so no qty/overlay edit can move
   // stock. Implemented by shadowing readOnly (reuses the proven read-only render:
@@ -510,16 +510,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     setShowAddItemType(false);
   };
 
-  // Prices for the item types actually on this bill. Fetched in Bills mode
-  // only: on the Invoices tab the amount is redistributed across lines at a
-  // FIXED quantity, so no stock cost is involved.
+  // Prices for the item types actually on this bill.
+  //
+  // Fetched on BOTH tabs. Bills mode derives a quantity from the cost; the
+  // Invoices tab does not, but it still needs the on-hand figure so a line
+  // asking for more than exists can say so there as well.
   const pricedItemTypeIds = useMemo(
     () => [...new Set(items.map((i) => i.itemTypeId).filter(Boolean))].sort().join(","),
     [items]
   );
   useEffect(() => {
     const companyId = invoice?.companyId;
-    if (!companyId || !billsMode || !pricedItemTypeIds) return;
+    if (!companyId || !pricedItemTypeIds) return;
     let cancelled = false;
     getStockPricing(companyId, pricedItemTypeIds)
       .then(({ data }) => {
@@ -528,7 +530,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       })
       .catch(() => { /* pricing is a convenience; qty and rate stay typeable */ });
     return () => { cancelled = true; };
-  }, [invoice?.companyId, billsMode, pricedItemTypeIds]);
+  }, [invoice?.companyId, pricedItemTypeIds]);
 
   const updateItem = (index, field, value) => {
     setItems((prev) => {
@@ -1248,10 +1250,57 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     } catch { /* non-fatal — the print reflects whatever was last saved */ }
   };
 
+  // How much a line wants versus how much there is to give it.
+  //
+  // On an EDIT the bill has already taken its stock, so on-hand is net of what
+  // this very line booked. That quantity is therefore added back before the
+  // comparison -- without it an over-issued bill could never be corrected,
+  // because every quantity, including a smaller one, would look like a
+  // shortage. Matching is by item type: re-pointing a line at a different item
+  // frees the old one and draws on the new, and only the new one is in play.
+  const shortfallFor = (row, index) => {
+    const price = stockPricing[row.itemTypeId];
+    // canPrice is false when there is nothing on hand or the stock carries no
+    // value. Billing an item with no stock is a supported flow, so lines the
+    // system cannot price are left alone.
+    if (!price?.canPrice) return null;
+    const want = parseFloat(row.quantity);
+    if (!(want > 0)) return null;
+    const orig = originalItemsRef.current[index];
+    const alreadyTaken = orig && orig.itemTypeId === row.itemTypeId
+      ? (parseFloat(orig.quantity) || 0)
+      : 0;
+    const have = Number(price.availableQuantity) + alreadyTaken;
+    if (!(want > have)) return null;
+    return {
+      want, have,
+      short: want - have,
+      uom: price.uom || row.uom || "",
+      unitCost: Number(price.unitCost) || 0,
+      name: price.itemTypeName || row.itemTypeName || row.description || "this item",
+    };
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setError("");
     if (items.length === 0) return setError("No items to save.");
+
+    // Never let an edit issue more than is on hand -- when the company asks for
+    // that (Company.StockGuardHardBlock). With the policy off the row still
+    // carries the warning; the save is the operator's call, which is what the
+    // server does too, so the form and the server agree either way.
+    // Checked before the per-tab validation, because it applies to every path.
+    const over = items.map((it, i) => shortfallFor(it, i)).filter(Boolean);
+    if (stockHardBlock && over.length > 0) {
+      return setError(
+        "Not enough stock: " +
+        over.map((sf) =>
+          `${sf.name} — ${sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom} available to this bill, ` +
+          `this line needs ${sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom}`
+        ).join("; ") + ". Lower the amount or the quantity."
+      );
+    }
 
     setSaving(true);
     // Division re-home (2026-07-14) — sent on every save path so the bill can
@@ -2072,6 +2121,26 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                       {Number(price.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
                                     </div>
                                   )}
+                                  {(() => {
+                                    // The figures the operator needs to act: what is
+                                    // available to this line, what it is asking for, and
+                                    // the largest amount that fits.
+                                    const sf = shortfallFor(item, idx);
+                                    if (!sf) return null;
+                                    const fits = sf.unitCost > 0 ? Math.floor(sf.have) * sf.unitCost : null;
+                                    return (
+                                      <div style={stockHardBlock ? styles.stockOverWarn : styles.stockOverSoft}>
+                                        {stockHardBlock
+                                          ? <>Only {sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom} available — </>
+                                          : <>Stock will go negative: {sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom} available, </>}
+                                        needs {sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom}
+                                        {" "}({sf.short.toLocaleString(undefined, { maximumFractionDigits: 2 })} short).
+                                        {fits !== null && (
+                                          <> {stockHardBlock ? "Max amount" : "Worth"} {fits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.</>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
                               );
                             })()}
@@ -3660,6 +3729,14 @@ const styles = {
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
+  stockOverSoft: {
+    marginTop: 3, fontSize: "0.66rem", lineHeight: 1.35, color: "#8d6e00",
+    fontWeight: 700, fontVariantNumeric: "tabular-nums", textAlign: "left",
+  },
+  stockOverWarn: {
+    marginTop: 3, fontSize: "0.66rem", lineHeight: 1.35, color: "#b3261e",
+    fontWeight: 700, fontVariantNumeric: "tabular-nums", textAlign: "left",
+  },
   narrowPermissionBanner: {
     display: "flex", alignItems: "flex-start", gap: "0.5rem",
     padding: "0.65rem 0.85rem", backgroundColor: colors.warnBg,

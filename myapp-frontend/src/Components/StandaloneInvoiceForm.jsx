@@ -731,6 +731,44 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     return { qty, rate, exact: Math.round(total * 100) / 100 };
   };
 
+  // How much this line wants versus how much there is.
+  //
+  // Only meaningful when the item HAS priceable stock: `canPrice` is false both
+  // when nothing is on hand and when the stock carries no value, and billing an
+  // item with nothing on hand is a documented flow (the operator types the
+  // quantity and rate themselves). Blocking that would be a regression, so the
+  // test is limited to lines the system can actually price.
+  //
+  // Entering an AMOUNT is what makes this easy to get wrong: 1,162,456.17 at a
+  // weighted-average 5.50 asks for 211,356 KG of an item holding 2,100, and
+  // nothing on the way to saving said so (Alpha Traders bill 51, 2026-09-04 --
+  // on-hand went to -209,256).
+  //
+  // Whether a shortfall STOPS the save follows the company's own policy
+  // (Company.StockGuardHardBlock), so the form never refuses something the
+  // server would accept, nor waves through something it would reject with a
+  // 409. With the policy off the operator still gets told, in as many words,
+  // that the bill will drive on-hand negative -- silence is what let Alpha
+  // Traders reach -209,256.
+  const stockHardBlock = !!company?.stockGuardHardBlock;
+
+  const stockShortfall = (row, extraAvailable = 0) => {
+    const price = stockPricing[row.itemTypeId];
+    if (!price?.canPrice) return null;
+    const want = parseFloat(row.quantity);
+    if (!(want > 0)) return null;
+    const have = Number(price.availableQuantity) + Number(extraAvailable || 0);
+    if (!(want > have)) return null;
+    return {
+      want,
+      have,
+      short: want - have,
+      uom: price.uom || row.uom || "",
+      unitCost: Number(price.unitCost) || 0,
+      name: price.itemTypeName || row.itemTypeName || "this item",
+    };
+  };
+
   const applyLineTotal = (localId, raw) => {
     const row = rows.find((r) => r.localId === localId);
     if (!row?.itemTypeId) return;          // the field is disabled until one is picked
@@ -784,6 +822,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!(q > 0)) errs.push("qty>0");
     const p = parseFloat(r.unitPrice);
     if (!(p > 0)) errs.push("unitPrice>0");
+    // Never issue more than is on hand. The message next to the row carries the
+    // figures; this is what actually stops the save.
+    if (stockHardBlock && stockShortfall(r)) errs.push("qty exceeds stock on hand");
     if (chosenScenario?.meta.needsMRP) {
       const mrp = parseFloat(r.mrp);
       if (!(mrp > 0)) errs.push("MRP>0");
@@ -807,6 +848,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
     if (rows.some((r) => !r.itemTypeId && !r.nonInventoryItemId)) {
       return setError("Every line must have an Item Type or Non-Inventory item selected.");
+    }
+    // A line asking for more than is on hand is not a missing field, so it gets
+    // its own message with the figures rather than being listed as "missing".
+    const over = rows.map((r) => stockShortfall(r)).filter(Boolean);
+    if (stockHardBlock && over.length > 0) {
+      return setError(
+        "Not enough stock: " +
+        over.map((sf) =>
+          `${sf.name} — ${sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom} on hand, ` +
+          `this bill needs ${sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sf.uom}`
+        ).join("; ") + ". Lower the amount or the quantity."
+      );
     }
     if (!allRowsValid) {
       const missing = rows.flatMap(rowErrors);
@@ -1427,6 +1480,31 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         No stock — type the quantity and rate
                                       </div>
                                     )}
+                                    {(() => {
+                                      // States the two numbers the operator needs: what
+                                      // they hold, and what this line would take. Saying
+                                      // only "not enough stock" leaves them to work out
+                                      // the amount that does fit, which is the whole
+                                      // difficulty when the quantity came from an amount.
+                                      const sf = stockShortfall(r);
+                                      if (!sf) return null;
+                                      const fits = sf.unitCost > 0
+                                        ? Math.floor(sf.have) * sf.unitCost
+                                        : null;
+                                      return (
+                                        <div style={stockHardBlock ? styles.stockChipOver : styles.stockChipWarn}>
+                                          {stockHardBlock
+                                            ? <>Only {sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom} on hand — </>
+                                            : <>Stock will go negative: {sf.have.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom} on hand, </>}
+                                          this line needs {sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom}
+                                          {" "}({sf.short.toLocaleString(undefined, { maximumFractionDigits: 2 })} short).
+                                          {fits !== null && (
+                                            <> At {sf.unitCost.toLocaleString(undefined, { maximumFractionDigits: 4 })} each, {stockHardBlock ? "the most you can bill is" : "what you hold is worth"}{" "}
+                                              {fits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.</>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                   {/* Description: in Invoices mode it stays locked to the
                                       picked item type's name (text display). In Bills mode
@@ -1826,6 +1904,14 @@ const styles = {
   stockChipNone: {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#8d6e00",
     fontWeight: 600,
+  },
+  stockChipWarn: {
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: "#8d6e00",
+    fontWeight: 600, fontVariantNumeric: "tabular-nums",
+  },
+  stockChipOver: {
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: "#b3261e",
+    fontWeight: 600, fontVariantNumeric: "tabular-nums",
   },
 
   row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
