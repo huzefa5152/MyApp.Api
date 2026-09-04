@@ -80,7 +80,15 @@ export default function ReportShell({
   const doPdf = async () => {
     setBusy("pdf");
     try {
-      await exportToPdf(buildReportHtml(report), `${slug(report.title)}.pdf`);
+      // Match the page the report's own stylesheet asks for. A statement is a
+      // narrow hierarchy and prints portrait; every other report is a grid and
+      // prints landscape -- which the PDF path used to ignore, so Sales Detail
+      // and its two dozen columns were squeezed onto a portrait sheet with the
+      // table running into the paper's edge (2026-09-04).
+      await exportToPdf(buildReportHtml(report), `${slug(report.title)}.pdf`, {
+        orientation: report.statement ? "portrait" : "landscape",
+        sideMarginMm: report.statement ? 12 : 10,
+      });
     } finally { setBusy(null); }
   };
 

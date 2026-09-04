@@ -72,7 +72,23 @@ function detachPrintFooter(wrapper, content) {
 /**
  * Export rendered template HTML to PDF.
  */
-export async function exportToPdf(html, filename) {
+/**
+ * Render HTML to a PDF.
+ *
+ * `opts` defaults to what every caller got before it existed -- A4 portrait,
+ * drawn edge to edge -- because the ~113 document templates that declare a
+ * @page margin have always had it ignored here, and quietly honouring it would
+ * re-margin every bill and challan at once. Callers that want the page set up
+ * properly pass it:
+ *
+ *   orientation   "portrait" | "landscape"
+ *   sideMarginMm  white space down the left and right edges. A wide grid needs
+ *                 it: with none the table runs into the paper's edge and the
+ *                 outermost columns read as cut off (Sales Detail, 2026-09-04).
+ */
+export async function exportToPdf(html, filename, opts = {}) {
+  const orientation = opts.orientation === "landscape" ? "landscape" : "portrait";
+  const sideMarginMm = Number(opts.sideMarginMm) || 0;
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import("html2canvas"),
     import("jspdf"),
@@ -81,6 +97,16 @@ export async function exportToPdf(html, filename) {
   const { wrapper, content } = createStyledContainer(css, bodyHtml);
   const footerHolder = detachPrintFooter(wrapper, content);
 
+  // How wide the page is rendered before being scaled onto the paper. 796px is
+  // an A4 portrait's printable width; a landscape sheet is half as wide again,
+  // and a grid with two dozen columns needs every pixel of it -- laid out at
+  // portrait width the far columns simply fall off the canvas.
+  const renderWidth = orientation === "landscape" ? 1123 : 796;
+  if (orientation === "landscape") {
+    wrapper.style.width = renderWidth + "px";
+    content.style.width = renderWidth + "px";
+  }
+
   await new Promise((r) => setTimeout(r, 400));
 
   try {
@@ -88,29 +114,32 @@ export async function exportToPdf(html, filename) {
       scale: 2,
       useCORS: true,
       letterRendering: true,
-      windowWidth: 796,
+      windowWidth: renderWidth,
     });
     const footerCanvas = footerHolder
-      ? await html2canvas(footerHolder, { scale: 2, useCORS: true, letterRendering: true, windowWidth: 796 })
+      ? await html2canvas(footerHolder, { scale: 2, useCORS: true, letterRendering: true, windowWidth: renderWidth })
       : null;
     const imgData = canvas.toDataURL("image/jpeg", 0.98);
-    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    const pageW = 210;
-    const pageH = 297;
-    const imgH = (canvas.height * pageW) / canvas.width;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation });
+    const pageW = orientation === "landscape" ? 297 : 210;
+    const pageH = orientation === "landscape" ? 210 : 297;
     const marginMm = 8;
+    // Where the artwork sits once the side margins are taken off.
+    const drawX = sideMarginMm;
+    const drawW = pageW - sideMarginMm * 2;
+    const imgH = (canvas.height * drawW) / canvas.width;
 
     // Same signature on the bottom of every page as the print path produces.
     const footerData = footerCanvas && footerCanvas.height
       ? footerCanvas.toDataURL("image/png")
       : null;
-    const footerMmH = footerData ? (footerCanvas.height * pageW) / footerCanvas.width : 0;
+    const footerMmH = footerData ? (footerCanvas.height * drawW) / footerCanvas.width : 0;
     const stampFooter = () => {
-      if (footerData) pdf.addImage(footerData, "PNG", 0, pageH - marginMm - footerMmH, pageW, footerMmH);
+      if (footerData) pdf.addImage(footerData, "PNG", drawX, pageH - marginMm - footerMmH, drawW, footerMmH);
     };
 
     if (imgH <= pageH * 1.02) {
-      pdf.addImage(imgData, "JPEG", 0, 0, pageW, Math.min(imgH, pageH));
+      pdf.addImage(imgData, "JPEG", drawX, sideMarginMm ? marginMm : 0, drawW, Math.min(imgH, pageH));
       stampFooter();
     } else {
       // Multi-page: leave a top + bottom white margin on EVERY page so
@@ -120,7 +149,7 @@ export async function exportToPdf(html, filename) {
       // "combined" and rows were cut flush). Content is sliced into
       // (pageH − 2·margin) tall bands, each drawn `marginMm` down from the top.
       const contentMm = pageH - marginMm * 2;
-      const pageCanvasH = (canvas.width * contentMm) / pageW;   // slice height in canvas px
+      const pageCanvasH = (canvas.width * contentMm) / drawW;   // slice height in canvas px
       let y = 0;
       let pageNum = 0;
       while (y < canvas.height) {
@@ -131,8 +160,8 @@ export async function exportToPdf(html, filename) {
         page.height = sliceH;
         page.getContext("2d").drawImage(canvas, 0, -y);
         const sliceData = page.toDataURL("image/jpeg", 0.98);
-        const sliceMmH = (sliceH * pageW) / canvas.width;
-        pdf.addImage(sliceData, "JPEG", 0, marginMm, pageW, sliceMmH);
+        const sliceMmH = (sliceH * drawW) / canvas.width;
+        pdf.addImage(sliceData, "JPEG", drawX, marginMm, drawW, sliceMmH);
         stampFooter();
         y += pageCanvasH;
         pageNum++;

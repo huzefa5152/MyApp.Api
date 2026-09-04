@@ -289,6 +289,40 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-04 — The stock dashboard exports to Excel, drill-down included
+
+- **New "Export Excel" button on the Stock dashboard.** One row per item with
+  Opening, Total In, Total Out, On Hand, Unit Cost, Excluding, Tax Rate, Sales
+  Tax, Including and the last movement date, a totals row that ties to the rows
+  above it, and the headline figures on a banner at the top. It exports the
+  whole filtered list, not the page on screen, and the current search rides
+  along and is named on the sheet.
+- **Every item's movement history is nested underneath it and starts closed.**
+  Open one with the `+` in Excel's left margin: each movement shows its date,
+  document, direction, quantity in or out, the cost it was valued at, and the
+  quantity and value left afterwards — so a drill-down reads like a bank
+  statement. Movements on the same document fold into one line, as they do on
+  screen.
+- The figures come from the same weighted-average valuation the dashboard
+  shows, so the sheet cannot disagree with the screen. Nothing is clipped: the
+  columns are sized from what is actually in them, and long item names and notes
+  wrap.
+- Needs the new **Inventory ▸ Dashboard ▸ Export** permission; movement detail
+  additionally needs **Inventory ▸ Movements ▸ View**, and the workbook says so
+  when it is left out. Existing roles need the new permission granted (the
+  Inventory Manager starter role already includes it).
+
+### 2026-09-04 — Report PDFs print on the right sheet, with a margin
+
+- **A report PDF now uses the page its own layout asks for.** Every report was
+  exported as A4 portrait regardless, so the wide grids — Sales Detail with its
+  two dozen columns — were squeezed onto the narrow sheet and the far columns
+  fell off. Grid reports now export landscape; statements stay portrait.
+- **The table no longer runs into the edge of the paper.** The artwork was drawn
+  the full width of the sheet with nothing either side, which is what made the
+  outer columns look cut off. There is now a clear margin down both edges.
+- Document PDFs — bills, challans, receipts — are untouched.
+
 ### 2026-09-04 — A bill line says when it would take stock negative
 
 - **A bill line that asks for more than is on hand now says so, with both
