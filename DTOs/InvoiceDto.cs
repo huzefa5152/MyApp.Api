@@ -153,6 +153,19 @@ namespace MyApp.Api.DTOs
         public decimal ChallanRemainingQuantity { get; set; }
 
         /// <summary>
+        /// What this bill sold, gathered by HS code -- one entry per distinct
+        /// code with the quantity and the money against it.
+        ///
+        /// On the list, so a card can say which codes a document covers without
+        /// opening it. Filled by a single batched query for the whole page, not
+        /// per row. Empty for a migrated document, which has no line items, and
+        /// lines carrying no code are gathered under an empty one rather than
+        /// dropped -- an unclassified line is exactly what the operator needs
+        /// to see.
+        /// </summary>
+        public List<InvoiceHsSummaryDto> HsBreakdown { get; set; } = new();
+
+        /// <summary>
         /// The reference the document had in the books it came from ("AA-51").
         /// That, not our invoice number, is what the operator recognises: an
         /// imported document is numbered from a reserved band precisely so it
@@ -743,6 +756,18 @@ namespace MyApp.Api.DTOs
         /// explicit unit wins; blank or absent leaves the catalog unit alone.
         /// </summary>
         public string? Uom { get; set; }
+    }
+
+    /// <summary>One HS code's share of a bill: how much of it, and for how much.</summary>
+    public class InvoiceHsSummaryDto
+    {
+        /// <summary>Empty string when the line carries no code yet.</summary>
+        public string HsCode { get; set; } = "";
+        public decimal Quantity { get; set; }
+        /// <summary>Unit, when every line under this code shares one; else null.</summary>
+        public string? Uom { get; set; }
+        /// <summary>Sum of the lines' totals, excluding tax.</summary>
+        public decimal Amount { get; set; }
     }
 
     /// <summary>

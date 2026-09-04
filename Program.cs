@@ -754,6 +754,7 @@ using (var scope = app.Services.CreateScope())
     // Advance-income-tax fields for the Bill / Tax Invoice templates. Runtime
     // seeded for the same reason as the sales ones -- see the seeder's remarks.
     await MyApp.Api.Data.AdvanceTaxMergeFieldSeeder.SeedAsync(db);
+    await MyApp.Api.Data.RoundedTaxMergeFieldSeeder.SeedAsync(db);
 
     // Credit/Debit Note + Purchase Bill + Goods Receipt template merge
     // fields — same idempotent runtime-seed contract.

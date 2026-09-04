@@ -409,6 +409,7 @@ namespace MyApp.Api.Services.Implementations
                 d.IsLatest = d.InvoiceNumber == maxNumber;
             await AttachReversalInfoAsync(dtos);
             await AttachChallanRemainingAsync(dtos);
+            await AttachHsBreakdownAsync(dtos);
 
             return new PagedResult<InvoiceDto>
             {
@@ -3205,7 +3206,7 @@ namespace MyApp.Api.Services.Implementations
             var taxAllTyped = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName));
             var groupTax = inv.PrintGroupTaxInvoiceByItemType == true && taxAllTyped;
 
-            return new PrintTaxInvoiceDto
+            var dto = new PrintTaxInvoiceDto
             {
                 DivisionId = inv.DivisionId,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
@@ -3358,6 +3359,29 @@ namespace MyApp.Api.Services.Implementations
                             };
                         }).ToList()
             };
+
+            // Whole-rupee figures for a template that prints the tax invoice
+            // rounded (operator request 2026-09-04).
+            //
+            // The totals are the sum of the ROUNDED LINES, not the rounded
+            // total -- those are not the same number. Round each of n lines and
+            // the column can drift from a separately-rounded total by up to n/2
+            // rupees, and an invoice whose tax column visibly fails to add up is
+            // the one thing a buyer's accountant will call about. Summing the
+            // rounded lines makes the printed document self-consistent, at the
+            // cost of the printed total differing from the stored one by under
+            // a rupee per line -- which is what "rounded" means and why the
+            // exact fields stay available beside these.
+            dto.SubtotalRounded   = dto.Items.Sum(i => NumberToWordsConverter.RoundForDisplay(i.ValueExclTax));
+            dto.GSTAmountRounded  = dto.Items.Sum(i => NumberToWordsConverter.RoundForDisplay(i.GSTAmount));
+            dto.GrandTotalRounded = dto.SubtotalRounded + dto.GSTAmountRounded;
+            // The words have to say what the total row says. AmountInWords
+            // follows the EXACT grand total rounded once (69,242.72 -> 69,243);
+            // summing the rounded lines can land a rupee below that (69,242), so
+            // a rounded template using the exact words would contradict its own
+            // total. This is the words for the figure such a template prints.
+            dto.AmountInWordsRounded = NumberToWordsConverter.Convert(dto.GrandTotalRounded);
+            return dto;
         }
 
         /// <summary>
@@ -3861,6 +3885,51 @@ namespace MyApp.Api.Services.Implementations
         /// bill list renders it on every card and table row to decide whether
         /// the "Create Delivery Challan" action appears at all.
         /// </summary>
+        /// <summary>
+        /// Gathers each bill's lines by HS code so a list card can show which
+        /// codes a document covers and how much sits against each, without
+        /// opening it.
+        ///
+        /// One query for the whole page, like AttachChallanRemainingAsync
+        /// beside it -- a per-row lookup here would be a query per card.
+        /// Lines with no code are gathered under an empty one instead of being
+        /// dropped: an unclassified line is the one the operator most needs to
+        /// find. A unit is reported only when every line under the code agrees
+        /// on it, since summing Kg and Pcs into one figure would be a lie.
+        /// </summary>
+        private async Task AttachHsBreakdownAsync(List<InvoiceDto> dtos)
+        {
+            if (dtos.Count == 0) return;
+            var invoiceIds = dtos.Select(d => d.Id).ToList();
+
+            var rows = await _context.InvoiceItems
+                .Where(ii => invoiceIds.Contains(ii.InvoiceId))
+                .Select(ii => new { ii.InvoiceId, ii.HSCode, ii.UOM, ii.Quantity, ii.LineTotal })
+                .ToListAsync();
+            if (rows.Count == 0) return;
+
+            var byInvoice = rows
+                .GroupBy(r => r.InvoiceId)
+                .ToDictionary(g => g.Key, g => g
+                    .GroupBy(r => (r.HSCode ?? "").Trim())
+                    .Select(h => new InvoiceHsSummaryDto
+                    {
+                        HsCode   = h.Key,
+                        Quantity = h.Sum(x => x.Quantity),
+                        Amount   = h.Sum(x => x.LineTotal),
+                        Uom      = h.Select(x => (x.UOM ?? "").Trim())
+                                    .Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1
+                                   ? h.First().UOM
+                                   : null,
+                    })
+                    .OrderByDescending(x => x.Amount)
+                    .ToList());
+
+            foreach (var d in dtos)
+                if (byInvoice.TryGetValue(d.Id, out var list))
+                    d.HsBreakdown = list;
+        }
+
         private async Task AttachChallanRemainingAsync(List<InvoiceDto> dtos)
         {
             if (dtos.Count == 0) return;

@@ -312,6 +312,22 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-04 — HS codes on every view, and a tax invoice in whole rupees
+
+- **The HS code is shown on both the Bills and the Invoices tab**, and whether
+  or not the company files with FBR. It used to appear only on the Invoices tab
+  of an FBR-enabled company, so a tenant with FBR off could classify a line and
+  then never see the classification. An HS code describes the goods; FBR only
+  decides whether the invoice is submitted.
+- **A bill card now lists the HS codes it covers**, each with its quantity and
+  value, highest first — the question you ask of a list rather than of one
+  document at a time. A line with no code says so instead of being left out.
+- **The Sales Tax Invoice can print in whole rupees.** Value Excl. Tax, Sales
+  Tax and Value Incl. Tax are available as rounded fields, and the total row
+  adds up the rounded lines rather than rounding the total separately, so the
+  column on the page sums to the figure beneath it. The amount in words follows
+  the same figure. Templates that want the exact paisa are unchanged.
+
 ### 2026-09-04 — The Invoices tab classifies a bill; it no longer re-prices one
 
 - **Fixed: saving on the Invoices tab failed outright when a company had FBR

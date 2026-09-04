@@ -1087,6 +1087,28 @@ export default function InvoicePage({ mode = "invoices" }) {
                     <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
                       DC#{inv.challanNumbers?.join(", #")} | {inv.items?.length} items
                     </p>
+                    {/* Which HS codes this document covers and how much sits
+                        against each -- the question an operator reconciling
+                        against a tariff asks of the list, not of one bill at a
+                        time. Highest value first, so the chip that matters is
+                        the one that fits; an unclassified line says so rather
+                        than being left out. */}
+                    {inv.hsBreakdown?.length > 0 && (
+                      <div style={cardStyles.hsWrap}>
+                        {inv.hsBreakdown.map((h, i) => (
+                          <span key={h.hsCode || `none-${i}`}
+                                style={h.hsCode ? cardStyles.hsChip : cardStyles.hsChipNone}
+                                title={`${h.hsCode || "No HS code"} — ${Number(h.quantity).toLocaleString(undefined, { maximumFractionDigits: 4 })}${h.uom ? " " + h.uom : ""} for Rs ${Number(h.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}>
+                            <b>{h.hsCode || "No HS code"}</b>
+                            {" · "}
+                            {Number(h.quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            {h.uom ? ` ${h.uom}` : ""}
+                            {" · "}
+                            Rs {Number(h.amount).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
                         In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
                         identifier as a pill so the operator sees at a glance which rows are locked.

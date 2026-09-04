@@ -29,6 +29,22 @@ export const buttonHover = {
 };
 
 export const cardStyles = {
+  // HS-code chips on a document card. Wrapping rather than a single ellipsised
+  // line: a bill can carry several codes and the operator is scanning for one
+  // of them, so a code that got truncated away is a code they cannot find.
+  hsWrap: {
+    display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2, marginBottom: 4,
+  },
+  hsChip: {
+    fontSize: "0.68rem", lineHeight: 1.3, padding: "1px 6px", borderRadius: 999,
+    background: "#e8f0fe", color: "#0d47a1", fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+  },
+  hsChipNone: {
+    fontSize: "0.68rem", lineHeight: 1.3, padding: "1px 6px", borderRadius: 999,
+    background: "#fdecea", color: "#b3261e", fontWeight: 600,
+    fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+  },
   grid: {
     display: "grid",
     // Auto-fit collapses 3 columns → 2 → 1 as the viewport narrows.

@@ -151,6 +151,24 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
+
+        // Whole-rupee totals for a template that prints the tax invoice
+        // rounded. These are the SUM OF THE ROUNDED LINES, not the rounded
+        // totals -- rounding n lines can drift from a separately-rounded total
+        // by up to n/2 rupees, and a tax invoice whose column does not add up
+        // is what a buyer's accountant rings about. Set by the builder, which
+        // is the only place that can see the lines.
+        public decimal SubtotalRounded { get; set; }
+        public decimal GSTAmountRounded { get; set; }
+        public decimal GrandTotalRounded { get; set; }
+        /// <summary>
+        /// AmountInWords for <see cref="GrandTotalRounded"/>. A rounded template
+        /// must use this one: AmountInWords is the words for the exact total
+        /// rounded once, which can sit a rupee above the sum of the rounded
+        /// lines, and a document whose words contradict its own total row is
+        /// worse than one that shows paisa.
+        /// </summary>
+        public string AmountInWordsRounded { get; set; } = "";
         public string AmountInWords { get; set; } = "";
 
         // ── Advance income tax collected from the buyer (236G / 236H) ──
@@ -223,6 +241,15 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal TotalInclTax { get; set; }
+
+        // Whole-rupee versions of the three money columns, for a template that
+        // prints the tax invoice rounded. Derived, never stored, so they cannot
+        // drift from the exact figures beside them. The document's totals are
+        // the SUM of these (see PrintTaxInvoiceDto.SubtotalRounded), which is
+        // what keeps the printed column adding up.
+        public decimal ValueExclTaxRounded => Math.Round(ValueExclTax, 0, MidpointRounding.AwayFromZero);
+        public decimal GSTAmountRounded    => Math.Round(GSTAmount,    0, MidpointRounding.AwayFromZero);
+        public decimal TotalInclTaxRounded => ValueExclTaxRounded + GSTAmountRounded;
         /// <summary>
         /// HS Code copied from the InvoiceItem (which inherits it from
         /// the ItemType picked on the line). Null/empty when the row is

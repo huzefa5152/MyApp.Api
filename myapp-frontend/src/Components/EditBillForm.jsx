@@ -1961,9 +1961,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                         <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
                         {/* HS Code is FBR data — only relevant on the Invoices
                             tab. Bills mode is pre-FBR data entry, so hide it. */}
-                        {!billsMode && fbrEnabled && (
-                          <th style={{ ...styles.th, width: 90, minWidth: 90 }}>HS Code</th>
-                        )}
+                        {/* Shown on BOTH tabs and whether or not the company
+                            files with FBR. An HS code classifies the goods; it
+                            is what the item catalog is keyed on and what the
+                            operator reconciles against. FbrEnabled decides
+                            whether an invoice is SUBMITTED and nothing else
+                            (CLAUDE.md 5b-2), so hiding the code behind it left
+                            an FBR-off tenant unable to see the classification
+                            they had just made. */}
+                        <th style={{ ...styles.th, width: 90, minWidth: 90 }}>HS Code</th>
                         {fbrEnabled && (
                           <th style={{ ...styles.th, minWidth: 140 }}>Sale Type</th>
                         )}
@@ -2050,11 +2056,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                             <td style={{ ...styles.td, fontWeight: 600, color: colors.textPrimary, textAlign: "right" }}>
                               {(Math.round(group.totalValue * 100) / 100).toLocaleString()}
                             </td>
-                            {!billsMode && fbrEnabled && (
-                              <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
-                                {group.hsCode || <span style={styles.muted}>—</span>}
-                              </td>
-                            )}
+                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
+                              {group.hsCode || <span style={styles.muted}>—</span>}
+                            </td>
                             {fbrEnabled && (
                               <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
                                 {group.saleType || <span style={styles.muted}>—</span>}
@@ -2195,11 +2199,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                 </td>
                               );
                             })()}
-                            {!billsMode && fbrEnabled && (
-                              <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
-                                {item.hsCode || <span style={styles.muted}>—</span>}
-                              </td>
-                            )}
+                            <td style={{ ...styles.td, ...styles.readOnlyCell, fontFamily: "monospace" }} title="Comes from Item Type">
+                              {item.hsCode || <span style={styles.muted}>—</span>}
+                            </td>
                             {fbrEnabled && (
                               <td style={{ ...styles.td, ...styles.readOnlyCell, fontSize: "0.72rem" }} title="Comes from Item Type">
                                 {item.saleType || <span style={styles.muted}>—</span>}
