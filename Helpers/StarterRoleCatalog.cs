@@ -84,7 +84,7 @@ namespace MyApp.Api.Helpers
                     new[]
                     {
                         "dashboard.view", "dashboard.kpi.inventory.view",
-                        "stock.dashboard.view", "stock.movements.view", "stock.opening.manage", "stock.adjust.create",
+                        "stock.dashboard.view", "stock.dashboard.export", "stock.movements.view", "stock.opening.manage", "stock.adjust.create",
                         "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update", "goodsreceipts.print.view",
                         "purchasebills.list.view",
                         "itemtypes.manage.view", "itemtypes.manage.create", "itemtypes.manage.update",

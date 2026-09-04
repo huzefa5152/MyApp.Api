@@ -16,6 +16,16 @@ export const setItemTypePolicy = (companyId, itemTypeId, mode, reorderLevel = nu
   http.post(`/stock/company/${companyId}/itemtype-policy`, { itemTypeId, mode, reorderLevel });
 export const getStockMovements = (companyId, params = {}) =>
   http.get(`/stock/company/${companyId}/movements`, { params });
+// The on-hand dashboard as a styled .xlsx, with each item's movement history
+// nested under it as a collapsed Excel group. `search` is the same item-or-HS
+// match the dashboard's search box makes, so the sheet mirrors the screen.
+// Gated server-side by stock.dashboard.export; movement detail additionally
+// needs stock.movements.view. Returns a blob — the caller triggers the save.
+export const exportStockOnHand = (companyId, search = "") =>
+  http.get(`/stock/company/${companyId}/onhand/excel`, {
+    params: search ? { search } : {},
+    responseType: "blob",
+  });
 export const getOpeningBalances = (companyId) =>
   http.get(`/stock/company/${companyId}/opening`);
 export const upsertOpeningBalance = (payload) =>

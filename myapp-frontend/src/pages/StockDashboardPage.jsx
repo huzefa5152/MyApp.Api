@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt } from "react-icons/md";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock } from "../api/stockApi";
+import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload } from "react-icons/md";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand } from "../api/stockApi";
+// Shared blob-save helper: it reads the filename off Content-Disposition and
+// revokes the object URL on the next tick. Generic, not accounting-specific —
+// a second copy here would only drift from it.
+import { saveBlob } from "../api/accountingReportApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getAllUnits } from "../api/unitsApi";
 import { dropdownStyles } from "../theme";
@@ -39,6 +43,7 @@ export default function StockDashboardPage() {
   const canAdjust = has("stock.adjust.create");
   const canViewMovements = has("stock.movements.view");
   const canManagePolicy = has("stock.policy.manage");
+  const canExport = has("stock.dashboard.export");
   const flowVersion = Number(selectedCompany?.inventoryFlowVersion) === 2 ? 2 : 1;
 
   const [onhandPage, setOnhandPage] = useState(1);
@@ -62,6 +67,7 @@ export default function StockDashboardPage() {
   const [units, setUnits] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // On-hand drill-down: which item-type row is expanded, plus a cache of
   // the full movement history per item type (so re-expanding is instant).
@@ -202,6 +208,37 @@ export default function StockDashboardPage() {
       notify(`Company switched to ${target === 2 ? "V2 (Standard Inventory)" : "V1 (Legacy)"}.`, "success");
     } catch (e) {
       notify(e?.response?.data?.error || "Could not switch inventory version.", "error");
+    }
+  };
+
+  // Download the on-hand grid as .xlsx. The SERVER builds the workbook, so it
+  // carries every item and every movement rather than the page on screen — the
+  // grid is client-paged, and an export of one page is not a stock sheet. The
+  // current search rides along, so an operator who narrowed the screen gets
+  // the sheet they can actually see.
+  const downloadExcel = async () => {
+    if (!selectedCompany || exporting) return;
+    setExporting(true);
+    try {
+      const response = await exportStockOnHand(selectedCompany.id, search.trim());
+      saveBlob(response, `stock-report-${todayYmd()}.xlsx`);
+    } catch (err) {
+      // With responseType "blob" an error body arrives as a Blob, not JSON, so
+      // the usual err.response.data.error read yields undefined and the
+      // operator would be told nothing at all. Read the blob first.
+      let message = "Could not build the Excel file.";
+      const data = err?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const parsed = JSON.parse(await data.text());
+          message = parsed?.message || parsed?.error || message;
+        } catch { /* not JSON — keep the generic message */ }
+      } else if (data?.message || data?.error) {
+        message = data.message || data.error;
+      }
+      notify(message, "error");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -440,6 +477,18 @@ export default function StockDashboardPage() {
               title={flowVersion === 2 ? "Switch back to legacy tracking" : "Switch to standard inventory (V2)"}
             >
               <MdSyncAlt size={16} /> {flowVersion === 2 ? "Switch to V1" : "Switch to V2"}
+            </button>
+          )}
+          {canExport && selectedCompany && (
+            <button
+              style={{ ...styles.altBtn, ...(exporting ? styles.altBtnBusy : null) }}
+              onClick={downloadExcel}
+              disabled={exporting || loading}
+              title={canViewMovements
+                ? "Download the stock dashboard as Excel — every item's movement history nested underneath, collapsed"
+                : "Download the stock dashboard as Excel (movement detail needs the Movements ▸ View permission)"}
+            >
+              <MdFileDownload size={16} /> {exporting ? "Preparing…" : "Export Excel"}
             </button>
           )}
           {canManageOpening && (
@@ -1401,6 +1450,7 @@ const styles = {
   title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   subtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   altBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#0d47a1", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
+  altBtnBusy: { opacity: 0.6, cursor: "progress" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },

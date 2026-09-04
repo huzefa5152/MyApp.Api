@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,11 +27,14 @@ namespace MyApp.Api.Controllers
         private readonly IAuditLogService _audit;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly IPermissionService _permissions;
+        private readonly ILogger<StockController> _logger;
         private readonly int _defaultPageSize;
 
         public StockController(AppDbContext context, IStockService stock, IInventoryReadService inventory,
             IAuditLogService audit, ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
+            IDivisionAccessGuard divisionAccess, IPermissionService permissions,
+            ILogger<StockController> logger, IConfiguration configuration)
         {
             _context = context;
             _stock = stock;
@@ -39,6 +42,8 @@ namespace MyApp.Api.Controllers
             _audit = audit;
             _access = access;
             _divisionAccess = divisionAccess;
+            _permissions = permissions;
+            _logger = logger;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -57,6 +62,25 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<StockOnHandRowDto>>> GetOnHand(int companyId)
         {
+            var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
+            return Ok(rows);
+        }
+
+        /// <summary>
+        /// The dashboard's on-hand grid, and optionally the movement history
+        /// behind every row.
+        ///
+        /// One method for both because the two answers come out of the SAME
+        /// walk: a movement's cost is the weighted average standing when it
+        /// happened, so the per-movement money only exists as a by-product of
+        /// computing the item's position. Working them out twice would be two
+        /// chances to disagree, and the export would then contradict the screen
+        /// it was taken from.
+        /// </summary>
+        private async Task<(List<StockOnHandRowDto> Rows,
+                            Dictionary<int, List<StockMovementRowDto>> Movements)>
+            BuildOnHandAsync(int companyId, bool withMovements)
+        {
             // Division RBAC: restricted users see company-level movements plus
             // their divisions' (policy D1); other divisions' traffic is
             // excluded from every aggregate below. Openings stay unfiltered —
@@ -67,6 +91,8 @@ namespace MyApp.Api.Controllers
                     ? _context.StockMovements.Where(m => m.CompanyId == companyId)
                     : _context.StockMovements.Where(m => m.CompanyId == companyId
                         && (m.DivisionId == null || divScope.Contains(m.DivisionId.Value)));
+
+            var empty = new Dictionary<int, List<StockMovementRowDto>>();
 
             // Items that have ever moved or have an opening balance.
             var movItemIds = await ScopedMovements()
@@ -79,7 +105,7 @@ namespace MyApp.Api.Controllers
                 .Distinct()
                 .ToListAsync();
             var ids = movItemIds.Union(openItemIds).Distinct().ToList();
-            if (ids.Count == 0) return Ok(new List<StockOnHandRowDto>());
+            if (ids.Count == 0) return (new List<StockOnHandRowDto>(), empty);
 
             // Exclude soft-deleted item types: a deleted catalog row keeps its
             // StockMovements (delete doesn't block on movements — see
@@ -120,6 +146,8 @@ namespace MyApp.Api.Controllers
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Last);
 
             var rows = new List<StockOnHandRowDto>();
+            var traced = withMovements ? new Dictionary<int, List<StockMovementRowDto>>() : empty;
+
             foreach (var id in ids)
             {
                 var it = itemTypes.GetValueOrDefault(id);
@@ -128,12 +156,20 @@ namespace MyApp.Api.Controllers
                 // promoted StockMovement / OpeningStockBalance columns.
                 var open = openings.GetValueOrDefault(id);
                 decimal opening = open?.Qty ?? 0m;
+                var itemMovements = movementsByItem.GetValueOrDefault(id) ?? new List<StockMovement>();
+
+                // The trace is only collected when someone is going to read it —
+                // the dashboard's own grid does not need per-movement money, and
+                // building a Step for every movement in the company would be
+                // pure waste on the hot path.
+                var trace = withMovements ? new List<StockValuation.Step>() : null;
 
                 var position = StockValuation.Compute(
                     opening,
                     open?.Value ?? 0m,
                     open?.Rate ?? 0m,
-                    movementsByItem.GetValueOrDefault(id) ?? new List<StockMovement>());
+                    itemMovements,
+                    trace);
 
                 rows.Add(new StockOnHandRowDto
                 {
@@ -154,10 +190,236 @@ namespace MyApp.Api.Controllers
                     ValueOut = position.ValueOut,
                     LastMovementAt = lastDates.TryGetValue(id, out var d) ? d : null,
                 });
+
+                if (!withMovements) continue;
+
+                var steps = trace!.ToDictionary(st => st.MovementId);
+                // Oldest first, in the SAME order the walk applied them, so the
+                // running figures on each line follow on from the one above.
+                traced[id] = itemMovements
+                    .OrderBy(m => m.MovementDate).ThenBy(m => m.Id)
+                    .Select(m => new StockMovementRowDto
+                    {
+                        Id = m.Id,
+                        ItemTypeId = m.ItemTypeId,
+                        ItemTypeName = it.Name,
+                        Direction = m.Direction.ToString(),
+                        Quantity = m.Quantity,
+                        SourceType = m.SourceType.ToString(),
+                        SourceId = m.SourceId,
+                        MovementDate = m.MovementDate,
+                        Notes = m.Notes,
+                        UnitCost = steps.TryGetValue(m.Id, out var st)
+                            ? Math.Round(st.UnitCost, 4, MidpointRounding.AwayFromZero) : 0m,
+                        Value = steps.TryGetValue(m.Id, out var sv) ? sv.Amount : 0m,
+                        RunningQuantity = steps.TryGetValue(m.Id, out var sq) ? sq.RunningQuantity : 0m,
+                        RunningValue = steps.TryGetValue(m.Id, out var sr) ? sr.RunningValue : 0m,
+                    })
+                    .ToList();
             }
-            return Ok(rows.OrderBy(r => r.ItemTypeName).ToList());
+
+            if (withMovements)
+                await AttachSourceNumbersAsync(traced.Values.SelectMany(v => v).ToList());
+
+            return (rows.OrderBy(r => r.ItemTypeName).ToList(), traced);
         }
 
+        /// <summary>
+        /// Fill in the human-facing document number for each movement's source.
+        /// <c>SourceId</c> is the internal PK and must never be shown, so this
+        /// resolves it in one batched query per source type.
+        /// </summary>
+        private async Task AttachSourceNumbersAsync(List<StockMovementRowDto> rows)
+        {
+            if (rows.Count == 0) return;
+
+            var invoiceIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.Invoice) && r.SourceId.HasValue)
+                                 .Select(r => r.SourceId!.Value).Distinct().ToList();
+            var billIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && r.SourceId.HasValue)
+                              .Select(r => r.SourceId!.Value).Distinct().ToList();
+            var grIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && r.SourceId.HasValue)
+                            .Select(r => r.SourceId!.Value).Distinct().ToList();
+
+            var invNums = invoiceIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.Invoices.Where(i => invoiceIds.Contains(i.Id))
+                    .Select(i => new { i.Id, i.InvoiceNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.InvoiceNumber);
+            var billNums = billIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.PurchaseBills.Where(p => billIds.Contains(p.Id))
+                    .Select(p => new { p.Id, p.PurchaseBillNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.PurchaseBillNumber);
+            var grNums = grIds.Count == 0 ? new Dictionary<int, int>()
+                : await _context.GoodsReceipts.Where(g => grIds.Contains(g.Id))
+                    .Select(g => new { g.Id, g.GoodsReceiptNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
+
+            foreach (var r in rows)
+            {
+                if (!r.SourceId.HasValue) continue;
+                if (r.SourceType == nameof(StockMovementSourceType.Invoice) && invNums.TryGetValue(r.SourceId.Value, out var iNo))
+                    r.SourceDocNumber = iNo.ToString();
+                else if (r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && billNums.TryGetValue(r.SourceId.Value, out var pNo))
+                    r.SourceDocNumber = pNo.ToString();
+                else if (r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && grNums.TryGetValue(r.SourceId.Value, out var gNo))
+                    r.SourceDocNumber = gNo.ToString();
+            }
+        }
+
+        /// <summary>
+        /// The whole on-hand dashboard as a styled .xlsx: one row per item with
+        /// Opening / In / Out / On-Hand and the money behind them (Excluding,
+        /// Tax Rate, Sales Tax, Including), each item's movement history nested
+        /// underneath as a COLLAPSED Excel outline group.
+        ///
+        /// Exports the whole filtered set, not a page — the grid is client-paged
+        /// precisely because one request already values every row, so there is
+        /// nothing to page through here either.
+        ///
+        /// Movement detail is a separate capability from seeing the totals, so
+        /// it is included only when the caller also holds
+        /// <c>stock.movements.view</c>; the workbook says on its face when it
+        /// was left out, rather than shipping bare rows that look complete.
+        /// </summary>
+        [HttpGet("company/{companyId}/onhand/excel")]
+        [HasPermission("stock.dashboard.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> ExportOnHand(int companyId, [FromQuery] string? search = null)
+        {
+            var withMovements = await _permissions.HasPermissionAsync(CurrentUserId, "stock.movements.view");
+            var (rows, movements) = await BuildOnHandAsync(companyId, withMovements);
+
+            // Same match the dashboard's search box makes (name OR HS code), so
+            // an operator who filtered the screen gets the sheet they can see.
+            var term = (search ?? "").Trim();
+            if (term.Length > 0)
+            {
+                rows = rows
+                    .Where(r => r.ItemTypeName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                             || (r.HSCode ?? "").Contains(term, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            var company = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == companyId)
+                .Select(c => new { c.Name, c.BrandName })
+                .FirstOrDefaultAsync();
+
+            var filters = new List<string> { $"As at {PakistanClock.Today:dd-MM-yyyy}" };
+            if (term.Length > 0) filters.Add($"Search: \"{term}\"");
+            // Say so when the figures are a division's share rather than the
+            // company's: a restricted user's export is a subset, and a sheet
+            // that does not admit that is a wrong number waiting to be quoted.
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            if (divScope != null) filters.Add("Scope: your divisions only");
+            if (!withMovements) filters.Add("Movement detail omitted");
+
+            var data = new StockExportDto
+            {
+                CompanyName = company?.BrandName is { Length: > 0 } b ? b : company?.Name ?? "",
+                Title = "Stock Valuation Report",
+                GeneratedAt = PakistanClock.Now,
+                FiltersApplied = filters,
+                IncludeMovements = withMovements,
+                Items = rows.Select(r => new StockExportItemDto
+                {
+                    Summary = r,
+                    Movements = withMovements
+                        ? MergeSameDocumentMovements(movements.GetValueOrDefault(r.ItemTypeId))
+                        : new List<StockMovementRowDto>(),
+                }).ToList(),
+            };
+
+            byte[] bytes;
+            try
+            {
+                bytes = StockExcelBuilder.Build(data);
+            }
+            catch (Exception ex)
+            {
+                // Never surface the exception text — it can carry schema detail.
+                _logger.LogError(ex, "Stock Excel export failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "Could not build the Excel file. Please try again." });
+            }
+
+            var fileName = $"stock-report-{PakistanClock.Today:yyyy-MM-dd}.xlsx";
+            return File(bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName);
+        }
+
+        /// <summary>
+        /// Fold CONSECUTIVE movements that belong to the same source document
+        /// and direction into one line, exactly as the dashboard's drill-down
+        /// does. One bill can touch the same item on several lines, and a reader
+        /// wants "Purchase Bill #204 — 300 in", not three thirds of it.
+        ///
+        /// Rows with no SourceId (adjustments, opening stock, reversals of a
+        /// deleted document) never merge — there is no document to merge them
+        /// under. Running quantity and value come from the LAST movement in the
+        /// fold, so the line reports the position after the whole document.
+        /// </summary>
+        private static List<StockMovementRowDto> MergeSameDocumentMovements(
+            List<StockMovementRowDto>? rows)
+        {
+            var merged = new List<StockMovementRowDto>();
+            if (rows == null || rows.Count == 0) return merged;
+
+            string? lastKey = null;
+            var foldedLines = 0;
+
+            foreach (var m in rows)
+            {
+                var key = m.SourceId.HasValue
+                    ? $"{m.SourceType}:{m.SourceId}:{m.Direction}"
+                    : null;
+
+                if (key != null && key == lastKey)
+                {
+                    var last = merged[^1];
+                    last.Quantity += m.Quantity;
+                    last.Value += m.Value;
+                    last.RunningQuantity = m.RunningQuantity;
+                    last.RunningValue = m.RunningValue;
+                    last.MovementDate = m.MovementDate;
+                    foldedLines++;
+                    // The per-line notes each carried their own quantity
+                    // breakdown, which is meaningless once summed — keep the
+                    // document's own prefix and say how many lines went in.
+                    var prefix = (last.Notes ?? "").Split(" (")[0];
+                    last.Notes = string.IsNullOrWhiteSpace(prefix)
+                        ? $"{foldedLines + 1} line items summed"
+                        : $"{prefix} — {foldedLines + 1} line items summed";
+                    // A merged line's unit cost is the value it moved over the
+                    // quantity it moved, not any one line's average.
+                    last.UnitCost = last.Quantity > 0m
+                        ? Math.Round(last.Value / last.Quantity, 4, MidpointRounding.AwayFromZero)
+                        : 0m;
+                    continue;
+                }
+
+                merged.Add(new StockMovementRowDto
+                {
+                    Id = m.Id,
+                    ItemTypeId = m.ItemTypeId,
+                    ItemTypeName = m.ItemTypeName,
+                    Direction = m.Direction,
+                    Quantity = m.Quantity,
+                    SourceType = m.SourceType,
+                    SourceId = m.SourceId,
+                    SourceDocNumber = m.SourceDocNumber,
+                    MovementDate = m.MovementDate,
+                    Notes = m.Notes,
+                    UnitCost = m.UnitCost,
+                    Value = m.Value,
+                    RunningQuantity = m.RunningQuantity,
+                    RunningValue = m.RunningValue,
+                });
+                lastKey = key;
+                foldedLines = 0;
+            }
+
+            return merged;
+        }
         /// <summary>Audit feed of every movement, newest first.</summary>
         [HttpGet("company/{companyId}/movements")]
         [HasPermission("stock.movements.view")]
@@ -216,29 +478,10 @@ namespace MyApp.Api.Controllers
                 })
                 .ToListAsync();
 
-            // Resolve human-facing document numbers for the source rows.
-            // SourceId is the internal PK (e.g. Invoice.Id) — operators need
-            // the InvoiceNumber / PurchaseBillNumber / GoodsReceiptNumber.
-            // Batched per source type so the page is at most 3 extra queries.
-            var invoiceIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.Invoice) && r.SourceId.HasValue)
-                                 .Select(r => r.SourceId!.Value).Distinct().ToList();
-            var billIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && r.SourceId.HasValue)
-                              .Select(r => r.SourceId!.Value).Distinct().ToList();
-            var grIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && r.SourceId.HasValue)
-                            .Select(r => r.SourceId!.Value).Distinct().ToList();
-
-            var invNums = invoiceIds.Count == 0 ? new Dictionary<int, int>()
-                : await _context.Invoices.Where(i => invoiceIds.Contains(i.Id))
-                    .Select(i => new { i.Id, i.InvoiceNumber })
-                    .ToDictionaryAsync(x => x.Id, x => x.InvoiceNumber);
-            var billNums = billIds.Count == 0 ? new Dictionary<int, int>()
-                : await _context.PurchaseBills.Where(p => billIds.Contains(p.Id))
-                    .Select(p => new { p.Id, p.PurchaseBillNumber })
-                    .ToDictionaryAsync(x => x.Id, x => x.PurchaseBillNumber);
-            var grNums = grIds.Count == 0 ? new Dictionary<int, int>()
-                : await _context.GoodsReceipts.Where(g => grIds.Contains(g.Id))
-                    .Select(g => new { g.Id, g.GoodsReceiptNumber })
-                    .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
+            // Resolve human-facing document numbers for the source rows — one
+            // batched query per source type, shared with the Excel export so
+            // the two cannot label the same movement differently.
+            await AttachSourceNumbersAsync(rows);
 
             // Money per movement. The cost of any one movement is the average
             // standing at that instant, so the only way to fill these in is to
@@ -285,17 +528,6 @@ namespace MyApp.Api.Controllers
                     r.RunningQuantity = st.RunningQuantity;
                     r.RunningValue = st.RunningValue;
                 }
-            }
-
-            foreach (var r in rows)
-            {
-                if (!r.SourceId.HasValue) continue;
-                if (r.SourceType == nameof(StockMovementSourceType.Invoice) && invNums.TryGetValue(r.SourceId.Value, out var iNo))
-                    r.SourceDocNumber = iNo.ToString();
-                else if (r.SourceType == nameof(StockMovementSourceType.PurchaseBill) && billNums.TryGetValue(r.SourceId.Value, out var pNo))
-                    r.SourceDocNumber = pNo.ToString();
-                else if (r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && grNums.TryGetValue(r.SourceId.Value, out var gNo))
-                    r.SourceDocNumber = gNo.ToString();
             }
 
             return Ok(new PagedResult<StockMovementRowDto>

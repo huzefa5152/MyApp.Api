@@ -1,4 +1,4 @@
-namespace MyApp.Api.DTOs
+﻿namespace MyApp.Api.DTOs
 {
     /// <summary>
     /// One row on the Stock Dashboard: an item from the catalog with its
@@ -225,5 +225,37 @@ namespace MyApp.Api.DTOs
         /// <summary>Rate as a percentage (18, 25). Only read alongside a
         /// stated unit cost.</summary>
         public decimal? SalesTaxRate { get; set; }
+    }
+
+    /// <summary>
+    /// One item on the stock export: the same on-hand figures the dashboard
+    /// shows, plus the movements behind them. The movements ride WITH the item
+    /// rather than in a flat list so the workbook can nest them under the row
+    /// they explain — the exported shape has to match the screen's drill-down.
+    /// </summary>
+    public class StockExportItemDto
+    {
+        public StockOnHandRowDto Summary { get; set; } = new();
+
+        /// <summary>Oldest first — a drill-down reads like a bank statement.
+        /// Empty when the caller may not see movements, or the item has none.</summary>
+        public List<StockMovementRowDto> Movements { get; set; } = new();
+    }
+
+    /// <summary>Everything the stock workbook needs, resolved server-side.</summary>
+    public class StockExportDto
+    {
+        public string CompanyName { get; set; } = "";
+        public string Title { get; set; } = "Stock Valuation Report";
+        public DateTime GeneratedAt { get; set; }
+
+        /// <summary>Provenance line: what shaped this export (search, scope).</summary>
+        public List<string> FiltersApplied { get; set; } = new();
+
+        /// <summary>False when the caller lacks stock.movements.view — the
+        /// workbook then says so rather than silently shipping bare rows.</summary>
+        public bool IncludeMovements { get; set; }
+
+        public List<StockExportItemDto> Items { get; set; } = new();
     }
 }

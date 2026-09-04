@@ -513,6 +513,57 @@ Accounts A/R balance.
 COMPANY level — FBR-submitted when FBR is on, any valid document when it is off.
 Do not reintroduce a "fully paid" test in either.
 
+### 5b-9. Exporting the stock dashboard (2026-09-04)
+
+`GET /api/stock/company/{id}/onhand/excel` → `Helpers/StockExcelBuilder.cs`.
+One row per item (Opening / Total In / Total Out / On Hand / Unit Cost /
+Excluding / Tax Rate / Sales Tax / Including / Last Movement), with that item's
+movement history nested underneath as a **collapsed Excel outline group**.
+
+- **The grid and the export come out of ONE walk.**
+  `StockController.BuildOnHandAsync(companyId, withMovements)` serves both, and
+  `withMovements` decides only whether `StockValuation`'s `Step` trace is
+  collected. A movement's cost is the weighted average standing when it
+  happened, so the per-movement money exists only as a by-product of valuing
+  the item — computing it twice would be two chances to disagree, and the
+  workbook would then contradict the screen it was taken from.
+- **Movement detail is a separate capability.** The route is gated by
+  `stock.dashboard.export`; the drill-down is included only when the caller
+  ALSO holds `stock.movements.view`, checked imperatively via
+  `IPermissionService`. A workbook without it says so on its face rather than
+  shipping bare rows that look complete.
+- **Item rows and movement rows share the same columns** wherever they mean the
+  same thing (Qty In / Qty Out / balance / unit cost / value), with a sub-header
+  inside each group naming the movement meanings. Do not give movements their
+  own sheet: the screen's drill-down is per item, and a flat movement sheet
+  loses which figures a movement explains.
+- **Column widths are measured from the longest value actually written**, banner
+  text excluded (a merged 14-column title would otherwise stretch column A to
+  nothing useful). Item names and notes WRAP — they are the two fields no cap
+  can size away, and the row carries no explicit height so Excel grows it.
+  `scripts/stock_export_harness` fails on any clipped cell.
+- **ClosedXML 0.104.2 files the ROW outline depth under
+  `sheetFormatPr/@outlineLevelCol` and never writes `@outlineLevelRow`** —
+  reproduced both ways (rows-only and columns-only grouping both emit
+  `outlineLevelCol="1"`). `StockExcelBuilder.FixRowOutlineLevel` corrects the
+  saved part. It is deliberately conservative: an unexpected element shape
+  returns the bytes untouched, so a fixed ClosedXML cannot be made wrong by it.
+- **Consecutive movements on the same document and direction fold into one
+  line**, as the dashboard's drill-down does — one bill can touch an item on
+  several lines, and a reader wants "Purchase Bill #204 — 300 in", not three
+  thirds of it. Rows with no `SourceId` (adjustments, opening stock, reversals)
+  never fold.
+- **Two suites, because they answer different questions.** The LAYOUT is pinned
+  offline against synthetic rows by `scripts/stock_export_harness`
+  (`dotnet run -c Release`, 64 checks — it links the real builder rather than a
+  copy, so no database and no running server). That the workbook cannot
+  DISAGREE with the screen is pinned live by
+  `scripts/test_stock_export_excel.py` (37 checks): it compares the sheet
+  row-for-row against `GET .../onhand`, ties the totals to the API's own sum,
+  reconciles the drill-down against the movements feed, and exercises both
+  halves of the permission split with throwaway roles it deletes afterwards.
+  A new column belongs in the harness; a new figure belongs in both.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -641,6 +692,8 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
+| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (64 checks) |
+| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (37 checks) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 

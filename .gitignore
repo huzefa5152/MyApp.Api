@@ -411,6 +411,9 @@ roshan_dc_current.html
 scripts/*.json
 scripts/*.xlsx
 scripts/*.txt
+# Sample workbooks the stock-export harness writes next to itself so a failing
+# check can be opened and looked at. Regenerated on every run.
+scripts/stock_export_harness/*.xlsx
 !scripts/dump_output.txt
 !scripts/*.py
 !scripts/*.sh

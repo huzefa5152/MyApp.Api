@@ -309,6 +309,7 @@ endpoints_to_test = [
     ("GET",  "/api/salesorders/company/{cid}/paged"),
     ("GET",  "/api/salesorders/company/{cid}/open"),
     ("GET",  "/api/stock/company/{cid}/onhand"),
+    ("GET",  "/api/stock/company/{cid}/onhand/excel"),
     ("GET",  "/api/stock/company/{cid}/movements"),
     ("GET",  "/api/stock/company/{cid}/opening"),
     ("GET",  "/api/fbr/sandbox/{cid}"),

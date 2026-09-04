@@ -379,6 +379,7 @@ namespace MyApp.Api.Helpers
 
             // ── Inventory / Stock ───────────────────────────────────────────
             new("stock.dashboard.view",     "Inventory", "Dashboard",       "View",   "View on-hand stock dashboard"),
+            new("stock.dashboard.export",   "Inventory", "Dashboard",       "Export", "Download the stock dashboard as an Excel workbook (movement detail needs Movements ▸ View too)"),
             new("stock.movements.view",     "Inventory", "Movements",       "View",   "View the stock-movement audit log"),
             new("stock.opening.manage",     "Inventory", "Opening Balance", "Manage", "Set or edit opening stock balance per item"),
             new("stock.adjust.create",      "Inventory", "Adjustment",      "Create", "Record a stock adjustment (count correction, write-off)"),
