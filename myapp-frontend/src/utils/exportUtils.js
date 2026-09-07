@@ -73,6 +73,43 @@ function detachPrintFooter(wrapper, content) {
  * Export rendered template HTML to PDF.
  */
 /**
+ * Resolve once every <img> in `root` has finished loading, or the timeout
+ * elapses -- whichever comes first.
+ *
+ * html2canvas paints whatever the DOM shows AT THE MOMENT IT RUNS. An image
+ * still in flight has no intrinsic size, so it rasterises as nothing: the PDF
+ * loses a logo or a letterhead while the text around it is fine. A fixed sleep
+ * is not a fix, it is a bet on the network.
+ *
+ * The print path has waited properly since the Jorbai Sales Quote bug
+ * (2026-06-27, printDocument.writeAndPrint) -- a banner measured 0px when
+ * printed immediately and 133px once loaded. This gives the PDF and Excel
+ * paths the same guarantee, and it is what lets a print template reference its
+ * artwork by URL instead of carrying it inline as base64.
+ *
+ * A broken or stalled image must never hang an export, so the timeout always
+ * wins in the end and a decode failure resolves rather than rejects.
+ */
+async function waitForImages(root, timeoutMs = 5000) {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  const pending = imgs.filter((img) => !img.complete || img.naturalWidth === 0);
+  if (pending.length === 0) return;
+
+  const settled = pending.map((img) => new Promise((resolve) => {
+    // decode() reports when the bytes are ready to PAINT, which is what
+    // html2canvas needs; load alone can fire a beat earlier.
+    if (typeof img.decode === "function") { img.decode().then(resolve, resolve); return; }
+    img.addEventListener("load", resolve, { once: true });
+    img.addEventListener("error", resolve, { once: true });
+  }));
+
+  await Promise.race([
+    Promise.all(settled),
+    new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+}
+
+/**
  * Render HTML to a PDF.
  *
  * `opts` defaults to what every caller got before it existed -- A4 portrait,
@@ -107,7 +144,9 @@ export async function exportToPdf(html, filename, opts = {}) {
     content.style.width = renderWidth + "px";
   }
 
+  // Fonts and layout settle in a tick; images take as long as they take.
   await new Promise((r) => setTimeout(r, 400));
+  await waitForImages(wrapper);
 
   try {
     const canvas = await html2canvas(content, {
@@ -192,6 +231,7 @@ export async function exportToExcel(html, filename, sheetName) {
   content.querySelectorAll(".mpl-spacer").forEach((el) => el.remove());
 
   await new Promise((r) => setTimeout(r, 400));
+  await waitForImages(wrapper);
 
   try {
     const canvas = await html2canvas(content, {
