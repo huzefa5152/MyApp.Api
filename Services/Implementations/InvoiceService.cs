@@ -3418,6 +3418,7 @@ namespace MyApp.Api.Services.Implementations
             // figures, and nothing else. A template's TOTAL row shows this in
             // the "Value Incl. Tax" column so that column sums to the rows
             // above it.
+            dto.TotalBeforeFurtherTax = inv.Subtotal + inv.GSTAmount;
             dto.TotalBeforeFurtherTaxRounded = dto.SubtotalRounded + dto.GSTAmountRounded;
             // The DOCUMENT's grand total, which further tax is part of. Kept
             // equal in meaning to GrandTotal so the rounded and exact fields

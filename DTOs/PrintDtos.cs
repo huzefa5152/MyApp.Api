@@ -176,6 +176,14 @@ namespace MyApp.Api.DTOs
         /// <see cref="GrandTotalRounded"/> as the document total beneath.
         /// </summary>
         public decimal TotalBeforeFurtherTaxRounded { get; set; }
+        /// <summary>
+        /// Subtotal + sales tax to the paisa -- the exact counterpart of
+        /// <see cref="TotalBeforeFurtherTaxRounded"/>, for a template that prints
+        /// 2dp rather than whole rupees. Needed for the same reason: a TOTAL row
+        /// showing GrandTotal in the "Value Incl. Tax" column no longer sums to
+        /// the lines above it once further tax is inside that total.
+        /// </summary>
+        public decimal TotalBeforeFurtherTax { get; set; }
 
         // Withholding tax (income-tax, s.153) -- 0 when none. The same three
         // fields PrintBillDto has carried all along; the tax invoice never

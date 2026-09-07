@@ -61,6 +61,13 @@ namespace MyApp.Api.Data
                         Label = "Total excl. further tax (whole rupees — sums the item columns)",
                         Category = "Totals", SortOrder = 48,
                     });
+                    defs.Add(new MergeField
+                    {
+                        TemplateType = type,
+                        FieldExpression = "{{fmtDec totalBeforeFurtherTax}}",
+                        Label = "Total excl. further tax (2dp — sums the item columns)",
+                        Category = "Totals", SortOrder = 49,
+                    });
                 }
                 defs.Add(new MergeField
                 {
