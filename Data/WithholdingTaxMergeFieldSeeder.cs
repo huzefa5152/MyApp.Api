@@ -70,6 +70,24 @@ namespace MyApp.Api.Data
                     Label = "Total after WHT (whole rupees)",
                     Category = "Totals", SortOrder = 54,
                 });
+                // The final line on a document carrying either income tax.
+                // Only the TaxInvoice DTO exposes it; the Bill template keeps
+                // the two single-tax fields it already had.
+                if (type == "TaxInvoice")
+                {
+                    defs.Add(new MergeField
+                    {
+                        TemplateType = type, FieldExpression = "{{fmtDec collectible}}",
+                        Label = "Net payable — less WHT, plus advance tax",
+                        Category = "Totals", SortOrder = 55,
+                    });
+                    defs.Add(new MergeField
+                    {
+                        TemplateType = type, FieldExpression = "{{fmt collectibleRounded}}",
+                        Label = "Net payable (whole rupees — adds up to the rows above)",
+                        Category = "Totals", SortOrder = 56,
+                    });
+                }
                 // So a template shows the row only on the documents that carry it.
                 defs.Add(new MergeField
                 {

@@ -178,6 +178,25 @@ namespace MyApp.Api.DTOs
         /// pays once the withheld slice goes to FBR. Equal to GrandTotal when
         /// no withholding applies.</summary>
         public decimal BalanceDueAfterWht { get; set; }
+
+        /// <summary>
+        /// What the buyer actually pays with BOTH income taxes applied:
+        /// GrandTotal - WithholdingTaxAmount + AdvanceTaxAmount (CLAUDE.md
+        /// 5b-5). Withholding is deducted and advance tax is collected, so a
+        /// document carrying both is served by neither BalanceDueAfterWht
+        /// (ignores advance tax) nor TotalWithAdvanceTax (ignores
+        /// withholding) -- a template using either printed a wrong final
+        /// total on any invoice that had both.
+        /// </summary>
+        public decimal Collectible { get; set; }
+
+        /// <summary>
+        /// Collectible for a template printing whole rupees, built from the
+        /// ROUNDED parts: GrandTotalRounded, less the rounded withholding,
+        /// plus the rounded advance tax. So the figures on the page add up to
+        /// the figure at the bottom, which is the arithmetic a reader checks.
+        /// </summary>
+        public decimal CollectibleRounded { get; set; }
         /// <summary>
         /// AmountInWords for <see cref="GrandTotalRounded"/>. A rounded template
         /// must use this one: AmountInWords is the words for the exact total

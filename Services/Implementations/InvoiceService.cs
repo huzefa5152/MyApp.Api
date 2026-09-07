@@ -3387,6 +3387,19 @@ namespace MyApp.Api.Services.Implementations
             // a rounded template using the exact words would contradict its own
             // total. This is the words for the figure such a template prints.
             dto.AmountInWordsRounded = NumberToWordsConverter.Convert(dto.GrandTotalRounded);
+
+            // What the buyer actually pays: withholding comes off, advance tax
+            // goes on (CLAUDE.md 5b-5). Neither BalanceDueAfterWht nor
+            // TotalWithAdvanceTax is this figure once a document carries both.
+            dto.Collectible = WithholdingTaxCalculator.Collectible(
+                inv.GrandTotal, inv.WithholdingTaxAmount) + inv.AdvanceTaxAmount;
+            // The rounded one is built from the ROUNDED parts, so a rounded
+            // template's own rows add up to its bottom line.
+            dto.CollectibleRounded =
+                  dto.GrandTotalRounded
+                - NumberToWordsConverter.RoundForDisplay(inv.WithholdingTaxAmount)
+                + NumberToWordsConverter.RoundForDisplay(inv.AdvanceTaxAmount);
+            if (dto.CollectibleRounded < 0m) dto.CollectibleRounded = 0m;
             return dto;
         }
 
