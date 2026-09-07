@@ -605,6 +605,61 @@ up is the easiest way to corrupt this ledger, so:
   both print DTOs, and the three edit cases) and section D, which spins up a
   GL-enabled company purely to prove the tax is **not** booked as revenue.
 
+### 5b-11. FIFO auto-allocation of receipts (2026-09-08)
+
+A receipt can now be spread across a customer's outstanding invoices oldest
+first, instead of being ticked by hand. Almost none of this is new machinery —
+`Payment` / `PaymentAllocation` / `AllocateAsync` already did the work — so the
+rule to keep is that **auto-allocation only ever CHOOSES; it never settles.**
+
+- **`Helpers/ReceiptAllocationPlanner.cs` is the only place the split is
+  computed**, and it is PURE: no database, no service, no GL. It proposes lines;
+  `PaymentService.AllocateAsync` applies them and owns every guard (cross-tenant,
+  cross-party, over-pay, period close) and the posting. So auto-allocation can
+  never settle something a hand-typed allocation could not. Do not add a second
+  splitter, and do not let the planner write.
+- **Headroom is `Collectible − AmountPaid`, never `GrandTotal − AmountPaid`.**
+  A withheld slice was settled by the customer at invoice time, so it was never
+  receivable — that is exactly the cap `AssertNoInvoiceOverpayAsync` enforces,
+  and the planner matches it rather than restating it. Get this wrong and the
+  button proposes lines the service then rejects.
+- **Order is Date then Id** — the same tie-break `StockValuation` uses, so two
+  invoices raised on one day are consumed in the order they were written.
+- **An invoice this receipt has already part-paid is still fair game.** Its
+  headroom already counts this receipt's own earlier line, so a top-up cannot
+  overpay. Excluding them (the first cut did) left a receipt that had manually
+  paid 50,000 of an invoice refusing to spend the rest of itself on the other
+  68,000, while reporting "no outstanding invoices" — with the customer plainly
+  still owing money.
+- **A CREDIT NOTE (`NoteKind` 2) is excluded; a DEBIT NOTE (1) is not.** A credit
+  note reduces the receivable, so taking cash against one is backwards; a debit
+  note is an undercharge the customer genuinely owes. Cancelled and demo
+  invoices are excluded, the same pair every report excludes.
+- **The sweep applies each receipt in its OWN transaction**, oldest receipt
+  first, and a receipt that cannot be applied (closed period, nothing left
+  outstanding) is reported in `AdvanceSweepResultDto.Receipts` with its reason
+  rather than aborting the rest. A sweep that stops halfway with no explanation
+  is worse than one that says what it could not do.
+- **Three routes, all under the existing receipt permissions** — no new keys:
+  `GET /api/receipts/company/{id}/allocation-plan` (preview, `.view`),
+  `POST /api/receipts/{id}/auto-allocate` and
+  `POST /api/receipts/company/{id}/apply-advances` (both `.create`).
+- **The form asks the SERVER for the split.** `PaymentForm`'s "Spread oldest
+  first" calls the preview endpoint and fills its boxes with the answer; every
+  box stays editable and saving goes through the ordinary create path. Never
+  reimplement the ordering in JavaScript. The button is create-only: on an edit
+  the server measures each balance with this receipt's own lines still counted
+  as settled, so it would propose less than the form allows.
+- **This does NOT reopen §5b-8.** Allocation being automatic does not make
+  per-document payment status safe to show again — receipts are still taken on
+  account by default, and a customer who has not been swept still reads as
+  unpaid. The status pills, aging buckets and Payment Status reports stay
+  removed unless the operator asks for them back.
+- Suite: `scripts/test_customer_receipts_ledger.py` suite 17 (ordering, the
+  collectible cap, the note/cancelled exclusions, the top-up case, both sweep
+  outcomes) and `scripts/test_tenant_isolation.py` suite 13, which covers the
+  id-based route that takes no company at all.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -763,7 +818,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
 | Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
 | Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `120/120 checks passed` |
-| Customer receipts + advances | `python scripts/test_customer_receipts_ledger.py` | `87/87 checks passed` (1 skipped) |
+| Customer receipts, advances + FIFO auto-allocation | `python scripts/test_customer_receipts_ledger.py` | `184/184 checks passed` (3 skipped without `--db`) |
 | Customer ledger | `python scripts/test_customer_ledger.py` | `100/100 checks passed` |
 | Customer ledger grouping | `python scripts/test_customer_ledger_groups.py` | `47/47 checks passed` |
 | Client Ledger report | `python scripts/test_client_ledger_report.py` | `97/97 checks passed` |

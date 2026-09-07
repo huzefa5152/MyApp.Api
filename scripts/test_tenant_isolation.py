@@ -325,6 +325,12 @@ endpoints_to_test = [
     ("GET",  "/api/payments/payments/company/{cid}/paged"),
     ("GET",  "/api/payments/company/{cid}/by-invoice/1"),
     ("GET",  "/api/payments/company/{cid}/by-bill/1"),
+    # FIFO auto-allocation. The plan endpoint is a READ that would otherwise
+    # disclose another tenant's outstanding invoices — their numbers, dates and
+    # balances — to anyone who could guess a client id; apply-advances WRITES
+    # allocations against them.
+    ("GET",  "/api/receipts/company/{cid}/allocation-plan?clientId=1&amount=1000"),
+    ("POST", "/api/receipts/company/{cid}/apply-advances?clientId=1"),
     # Customer Ledger — derived money in/out trail (Task 6).
     ("GET",  "/api/customer-ledger/company/{cid}"),
     ("GET",  "/api/customer-ledger/company/{cid}/client/1"),
@@ -953,6 +959,21 @@ check(suite13a, "admin allocate 200 + unallocatedAmount drops to 450000",
       s == 200 and isinstance(allocated, dict)
       and abs(float(allocated.get("unallocatedAmount", -1)) - 450000) < 0.01,
       f"status {s}, body {allocated}")
+
+# POST /api/receipts/{id}/auto-allocate takes NO company and no body at all —
+# it reads the party and the company off the stored receipt — so the guard on
+# the stored CompanyId is the only thing standing between alice and spending
+# Beta's advance against Beta's invoices.
+s, _ = request("POST", f"/api/receipts/{beta_receipt['id']}/auto-allocate", token=tokens["alice"])
+status_check(suite13a, "alice POST /receipts/{betaReceiptId}/auto-allocate", s, 403)
+
+# And it works for someone who may: 450,000 is left, the invoice still owes
+# 68,000 of its 118,000, so FIFO settles that and parks the rest.
+s, auto = request("POST", f"/api/receipts/{beta_receipt['id']}/auto-allocate", token=admin)
+check(suite13a, "admin auto-allocate 200 + the invoice is cleared",
+      s == 200 and isinstance(auto, dict)
+      and abs(float(auto.get("unallocatedAmount", -1)) - 382000) < 0.01,
+      f"status {s}, body {auto}")
 
 # Cleanup (invoice/payment before the client — Restrict FKs).
 request("DELETE", f"/api/invoices/{beta_invoice['id']}", token=admin)

@@ -145,4 +145,54 @@ namespace MyApp.Api.DTOs
     {
         public string Status { get; set; } = "";
     }
+    /// <summary>One proposed allocation line, with enough context for the
+    /// operator to see WHY it was proposed before accepting it.</summary>
+    public class PlannedAllocationDto
+    {
+        public int InvoiceId { get; set; }
+        public int InvoiceNumber { get; set; }
+        public DateTime Date { get; set; }
+        /// <summary>What the invoice still claims (collectible less settled).</summary>
+        public decimal BalanceDue { get; set; }
+        /// <summary>What this plan would apply to it.</summary>
+        public decimal Amount { get; set; }
+        /// <summary>True when the line clears the invoice outright — the last
+        /// invoice in a plan is usually the part-paid one.</summary>
+        public bool SettlesInFull => Amount >= BalanceDue;
+    }
+
+    /// <summary>What auto-allocation WOULD do, without doing it. The remainder
+    /// is what stays on the customer's account as an advance.</summary>
+    public class AllocationPlanDto
+    {
+        public decimal Available { get; set; }
+        public decimal Applied { get; set; }
+        public decimal Remainder { get; set; }
+        public List<PlannedAllocationDto> Lines { get; set; } = new();
+    }
+
+    /// <summary>Outcome of sweeping every one of a customer's receipts that
+    /// still holds unapplied cash. Per-receipt, because each is applied in its
+    /// own transaction: one that cannot be applied (a closed period, say) must
+    /// not silently stop the others, and the operator needs to know which.</summary>
+    public class AdvanceSweepResultDto
+    {
+        public int ReceiptsConsidered { get; set; }
+        public int ReceiptsApplied { get; set; }
+        public decimal TotalApplied { get; set; }
+        public decimal RemainingOnAccount { get; set; }
+        public List<AdvanceSweepLineDto> Receipts { get; set; } = new();
+    }
+
+    public class AdvanceSweepLineDto
+    {
+        public int PaymentId { get; set; }
+        public int Number { get; set; }
+        public DateTime Date { get; set; }
+        public decimal Available { get; set; }
+        public decimal Applied { get; set; }
+        public int InvoicesSettled { get; set; }
+        /// <summary>Null when it worked; otherwise why this receipt was skipped.</summary>
+        public string? Skipped { get; set; }
+    }
 }

@@ -289,6 +289,28 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — Receipts spread themselves across the oldest invoices
+
+- **"Spread oldest first" on the receipt form.** Type what the customer paid and
+  press it: the boxes fill from their oldest unpaid invoice onward, each one
+  filled to its balance before the next is touched, and whatever no invoice
+  claims is left as the customer's advance. Every box stays editable — it is a
+  starting point, not a decision, and saving works exactly as it always has.
+- **Apply an advance you are already holding.** A saved receipt with money left
+  on it can be spread across the customer's outstanding invoices in one action,
+  and there is a sweep that does it for every advance a customer holds at once —
+  oldest receipt first, so the money held longest is used up first. It reports
+  what it applied receipt by receipt, and names any it had to skip with the
+  reason, rather than stopping quietly halfway.
+- **What it will not do.** It never proposes more than an invoice can take: an
+  invoice with tax withheld at source offers only the part that was ever
+  collectible. Credit notes are left alone (they reduce what is owed, so
+  receiving money against one is backwards), as are cancelled invoices. An
+  invoice this same receipt already part-paid can still be topped up.
+- Nothing about how receipts are recorded, posted or reversed changed — the
+  spread only chooses which invoices to name, and the existing allocation path
+  applies it with all its usual checks.
+
 ### 2026-09-04 — The stock dashboard exports to Excel, drill-down included
 
 - **New "Export Excel" button on the Stock dashboard.** One row per item with

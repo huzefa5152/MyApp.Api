@@ -104,6 +104,79 @@ namespace MyApp.Api.Controllers
             }
         }
 
+        // ── Auto-allocation (FIFO, oldest invoice first) ──────────────────────
+        // All three sit under the receipt permissions: the preview is a read,
+        // the two that write allocations are creates. Nothing here computes a
+        // FIFO split of its own — Helpers/ReceiptAllocationPlanner is the only
+        // place that happens, and applying always goes through AllocateAsync.
+
+        /// <summary>Preview what auto-allocation would do with <paramref name="amount"/>
+        /// for this customer, without writing anything. The receipt form calls
+        /// this to fill its boxes, so the operator can adjust the proposal
+        /// before saving and the rule is not restated in JavaScript.</summary>
+        [HttpGet("~/api/receipts/company/{companyId}/allocation-plan")]
+        [HasPermission("accounting.receipts.view")]
+        public async Task<ActionResult<AllocationPlanDto>> AllocationPlan(
+            int companyId, [FromQuery] int clientId, [FromQuery] decimal amount)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            try
+            {
+                return Ok(await _service.PlanClientAllocationAsync(companyId, clientId, amount));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Allocation plan for company {CompanyId} client {ClientId} failed",
+                    companyId, clientId);
+                return StatusCode(500, new { error = "Could not work out the allocation. Please try again." });
+            }
+        }
+
+        /// <summary>Spread this receipt's unallocated cash across its customer's
+        /// outstanding invoices, oldest first.</summary>
+        [HttpPost("~/api/receipts/{id}/auto-allocate")]
+        [HasPermission("accounting.receipts.create")]
+        public async Task<ActionResult<PaymentDto>> AutoAllocate(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            // Tenant guard reads CompanyId off the STORED receipt — never the body.
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.AutoAllocateAsync(id);
+                return updated == null ? NotFound() : Ok(updated);
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Auto-allocate receipt {Id} failed", id);
+                return StatusCode(500, new { error = "Could not allocate the receipt. Please try again." });
+            }
+        }
+
+        /// <summary>Apply every advance this customer is holding to their
+        /// outstanding invoices. Returns a per-receipt report — a receipt that
+        /// could not be applied is named with the reason rather than dropped.</summary>
+        [HttpPost("~/api/receipts/company/{companyId}/apply-advances")]
+        [HasPermission("accounting.receipts.create")]
+        public async Task<ActionResult<AdvanceSweepResultDto>> ApplyAdvances(
+            int companyId, [FromQuery] int clientId)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            try
+            {
+                return Ok(await _service.ApplyClientAdvancesAsync(companyId, clientId));
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Apply advances for company {CompanyId} client {ClientId} failed",
+                    companyId, clientId);
+                return StatusCode(500, new { error = "Could not apply the advances. Please try again." });
+            }
+        }
+
         // ── Payments (money out — settle purchase bills) ──────────────────────
 
         [HttpGet("payments/company/{companyId}/paged")]

@@ -590,6 +590,189 @@ namespace MyApp.Api.Services.Implementations
             return await GetByIdAsync(payment.Id);
         }
 
+        // ── Auto-allocation (FIFO) ───────────────────────────────────────────
+        // The rule itself lives in Helpers/ReceiptAllocationPlanner: oldest
+        // invoice first, each filled to its balance, remainder left on account.
+        // Everything here is plumbing — loading what the planner needs and
+        // handing its answer to AllocateAsync, which owns every guard and the
+        // posting. Auto-allocation can therefore never settle something a
+        // hand-typed allocation could not.
+
+        /// <summary>What FIFO would do with a given amount for a given customer.
+        /// Read-only — nothing is written. Drives the create form's
+        /// "spread oldest first" button, so the operator can edit the proposal
+        /// before saving and the rule is not duplicated in JavaScript.</summary>
+        public async Task<AllocationPlanDto> PlanClientAllocationAsync(
+            int companyId, int clientId, decimal available)
+        {
+            var outstanding = await LoadOutstandingAsync(companyId, clientId);
+            return ToPlanDto(ReceiptAllocationPlanner.Plan(outstanding, available), available);
+        }
+
+        /// <summary>Spread a receipt's still-unapplied cash across its
+        /// customer's outstanding invoices, oldest first. Returns the updated
+        /// receipt, or null if it does not exist.</summary>
+        public async Task<PaymentDto?> AutoAllocateAsync(int paymentId)
+        {
+            var payment = await _repo.GetByIdAsync(paymentId);
+            if (payment == null) return null;
+            if (payment.Direction != PaymentDirection.Receipt)
+                throw new InvalidOperationException("Only a receipt can be allocated to invoices.");
+            if (payment.IsCancelled)
+                throw new InvalidOperationException("A cancelled receipt cannot be allocated.");
+
+            // The party is read from the STORED contact, never from a caller —
+            // the same reasoning AllocateAsync applies to its cross-party guard.
+            // Without a Client there is nothing to search for outstanding work.
+            if (NormalizeContactType(payment.ContactType) != "Client" || !payment.ContactId.HasValue)
+                throw new InvalidOperationException(
+                    "Auto-allocation needs a receipt from a specific customer.");
+
+            var free = OnAccountCash(payment);
+            if (free <= 0m)
+                throw new InvalidOperationException("This receipt has no unallocated amount left.");
+
+            // An invoice this receipt has ALREADY part-settled is still fair game.
+            // Its headroom is Collectible - AmountPaid, and AmountPaid already
+            // counts this receipt's own earlier line, so a top-up is measured
+            // correctly and can never overpay. Excluding such invoices (as this
+            // did first) meant a receipt that had manually paid 50,000 of an
+            // invoice then refused to spend the rest of itself on the other
+            // 68,000 -- reporting "no outstanding invoices" while the customer
+            // plainly still owed money.
+            var outstanding = await LoadOutstandingAsync(payment.CompanyId, payment.ContactId.Value);
+
+            var plan = ReceiptAllocationPlanner.Plan(outstanding, free);
+            if (plan.Lines.Count == 0)
+                throw new InvalidOperationException(
+                    "This customer has no outstanding invoices for the advance to settle.");
+
+            return await AllocateAsync(paymentId, plan.Lines
+                .Select(l => new CreatePaymentAllocationDto
+                {
+                    Kind = nameof(AllocationKind.Document),
+                    InvoiceId = l.InvoiceId,
+                    Amount = l.Amount,
+                })
+                .ToList());
+        }
+
+        /// <summary>Apply every advance this customer is sitting on to their
+        /// outstanding invoices — the "their old money should have cleared these
+        /// invoices" sweep.
+        ///
+        /// Oldest RECEIPT first, so the money that has been held longest is used
+        /// up first, and each receipt is applied in its own transaction. One
+        /// that cannot be applied — a closed period, an advance whose invoices
+        /// are all settled — is RECORDED and skipped rather than aborting the
+        /// rest; a sweep that stops halfway with no explanation is worse than
+        /// one that reports what it could not do.</summary>
+        public async Task<AdvanceSweepResultDto> ApplyClientAdvancesAsync(int companyId, int clientId)
+        {
+            var candidates = await _context.Payments
+                .Include(p => p.Allocations)
+                .Where(p => p.CompanyId == companyId
+                            && p.Direction == PaymentDirection.Receipt
+                            && !p.IsCancelled
+                            && p.ContactType == "Client"
+                            && p.ContactId == clientId)
+                .OrderBy(p => p.Date).ThenBy(p => p.Id)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var withCash = candidates.Where(p => OnAccountCash(p) > 0m).ToList();
+            var result = new AdvanceSweepResultDto { ReceiptsConsidered = withCash.Count };
+
+            foreach (var p in withCash)
+            {
+                var before = OnAccountCash(p);
+                var line = new AdvanceSweepLineDto
+                {
+                    PaymentId = p.Id, Number = p.Number, Date = p.Date, Available = before,
+                };
+                try
+                {
+                    var updated = await AutoAllocateAsync(p.Id);
+                    if (updated == null)
+                    {
+                        line.Skipped = "The receipt no longer exists.";
+                    }
+                    else
+                    {
+                        // Measured from the saved document rather than the plan,
+                        // so the figure reported is the one that was written.
+                        var after = updated.Amount - updated.Allocations
+                            .Where(a => a.Kind != nameof(AllocationKind.OnAccount))
+                            .Sum(a => a.Amount);
+                        line.Applied = Math.Max(0m, before - after);
+                        line.InvoicesSettled = updated.Allocations
+                            .Count(a => a.InvoiceId.HasValue);
+                        result.ReceiptsApplied++;
+                        result.TotalApplied += line.Applied;
+                    }
+                }
+                catch (InvalidOperationException ex)
+                {
+                    // Business refusals are the expected outcome for some rows
+                    // (nothing outstanding, period closed) and are the operator's
+                    // to read. Anything else is a real fault and propagates.
+                    line.Skipped = ex.Message;
+                    _logger.LogInformation(
+                        "Advance sweep skipped receipt {PaymentId} for client {ClientId}: {Reason}",
+                        p.Id, clientId, ex.Message);
+                }
+                result.RemainingOnAccount += line.Available - line.Applied;
+                result.Receipts.Add(line);
+            }
+
+            return result;
+        }
+
+        /// <summary>Every invoice of one customer that can still take money,
+        /// in the shape the planner reads.
+        ///
+        /// Excluded, and each for its own reason: CANCELLED and DEMO invoices are
+        /// not receivable at all (the same pair every report excludes); a CREDIT
+        /// NOTE (NoteKind 2) REDUCES the receivable, so taking cash against one
+        /// would be backwards. A DEBIT NOTE (NoteKind 1) stays — it is an
+        /// undercharge the customer genuinely owes.</summary>
+        private async Task<List<OutstandingInvoice>> LoadOutstandingAsync(int companyId, int clientId)
+        {
+            var rows = await _context.Invoices
+                .Where(i => i.CompanyId == companyId
+                            && i.ClientId == clientId
+                            && !i.IsCancelled
+                            && !i.IsDemo
+                            && i.NoteKind != 2)
+                .Select(i => new
+                {
+                    i.Id, i.InvoiceNumber, i.Date, i.GrandTotal,
+                    i.WithholdingTaxAmount, i.AmountPaid,
+                })
+                .AsNoTracking()
+                .ToListAsync();
+
+            return rows
+                .Select(i => new OutstandingInvoice(
+                    i.Id, i.InvoiceNumber, i.Date,
+                    WithholdingTaxCalculator.Collectible(i.GrandTotal, i.WithholdingTaxAmount),
+                    i.AmountPaid))
+                .Where(i => i.BalanceDue > 0m)
+                .ToList();
+        }
+
+        private static AllocationPlanDto ToPlanDto(AllocationPlan plan, decimal available) => new()
+        {
+            Available = available > 0m ? available : 0m,
+            Applied = plan.Applied,
+            Remainder = plan.Remainder,
+            Lines = plan.Lines.Select(l => new PlannedAllocationDto
+            {
+                InvoiceId = l.InvoiceId, InvoiceNumber = l.InvoiceNumber,
+                Date = l.Date, BalanceDue = l.BalanceDue, Amount = l.Amount,
+            }).ToList(),
+        };
+
         // ── Delete ───────────────────────────────────────────────────────────
 
         public async Task<bool> DeleteAsync(int id)

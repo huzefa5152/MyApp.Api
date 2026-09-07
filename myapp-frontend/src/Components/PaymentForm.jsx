@@ -8,7 +8,7 @@ import AccountSelect from "./AccountSelect";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import useIsNarrow from "../hooks/useIsNarrow";
-import { createPayment, updatePayment } from "../api/paymentApi";
+import { createPayment, updatePayment, getAllocationPlan } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getPagedInvoicesByCompany } from "../api/invoiceApi";
@@ -141,6 +141,14 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // attempt (new contact, or a Retry) starts clean -- and set only in the
   // .catch() below.
   const [docsLoadFailed, setDocsLoadFailed] = useState(false);
+  // "Spread oldest first" — asks the SERVER how the typed amount divides across
+  // this customer's outstanding invoices and fills the boxes with the answer.
+  // The split is never computed here: Helpers/ReceiptAllocationPlanner is the
+  // one implementation, so the button and the server can't drift apart. What
+  // comes back is a PROPOSAL — every box stays editable, and saving goes
+  // through the same create path a hand-typed allocation uses.
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoError, setAutoError] = useState("");
   // Bumped by the Retry action to re-run the docs-fetch effect without any
   // of its other dependencies changing.
   const [retryToken, setRetryToken] = useState(0);
@@ -439,6 +447,41 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const advance = Math.max(0, round2(amountNum - docCashTotal));
   const overAllocated = isReceipt && purpose === "settle"
     && round2(docCashTotal) > round2(amountNum) + 0.005;
+
+  // Ask the server how this amount divides oldest-invoice-first, and fill the
+  // boxes with its answer. Boxes the plan does not name are CLEARED, so the
+  // result is the plan rather than the plan merged onto whatever was typed
+  // before — pressing the button twice gives the same answer both times.
+  //
+  // Create only. On an edit the server measures each invoice's balance with
+  // THIS receipt's own allocations still counted as settled, so it would
+  // propose less than the form allows; the existing lines are the operator's
+  // to adjust by hand.
+  const canAutoAllocate = isReceipt && !isEdit && purpose === "settle"
+    && payeeType === "Client" && !!contactId && docs.length > 0;
+
+  const runAutoAllocate = async () => {
+    setAutoError("");
+    if (amountNum <= 0) { setAutoError("Enter the amount received first."); return; }
+    setAutoBusy(true);
+    try {
+      const { data } = await getAllocationPlan(companyId, contactId, amountNum);
+      const next = {};
+      for (const line of data?.lines || []) {
+        next[line.invoiceId] = {
+          cash: String(line.amount), adj: "0", adjMode: "none", adjAccountId: null,
+        };
+      }
+      setAlloc(next);
+      if ((data?.lines || []).length === 0) {
+        setAutoError("Nothing outstanding to apply this to — it will all be an advance.");
+      }
+    } catch (e) {
+      setAutoError(e?.response?.data?.error || "Could not work out the allocation.");
+    } finally {
+      setAutoBusy(false);
+    }
+  };
 
   // Settle-remainder affordance for one document row (shared desktop + mobile).
   // Nothing shows until the operator receives less cash than the balance due.
@@ -941,6 +984,37 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                     Apply to open {docLabel.toLowerCase()}s
                     {isReceipt && <span style={{ fontWeight: 400, color: colors.textSecondary }}> (optional — anything left over is an advance)</span>}
                   </label>
+                  {canAutoAllocate && (
+                    <div style={{
+                      display: "flex", flexWrap: "wrap", alignItems: "center",
+                      gap: 10, marginBottom: 10,
+                    }}>
+                      <button
+                        type="button"
+                        data-testid="auto-allocate"
+                        onClick={runAutoAllocate}
+                        disabled={autoBusy}
+                        style={{
+                          padding: "10px 14px", minHeight: 44, borderRadius: 8,
+                          border: `1px solid ${colors.primary}`, background: "transparent",
+                          color: colors.primary, fontWeight: 600,
+                          cursor: autoBusy ? "default" : "pointer",
+                          opacity: autoBusy ? 0.6 : 1,
+                        }}
+                      >
+                        {autoBusy ? "Working…" : "Spread oldest first"}
+                      </button>
+                      <span style={{ color: colors.textSecondary, fontSize: 13 }}>
+                        Fills the boxes below from the oldest invoice onward. Change
+                        anything you like before saving.
+                      </span>
+                      {autoError && (
+                        <span style={{ color: colors.danger, fontSize: 13, width: "100%" }}>
+                          {autoError}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {!contactId ? (
                     <div style={hintBox}>Select a {contactLabel.toLowerCase()} to see their unpaid {docLabel.toLowerCase()}s.</div>
                   ) : loadingDocs ? (

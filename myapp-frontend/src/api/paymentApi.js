@@ -43,3 +43,26 @@ export const setInvoiceDueDate = (invoiceId, dueDate) =>
 
 export const setBillDueDate = (billId, dueDate) =>
   httpClient.put(`/purchasebills/${billId}/due-date`, { dueDate });
+
+// ── Auto-allocation (FIFO, oldest invoice first) ─────────────────────────────
+// The split itself is computed server-side (Helpers/ReceiptAllocationPlanner)
+// so there is exactly one implementation of the rule. The form asks what the
+// server WOULD do, fills its boxes with the answer, and lets the operator edit
+// it before saving through the normal create path.
+
+export const getAllocationPlan = (companyId, clientId, amount) =>
+  httpClient.get(`/receipts/company/${companyId}/allocation-plan`, {
+    params: { clientId, amount },
+  });
+
+// Applies FIFO to a SAVED receipt's still-unallocated cash (the advance case).
+export const autoAllocateReceipt = (id) =>
+  httpClient.post(`/receipts/${id}/auto-allocate`);
+
+// Sweeps every advance this customer holds onto their outstanding invoices.
+// Returns a per-receipt report; a receipt that could not be applied is named
+// with the reason rather than dropped.
+export const applyClientAdvances = (companyId, clientId) =>
+  httpClient.post(`/receipts/company/${companyId}/apply-advances`, null, {
+    params: { clientId },
+  });

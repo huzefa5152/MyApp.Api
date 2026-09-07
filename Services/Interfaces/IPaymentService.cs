@@ -44,6 +44,22 @@ namespace MyApp.Api.Services.Interfaces
         /// what A/R gains. Returns null if the payment is not found.</summary>
         Task<PaymentDto?> AllocateAsync(int paymentId, List<CreatePaymentAllocationDto> lines);
 
+        /// <summary>What FIFO auto-allocation WOULD do with a given amount for
+        /// a given customer, without writing anything: oldest invoice first,
+        /// each filled to its balance, the rest left as an advance. Feeds the
+        /// receipt form so the proposal can be edited before it is saved.</summary>
+        Task<AllocationPlanDto> PlanClientAllocationAsync(int companyId, int clientId, decimal available);
+
+        /// <summary>Spread a receipt's still-unallocated cash across its
+        /// customer outstanding invoices, oldest first, and apply it. Delegates
+        /// to AllocateAsync, so every guard and the GL posting are the shared
+        /// ones. Returns null if the receipt is not found.</summary>
+        Task<PaymentDto?> AutoAllocateAsync(int paymentId);
+
+        /// <summary>Apply every advance a customer is sitting on to their
+        /// outstanding invoices, oldest receipt first. Each receipt is applied
+        /// in its own transaction; one that cannot be is reported and skipped.</summary>
+        Task<AdvanceSweepResultDto> ApplyClientAdvancesAsync(int companyId, int clientId);
         /// <summary>Advance a cheque's lifecycle (Pending → Deposited → Cleared /
         /// Bounced) without a full document edit — the PDC register action.</summary>
         Task<PaymentDto?> SetChequeStatusAsync(int id, string status);

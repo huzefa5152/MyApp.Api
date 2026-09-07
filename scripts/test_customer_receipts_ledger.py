@@ -172,9 +172,9 @@ def err_of(body) -> str:
 
 
 # ── Document helpers ───────────────────────────────────────────────
-def make_invoice(base, token, cid, client_id, item_type_id, total):
+def make_invoice(base, token, cid, client_id, item_type_id, total, date=None):
     st, inv = http("POST", "/api/invoices/standalone", base, token=token, body={
-        "date": today_iso(), "companyId": cid, "clientId": client_id, "gstRate": 0,
+        "date": date or today_iso(), "companyId": cid, "clientId": client_id, "gstRate": 0,
         "items": [{"description": "Receipt-ledger test good", "quantity": 1,
                    "uom": "Pcs", "unitPrice": total, "itemTypeId": item_type_id}]})
     return (inv if st in (200, 201) and isinstance(inv, dict) else None)
@@ -1218,6 +1218,234 @@ def suite_16_twins_agree(base, token, cid, item_type_id):
                       f"in-memory = {in_memory}, A/R column = {in_sql}")
 
 
+def days_ago(n: int) -> str:
+    return (datetime.now(PKT).date() - timedelta(days=n)).strftime("%Y-%m-%dT00:00:00Z")
+
+
+def suite_17_auto_allocate(base, token, cid, item_type_id):
+    """FIFO auto-allocation: oldest invoice first, remainder left as an advance.
+
+    The split itself is Helpers/ReceiptAllocationPlanner, and applying it goes
+    through AllocateAsync — the same path a hand-typed allocation takes — so
+    what is worth pinning here is the ORDER, the CAP each invoice offers, and
+    which documents are eligible at all. Each case gets its own client, so one
+    client's leftovers can never feed another's plan."""
+    suite = "17. FIFO auto-allocation"
+    print(f"\n=== {suite} ===")
+    sfx = datetime.now().strftime("%H%M%S")
+
+    def plan_for(client_id, amount):
+        return http("GET", f"/api/receipts/company/{cid}/allocation-plan"
+                            f"?clientId={client_id}&amount={amount}", base, token=token)
+
+    def auto(rid):
+        return http("POST", f"/api/receipts/{rid}/auto-allocate", base, token=token)
+
+    def invoice_of(inv_id):
+        st, r = http("GET", f"/api/invoices/{inv_id}", base, token=token)
+        return r if st == 200 else None
+
+    # ── A. Oldest first, each filled to its balance ───────────────────────────
+    # Three invoices on three different DAYS, deliberately created newest-first
+    # so a plan that merely echoed creation order would fail this.
+    c1 = make_client(base, token, cid, f"FIFO Client {sfx}")
+    newest = make_invoice(base, token, cid, c1, item_type_id, 300000, date=days_ago(10))
+    oldest = make_invoice(base, token, cid, c1, item_type_id, 100000, date=days_ago(30))
+    middle = make_invoice(base, token, cid, c1, item_type_id, 200000, date=days_ago(20))
+    if not check(suite, "three invoices created across three dates",
+                 all(x is not None for x in (newest, oldest, middle)), "invoice create failed"):
+        return
+
+    st, plan = plan_for(c1, 250000)
+    lines = plan.get("lines") if isinstance(plan, dict) else None
+    check(suite, "the plan is returned", st == 200 and isinstance(lines, list),
+          f"got {st} {err_of(plan)}")
+    if isinstance(lines, list):
+        check(suite, "it names exactly the two invoices the money reaches",
+              len(lines) == 2, f"{len(lines)} lines")
+        if len(lines) == 2:
+            check(suite, "the OLDEST invoice comes first, not the first created",
+                  lines[0].get("invoiceId") == oldest["id"],
+                  f"first line is invoice id {lines[0].get('invoiceId')}, oldest is {oldest['id']}")
+            check(suite, "it is filled to its balance (100,000) and settles in full",
+                  eq(lines[0].get("amount"), 100000) and lines[0].get("settlesInFull") is True,
+                  f"amount {lines[0].get('amount')}, settlesInFull {lines[0].get('settlesInFull')}")
+            check(suite, "the next-oldest takes the remaining 150,000, part-paid",
+                  lines[1].get("invoiceId") == middle["id"]
+                  and eq(lines[1].get("amount"), 150000)
+                  and lines[1].get("settlesInFull") is False,
+                  f"line 2 = {lines[1]}")
+        check(suite, "the newest invoice is not touched",
+              all(l.get("invoiceId") != newest["id"] for l in lines),
+              "the newest invoice appeared in the plan")
+        check(suite, "applied is the whole 250,000 with nothing left over",
+              eq(plan.get("applied"), 250000) and eq(plan.get("remainder"), 0),
+              f"applied {plan.get('applied')}, remainder {plan.get('remainder')}")
+
+    # ── B. Applying it writes exactly what the preview promised ───────────────
+    st, rec = post_receipt(base, token, cid, receipt_body(c1, amount=250000, allocations=[]))
+    if check(suite, "a 250,000 advance is recorded", st in (200, 201), f"got {st} {err_of(rec)}"):
+        st, applied = auto(rec["id"])
+        check(suite, "auto-allocating it is accepted", st == 200, f"got {st} {err_of(applied)}")
+        if st == 200:
+            doc_lines = [a for a in (applied.get("allocations") or []) if a.get("invoiceId")]
+            check(suite, "the receipt now carries two invoice allocations",
+                  len(doc_lines) == 2, f"{len(doc_lines)} document lines")
+            check(suite, "and holds nothing back on account",
+                  eq(applied.get("unallocatedAmount"), 0),
+                  f"unallocatedAmount = {applied.get('unallocatedAmount')}")
+            a, b, c = invoice_of(oldest["id"]), invoice_of(middle["id"]), invoice_of(newest["id"])
+            check(suite, "the oldest invoice is fully settled",
+                  a is not None and eq(a.get("balanceDue"), 0), f"balanceDue {a and a.get('balanceDue')}")
+            check(suite, "the middle one is left owing 50,000",
+                  b is not None and eq(b.get("balanceDue"), 50000), f"balanceDue {b and b.get('balanceDue')}")
+            check(suite, "the newest is untouched at 300,000",
+                  c is not None and eq(c.get("balanceDue"), 300000), f"balanceDue {c and c.get('balanceDue')}")
+
+    # ── C. What no invoice claims stays an advance ────────────────────────────
+    c2 = make_client(base, token, cid, f"FIFO Spare {sfx}")
+    small = make_invoice(base, token, cid, c2, item_type_id, 60000)
+    st, rec2 = post_receipt(base, token, cid, receipt_body(c2, amount=100000, allocations=[]))
+    if check(suite, "a 100,000 receipt against 60,000 of invoices is recorded",
+             small is not None and st in (200, 201), f"got {st} {err_of(rec2)}"):
+        st, r = auto(rec2["id"])
+        check(suite, "auto-allocation applies only the 60,000 that is owed",
+              st == 200 and eq(r.get("unallocatedAmount"), 40000),
+              f"got {st}, unallocatedAmount = {r.get('unallocatedAmount') if st == 200 else err_of(r)}")
+        check(suite, "re-running it refuses rather than inventing somewhere to put the rest",
+              auto(rec2["id"])[0] == 400, "expected 400")
+
+    # ── C2. An invoice this receipt already part-paid can still be topped up ──
+    # Its headroom is Collectible − AmountPaid and AmountPaid already counts
+    # this receipt's own earlier line, so the top-up is measured correctly.
+    # Skipping such invoices (the first cut did) left a receipt refusing to
+    # spend itself on a debt the customer plainly still owed, and said "no
+    # outstanding invoices" while saying it.
+    c2b = make_client(base, token, cid, f"FIFO TopUp {sfx}")
+    part = make_invoice(base, token, cid, c2b, item_type_id, 60000)
+    st, rec2b = post_receipt(base, token, cid, receipt_body(
+        c2b, amount=100000,
+        allocations=[{"kind": "Document", "invoiceId": part["id"], "amount": 20000}]))
+    if check(suite, "a receipt that hand-pays 20,000 of a 60,000 invoice is recorded",
+             part is not None and st in (200, 201), f"got {st} {err_of(rec2b)}"):
+        st, r = auto(rec2b["id"])
+        check(suite, "auto-allocation tops the SAME invoice up by the other 40,000",
+              st == 200 and eq(r.get("unallocatedAmount"), 40000),
+              f"got {st}, unallocatedAmount = {r.get('unallocatedAmount') if st == 200 else err_of(r)}")
+        inv = invoice_of(part["id"])
+        check(suite, "and the invoice is fully settled, not overpaid",
+              inv is not None and eq(inv.get("balanceDue"), 0)
+              and eq(inv.get("amountPaid"), 60000),
+              f"balanceDue {inv and inv.get('balanceDue')}, amountPaid {inv and inv.get('amountPaid')}")
+
+    # ── D. The cap is the COLLECTIBLE, not the grand total ────────────────────
+    # A withheld slice was settled by the customer at invoice time, so it was
+    # never receivable. Proposing it would produce a line AssertNoInvoiceOverpay
+    # then rejects — the button would look broken.
+    c3 = make_client(base, token, cid, f"FIFO WHT {sfx}")
+    st, wht_inv = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": today_iso(), "companyId": cid, "clientId": c3, "gstRate": 0,
+        "withholdingTaxRate": 10,
+        "items": [{"description": "WHT good", "quantity": 1, "uom": "Pcs",
+                   "unitPrice": 100000, "itemTypeId": item_type_id}]})
+    if check(suite, "a 100,000 invoice with 10% withheld is created",
+             st in (200, 201) and eq(wht_inv.get("withholdingTaxAmount"), 10000),
+             f"got {st} {err_of(wht_inv)}"):
+        st, plan = plan_for(c3, 100000)
+        got = (plan.get("lines") or [{}])[0].get("amount") if st == 200 else None
+        check(suite, "the plan offers 90,000 — the collectible, not the 100,000 total",
+              st == 200 and eq(got, 90000), f"offered {got}")
+        check(suite, "and the other 10,000 is reported as the leftover advance",
+              st == 200 and eq(plan.get("remainder"), 10000),
+              f"remainder {plan.get('remainder') if st == 200 else err_of(plan)}")
+
+    # ── E. A credit note is not something to receive money against ────────────
+    c4 = make_client(base, token, cid, f"FIFO Note {sfx}")
+    base_inv = make_invoice(base, token, cid, c4, item_type_id, 50000)
+    st, note = http("POST", "/api/invoices/notes", base, token=token, body={
+        "originalInvoiceId": base_inv["id"], "documentType": 10,
+        "reason": "Return of goods"})
+    if check(suite, "a credit note against it is created", st in (200, 201),
+             f"got {st} {err_of(note)}"):
+        st, plan = plan_for(c4, 500000)
+        ids = [l.get("invoiceId") for l in (plan.get("lines") or [])] if st == 200 else []
+        check(suite, "the credit note is excluded — it reduces the receivable",
+              note["id"] not in ids, f"plan named invoice ids {ids}")
+        check(suite, "the original invoice is still offered",
+              base_inv["id"] in ids, f"plan named invoice ids {ids}")
+
+    # ── F. A cancelled invoice is not outstanding ─────────────────────────────
+    c5 = make_client(base, token, cid, f"FIFO Void {sfx}")
+    voided = make_invoice(base, token, cid, c5, item_type_id, 70000)
+    st, _ = http("POST", f"/api/invoices/{voided['id']}/cancel", base, token=token,
+                 body={"reason": "test"})
+    if check(suite, "an invoice is cancelled", st in (200, 204), f"got {st}"):
+        st, plan = plan_for(c5, 70000)
+        check(suite, "it drops out of the plan entirely",
+              st == 200 and len(plan.get("lines") or []) == 0,
+              f"got {st} with {len(plan.get('lines') or []) if st == 200 else '?'} lines")
+
+    # ── G. Guards ─────────────────────────────────────────────────────────────
+    st, r = auto(999999999)
+    check(suite, "auto-allocating a receipt that does not exist is a 404", st == 404, f"got {st}")
+
+    c6 = make_client(base, token, cid, f"FIFO Bare {sfx}")
+    st, bare = post_receipt(base, token, cid, receipt_body(c6, amount=5000, allocations=[]))
+    if st in (200, 201):
+        st, r = auto(bare["id"])
+        check(suite, "a customer with nothing outstanding is refused, and says so",
+              st == 400 and "outstanding" in err_of(r).lower(),
+              f"got {st}: {err_of(r)}")
+
+    # ── H. Sweeping every advance a customer holds ────────────────────────────
+    # Oldest RECEIPT first: the money held longest is spent first.
+    c7 = make_client(base, token, cid, f"FIFO Sweep {sfx}")
+    make_invoice(base, token, cid, c7, item_type_id, 40000, date=days_ago(9))
+    make_invoice(base, token, cid, c7, item_type_id, 30000, date=days_ago(8))
+    r1 = post_receipt(base, token, cid, receipt_body(c7, amount=50000, allocations=[],
+                                                     date=days_ago(7)))[1]
+    r2 = post_receipt(base, token, cid, receipt_body(c7, amount=50000, allocations=[],
+                                                     date=days_ago(6)))[1]
+    st, sweep = http("POST", f"/api/receipts/company/{cid}/apply-advances?clientId={c7}",
+                     base, token=token, body=None)
+    if check(suite, "the sweep runs", st == 200 and isinstance(sweep, dict), f"got {st} {err_of(sweep)}"):
+        check(suite, "it considered both advances and applied both",
+              sweep.get("receiptsConsidered") == 2 and sweep.get("receiptsApplied") == 2,
+              f"considered {sweep.get('receiptsConsidered')}, applied {sweep.get('receiptsApplied')}")
+        check(suite, "70,000 of invoices was cleared out of 100,000 held",
+              eq(sweep.get("totalApplied"), 70000), f"totalApplied {sweep.get('totalApplied')}")
+        check(suite, "30,000 is reported as still sitting on account",
+              eq(sweep.get("remainingOnAccount"), 30000),
+              f"remainingOnAccount {sweep.get('remainingOnAccount')}")
+        rows = sweep.get("receipts") or []
+        check(suite, "the OLDEST receipt is the one spent in full",
+              len(rows) == 2 and rows[0].get("paymentId") == r1.get("id")
+              and eq(rows[0].get("applied"), 50000),
+              f"first row {rows[0] if rows else None}")
+        check(suite, "the newer one covers what is left and keeps the rest",
+              len(rows) == 2 and rows[1].get("paymentId") == r2.get("id")
+              and eq(rows[1].get("applied"), 20000),
+              f"second row {rows[1] if len(rows) > 1 else None}")
+        check(suite, "the per-receipt applied figures add up to the total",
+              eq(sum(float(x.get("applied") or 0) for x in rows), sweep.get("totalApplied")),
+              f"rows sum to {sum(float(x.get('applied') or 0) for x in rows)}")
+
+    # ── I. A sweep that can do nothing says why, per receipt ──────────────────
+    c8 = make_client(base, token, cid, f"FIFO Idle {sfx}")
+    post_receipt(base, token, cid, receipt_body(c8, amount=25000, allocations=[]))
+    st, sweep = http("POST", f"/api/receipts/company/{cid}/apply-advances?clientId={c8}",
+                     base, token=token, body=None)
+    if check(suite, "a sweep with nothing to settle still succeeds", st == 200, f"got {st}"):
+        rows = sweep.get("receipts") or []
+        check(suite, "it applies nothing and names the receipt it skipped, with a reason",
+              sweep.get("receiptsApplied") == 0 and eq(sweep.get("totalApplied"), 0)
+              and len(rows) == 1 and bool(rows[0].get("skipped")),
+              f"applied {sweep.get('receiptsApplied')}, rows {rows}")
+        check(suite, "and the money is still reported as held on account",
+              eq(sweep.get("remainingOnAccount"), 25000),
+              f"remainingOnAccount {sweep.get('remainingOnAccount')}")
+
+
 # ── Setup / teardown ───────────────────────────────────────────────
 def make_company(base, token, name, gl=True):
     st, company = http("POST", "/api/companies", base, token=token, body={
@@ -1347,6 +1575,7 @@ def main() -> int:
         suite_14_legacy_contact_case(base, token, cid, client_id, item_type_id, ar, args.db)
         suite_15_supplier_statement_scope(base, token, cid, supplier_id, foreign, args.db)
         suite_16_twins_agree(base, token, cid, item_type_id)
+        suite_17_auto_allocate(base, token, cid, item_type_id)
     finally:
         teardown(base, token, [cid, foreign["company_id"]], args.keep)
 
