@@ -70,17 +70,19 @@ namespace MyApp.Api.Data
                     Label = "Total after WHT (whole rupees)",
                     Category = "Totals", SortOrder = 54,
                 });
-                // The final line on a document carrying either income tax.
-                // Only the TaxInvoice DTO exposes it; the Bill template keeps
-                // the two single-tax fields it already had.
+                // The final line on a document carrying either income tax:
+                // grand total, less withholding, plus advance tax. Both print
+                // DTOs expose it (the bill print gained it 2026-09-07).
+                defs.Add(new MergeField
+                {
+                    TemplateType = type, FieldExpression = "{{fmtDec collectible}}",
+                    Label = "Net payable — less WHT, plus advance tax",
+                    Category = "Totals", SortOrder = 55,
+                });
+                // The whole-rupee variant exists only on the tax invoice, which
+                // is the only print DTO carrying rounded figures.
                 if (type == "TaxInvoice")
                 {
-                    defs.Add(new MergeField
-                    {
-                        TemplateType = type, FieldExpression = "{{fmtDec collectible}}",
-                        Label = "Net payable — less WHT, plus advance tax",
-                        Category = "Totals", SortOrder = 55,
-                    });
                     defs.Add(new MergeField
                     {
                         TemplateType = type, FieldExpression = "{{fmt collectibleRounded}}",

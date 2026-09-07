@@ -96,6 +96,13 @@ namespace MyApp.Api.DTOs
         /// it against the Further Tax line beneath.
         /// </summary>
         public decimal TotalBeforeFurtherTax { get; set; }
+        /// <summary>
+        /// What the buyer actually pays: GrandTotal (which already includes
+        /// further tax) less withholding, plus advance tax. Neither
+        /// BalanceDueAfterWht (ignores advance tax) nor TotalWithAdvanceTax
+        /// (ignores withholding) is that figure on a document carrying both.
+        /// </summary>
+        public decimal Collectible { get; set; }
         public string? PaymentTerms { get; set; }
         public List<PrintBillItemDto> Items { get; set; } = new();
     }

@@ -3173,6 +3173,8 @@ namespace MyApp.Api.Services.Implementations
                 WithholdingTaxAmount = inv.WithholdingTaxAmount,
                 BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount),
                 TotalBeforeFurtherTax = inv.Subtotal + inv.GSTAmount,
+                Collectible = WithholdingTaxCalculator.Collectible(
+                    inv.GrandTotal, inv.WithholdingTaxAmount) + inv.AdvanceTaxAmount,
                 FurtherTaxRate = inv.FurtherTaxRate,
                 FurtherTaxAmount = inv.FurtherTaxAmount,
                 // Advance income tax: the row the client's format calls
