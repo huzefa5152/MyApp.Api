@@ -312,6 +312,25 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-07 — Fix: the tax invoice's tax rows and its final total
+
+- **The "Further Tax" row on the Sales Tax Invoice never had a figure to show.**
+  Further tax is part of the FBR submission payload, not something this system
+  records on a document, so the row printed with an empty amount. It has been
+  replaced by the withholding-tax row it was standing in for — rate and amount,
+  deducted from what the buyer pays.
+- **The withholding row and the final total were only shown when advance tax
+  applied.** An invoice with withholding and no advance tax printed no
+  deduction and no final total at all.
+- **The final total was the wrong number whenever both taxes applied.** It read
+  "SUB TOTAL" and showed the grand total plus advance tax, ignoring the
+  withholding. There is now a **Net Payable** line: grand total, less
+  withholding, plus advance tax — built from the same rounded figures printed
+  above it, so the rows on the page add up to the line at the bottom.
+- Each tax row appears only on an invoice that carries that tax, and the net
+  line only when one of them actually moved the figure. Rates keep their
+  decimals, so 0.5% prints as 0.5%.
+
 ### 2026-09-05 — Fix: deleting a purchase bill left money on the stock
 
 - **Deleting a purchase bill gave back the quantity but not the value.** The
