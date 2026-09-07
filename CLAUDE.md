@@ -599,6 +599,52 @@ Rules that must not be relaxed:
   suite 4 (IDOR) — that suite is the only automated proof the hand-rolled scope
   holds.
 
+### 5c-2. Print-template artwork is a FILE, never inline base64 (2026-09-07)
+
+A bespoke print template must reference its logos, letterheads and banners by
+URL. Do not paste a `data:image/...;base64,...` URI into a template.
+
+Why: on the Alpha Traders templates the inline artwork was **87% of the Bill
+template (65KB) and 90% of the Challan (43KB)**. Those bytes are stored in the
+row, re-sent on every render, every editor load and every preview, and they
+bloat the print HTML (80KB -> 11KB once hosted).
+
+Where the files go:
+
+```
+myapp-frontend/public/print-assets/company-<id>/<name>-<WxH>.png
+```
+
+Vite copies `public/` into `dist/`, CI copies `dist/` into `wwwroot/`, so the
+asset deploys with the app. It is version-controlled, identical in every
+environment, and needs no new public-file mount (it is NOT under `data/`, so
+`§5d`'s allowlist does not apply). Uploads under `data/` would also survive —
+the FTP action runs `dangerous-clean-slate: false` — but they are not in git and
+a fresh environment would render without them.
+
+**Reference it RELATIVELY**, with no leading slash:
+
+```html
+<img src="print-assets/company-4/bill-header-915x168.png">
+```
+
+`mergeTemplate` injects `<base href="{origin}{BASE_URL}">`, so a relative path
+resolves wherever the app is mounted — this installation serves the ERP under
+`/admin/`. A ROOT-relative path (`/print-assets/...`) ignores the base path and
+404s here; that is exactly why `PrintBillDto.FbrLogoUrl`'s
+`/images/fbr-logo.png` does not resolve on a based deployment.
+
+**Both export paths wait for images.** `printDocument.writeAndPrint` has since
+the Jorbai Sales Quote bug (2026-06-27); `exportToPdf` and `exportToExcel` gained
+it on 2026-09-07 (`waitForImages`, awaiting `decode()` with a 5s cap). Without
+that, html2canvas rasterises a still-loading image as nothing and the PDF loses
+a logo while its text renders fine. If you add another export path, wait there
+too or hosted artwork will be intermittently blank.
+
+Prove a swap changed nothing: merge the template before and after and compare
+the flow height (`.tail` bottom) — it must be identical to the pixel. On the
+Bill it was 1049px both ways.
+
 ### 5d. Public file allowlist
 
 `data/` holds user uploads. Program.cs mounts ONLY the folders a browser must

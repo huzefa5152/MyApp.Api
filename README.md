@@ -312,6 +312,22 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-07 — Print templates load their artwork instead of carrying it
+
+- **Logos and letterheads on a print template are now files served with the
+  app, not image data pasted into the template.** On the bespoke Alpha Traders
+  layouts that artwork was 87% of the bill template and 90% of the challan, and
+  those bytes were re-sent every time a document was rendered, previewed or
+  opened in the editor. The bill template is now 8.9 KB instead of 65 KB, and
+  the HTML behind a printed bill 11 KB instead of 80 KB.
+- **The printed bill and its PDF are unchanged** — same layout to the pixel.
+- **PDF and Excel exports now wait for images before capturing.** They
+  previously paused for a fixed moment and took whatever had arrived, so a
+  slow image could come out blank while the text around it printed fine. The
+  print dialog has waited properly for some time; the other two now match.
+- Templates reference artwork by a relative path, so it resolves correctly
+  whether the app is served from the root of a domain or a sub-folder.
+
 ### 2026-09-07 — Further tax on a bill
 
 - **Further tax (s.3(1A)) can now be charged on a bill.** A percentage field
