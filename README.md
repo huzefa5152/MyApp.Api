@@ -289,6 +289,18 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-05 — Withholding tax can be printed on a bill or tax invoice
+
+- **WHT rate, WHT amount and the total after WHT are now merge fields** on both
+  the Bill and the Sales Tax Invoice templates. The Sales Tax Invoice had never
+  carried the figures at all, so a template could not show a deduction the
+  invoice had already recorded.
+- The rate keeps its decimals — 0.1%, 0.5% and 2.5% print as themselves. The
+  whole-rupee formatter would have shown them as 0%, 1% and 3%.
+- Where no withholding applies the amount is zero and the total after WHT
+  equals the grand total, so a template can print the row unconditionally or
+  hide it with the new conditional.
+
 ### 2026-09-02 — Unit price and quantity accept 12 decimal places
 
 - **Unit price and quantity now take up to 12 decimals everywhere they are typed** — sales invoice, standalone bill, purchase bill, purchase debit note, sales quote, sales order, delivery challan, PO import, stock opening balance and adjustment, and non-inventory default prices. Entering a back-computed rate such as `39,400 / 12 = 3283.333333333333` no longer shows "Please enter a valid value. The two nearest valid values are 3283.33 and 3283.34", and no longer gets silently rounded to two decimals when saved.

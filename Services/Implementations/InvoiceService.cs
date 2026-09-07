@@ -3086,6 +3086,12 @@ namespace MyApp.Api.Services.Implementations
                 GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),
                 // Recompute words at print time so old bills stay in sync.
                 AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
+                // Same source as the Bill print path: the stored rate and
+                // amount, and Collectible() for the net.
+                WithholdingTaxRate = inv.WithholdingTaxRate,
+                WithholdingTaxAmount = inv.WithholdingTaxAmount,
+                BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(
+                    inv.GrandTotal, inv.WithholdingTaxAmount),
                 FbrIRN = inv.FbrIRN,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,

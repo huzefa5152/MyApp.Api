@@ -131,6 +131,23 @@ namespace MyApp.Api.DTOs
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
 
+        // Withholding tax (income-tax, s.153) -- 0 when none. The same three
+        // fields PrintBillDto has carried all along; the tax invoice never
+        // exposed them, so a template could not print the WHT line even though
+        // the invoice stored it. Nothing is recomputed: the rate and amount are
+        // the stored ones and the net comes from WithholdingTaxCalculator,
+        // which is the only place the collectible balance is worked out.
+        //
+        // The rate is a DECIMAL percentage (0.1, 0.5, 2, 2.5), so a template
+        // must format it with a helper that keeps decimals -- {{fmtQty}} -- and
+        // not {{fmt}}, which rounds 0.1% to 0%.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>GrandTotal - WithholdingTaxAmount: what the buyer actually
+        /// pays once the withheld slice goes to FBR. Equal to GrandTotal when
+        /// no withholding applies.</summary>
+        public decimal BalanceDueAfterWht { get; set; }
+
         // FBR Digital Invoicing
         public string? FbrIRN { get; set; }
         public string? FbrStatus { get; set; }

@@ -748,6 +748,7 @@ using (var scope = app.Services.CreateScope())
     // Division (sub-company) merge fields across all template types — same
     // idempotent runtime-seed contract.
     await MyApp.Api.Data.DivisionMergeFieldSeeder.SeedAsync(db);
+    await MyApp.Api.Data.WithholdingTaxMergeFieldSeeder.SeedAsync(db);
 
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
