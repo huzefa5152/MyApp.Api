@@ -162,7 +162,21 @@ export function mergeTemplate(htmlTemplate, data) {
   // pagination fix without being rewritten. See utils/printLayout.js.
   const html = applyPrintLayoutToHtml(compiled(merged));
   if (typeof window !== "undefined" && window.location?.origin) {
-    const base = `<base href="${window.location.origin}/">`;
+    // The base the printed document resolves its relative URLs against.
+    //
+    // It carries the app's BASE_URL, not just the origin, because this
+    // deployment serves the ERP under "/admin/" -- with a bare origin the only
+    // asset path that worked was one with "/admin/" written into it, which is
+    // not portable to an installation mounted at the root. (It is also why
+    // FbrLogoUrl's "/images/fbr-logo.png" 404s here: a ROOT-relative URL
+    // ignores the base path entirely.)
+    //
+    // A print template should therefore reference its artwork RELATIVELY --
+    //   <img src="print-assets/<company>/<file>.png">
+    // -- and it then resolves correctly whatever path the app is mounted at.
+    // Root-relative URLs are unaffected by this: they keep using the origin.
+    const appBase = (import.meta.env?.BASE_URL || "/").replace(/\/*$/, "/");
+    const base = `<base href="${window.location.origin}${appBase}">`;
     return /<head[^>]*>/i.test(html)
       ? html.replace(/<head[^>]*>/i, (m) => m + base)
       : base + html;
