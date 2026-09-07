@@ -48,14 +48,21 @@ OUT = tempfile.mkdtemp(prefix="stock-export-")
 
 # Column layout — must match Helpers/StockExcelBuilder.cs.
 C_ITEM, C_HS, C_UOM = 1, 2, 3
-C_OPEN, C_IN, C_OUT, C_ONHAND = 4, 5, 6, 7
-C_UNIT, C_EXCL, C_RATE, C_TAX, C_INCL = 8, 9, 10, 11, 12
+# Each quantity is followed by its own money (2026-09-04).
+C_OPEN, C_OPENVAL = 4, 5
+C_IN, C_INVAL = 6, 7
+C_OUT, C_OUTVAL = 8, 9
+C_ONHAND = 10
+C_UNIT, C_EXCL, C_RATE, C_TAX, C_INCL = 11, 12, 13, 14, 15
 
 # DTO field -> column, for the row-for-row comparison against the grid.
 FIELD_COLUMNS = {
     "openingBalance": C_OPEN,
+    "openingValueExcludingTax": C_OPENVAL,
     "totalIn": C_IN,
+    "valueIn": C_INVAL,
     "totalOut": C_OUT,
+    "valueOut": C_OUTVAL,
     "onHand": C_ONHAND,
     "unitCost": C_UNIT,
     "valueExcludingTax": C_EXCL,
@@ -290,8 +297,10 @@ def main() -> int:
 
         # ── Suite 2: totals ─────────────────────────────────────────────────
         print("\n  Suite 2 — totals tie to the rows and to the API")
-        for field, col in [("openingBalance", C_OPEN), ("totalIn", C_IN),
-                           ("totalOut", C_OUT), ("onHand", C_ONHAND),
+        for field, col in [("openingBalance", C_OPEN), ("openingValueExcludingTax", C_OPENVAL),
+                           ("totalIn", C_IN), ("valueIn", C_INVAL),
+                           ("totalOut", C_OUT), ("valueOut", C_OUTVAL),
+                           ("onHand", C_ONHAND),
                            ("valueExcludingTax", C_EXCL), ("salesTax", C_TAX),
                            ("valueIncludingTax", C_INCL)]:
             summed = sum(dec(ws.cell(r, col).value) for r in items)

@@ -639,6 +639,18 @@ export default function StockDashboardPage() {
                                 <span style={{ color: "#2e7d32" }} title="Total in">+{num(r.totalIn)}</span>
                                 <span style={{ color: "#c62828" }} title="Total out">−{num(r.totalOut)}</span>
                               </div>
+                              {/* The money against each of those three
+                                  quantities, on its own line beneath them so
+                                  the column keeps its width and the figures
+                                  stay aligned with the quantity above. All
+                                  three come from the API row -- the opening's
+                                  stored value and the valuation walk's own
+                                  ValueIn / ValueOut. */}
+                              <div style={styles.flowMetaValue}>
+                                <span title="Opening value, excluding tax">{money(r.openingValueExcludingTax)}</span>
+                                <span style={{ color: "#2e7d32" }} title="Value in, excluding tax">+{money(r.valueIn)}</span>
+                                <span style={{ color: "#c62828" }} title="Value out, excluding tax">−{money(r.valueOut)}</span>
+                              </div>
                             </td>
                             <td style={styles.tdMoney}>{money(r.valueExcludingTax)}</td>
                             <td style={styles.tdMoney}>
@@ -702,14 +714,17 @@ export default function StockDashboardPage() {
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Opening</span>
                             <span className="stock-card__stat-value">{r.openingBalance.toLocaleString()}</span>
+                            <span style={styles.cardStatMoney}>{money(r.openingValueExcludingTax)}</span>
                           </div>
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Total IN</span>
                             <span className="stock-card__stat-value" style={{ color: "#2e7d32" }}>+{r.totalIn.toLocaleString()}</span>
+                            <span style={styles.cardStatMoney}>{money(r.valueIn)}</span>
                           </div>
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Total OUT</span>
                             <span className="stock-card__stat-value" style={{ color: "#c62828" }}>−{r.totalOut.toLocaleString()}</span>
+                            <span style={styles.cardStatMoney}>{money(r.valueOut)}</span>
                           </div>
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Excluding</span>
@@ -1482,6 +1497,17 @@ const styles = {
   flowMeta: {
     display: "flex", justifyContent: "flex-end", gap: "0.35rem",
     marginTop: "0.15rem", fontSize: "0.72rem", color: colors.textSecondary,
+    fontVariantNumeric: "tabular-nums",
+  },
+  // Same alignment and figures style as flowMeta above, one shade lighter so
+  // the quantity line stays the one the eye lands on first.
+  flowMetaValue: {
+    display: "flex", justifyContent: "flex-end", gap: "0.35rem",
+    marginTop: "0.1rem", fontSize: "0.68rem", color: colors.textSecondary,
+    fontVariantNumeric: "tabular-nums", opacity: 0.85,
+  },
+  cardStatMoney: {
+    fontSize: "0.68rem", color: colors.textSecondary,
     fontVariantNumeric: "tabular-nums",
   },
   rateChip: { marginTop: "0.15rem", fontSize: "0.72rem", color: colors.textSecondary },

@@ -40,6 +40,14 @@
         /// <summary>Weighted-average cost of a single unit on hand.</summary>
         public decimal UnitCost { get; set; }
 
+        /// <summary>
+        /// What the OPENING quantity was worth, excluding sales tax -- the
+        /// figure the operator entered (or the stock sheet imported) against
+        /// the opening balance, not a re-derivation of it. Reported so the
+        /// three quantity columns each have their money beside them.
+        /// </summary>
+        public decimal OpeningValueExcludingTax { get; set; }
+
         /// <summary>Value that came in, and went out, over the item's life.</summary>
         public decimal ValueIn { get; set; }
         public decimal ValueOut { get; set; }

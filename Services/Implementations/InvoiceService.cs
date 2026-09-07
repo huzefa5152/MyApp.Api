@@ -3260,6 +3260,12 @@ namespace MyApp.Api.Services.Implementations
                     ? ""
                     : $"Advanced Income Tax {AdvanceTaxRates.PrintLabel(inv.AdvanceTaxSection)}",
                 TotalWithAdvanceTax = inv.GrandTotal + inv.AdvanceTaxAmount,
+                // Same source as the Bill print path (line ~3144): the stored
+                // rate and amount, and Collectible() for the net.
+                WithholdingTaxRate = inv.WithholdingTaxRate,
+                WithholdingTaxAmount = inv.WithholdingTaxAmount,
+                BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(
+                    inv.GrandTotal, inv.WithholdingTaxAmount),
                 FbrIRN = inv.FbrIRN,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,

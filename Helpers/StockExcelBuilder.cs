@@ -53,23 +53,32 @@ namespace MyApp.Api.Helpers
         /// was truncated rather than growing into a file that never opens.</summary>
         public const int MaxRows = 60_000;
 
-        private const int Cols = 14;
+        private const int Cols = 17;
 
         // Column indices, named once so the two row shapes cannot drift apart.
-        private const int CName = 1;   // Item            | Date
-        private const int CCode = 2;   // HS Code         | Document
-        private const int CUom = 3;    // UOM             | Direction
-        private const int COpen = 4;   // Opening         | —
-        private const int CIn = 5;     // Total In        | Qty In
-        private const int COut = 6;    // Total Out       | Qty Out
-        private const int COnHand = 7; // On Hand         | Balance
-        private const int CUnit = 8;   // Unit Cost       | Unit Cost
-        private const int CExcl = 9;   // Excluding       | Value
-        private const int CRate = 10;  // Tax Rate %      | —
-        private const int CTax = 11;   // Sales Tax       | —
-        private const int CIncl = 12;  // Including       | Running Value
-        private const int CLast = 13;  // Last Movement   | —
-        private const int CNotes = 14; // —               | Notes
+        // Each of the three quantity columns is followed by its own money, so
+        // a reader never has to hold a figure in their head across the sheet
+        // (operator request 2026-09-04). The value columns are blank on a
+        // movement sub-row, as Opening / Tax Rate / Sales Tax already are --
+        // a movement's own money stays where it has always been, under Value
+        // and Running Value, so nothing existing changed meaning.
+        private const int CName = 1;      // Item             | Date
+        private const int CCode = 2;      // HS Code          | Document
+        private const int CUom = 3;       // UOM              | Direction
+        private const int COpen = 4;      // Opening          | —
+        private const int COpenVal = 5;   // Opening Value    | —
+        private const int CIn = 6;        // Total In         | Qty In
+        private const int CInVal = 7;     // Total In Value   | —
+        private const int COut = 8;       // Total Out        | Qty Out
+        private const int COutVal = 9;    // Total Out Value  | —
+        private const int COnHand = 10;   // On Hand          | Balance
+        private const int CUnit = 11;     // Unit Cost        | Unit Cost
+        private const int CExcl = 12;     // Excluding        | Value
+        private const int CRate = 13;     // Tax Rate %       | —
+        private const int CTax = 14;      // Sales Tax        | —
+        private const int CIncl = 15;     // Including        | Running Value
+        private const int CLast = 16;     // Last Movement    | —
+        private const int CNotes = 17;    // —                | Notes
 
         public static byte[] Build(StockExportDto data)
         {
@@ -315,8 +324,11 @@ namespace MyApp.Api.Helpers
             (CCode,   "HS Code",       false),
             (CUom,    "UOM",           false),
             (COpen,   "Opening",       true),
+            (COpenVal, "Opening Value", true),
             (CIn,     "Total In",      true),
+            (CInVal,  "Total In Value", true),
             (COut,    "Total Out",     true),
+            (COutVal, "Total Out Value", true),
             (COnHand, "On Hand",       true),
             (CUnit,   "Unit Cost",     true),
             (CExcl,   "Excluding",     true),
@@ -356,8 +368,15 @@ namespace MyApp.Api.Helpers
             Text(ws, r, CUom, s.UOM, widths);
 
             Number(ws, r, COpen, s.OpeningBalance, Qty, widths);
+            // Straight from the row the API built: the opening's stored value
+            // and the walk's own ValueIn / ValueOut. No arithmetic here -- the
+            // weighted-average walk in Helpers/StockValuation is the only place
+            // stock is valued, and a second sum here could disagree with it.
+            Number(ws, r, COpenVal, s.OpeningValueExcludingTax, Money, widths);
             Number(ws, r, CIn, s.TotalIn, Qty, widths);
+            Number(ws, r, CInVal, s.ValueIn, Money, widths);
             Number(ws, r, COut, s.TotalOut, Qty, widths);
+            Number(ws, r, COutVal, s.ValueOut, Money, widths);
             Number(ws, r, COnHand, s.OnHand, Qty, widths);
             Number(ws, r, CUnit, s.UnitCost, Cost, widths);
             Number(ws, r, CExcl, s.ValueExcludingTax, Money, widths);
@@ -379,7 +398,7 @@ namespace MyApp.Api.Helpers
             ws.Cell(r, CName).Style.Font.SetBold();
             ws.Cell(r, COnHand).Style.Font.SetBold();
             ws.Cell(r, CIncl).Style.Font.SetBold();
-            ws.Range(r, COpen, r, COut).Style.Font.SetFontColor(Muted);
+            ws.Range(r, COpen, r, COutVal).Style.Font.SetFontColor(Muted);
 
             // Item names run past any sane column width, and the HS code in the
             // next cell means a long one has nothing to spill into — it would be
@@ -474,12 +493,16 @@ namespace MyApp.Api.Helpers
         private sealed class Totals
         {
             public decimal Opening, In, Out, Qty, Excl, Tax, Incl;
+            public decimal OpeningVal, InVal, OutVal;
 
             public void Add(StockOnHandRowDto s)
             {
                 Opening += s.OpeningBalance;
+                OpeningVal += s.OpeningValueExcludingTax;
                 In += s.TotalIn;
+                InVal += s.ValueIn;
                 Out += s.TotalOut;
+                OutVal += s.ValueOut;
                 Qty += s.OnHand;
                 Excl += s.ValueExcludingTax;
                 Tax += s.SalesTax;
@@ -496,8 +519,11 @@ namespace MyApp.Api.Helpers
             Measure(widths, CName, label);
 
             Number(ws, r, COpen, t.Opening, Qty, widths);
+            Number(ws, r, COpenVal, t.OpeningVal, Money, widths);
             Number(ws, r, CIn, t.In, Qty, widths);
+            Number(ws, r, CInVal, t.InVal, Money, widths);
             Number(ws, r, COut, t.Out, Qty, widths);
+            Number(ws, r, COutVal, t.OutVal, Money, widths);
             Number(ws, r, COnHand, t.Qty, Qty, widths);
             Number(ws, r, CExcl, t.Excl, Money, widths);
             Number(ws, r, CTax, t.Tax, Money, widths);

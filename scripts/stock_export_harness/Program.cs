@@ -218,7 +218,12 @@ Console.WriteLine("\n=== 3. Columns and totals ===");
 
     string[] expected =
     {
-        "Item", "HS Code", "UOM", "Opening", "Total In", "Total Out", "On Hand",
+        "Item", "HS Code", "UOM",
+        // Each quantity is followed by its own money (2026-09-04).
+        "Opening", "Opening Value",
+        "Total In", "Total In Value",
+        "Total Out", "Total Out Value",
+        "On Hand",
         "Unit Cost", "Excluding", "Tax Rate", "Sales Tax", "Including",
         "Last Movement", "Notes",
     };
@@ -241,7 +246,11 @@ Console.WriteLine("\n=== 3. Columns and totals ===");
         .ToList();
     Check("one row per item above the total", itemRows.Count == items.Count, itemRows.Count.ToString());
 
-    foreach (var (col, name) in new[] { (4, "Opening"), (5, "Total In"), (6, "Total Out"), (7, "On Hand"), (9, "Excluding"), (11, "Sales Tax"), (12, "Including") })
+    foreach (var (col, name) in new[] {
+        (4, "Opening"), (5, "Opening Value"),
+        (6, "Total In"), (7, "Total In Value"),
+        (8, "Total Out"), (9, "Total Out Value"),
+        (10, "On Hand"), (12, "Excluding"), (14, "Sales Tax"), (15, "Including") })
     {
         var summed = itemRows.Sum(r => r.Cell(col).GetValue<decimal>());
         var stated = ws.Cell(totalRow, col).GetValue<decimal>();
@@ -250,17 +259,17 @@ Console.WriteLine("\n=== 3. Columns and totals ===");
 
     // A weighted average and a percentage do not add up, so those two columns
     // must stay EMPTY on the total row rather than showing a nonsense sum.
-    Check("TOTAL leaves Unit Cost blank", ws.Cell(totalRow, 8).IsEmpty());
-    Check("TOTAL leaves Tax Rate blank", ws.Cell(totalRow, 10).IsEmpty());
+    Check("TOTAL leaves Unit Cost blank", ws.Cell(totalRow, 11).IsEmpty());
+    Check("TOTAL leaves Tax Rate blank", ws.Cell(totalRow, 13).IsEmpty());
 
     // Sales tax and the inclusive total are DERIVED, and the sheet has to keep
     // that identity or it contradicts the dashboard it was taken from.
     foreach (var r in itemRows)
     {
-        var excl = r.Cell(9).GetValue<decimal>();
-        var rate = r.Cell(10).GetValue<decimal>();
-        var tax = r.Cell(11).GetValue<decimal>();
-        var incl = r.Cell(12).GetValue<decimal>();
+        var excl = r.Cell(12).GetValue<decimal>();
+        var rate = r.Cell(13).GetValue<decimal>();
+        var tax = r.Cell(14).GetValue<decimal>();
+        var incl = r.Cell(15).GetValue<decimal>();
         var derived = Math.Round(excl * rate / 100m, 2, MidpointRounding.AwayFromZero);
         Check($"\"{Trim(r.Cell(1).GetString(), 28)}\": tax = excluding x rate / 100",
             tax == derived && incl == excl + tax, $"{excl} @ {rate}% -> {tax} / {incl}");
@@ -277,25 +286,30 @@ Console.WriteLine("\n=== 4. Movement rows share the item grid ===");
     var subHeader = ws.RowsUsed().First(r => r.OutlineLevel > 0 && r.Cell(1).GetString() == "Date");
     var expectPairs = new[]
     {
-        (1, "Date"), (2, "Document"), (3, "Direction"), (5, "Qty In"), (6, "Qty Out"),
-        (7, "Balance"), (8, "Unit Cost"), (9, "Value"), (12, "Running Value"), (14, "Notes"),
+        (1, "Date"), (2, "Document"), (3, "Direction"), (6, "Qty In"), (8, "Qty Out"),
+        (10, "Balance"), (11, "Unit Cost"), (12, "Value"), (15, "Running Value"), (17, "Notes"),
     };
     foreach (var (col, text) in expectPairs)
         Check($"sub-header column {col} is \"{text}\"",
             subHeader.Cell(col).GetString() == text, subHeader.Cell(col).GetString());
     Check("sub-header leaves the Opening column empty", subHeader.Cell(4).IsEmpty());
+    // A movement's own money stays under Value / Running Value; the three
+    // new item-level value columns are blank on a movement row, as Opening is.
+    Check("sub-header leaves Opening Value empty", subHeader.Cell(5).IsEmpty());
+    Check("sub-header leaves Total In Value empty", subHeader.Cell(7).IsEmpty());
+    Check("sub-header leaves Total Out Value empty", subHeader.Cell(9).IsEmpty());
 
     var firstMove = ws.Row(subHeader.RowNumber() + 1);
     Check("an IN movement fills Qty In and leaves Qty Out empty",
-        !firstMove.Cell(5).IsEmpty() && firstMove.Cell(6).IsEmpty());
+        !firstMove.Cell(6).IsEmpty() && firstMove.Cell(8).IsEmpty());
     Check("source type reads as words, not an enum name",
         firstMove.Cell(2).GetString().StartsWith("Purchase Bill #"), firstMove.Cell(2).GetString());
 
     var outMove = ws.RowsUsed().First(r => r.OutlineLevel > 0 && r.Cell(3).GetString() == "OUT");
     Check("an OUT movement fills Qty Out and leaves Qty In empty",
-        !outMove.Cell(6).IsEmpty() && outMove.Cell(5).IsEmpty());
+        !outMove.Cell(8).IsEmpty() && outMove.Cell(6).IsEmpty());
     Check("movement quantities are unsigned — the direction carries the sign",
-        outMove.Cell(6).GetValue<decimal>() > 0m, outMove.Cell(6).GetString());
+        outMove.Cell(8).GetValue<decimal>() > 0m, outMove.Cell(8).GetString());
 }
 
 // ── Suite 5: safety and the summary-only variant ─────────────────────────────

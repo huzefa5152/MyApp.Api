@@ -186,6 +186,14 @@ namespace MyApp.Api.Controllers
                     SalesTax = position.SalesTax,
                     ValueIncludingTax = position.ValueIncludingTax,
                     UnitCost = Math.Round(position.UnitCost, 4),
+                    // The opening's own value, straight from the stored opening
+                    // balance -- the same figure fed into the walk above, so the
+                    // column cannot disagree with what the valuation used.
+                    OpeningValueExcludingTax = open?.Value ?? 0m,
+                    // Already computed by the walk (StockValuation.Position):
+                    // an inward movement's value is its stated cost or the
+                    // running average, an outward movement's is the average
+                    // standing when it happened. Never recomputed here.
                     ValueIn = position.ValueIn,
                     ValueOut = position.ValueOut,
                     LastMovementAt = lastDates.TryGetValue(id, out var d) ? d : null,

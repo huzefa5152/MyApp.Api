@@ -312,6 +312,22 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-05 — Stock values beside the quantities, and WHT on print templates
+
+- **The Stock Report now shows the value of Opening, Total In and Total Out**,
+  not just their quantities. Each figure sits next to the quantity it belongs
+  to, in the grid, on the cards and in the Excel export. Nothing is recomputed:
+  the opening's value is the one entered against the opening balance, and the
+  in/out values come from the same weighted-average walk that already produces
+  the on-hand value — so Opening + In − Out ties exactly to the value on hand.
+- Quantities, on-hand, unit cost and the existing filters are untouched.
+- **Withholding tax can now be printed.** WHT rate, WHT amount and the total
+  after WHT are available as merge fields on both the Bill and the Sales Tax
+  Invoice templates. The Sales Tax Invoice had never carried the figures at
+  all, so a template could not show a deduction the invoice had recorded.
+- The rate keeps its decimals: 0.1%, 0.5% and 2.5% print as themselves. The
+  whole-rupee formatter would have shown them as 0%, 1% and 3%.
+
 ### 2026-09-04 — HS codes on every view, and a tax invoice in whole rupees
 
 - **The HS code is shown on both the Bills and the Invoices tab**, and whether
