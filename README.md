@@ -312,6 +312,19 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-07 — Fix: the Bills and Invoices table view would not open
+
+- **Switching Bills or Invoices to table view showed "Something Went Wrong" and
+  the page did not load.** The Receipts link that replaced the payment-status
+  column on 2026-09-03 referred to a colour it never imported, which throws the
+  moment the table renders. The Purchase Bills table had the same fault.
+- It reached production because the build is happy either way — the identifier
+  only fails at render — and the table layout is offered only on screens
+  1280px and wider, so a narrower browser silently falls back to cards and
+  never runs the broken code.
+- A static check now scans every component for a theme value used without
+  being imported, so this class of fault cannot be shipped again.
+
 ### 2026-09-07 — Fix: the tax invoice's tax rows and its final total
 
 - **The "Further Tax" row on the Sales Tax Invoice never had a figure to show.**

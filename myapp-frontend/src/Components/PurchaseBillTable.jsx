@@ -1,6 +1,7 @@
 import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
+import { colors } from "../theme";
 
 // Payment-status pill (mirror of InvoiceTable's): Paid / Partial / Overdue / Unpaid.
 // No per-document payment status (2026-09-03) — payments here are recorded

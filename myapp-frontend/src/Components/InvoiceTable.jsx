@@ -8,6 +8,7 @@ import {
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import { isFutureDocDate } from "../utils/dateInput";
+import { colors } from "../theme";
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
