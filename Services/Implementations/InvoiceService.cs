@@ -3414,7 +3414,16 @@ namespace MyApp.Api.Services.Implementations
             // exact fields stay available beside these.
             dto.SubtotalRounded   = dto.Items.Sum(i => NumberToWordsConverter.RoundForDisplay(i.ValueExclTax));
             dto.GSTAmountRounded  = dto.Items.Sum(i => NumberToWordsConverter.RoundForDisplay(i.GSTAmount));
-            dto.GrandTotalRounded = dto.SubtotalRounded + dto.GSTAmountRounded;
+            // What the ITEM COLUMNS come to: the sum of the rounded line
+            // figures, and nothing else. A template's TOTAL row shows this in
+            // the "Value Incl. Tax" column so that column sums to the rows
+            // above it.
+            dto.TotalBeforeFurtherTaxRounded = dto.SubtotalRounded + dto.GSTAmountRounded;
+            // The DOCUMENT's grand total, which further tax is part of. Kept
+            // equal in meaning to GrandTotal so the rounded and exact fields
+            // cannot describe different totals.
+            dto.GrandTotalRounded = dto.TotalBeforeFurtherTaxRounded
+                + NumberToWordsConverter.RoundForDisplay(inv.FurtherTaxAmount);
             // The words have to say what the total row says. AmountInWords
             // follows the EXACT grand total rounded once (69,242.72 -> 69,243);
             // summing the rounded lines can land a rupee below that (69,242), so

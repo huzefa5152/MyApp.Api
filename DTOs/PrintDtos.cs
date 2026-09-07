@@ -168,6 +168,14 @@ namespace MyApp.Api.DTOs
         public decimal SubtotalRounded { get; set; }
         public decimal GSTAmountRounded { get; set; }
         public decimal GrandTotalRounded { get; set; }
+        /// <summary>
+        /// Subtotal + sales tax in whole rupees -- what the item columns add
+        /// up to, WITHOUT further tax. A template's TOTAL row uses this in the
+        /// "Value Incl. Tax" column so that column sums to the lines above,
+        /// then shows further tax on its own row and
+        /// <see cref="GrandTotalRounded"/> as the document total beneath.
+        /// </summary>
+        public decimal TotalBeforeFurtherTaxRounded { get; set; }
 
         // Withholding tax (income-tax, s.153) -- 0 when none. The same three
         // fields PrintBillDto has carried all along; the tax invoice never

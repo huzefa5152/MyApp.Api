@@ -52,6 +52,16 @@ namespace MyApp.Api.Data
                     Label = "Further Tax amount (whole rupees)",
                     Category = "Totals", SortOrder = 47,
                 });
+                if (type == "TaxInvoice")
+                {
+                    defs.Add(new MergeField
+                    {
+                        TemplateType = type,
+                        FieldExpression = "{{fmt totalBeforeFurtherTaxRounded}}",
+                        Label = "Total excl. further tax (whole rupees — sums the item columns)",
+                        Category = "Totals", SortOrder = 48,
+                    });
+                }
                 defs.Add(new MergeField
                 {
                     TemplateType = type, FieldExpression = "{{#if furtherTaxAmount}}",
