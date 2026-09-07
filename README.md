@@ -312,6 +312,16 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-07 — Fix: the FBR logo was missing from printed tax invoices
+
+- **The FBR logo did not appear on a submitted tax invoice.** Its address was
+  written from the root of the domain, but the image ships with the app, which
+  on this installation is served from a sub-folder — so the printed document
+  asked for a file that was not there and drew nothing. The QR code and the
+  reference number beside it were unaffected, which is why it read as a styling
+  quirk rather than a missing image.
+- It now resolves wherever the app is mounted.
+
 ### 2026-09-07 — Print templates load their artwork instead of carrying it
 
 - **Logos and letterheads on a print template are now files served with the

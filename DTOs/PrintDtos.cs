@@ -287,11 +287,22 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public string? FbrQrPngDataUrl { get; set; }
         /// <summary>
-        /// Path to the deployed FBR logo asset. Stable URL served by
-        /// app.UseStaticFiles() from wwwroot/ — does not depend on the
-        /// gitignored runtime data/ folder. Merge field: {{fbrLogoUrl}}.
+        /// Path to the deployed FBR logo asset, served by app.UseStaticFiles()
+        /// from wwwroot/ — it does not depend on the gitignored runtime data/
+        /// folder. Merge field: {{fbrLogoUrl}}.
+        ///
+        /// RELATIVE, with no leading slash, on purpose (CLAUDE.md 5c-2). The
+        /// file ships in the frontend bundle, so it is served under the app's
+        /// base path, and this installation mounts the ERP at "/admin/". While
+        /// this was root-relative it resolved to {origin}/images/fbr-logo.png
+        /// and 404'd, so the FBR logo was missing from every printed tax
+        /// invoice here; the same string works at either mount point once the
+        /// base href mergeTemplate injects is allowed to apply to it.
+        ///
+        /// Only ever rendered in the browser through mergeTemplate, which is
+        /// what supplies that base — no server-side renderer reads this.
         /// </summary>
-        public string FbrLogoUrl { get; set; } = "/images/fbr-logo.png";
+        public string FbrLogoUrl { get; set; } = "images/fbr-logo.png";
 
         // ── Credit / Debit note fields ───────────────────────────────────
         // Populated only when the printed row is a note (DocumentType 9/10);
