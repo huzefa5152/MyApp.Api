@@ -755,34 +755,43 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
-        private async Task ReversePostedStockAsync(PurchaseBill bill, DateTime movementDate, string notes)
+        /// <summary>
+        /// Removes the stock this bill posted, because the bill itself is being
+        /// deleted.
+        ///
+        /// Until 2026-09-05 this wrote a compensating OUT instead, to keep the
+        /// movement log immutable. That returned the right QUANTITY and the
+        /// wrong VALUE: an inward movement carries its own cost, while an
+        /// outward one is valued at the weighted average standing when it
+        /// happens (Helpers/StockValuation, and RecordMovementAsync drops a
+        /// cost passed on an Out for good reason -- selling at a margin must
+        /// not drain more value than the goods cost). So a bill bought above
+        /// the running average put in more value than its reversal took out,
+        /// and deleting it left the item holding money with no goods behind it:
+        /// 300 units at 31.4159 added 9,424.77, the reversal removed 6,998.19
+        /// at the blended 23.33, and 2,426.58 stayed on an item whose quantity
+        /// was back where it started. Create and delete a bill repeatedly and
+        /// stock value climbs on its own.
+        ///
+        /// Deleting the rows is exact, and the immutability argument does not
+        /// survive the delete anyway: the movements referenced a SourceId whose
+        /// PurchaseBill no longer existed. This is what InvoiceService.
+        /// DeleteAsync has always done with an invoice's movements, for the
+        /// same reason, so the two delete paths now agree.
+        ///
+        /// A CANCEL is a different matter and is not affected -- the document
+        /// survives a cancellation, so a compensating entry would be the right
+        /// shape there. This helper was only ever called by DeleteAsync.
+        /// </summary>
+        private async Task PurgePostedStockAsync(PurchaseBill bill)
         {
             var posted = await _context.StockMovements
                 .Where(m => m.CompanyId == bill.CompanyId
                          && m.SourceType == StockMovementSourceType.PurchaseBill
                          && m.SourceId == bill.Id)
-                .GroupBy(m => m.ItemTypeId)
-                .Select(g => new
-                {
-                    ItemTypeId = g.Key,
-                    Net = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity),
-                })
                 .ToListAsync();
 
-            foreach (var p in posted)
-            {
-                if (p.Net <= 0m) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: p.ItemTypeId,
-                    direction: StockMovementDirection.Out,
-                    quantity: p.Net,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: movementDate,
-                    notes: notes,
-                    divisionId: bill.DivisionId);
-            }
+            if (posted.Count > 0) _context.StockMovements.RemoveRange(posted);
         }
 
         public async Task<bool> DeleteAsync(int id)
@@ -798,13 +807,10 @@ namespace MyApp.Api.Services.Implementations
             // Period-close guard: a locked bill can't be deleted.
             await _posting.AssertPeriodOpenAsync(bill.CompanyId, bill.Date);
 
-            // Reverse the bill's actual posted stock before deleting its rows.
-            // Compensating OUT entries are written rather than the IN rows
-            // being deleted — keeps the movement log immutable. Reverses the
-            // bill's own posted net (see ReversePostedStockAsync) so a bill
-            // whose ItemType was classified after creation isn't over-reversed.
-            await ReversePostedStockAsync(bill, bill.Date,
-                $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
+            // Remove the stock this bill posted. Deleting the rows returns the
+            // value exactly as well as the quantity — see PurgePostedStockAsync
+            // for why a compensating OUT could not.
+            await PurgePostedStockAsync(bill);
 
             // The ledger entry dies with its document.
             await _posting.RemoveForSourceAsync(bill.CompanyId,

@@ -362,6 +362,55 @@ def suite_purchase(api, h, cid, supplier_id, item, before):
     return after
 
 
+def suite_purchase_delete(api, h, cid, supplier_id, item, before):
+    """Deleting a purchase bill must give back the VALUE as well as the quantity.
+
+    Until 2026-09-05 the delete wrote a compensating OUT instead of removing
+    the bill's movements. An inward movement carries its own cost while an
+    outward one is valued at the running average, so a bill bought ABOVE the
+    average put in more value than its reversal took out and the item was left
+    holding money with no goods behind it -- create and delete repeatedly and
+    stock value climbed on its own. The price here is deliberately far above
+    the running average so any such gap is large enough to see.
+    """
+    print("")
+    print("-- 2b. Deleting a purchase gives back the value, not just the quantity --")
+    qty, unit_price = 20.0, 5000.0        # well above the ~500 average
+    before_qty = float(before["onHand"])
+    before_val = float(before["valueExcludingTax"])
+
+    r = api_call("POST", f"{api}/purchasebills", h, json={
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z"),
+        "companyId": cid, "supplierId": supplier_id, "gstRate": 18.0,
+        "items": [{"itemTypeId": item["itemTypeId"], "description": item["itemTypeName"],
+                   "quantity": qty, "unit": item.get("uom") or "Pcs",
+                   "unitPrice": unit_price}]})
+    if not check("a dear purchase bill is created", r.ok, f"http {r.status_code}: {r.text[:200]}"):
+        return before
+    bill_id = r.json()["id"]
+
+    mid = onhand_row(api, h, cid, item["itemTypeId"])
+    check("it added quantity x its own price",
+          near(mid["valueExcludingTax"], before_val + qty * unit_price, 0.02),
+          f"expected {before_val + qty * unit_price}, got {mid['valueExcludingTax']}")
+
+    d = api_call("DELETE", f"{api}/purchasebills/{bill_id}", h)
+    if not check("the purchase bill is deleted", d.ok, f"http {d.status_code}"):
+        return before
+
+    after = onhand_row(api, h, cid, item["itemTypeId"])
+    check("quantity is back where it started",
+          near(after["onHand"], before_qty, QTY_TOL),
+          f"{before_qty} != {after['onHand']}")
+    check("VALUE is back where it started -- no money left behind",
+          near(after["valueExcludingTax"], before_val, 0.02),
+          f"expected {before_val}, got {after['valueExcludingTax']}")
+    check("the average cost is back where it started",
+          near(after["unitCost"], float(before["unitCost"]), 0.001),
+          f"expected {before['unitCost']}, got {after['unitCost']}")
+    return after
+
+
 def suite_invoice(api, h, cid, client_id, item, before):
     print("\n-- 3. A sale takes value off at COST, not at the sale price --")
     qty = 5.0
@@ -741,6 +790,7 @@ def main():
         after_buy = suite_purchase(api, h, cid, supplier_id, item, item)
         if after_buy is None:
             return report()
+        after_buy = suite_purchase_delete(api, h, cid, supplier_id, item, after_buy)
         after_sell = suite_invoice(api, h, cid, client_id, item, after_buy)
         if after_sell is None:
             return report()

@@ -312,6 +312,22 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-05 — Fix: deleting a purchase bill left money on the stock
+
+- **Deleting a purchase bill gave back the quantity but not the value.** The
+  delete recorded a compensating outward movement instead of removing the
+  bill's own movements. Goods coming in are valued at what was paid for them,
+  goods going out at the average cost of what is on hand — so a bill bought
+  above the running average put in more value than its reversal took out, and
+  the item was left holding money with nothing behind it. On a bill of 300
+  units at 31.4159 that was 2,426.58 stranded on an item whose quantity had
+  returned to where it started. Creating and deleting bills made stock value
+  climb on its own.
+- The bill's movements are now removed outright, which returns the value
+  exactly — and is what deleting a sales invoice has always done. Cancelling a
+  purchase bill is unaffected: the document survives a cancellation, so a
+  compensating entry is right there.
+
 ### 2026-09-05 — Stock values beside the quantities, and WHT on print templates
 
 - **The Stock Report now shows the value of Opening, Total In and Total Out**,
