@@ -368,7 +368,7 @@ quantity):
 - The endpoint is `GET /api/invoices/company/{id}/stock-pricing`, gated by
   `bills.manage.create` — the same reasoning as `last-rates`: if you cannot
   make a bill, you do not need its pricing.
-- Suite: `scripts/test_bill_pricing_advance_tax.py` (43 checks).
+- Suite: `scripts/test_bill_pricing_advance_tax.py` (102 checks).
 
 ### 5b-6. Delivering a bill: challans raised AFTER the invoice (2026-09-02)
 
@@ -564,6 +564,47 @@ movement history nested underneath as a **collapsed Excel outline group**.
   halves of the permission split with throwaway roles it deletes afterwards.
   A new column belongs in the harness; a new figure belongs in both.
 
+### 5b-10. Further tax s.3(1A) — the THIRD tax, and the only one inside the total (2026-09-07)
+
+Three taxes now sit on a sale and they behave differently. Getting them mixed
+up is the easiest way to corrupt this ledger, so:
+
+| | Withholding s.153 | Advance income tax 236G/H | **Further tax s.3(1A)** |
+|---|---|---|---|
+| Direction | DEDUCTED by the buyer | ADDED, outside the invoice | **ADDED, inside the invoice** |
+| In `GrandTotal`? | no | no | **yes** |
+| On the FBR payload? | no | no | **yes — it is sales tax** |
+| Charged on | net | net + sales tax | **net** |
+
+- **`GrandTotal = Subtotal + GSTAmount + FurtherTaxAmount`**, and the
+  collectible line stays `GrandTotal − WithholdingTaxAmount + AdvanceTaxAmount`.
+  Further tax is part of the supply's tax, not a collection on top of it, which
+  is why it is the only one of the three that moves the grand total.
+- **`Helpers/FurtherTaxCalculator.cs` is the only place it is computed.** A null
+  or non-positive rate, or a non-positive subtotal, resolves to zero — a
+  half-filled form must not charge the buyer on a guess, the same rule advance
+  tax keeps.
+- **The RESOLVED RATE is stored on the invoice**, so a bill keeps the rate it
+  was issued at. The form defaults to **4%** (the statutory rate for a supply
+  to an unregistered buyer) and the operator may edit it; per-client defaults
+  were deliberately left for later.
+- **`PostingService` derives the sale by SUBTRACTION**, so further tax must be
+  subtracted there too:
+  `net = GrandTotal − GSTAmount − FurtherTaxAmount`. Miss it and the tax is
+  credited to **Sales** as revenue — the books balance and the income statement
+  is wrong, which is the worst shape a bug can take here. It posts to its own
+  liability account, `ControlType.FurtherTaxPayable`, seeded onto existing
+  charts by `Data/FurtherTaxAccountSeeder.cs`.
+- **`Helpers/FbrLineTax.cs` takes the DOCUMENT's rate** (`documentFurtherTaxRate`)
+  and a stored rate wins over the statutory 4%, so what is filed matches what
+  was printed.
+- Merge fields are seeded at RUNTIME (`Data/FurtherTaxMergeFieldSeeder.cs`) for
+  the reason `AdvanceTaxMergeFieldSeeder` records — the Bill/TaxInvoice fields
+  carry hard-coded `HasData` ids that collide with operator-created rows.
+- Suite: `scripts/test_bill_pricing_advance_tax.py` section C (the arithmetic,
+  both print DTOs, and the three edit cases) and section D, which spins up a
+  GL-enabled company purely to prove the tax is **not** booked as revenue.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -733,7 +774,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Spreadsheet import (layouts, file checks, stock, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (101 checks) |
-| Bill line pricing + advance tax (236G/236H, incl. edit) | `python scripts/test_bill_pricing_advance_tax.py` | `75/75 checks passed` |
+| Bill line pricing, advance tax (236G/236H) + further tax s.3(1A), incl. edit and GL posting | `python scripts/test_bill_pricing_advance_tax.py` | `102/102 checks passed` |
 | Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |

@@ -555,6 +555,203 @@ def main():
             check("and its sales-tax invoice is untouched",
                   fromch.ok and near(jf.get("grandTotal"), 118000, 0.02),
                   f"gt={jf.get('grandTotal')}")
+        # ── C. Further tax (s.3(1A)) ──────────────────────────────────────
+        # The MIRROR of advance tax above, and the difference is the point:
+        # advance tax is collected OUTSIDE the sales-tax invoice and leaves
+        # GrandTotal alone, while further tax is part of the supply's own tax
+        # and goes INSIDE it. Charged on the NET value of supply -- the same
+        # base FbrLineTax uses per line, so the document and the FBR payload
+        # cannot disagree.
+        print("")
+        print("-- C. Further tax (s.3(1A)) --")
+        ft_item = make_item(f"FurtherTax {tag}")
+        set_stock(ft_item, 1000, 100000, 18)
+
+        def bill(rate, qty=10, price=1000, **extra):
+            body = {"date": today, "companyId": cid, "clientId": client["id"],
+                    "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+                    "items": [{"itemTypeId": ft_item, "description": f"FT {tag}",
+                               "quantity": qty, "uom": "Pcs", "unitPrice": price}]}
+            if rate is not None:
+                body["furtherTaxRate"] = rate
+            body.update(extra)
+            return requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json=body)
+
+        # 10 x 1000 = 10,000 net; GST 18% = 1,800; further tax 4% of the NET.
+        r4 = bill(4)
+        j4 = r4.json() if r4.ok else {}
+        check("a bill takes a further-tax rate", r4.ok, f"http {r4.status_code}: {r4.text[:160]}")
+        check("further tax is charged on the net, not the gross",
+              near(j4.get("furtherTaxAmount"), 400.0, 0.02),
+              f"expected 400 (4% of 10,000), got {j4.get('furtherTaxAmount')}")
+        check("the stored rate is what was asked for",
+              near(j4.get("furtherTaxRate"), 4.0, 0.001), f"got {j4.get('furtherTaxRate')}")
+        check("subtotal and GST are untouched by it",
+              near(j4.get("subtotal"), 10000, 0.02) and near(j4.get("gstAmount"), 1800, 0.02),
+              f"subtotal={j4.get('subtotal')} gst={j4.get('gstAmount')}")
+        check("and it is INSIDE the grand total",
+              near(j4.get("grandTotal"), 12200, 0.02),
+              f"expected 10,000 + 1,800 + 400 = 12,200, got {j4.get('grandTotal')}")
+
+        # The identity the whole feature rests on.
+        check("grand total == subtotal + GST + further tax",
+              near(j4.get("grandTotal"),
+                   (j4.get("subtotal") or 0) + (j4.get("gstAmount") or 0)
+                   + (j4.get("furtherTaxAmount") or 0), 0.02))
+
+        # No rate at all must behave exactly as every bill written before this
+        # existed -- that is what keeps historic documents readable.
+        r0 = bill(None)
+        j0 = r0.json() if r0.ok else {}
+        check("a bill with no further-tax rate charges none",
+              r0.ok and (j0.get("furtherTaxAmount") or 0) == 0,
+              f"got {j0.get('furtherTaxAmount')}")
+        check("and its grand total is subtotal + GST",
+              near(j0.get("grandTotal"), 11800, 0.02), f"got {j0.get('grandTotal')}")
+
+        # A fractional rate must survive: the print field formats with fmtQty
+        # for exactly this reason ({{fmt}} renders 2.5% as 3%).
+        rhalf = bill(2.5)
+        jh = rhalf.json() if rhalf.ok else {}
+        check("a fractional rate is kept, not rounded",
+              rhalf.ok and near(jh.get("furtherTaxRate"), 2.5, 0.001),
+              f"got {jh.get('furtherTaxRate')}")
+        check("and charges 2.5% of the net",
+              near(jh.get("furtherTaxAmount"), 250.0, 0.02),
+              f"expected 250, got {jh.get('furtherTaxAmount')}")
+
+        # ── the print DTOs both carry it ──
+        if r4.ok:
+            iid = j4["id"]
+            pb = requests.get(f"{api}/invoices/{iid}/print/bill", headers=h, timeout=60)
+            pt = requests.get(f"{api}/invoices/{iid}/print/tax-invoice", headers=h, timeout=60)
+            jb = pb.json() if pb.ok else {}
+            jt = pt.json() if pt.ok else {}
+            check("the bill print carries the rate and amount",
+                  near(jb.get("furtherTaxAmount"), 400.0, 0.02) and near(jb.get("furtherTaxRate"), 4.0, 0.001),
+                  f"rate={jb.get('furtherTaxRate')} amt={jb.get('furtherTaxAmount')}")
+            check("the tax invoice print does too",
+                  near(jt.get("furtherTaxAmount"), 400.0, 0.02) and near(jt.get("furtherTaxRate"), 4.0, 0.001),
+                  f"rate={jt.get('furtherTaxRate')} amt={jt.get('furtherTaxAmount')}")
+            # A totals block shows this in the "Value Incl. Tax" cell of its
+            # TOTAL row so the column still sums to the lines above it.
+            check("the print exposes the pre-further-tax total for the column sum",
+                  near(jb.get("totalBeforeFurtherTax"), 11800, 0.02),
+                  f"got {jb.get('totalBeforeFurtherTax')}")
+            check("net payable = grand total less WHT plus advance tax",
+                  near(jb.get("collectible"), 12200, 0.02),
+                  f"got {jb.get('collectible')}")
+
+        # ── editing: absent leaves it, a value sets it, 0 clears it ──
+        if r4.ok:
+            iid = j4["id"]
+            items_only = {"date": today, "gstRate": 18, "clientId": client["id"],
+                          "documentType": 4, "paymentMode": "Cash",
+                          "items": [{"itemTypeId": ft_item, "description": f"FT {tag}",
+                                     "quantity": 10, "uom": "Pcs", "unitPrice": 1000}]}
+            e1 = requests.put(f"{api}/invoices/{iid}", headers=h, timeout=120, json=items_only)
+            g1 = requests.get(f"{api}/invoices/{iid}", headers=h, timeout=60).json()
+            check("an edit that never mentions further tax keeps the charge",
+                  e1.ok and near(g1.get("furtherTaxAmount"), 400.0, 0.02),
+                  f"got {g1.get('furtherTaxAmount')}")
+
+            e2 = requests.put(f"{api}/invoices/{iid}", headers=h, timeout=120,
+                              json={**items_only, "furtherTaxRate": 3})
+            g2 = requests.get(f"{api}/invoices/{iid}", headers=h, timeout=60).json()
+            check("changing the rate re-charges it",
+                  e2.ok and near(g2.get("furtherTaxAmount"), 300.0, 0.02),
+                  f"got {g2.get('furtherTaxAmount')}")
+            check("and the grand total follows",
+                  near(g2.get("grandTotal"), 12100, 0.02), f"got {g2.get('grandTotal')}")
+
+            e3 = requests.put(f"{api}/invoices/{iid}", headers=h, timeout=120,
+                              json={**items_only, "furtherTaxRate": 0})
+            g3 = requests.get(f"{api}/invoices/{iid}", headers=h, timeout=60).json()
+            check("a rate of zero clears the charge",
+                  e3.ok and (g3.get("furtherTaxAmount") or 0) == 0,
+                  f"got {g3.get('furtherTaxAmount')}")
+            check("and the grand total drops back",
+                  near(g3.get("grandTotal"), 11800, 0.02), f"got {g3.get('grandTotal')}")
+
+        # ── D. Further tax in the ledger ──────────────────────────────────
+        # The company above has the GL off, so this needs its own. This is the
+        # part that would corrupt the books rather than merely look wrong:
+        # PostingService derives the sale as GrandTotal - GSTAmount, and
+        # further tax is now inside GrandTotal, so without subtracting it too
+        # the tax would be credited to SALES as revenue.
+        print("")
+        print("-- D. Further tax in the ledger --")
+        gl_cid = requests.post(f"{api}/companies", headers=h, timeout=60, json={
+            "name": f"_ft_gl {tag}", "brandName": "FTG",
+            "fullAddress": "1 Test Street", "phone": "021-0000000", "ntn": "1234567-8",
+            "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+            "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
+            "startingSalesQuoteNumber": 1, "startingSalesOrderNumber": 1,
+            "fbrEnabled": False, "inventoryTrackingEnabled": False,
+        }).json()["id"]
+        try:
+            en = requests.post(f"{api}/accounting/gl/company/{gl_cid}/enable", headers=h, timeout=180)
+            check("the GL can be switched on for a fresh company", en.ok, f"http {en.status_code}")
+
+            gl_client = requests.post(f"{api}/clients", headers=h, timeout=60, json={
+                "name": f"FT GL Client {tag}", "address": "1 Road", "phone": "021-1",
+                "companyId": gl_cid, "registrationType": "Unregistered"}).json()
+            gl_item = requests.post(f"{api}/itemtypes", headers=h, timeout=60,
+                                    params={"companyId": gl_cid},
+                                    json={"name": f"FT GL Item {tag}", "uom": "Pcs",
+                                          "companyId": gl_cid, "isFavorite": True}).json()["id"]
+
+            gb = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+                "date": today, "companyId": gl_cid, "clientId": gl_client["id"],
+                "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+                "furtherTaxRate": 4,
+                "items": [{"itemTypeId": gl_item, "description": f"FT GL {tag}",
+                           "quantity": 10, "uom": "Pcs", "unitPrice": 1000}]})
+            gj = gb.json() if gb.ok else {}
+            check("a bill with further tax is created on a GL company",
+                  gb.ok and near(gj.get("grandTotal"), 12200, 0.02),
+                  f"http {gb.status_code}: {gb.text[:160] if not gb.ok else gj.get('grandTotal')}")
+
+            if gb.ok:
+                ent = requests.get(f"{api}/journal-entries/company/{gl_cid}/paged",
+                                   headers=h, timeout=120,
+                                   params={"page": 1, "pageSize": 50})
+                lines = []
+                if ent.ok:
+                    for e in ent.json().get("items", []):
+                        if (e.get("sourceDocType") == "Invoice"
+                                and e.get("sourceDocId") == gj["id"]):
+                            lines = e.get("lines") or []
+                            break
+                else:
+                    print(f"    (journal fetch http {ent.status_code}: {ent.text[:160]})")
+                by = {}
+                for l in lines:
+                    nm = (l.get("accountName") or "").lower()
+                    by[nm] = by.get(nm, 0) + (l.get("credit") or 0) - (l.get("debit") or 0)
+
+                check("the invoice posted a journal entry", len(lines) > 0,
+                      f"{len(lines)} lines")
+                if lines:
+                    dr = sum(l.get("debit") or 0 for l in lines)
+                    cr = sum(l.get("credit") or 0 for l in lines)
+                    check("the entry balances", near(dr, cr, 0.02), f"dr={dr} cr={cr}")
+                    check("receivable is the whole grand total, further tax included",
+                          near(dr, 12200, 0.02), f"dr={dr}")
+                    sales = next((v for k, v in by.items() if "sales" in k and "tax" not in k), None)
+                    check("SALES is the net only -- the tax is not revenue",
+                          sales is not None and near(sales, 10000, 0.02),
+                          f"sales credit {sales} (10,400 would mean further tax was booked as income)")
+                    outp = next((v for k, v in by.items() if "output" in k), None)
+                    check("output sales tax is unchanged at 18% of the net",
+                          outp is not None and near(outp, 1800, 0.02), f"output tax {outp}")
+                    furth = next((v for k, v in by.items() if "further" in k), None)
+                    check("further tax lands in its own liability account",
+                          furth is not None and near(furth, 400, 0.02),
+                          f"further tax payable {furth}")
+        finally:
+            requests.delete(f"{api}/companies/{gl_cid}", headers=h, timeout=600)
+
     finally:
         if args.keep:
             print(f"\nkeeping company {cid}")
