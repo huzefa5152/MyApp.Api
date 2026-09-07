@@ -312,6 +312,24 @@ Publish output optimized from 79 MB to 37 MB via:
   when it is left out. Existing roles need the new permission granted (the
   Inventory Manager starter role already includes it).
 
+### 2026-09-07 — Further tax on a bill
+
+- **Further tax (s.3(1A)) can now be charged on a bill.** A percentage field
+  appears when creating a bill with or without a delivery challan, and when
+  editing one; it defaults to 4% and can be changed or cleared. The amount is
+  charged on the value **excluding** sales tax — the same base sales tax uses —
+  and is **added to the grand total**, because unlike withholding and advance
+  income tax it is part of the supply's own tax.
+- It shows on the bill and invoice views as well as the forms, and on the
+  printed bill and sales tax invoice through new merge fields.
+- **It posts to its own "Further Tax Payable" account**, not into Output Sales
+  Tax. That keeps the Output Tax account reconciling to sales tax on sales,
+  which is the check the tax reports depend on. Companies that already had a
+  chart of accounts get the new account added automatically.
+- Where a company submits to FBR, the rate on the document is the rate filed,
+  so the printed invoice and the filing always agree.
+- Bills raised before today carry no further tax and are unchanged.
+
 ### 2026-09-07 — Fix: the Bills and Invoices table view would not open
 
 - **Switching Bills or Invoices to table view showed "Something Went Wrong" and

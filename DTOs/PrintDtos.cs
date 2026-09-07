@@ -82,6 +82,13 @@ namespace MyApp.Api.DTOs
         public decimal? WithholdingTaxRate { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
         public decimal BalanceDueAfterWht { get; set; }
+        /// <summary>Further tax (s.3(1A)) rate as a percentage, 0/null when none.
+        /// A template must format it with {{fmtQty}}: {{fmt}} would print a
+        /// fractional rate as 0%.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+        /// <summary>Further tax charged. Already INSIDE GrandTotal -- it is part
+        /// of the supply's tax, not an adjustment sitting outside it.</summary>
+        public decimal FurtherTaxAmount { get; set; }
         public string? PaymentTerms { get; set; }
         public List<PrintBillItemDto> Items { get; set; } = new();
     }
@@ -178,6 +185,13 @@ namespace MyApp.Api.DTOs
         /// pays once the withheld slice goes to FBR. Equal to GrandTotal when
         /// no withholding applies.</summary>
         public decimal BalanceDueAfterWht { get; set; }
+        /// <summary>Further tax (s.3(1A)) rate as a percentage, 0/null when none.
+        /// A template must format it with {{fmtQty}}: {{fmt}} would print a
+        /// fractional rate as 0%.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+        /// <summary>Further tax charged. Already INSIDE GrandTotal -- it is part
+        /// of the supply's tax, not an adjustment sitting outside it.</summary>
+        public decimal FurtherTaxAmount { get; set; }
 
         /// <summary>
         /// What the buyer actually pays with BOTH income taxes applied:

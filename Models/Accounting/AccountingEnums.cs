@@ -53,6 +53,16 @@ namespace MyApp.Api.Models.Accounting
         /// <summary>Payment-side write-back of an amount no longer owed to a supplier (P&amp;L income).</summary>
         WriteBackIncome = 18,
 
+        /// <summary>
+        /// Further tax (s.3(1A)) collected on a supply and owed to FBR.
+        ///
+        /// Kept OUT of <see cref="OutputTax"/> deliberately: the tax reports
+        /// read the Output Tax account from the ledger, so mixing a second
+        /// rate into it would stop that account reconciling to GST on sales
+        /// and lose the check those reports exist to provide.
+        /// </summary>
+        FurtherTaxPayable = 19,
+
         /// <summary>SUPERSEDED (2026-08-31) — reserved, never assign 19 to
         /// anything else.
         ///

@@ -157,6 +157,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Prefilled from the company's default rate below when one is configured.
   const [whtMode, setWhtMode] = useState("none");
   const [whtRate, setWhtRate] = useState("");
+  // Further tax (s.3(1A)). Unlike the two income taxes it is part of the
+  // supply's tax, so it goes INSIDE the grand total. Defaulted to the
+  // statutory 4% on every bill (operator decision 2026-09-07) -- clear the
+  // field to charge none. A per-client rate can come later.
+  const [furtherTaxRate, setFurtherTaxRate] = useState("4");
   // Advance income tax (236G / 236H). One dropdown: the section and whether the
   // buyer is on the Active Taxpayer List together pick the rate. Empty means
   // none, which is the default -- it must never be charged by accident.
@@ -654,7 +659,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     return sum + q * p;
   }, 0);
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
-  const grandTotal = subtotal + gstAmount;
+  // Charged on the NET value of supply -- the same base as sales tax, which is
+  // what FbrLineTax uses per line, so the document and the FBR payload cannot
+  // disagree. Rounded the way the server rounds it.
+  const furtherTaxAmount =
+    Math.round(subtotal * (parseFloat(furtherTaxRate) || 0) / 100 * 100) / 100;
+  const grandTotal = subtotal + gstAmount + furtherTaxAmount;
 
   // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
@@ -878,6 +888,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // rate + the typed amount. Backend recomputes/clamps the amount.
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
+        // The server recomputes the amount from this rate; it never trusts a
+        // client-side money figure.
+        furtherTaxRate: parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : null,
         advanceTaxSection: advTaxOption?.section ?? null,
         advanceTaxFilerActive: advTaxOption ? advTaxOption.filerActive : null,
         paymentTerms: paymentTerms || null,
@@ -1276,6 +1289,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <option key={o.key} value={o.key}>{advanceTaxLabel(o)}</option>
                                 ))}
                               </select>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 120 }}>
+                              <label style={styles.label}>Further Tax (%)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                style={styles.input}
+                                value={furtherTaxRate}
+                                onChange={(e) => setFurtherTaxRate(e.target.value)}
+                                placeholder="0"
+                                title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total. Defaults to 4%; clear it to charge none."
+                              />
                             </div>
                             {whtMode === "rate" && (
                               <div style={{ flex: 1, minWidth: 120 }}>
@@ -1792,6 +1816,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <div style={styles.totalsBox}>
                         <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                         <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                        {furtherTaxAmount > 0 && (
+                          <div style={styles.totalRow}>
+                            <span>Further Tax ({furtherTaxRate}%):</span>
+                            <span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        )}
                         <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
                           <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>

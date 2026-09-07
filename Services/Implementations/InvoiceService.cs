@@ -217,6 +217,8 @@ namespace MyApp.Api.Services.Implementations
             PaymentTerms = inv.PaymentTerms,
             WithholdingTaxRate = inv.WithholdingTaxRate,
             WithholdingTaxAmount = inv.WithholdingTaxAmount,
+            FurtherTaxRate = inv.FurtherTaxRate,
+            FurtherTaxAmount = inv.FurtherTaxAmount,
             DueDate = inv.DueDate,
             AmountPaid = inv.AmountPaid,
             // Collectible = GrandTotal − WHT; balance due + status settle against
@@ -707,7 +709,10 @@ namespace MyApp.Api.Services.Implementations
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
-            var grandTotal = subtotal + gstAmount;
+            // Further tax (s.3(1A)) is part of the supply's tax, so it is charged
+            // on the same net base as sales tax and lands INSIDE the grand total.
+            var furtherTaxAmount = FurtherTaxCalculator.Resolve(dto.FurtherTaxRate, subtotal);
+            var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, furtherTaxAmount);
 
             // Audit C-14 (2026-05-13) + 2026-07 fix: the stock availability
             // guard now runs INSIDE the create transaction under a per-company
@@ -768,6 +773,8 @@ namespace MyApp.Api.Services.Implementations
                     GrandTotal = grandTotal,
                     WithholdingTaxRate = dto.WithholdingTaxRate,
                     WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
+                    FurtherTaxRate = dto.FurtherTaxRate,
+                    FurtherTaxAmount = furtherTaxAmount,
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = dto.PaymentTerms,
                     DocumentType = effectiveDocType,
@@ -1058,7 +1065,10 @@ namespace MyApp.Api.Services.Implementations
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
-            var grandTotal = subtotal + gstAmount;
+            // Further tax (s.3(1A)) is part of the supply's tax, so it is charged
+            // on the same net base as sales tax and lands INSIDE the grand total.
+            var furtherTaxAmount = FurtherTaxCalculator.Resolve(dto.FurtherTaxRate, subtotal);
+            var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, furtherTaxAmount);
 
             // Audit C-14 (2026-05-13) + 2026-07: availability guard moved inside
             // the create transaction under the per-company stock lock — see the
@@ -1126,6 +1136,8 @@ namespace MyApp.Api.Services.Implementations
                     GrandTotal = grandTotal,
                     WithholdingTaxRate = dto.WithholdingTaxRate,
                     WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
+                    FurtherTaxRate = dto.FurtherTaxRate,
+                    FurtherTaxAmount = furtherTaxAmount,
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = finalPaymentTerms,
                     DocumentType = effectiveDocType,
@@ -1367,6 +1379,12 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.Date.HasValue)
                     invoice.Date = dto.Date.Value;
                 invoice.GSTRate = dto.GSTRate;
+                // Further tax: null = the caller did not mention it, so the bill
+                // keeps what it had; a value (including 0) sets it. Same
+                // reasoning as AdvanceTaxSection -- an API client editing only
+                // the items must not silently drop the charge.
+                if (dto.FurtherTaxRate.HasValue)
+                    invoice.FurtherTaxRate = dto.FurtherTaxRate.Value > 0m ? dto.FurtherTaxRate : null;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
                 // Advance income tax on an EDIT. Until now the recompute further
@@ -1528,7 +1546,10 @@ namespace MyApp.Api.Services.Implementations
 
                 invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
                 invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
-                invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
+                invoice.FurtherTaxAmount = FurtherTaxCalculator.Resolve(
+                    invoice.FurtherTaxRate, invoice.Subtotal);
+                invoice.GrandTotal = FurtherTaxCalculator.GrandTotal(
+                    invoice.Subtotal, invoice.GSTAmount, invoice.FurtherTaxAmount);
                 invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
                 // The totals moved, so the tax charged on them moves too.
                 ApplyAdvanceTax(invoice, invoice.AdvanceTaxSection, invoice.AdvanceTaxFilerActive);
@@ -1984,7 +2005,10 @@ namespace MyApp.Api.Services.Implementations
                     {
                         invoice.Subtotal = newSubtotal;
                         invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
-                        invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
+                        invoice.FurtherTaxAmount = FurtherTaxCalculator.Resolve(
+                            invoice.FurtherTaxRate, newSubtotal);
+                        invoice.GrandTotal = FurtherTaxCalculator.GrandTotal(
+                            newSubtotal, invoice.GSTAmount, invoice.FurtherTaxAmount);
                         invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
                 // The totals moved, so the tax charged on them moves too.
                 ApplyAdvanceTax(invoice, invoice.AdvanceTaxSection, invoice.AdvanceTaxFilerActive);
@@ -2887,7 +2911,11 @@ namespace MyApp.Api.Services.Implementations
             var subtotal   = plannedLines.Sum(l => l.LineTotal);
             var gstRate    = original.GSTRate;
             var gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
-            var grandTotal = subtotal + gstAmount;
+            // A correction inherits the original's further-tax rate: it is the
+            // same supply to the same buyer, so the same rate applies.
+            var furtherTaxRate   = original.FurtherTaxRate;
+            var furtherTaxAmount = FurtherTaxCalculator.Resolve(furtherTaxRate, subtotal);
+            var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, furtherTaxAmount);
 
             // Which original challans to clone, matched to delta lines by description.
             var plannedChallans = new List<(DeliveryChallan Src, List<(int? ItemTypeId, string Description, string Unit, decimal Quantity)> Items)>();
@@ -2952,6 +2980,8 @@ namespace MyApp.Api.Services.Implementations
                     // supplement carries no WHT — an acceptable v1 edge.
                     WithholdingTaxRate = original.WithholdingTaxRate,
                     WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(original.WithholdingTaxRate, grandTotal, 0m),
+                    FurtherTaxRate = furtherTaxRate,
+                    FurtherTaxAmount = furtherTaxAmount,
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = original.PaymentTerms,
                     DocumentType = original.DocumentType,
@@ -3142,6 +3172,8 @@ namespace MyApp.Api.Services.Implementations
                 WithholdingTaxRate = inv.WithholdingTaxRate,
                 WithholdingTaxAmount = inv.WithholdingTaxAmount,
                 BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount),
+                FurtherTaxRate = inv.FurtherTaxRate,
+                FurtherTaxAmount = inv.FurtherTaxAmount,
                 // Advance income tax: the row the client's format calls
                 // "Advanced Income Tax 236-G", and their Total line beneath it.
                 // Zero and empty when no section was chosen, so the template
@@ -3266,6 +3298,8 @@ namespace MyApp.Api.Services.Implementations
                 WithholdingTaxAmount = inv.WithholdingTaxAmount,
                 BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(
                     inv.GrandTotal, inv.WithholdingTaxAmount),
+                FurtherTaxRate = inv.FurtherTaxRate,
+                FurtherTaxAmount = inv.FurtherTaxAmount,
                 FbrIRN = inv.FbrIRN,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,

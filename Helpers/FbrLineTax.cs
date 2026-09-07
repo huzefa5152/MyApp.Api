@@ -32,8 +32,16 @@ namespace MyApp.Api.Helpers
         /// Returns (salesTax, furtherTax, fixedNotifiedValueOrRetailPrice) for
         /// one invoice line. Every caller needs all three.
         /// </summary>
+        /// <param name="documentFurtherTaxRate">
+        /// The rate stored on the document, when the operator set one. It WINS over
+        /// the statutory 4% below (2026-09-07 decision), so the printed invoice and
+        /// the FBR filing always carry the same figure -- a document showing 3% and
+        /// filing 4% is the worse outcome. Null leaves the original behaviour:
+        /// derive it from the buyer's registration and the sale type.
+        /// </param>
         public static (decimal SalesTax, decimal FurtherTax, decimal RetailPrice) Compute(
-            InvoiceItem item, decimal gstRate, string buyerRegType, string? scenarioId)
+            InvoiceItem item, decimal gstRate, string buyerRegType, string? scenarioId,
+            decimal? documentFurtherTaxRate = null)
         {
             var rate = gstRate / 100m;
             var retail = item.FixedNotifiedValueOrRetailPrice ?? 0m;
@@ -61,7 +69,14 @@ namespace MyApp.Api.Helpers
             // (3) …except SN026/027/028 end-consumer retail (exempt)
             var isEndConsumerRetail = scenarioId is "SN026" or "SN027" or "SN028";
 
-            if (buyerRegType == "Unregistered" && isStandardRate && !isEndConsumerRetail)
+            if (documentFurtherTaxRate is > 0m)
+            {
+                // The operator said what the rate is; the filing follows the
+                // document. Charged on the line net, the same base as (2) below.
+                furtherTax = Math.Round(
+                    item.LineTotal * documentFurtherTaxRate.Value / 100m, 2, MidpointRounding.AwayFromZero);
+            }
+            else if (buyerRegType == "Unregistered" && isStandardRate && !isEndConsumerRetail)
             {
                 furtherTax = Math.Round(item.LineTotal * 0.04m, 2, MidpointRounding.AwayFromZero);
             }

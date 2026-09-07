@@ -756,6 +756,8 @@ using (var scope = app.Services.CreateScope())
     await MyApp.Api.Data.AdvanceTaxMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.RoundedTaxMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.WithholdingTaxMergeFieldSeeder.SeedAsync(db);
+    await MyApp.Api.Data.FurtherTaxAccountSeeder.SeedAsync(db);
+    await MyApp.Api.Data.FurtherTaxMergeFieldSeeder.SeedAsync(db);
 
     // Credit/Debit Note + Purchase Bill + Goods Receipt template merge
     // fields — same idempotent runtime-seed contract.

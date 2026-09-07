@@ -179,6 +179,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // quantity follows at the stock's own weighted-average cost.
   const [stockPricing, setStockPricing] = useState({});
   const [whtRate, setWhtRate] = useState("");
+  // Further tax (s.3(1A)) -- part of the supply's tax, so INSIDE the grand
+  // total. Loaded from the bill below; a bill written before further tax
+  // existed has none, which reads as an empty field.
+  const [furtherTaxRate, setFurtherTaxRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
   const [billDate, setBillDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
@@ -287,6 +291,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           setWhtAmount(String(data.withholdingTaxAmount));
         } else {
           setWhtMode("none");
+        }
+        // Further tax is independent of the withholding chain above -- a bill
+        // can carry either, both or neither.
+        if (data.furtherTaxRate != null && Number(data.furtherTaxRate) > 0) {
+          setFurtherTaxRate(String(data.furtherTaxRate));
         }
         setIsMigrated(!!data.isMigrated);
         // Show the choice the bill was issued with, not an empty box.
@@ -980,7 +989,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const gstAmount = isMigrated
     ? Number(invoice?.gstAmount || 0)
     : Math.round(computedSubtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
-  const grandTotal = isMigrated ? Number(invoice?.grandTotal || 0) : subtotal + gstAmount;
+  // Charged on the NET value of supply, the same base as sales tax. A migrated
+  // document keeps the total it was imported with -- it has no lines to
+  // recompute from, and inventing one would restate the books.
+  const furtherTaxAmount = isMigrated
+    ? Number(invoice?.furtherTaxAmount || 0)
+    : Math.round(computedSubtotal * (parseFloat(furtherTaxRate) || 0) / 100 * 100) / 100;
+  const grandTotal = isMigrated
+    ? Number(invoice?.grandTotal || 0)
+    : subtotal + gstAmount + furtherTaxAmount;
 
   // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
@@ -1413,6 +1430,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           // rate + the typed amount. Backend recomputes/clamps the amount.
           withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
           withholdingTaxAmount: whtResolved,
+          // 0 clears the charge, which the server distinguishes from absent.
+          furtherTaxRate: parseFloat(furtherTaxRate) > 0 ? parseFloat(furtherTaxRate) : 0,
           // The server owns the rate and the amount (Helpers/AdvanceTaxRates);
           // the form only states the section and the filer status. A null
           // section is "None" and clears it.
@@ -1727,6 +1746,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                       <option value="rate">Rate %</option>
                       <option value="amount">Fixed amount</option>
                     </select>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <label style={styles.label}>Further Tax (%)</label>
+                    <input
+                      type="number"
+                      style={{ ...styles.input, ...(lockNonItemType ? styles.readOnlyInput : {}) }}
+                      value={furtherTaxRate}
+                      onChange={(e) => setFurtherTaxRate(e.target.value)}
+                      min={0}
+                      step={0.01}
+                      readOnly={lockNonItemType}
+                      placeholder="0"
+                      title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total."
+                    />
                   </div>
                   {whtMode === "rate" && (
                     <div style={{ flex: 1, minWidth: 120 }}>
@@ -2243,6 +2276,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     <span>GST ({gstRate}%):</span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
+                  {/* Shown on the read-only view as well as the edit form --
+                      this block serves both. */}
+                  {furtherTaxAmount > 0 && (
+                    <div style={styles.totalsRow}>
+                      <span>Further Tax ({furtherTaxRate || Number(invoice?.furtherTaxRate) || 0}%):</span>
+                      <strong>Rs. {furtherTaxAmount.toLocaleString()}</strong>
+                    </div>
+                  )}
                   <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
                     <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>

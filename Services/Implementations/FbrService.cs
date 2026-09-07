@@ -963,7 +963,8 @@ namespace MyApp.Api.Services.Implementations
             foreach (var item in fbrItems)
             {
                 var (salesTax, furtherTax, retailPrice) =
-                    MyApp.Api.Helpers.FbrLineTax.Compute(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
+                    MyApp.Api.Helpers.FbrLineTax.Compute(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId,
+                        invoice.FurtherTaxRate);
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
                 // Normalise the sale-type string to the §9 canonical form.
                 // Older seed rows + manually-entered bills sometimes carry

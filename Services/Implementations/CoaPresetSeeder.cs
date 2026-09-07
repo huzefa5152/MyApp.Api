@@ -86,6 +86,7 @@ namespace MyApp.Api.Services.Implementations
             await Group("liabilities", "Liabilities", FinancialStatement.BalanceSheet, null, true);
             await Account("ap", "Accounts payable", "liabilities", AccountType.Liability, ControlType.AccountsPayable);
             await Account("output_tax", "Output Sales Tax", "liabilities", AccountType.Liability, ControlType.OutputTax);
+            await Account("further_tax_payable", "Further Tax Payable", "liabilities", AccountType.Liability, ControlType.FurtherTaxPayable);
             await Account("wht_payable", "WHT payable", "liabilities", AccountType.Liability, ControlType.WithholdingPayable);
             await Account("loans_payable", "Loans payable", "liabilities", AccountType.Liability);
             // NOTE: "Advance from Customers" (seed:customer_advances,

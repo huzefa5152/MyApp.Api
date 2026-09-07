@@ -326,6 +326,13 @@ namespace MyApp.Api.Services.Implementations
             var outputTax = invoice.GSTAmount != 0
                 ? await ResolveAsync(invoice.CompanyId, accounts, ControlType.OutputTax, "output tax")
                 : null;
+            // Further tax (s.3(1A)) is a separate liability to FBR, not part of
+            // output tax -- keeping it out means the Output Tax account still
+            // reconciles to GST on sales, which is the check the tax reports rest
+            // on (they read these accounts from the ledger).
+            var furtherTax = invoice.FurtherTaxAmount != 0
+                ? await ResolveAsync(invoice.CompanyId, accounts, ControlType.FurtherTaxPayable, "further tax payable")
+                : null;
 
             // Credit Note (10) reverses the sale; invoice + Debit Note (9) post
             // in the sale direction.
@@ -336,7 +343,10 @@ namespace MyApp.Api.Services.Implementations
                 9 => $"Debit Note #{invoice.InvoiceNumber}",
                 _ => $"Invoice #{invoice.InvoiceNumber}",
             };
-            var net = invoice.GrandTotal - invoice.GSTAmount;
+            // The sale itself. Further tax is inside GrandTotal, so it has to come
+            // off here too -- without that it would be credited to Sales and
+            // overstate revenue by the tax collected.
+            var net = invoice.GrandTotal - invoice.GSTAmount - invoice.FurtherTaxAmount;
             // Withholding tax (income-tax) splits the AR line: the customer
             // settles only the collectible (GrandTotal − WHT); the withheld
             // slice is a receivable reclaimable from FBR (Manager parity). WHT is
@@ -377,6 +387,9 @@ namespace MyApp.Api.Services.Implementations
             if (outputTax != null)
                 AddLine(lines, outputTax.Id, debit: isCreditNote ? invoice.GSTAmount : 0m,
                     credit: isCreditNote ? 0m : invoice.GSTAmount, invoice.DivisionId, label);
+            if (furtherTax != null)
+                AddLine(lines, furtherTax.Id, debit: isCreditNote ? invoice.FurtherTaxAmount : 0m,
+                    credit: isCreditNote ? 0m : invoice.FurtherTaxAmount, invoice.DivisionId, label);
             if (wht != 0m)
             {
                 var whtReceivable = await ResolveAsync(invoice.CompanyId, accounts, ControlType.WithholdingReceivable, "withholding tax receivable");

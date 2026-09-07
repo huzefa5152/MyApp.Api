@@ -101,6 +101,12 @@ namespace MyApp.Api.DTOs
         public decimal? AdvanceTaxRate { get; set; }
         public decimal AdvanceTaxAmount { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>Further tax (s.3(1A)) rate as a percentage, or null when none
+        /// applies. Unlike the two income taxes this one is part of the supply's
+        /// tax, so it sits INSIDE GrandTotal.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+        /// <summary>Derived: subtotal x rate / 100 (Helpers/FurtherTaxCalculator).</summary>
+        public decimal FurtherTaxAmount { get; set; }
 
         // ── Payments / Receipts (design §11.5) ──
         // DueDate is operator-set; AmountPaid is synced by the receipt flow;
@@ -344,6 +350,9 @@ namespace MyApp.Api.DTOs
         public bool? AdvanceTaxFilerActive { get; set; }
         /// <summary>WHT amount (PKR) — used directly in fixed-amount mode; recomputed from rate on gross in rate mode.</summary>
         public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>Further tax (s.3(1A)) rate as a percentage; null = none.
+        /// The amount is derived from the subtotal, never taken from the caller.</summary>
+        public decimal? FurtherTaxRate { get; set; }
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
         /// <summary>
@@ -437,6 +446,9 @@ namespace MyApp.Api.DTOs
         public string? AdvanceTaxSection { get; set; }
         public bool? AdvanceTaxFilerActive { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>Further tax (s.3(1A)) rate as a percentage; null = none.
+        /// The amount is derived from the subtotal, never taken from the caller.</summary>
+        public decimal? FurtherTaxRate { get; set; }
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
 
@@ -636,6 +648,11 @@ namespace MyApp.Api.DTOs
         public string? AdvanceTaxSection { get; set; }
         public bool? AdvanceTaxFilerActive { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>Further tax (s.3(1A)) rate as a percentage. null leaves the
+        /// stored rate alone; 0 clears it -- the same absent-vs-none distinction
+        /// AdvanceTaxSection makes, so an API client editing only the items
+        /// cannot silently drop the charge.</summary>
+        public decimal? FurtherTaxRate { get; set; }
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 

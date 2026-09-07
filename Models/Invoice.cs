@@ -42,6 +42,23 @@ namespace MyApp.Api.Models
         public decimal? WithholdingTaxRate { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
 
+        // ── Further tax (Sales Tax Act s.3(1A)) ──
+        // Charged on a supply -- typically to a buyer with no sales-tax
+        // registration -- and owed to FBR with the output tax.
+        //
+        // Unlike the two income taxes above and below, this one is PART OF THE
+        // SUPPLY'S TAX: same base as sales tax (the net value of supply), on
+        // the sales-tax invoice, and inside the grand total:
+        //   GrandTotal = Subtotal + GSTAmount + FurtherTaxAmount
+        // It posts to its own liability account (ControlType.FurtherTaxPayable)
+        // rather than into Output Sales Tax, so that account keeps
+        // reconciling to GST on sales for the tax reports.
+        //
+        // Rate null (or zero) = no further tax, which is how every row written
+        // before 2026-09-07 reads. Resolved by Helpers/FurtherTaxCalculator.
+        public decimal? FurtherTaxRate { get; set; }
+        public decimal FurtherTaxAmount { get; set; }
+
         // ── Advance income tax collected from the buyer (s.236G / s.236H) ──
         // The mirror of the withholding tax above: same placement (on top of
         // sales tax, outside the FBR sales-tax invoice, GrandTotal/GSTAmount and
