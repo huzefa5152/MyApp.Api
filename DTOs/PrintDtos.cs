@@ -89,6 +89,13 @@ namespace MyApp.Api.DTOs
         /// <summary>Further tax charged. Already INSIDE GrandTotal -- it is part
         /// of the supply's tax, not an adjustment sitting outside it.</summary>
         public decimal FurtherTaxAmount { get; set; }
+        /// <summary>
+        /// Subtotal + sales tax: what the item column adds up to, WITHOUT
+        /// further tax. A totals block's "Including" line uses this, because
+        /// GrandTotal now carries further tax as well and would double-count
+        /// it against the Further Tax line beneath.
+        /// </summary>
+        public decimal TotalBeforeFurtherTax { get; set; }
         public string? PaymentTerms { get; set; }
         public List<PrintBillItemDto> Items { get; set; } = new();
     }
