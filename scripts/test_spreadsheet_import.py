@@ -141,7 +141,7 @@ def stock_workbook(rows, month="Jul 2026", sheet_name=None):
 # so an invented code is rejected — and Pakistan splits some WCO subheadings into
 # national lines, which is why this uses 8536.5010 rather than 8536.5000.
 def full_stock_workbook(rows, month="Jul 2026", alt_order=False, text_rates=(),
-                        header_row=3, first_data_row=4):
+                        header_row=3, first_data_row=4, drop_rate_heading=False):
     """The STANDARD sheet, all 21 columns: Opening / Consumed / Balance blocks.
 
     rows: (lot, hs4, hs8, name, subcat, unit, price, qty, value, rate)
@@ -166,6 +166,10 @@ def full_stock_workbook(rows, month="Jul 2026", alt_order=False, text_rates=(),
                 10: "Qty", 11: "Exl", 12: "Rate", 13: "S.Tax",
                 14: "Qty", 15: "Consumed Exl", 16: "Rate", 17: "S.Tax",
                 18: "Bal Qty", 19: "Bal Exl", 20: "Rate", 21: "S.Tax"}
+    if drop_rate_heading:
+        # A sheet that genuinely carries no rate column, to prove the guard
+        # does not block honest tax-free stock.
+        headings = {c: t for c, t in headings.items() if t not in ("Rate", "S.Tax")}
     for col, text in headings.items():
         ws.cell(header_row, col, text)
 
@@ -1084,6 +1088,56 @@ def main():
               abs(gp.get("totalValue", 0) - sp.get("totalValue", 0)) < 0.05
               and abs(gp.get("totalSalesTax", 0) - sp.get("totalSalesTax", 0)) < 0.05,
               f"{gp.get('totalValue')}/{gp.get('totalSalesTax')}")
+
+        # (d3) A layout with no tax-rate column is REFUSED on a sheet that has
+        #      one. This is the fault that reached a real client: an
+        #      operator-saved layout omitted the closing tax rate, so 79 stock
+        #      lines worth 72,737,094.04 imported with NO sales tax against
+        #      them and a preview that looked entirely healthy -- every other
+        #      figure was right, and the missing column simply was not on
+        #      screen. Sales tax is derived from value x rate, so there is
+        #      nothing downstream to notice it. Blocking, not warning.
+        no_rate = dict(std_mapping)
+        no_rate["columns"] = {k: v for k, v in std_mapping["columns"].items()
+                              if k not in ("balanceTaxRate", "balanceTax")}
+        r = upload(stock_preview, h, full_stock_workbook(std_rows), "stock.xlsx",
+                   {"mappingJson": json.dumps(no_rate)}, {"companyId": company})
+        nr = r.json() if r.ok else {}
+        check("a layout with no tax-rate column is REFUSED when the sheet has one",
+              nr.get("canCommit") is False
+              and any("closing sales-tax rate" in e for e in nr.get("blockingErrors", [])),
+              f"canCommit={nr.get('canCommit')} errors={nr.get('blockingErrors')}")
+        check("and the refusal names the column the sheet keeps the rate in",
+              any("20" in e for e in nr.get("blockingErrors", [])),
+              nr.get("blockingErrors"))
+
+        # A sheet that genuinely has no rate column must still import, or the
+        # guard would block honest tax-free stock.
+        rateless = full_stock_workbook(std_rows, drop_rate_heading=True)
+        r = upload(stock_preview, h, rateless, "stock.xlsx",
+                   {"mappingJson": json.dumps(no_rate)}, {"companyId": company})
+        rl = r.json() if r.ok else {}
+        check("a sheet with no rate column at all still imports",
+              rl.get("canCommit") is True,
+              f"canCommit={rl.get('canCommit')} errors={rl.get('blockingErrors')}")
+
+        # (d4) Closing figures taken from the OPENING block. The three blocks
+        #      repeat the same four columns, and the same saved layout pointed
+        #      the closing quantity at column 10 rather than 18. It agrees with
+        #      the balance only while nothing has been consumed -- which is
+        #      exactly why it passes review.
+        # No headerAliases, exactly as the operator-saved layout had none. WITH
+        # aliases the mapping repairs itself -- "Bal Qty" relocates 10 back to
+        # 18 and there is nothing left to warn about, which is the better
+        # outcome and the reason the built-in never had this problem.
+        wrong_block = {k: v for k, v in std_mapping.items() if k != "headerAliases"}
+        wrong_block["columns"] = dict(std_mapping["columns"], balanceQty=10, balanceValue=11)
+        r = upload(stock_preview, h, full_stock_workbook(std_rows), "stock.xlsx",
+                   {"mappingJson": json.dumps(wrong_block)}, {"companyId": company})
+        wb_ = r.json() if r.ok else {}
+        check("closing figures read from the Opening block are called out",
+              any("Balance" in w and "OPENING" in w for w in wb_.get("warnings", [])),
+              wb_.get("warnings"))
 
         # (e) Merging on the HS code is right for the stock position and lossy
         #     for the row, so every source row is kept as a lot beside it.

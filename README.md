@@ -312,6 +312,31 @@ Publish output optimized from 79 MB to 37 MB via:
   challan, and switching the setting off later leaves every existing document
   exactly as it was.
 
+### 2026-09-08 — An import can no longer swallow the sales tax in silence
+
+- **A stock import with no tax-rate column is now refused, not accepted.** A
+  client's opening stock went in with 72,737,094.04 of value and **no sales tax
+  at all** against it. Nothing was wrong with their spreadsheet — it carried the
+  rate in its Rate column, 118 rows of it. The layout that had been saved for
+  that company simply never mapped the column, and because sales tax is DERIVED
+  from value x rate there was nothing downstream to notice: every other figure
+  was right, the totals tied to the sheet, and the missing column was not on
+  screen to be missed. The preview now blocks the import and names the column
+  the rate is sitting in.
+- **A sheet that genuinely has no rate column still imports**, so honest
+  tax-free stock is unaffected — the check only fires when the sheet has a rate
+  to map and the layout ignores it.
+- **Closing figures taken from the Opening block are now called out.** The same
+  saved layout pointed the closing quantity and value at columns 10 and 11 — the
+  Opening block — rather than 18 and 19. Those agree only while nothing has been
+  consumed, which is exactly why it survived review. A layout carrying heading
+  aliases repairs this by itself; one without them now warns.
+- Both checks look for the sheet's own headings across its top rows rather than
+  trusting the layout's "heading row" setting, because a layout that gets this
+  wrong is usually one whose heading row is wrong too — the guard has to work
+  precisely when the mapping does not.
+- Suite: `python scripts/test_spreadsheet_import.py` — **135 checks**.
+
 ### 2026-09-08 — The FBR screens are back, and the sandbox page opens on the right company
 
 - **FBR Sandbox and FBR Monitor are in the sidebar again**, shown whenever ANY

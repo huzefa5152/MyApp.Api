@@ -329,6 +329,25 @@ column order differs.
   starts at `max(firstDataRow, headerRow + 1)` and warns. The scaffold's old
   `firstDataRow: 2` against a `headerRow: 3` imported the heading "Description"
   as a product: one phantom item and a second blocking error.
+- **AN UNMAPPED TAX RATE IS A BLOCKING ERROR, not a warning.** If the layout
+  has no `balanceTaxRate` and the sheet HAS a rate column, `ReadLots` refuses
+  the import and names the column. Sales tax is derived from value x rate
+  (§5b-4), so an unmapped rate silently values an entire opening stock at 0%
+  — it happened to a live client: 72,737,094.04 of stock, no tax, and a preview
+  that looked perfect because every other figure WAS right. There is nothing
+  downstream that can catch it. A sheet with no rate column at all still
+  imports, so tax-free stock is unaffected.
+- **Closing figures mapped before the "Balance" band are warned about.** The
+  three blocks repeat Qty / Exl / Rate / S.Tax, so a closing quantity at column
+  10 reads the OPENING position and matches the balance only while nothing has
+  been consumed. `headerAliases` repairs this by itself ("Bal Qty" relocates
+  10 back to 18); an operator-saved layout without aliases gets the warning.
+- **Both checks scan the sheet's TOP ROWS, not `headerRow`.**
+  `FindRateColumns` / `FindBandStart` deliberately ignore the mapped heading
+  row: the layout that omits a tax rate is usually the same one whose
+  `headerRow` is wrong, and a guard that trusts it finds nothing exactly when it
+  is needed. Learned the hard way — the first cut scanned `headerRow` and did
+  not fire on the very layout it was written for.
 - **A heading row is recognised by its TEXT, not by `headerRow`.**
   `LotRowsMapping.LooksLikeHeadingText` holds the layout's heading vocabulary and
   `ReadLots` skips any row whose item name matches it AND that has no closing
@@ -1164,7 +1183,7 @@ them can be resolved from FBR.
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Spreadsheet import (layouts, heading aliases, stock, lots, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (131 checks) |
+| Spreadsheet import (layouts, heading aliases, tax-rate guard, stock, lots, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (135 checks) |
 | Bill line pricing, advance tax (236G/236H) + further tax s.3(1A), incl. edit and GL posting | `python scripts/test_bill_pricing_advance_tax.py` | `102/102 checks passed` |
 | Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |

@@ -147,6 +147,52 @@ namespace MyApp.Api.Services.Implementations
             var cols = mapping.ResolveColumns(wb, sheet, out var relocations);
             foreach (var note in relocations) preview.Warnings.Add(note);
 
+            // ── A layout with no tax rate, on a sheet that has one ──────────
+            // BLOCKING, not a warning. Sales tax is DERIVED from value x rate
+            // (CLAUDE.md 5b-4), so an unmapped rate column silently values a
+            // whole opening stock at 0% tax -- 72,737,094.04 of stock with no
+            // tax against it, on a preview that looked entirely healthy,
+            // because every OTHER figure was right. The operator has no way to
+            // see the omission: the column simply is not on screen.
+            //
+            // Only fires when the SHEET has a rate column to map. A genuinely
+            // tax-free sheet has none and imports as before.
+            if (cols.BalanceTaxRate is null or <= 0)
+            {
+                var rateCols = mapping.FindRateColumns(wb, sheet);
+                if (rateCols.Count > 0)
+                {
+                    preview.BlockingErrors.Add(
+                        "This layout does not say which column holds the closing sales-tax rate, "
+                        + $"but the sheet has one (column {string.Join(" or ", rateCols)}). "
+                        + "Every item would import at 0% tax. Set \"Closing tax rate\" on the "
+                        + "mapping screen — for these sheets it is the Rate column of the Balance "
+                        + "block — and preview again.");
+                    return lots;
+                }
+            }
+
+            // ── Closing figures taken from the wrong block ─────────────────
+            // The three blocks repeat the same four columns, so a closing
+            // quantity mapped at 10 instead of 18 reads the OPENING position.
+            // It agrees with the balance only while nothing has been consumed,
+            // which is exactly why it survives review: the totals match the
+            // sheet. Warn rather than block — the operator may have a sheet
+            // with no bands at all.
+            var balanceBand = mapping.FindBandStart(wb, sheet, "balance");
+            if (balanceBand is > 0)
+            {
+                if (cols.BalanceQty > 0 && cols.BalanceQty < balanceBand)
+                    preview.Warnings.Add(
+                        $"The closing quantity is mapped to column {cols.BalanceQty}, which is before "
+                        + $"the sheet's \"Balance\" block (column {balanceBand}). That reads the "
+                        + "OPENING position — the same figure only while nothing has been consumed.");
+                if (cols.BalanceValue is > 0 && cols.BalanceValue < balanceBand)
+                    preview.Warnings.Add(
+                        $"The closing value is mapped to column {cols.BalanceValue}, before the "
+                        + $"\"Balance\" block (column {balanceBand}). That reads the OPENING value.");
+            }
+
             var blankStreak = 0;
             var headingRowsSkipped = new List<int>();
 

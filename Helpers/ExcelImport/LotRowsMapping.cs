@@ -368,6 +368,56 @@ namespace MyApp.Api.Helpers.ExcelImport
             return false;
         }
 
+        /// <summary>
+        /// Columns on the heading row that look like a sales-tax RATE.
+        ///
+        /// Used to catch a layout that does not map one on a sheet that plainly
+        /// has one. That combination imports every item at 0% tax and says
+        /// nothing, which is how a real client's opening stock landed with
+        /// 72,737,094.04 of value and no tax at all against it.
+        /// </summary>
+        public List<int> FindRateColumns(IImportedWorkbook workbook, int sheet)
+        {
+            var hits = new List<int>();
+            // Scans the sheet's top band, NOT just HeaderRow. The layout that
+            // gets this wrong is exactly the one whose HeaderRow is wrong: the
+            // mapping that lost a client's tax had headerRow 1, which on these
+            // sheets is the title row, so a scan of that row alone finds
+            // nothing and the guard never fires — useless precisely when needed.
+            var lastRow = Math.Min(workbook.GetLastRow(sheet), HeadingScanRows);
+            for (int row = 1; row <= lastRow; row++)
+                for (int col = 1; col <= AliasScanCols; col++)
+                {
+                    var t = Normalise(workbook.GetString(sheet, row, col));
+                    if (t is "rate" or "taxrate" or "salestaxrate" or "gstrate"
+                        && !hits.Contains(col))
+                        hits.Add(col);
+                }
+            hits.Sort();
+            return hits;
+        }
+
+        /// <summary>Rows of the top band searched for headings.</summary>
+        private const int HeadingScanRows = 8;
+
+        /// <summary>
+        /// Column where a band label sits on the row ABOVE the headings — these
+        /// sheets write "Opening", "Consumed" and "Balance" over their blocks.
+        /// Returns null when the sheet has no such band row.
+        /// </summary>
+        public int? FindBandStart(IImportedWorkbook workbook, int sheet, string band)
+        {
+            var want = Normalise(band);
+            // Same reasoning as FindRateColumns: do not trust HeaderRow to be
+            // right, because a wrong HeaderRow is the fault being detected.
+            var lastRow = Math.Min(workbook.GetLastRow(sheet), HeadingScanRows);
+            for (int row = 1; row <= lastRow; row++)
+                for (int col = 1; col <= AliasScanCols; col++)
+                    if (Normalise(workbook.GetString(sheet, row, col)) == want)
+                        return col;
+            return null;
+        }
+
         private static int? CurrentColumn(LotRowsColumns c, string field) => field.ToLowerInvariant() switch
         {
             "itemname" => c.ItemName,
