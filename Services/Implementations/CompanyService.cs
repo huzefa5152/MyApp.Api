@@ -87,6 +87,7 @@ namespace MyApp.Api.Services.Implementations
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
             DefaultWithholdingTaxRate = c.DefaultWithholdingTaxRate,
             StockGuardHardBlock = c.StockGuardHardBlock,
+            InventoryOverlayEnabled = c.InventoryOverlayEnabled,
             InventoryFlowVersion = c.InventoryFlowVersion,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
             CurrentPurchaseBillNumber = c.CurrentPurchaseBillNumber,
@@ -188,6 +189,7 @@ namespace MyApp.Api.Services.Implementations
                 DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate,
                 InventoryFlowVersion = dto.InventoryFlowVersion,
                 StockGuardHardBlock = dto.StockGuardHardBlock,
+                InventoryOverlayEnabled = dto.InventoryOverlayEnabled,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
                 CurrentPurchaseBillNumber = 0,
                 StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber,
@@ -266,6 +268,7 @@ namespace MyApp.Api.Services.Implementations
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
             company.DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate;
             company.StockGuardHardBlock = dto.StockGuardHardBlock;
+            company.InventoryOverlayEnabled = dto.InventoryOverlayEnabled;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
             if (!hasPurchaseBills)
             {

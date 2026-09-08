@@ -63,6 +63,9 @@
         public bool InventoryTrackingEnabled { get; set; }
         // Hard-block over-commit/oversell (409) when tracking is on (Q4).
         public bool StockGuardHardBlock { get; set; }
+        /// <summary>Two books per sale: a commercial bill and an FBR
+        /// invoice that share a total. See Company.InventoryOverlayEnabled.</summary>
+        public bool InventoryOverlayEnabled { get; set; }
         // Inventory tracking version: 1 = legacy (only HS-coded items tracked),
         // 2 = standard (all item types are inventory). Drives the V1/V2 toggle.
         public byte InventoryFlowVersion { get; set; } = 1;

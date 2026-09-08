@@ -122,6 +122,31 @@
         // discipline.
         public bool StockGuardHardBlock { get; set; }
 
+        // ── Inventory Overlay Behaviour (2026-09-08) ─────────────────────
+        // Splits a sale into TWO books that share one total:
+        //
+        //   the BILL      what the customer ordered and signed for, in the
+        //                 units they buy — item types with NO HS code,
+        //                 quantity and unit price typed by hand.
+        //   the INVOICE   the same money decomposed for FBR — HS-coded item
+        //                 types, quantity and unit price adjusted for the
+        //                 filing, stored on InvoiceItemAdjustment so the bill
+        //                 line itself is never rewritten.
+        //
+        // OFF (default, and what every existing company keeps): one book. The
+        // bill line IS the filing, a bill line prices itself from stock
+        // weighted-average cost, and both pickers offer every item type. Do
+        // not make any of that conditional on anything else -- Hakimi, Roshan
+        // and Alpha must behave exactly as they do today.
+        //
+        // ON: the two pickers become disjoint (no-HS on the bill, HS-only on
+        // the invoice), the bill stops pricing itself from stock, and the
+        // overlay widens to carry the item type as well as the numbers.
+        //
+        // Read it through Company, never by company id: which behaviour a
+        // document follows is configuration, not identity.
+        public bool InventoryOverlayEnabled { get; set; }
+
         // Inventory tracking policy version (2026-07 redesign). 1 = V1 legacy
         // (only HS-coded item types are stock-tracked — today's behaviour,
         // byte-identical). 2 = V2 (all non-deleted item types are inventory;

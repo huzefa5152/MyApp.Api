@@ -54,6 +54,8 @@
         // (zero-stock) company can still bill with a soft warning; the operator
         // turns it on in the Inventory tab.
         public bool StockGuardHardBlock { get; set; }
+        /// <summary>Off for a new company: one book, exactly as today.</summary>
+        public bool InventoryOverlayEnabled { get; set; } = false;
 
         // General Ledger master switch for a NEW company. Defaults ON: on the
         // create path the service runs the GL enable flow (seeds the Chart of

@@ -78,7 +78,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         // tracked from day one. Operator can turn it off in the Inventory tab.
         inventoryTrackingEnabled: true,
         // Hard-block over-commit/oversell (409) when tracking is on (Q4).
-        stockGuardHardBlock: false,
+        stockGuardHardBlock: false,
+        inventoryOverlayEnabled: false,
         // General Ledger — ON by default for new companies (seeds the Chart of
         // Accounts + turns posting on at create). Create-only; existing
         // companies manage GL from the Accounting page. Ignored on edit.
@@ -155,7 +156,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultPaymentModeRegistered: freshCompany.fbrDefaultPaymentModeRegistered || "",
                 fbrDefaultPaymentModeUnregistered: freshCompany.fbrDefaultPaymentModeUnregistered || "",
                 inventoryTrackingEnabled: !!freshCompany.inventoryTrackingEnabled,
-                stockGuardHardBlock: !!freshCompany.stockGuardHardBlock,
+                stockGuardHardBlock: !!freshCompany.stockGuardHardBlock,
+                inventoryOverlayEnabled: !!freshCompany.inventoryOverlayEnabled,
                 requireSalesOrderForBilling: !!freshCompany.requireSalesOrderForBilling,
                 startingPurchaseBillNumber: freshCompany.startingPurchaseBillNumber || 0,
                 startingGoodsReceiptNumber: freshCompany.startingGoodsReceiptNumber || 0,
@@ -528,6 +530,15 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                         <strong style={{ display: "block" }}>Hard-block over-commit / oversell</strong>
                                         <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
                                             ON — refuse a sales order or bill (409) when there isn't enough available stock. OFF — allow it with a soft warning. Enabled automatically when a company is switched to V2 inventory.
+                                        </span>
+                                    </span>
+                                </label>
+                                <label style={toggleCard}>
+                                    <input type="checkbox" name="inventoryOverlayEnabled" checked={!!form.inventoryOverlayEnabled} onChange={handleChange} style={{ marginTop: "0.15rem", flexShrink: 0 }} />
+                                    <span style={{ fontSize: "0.86rem", color: "#1a2332", lineHeight: 1.4 }}>
+                                        <strong style={{ display: "block" }}>Enable Inventory Overlay Behaviour</strong>
+                                        <span style={{ fontSize: "0.76rem", color: "#5f6d7e" }}>
+                                            ON — a sale keeps two books that share one total: the <strong>bill</strong> the customer signs (item types with no HS code, quantity and unit price typed by hand) and the <strong>invoice</strong> filed to FBR (HS-coded item types, quantity and price adjusted for the filing). Adjusting the invoice never changes the bill. OFF — one book, exactly as today: the bill line is the filing and prices itself from stock.
                                         </span>
                                     </span>
                                 </label>
