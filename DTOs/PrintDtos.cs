@@ -104,6 +104,29 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public decimal Collectible { get; set; }
         public string? PaymentTerms { get; set; }
+
+        // ── FBR Digital Invoicing ────────────────────────────────────────
+        // A Bill and a Tax Invoice are the SAME Invoice row printed through
+        // two different templates, so a bill can perfectly well carry an IRN.
+        // These mirror PrintTaxInvoiceDto exactly -- same names, same
+        // semantics -- so one FBR block works in either template type and an
+        // operator moving a design between them does not have to relearn the
+        // fields. Null on a bill that was never filed, which is what keeps
+        // {{#if fbrIRN}} from rendering an empty box.
+        public string? FbrIRN { get; set; }
+        public string? FbrStatus { get; set; }
+        public DateTime? FbrSubmittedAt { get; set; }
+        /// <summary>Verify-URL QR as a base64 PNG. See
+        /// PrintTaxInvoiceDto.FbrQrPngDataUrl -- inlined so the printed PDF
+        /// needs no external fetch. Merge field: {{{fbrQrPngDataUrl}}}
+        /// (triple braces, or Handlebars escapes the data URI).</summary>
+        public string? FbrQrPngDataUrl { get; set; }
+        /// <summary>RELATIVE with no leading slash, for the reason
+        /// PrintTaxInvoiceDto.FbrLogoUrl records at length: this installation
+        /// mounts the ERP under /admin/, and a root-relative path 404s there.
+        /// Merge field: {{fbrLogoUrl}}.</summary>
+        public string FbrLogoUrl { get; set; } = "images/fbr-logo.png";
+
         public List<PrintBillItemDto> Items { get; set; } = new();
     }
 

@@ -66,6 +66,123 @@ namespace MyApp.Api.Services.Implementations
         //  Reads — no FBR involvement whatsoever
         // ─────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// Local tariff first; if a fully-typed code is not in it, ask FBR and
+        /// fold what comes back into the master, then answer from the master.
+        ///
+        /// The point is that a picked code must be one FBR will actually
+        /// ACCEPT. Two real codes off a client's stock sheet -- 9405.9010 and
+        /// 8513.6019 -- were rejected as "not in the tariff master": the
+        /// embedded Pakistan tariff is a published snapshot and FBR's own list
+        /// moves. Rather than let the operator guess, the picker goes and asks.
+        ///
+        /// Only a COMPLETE code triggers the call. Firing on every keystroke of
+        /// "9405" would hit FBR four times for one code and answer none of them
+        /// usefully, since PRAL's itemdesccode has no search parameter -- the
+        /// only fetch available is the whole catalog. That also makes this
+        /// self-healing: one miss refreshes the master for everyone, so the
+        /// same code never has to be looked up twice, and the opening-stock
+        /// import stops rejecting it too.
+        ///
+        /// The token is the INSTALLATION's reference token, never a tenant's
+        /// (audit H-9) -- the company being edited may have FBR switched off
+        /// entirely, and this is read-only catalog data that is identical for
+        /// every caller.
+        /// </summary>
+        public async Task<List<HsCodeDto>> SearchWithFbrFallbackAsync(
+            string? search, int take, bool activeOnly = true)
+        {
+            var local = await SearchAsync(search, take, activeOnly);
+
+            var term = search?.Trim();
+            if (!LooksLikeCompleteCode(term)) return local;
+            if (local.Any(r => string.Equals(r.Code, term, StringComparison.OrdinalIgnoreCase)))
+                return local;
+
+            if (!await TryRefreshFromFbrAsync(term!)) return local;
+
+            return await SearchAsync(search, take, activeOnly);
+        }
+
+        /// <summary>"9405.9010" or "94059010" — a code the operator has finished
+        /// typing. A partial like "9405" is deliberately excluded.</summary>
+        private static bool LooksLikeCompleteCode(string? term)
+        {
+            if (string.IsNullOrWhiteSpace(term)) return false;
+            var digits = term.Replace(".", "").Trim();
+            return digits.Length >= 8 && digits.All(char.IsDigit);
+        }
+
+        // One installation-wide throttle. A miss on a code FBR does not have
+        // either would otherwise re-download the catalog on every keystroke
+        // after the eighth digit.
+        private static DateTime _lastFbrCatalogRefresh = DateTime.MinValue;
+        private static readonly TimeSpan FbrRefreshCooldown = TimeSpan.FromMinutes(10);
+        private static readonly SemaphoreSlim _refreshGate = new(1, 1);
+
+        private async Task<bool> TryRefreshFromFbrAsync(string missingCode)
+        {
+            if (DateTime.UtcNow - _lastFbrCatalogRefresh < FbrRefreshCooldown) return false;
+            if (!await _refreshGate.WaitAsync(0)) return false;   // one at a time
+            try
+            {
+                if (DateTime.UtcNow - _lastFbrCatalogRefresh < FbrRefreshCooldown) return false;
+
+                var token = await GetReferenceTokenAsync();
+                if (string.IsNullOrWhiteSpace(token)) return false;
+
+                var feed = await _fbr.FetchHsCodeCatalogWithTokenAsync(token!);
+                _lastFbrCatalogRefresh = DateTime.UtcNow;
+                if (feed.Count == 0) return false;
+
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var incoming = new List<(string Code, string? Description)>();
+                foreach (var row in feed)
+                {
+                    var code = row.HS_CODE?.Trim();
+                    if (string.IsNullOrWhiteSpace(code) || !seen.Add(code)) continue;
+                    incoming.Add((code,
+                        string.IsNullOrWhiteSpace(row.Description) ? null : row.Description.Trim()));
+                }
+
+                // ADD-ONLY. UpsertAsync also refreshes the description of a code
+                // it already knows, which is right when an operator presses
+                // "Import HS Codes" and asks for FBR's version -- but this
+                // refresh is a silent side effect of typing, and FBR's
+                // itemdesccode carries the CHAPTER heading ("FURNITURE; BEDDING,
+                // MATRESSES...") where the embedded Pakistan tariff carries the
+                // leaf ("Of chandelier"). Letting it through rewrote thousands
+                // of precise descriptions into useless ones the first time this
+                // ran. Only genuinely new codes are passed in.
+                var known = await _db.HsCodes.AsNoTracking()
+                    .Select(h => h.Code).ToListAsync();
+                var knownSet = known.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var newOnly = incoming.Where(i => !knownSet.Contains(i.Code)).ToList();
+                if (newOnly.Count == 0) return false;
+
+                // No placeholder item types either: the operator is in the middle
+                // of creating the one they want, and 7.8k placeholders is exactly
+                // what §5b-2 warns against.
+                var result = new HsCodeImportResultDto();
+                await UpsertAsync(newOnly, "FBR", createItemTypes: false, result);
+                _logger.LogInformation(
+                    "HS master refreshed from FBR after a miss on {Code}: {Added} added, {Existing} already known",
+                    missingCode, result.Added, result.AlreadyExisting);
+                return result.Added > 0;
+            }
+            catch (Exception ex)
+            {
+                // The picker still shows the local matches; a lookup failure
+                // must not break typing.
+                _logger.LogWarning(ex, "FBR HS lookup failed for {Code}", missingCode);
+                return false;
+            }
+            finally
+            {
+                _refreshGate.Release();
+            }
+        }
+
         public async Task<List<HsCodeDto>> SearchAsync(string? search, int take, bool activeOnly = true)
         {
             take = take <= 0 ? 50 : Math.Min(take, 200);
@@ -84,8 +201,19 @@ namespace MyApp.Api.Services.Implementations
                     (h.Description != null && EF.Functions.Like(h.Description, "%" + term + "%")));
             }
 
+            // Rank before truncating, or `take` throws away the codes the
+            // operator was actually typing. Searching "45" used to answer with
+            // 2903.4700 first, because "245fa" inside a description is a
+            // substring hit and the whole set was then ordered by code -- so a
+            // chemical outranked every 45xx tariff line.
+            //   0  the exact code
+            //   1  a code starting with what was typed
+            //   2  a description that merely contains it
             var rows = await query
-                .OrderBy(h => h.Code)
+                .OrderBy(h => h.Code == term ? 0
+                            : (term != null && h.Code.StartsWith(term)) ? 1
+                            : 2)
+                .ThenBy(h => h.Code)
                 .Take(take)
                 .ToListAsync();
 

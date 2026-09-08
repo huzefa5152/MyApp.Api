@@ -287,6 +287,31 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 </div>
 </div>
 
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
+
 <!-- Footer: signature + types (pushed to bottom) -->
 <div class="footer-section">
   <div class="sig-row">

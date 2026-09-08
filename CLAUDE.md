@@ -215,6 +215,29 @@ Rules:
   loaded by `ImportFromTariffAsync` — same upsert contract as the FBR import.
   It brings NO UOMs: the tariff has no unit column. Regenerate it once a year
   when FBR publishes a new tariff.
+- **The HS picker searches the local tariff FIRST, then FBR** (2026-09-08).
+  `HsCodeService.SearchWithFbrFallbackAsync`: a code the operator has typed in
+  FULL that the master does not hold triggers one throttled fetch of FBR's
+  `itemdesccode` catalog, folded into the master, so the code they pick is one
+  FBR accepts. Two codes off a client's stock sheet (`9405.9010`, `8513.6019`)
+  turned out to be in neither — genuinely dead codes, and the picker now proves
+  that rather than leaving the operator guessing. PRAL has no per-code search,
+  so the only fetch available is the whole catalog: that is why it fires on a
+  complete code only, is throttled to once per 10 minutes installation-wide,
+  and is self-healing (one miss fixes the master for every later caller,
+  including the opening-stock import).
+- **That refresh is ADD-ONLY, and must stay that way.** `UpsertAsync` also
+  refreshes the description of a code it already knows — correct when an
+  operator presses "Import HS Codes" and asks for FBR's version, wrong as a
+  silent side effect of typing. FBR's `itemdesccode` carries the CHAPTER
+  heading ("FURNITURE; BEDDING, MATRESSES…") where the embedded Pakistan tariff
+  carries the leaf ("Of chandelier"), so letting it through rewrote 7,590
+  precise descriptions into useless ones the first time this ran. Pass only
+  codes the master does not have.
+- **Rank code matches above description matches in the picker.** Description
+  matching is a substring, so searching `45` used to answer `2903.4700` first —
+  "245fa" inside a chemical's name — and the ranking has to happen BEFORE
+  `take`, or the codes the operator is typing are the ones thrown away.
 - **Pakistan splits some WCO subheadings into national lines**, so `8536.5000`
   and `7318.1500` genuinely do not exist while `8536.5010` and `7318.1510` do.
   A fixture that invents a code is rejected by master-first validation and the
@@ -914,6 +937,26 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
   -> the rate whose value matches. Picking the first put a Cement bill at 2%,
   which then demanded an SRO schedule it had no business needing.
 
+- **The FBR block belongs on the Bill template too, and its data now reaches
+  it.** A Bill and a Tax Invoice are the SAME `Invoice` row printed through two
+  templates, so a filed bill can carry an IRN — but `PrintBillDto` had no FBR
+  fields at all, so the block was dead there while the tax invoice showed it.
+  `PrintBillDto` now mirrors `PrintTaxInvoiceDto` field for field (same names,
+  same meanings) so one block works in either type, and
+  `Data/BillFbrMergeFieldSeeder` offers the fields in the Bill editor. The
+  CreditNote/DebitNote DEFAULTS need nothing: `purchaseNoteDocTemplates.classic()`
+  returns the `*-classic-serif` STARTER's html, and those starters already carry
+  the block. `defaultBillTemplate` is a standalone literal, which is why Bill
+  alone needed editing in two places.
+- **`{{{fbrQrPngDataUrl}}}` needs TRIPLE braces** — it is a `data:image/png;base64,…`
+  URI and Handlebars HTML-escapes a double-brace value, which renders a broken
+  image. The merge-field labels say so, because the editor inserts the label's
+  expression verbatim.
+- **The template editor's preview needs a FILED sample document.** The block is
+  wrapped in `{{#if fbrIRN}}`, and `templateSampleData` supplied no IRN for any
+  type (Bill/TaxInvoice had no FBR keys; the notes had `fbrIRN: ""`), so
+  inserting the block previewed as nothing and looked broken. Keep those sample
+  values populated.
 ### 11. SQL Server gotchas
 
 - **A single batch that both ALTERs a table and references the new column will fail at parse time** even when execution is guarded by `IF NOT EXISTS`. Split into separate `ExecuteSqlRaw` calls. Wrap column-dependent statements in `EXEC('...')` so they're parsed only at execution time. See `Program.cs:SecurityStamp backfill` for the pattern.

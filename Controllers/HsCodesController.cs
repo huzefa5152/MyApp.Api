@@ -54,7 +54,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("hscodes.list.view")]
         public async Task<ActionResult<List<HsCodeDto>>> Search(
             [FromQuery] string? search, [FromQuery] int take = 50, [FromQuery] bool includeInactive = false)
-            => Ok(await _service.SearchAsync(search, take, activeOnly: !includeInactive));
+            => Ok(await _service.SearchWithFbrFallbackAsync(search, take, activeOnly: !includeInactive));
 
         /// <summary>How many codes the master holds. 0 = the import has never run.</summary>
         [HttpGet("count")]

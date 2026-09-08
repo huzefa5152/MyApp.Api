@@ -176,6 +176,13 @@ export const SAMPLE_DATA = {
       { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
       { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },
     ],
+    // FBR digital invoicing -- preview values so the {{#if fbrIRN}} block
+    // actually draws in the editor. Real values come from the print DTO.
+    fbrIRN: "4230193299489DISAMPLE0000001",
+    fbrStatus: "Submitted",
+    fbrSubmittedAt: "2026-09-08T10:15:00",
+    fbrQrPngDataUrl: "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Crect width='96' height='96' fill='%23fff'/%3E%3Crect x='6' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='66' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='6' y='66' width='24' height='24' fill='%23000'/%3E%3Crect x='42' y='42' width='12' height='12' fill='%23000'/%3E%3Ctext x='48' y='88' font-size='9' text-anchor='middle' font-family='sans-serif'%3Esample QR%3C/text%3E%3C/svg%3E",
+    fbrLogoUrl: "images/fbr-logo.png",
   },
   TaxInvoice: {
     supplierName: "SAMPLE COMPANY",
@@ -200,6 +207,13 @@ export const SAMPLE_DATA = {
       { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
       { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
     ],
+    // FBR digital invoicing -- preview values so the {{#if fbrIRN}} block
+    // actually draws in the editor. Real values come from the print DTO.
+    fbrIRN: "4230193299489DISAMPLE0000001",
+    fbrStatus: "Submitted",
+    fbrSubmittedAt: "2026-09-08T10:15:00",
+    fbrQrPngDataUrl: "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Crect width='96' height='96' fill='%23fff'/%3E%3Crect x='6' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='66' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='6' y='66' width='24' height='24' fill='%23000'/%3E%3Crect x='42' y='42' width='12' height='12' fill='%23000'/%3E%3Ctext x='48' y='88' font-size='9' text-anchor='middle' font-family='sans-serif'%3Esample QR%3C/text%3E%3C/svg%3E",
+    fbrLogoUrl: "images/fbr-logo.png",
   },
   SalesQuote: {
     companyBrandName: "SAMPLE COMPANY",
@@ -281,11 +295,17 @@ export const SAMPLE_DATA = {
     gstAmount: 9000,
     grandTotal: 59000,
     amountInWords: "Fifty Nine Thousand Rupees Only",
-    fbrIRN: "",
     items: [
       { quantity: 5, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", valueExclTax: 40000, gstRate: 18, gstAmount: 7200, totalInclTax: 47200 },
       { quantity: 2, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", hsCode: "8412.2100", valueExclTax: 10000, gstRate: 18, gstAmount: 1800, totalInclTax: 11800 },
     ],
+    // FBR digital invoicing -- preview values so the {{#if fbrIRN}} block
+    // actually draws in the editor. Real values come from the print DTO.
+    fbrIRN: "4230193299489DISAMPLE0000001",
+    fbrStatus: "Submitted",
+    fbrSubmittedAt: "2026-09-08T10:15:00",
+    fbrQrPngDataUrl: "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Crect width='96' height='96' fill='%23fff'/%3E%3Crect x='6' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='66' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='6' y='66' width='24' height='24' fill='%23000'/%3E%3Crect x='42' y='42' width='12' height='12' fill='%23000'/%3E%3Ctext x='48' y='88' font-size='9' text-anchor='middle' font-family='sans-serif'%3Esample QR%3C/text%3E%3C/svg%3E",
+    fbrLogoUrl: "images/fbr-logo.png",
   },
   DebitNote: {
     supplierName: "SAMPLE COMPANY",
@@ -312,10 +332,16 @@ export const SAMPLE_DATA = {
     gstAmount: 4500,
     grandTotal: 29500,
     amountInWords: "Twenty Nine Thousand Five Hundred Rupees Only",
-    fbrIRN: "",
     items: [
       { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", valueExclTax: 25000, gstRate: 18, gstAmount: 4500, totalInclTax: 29500 },
     ],
+    // FBR digital invoicing -- preview values so the {{#if fbrIRN}} block
+    // actually draws in the editor. Real values come from the print DTO.
+    fbrIRN: "4230193299489DISAMPLE0000001",
+    fbrStatus: "Submitted",
+    fbrSubmittedAt: "2026-09-08T10:15:00",
+    fbrQrPngDataUrl: "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Crect width='96' height='96' fill='%23fff'/%3E%3Crect x='6' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='66' y='6' width='24' height='24' fill='%23000'/%3E%3Crect x='6' y='66' width='24' height='24' fill='%23000'/%3E%3Crect x='42' y='42' width='12' height='12' fill='%23000'/%3E%3Ctext x='48' y='88' font-size='9' text-anchor='middle' font-family='sans-serif'%3Esample QR%3C/text%3E%3C/svg%3E",
+    fbrLogoUrl: "images/fbr-logo.png",
   },
   PurchaseBill: {
     companyBrandName: "SAMPLE COMPANY",

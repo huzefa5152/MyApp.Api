@@ -3365,6 +3365,18 @@ namespace MyApp.Api.Services.Implementations
                     : $"Advanced Income Tax {AdvanceTaxRates.PrintLabel(inv.AdvanceTaxSection)}",
                 TotalWithAdvanceTax = inv.GrandTotal + inv.AdvanceTaxAmount,
                 PaymentTerms = inv.PaymentTerms,
+
+                // FBR block, same contract as the Tax Invoice print. A bill and
+                // a tax invoice are one Invoice row shown through two
+                // templates, so a filed bill can print its IRN too. The QR is
+                // pre-rendered here for the reason the tax-invoice path
+                // records: no external fetch from the printed PDF, and the IRN
+                // never reaches a third-party image host.
+                FbrIRN = inv.FbrIRN,
+                FbrStatus = inv.FbrStatus,
+                FbrSubmittedAt = inv.FbrSubmittedAt,
+                FbrQrPngDataUrl = FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN),
+
                 Items = groupBill
                     ? inv.Items
                         .GroupBy(ii => ii.ItemTypeName)

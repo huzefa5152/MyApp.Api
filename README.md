@@ -289,6 +289,38 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — The FBR digital-invoice block prints on bills too
+
+- **A filed bill now prints its FBR block**: the IRN, the submission date, the
+  verification QR and the FBR logo, in a bordered panel. Sales Tax Invoices,
+  Credit Notes and Debit Notes have shown this for months; the Bill / Invoice
+  template never could, even though a bill and a tax invoice are the same
+  document printed two ways, so the same filed sale printed with an IRN on one
+  template and no trace of it on the other.
+- It is in the **default Bill template and all fifteen Bill starter designs**,
+  and it appears only on a bill that actually holds an IRN — an unfiled bill
+  prints exactly as before.
+- **The FBR fields are now offered in the Bill template editor** (IRN, status,
+  submission date, QR, logo, and the conditional wrapper), so a bespoke bill
+  design can place them wherever it likes.
+- **Fixed: the FBR block never appeared in the template editor's preview.** The
+  preview's sample document had no IRN, so the block was hidden — anyone who
+  inserted it saw nothing and had every reason to think it was broken. The
+  preview now shows a filed sample document for bills, tax invoices and both
+  note types.
+- The QR travels inside the document as an image, so a printed or emailed PDF
+  needs no internet connection to show it, and the invoice number is never sent
+  to an outside image service.
+
+- **The HS code picker now asks FBR when your tariff does not have the code.**
+  Type a full code; if the built-in Pakistan tariff does not know it, the app
+  looks it up in FBR'''s own list and adds it, so what you pick is a code FBR
+  will accept. It only happens for a code you have finished typing, and once
+  per lookup — after that the code is simply there, for item types and for the
+  stock import alike.
+- **Fixed: searching the HS picker by a short number returned nonsense first.**
+  Typing `45` led with a chemical, because its description happened to contain
+  "245fa". Codes that start with what you typed now come first.
 ### 2026-09-08 — One standard opening stock sheet, and the tax it was losing
 
 - **Opening stock imports were quietly running at 0% sales tax.** The layout

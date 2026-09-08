@@ -98,6 +98,30 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
   </div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -207,6 +231,30 @@ table.items th.c { text-align: center; }
   </div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -301,6 +349,30 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
     </div>
   </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -396,6 +468,30 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
     </div>
   </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -495,6 +591,30 @@ table.items th.l { text-align: left; }
   </div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -607,6 +727,30 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
   </div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -696,6 +840,30 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
   </div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -805,6 +973,30 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
       </div>
     </div>
   </div>
+  {{#if fbrIRN}}
+  <!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+       The QR is a base64 PNG built server-side, so the printed PDF needs no
+       external fetch and the IRN never reaches a third-party image host --
+       TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+       fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+       mounts the app under /admin/, where a root-relative path 404s. -->
+  <div style="page-break-inside:avoid">
+    <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+      <div>
+        <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+        <div><strong>IRN:</strong> {{fbrIRN}}</div>
+        {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+        <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+      </div>
+    </div>
+    <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+         would collapse at the page boundary, so this has to be a real box. -->
+    <div style="height:30pt"></div>
+  </div>
+  {{/if}}
   <div class="footer-sect">
     <div class="sigs">
       <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -914,6 +1106,30 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
   </div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -1022,6 +1238,30 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
   <div class="terms"><strong>Terms &amp; Conditions:</strong> Payment due within 30 days. Goods once sold will not be taken back. All disputes subject to local jurisdiction.</div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -1127,6 +1367,30 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
     </div>
   </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -1238,6 +1502,30 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
     </div>
   </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -1337,6 +1625,30 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
   <div class="terms"><strong>Terms:</strong> {{#if paymentTerms}}{{paymentTerms}}{{else}}Payment due within 30 days of invoice date. Goods once sold will not be taken back.{{/if}}</div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -1436,6 +1748,30 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
   </div>
 </div>
 </div>
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
 <div class="footer-sect">
   <div class="sigs">
     <div class="sig"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="lbl">Authorized Signature</div></div>
@@ -1544,6 +1880,30 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
       </table>
     </div>
   </div>
+  {{#if fbrIRN}}
+  <!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+       The QR is a base64 PNG built server-side, so the printed PDF needs no
+       external fetch and the IRN never reaches a third-party image host --
+       TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+       fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+       mounts the app under /admin/, where a root-relative path 404s. -->
+  <div style="page-break-inside:avoid">
+    <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+      <div>
+        <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+        <div><strong>IRN:</strong> {{fbrIRN}}</div>
+        {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+        <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+      </div>
+    </div>
+    <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+         would collapse at the page boundary, so this has to be a real box. -->
+    <div style="height:30pt"></div>
+  </div>
+  {{/if}}
   <div class="sig-row">
     <div class="sig-cell"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>Authorized Signature</div>
     <div class="sig-cell">Receiver's Signature &amp; Stamp</div>

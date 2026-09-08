@@ -762,6 +762,7 @@ using (var scope = app.Services.CreateScope())
     // Credit/Debit Note + Purchase Bill + Goods Receipt template merge
     // fields — same idempotent runtime-seed contract.
     await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db);
+    await MyApp.Api.Data.BillFbrMergeFieldSeeder.SeedAsync(db);
 
     // Division (sub-company) merge fields across all template types — same
     // idempotent runtime-seed contract.

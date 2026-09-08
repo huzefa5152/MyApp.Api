@@ -16,6 +16,11 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<List<HsCodeDto>> SearchAsync(string? search, int take, bool activeOnly = true);
 
+        /// <summary>Local tariff first; a fully-typed code that is not in it is
+        /// looked up at FBR (installation reference token, throttled) and folded
+        /// into the master, so what the operator picks is a code FBR accepts.</summary>
+        Task<List<HsCodeDto>> SearchWithFbrFallbackAsync(string? search, int take, bool activeOnly = true);
+
         Task<HsCodeDto?> GetByCodeAsync(string code);
 
         /// <summary>How many active codes the master holds — 0 means "never imported".</summary>
