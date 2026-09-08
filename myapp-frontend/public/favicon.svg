@@ -1,10 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect x="10" y="4" width="44" height="56" rx="4" fill="#0d47a1" stroke="#0a3470" stroke-width="2"/>
-  <rect x="16" y="14" width="24" height="3" rx="1.5" fill="#bbdefb"/>
-  <rect x="16" y="21" width="32" height="2" rx="1" fill="#64b5f6"/>
-  <rect x="16" y="27" width="32" height="2" rx="1" fill="#64b5f6"/>
-  <rect x="16" y="33" width="32" height="2" rx="1" fill="#64b5f6"/>
-  <rect x="16" y="39" width="20" height="2" rx="1" fill="#64b5f6"/>
-  <circle cx="44" cy="46" r="14" fill="#00c853" stroke="#fff" stroke-width="2"/>
-  <path d="M37 46l4 4 8-8" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Digital Invoicing ERP">
+  <!-- Product mark: a filed invoice.
+       Drawn for 16px first. A favicon is read at the size of a full stop, so
+       the whole design is three shapes with hard contrast: a solid tile, a
+       white document, and a green verified badge. The earlier mark carried
+       five 2px "text" rules that merged into a grey smudge at tab size, which
+       is why it read as a blank square.
+       width/height are explicit, not just a viewBox: some browsers decline to
+       render an SVG favicon that states no intrinsic size. -->
+  <rect width="64" height="64" rx="13" fill="#0d47a1"/>
+  <path d="M18 13h20l10 10v28a3 3 0 0 1-3 3H18a3 3 0 0 1-3-3V16a3 3 0 0 1 3-3z" fill="#fff"/>
+  <path d="M38 13l10 10H41a3 3 0 0 1-3-3z" fill="#bbdefb"/>
+  <rect x="21" y="27" width="16" height="3.4" rx="1.7" fill="#0d47a1"/>
+  <rect x="21" y="34" width="12" height="3.4" rx="1.7" fill="#90a4c8"/>
+  <circle cx="45" cy="45" r="13" fill="#00c853" stroke="#0d47a1" stroke-width="3"/>
+  <path d="M39.5 45.2l3.8 3.8 7-7.4" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -2,7 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Icon set. Vite rewrites these leading slashes with the deploy base, so
+         under /admin/ they resolve to /admin/favicon.* -- verified in the built
+         output, not assumed. The .ico matters because a browser falls back to
+         requesting one when it cannot use the declared icon, and this site
+         answered that request with a 404, which is what left the tab blank.
+         Declared smallest-first; the browser takes the last one it supports. -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon-180.png" />
+    <!-- Icon sources are RELATIVE inside the manifest, so they resolve
+         against the manifest's own URL and survive the /admin/ base. -->
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#0d47a1" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"

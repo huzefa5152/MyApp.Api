@@ -317,6 +317,131 @@ def suite_concurrency(base, token, cid, client, supplier, suffix):
           b["committed"] <= 5.0 + 0.001 and b["available"] >= -0.001, f"{b}")
 
 
+def suite_tracked_itemtypes(base, token, cid, suffix):
+    """Which item types can hold a stock position is a SERVER rule, and the
+    stock modals' pickers are built from it.
+
+    They used to be built from a guess in the page, and the guess had already
+    drifted from the page's own hint: the hint promised that items with no HS
+    code were hidden while both pickers offered every one of them. Pinning the
+    endpoint is what stops that drifting again -- the pickers cannot disagree
+    with a rule they ask for."""
+    suite = "tracked item types feed the stock pickers"
+    print(f"\n=== {suite} ===")
+
+    # Two items that differ ONLY in whether they carry an HS code, so the
+    # difference between the V1 and V2 answers can be nothing else.
+    st, hs = http("POST", f"/api/itemtypes?companyId={cid}", base, token=token, body={
+        "name": f"V2 Tracked HS {suffix}", "uom": "Numbers, pieces, units",
+        "hsCode": "8481.8090", "companyId": cid, "isFavorite": True})
+    st2, nohs = http("POST", f"/api/itemtypes?companyId={cid}", base, token=token, body={
+        "name": f"V2 Tracked NoHS {suffix}", "uom": "Numbers, pieces, units",
+        "companyId": cid, "isFavorite": True})
+    if not (st in (200, 201) and st2 in (200, 201)):
+        check(suite, "the two probe item types are created", False, f"{st}/{st2}")
+        return
+    check(suite, "an HS-coded and a non-HS item type are created", True)
+
+    st, ids = http("GET", f"/api/stock/company/{cid}/tracked-itemtypes", base, token=token)
+    answered = st == 200 and isinstance(ids, list)
+    check(suite, "the tracked-item-types endpoint answers", answered, f"http {st}: {ids}")
+    if not answered:
+        return
+    tracked = set(ids)
+
+    # This company is V2, where HS code is FBR metadata and everything is stock.
+    check(suite, "V2 tracks the HS-coded item", hs["id"] in tracked, "missing")
+    check(suite, "V2 ALSO tracks the item with no HS code -- that is what V2 means",
+          nohs["id"] in tracked,
+          "the non-HS item was excluded, which is the V1 rule leaking into V2")
+
+    # A per-company override has to beat the version, or the policy screen lies.
+    st, _ = http("POST", f"/api/stock/company/{cid}/itemtype-policy", base, token=token,
+                 body={"itemTypeId": nohs["id"], "mode": 2})   # 2 = FbrOnly
+    marked = st in (200, 204)
+    check(suite, "the non-HS item can be marked FBR-only", marked, f"http {st}")
+    if marked:
+        st, ids2 = http("GET", f"/api/stock/company/{cid}/tracked-itemtypes", base, token=token)
+        check(suite, "an FBR-only override drops it from the tracked set",
+              st == 200 and nohs["id"] not in set(ids2),
+              "the override was ignored")
+        # Put it back so later suites see the company they expect.
+        http("POST", f"/api/stock/company/{cid}/itemtype-policy", base, token=token,
+             body={"itemTypeId": nohs["id"], "mode": 0})
+
+    return {"hs": hs["id"], "nohs": nohs["id"]}
+
+
+def suite_v2_is_one_way(base, token, cid, suffix):
+    """V2 cannot be undone.
+
+    Under V2 a company accumulates stock positions on item types V1 does not
+    track at all. Going back would not untrack them -- it would leave their
+    movements recorded and their on-hand invisible, which reads to an operator
+    as stock vanishing. There is no safe automatic reverse, so the server
+    refuses one; the dashboard also stops offering the button, but the refusal
+    has to hold without it because the endpoint is reachable directly."""
+    suite = "V2 is one-way"
+    print(f"\n=== {suite} ===")
+
+    st, before = http("GET", f"/api/companies/{cid}", base, token=token)
+    check(suite, "the company is on V2 to begin with",
+          st == 200 and before.get("inventoryFlowVersion") == 2,
+          f"flowVersion={before.get('inventoryFlowVersion') if st == 200 else st}")
+
+    st, r = http("POST", f"/api/stock/company/{cid}/flow-version", base, token=token,
+                 body={"version": 1})
+    check(suite, "asking to go back to V1 is refused", st == 400, f"http {st}: {r}")
+    msg = (r or {}).get("error", "") if isinstance(r, dict) else str(r)
+    check(suite, "and the refusal explains why, not just that",
+          "cannot be moved back" in msg.lower() or "hide positions" in msg.lower(),
+          f"message was: {msg[:140]}")
+
+    st, after = http("GET", f"/api/companies/{cid}", base, token=token)
+    check(suite, "the company is still on V2 after the attempt",
+          st == 200 and after.get("inventoryFlowVersion") == 2,
+          f"flowVersion={after.get('inventoryFlowVersion') if st == 200 else st}")
+
+    # Setting it to the version it already has stays a no-op, not an error --
+    # an idempotent PUT-alike must not start failing because of the new guard.
+    st, same = http("POST", f"/api/stock/company/{cid}/flow-version", base, token=token,
+                    body={"version": 2})
+    check(suite, "re-asserting V2 is still accepted as a no-op",
+          st == 200 and (same or {}).get("changed") is False,
+          f"http {st}: {same}")
+
+    # And forward is still allowed, from a company that has not moved yet.
+    st, v1co = http("POST", "/api/companies", base, token=token, body={
+        "name": f"_v2_oneway_probe {suffix}", "startingChallanNumber": 1,
+        "startingInvoiceNumber": 1, "startingPurchaseBillNumber": 1,
+        "startingGoodsReceiptNumber": 1, "fbrEnabled": False,
+        "inventoryTrackingEnabled": True, "inventoryFlowVersion": 1})
+    made_v1 = st in (200, 201) and v1co.get("inventoryFlowVersion") == 1
+    check(suite, "a V1 company can be created for the forward case", made_v1,
+          f"http {st}: flowVersion={v1co.get('inventoryFlowVersion') if st in (200,201) else v1co}")
+    if made_v1:
+        st, fwd = http("POST", f"/api/stock/company/{v1co['id']}/flow-version",
+                       base, token=token, body={"version": 2})
+        check(suite, "V1 -> V2 is still allowed", st == 200 and (fwd or {}).get("changed") is True,
+              f"http {st}: {fwd}")
+        # V1 tracks only HS-coded items -- the other half of the picker rule.
+        st, probe = http("POST", "/api/companies", base, token=token, body={
+            "name": f"_v1_tracked_probe {suffix}", "startingChallanNumber": 1,
+            "startingInvoiceNumber": 1, "startingPurchaseBillNumber": 1,
+            "startingGoodsReceiptNumber": 1, "fbrEnabled": False,
+            "inventoryTrackingEnabled": True, "inventoryFlowVersion": 1})
+        if st in (200, 201):
+            st, v1ids = http("GET", f"/api/stock/company/{probe['id']}/tracked-itemtypes",
+                             base, token=token)
+            st2, v2ids = http("GET", f"/api/stock/company/{cid}/tracked-itemtypes",
+                              base, token=token)
+            check(suite, "V1 tracks strictly fewer item types than V2",
+                  st == 200 and st2 == 200 and len(v1ids) < len(v2ids),
+                  f"V1={len(v1ids) if st == 200 else st} V2={len(v2ids) if st2 == 200 else st2}")
+            http("DELETE", f"/api/companies/{probe['id']}", base, token=token)
+        http("DELETE", f"/api/companies/{v1co['id']}", base, token=token)
+
+
 # ── Report / main ───────────────────────────────────────────────────
 def print_report() -> int:
     print("\n" + "=" * 60)
@@ -353,6 +478,8 @@ def main() -> int:
             suite_reserve_deliver_bill(args.base, token, company["id"], client, W, suffix)
         suite_overcommit_block(args.base, token, company["id"], client, suffix)
         suite_concurrency(args.base, token, company["id"], client, supplier, suffix)
+        suite_tracked_itemtypes(args.base, token, company["id"], suffix)
+        suite_v2_is_one_way(args.base, token, company["id"], suffix)
     finally:
         teardown(args.base, token, company, args.keep)
     return print_report()

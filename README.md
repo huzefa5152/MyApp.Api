@@ -289,6 +289,44 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — The stock modals only offer items that can hold stock, and V2 is permanent
+
+- **The item pickers on Opening Balance and Adjust now ask the server which
+  items are stock-tracked**, instead of guessing in the page. The guess had
+  already drifted from the screen's own wording: the hint under the picker
+  promised that items with no HS code were hidden, while both pickers in fact
+  listed every one of them. What is tracked depends on the company's inventory
+  version and on any per-item override, so it was never something the browser
+  could work out on its own.
+- **Opening Balance offers only items that have no opening yet**; Adjust offers
+  everything tracked, opened or not. Setting an opening twice is a correction,
+  not an addition, and it belongs on the item's own row.
+- **An opening balance can now be edited.** Correcting a mistyped opening is not
+  a stock movement — nothing physically moved, the figure was recorded wrong —
+  so it must not go through Adjust, which would put an event in the ledger that
+  never happened. The Edit button reopens the same figures with the item locked.
+- **A company on V2 inventory can no longer be moved back to V1.** Under V2 a
+  company builds up stock positions on item types V1 does not track at all;
+  going back would not remove them, it would hide them, which reads to an
+  operator as stock disappearing. The button is gone from the dashboard and the
+  server refuses the change with the reason, since the endpoint is reachable
+  without the button. New companies still start on V2, and V1 to V2 is still
+  allowed.
+- Suite: `python scripts/test_stock_v2_lifecycle.py` — **43 checks**.
+
+### 2026-09-08 — The app has a proper icon in the browser tab
+
+- **Every tab now shows the product mark** instead of the browser's blank page
+  icon. The tab was blank because the site answered `/favicon.ico` with a 404 —
+  the file a browser asks for by name when it cannot use the icon a page
+  declares — and because the SVG stated no intrinsic size, which some browsers
+  decline to render. Both are fixed, and the icon is declared in the sizes
+  browsers actually reach for: `.ico` for the tab, SVG where it is supported,
+  a 180px PNG for an iPhone home screen and 192/512 for Android.
+- The mark is drawn for 16px first: three shapes with hard contrast — a solid
+  tile, a document, and a green verified badge — because a favicon is read at
+  the size of a full stop and fine detail turns into a smudge.
+
 ### 2026-09-08 — Inventory Overlay: a bill and a tax invoice that differ on purpose
 
 - **New setting, off by default: "Enable Inventory Overlay Behaviour"** (Company →
