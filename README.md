@@ -312,6 +312,37 @@ Publish output optimized from 79 MB to 37 MB via:
   challan, and switching the setting off later leaves every existing document
   exactly as it was.
 
+### 2026-09-08 — Seven of eight FBR scenarios file, after one wrong URL
+
+- **One reference endpoint was on the wrong path, and it cost four scenarios.**
+  PRAL's spec puts `SroSchedule` on `pdi/v1/` while its neighbours
+  (`SaleTypeToRate`, `SROItem`, `HS_UOM`) are on `pdi/v2/`. We called it on v2,
+  where it answers **200 with an empty array** rather than 404 — indistinguishable
+  from "this rate has no SRO schedules". So the SRO schedule reference could
+  never be resolved, and every reduced-rate, exempt, zero-rated and SRO-297
+  filing fell back to a hard-coded string that FBR did not recognise.
+- **With the path corrected, FBR tells us the values.** `SroSchedule` returns the
+  schedule descriptions and `SROItem` the serials that belong to each. They are
+  nothing like what was guessable: the exempt schedule is `6th Schd Table I`
+  (FBR abbreviates it), SRO 297 is `297(I)/2023-Table-I` with no "SRO" prefix,
+  and the Fifth Schedule's serials are parenthesised — `1(i)`, `1(ii)`,
+  `1(i)(a)`. All four scenarios were accepted first time with FBR's own values.
+- **`SROItem` also takes a different date format** from every other reference
+  endpoint — ISO `2025-03-25` where the others want `04-Feb-2024`. Converted in
+  one place so callers cannot get it wrong.
+- **Seven of the eight scenarios now file real IRNs**, on both Importer and
+  Exporter, with zero refusals: SN001, SN002, SN005, SN006, SN007, SN016, SN024.
+- **SN017 (FED charged in ST mode) still does not**, and the reason is now
+  precise rather than mysterious: `SroSchedule` returns nothing for its rate, so
+  `[0052] HS Code does not match with provided sale type` is purely an HS-code
+  whitelist and FBR publishes no sale-type-to-HS-code mapping. Around sixty codes
+  have been refused. It will also need `fedPayable` populated — its rate is
+  "18% and Rs. 80 per Liter" and we send 0 — which is a second thing to fix once
+  PRAL says which commodity the scenario means.
+- Verified against PRAL's published Technical Documentation for DI API v1.12,
+  which also confirmed the scenario table and the applicable-scenarios matrix
+  match ours exactly.
+
 ### 2026-09-08 — Four FBR scenarios that never filed, now do
 
 - **Exempt sales were filed with the wrong word for their rate.** FBR wants its

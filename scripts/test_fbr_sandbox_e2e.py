@@ -694,20 +694,20 @@ REGISTERED_SHAPES = {
     # 1, 56, 70 and 100 is refused [0078].
     "SN005": dict(saleType="Goods at Reduced Rate", rate=5,
                   hs="8481.8090", uom="Numbers, pieces, units", buyer="registered",
-                  sro="EIGHTH SCHEDULE TABLE-1", serial="82", retail=3000,
-                  filesInSuite=False, inSuiteError="filed in isolation; [0077] on later identical payloads"),
+                  sro="EIGHTH SCHEDULE Table 1", serial="19", retail=3000,
+                  filesInSuite=True),
     # A roman numeral I, not a digit 1 -- every "Table 1"/"TABLE-1" spelling is
     # refused [0077], i.e. not recognised as a schedule at all. The rate also
     # has to reach FBR as the word "Exempt"; FbrService does that.
     "SN006": dict(saleType="Exempt goods", rate=0,
                   hs="8481.8090", uom="Numbers, pieces, units", buyer="registered",
-                  sro="SIXTH SCHEDULE TABLE-I", serial="63", retail=3000,
-                  filesInSuite=False, inSuiteError="filed in isolation; [0077] on later identical payloads"),
+                  sro="6th Schd Table I", serial="100", retail=3000,
+                  filesInSuite=True),
     # No table suffix here, and serial 14. A zero-rated line also needs a
     # genuinely zero-rated commodity: 8481.8090 is refused [0052], wheat is not.
     "SN007": dict(saleType="Goods at zero-rate", rate=0,
                   hs="1001.1900", uom="KG", buyer="registered",
-                  sro="FIFTH SCHEDULE", serial="14", retail=3000,
+                  sro="FIFTH SCHEDULE", serial="1(i)", retail=3000,
                   # The only one of the four SRO scenarios that has filed from
                   # inside a full run. Its schedule string is also the only one
                   # with no table suffix, which may or may not be why.
@@ -726,8 +726,8 @@ REGISTERED_SHAPES = {
     # Eight other spellings of this schedule are refused [0077].
     "SN024": dict(saleType="Goods as per SRO.297(|)/2023", rate=25,
                   hs="8481.8090", uom="Numbers, pieces, units", buyer="registered",
-                  sro="SRO 297(I)/2023 TABLE-1", serial="82", retail=3000,
-                  filesInSuite=False, inSuiteError="filed in isolation; [0077] on later identical payloads"),
+                  sro="297(I)/2023-Table-I", serial="12", retail=3000,
+                  filesInSuite=True),
 }
 
 

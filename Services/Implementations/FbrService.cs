@@ -1081,12 +1081,11 @@ namespace MyApp.Api.Services.Implementations
                 if (isReducedRate && invoice.GSTRate != 18m
                     && string.IsNullOrWhiteSpace(sroScheduleNo))
                 {
-                    // The pair FBR's own validator accepts: upper case,
-                    // hyphenated, serial 82. The previous values here
-                    // ("EIGHTH SCHEDULE Table 1" + "70", from PRAL's published
-                    // SN028 sample) are refused [0078] today.
-                    sroScheduleNo = "EIGHTH SCHEDULE TABLE-1";
-                    sroItemSerialNo = "82";
+                    // FBR's own srO_DESC for rateId 109, with a serial that is
+                    // actually in that schedule's SROItem list. Serial 70 (from
+                    // PRAL's published SN028 sample) is not, and draws [0078].
+                    sroScheduleNo = "EIGHTH SCHEDULE Table 1";
+                    sroItemSerialNo = "19";
                 }
 
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
@@ -1883,7 +1882,15 @@ namespace MyApp.Api.Services.Implementations
             return await GetReferenceListAsync<FbrSaleTypeRateDto>(httpClient, url, "SaleTypeToRate");
         }
 
-        // §5.7 — SroSchedule (v2)
+        // §5.7 — SroSchedule. Lives on v1, NOT v2.
+        //
+        // PRAL's spec §5.7 gives the URL as pdi/v1/SroSchedule while its
+        // neighbours (SaleTypeToRate, HS_UOM, SROItem) are all v2. Called on v2
+        // it answers 200 with an EMPTY ARRAY rather than 404, so it looks
+        // exactly like "this rate has no schedules" — and that is what made the
+        // SRO schedule string unresolvable, which in turn made every
+        // reduced-rate / exempt / zero-rated / SRO-297 filing depend on a
+        // hard-coded guess.
         public async Task<List<FbrSRODto>> GetSROScheduleAsync(
             int companyId, int rateId, string date, int provinceId)
         {
@@ -1891,7 +1898,7 @@ namespace MyApp.Api.Services.Implementations
             if (company == null || string.IsNullOrEmpty(company.FbrToken)) return new();
 
             var httpClient = CreateClient(company);
-            var url = $"{RefBaseV2}/SroSchedule?rate_id={rateId}&date={date}&origination_supplier_csv={provinceId}";
+            var url = $"{RefBaseV1}/SroSchedule?rate_id={rateId}&date={date}&origination_supplier_csv={provinceId}";
             return await GetReferenceListAsync<FbrSRODto>(httpClient, url, "SroSchedule");
         }
 
@@ -1903,7 +1910,15 @@ namespace MyApp.Api.Services.Implementations
             if (company == null || string.IsNullOrEmpty(company.FbrToken)) return new();
 
             var httpClient = CreateClient(company);
-            var url = $"{RefBaseV2}/SROItem?date={date}&sro_id={sroId}";
+            // SROItem is the one reference endpoint documented with an ISO date
+            // (spec §5.10: date=2025-03-25); its neighbours take dd-MMM-yyyy.
+            // Callers pass the dd-MMM-yyyy form everything else needs, so
+            // convert rather than making every caller remember the exception.
+            var isoDate = DateTime.TryParse(date, System.Globalization.CultureInfo.InvariantCulture,
+                                            System.Globalization.DateTimeStyles.None, out var parsed)
+                ? parsed.ToString("yyyy-MM-dd")
+                : date;
+            var url = $"{RefBaseV2}/SROItem?date={isoDate}&sro_id={sroId}";
             return await GetReferenceListAsync<FbrSROItemDto>(httpClient, url, "SROItem");
         }
 

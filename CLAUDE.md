@@ -1057,14 +1057,23 @@ them can be resolved from FBR.
   (valves) is refused `[0052]`; `1001.1900` (wheat) is accepted. Same for the
   HS/UoM pair — FBR names the units it will take, and the pre-flight surfaces
   that before the call.
-- **SRO schedule strings are FBR's spellings, and nothing normalises them.**
-  `EIGHTH SCHEDULE TABLE-1` (upper case, hyphen), `SIXTH SCHEDULE TABLE-I`
-  (roman numeral I, not a digit), `FIFTH SCHEDULE` (no suffix at all),
-  `SRO 297(I)/2023 TABLE-1`. A spelling FBR does not know comes back as
+- **`SroSchedule` lives on `pdi/v1/`. Everything around it is `pdi/v2/`.**
+  Spec §5.7. Called on v2 it returns **200 and an empty array**, not a 404 — so
+  it reads as "this rate has no schedules" and the mistake survived for months.
+  That single wrong path is why the SRO reference could not be resolved and why
+  four scenarios depended on hard-coded guesses. `SaleTypeToRate`, `SROItem` and
+  `HS_UOM` are all v2; check the spec before adding another.
+- **`SROItem` takes an ISO date; the others take `dd-MMM-yyyy`.** Spec §5.10
+  (`date=2025-03-25`) against §5.7 (`date=04-Feb-2024`). `GetSROItemsAsync`
+  converts, so callers pass the one format.
+- **RESOLVE the SRO reference, never spell it.** `SaleTypeToRate` → rateId,
+  `SroSchedule` → `srO_DESC` (that IS the string to file), `SROItem` → the valid
+  serials. FBR's own values look nothing like their legal names: `6th Schd Table
+  I` for the Sixth Schedule, `297(I)/2023-Table-I` with no "SRO" prefix, and
+  parenthesised serials like `1(i)`. A spelling FBR does not know comes back as
   `[0077] Valid SRO/Schedule No. is mandatory` — identical to sending none, which
-  is why this took so long to see. Right spelling, wrong serial is `[0078]`.
-  Those two codes tell you which half is wrong; the serials that work are 82
-  (eighth, SRO 297), 63 (sixth) and 14 (fifth).
+  is what makes this so easy to misread. Right schedule, wrong serial is
+  `[0078]`.
 - **Once ANY schedule is in play FBR treats the line as 3rd-Schedule** and
   requires a `FixedNotifiedValueOrRetailPrice` (`[0090]`). It is an operator
   input, so the catalog does not default it — but a scenario with an SRO cannot
