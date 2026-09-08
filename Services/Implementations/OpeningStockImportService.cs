@@ -148,6 +148,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var note in relocations) preview.Warnings.Add(note);
 
             var blankStreak = 0;
+            var headingRowsSkipped = new List<int>();
 
             // The heading row is never data, whatever the mapping says. A
             // mapping edited on screen starts from a scaffold whose first data
@@ -180,6 +181,23 @@ namespace MyApp.Api.Services.Implementations
                 blankStreak = 0;
 
                 if (string.IsNullOrWhiteSpace(name)) continue;
+
+                // A heading row that landed inside the data range. `headerRow`
+                // cannot catch this: a layout saved with headerRow 1 and
+                // firstDataRow 3, against a sheet whose headings are on row 3,
+                // has nothing wrong with it arithmetically. The row arrived as a
+                // product called "Description" carrying HS code "8" and no
+                // quantity, and then blocked the whole import as
+                // "No closing quantity - nothing to open with".
+                //
+                // Tested on BOTH the name and the absence of a quantity, so a
+                // genuine product that happens to be called "Item" is never
+                // dropped -- a real stock line has something on hand.
+                if (mapping.LooksLikeHeadingText(name) && qty is null or <= 0m)
+                {
+                    if (!headingRowsSkipped.Contains(row)) headingRowsSkipped.Add(row);
+                    continue;
+                }
 
                 var full = cols.HsCodeFull is > 0
                     ? CleanHsCode(wb.GetString(sheet, row, cols.HsCodeFull.Value), mapping.HsCodeStripSuffix)
@@ -218,6 +236,11 @@ namespace MyApp.Api.Services.Implementations
                     ConsumedTaxRate: cols.ConsumedTaxRate is > 0
                         ? AsPercentage(wb.GetDecimal(sheet, row, cols.ConsumedTaxRate.Value)) : null));
             }
+
+            if (headingRowsSkipped.Count > 0)
+                preview.Warnings.Add(
+                    $"Row {string.Join(", ", headingRowsSkipped)} held column headings, not stock, and was skipped. "
+                    + "Set the heading row and first data row correctly to silence this.");
 
             if (lots.Count >= MaxSourceRows)
                 preview.Warnings.Add(

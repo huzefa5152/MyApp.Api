@@ -289,6 +289,24 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — A column-heading row can no longer block a stock import
+
+- **A stock sheet failed to import because its own heading row was read as a
+  product.** It arrived as an item called "Description" with HS code "8" and no
+  quantity, and its "No closing quantity — nothing to open with" error blocked
+  the entire file — 120 good rows held up by one. This happens when a saved
+  layout leaves "heading row" at 1 while the sheet's headings are on row 3 and
+  the layout starts reading there: nothing about those two numbers is wrong, so
+  the earlier off-by-one guard passed the row straight through.
+- **A heading row is now recognised by its own text**, wherever it sits, and
+  skipped — and the preview names the row it skipped rather than dropping it
+  silently. It is only treated as a heading when the row also has no closing
+  quantity, so a real product that happens to be called "Item" is never
+  discarded.
+- The client's corrected sheet now imports clean: 120 rows, 78 items, 72,736,594.04
+  excluding tax and 13,662,430.93 sales tax — matching the workbook's own totals
+  row — through the shipped layout with no mapping step.
+
 ### 2026-09-08 — FBR: a scenario that could never be filed, and a check that blocked two more
 
 - **"Processing / Conversion of Goods" could not be filed at all.** Our sale type

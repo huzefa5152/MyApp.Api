@@ -332,6 +332,42 @@ namespace MyApp.Api.Helpers.ExcelImport
             return resolved;
         }
 
+        /// <summary>
+        /// Heading words this layout knows about, normalised. Every alias, plus
+        /// the fixed vocabulary of the blocks that are pinned by position and so
+        /// have no aliases of their own.
+        /// </summary>
+        private static readonly string[] AlwaysHeadings =
+        {
+            "qty", "rate", "stax", "salestax", "exl", "excl", "balqty", "balexl",
+            "consumedexl", "price", "unit", "uom", "description", "items", "item",
+            "itemname", "particulars", "subcategory", "subcat", "claimmonth",
+            "gdnumber", "gdsno", "gdno", "gddate", "4digithscode", "8digithscode",
+        };
+
+        /// <summary>
+        /// True when this text is one of the layout's own column HEADINGS rather
+        /// than a value.
+        ///
+        /// The reader needs this because <c>headerRow</c> cannot be trusted to
+        /// locate the heading row. A layout saved with <c>headerRow: 1</c> and
+        /// <c>firstDataRow: 3</c> against a sheet whose headings are on row 3
+        /// puts the heading row squarely inside the data range, and no
+        /// arithmetic on those two numbers can tell. It arrives as a product
+        /// called "Description" with HS code "8" and no quantity — which is
+        /// exactly what a real import produced.
+        /// </summary>
+        public bool LooksLikeHeadingText(string? text)
+        {
+            var t = Normalise(text);
+            if (t.Length == 0) return false;
+            if (AlwaysHeadings.Contains(t)) return true;
+            foreach (var aliases in HeaderAliases.Values)
+                foreach (var a in aliases ?? new List<string>())
+                    if (Normalise(a) == t) return true;
+            return false;
+        }
+
         private static int? CurrentColumn(LotRowsColumns c, string field) => field.ToLowerInvariant() switch
         {
             "itemname" => c.ItemName,

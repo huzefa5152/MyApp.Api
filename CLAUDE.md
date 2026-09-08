@@ -329,6 +329,16 @@ column order differs.
   starts at `max(firstDataRow, headerRow + 1)` and warns. The scaffold's old
   `firstDataRow: 2` against a `headerRow: 3` imported the heading "Description"
   as a product: one phantom item and a second blocking error.
+- **A heading row is recognised by its TEXT, not by `headerRow`.**
+  `LotRowsMapping.LooksLikeHeadingText` holds the layout's heading vocabulary and
+  `ReadLots` skips any row whose item name matches it AND that has no closing
+  quantity. Arithmetic on `headerRow`/`firstDataRow` cannot catch the real case:
+  a layout saved with `headerRow: 1` against a sheet whose headings are on row 3,
+  reading from row 3, has nothing wrong with those numbers — and the heading row
+  then imports as a product called "Description" with HS code "8", whose "No
+  closing quantity" error BLOCKS the whole file. The quantity half of the test is
+  what keeps a genuine product called "Item" importable. Every skip is a named
+  preview warning.
 - **`StockSignature` / `StockTokens` are the TEMPLATE's own fingerprint**, so the
   file we hand a client is an exact match. Regenerate both from the template (via
   the identify step) whenever its headings change; the suite's "the shipped
@@ -1043,7 +1053,7 @@ them can be resolved from FBR.
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Spreadsheet import (layouts, heading aliases, stock, lots, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (126 checks) |
+| Spreadsheet import (layouts, heading aliases, stock, lots, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (131 checks) |
 | Bill line pricing, advance tax (236G/236H) + further tax s.3(1A), incl. edit and GL posting | `python scripts/test_bill_pricing_advance_tax.py` | `102/102 checks passed` |
 | Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |

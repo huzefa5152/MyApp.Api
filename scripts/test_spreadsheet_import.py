@@ -1055,6 +1055,36 @@ def main():
         check("and it says the row was corrected",
               any("heading row" in w for w in hp.get("warnings", [])), hp.get("warnings"))
 
+        # (d2) The heading row sitting INSIDE the data range, which is the case
+        #      arithmetic on headerRow/firstDataRow cannot catch: headerRow left
+        #      at its default 1 while the sheet's headings are on row 3 and the
+        #      layout starts reading there. Nothing about those two numbers is
+        #      wrong, so the old guard passed the row straight through -- it
+        #      arrived as a product called "Description" carrying HS code "8"
+        #      and no quantity, and its "No closing quantity" error BLOCKED the
+        #      whole import. A real operator hit exactly this.
+        r = upload(stock_preview, h, full_stock_workbook(std_rows), "stock.xlsx",
+                   {"mappingJson": json.dumps(dict(std_mapping, headerRow=1, firstDataRow=3))},
+                   {"companyId": company})
+        gp = r.json() if r.ok else {}
+        names = [(x.get("itemName") or "").strip().lower() for x in gp.get("rows", [])]
+        check("a heading row inside the data range is not imported as a product",
+              r.ok and "description" not in names and "items" not in names,
+              f"http {r.status_code} names={names}")
+        check("it reads exactly the real data rows",
+              gp.get("sourceRowCount") == len(std_rows),
+              f"rows={gp.get('sourceRowCount')} expected={len(std_rows)}")
+        check("and the import is not blocked by it",
+              gp.get("canCommit") is True,
+              f"canCommit={gp.get('canCommit')} errors={gp.get('blockingErrors')}")
+        check("the skipped heading row is named, not silently dropped",
+              any("column headings" in w for w in gp.get("warnings", [])),
+              gp.get("warnings"))
+        check("the totals still match the standard order",
+              abs(gp.get("totalValue", 0) - sp.get("totalValue", 0)) < 0.05
+              and abs(gp.get("totalSalesTax", 0) - sp.get("totalSalesTax", 0)) < 0.05,
+              f"{gp.get('totalValue')}/{gp.get('totalSalesTax')}")
+
         # (e) Merging on the HS code is right for the stock position and lossy
         #     for the row, so every source row is kept as a lot beside it.
         lot_rows = [
