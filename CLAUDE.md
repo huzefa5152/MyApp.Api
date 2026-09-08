@@ -825,7 +825,7 @@ reads the flag unless it is on.
 - Staleness is **overlay-only**. A normal company's overlay has always been
   allowed to drift, and forcing `FbrReady` false there would change behaviour
   for every existing customer.
-- Suite: `scripts/test_inventory_overlay.py` (51 checks). Its suite 2 walks a
+- Suite: `scripts/test_inventory_overlay.py` (71 checks). Its suite 2 walks a
   NORMAL company through the same steps and is the one that catches a
   regression in the behaviour existing customers rely on.
 
@@ -1148,7 +1148,7 @@ them can be resolved from FBR.
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
-| Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` | `51/51 checks passed` |
+| Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 

@@ -31,12 +31,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import urllib.error
 import urllib.request
 from datetime import datetime
 
+DB_SERVER = r"CRKRL-HUSSAHUZ1\MSSQLSERVER2"
+
 results: list[tuple[str, bool, str]] = []
+skips: list[tuple[str, str]] = []
 
 
 def check(name: str, ok: bool, reason: str = "") -> bool:
@@ -46,6 +50,31 @@ def check(name: str, ok: bool, reason: str = "") -> bool:
     results.append((name, bool(ok), reason))
     print(f"    [{'OK  ' if ok else 'FAIL'}] {name}" + ("" if ok else f"  -> {reason}"))
     return bool(ok)
+
+
+def skip(name: str, why: str) -> None:
+    skips.append((name, why))
+    print(f"    [SKIP] {name}  ({why})")
+
+
+def db_mark_submitted(db: str, invoice_id: int) -> bool:
+    """Mark a bill Submitted without a live FBR filing.
+
+    -I because Invoices carries a persisted computed NoteKind with an index, and
+    @@ROWCOUNT because sqlcmd exits 0 for an UPDATE that matched nothing -- a
+    poke at the wrong database would otherwise read as a passing test."""
+    q = (f"SET NOCOUNT ON; UPDATE Invoices SET FbrStatus='Submitted', "
+         f"FbrIRN='TESTONLY{invoice_id}' WHERE Id={int(invoice_id)}; SELECT @@ROWCOUNT;")
+    try:
+        r = subprocess.run(["sqlcmd", "-S", DB_SERVER, "-d", db, "-E", "-C", "-I", "-b", "-Q", q],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode != 0:
+            print(f"      (sqlcmd rc={r.returncode}: {(r.stdout or r.stderr).strip()[:140]})")
+            return False
+        return any(t.strip().isdigit() and int(t) >= 1 for t in (r.stdout or "").split())
+    except Exception as e:
+        print(f"      (sqlcmd error: {e})")
+        return False
 
 
 def http(method, path, base, token=None, body=None):
@@ -125,6 +154,8 @@ def main() -> int:
     ap.add_argument("--user", default="admin")
     ap.add_argument("--password", default="admin123")
     ap.add_argument("--keep", action="store_true")
+    ap.add_argument("--db", default=None,
+                    help="database name, to mark a bill Submitted without filing it")
     args = ap.parse_args()
 
     print("=" * 78)
@@ -415,6 +446,149 @@ def main() -> int:
               (back["items"][0].get("adjustment") or {}).get("adjustedQuantity") is not None,
               "the adjustment was dropped when the flag went off")
 
+        # Put it back: the suites below are about overlay behaviour, and a
+        # company left switched off makes every one of them silently test the
+        # normal path instead -- which looks like the overlay is broken.
+        body["inventoryOverlayEnabled"] = True
+        st, _ = http("PUT", f"/api/companies/{overlay['id']}", args.base, token=tok, body=body)
+        check("and it can be switched back on", st in (200, 204), f"{st}")
+
+        # ── 14. Several lines, only some of them adjusted ───────────────────
+        # The realistic shape: a consultant redistributes one line and leaves
+        # the rest alone. Every un-adjusted line must contribute its own bill
+        # total to the filing, or the comparison flags a document nobody
+        # touched.
+        print("\n=== 14. A multi-line bill with a partial adjustment ===")
+        st, m = http("POST", "/api/invoices/standalone", args.base, token=tok, body={
+            "date": today(), "companyId": overlay["id"], "clientId": o_client,
+            "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+            "items": [
+                {"description": "Line A", "quantity": 10, "uom": "Numbers, pieces, units",
+                 "unitPrice": 1000, "itemTypeId": o_nohs},
+                {"description": "Line B", "quantity": 4, "uom": "Numbers, pieces, units",
+                 "unitPrice": 500, "itemTypeId": o_nohs},
+            ]})
+        if check("a two-line bill is created (10,000 + 2,000 = 12,000)",
+                 st in (200, 201) and near(m.get("subtotal"), 12000),
+                 f"{st}: {err(m) if st not in (200,201) else m.get('subtotal')}"):
+            a_line, b_line = m["items"][0], m["items"][1]
+            st, madj = adjust(args.base, tok, m["id"],
+                              [{"id": a_line["id"], "itemTypeId": o_hs,
+                                "quantity": 5, "unitPrice": 2000}])
+            if check("only line A is adjusted, to 5 x 2,000", st == 200, f"{st}: {err(madj)}"):
+                la = next(x for x in madj["items"] if x["id"] == a_line["id"])
+                lb = next(x for x in madj["items"] if x["id"] == b_line["id"])
+                check("line A's bill values are untouched",
+                      near(la["quantity"], 10) and near(la["unitPrice"], 1000),
+                      f"A is {la['quantity']}x{la['unitPrice']}")
+                check("line B has no overlay at all",
+                      (lb.get("adjustment") or {}).get("adjustedQuantity") is None,
+                      f"B overlay={lb.get('adjustment')}")
+                check("and the document is NOT stale — the un-adjusted line still counts",
+                      madj.get("fbrAdjustmentStale") is False,
+                      f"stale={madj.get('fbrAdjustmentStale')} filed={madj.get('fbrAdjustedSubtotal')}")
+                check("the filing book totals the same 12,000",
+                      near(madj.get("fbrAdjustedSubtotal"), 12000),
+                      f"filed={madj.get('fbrAdjustedSubtotal')}")
+
+            # ── 15. Adding a line moves the bill, so the filing goes stale ──
+            print("\n=== 15. Adding a bill line makes the filing stale ===")
+            st, added = http("PUT", f"/api/invoices/{m['id']}", args.base, token=tok, body={
+                "date": today(), "companyId": overlay["id"], "clientId": o_client,
+                "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+                "items": [
+                    {"id": a_line["id"], "itemTypeId": o_nohs, "description": "Line A",
+                     "quantity": 10, "uom": "Numbers, pieces, units", "unitPrice": 1000},
+                    {"id": b_line["id"], "itemTypeId": o_nohs, "description": "Line B",
+                     "quantity": 4, "uom": "Numbers, pieces, units", "unitPrice": 500},
+                    {"itemTypeId": o_nohs, "description": "Line C",
+                     "quantity": 2, "uom": "Numbers, pieces, units", "unitPrice": 1500},
+                ]})
+            if check("a third line is added (+3,000 = 15,000)",
+                     st == 200 and near(added.get("subtotal"), 15000),
+                     f"{st}: {err(added) if st != 200 else added.get('subtotal')}"):
+                # NOT stale, and that is right: the new line has no overlay, so
+                # it adds the same 3,000 to both books and they still agree.
+                # Staleness is for an ADJUSTED line whose bill value moved --
+                # an untouched line being added cannot invalidate a
+                # decomposition it was never part of.
+                check("the books still agree, so nothing is flagged stale",
+                      added.get("fbrAdjustmentStale") is False,
+                      f"stale={added.get('fbrAdjustmentStale')}")
+                check("both books now total 15,000",
+                      near(added.get("fbrAdjustedSubtotal"), 15000),
+                      f"filed={added.get('fbrAdjustedSubtotal')}")
+                # What the new line DOES need is classifying -- it went on with a
+                # commercial item, and FBR cannot receive a line with no HS code.
+                # A different guard catches that, and it must still fire.
+                check("the unclassified new line keeps the bill off FBR",
+                      added.get("fbrReady") is not True,
+                      f"fbrReady={added.get('fbrReady')} missing={added.get('fbrMissing')}")
+
+            # ── 15b. Moving an ADJUSTED line is what goes stale ─────────────
+            print("\n=== 15b. Changing an adjusted line's own quantity goes stale ===")
+            st, moved = http("PUT", f"/api/invoices/{m['id']}", args.base, token=tok, body={
+                "date": today(), "companyId": overlay["id"], "clientId": o_client,
+                "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+                "items": [
+                    {"id": a_line["id"], "itemTypeId": o_nohs, "description": "Line A",
+                     "quantity": 14, "uom": "Numbers, pieces, units", "unitPrice": 1000},
+                    {"id": b_line["id"], "itemTypeId": o_nohs, "description": "Line B",
+                     "quantity": 4, "uom": "Numbers, pieces, units", "unitPrice": 500},
+                ]})
+            if check("line A is changed from 10 to 14", st == 200, f"{st}: {err(moved)}"):
+                check("NOW the filing is stale",
+                      moved.get("fbrAdjustmentStale") is True,
+                      f"stale={moved.get('fbrAdjustmentStale')}")
+                check("the filing still carries the old 12,000 against a 16,000 bill",
+                      near(moved.get("fbrAdjustedSubtotal"), 12000)
+                      and near(moved.get("subtotal"), 16000),
+                      f"filed={moved.get('fbrAdjustedSubtotal')} bill={moved.get('subtotal')}")
+
+            # ── 16. Removing the adjusted line takes its overlay with it ────
+            print("\n=== 16. Removing an adjusted line drops its overlay ===")
+            st, removed = http("PUT", f"/api/invoices/{m['id']}", args.base, token=tok, body={
+                "date": today(), "companyId": overlay["id"], "clientId": o_client,
+                "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+                "items": [
+                    {"id": b_line["id"], "itemTypeId": o_nohs, "description": "Line B",
+                     "quantity": 4, "uom": "Numbers, pieces, units", "unitPrice": 500},
+                ]})
+            if check("the adjusted line A is removed, leaving 2,000",
+                     st == 200 and near(removed.get("subtotal"), 2000),
+                     f"{st}: {err(removed) if st != 200 else removed.get('subtotal')}"):
+                check("no overlay survives the line it belonged to",
+                      all((x.get("adjustment") or {}).get("adjustedQuantity") is None
+                          for x in removed["items"]),
+                      f"items={[x.get('adjustment') for x in removed['items']]}")
+                check("and with nothing adjusted the document is not stale",
+                      removed.get("fbrAdjustmentStale") is False,
+                      f"stale={removed.get('fbrAdjustmentStale')}")
+
+        # ── 17. A submitted bill stays locked, overlay or not ───────────────
+        print("\n=== 17. A filed bill cannot be edited, in either mode ===")
+        st, locked = make_bill(args.base, tok, overlay["id"], o_client, o_nohs, 3, 100)
+        if not args.db:
+            skip("a submitted overlay bill refuses edits",
+                 "pass --db to mark a bill Submitted without a live FBR filing")
+        elif check("a bill to lock is created", st in (200, 201), f"{st}: {err(locked)}"):
+            if not db_mark_submitted(args.db, locked["id"]):
+                skip("a submitted overlay bill refuses edits", "the DB poke did not apply")
+            else:
+                st, r = http("PUT", f"/api/invoices/{locked['id']}", args.base, token=tok, body={
+                    "date": today(), "companyId": overlay["id"], "clientId": o_client,
+                    "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+                    "items": [{"id": locked["items"][0]["id"], "itemTypeId": o_nohs,
+                               "description": "TAMPERED", "quantity": 99,
+                               "uom": "Numbers, pieces, units", "unitPrice": 1}]})
+                check("editing a submitted overlay bill is refused", st == 400,
+                      f"{st}: {err(r)}")
+                st, still = http("GET", f"/api/invoices/{locked['id']}", args.base, token=tok)
+                check("and the bill is untouched",
+                      near(still["items"][0]["quantity"], 3)
+                      and still["items"][0]["description"] != "TAMPERED",
+                      f"qty={still['items'][0]['quantity']}")
+
     finally:
         if args.keep:
             print(f"\n(kept companies {made})")
@@ -424,10 +598,13 @@ def main() -> int:
                 print(f"teardown: delete company {cid} -> {st}")
 
     print("\n" + "=" * 78)
+    for name, why in skips:
+        print(f"  SKIP  {name}  ({why})")
     failed = [r for r in results if not r[1]]
     for name, _, reason in failed:
         print(f"  FAIL  {name}  -> {reason}")
-    print(f"\n  {len(results) - len(failed)}/{len(results)} checks passed")
+    print(f"\n  {len(results) - len(failed)}/{len(results)} checks passed"
+          + (f", {len(skips)} skipped" if skips else ""))
     print("=" * 78)
     return 1 if failed else 0
 
