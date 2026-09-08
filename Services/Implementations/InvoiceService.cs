@@ -1477,6 +1477,7 @@ namespace MyApp.Api.Services.Implementations
                     if (!string.IsNullOrWhiteSpace(defSt)) companyDefaultSaleType = defSt;
                 }
 
+
                 foreach (var itemDto in dto.Items)
                 {
                     if (itemDto.Id <= 0)
@@ -1773,9 +1774,20 @@ namespace MyApp.Api.Services.Implementations
             // because dto.WriteMode is ignored when allowQuantityEdit is
             // false — Item Type re-classification belongs on the bill
             // proper, not in a tax-filing overlay.
+            // Under Inventory Overlay Behaviour the two books hold DIFFERENT item
+            // types on purpose -- a no-HS commercial item on the bill, an HS-coded
+            // one on the filing -- so an edit made here is ALWAYS an adjustment.
+            // It cannot wait for dto.WriteMode (the operator did not choose to keep
+            // two books line by line; the company did) and it must not require
+            // fbrOn (a company can keep the commercial book separate from the tax
+            // book before it ever files anything).
+            var overlayCompany = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == invoice.CompanyId)
+                .Select(c => c.InventoryOverlayEnabled).FirstOrDefaultAsync();
+
             var asAdjustment = allowQuantityEdit
-                && fbrOn
-                && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase);
+                && (overlayCompany
+                    || (fbrOn && string.Equals(dto.WriteMode, "adjustment", StringComparison.OrdinalIgnoreCase)));
 
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
@@ -1817,7 +1829,50 @@ namespace MyApp.Api.Services.Implementations
                         // the overlay — those are the tax-claim
                         // optimization knobs that should leave the bill
                         // print untouched.
-                        if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var tAdj))
+                        // OVERLAY COMPANIES: the classification is the FILING's,
+                        // and the bill line keeps the commercial item the customer
+                        // bought. Writing it to InvoiceItem here — which is what
+                        // every other company still does, three lines down — would
+                        // put the HS-coded item on the printed bill and break the
+                        // one rule the whole feature exists for.
+                        InvoiceItemAdjustment? typeOverlay = null;
+                        if (overlayCompany)
+                        {
+                            existingOverlays.TryGetValue(existing.Id, out typeOverlay);
+                            if (typeOverlay == null)
+                            {
+                                typeOverlay = new InvoiceItemAdjustment
+                                {
+                                    InvoiceItemId = existing.Id,
+                                    InvoiceId     = invoice.Id,
+                                    Reason        = "inventory-overlay",
+                                    CreatedAt     = DateTime.UtcNow,
+                                };
+                                _context.InvoiceItemAdjustments.Add(typeOverlay);
+                                existingOverlays[existing.Id] = typeOverlay;
+                            }
+                            if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var tOv))
+                            {
+                                typeOverlay.AdjustedItemTypeId   = tOv.Id;
+                                typeOverlay.AdjustedItemTypeName = tOv.Name;
+                                typeOverlay.AdjustedUOM          = tOv.UOM;
+                                typeOverlay.AdjustedFbrUOMId     = tOv.FbrUOMId;
+                                typeOverlay.AdjustedHSCode       = tOv.HSCode;
+                                typeOverlay.AdjustedSaleType     = tOv.SaleType;
+                                typeOverlay.UpdatedAt            = DateTime.UtcNow;
+                            }
+                            else if (!row.ItemTypeId.HasValue)
+                            {
+                                typeOverlay.AdjustedItemTypeId   = null;
+                                typeOverlay.AdjustedItemTypeName = null;
+                                typeOverlay.AdjustedUOM          = null;
+                                typeOverlay.AdjustedFbrUOMId     = null;
+                                typeOverlay.AdjustedHSCode       = null;
+                                typeOverlay.AdjustedSaleType     = null;
+                                typeOverlay.UpdatedAt            = DateTime.UtcNow;
+                            }
+                        }
+                        else if (row.ItemTypeId.HasValue && typeMap.TryGetValue(row.ItemTypeId.Value, out var tAdj))
                         {
                             existing.ItemTypeId   = tAdj.Id;
                             existing.ItemTypeName = tAdj.Name;
@@ -1843,7 +1898,11 @@ namespace MyApp.Api.Services.Implementations
                         if (row.Uom != null)
                         {
                             var uomAdj = row.Uom.Trim();
-                            if (uomAdj.Length > 0) existing.UOM = uomAdj;
+                            if (uomAdj.Length > 0)
+                            {
+                                if (overlayCompany && typeOverlay != null) typeOverlay.AdjustedUOM = uomAdj;
+                                else existing.UOM = uomAdj;
+                            }
                         }
 
                         // Numerical decomposition → overlay.
@@ -1870,7 +1929,10 @@ namespace MyApp.Api.Services.Implementations
                             // qty/price by way of Reset, or the only
                             // change was an Item Type swap which we
                             // already applied to InvoiceItem above).
-                            if (overlay != null)
+                            // Keep an overlay that still carries the FILING's own
+                            // item type: under the overlay a line can legitimately
+                            // agree on the money and differ on the classification.
+                            if (overlay != null && overlay.AdjustedItemTypeId == null)
                             {
                                 _context.InvoiceItemAdjustments.Remove(overlay);
                             }
@@ -1899,12 +1961,21 @@ namespace MyApp.Api.Services.Implementations
                         // Explicitly null the deprecated text columns so
                         // any stale rows from before this fix get cleared
                         // on next save.
-                        overlay.AdjustedItemTypeId   = null;
-                        overlay.AdjustedItemTypeName = null;
-                        overlay.AdjustedUOM          = null;
-                        overlay.AdjustedFbrUOMId     = null;
-                        overlay.AdjustedHSCode       = null;
-                        overlay.AdjustedSaleType     = null;
+                        // Only a NORMAL company clears these: there the overlay is
+                        // numeric-only (2026-05-12) and the classification belongs on
+                        // the bill line. An overlay company keeps what was just
+                        // written above — that is its second book.
+                        if (!overlayCompany)
+                        {
+                            overlay.AdjustedItemTypeId   = null;
+                            overlay.AdjustedItemTypeName = null;
+                            overlay.AdjustedUOM          = null;
+                            overlay.AdjustedFbrUOMId     = null;
+                            overlay.AdjustedHSCode       = null;
+                            overlay.AdjustedSaleType     = null;
+                        }
+                        // Description is never part of either book'''s
+                        // classification -- it is bill text, cleared for both.
                         overlay.AdjustedDescription  = null;
                         continue;
                     }
@@ -3429,6 +3500,9 @@ namespace MyApp.Api.Services.Implementations
             var taxAllTyped = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName));
             var groupTax = inv.PrintGroupTaxInvoiceByItemType == true && taxAllTyped;
 
+            // This document is the FILED book when the company keeps two.
+            var ovl = inv.Company?.InventoryOverlayEnabled == true;
+
             var dto = new PrintTaxInvoiceDto
             {
                 DivisionId = inv.DivisionId,
@@ -3534,12 +3608,18 @@ namespace MyApp.Api.Services.Implementations
                 // is for the warehouse + delivery), and they SHOULD
                 // diverge when the operator runs the §8B optimization.
                 //
-                // Description / UOM / ItemTypeName / HSCode continue to
-                // come from InvoiceItem — same narrowing the FbrService
-                // applies (overlay only ever carries numerical fields).
+                // Description / UOM / ItemTypeName / HSCode come from
+                // InvoiceItem for a NORMAL company -- the overlay is numeric-only
+                // there. Under Inventory Overlay Behaviour this document IS the
+                // second book, so it prints the overlaid classification: the
+                // HS-coded item the filing carries, not the commercial one the
+                // customer's bill shows. Same rule FbrService applies to the
+                // payload, so the printed tax invoice and the filing agree.
                 Items = groupTax
                     ? inv.Items
-                        .GroupBy(ii => ii.ItemTypeName)
+                        .GroupBy(ii => ovl && ii.Adjustment?.AdjustedItemTypeName != null
+                                       ? ii.Adjustment.AdjustedItemTypeName
+                                       : ii.ItemTypeName)
                         .Select(g =>
                         {
                             var totalQty = g.Sum(ii =>
@@ -3551,7 +3631,7 @@ namespace MyApp.Api.Services.Implementations
                             {
                                 ItemTypeName = g.Key,
                                 Quantity = totalQty,
-                                UOM = g.First().UOM,
+                                UOM = (ovl ? g.First().Adjustment?.AdjustedUOM : null) ?? g.First().UOM,
                                 // Grouped rows are labelled by the ITEM TYPE (the
                                 // grouping key). Individual mode shows each line's
                                 // real Description instead.
@@ -3577,16 +3657,16 @@ namespace MyApp.Api.Services.Implementations
                             var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
                             return new PrintTaxItemDto
                             {
-                                ItemTypeName = ii.ItemTypeName,
+                                ItemTypeName = (ovl ? ii.Adjustment?.AdjustedItemTypeName : null) ?? ii.ItemTypeName,
                                 Quantity = qty,
-                                UOM = ii.UOM,
+                                UOM = (ovl ? ii.Adjustment?.AdjustedUOM : null) ?? ii.UOM,
                                 Description = ii.Description,
                                 UnitPrice = ii.Adjustment?.AdjustedUnitPrice ?? ii.UnitPrice,
                                 ValueExclTax = lineTotal,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
                                 TotalInclTax = lineTotal + gstAmt,
-                                HSCode = ii.HSCode
+                                HSCode = (ovl ? ii.Adjustment?.AdjustedHSCode : null) ?? ii.HSCode
                             };
                         }).ToList()
             };

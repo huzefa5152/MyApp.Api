@@ -167,6 +167,11 @@ namespace MyApp.Api.Services.Implementations
                 ["Processing / Conversion of Goods"]  = "Processing/Conversion of Goods",
             };
 
+        /// <summary>Exempt goods, however the row spelled it.</summary>
+        internal static bool IsExemptSaleType(string? saleType) =>
+            !string.IsNullOrWhiteSpace(saleType)
+            && saleType.Trim().StartsWith("Exempt", StringComparison.OrdinalIgnoreCase);
+
         internal static string NormalizeSaleType(string? saleType)
         {
             if (string.IsNullOrWhiteSpace(saleType))
@@ -233,7 +238,7 @@ namespace MyApp.Api.Services.Implementations
         ///
         /// 2026-05-11: added.
         /// </summary>
-        private static InvoiceItem ApplyAdjustmentOverlay(InvoiceItem ii)
+        private static InvoiceItem ApplyAdjustmentOverlay(InvoiceItem ii, bool overlayCompany = false)
         {
             if (ii.Adjustment == null) return ii;
             var a = ii.Adjustment;
@@ -250,16 +255,21 @@ namespace MyApp.Api.Services.Implementations
                 Id              = ii.Id,
                 InvoiceId       = ii.InvoiceId,
                 DeliveryItemId  = ii.DeliveryItemId,
-                ItemTypeId      = ii.ItemTypeId,
-                ItemTypeName    = ii.ItemTypeName,
+                // A NORMAL company reads the classification off the bill line:
+                // the overlay is numeric-only there (2026-05-12) and those
+                // columns are null anyway. An OVERLAY company files its second
+                // book, whose whole point is a different, HS-coded item -- take
+                // it when the overlay carries one, fall back otherwise.
+                ItemTypeId      = overlayCompany ? (a.AdjustedItemTypeId   ?? ii.ItemTypeId)   : ii.ItemTypeId,
+                ItemTypeName    = overlayCompany ? (a.AdjustedItemTypeName ?? ii.ItemTypeName) : ii.ItemTypeName,
                 Description     = ii.Description,
                 Quantity        = a.AdjustedQuantity   ?? ii.Quantity,
-                UOM             = ii.UOM,
+                UOM             = overlayCompany ? (a.AdjustedUOM ?? ii.UOM) : ii.UOM,
                 UnitPrice       = a.AdjustedUnitPrice  ?? ii.UnitPrice,
                 LineTotal       = a.AdjustedLineTotal  ?? ii.LineTotal,
-                HSCode          = ii.HSCode,
-                FbrUOMId        = ii.FbrUOMId,
-                SaleType        = ii.SaleType,
+                HSCode          = overlayCompany ? (a.AdjustedHSCode   ?? ii.HSCode)   : ii.HSCode,
+                FbrUOMId        = overlayCompany ? (a.AdjustedFbrUOMId ?? ii.FbrUOMId) : ii.FbrUOMId,
+                SaleType        = overlayCompany ? (a.AdjustedSaleType ?? ii.SaleType) : ii.SaleType,
                 RateId          = ii.RateId,
                 FixedNotifiedValueOrRetailPrice = ii.FixedNotifiedValueOrRetailPrice,
                 SroScheduleNo   = ii.SroScheduleNo,
@@ -569,7 +579,15 @@ namespace MyApp.Api.Services.Implementations
                 errors.Add("Invoice must have at least one item.");
             else
             {
-                var itemList = invoice.Items.ToList();
+                // Validate what will actually be FILED. Under Inventory Overlay
+                // Behaviour that is the overlaid book -- the bill line carries a
+                // commercial item with no HS code on purpose, so checking it here
+                // would reject every overlay bill for a missing classification it
+                // is never supposed to have. Off the overlay this is a no-op:
+                // those columns are null and the numbers fall through.
+                var itemList = invoice.Items
+                    .Select(ii => ApplyAdjustmentOverlay(ii, company.InventoryOverlayEnabled))
+                    .ToList();
                 for (int i = 0; i < itemList.Count; i++)
                 {
                     var item = itemList[i];
@@ -641,7 +659,9 @@ namespace MyApp.Api.Services.Implementations
                         if (m.Success) scen = m.Groups[1].Value.ToUpperInvariant();
                     }
 
-                    var itemList = invoice.Items.ToList();
+                    var itemList = invoice.Items
+                        .Select(ii => ApplyAdjustmentOverlay(ii, company.InventoryOverlayEnabled))
+                        .ToList();
                     for (int i = 0; i < itemList.Count; i++)
                     {
                         var item = itemList[i];
@@ -951,7 +971,9 @@ namespace MyApp.Api.Services.Implementations
             // projected into an "effective" copy — NULL overlay fields
             // fall back to the underlying InvoiceItem. The printed bill
             // is NEVER touched; only this in-memory view is.
-            var effectiveItems = invoice.Items.Select(ApplyAdjustmentOverlay).ToList();
+            var effectiveItems = invoice.Items
+
+                .Select(ii => ApplyAdjustmentOverlay(ii, company.InventoryOverlayEnabled)).ToList();
 
             // ── Item-Type grouping (mirrors the Tax Invoice print) ───────────
             //
@@ -1036,18 +1058,25 @@ namespace MyApp.Api.Services.Implementations
                 if (isReducedRate && invoice.GSTRate != 18m
                     && string.IsNullOrWhiteSpace(sroScheduleNo))
                 {
-                    // Per PRAL's published SN028 sample payload, the sandbox
-                    // accepts "EIGHTH SCHEDULE Table 1" + serial "70" at a 1%
-                    // rate for reduced-rate end-consumer goods.
-                    sroScheduleNo = "EIGHTH SCHEDULE Table 1";
-                    sroItemSerialNo = "70";
+                    // The pair FBR's own validator accepts: upper case,
+                    // hyphenated, serial 82. The previous values here
+                    // ("EIGHTH SCHEDULE Table 1" + "70", from PRAL's published
+                    // SN028 sample) are refused [0078] today.
+                    sroScheduleNo = "EIGHTH SCHEDULE TABLE-1";
+                    sroItemSerialNo = "82";
                 }
 
                 fbrRequest.Items.Add(new FbrInvoiceItemRequest
                 {
                     HsCode = item.HSCode ?? "",
                     ProductDescription = SanitizeForFbr(item.Description),
-                    Rate = $"{invoice.GSTRate:0.##}%",
+                    // FBR wants its OWN rate description here, and for an
+                    // exempt supply that word is "Exempt", not "0%" -- which is
+                    // what saletyperates returns for transaction type 81
+                    // (ratE_ID 133, ratE_DESC "Exempt", value 0). Sending "0%"
+                    // draws [0046] "Provided Rate is not correct", which reads
+                    // as a rate problem and is really a vocabulary one.
+                    Rate = IsExemptSaleType(saleType) ? "Exempt" : $"{invoice.GSTRate:0.##}%",
                     UoM = uomDesc,
                     // Quantity is stored at 12dp since 2026-09-02, but PRAL has only ever
                     // received <=4dp (the old decimal(18,4) column), so keep transmitting

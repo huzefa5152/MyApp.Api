@@ -1051,7 +1051,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // rounding tolerance), so a line can be re-pointed, re-united or split and
   // the buyer is still billed exactly what they were billed. Re-pricing belongs
   // on the Bills tab, where the total is allowed to move.
-  const lockPrice       = readOnly || itemTypeOnlyMode || !billsMode;
+  // Under the overlay the Invoices tab is where the FILED decomposition is
+  // built, so the unit price is editable there too — the server's
+  // total-preservation guard is what stops it altering the bill amount.
+  const lockPrice       = readOnly || itemTypeOnlyMode || (!billsMode && !inventoryOverlay);
   // ...and the unit follows the opposite rule: it is editable exactly where the
   // classification is, because a line can need a unit its catalog row does not
   // carry (the same goods sold by weight on one document, by piece on another).
