@@ -15,6 +15,7 @@ import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount 
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
@@ -440,13 +441,24 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // scenario is locked in, only items whose stored saleType matches the
   // scenario's saleType are surfaced — preventing the operator from
   // building a mixed-sale-type bill that FBR will reject with 0052.
+  // A bill built from a challan is still the COMMERCIAL book, so the overlay
+  // narrows it to item types with no HS code exactly as the standalone form
+  // does -- the challan route must not be a way round the split.
+  const overlayOn = !!company?.inventoryOverlayEnabled;
   const filteredItemTypes = useMemo(() => {
-    if (!chosenScenario) return itemTypes;
+    const forBook = itemTypesForBook(itemTypes, overlayOn, BOOK_BILL);
+    // The scenario's sale-type filter belongs to the FILED book. It exists to
+    // stop a mixed-sale-type bill that FBR rejects with 0052 -- but under the
+    // overlay the bill is not what gets filed, and a commercial no-HS item
+    // carries no sale type at all, so applying both filters leaves the picker
+    // empty and the operator with nothing to choose.
+    if (overlayOn) return forBook;
+    if (!chosenScenario) return forBook;
     const target = (chosenScenario.saleType || "").trim().toLowerCase();
-    return itemTypes.filter(
+    return forBook.filter(
       (it) => (it.saleType || "").trim().toLowerCase() === target,
     );
-  }, [itemTypes, chosenScenario]);
+  }, [itemTypes, chosenScenario, overlayOn]);
 
   // When operator picks a scenario, snap the GST Rate to that scenario's
   // canonical rate. Field is read-only while a scenario is locked — same

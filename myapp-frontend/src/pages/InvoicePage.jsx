@@ -1654,6 +1654,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           billsMode={isBillsMode}
           fbrEnabled={fbrEnabled}
           stockHardBlock={!!selectedCompany?.stockGuardHardBlock}
+          inventoryOverlay={!!selectedCompany?.inventoryOverlayEnabled}
           // Invoices-tab edit lets the FBR officer set Item Type AND Qty —
           // descriptions, prices, dates, payment terms etc. stay read-only
           // and reflect whatever was last saved on the Bills tab. Set on
@@ -1681,6 +1682,7 @@ export default function InvoicePage({ mode = "invoices" }) {
           billsMode={isBillsMode}
           fbrEnabled={fbrEnabled}
           stockHardBlock={!!selectedCompany?.stockGuardHardBlock}
+          inventoryOverlay={!!selectedCompany?.inventoryOverlayEnabled}
           onClose={() => setViewingId(null)}
           onSaved={() => setViewingId(null)}
         />

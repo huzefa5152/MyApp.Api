@@ -13,6 +13,7 @@ import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount 
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -630,13 +631,24 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // only items whose stored saleType matches the scenario's saleType
   // surface — same rule the InvoiceForm uses, prevents 0052 mixed-bucket
   // errors at FBR validation.
+  // A bill is the COMMERCIAL book, so under the overlay it offers only item
+  // types with no HS code; the HS-coded ones belong to the invoice that gets
+  // filed. With the overlay off this is the identical list as before.
+  const overlayOn = !!company?.inventoryOverlayEnabled;
   const filteredItemTypes = useMemo(() => {
-    if (!chosenScenario) return itemTypes;
+    const forBook = itemTypesForBook(itemTypes, overlayOn, BOOK_BILL);
+    // The scenario's sale-type filter belongs to the FILED book. It exists to
+    // stop a mixed-sale-type bill that FBR rejects with 0052 -- but under the
+    // overlay the bill is not what gets filed, and a commercial no-HS item
+    // carries no sale type at all, so applying both filters leaves the picker
+    // empty and the operator with nothing to choose.
+    if (overlayOn) return forBook;
+    if (!chosenScenario) return forBook;
     const target = (chosenScenario.saleType || "").trim().toLowerCase();
-    return itemTypes.filter(
+    return forBook.filter(
       (t) => (t.saleType || "").trim().toLowerCase() === target,
     );
-  }, [itemTypes, chosenScenario]);
+  }, [itemTypes, chosenScenario, overlayOn]);
 
   // Effective sale type for a row — locked to scenario when one's picked.
   const effectiveSaleType = (r) => (chosenScenario ? chosenScenario.saleType : r.saleType || "");
@@ -680,6 +692,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   );
   useEffect(() => {
     if (!companyId || !pickedItemTypeIds) return;
+    // Under the overlay the bill carries the COMMERCIAL quantity and price the
+    // customer agreed, typed by hand -- not this item'''s stock cost. Not
+    // fetching is the whole switch: with no pricing, canPrice is never true,
+    // deriveFromTotal returns null, the Amount box stops driving anything and
+    // focus lands on Quantity. The form falls back to its own qty x price
+    // path, which is code that already existed and is already tested.
+    if (overlayOn) { setStockPricing({}); return; }
     let cancelled = false;
     getStockPricing(companyId, pickedItemTypeIds)
       .then(({ data }) => {
@@ -688,7 +707,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       })
       .catch(() => { /* pricing is a convenience; the operator can still type */ });
     return () => { cancelled = true; };
-  }, [companyId, pickedItemTypeIds]);
+  }, [companyId, pickedItemTypeIds, overlayOn]);
 
   // Line total -> quantity, at the stock's own unit price:
   //     UnitPrice = stock value excluding tax / stock quantity

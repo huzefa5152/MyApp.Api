@@ -18,6 +18,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
@@ -49,7 +50,7 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: readOnlyProp = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true, stockHardBlock = false }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: readOnlyProp = false, billsMode = false, forceItemTypeAndQty = false, fbrEnabled = true, stockHardBlock = false, inventoryOverlay = false }) {
   // FBR-off Invoices tab (2026-08-11): print-grouping selection ONLY — item type,
   // quantity and every other field are read-only so no qty/overlay edit can move
   // stock. Implemented by shadowing readOnly (reuses the proven read-only render:
@@ -385,13 +386,26 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
 
   // Item types compatible with the chosen scenario. Empty selection ("auto")
   // shows ALL item types — same fallback as the create form.
+  // This one form serves both tabs, so the book follows the tab: the Bills
+  // tab is the commercial book (no HS code) and the Invoices tab is the filed
+  // one (HS code required). Off the overlay, both see every item type exactly
+  // as they do today.
   const filteredItemTypes = useMemo(() => {
-    if (!chosenScenario) return itemTypes;
+    const forBook = itemTypesForBook(
+      itemTypes, inventoryOverlay, billsMode ? BOOK_BILL : BOOK_INVOICE);
+    // The scenario's sale-type filter belongs to the FILED book. It exists to
+    // stop a mixed-sale-type bill that FBR rejects with 0052 -- but under the
+    // overlay the bill is not what gets filed, and a commercial no-HS item
+    // carries no sale type at all, so applying both filters leaves the picker
+    // empty and the operator with nothing to choose.
+    // On the Invoices tab the sale type still matters -- that IS the filing.
+    if (inventoryOverlay && billsMode) return forBook;
+    if (!chosenScenario) return forBook;
     const target = (chosenScenario.saleType || "").trim().toLowerCase();
-    return itemTypes.filter(
+    return forBook.filter(
       (it) => (it.saleType || "").trim().toLowerCase() === target,
     );
-  }, [itemTypes, chosenScenario]);
+  }, [itemTypes, chosenScenario, inventoryOverlay, billsMode]);
 
   // ── HS Stock panel — derive unique HS codes + per-HS bill totals ────
   //
