@@ -105,6 +105,13 @@ export const getInvoicePrintBill = (invoiceId) =>
 export const getInvoicePrintTaxInvoice = (invoiceId) =>
   httpClient.get(`/invoices/${invoiceId}/print/tax-invoice`);
 
+// Record that a filed bill was cancelled on the FBR portal (their 72-hour
+// window). Not a void: the bill stays visible with its number and IRN, stops
+// counting as a sale, hands its challans back for re-billing, and gets its
+// stock back unless a credit note already returned it.
+export const markInvoiceFbrCancelled = (invoiceId, reason) =>
+  httpClient.post(`/invoices/${invoiceId}/fbr-cancelled`, { reason: reason || null });
+
 export const getInvoicesCount = (companyId) =>
   httpClient.get("/invoices/count", { params: companyId ? { companyId } : {} });
 

@@ -789,6 +789,50 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 
 - POST to FBR (`/submit`, `/validate`) is **never retried** by the Polly resilience handler — see `Program.cs: Retry.ShouldHandle` skipping `HttpMethod.Post`. Retrying a POST after a timeout can issue a duplicate IRN.
 - Reference-data endpoints (`/provinces`, `/hscodes`, …): gated by `fbr.reference.read`. Never bleed one tenant's token to fetch catalogs for another tenant.
+- **A submit is CLAIMED before it is sent** (ported from master 2026-09-08).
+  `FbrService` runs a conditional `ExecuteUpdateAsync` — `SET FbrStatus='Submitting'
+  WHERE FbrIRN IS NULL AND FbrStatus IN (null,'Failed','Validated')` — immediately
+  before the POST. Zero rows affected means someone else holds the claim, and
+  **no POST is sent**. The old load-time `FbrIRN` read was a TOCTOU that issued
+  **two IRNs for invoice 3816** in production; PRAL does NOT honour our
+  `X-Idempotency-Key`, so the duplicate was real. The WHERE clause mirrors
+  `Helpers/FbrSubmissionStatus.IsSubmittable` and is written as inline constants
+  because EF cannot translate a method call to SQL — change one, change the other.
+- **A lost outcome is `Uncertain`, never `Failed`.** If the bytes went out and the
+  answer did not come back (timeout, or a crash after send), FBR may hold the
+  invoice. `Uncertain` is deliberately NOT claimable, so nothing can auto-retry
+  into a duplicate. `Failed` stays re-submittable and is only used when we know
+  nothing was sent. The recovery valve is
+  `POST /api/fbr/{id}/reset-submission` (permission `invoices.fbr.reset`, modes
+  `retry` / `recordExisting`, audited) — an administrator verifies at FBR first.
+- **`Helpers/FbrStatus`'s two in-flight states must never read as "not submitted".**
+  `myapp-frontend/src/utils/fbrStatus.js` (`isFbrInFlight`) is the ONE definition,
+  shared by the table and the cards, because a bill showing "Pending FBR
+  submission" on its card while the table calls it "Submitting…" invites exactly
+  the re-submit the claim exists to prevent. Submitted / Submitting / Uncertain
+  are rendered ABOVE the `fbrEnabled` gate on purpose: they are facts about a
+  filing that already left the building, and switching FBR off must not hide one.
+- **Cancellation at the FBR portal is RECORDED here, not performed here**
+  (`Invoice.FbrCancelledAt/Reason/By`, `POST /api/invoices/{id}/fbr-cancelled`).
+  FBR allows a filing to be withdrawn on their portal within 72 hours; that
+  happens THERE. Deliberately NOT `IsCancelled`: a void hides the bill, while
+  this keeps it visible with its number and IRN and merely stops it counting as
+  a sale. Recording it releases the delivery challans back to the billable pool
+  and returns the stock — **once**: a full credit note that already returned the
+  goods must not return them again. Pinned by `scripts/test_fbr_cancellation.py`.
+- **Sandbox vs production is per company**, `Company.FbrEnvironment`; anything
+  but `"production"` routes to PRAL's `*_sb` endpoints, so null fails safe to
+  sandbox. Do not assert this from config — `scripts/test_fbr_sandbox_e2e.py`
+  proves it from the FBR communication log, i.e. the URL actually called.
+- **FBR's reference APIs want `dd-MMM-yyyy`.** An ISO date is not rejected: it
+  comes back as an EMPTY list, which reads like "this company has no rates"
+  rather than "you asked wrongly". Bitten once; worth knowing before debugging
+  an empty dropdown.
+- **Never guess a rate for a sale type.** FBR answers `[0046] Provided Rate is
+  not correct` for a mismatch, and some transaction types list 21 rates (reduced
+  rate runs 0.5% to Rs.700/MT). Resolve it: transaction type -> `saletyperates`
+  -> the rate whose value matches. Picking the first put a Cement bill at 2%,
+  which then demanded an SRO schedule it had no business needing.
 
 ### 11. SQL Server gotchas
 
@@ -836,6 +880,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (64 checks) |
 | Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (37 checks) |
+| FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
+| FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
+| FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 

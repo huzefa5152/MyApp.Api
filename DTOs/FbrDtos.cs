@@ -177,6 +177,16 @@ namespace MyApp.Api.DTOs
         public string? FbrStatus { get; set; }
         public string? ErrorMessage { get; set; }
         public List<FbrInvoiceStatus>? ItemErrors { get; set; }
+
+        /// <summary>
+        /// True when this submit was refused because another submit for the same
+        /// invoice is already in flight (or the invoice is in a non-resubmittable
+        /// state: Submitting / Submitted / Uncertain). The caller did NOT reach
+        /// FBR — nothing was POSTed. Lets the UI show "already in progress, refresh"
+        /// instead of a hard error, and lets tests distinguish the claim-loser from
+        /// a genuine FBR rejection. See the atomic submit claim in FbrService.
+        /// </summary>
+        public bool AlreadyInProgress { get; set; }
         /// <summary>
         /// Populated only when the caller asked for a dry-run preview (the
         /// /api/fbr/{id}/preview-payload endpoint). Carries the exact JSON
@@ -198,5 +208,38 @@ namespace MyApp.Api.DTOs
         public int ItemCount { get; set; }
         /// <summary>How many bill lines collapsed into the payload (n→1 grouping shows here).</summary>
         public int OriginalLineCount { get; set; }
+    }
+
+    /// <summary>
+    /// Admin-only recovery for an invoice stuck in a non-resubmittable FBR state
+    /// (Submitting after a crash, or Uncertain after a timed-out submit whose
+    /// outcome PRAL never confirmed). This is the deliberate valve for the
+    /// double-submit lock — it must never be reachable without the
+    /// <c>invoices.fbr.reset</c> permission, and every use is audited.
+    /// </summary>
+    public class FbrResetSubmissionRequest
+    {
+        /// <summary>
+        /// "retry"          — operator verified at FBR that NO invoice exists for
+        ///                    this bill; clear the FBR fields so it can be submitted
+        ///                    again (the only safe way to re-open a locked bill).
+        /// "recordExisting" — operator FOUND the invoice at FBR; record its IRN so
+        ///                    our books match FBR without POSTing again.
+        /// </summary>
+        public string Mode { get; set; } = "";
+
+        /// <summary>The IRN found at FBR. Required for mode "recordExisting".</summary>
+        public string? Irn { get; set; }
+
+        /// <summary>Why the reset is being done — required, written to the audit log.</summary>
+        public string Reason { get; set; } = "";
+    }
+
+    public class FbrResetResult
+    {
+        public bool Success { get; set; }
+        public string? FbrStatus { get; set; }
+        public string? FbrIRN { get; set; }
+        public string? Message { get; set; }
     }
 }

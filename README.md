@@ -289,6 +289,31 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — FBR: one submission per bill, and a way to record a withdrawal
+
+- **A bill can no longer be filed twice.** Pressing Submit twice, a double
+  click, or two people acting at once now results in exactly one filing: the
+  bill is claimed before anything is sent, and everyone else is turned away
+  with "a submission is in progress". Previously two simultaneous submits could
+  both reach FBR and come back with two different IRNs for one sale.
+- **A submission whose outcome never came back is no longer treated as a
+  failure.** If FBR does not answer in time, the bill is marked **unconfirmed**
+  rather than failed, and cannot be re-sent by anyone — because FBR may already
+  have it. An administrator checks at FBR and then either records the IRN it
+  issued or clears the bill for another attempt. Both new states show on the
+  bill's card and in the table, so nobody has to guess.
+- **Fixed: a bill mid-submission read as "Pending FBR submission" on its card**,
+  which invited exactly the second submission the above prevents. The card and
+  the table now share one definition of what "in flight" means and cannot
+  disagree.
+- **You can record that a filing was cancelled on the FBR portal.** FBR lets a
+  submitted invoice be withdrawn there within 72 hours; the Correct dialog now
+  has an option to write that down here. The bill is not voided — it keeps its
+  number and its IRN and stays visible — but it stops counting as a sale, its
+  delivery challans go back on the list of things to bill, and the stock comes
+  back (once: a credit note that already returned the goods is not double
+  counted). It drops out of the Sales Report.
+
 ### 2026-09-08 — Receipts spread themselves across the oldest invoices
 
 - **"Spread oldest first" on the receipt form.** Type what the customer paid and

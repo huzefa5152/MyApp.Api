@@ -8,6 +8,7 @@ import {
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import { isFutureDocDate } from "../utils/dateInput";
+import { isFbrInFlight } from "../utils/fbrStatus";
 import { colors } from "../theme";
 
 // Renders the FBR-status pill in compact form for the table.
@@ -26,8 +27,17 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
       </StatusBadge>
     );
   }
-  // FBR disabled for this company → no FBR status badge on unsubmitted bills
-  // (already-submitted bills above still show their status for accuracy).
+  if (inv.fbrStatus === "Submitting") {
+    return <StatusBadge tone="info" title="A submission is in progress. Please wait and refresh — do not submit again.">Submitting…</StatusBadge>;
+  }
+  if (inv.fbrStatus === "Uncertain") {
+    return <StatusBadge tone="warning" title="A previous submission timed out — its FBR outcome is unconfirmed. An administrator must verify it at FBR and reset it.">Uncertain</StatusBadge>;
+  }
+  // FBR disabled for this company → no FBR status badge on unsubmitted bills.
+  // Submitted / Submitting / Uncertain are checked ABOVE this line on purpose:
+  // they are facts about a filing that already left the building, and hiding
+  // one because the company later switched FBR off would hide the very state
+  // an operator must act on.
   if (!fbrEnabled) return null;
   if (isBillsMode) {
     return <StatusBadge tone="warning">Pending FBR</StatusBadge>;
@@ -87,6 +97,7 @@ export default function InvoiceTable({
   onFbrPreview,
   onFbrValidate,
   onFbrSubmit,
+  onFbrReset,
   onEdit,
   onCopy,
   onCreateChallan,
@@ -117,6 +128,20 @@ export default function InvoiceTable({
             >
               {i.documentType === 10 ? "CREDIT NOTE" : "DEBIT NOTE"}
               {i.originalInvoiceNumber ? ` ↩ #${i.originalInvoiceNumber}` : ""}
+            </span>
+          )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.fbrCancelledAt && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#f9dedc", color: "#b3261e", border: "1px solid #f2b8b5",
+              }}
+              title={`Cancelled on the FBR portal on ${new Date(i.fbrCancelledAt).toLocaleDateString()}`
+                + (i.fbrCancelledReason ? ` — ${i.fbrCancelledReason}` : "")
+                + ". The bill keeps its number and IRN but no longer counts as a sale."}
+            >
+              <MdBlock size={11} /> FBR CANCELLED
             </span>
           )}
           {i.documentType !== 9 && i.documentType !== 10 && i.reversedByCreditNoteNumber && (
@@ -254,6 +279,11 @@ export default function InvoiceTable({
 
   const renderActions = (inv) => {
     const isSubmitted = inv.fbrStatus === "Submitted";
+    // A bill mid-submit ("Submitting") or with an unconfirmed outcome
+    // ("Uncertain") is NOT submittable — the server refuses it, so we must not
+    // offer Validate/Submit. It can only be moved on via the admin Reset action.
+    const isFbrPending = isFbrInFlight(inv);
+    const canReset = !!perms?.canFbrReset && isFbrPending;
     return (
       <>
         {!isReturnsMode && (
@@ -330,7 +360,16 @@ export default function InvoiceTable({
             <MdVisibility size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !inv.isCancelled && !isFutureDocDate(inv.date) && (
+        {!isBillsMode && canReset && (
+          <button
+            style={{ ...btn.neutral, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+            onClick={() => onFbrReset?.(inv)}
+            title="Reset this bill's FBR state (it is stuck after a timed-out/uncertain submit). Verify at FBR first."
+          >
+            <MdRestore size={14} />
+          </button>
+        )}
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && !isFutureDocDate(inv.date) && (
           <>
             {perms.canFbrValidate && (
               <button
@@ -431,7 +470,7 @@ export default function InvoiceTable({
             <MdCancel size={14} />
           </button>
         )}
-        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
+        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.fbrCancelledAt &&
          inv.documentType !== 9 && inv.documentType !== 10 && (
           <button
             style={btn.reverse}
