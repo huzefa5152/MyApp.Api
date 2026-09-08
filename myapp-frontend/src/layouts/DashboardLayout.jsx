@@ -52,8 +52,11 @@ import {
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
+import { useCompany } from "../contexts/CompanyContext";
 import { getAvatarUrl } from "../utils/avatarUrl";
-import { isNavPathVisible, visibleNavPermissions } from "../config/navVisibility";
+import {
+  isNavPathVisible, visibleNavPermissions, applyFbrCompanyGate, anyCompanyHasFbr,
+} from "../config/navVisibility";
 import "./DashboardLayout.css";
 
 /* ------------------------------------------------------------------ */
@@ -175,8 +178,18 @@ export default function DashboardLayout() {
     "noninventoryitems.list.view",
     "config.units.manage",
   ];
+  // The FBR screens (Sandbox, Monitor) are shown when the installation files
+  // with FBR at all — i.e. ANY visible company has the integration on. Not the
+  // selected one: tabs that appear and vanish as you switch company read as a
+  // bug, and the pages themselves explain when the selected company is not an
+  // FBR one.
+  const { companies } = useCompany();
+  const showFbrScreens = anyCompanyHasFbr(companies);
+
   // Settings — company/system configuration + FBR tooling.
-  const settingsKeys = visibleNavPermissions([
+  // The FBR screens are additionally gated on the installation actually filing
+  // with FBR, so the badge count and the links below agree.
+  const settingsKeys = applyFbrCompanyGate(visibleNavPermissions([
     "companies.manage.view",
     "divisions.manage.view",
     "poformats.manage.view",
@@ -185,7 +198,7 @@ export default function DashboardLayout() {
     "fbr.sandbox.view",
     "fbrmonitor.view",
     "folders.list.view",
-  ]);
+  ]), companies);
   const salesKeys = visibleNavPermissions([
     // Sales tab visible if the user has any of: sales quotes, sales orders,
     // see-bills (Bills + Invoices tabs), see-challans, import-challans,
@@ -694,7 +707,7 @@ export default function DashboardLayout() {
                   </NavLink>
                 </Can>
               )}
-              {isNavPathVisible("/fbr-sandbox") && (
+              {isNavPathVisible("/fbr-sandbox") && showFbrScreens && (
                 <Can permission="fbr.sandbox.view">
                   <NavLink to="/fbr-sandbox" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                     <MdScience className="dl-subitem__icon" aria-hidden="true" />
@@ -702,7 +715,7 @@ export default function DashboardLayout() {
                   </NavLink>
                 </Can>
               )}
-              {isNavPathVisible("/fbr-monitor") && (
+              {isNavPathVisible("/fbr-monitor") && showFbrScreens && (
                 <Can permission="fbrmonitor.view">
                   <NavLink to="/fbr-monitor" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                     <MdMonitorHeart className="dl-subitem__icon" aria-hidden="true" />

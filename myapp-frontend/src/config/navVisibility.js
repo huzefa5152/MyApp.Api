@@ -41,8 +41,12 @@ export const NAV_ITEMS = [
 
   // ── Settings ─────────────────────────────────────────────────────────────
   { path: "/fbr-settings",              permission: "fbr.config.update",           label: "FBR Settings",       visible: false },
-  { path: "/fbr-sandbox",               permission: "fbr.sandbox.view",            label: "FBR Sandbox",        visible: false },
-  { path: "/fbr-monitor",               permission: "fbrmonitor.view",             label: "FBR Monitor",        visible: false },
+  // Visible again, but ALSO gated at runtime on there being at least one
+  // FBR-enabled company — see anyCompanyHasFbr below. An installation that
+  // does not file with FBR has no use for either screen, and a nav entry that
+  // only ever leads to "not applicable" is noise.
+  { path: "/fbr-sandbox",               permission: "fbr.sandbox.view",            label: "FBR Sandbox",        visible: true },
+  { path: "/fbr-monitor",               permission: "fbrmonitor.view",             label: "FBR Monitor",        visible: true },
 
   // ── Administration ───────────────────────────────────────────────────────
   { path: "/accounting/data-migration", permission: "accounting.import.run",       label: "Data Migration",     visible: false },
@@ -69,4 +73,50 @@ export function isNavPermissionVisible(permission) {
  */
 export function visibleNavPermissions(keys) {
   return keys.filter(isNavPermissionVisible);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runtime gate: the FBR screens
+// ─────────────────────────────────────────────────────────────────────────────
+// FBR Sandbox and FBR Monitor are about one thing — filing invoices with FBR —
+// so they are shown when the installation does that AT ALL, i.e. when any one
+// company the user can see has FBR integration on. Deliberately "any", not
+// "the selected one": the tabs must not appear and vanish as the operator
+// switches company, which reads as a bug. The PAGE then tells them when the
+// company they have selected is not one of the FBR ones.
+//
+// Nav items gated by these keys, for the section-badge arithmetic.
+export const FBR_COMPANY_GATED_PERMISSIONS = ["fbr.sandbox.view", "fbrmonitor.view"];
+export const FBR_COMPANY_GATED_PATHS = ["/fbr-sandbox", "/fbr-monitor"];
+
+/** True when at least one company carries FBR integration. */
+export function anyCompanyHasFbr(companies) {
+  return Array.isArray(companies) && companies.some((c) => c?.fbrEnabled === true);
+}
+
+/**
+ * Whether a company files with FBR, answered from the LIST rather than from a
+ * company object a caller happens to be holding.
+ *
+ * Callers hold company objects of several vintages -- the context's
+ * selectedCompany, a row a page cached, one a picker handed back -- and any of
+ * them can predate an FbrEnabled change. Resolving by id against the list the
+ * context just fetched means the gate and the message it prints cannot
+ * disagree, which is exactly what they did while this was being built: the
+ * screen said "FBR integration is off for Overlay Traders" while listing
+ * Overlay Traders as a company that files.
+ */
+export function companyHasFbr(companies, companyId) {
+  if (!companyId) return false;
+  const live = (companies || []).find((c) => Number(c?.id) === Number(companyId));
+  return live?.fbrEnabled === true;
+}
+
+/**
+ * Removes the FBR-screen keys from a section's list when no company files with
+ * FBR, so the "[N]" badge and the section gate agree with the links rendered.
+ */
+export function applyFbrCompanyGate(keys, companies) {
+  if (anyCompanyHasFbr(companies)) return keys;
+  return keys.filter((k) => !FBR_COMPANY_GATED_PERMISSIONS.includes(k));
 }

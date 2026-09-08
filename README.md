@@ -312,6 +312,32 @@ Publish output optimized from 79 MB to 37 MB via:
   challan, and switching the setting off later leaves every existing document
   exactly as it was.
 
+### 2026-09-08 — The FBR screens are back, and the sandbox page opens on the right company
+
+- **FBR Sandbox and FBR Monitor are in the sidebar again**, shown whenever ANY
+  company has FBR integration on. Deliberately "any" rather than "the selected
+  one": tabs that appear and vanish as you switch company read as a bug. An
+  installation that does not file with FBR still sees neither.
+- **Reaching one with a non-FBR company selected now explains itself.** The
+  screen says which company is not enabled, where to turn it on, and lists the
+  companies that DO file with a button to switch to each — instead of an empty
+  table that looks broken.
+- **The FBR Sandbox page was opening on the wrong company.** Its start-up had two
+  separate checks reading the same stale value, so the "fall back to the first
+  company" line fired alongside the "use the selected company" line and won. The
+  page therefore always opened on whichever company happened to be first in the
+  list, whatever you had selected — and on an installation whose first company
+  does not file with FBR, that looked like the screen being broken. Found while
+  verifying the notice above.
+- Both gates now resolve the company from the live list by id rather than from
+  whichever company object the caller was holding, so the gate and the message
+  it prints cannot disagree.
+- The full journey is verified end to end against the live PRAL sandbox in one
+  run: **challan raised → number allocated → bill built from it → lines linked
+  back → challan leaves the pending-to-bill pool → FBR validate → submit → IRN
+  stored → bill locked → corrected by credit note**, plus the standalone-bill
+  path and seven scenarios on both business activities. 282 checks.
+
 ### 2026-09-08 — Seven of eight FBR scenarios file, after one wrong URL
 
 - **One reference endpoint was on the wrong path, and it cost four scenarios.**

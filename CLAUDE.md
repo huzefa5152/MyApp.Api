@@ -1098,6 +1098,34 @@ them can be resolved from FBR.
 
 ---
 
+### 10c. The FBR-only screens, and who may see them (2026-09-08)
+
+`FBR Sandbox` and `FBR Monitor` are gated in TWO places and both matter.
+
+- **The sidebar gate is "does this installation file with FBR at all"** —
+  `anyCompanyHasFbr(companies)` in `myapp-frontend/src/config/navVisibility.js`,
+  ANDed into the nav links and into `settingsKeys` via `applyFbrCompanyGate` so
+  the section's "[N]" badge matches the links rendered. Deliberately ANY company,
+  not the selected one: a tab that appears and disappears as the operator
+  switches company reads as a bug, and support calls follow.
+- **The page gate is per company**, and it must resolve `fbrEnabled` from the
+  live `companies` list by id (`companyHasFbr`), never from a company object the
+  caller is holding. Callers hold objects of several vintages — the context's
+  `selectedCompany`, a row a page cached, one a picker returned — and a stale one
+  made the screen say "FBR integration is off for Overlay Traders" while listing
+  Overlay Traders as a company that files.
+- **`FbrSandboxPage` has its OWN company picker**, separate from the global
+  selection by design, so its gate follows that picker and `FbrOnlyNotice` takes
+  the `companyId` explicitly. Its start-up effect must return after each branch:
+  two bare `if`s reading the same stale `companyId` both fired on the first pass,
+  so "fall back to companies[0]" overwrote "use the globally selected company"
+  and the page opened on the wrong company every time.
+- A non-FBR company gets `Components/FbrOnlyNotice.jsx`, which names the company,
+  says where to switch it on, and offers a one-click switch to each company that
+  does file. Never an empty grid — that reads as a fault.
+
+---
+
 ### 11. SQL Server gotchas
 
 - **A single batch that both ALTERs a table and references the new column will fail at parse time** even when execution is guarded by `IF NOT EXISTS`. Split into separate `ExecuteSqlRaw` calls. Wrap column-dependent statements in `EXEC('...')` so they're parsed only at execution time. See `Program.cs:SecurityStamp backfill` for the pattern.

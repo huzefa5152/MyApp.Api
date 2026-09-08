@@ -93,7 +93,35 @@ def http(method: str, path: str, base: str, token: str | None = None, body=None)
 _last_fbr_call = [0.0]
 
 
-def fbr_call(method, path, base, token=None, body=None, pace=2.2):
+# PRAL intermittently answers a perfectly ordinary standard-rate line with
+# [0090] "Fixed/Notified Value or Retail Price is mandatory. Where sale type is
+# 3rd Schedule Goods". The payload was dumped and contains
+# saleType "Goods at Standard Rate (default)" and scenarioId SN001, so the
+# claim is false about the bytes we sent; the same shape submits four times in a
+# row minutes later. Retrying is safe here in a way it is NOT safe in the
+# product: FBR REJECTED the invoice, so no IRN was issued and our own status
+# went to Failed, which is explicitly re-submittable (CLAUDE.md §10 forbids
+# retrying a POST whose outcome is UNKNOWN -- a timeout -- which is a different
+# thing entirely).
+PRAL_FLAKE = "3rd Schedule Goods"
+
+
+def _looks_like_pral_flake(body) -> bool:
+    if not isinstance(body, dict) or body.get("success") is True:
+        return False
+    return PRAL_FLAKE in str(body.get("errorMessage") or "")
+
+
+def fbr_call(method, path, base, token=None, body=None, pace=2.2, retry_flake=True):
+    st, out = _fbr_call_once(method, path, base, token, body, pace)
+    # One retry, only for the known-false [0090] answer described above.
+    if retry_flake and _looks_like_pral_flake(out):
+        print(f"    (PRAL returned the spurious 3rd-Schedule error; retrying once)")
+        st, out = _fbr_call_once(method, path, base, token, body, pace=6.0)
+    return st, out
+
+
+def _fbr_call_once(method, path, base, token=None, body=None, pace=2.2):
     wait = pace - (time.monotonic() - _last_fbr_call[0])
     if wait > 0:
         time.sleep(wait)
@@ -284,7 +312,7 @@ def suite_c_lifecycle(base, token, cid, client_id, item_id, label):
     """C: validate -> submit -> IRN -> the database agrees with FBR."""
     suite = f"C. {label} bill lifecycle (live sandbox)"
     print(f"\n=== {suite} ===")
-    st, inv, _ = make_bill(base, token, cid, client_id, [
+    st, inv, challan = make_bill(base, token, cid, client_id, [
         {"desc": "Solenoid valve 220VAC", "qty": 10, "uom": "Numbers, pieces, units",
          "price": 400, "hs": "8481.8090", "itemTypeId": item_id},
     ])
@@ -292,6 +320,34 @@ def suite_c_lifecycle(base, token, cid, client_id, item_id, label):
                  f"http {st}: {err(inv)}"):
         return None
     iid = inv["id"]
+
+    # The challan stage, asserted rather than assumed. This flow starts at a
+    # delivery challan and the bill is built FROM it, so the goods leaving and
+    # the document that files them are two steps -- and if the first one is only
+    # ever used as a fixture, nothing proves the operator's actual journey.
+    if challan is not None:
+        check(suite, "the challan stage: a challan number was allocated",
+              bool(challan.get("challanNumber")),
+              f"challanNumber={challan.get('challanNumber')}")
+        check(suite, "the challan stage: its line is on the challan",
+              len(challan.get("items") or []) == 1,
+              f"{len(challan.get('items') or [])} lines")
+        check(suite, "the bill carries the challan it was built from",
+              challan.get("challanNumber") in (inv.get("challanNumbers") or []),
+              f"bill challanNumbers={inv.get('challanNumbers')} "
+              f"challan={challan.get('challanNumber')}")
+        check(suite, "each billed line is linked back to its challan line",
+              all(i.get("deliveryItemId") for i in (inv.get("items") or [])),
+              [i.get("deliveryItemId") for i in (inv.get("items") or [])])
+        # A billed challan must leave the pending pool, or it can be billed twice.
+        st, pend = http("GET", f"/api/deliverychallans/company/{cid}/pending", base, token=token)
+        rows = pend if isinstance(pend, list) else (pend or {}).get("items") or []
+        still = [r for r in rows if r.get("id") == challan.get("id")]
+        check(suite, "and the billed challan is out of the pending-to-bill pool",
+              st != 200 or not still,
+              f"http {st}, still pending={bool(still)}")
+    else:
+        skip(suite, "the challan stage", "the bill was not built from a challan")
     check(suite, "it starts with no FBR status", not inv.get("fbrStatus"),
           f"fbrStatus={inv.get('fbrStatus')}")
     check(suite, "and it is editable before submission",

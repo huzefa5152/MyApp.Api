@@ -16,6 +16,8 @@ import {
   MdCloudDone, MdHourglassEmpty, MdError, MdWarning, MdCheckCircle, MdRefresh, MdFilterList,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
+import FbrOnlyNotice from "../Components/FbrOnlyNotice";
+import { companyHasFbr } from "../config/navVisibility";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getFbrLogs, getFbrLogById, getFbrSummary } from "../api/fbrMonitorApi";
 import { notify } from "../utils/notify";
@@ -120,6 +122,12 @@ export default function FbrMonitorPage() {
   if (permsLoading) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div></Shell>;
   if (!canView) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>You don't have permission to view FBR monitor.</div></Shell>;
   if (!selectedCompany) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Pick a company first.</div></Shell>;
+  // The tab is shown whenever ANY company files with FBR, so the operator can
+  // arrive here with a non-FBR company selected. Say so instead of rendering an
+  // empty feed that looks like a fault.
+  if (!companyHasFbr(companies, selectedCompany.id)) {
+    return <Shell><FbrOnlyNotice screen="FBR Monitor" /></Shell>;
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / effectiveSize));
   const filteredCount = total;

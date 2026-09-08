@@ -6,6 +6,8 @@ import {
 } from "../api/fbrSandboxApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { useCompany } from "../contexts/CompanyContext";
+import FbrOnlyNotice from "../Components/FbrOnlyNotice";
+import { companyHasFbr } from "../config/navVisibility";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
@@ -58,9 +60,17 @@ export default function FbrSandboxPage() {
   // without side-effects elsewhere.
   const [companyId, setCompanyId] = useState(globalCompany?.id ?? "");
   useEffect(() => {
-    if (!companyId && globalCompany?.id) setCompanyId(globalCompany.id);
-    // If there's no global company but companies have loaded, default to first
-    if (!companyId && (companies?.length ?? 0) > 0) setCompanyId(companies[0].id);
+    // Already chosen — the operator's pick on this page wins, and re-running
+    // must not move it.
+    if (companyId) return;
+    // The globally selected company first. This used to be two separate `if`s
+    // reading the same stale `companyId`, so BOTH fired on the first pass and
+    // the fall-back below overwrote the global selection — the page always
+    // opened on companies[0] whatever you had selected, which sent it at the
+    // wrong company entirely.
+    if (globalCompany?.id) { setCompanyId(globalCompany.id); return; }
+    // Only when there is no global selection at all.
+    if ((companies?.length ?? 0) > 0) setCompanyId(companies[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalCompany?.id, companies?.length]);
 
@@ -151,6 +161,17 @@ export default function FbrSandboxPage() {
       notify("Failed to wipe sandbox data.", "error");
     }
   };
+
+  // This page has its own company picker, so the guard follows THAT choice
+  // rather than the global one.
+  if (canView && companyId && !companyHasFbr(companies, companyId)) {
+    return (
+      <div style={{ padding: "1.5rem" }}>
+        <h1 style={{ fontSize: 20, margin: "0 0 0.25rem" }}>FBR Sandbox</h1>
+        <FbrOnlyNotice screen="The FBR Sandbox" companyId={companyId} />
+      </div>
+    );
+  }
 
   if (!canView) {
     return (
