@@ -858,6 +858,10 @@ namespace MyApp.Api.Helpers
                 ["companyNTN"] = dto.CompanyNTN,
                 ["companySTRN"] = dto.CompanySTRN,
                 ["invoiceNumber"] = dto.InvoiceNumber,
+                // The company's own reference ("PTC-52"): the number on
+                // the customer's copy. A separate thing from the internal
+                // sequence above and from the IRN FBR issues.
+                ["fbrInvoiceNumber"] = dto.FbrInvoiceNumber,
                 ["date"] = dto.Date,
                 ["challanNumbers"] = dto.ChallanNumbers.Cast<object?>().ToList(),
                 ["challanDates"] = dto.ChallanDates.Cast<object?>().ToList(),
@@ -910,6 +914,10 @@ namespace MyApp.Api.Helpers
                 ["buyerNTN"] = dto.BuyerNTN,
                 ["buyerSTRN"] = dto.BuyerSTRN,
                 ["invoiceNumber"] = dto.InvoiceNumber,
+                // The company's own reference ("PTC-52"): the number on
+                // the customer's copy. A separate thing from the internal
+                // sequence above and from the IRN FBR issues.
+                ["fbrInvoiceNumber"] = dto.FbrInvoiceNumber,
                 ["date"] = dto.Date,
                 ["challanNumbers"] = dto.ChallanNumbers.Cast<object?>().ToList(),
                 ["poNumber"] = dto.PoNumber,

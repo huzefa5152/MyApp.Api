@@ -9,6 +9,7 @@ import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import { isFutureDocDate } from "../utils/dateInput";
 import { isFbrInFlight } from "../utils/fbrStatus";
+import { documentReference } from "../utils/invoiceReference";
 import { colors } from "../theme";
 
 // Renders the FBR-status pill in compact form for the table.
@@ -121,6 +122,18 @@ export default function InvoiceTable({
       render: (i) => (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <strong>{i.invoiceNumber}</strong>
+          {/* The company's own prefix ("PTC-52") — the reference on the
+              customer's copy. Suppressed when it adds nothing (see
+              documentReference), so a company with no prefix set reads
+              exactly as it does today. */}
+          {documentReference(i) && (
+            <span
+              style={{ fontFamily: "monospace", fontSize: "0.7rem", lineHeight: 1.2, color: colors.textSecondary }}
+              title="Invoice reference (company prefix + number)"
+            >
+              {documentReference(i)}
+            </span>
+          )}
           {(i.documentType === 9 || i.documentType === 10) && (
             <span
               style={{
@@ -484,12 +497,15 @@ export default function InvoiceTable({
           </button>
         )}
         {/* Correct: bill the balance qty under-reported on a locked original.
-            Eligible when FBR is on AND the bill is submitted, OR FBR is off AND
-            the bill is fully paid. Hidden once a live supplement already exists
-            (inv.hasSupplement) so no duplicate correction is created. */}
+            A correction is a FILING correction: it exists to bill quantity
+            under-reported on a bill FBR already holds. So it needs both — FBR
+            on for this company, and this bill actually submitted. With FBR off
+            there is no filing to correct, and an ordinary edit is the right
+            tool. Hidden once a live supplement exists (inv.hasSupplement) so
+            no duplicate correction is created. */}
         {perms.canReverse && !inv.isCancelled && !inv.hasSupplement && !inv.isMigrated &&
          inv.documentType !== 9 && inv.documentType !== 10 &&
-         (fbrEnabled ? isSubmitted : true) && (
+         fbrEnabled && isSubmitted && (
           <button
             style={btn.teal}
             onClick={() => onCorrect?.(inv)}

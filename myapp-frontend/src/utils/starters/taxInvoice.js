@@ -66,7 +66,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
   <div class="inv-head">
     <div class="inv-title">SALES TAX INVOICE</div>
     <div class="inv-meta">
-      <b>Invoice No:</b> {{invoiceNumber}}<br>
+      <b>Invoice No:</b> {{or fbrInvoiceNumber invoiceNumber}}<br>
       <b>Date:</b> {{fmtDate date}}<br>
       {{#if poNumber}}<b>PO #:</b> {{poNumber}}<br>{{/if}}
       {{#if challanNumbers}}<b>DC #:</b> {{join challanNumbers}}<br>{{/if}}
@@ -100,15 +100,15 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
 {{#if fbrIRN}}
 <div class="fbr-block">
   <img src="{{fbrLogoUrl}}" style="height:42px">
@@ -186,7 +186,7 @@ table.items thead th.left { text-align: left; }
   <div style="text-align:right">
     <div class="inv-tag">SALES TAX INVOICE</div>
     <div class="inv-meta">
-      <strong>Invoice No:</strong> {{invoiceNumber}}<br>
+      <strong>Invoice No:</strong> {{or fbrInvoiceNumber invoiceNumber}}<br>
       <strong>Date:</strong> {{fmtDate date}}<br>
       {{#if poNumber}}<strong>PO:</strong> {{poNumber}}<br>{{/if}}
       {{#if challanNumbers}}<strong>DC:</strong> {{join challanNumbers}}{{/if}}
@@ -227,16 +227,16 @@ table.items thead th.left { text-align: left; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="totals-row">
-  <div class="words-box"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
+  <div class="words-box"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWordsRounded}}</div></div>
 </div>
 {{#if fbrIRN}}
 <div class="fbr-strip">
@@ -315,7 +315,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
   </div>
   <div class="nav-inv">
     <div class="nav-inv-title">SALES TAX INVOICE</div>
-    <div class="nav-inv-num"># {{invoiceNumber}}</div>
+    <div class="nav-inv-num"># {{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="nav-inv-date">{{fmtDate date}}</div>
   </div>
 </div>
@@ -351,15 +351,15 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
 {{#if fbrIRN}}
 <div class="fbr-block">
   <img src="{{fbrLogoUrl}}" style="height:42px">
@@ -437,7 +437,7 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
   </div>
   <div class="ban-right">
     <div class="ban-title">Sales Tax Invoice</div>
-    <div class="ban-num">{{invoiceNumber}}</div>
+    <div class="ban-num">{{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="ban-date">{{fmtDate date}}</div>
   </div>
 </div>
@@ -477,16 +477,16 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="bot-area">
-  <div class="words-box"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
+  <div class="words-box"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWordsRounded}}</div></div>
   {{#if fbrIRN}}
   <div class="fbr-box">
     <img src="{{fbrLogoUrl}}" style="height:32px">
@@ -556,7 +556,7 @@ table.items th.left { text-align: left; }
   </div>
   <div class="inv-right">
     <div class="inv-title">SALES TAX INVOICE</div>
-    <div class="inv-num">No. {{invoiceNumber}}</div>
+    <div class="inv-num">No. {{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="inv-date">Date: {{fmtDate date}}</div>
     {{#if poNumber}}<div class="inv-date">PO: {{poNumber}}</div>{{/if}}
     {{#if challanNumbers}}<div class="inv-date">DC: {{join challanNumbers}}</div>{{/if}}
@@ -589,15 +589,15 @@ table.items th.left { text-align: left; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
 </div>
 <div class="footer">
   <div class="sig-row">
@@ -668,7 +668,7 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
   </div>
   <div class="cb-right">
     <div class="cb-title">Sales Tax Invoice</div>
-    <div class="cb-num">{{invoiceNumber}}</div>
+    <div class="cb-num">{{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="cb-date">{{fmtDate date}}</div>
   </div>
 </div>
@@ -710,16 +710,16 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="bot-section">
-  <div class="words-block"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
+  <div class="words-block"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWordsRounded}}</div></div>
   {{#if fbrIRN}}
   <div class="fbr-block">
     <img src="{{fbrLogoUrl}}" style="height:38px">
@@ -797,7 +797,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
   </div>
   <div class="inv-right">
     <div class="inv-title">Sales Tax Invoice</div>
-    <div class="inv-row"><b>No:</b> {{invoiceNumber}}</div>
+    <div class="inv-row"><b>No:</b> {{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="inv-row"><b>Date:</b> {{fmtDate date}}</div>
     {{#if poNumber}}<div class="inv-row"><b>PO:</b> {{poNumber}}</div>{{/if}}
     {{#if challanNumbers}}<div class="inv-row"><b>DC:</b> {{join challanNumbers}}</div>{{/if}}
@@ -830,15 +830,15 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
 {{#if fbrIRN}}
 <div class="fbr-block">
   <img src="{{fbrLogoUrl}}" style="height:34px">
@@ -931,7 +931,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
 <div class="inv-head">
   <div class="inv-title">Sales Tax Invoice</div>
   <div class="inv-meta">
-    <strong>Invoice No:</strong> {{invoiceNumber}}<br>
+    <strong>Invoice No:</strong> {{or fbrInvoiceNumber invoiceNumber}}<br>
     <strong>Date:</strong> {{fmtDate date}}<br>
     {{#if poNumber}}<strong>PO #:</strong> {{poNumber}}<br>{{/if}}
     {{#if challanNumbers}}<strong>DC #:</strong> {{join challanNumbers}}{{/if}}
@@ -957,15 +957,15 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
 </div>
 <div class="footer">
   <div class="sig-row">
@@ -1041,7 +1041,7 @@ table.items th.left { text-align: left; }
     </div>
     <div class="inv-cell">
       <div class="inv-lbl">Invoice No</div>
-      <div class="inv-num">{{invoiceNumber}}</div>
+      <div class="inv-num">{{or fbrInvoiceNumber invoiceNumber}}</div>
       <div class="inv-date">{{fmtDate date}}</div>
     </div>
   </div>
@@ -1076,15 +1076,15 @@ table.items th.left { text-align: left; }
         <td class="cell c">{{this.quantity}}</td>
         <td class="cell c">{{this.uom}}</td>
         <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-        <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+        <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
         <td class="cell c">{{this.gstRate}}%</td>
-        <td class="cell r">{{fmtDec this.gstAmount}}</td>
-        <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+        <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+        <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
       </tr>{{/each}}
     </tbody>
-    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
   </table>
-  <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+  <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
   {{#if fbrIRN}}
   <div class="fbr-row">
     <img src="{{fbrLogoUrl}}" style="height:42px">
@@ -1174,7 +1174,7 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
     </div>
     <div class="inv-block">
       <div class="inv-lbl">Invoice No</div>
-      <div class="inv-num">{{invoiceNumber}}</div>
+      <div class="inv-num">{{or fbrInvoiceNumber invoiceNumber}}</div>
       <div class="inv-date">{{fmtDate date}}</div>
     </div>
   </div>
@@ -1209,15 +1209,15 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
         <td class="cell c">{{this.quantity}}</td>
         <td class="cell c">{{this.uom}}</td>
         <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-        <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+        <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
         <td class="cell c">{{this.gstRate}}%</td>
-        <td class="cell r">{{fmtDec this.gstAmount}}</td>
-        <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+        <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+        <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
       </tr>{{/each}}
     </tbody>
-    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
   </table>
-  <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+  <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
   {{#if fbrIRN}}
   <div class="fbr-row">
     <img src="{{fbrLogoUrl}}" style="height:42px">
@@ -1299,7 +1299,7 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
   </div>
   <div class="gb-right">
     <div class="gb-title">Sales Tax Invoice</div>
-    <div class="gb-num">{{invoiceNumber}}</div>
+    <div class="gb-num">{{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="gb-date">{{fmtDate date}}</div>
   </div>
 </div>
@@ -1340,16 +1340,16 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="bot-row">
-  <div class="words-block"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
+  <div class="words-block"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWordsRounded}}</div></div>
   <div class="bank-block">
     <div class="bank-title">Bank Details</div>
     <div>Account Title: {{supplierName}}</div>
@@ -1437,7 +1437,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
   <div class="badge-area">
     <div class="badge">SALES TAX INVOICE</div>
     <div class="inv-meta">
-      <strong>No:</strong> {{invoiceNumber}}<br>
+      <strong>No:</strong> {{or fbrInvoiceNumber invoiceNumber}}<br>
       <strong>Date:</strong> {{fmtDate date}}<br>
       {{#if poNumber}}<strong>PO:</strong> {{poNumber}}<br>{{/if}}
       {{#if challanNumbers}}<strong>DC:</strong> {{join challanNumbers}}{{/if}}
@@ -1475,15 +1475,15 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
 {{#if fbrIRN}}
 <div class="fbr-block">
   <img src="{{fbrLogoUrl}}" style="height:42px">
@@ -1576,7 +1576,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
 <div class="inv-banner">
   <div class="inv-title">Sales Tax Invoice</div>
   <div class="inv-meta">
-    <strong>Invoice No:</strong> {{invoiceNumber}}<br>
+    <strong>Invoice No:</strong> {{or fbrInvoiceNumber invoiceNumber}}<br>
     <strong>Date:</strong> {{fmtDate date}}
   </div>
 </div>
@@ -1615,15 +1615,15 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+<div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
 {{#if fbrIRN}}
 <div class="fbr-block">
   <img src="{{fbrLogoUrl}}" style="height:42px">
@@ -1705,7 +1705,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
 <div class="inv-center">
   <div class="inv-title">Sales Tax Invoice</div>
   <div class="inv-nums">
-    <span><strong>No:</strong> {{invoiceNumber}}</span>
+    <span><strong>No:</strong> {{or fbrInvoiceNumber invoiceNumber}}</span>
     <span><strong>Date:</strong> {{fmtDate date}}</span>
     {{#if poNumber}}<span><strong>PO:</strong> {{poNumber}}</span>{{/if}}
   </div>
@@ -1744,15 +1744,15 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
 </table>
-<div class="words-center"><div class="words-box"><span class="wlbl">Amount In Words</span><span class="wval">{{amountInWords}}</span></div></div>
+<div class="words-center"><div class="words-box"><span class="wlbl">Amount In Words</span><span class="wval">{{amountInWordsRounded}}</span></div></div>
 {{#if fbrIRN}}
 <div class="fbr-block">
   <img src="{{fbrLogoUrl}}" style="height:42px">
@@ -1845,7 +1845,7 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
     </div>
     <div class="title-right">
       <div class="inv-lbl">Invoice No</div>
-      <div class="inv-num">{{invoiceNumber}}</div>
+      <div class="inv-num">{{or fbrInvoiceNumber invoiceNumber}}</div>
       <div class="inv-date">{{fmtDate date}}</div>
     </div>
   </div>
@@ -1904,15 +1904,15 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
         <td class="cell c">{{this.quantity}}</td>
         <td class="cell c">{{this.uom}}</td>
         <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-        <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+        <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
         <td class="cell c">{{this.gstRate}}%</td>
-        <td class="cell r">{{fmtDec this.gstAmount}}</td>
-        <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+        <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+        <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
       </tr>{{/each}}
     </tbody>
-    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmt subtotalRounded}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}</tfoot>
   </table>
-  <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
+  <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWordsRounded}}</span></div>
   {{#if fbrIRN}}
   <div class="fbr-section">
     <div class="fbr-main">

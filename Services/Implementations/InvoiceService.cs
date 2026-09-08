@@ -3486,6 +3486,7 @@ namespace MyApp.Api.Services.Implementations
                 // records: no external fetch from the printed PDF, and the IRN
                 // never reaches a third-party image host.
                 FbrIRN = inv.FbrIRN,
+                FbrInvoiceNumber = inv.FbrInvoiceNumber,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,
                 FbrQrPngDataUrl = FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN),
@@ -3608,6 +3609,7 @@ namespace MyApp.Api.Services.Implementations
                 FurtherTaxRate = inv.FurtherTaxRate,
                 FurtherTaxAmount = inv.FurtherTaxAmount,
                 FbrIRN = inv.FbrIRN,
+                FbrInvoiceNumber = inv.FbrInvoiceNumber,
                 FbrStatus = inv.FbrStatus,
                 FbrSubmittedAt = inv.FbrSubmittedAt,
                 // Pre-render the verify-URL QR as a base64 PNG. Inlined into

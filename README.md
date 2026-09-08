@@ -289,6 +289,50 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-09 — The three optional taxes print, and a bill shows its own reference number
+
+- **Further tax, withholding tax and advance income tax now appear on every
+  built-in bill and invoice template** — all 15 Bill starters, all 15 Sales Tax
+  Invoice starters and both defaults, 32 in total. Each line is conditional, so
+  a document that carries none of the three prints exactly as it did before. The
+  order follows what the taxes actually do: further tax s.3(1A) is part of the
+  supply's tax and sits INSIDE the total, so it is listed before the grand total;
+  withholding s.153 is deducted and advance tax 236G/H is added, both outside the
+  invoice, so they follow it and a **Net Payable** line closes the block. Before
+  this, a bill charging further tax printed a grand total the itemised column did
+  not add up to, and the two income-tax figures appeared nowhere at all — an
+  operator had to hand-edit a template to show what the customer owed.
+- **A bill now shows its own reference number.** The invoice-number prefix under
+  Configuration → Companies → Numbering has been settable for months but
+  appeared on no screen and in no template, so a company filing as "PTC-"
+  printed a bare "52" and the reference a customer quoted back matched nothing.
+  It now shows on the bill card and in the bills table (beneath the internal
+  number, which every report and lookup still keys on), names the downloaded PDF
+  and Excel file, prints in the number position on the built-in templates, and is
+  available as a merge field on any template an operator has customised. Nothing
+  changes for a company with no prefix set: there the reference IS the number, so
+  the extra line is suppressed rather than repeating it.
+- **The sales tax invoice prints in whole rupees.** Every figure on it — each
+  line's value, sales tax and inclusive total, the totals row, further tax,
+  withholding, advance tax, the net payable and the amount in words — now uses
+  the rounded fields, which are built by summing the ROUNDED LINES rather than
+  rounding the total. That is the difference between a column that adds up on
+  the page and one that is off by a rupee or two, which is what a buyer's
+  accountant rings about. The paisa-exact fields remain available for a tenant
+  that wants them. Applied to the built-in templates and to the three templates
+  already saved in production, whose previous contents were backed up first.
+- **The Correct action only appears where a correction makes sense.** It offers
+  to bill quantity under-reported on a document FBR already holds, so it now
+  requires both FBR switched on for the company and that document actually
+  submitted — on the Bills tab and the Invoices tab, cards and table. It used to
+  show on every bill of every company with FBR off, where there is no filing to
+  correct and an ordinary edit is the right tool.
+- **Resetting a submission no longer throws the reference away.** The FBR retry
+  path cleared it, and nothing ever reassigned it — so a bill that had been reset
+  once lost its customer-facing number for good. The same path had also been
+  writing a hard-coded "INV-" prefix when recording an existing filing, ignoring
+  whatever the company actually files under.
+
 ### 2026-09-09 — Item dropdowns now show your own items, not the whole installation
 
 - **Every item picker is scoped to the companies you can reach.** Until now the

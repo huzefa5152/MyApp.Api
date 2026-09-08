@@ -114,6 +114,15 @@ namespace MyApp.Api.DTOs
         // fields. Null on a bill that was never filed, which is what keeps
         // {{#if fbrIRN}} from rendering an empty box.
         public string? FbrIRN { get; set; }
+
+        /// <summary>
+        /// The document's FBR reference number — the company's
+        /// InvoiceNumberPrefix plus the document number, e.g. "PTC-52". A
+        /// SEPARATE thing from InvoiceNumber (the internal sequence) and from
+        /// FbrIRN (what FBR issues on acceptance). This is the reference the
+        /// customer sees, so it prints and exports.
+        /// </summary>
+        public string? FbrInvoiceNumber { get; set; }
         public string? FbrStatus { get; set; }
         public DateTime? FbrSubmittedAt { get; set; }
         /// <summary>Verify-URL QR as a base64 PNG. See
@@ -298,6 +307,15 @@ namespace MyApp.Api.DTOs
 
         // FBR Digital Invoicing
         public string? FbrIRN { get; set; }
+
+        /// <summary>
+        /// The document's FBR reference number — the company's
+        /// InvoiceNumberPrefix plus the document number, e.g. "PTC-52". A
+        /// SEPARATE thing from InvoiceNumber (the internal sequence) and from
+        /// FbrIRN (what FBR issues on acceptance). This is the reference the
+        /// customer sees, so it prints and exports.
+        /// </summary>
+        public string? FbrInvoiceNumber { get; set; }
         public string? FbrStatus { get; set; }
         public DateTime? FbrSubmittedAt { get; set; }
         /// <summary>

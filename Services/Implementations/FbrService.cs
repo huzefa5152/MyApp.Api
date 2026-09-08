@@ -1484,6 +1484,28 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
+        /// The document's FBR reference number: the company's
+        /// <c>InvoiceNumberPrefix</c> followed by the document number, with
+        /// "CN-"/"DN-" for a credit/debit note. Mirrors what InvoiceService
+        /// assigns at creation — the two must agree, because this is the number
+        /// on the customer's copy.
+        /// </summary>
+        private async Task<string> BuildFbrInvoiceNumberAsync(Invoice invoice)
+        {
+            var company = await _companyRepo.GetByIdAsync(invoice.CompanyId);
+            var prefix = company?.InvoiceNumberPrefix ?? "";
+            var kind = invoice.DocumentType switch
+            {
+                10 => "CN-",
+                9 => "DN-",
+                _ => "",
+            };
+            return string.IsNullOrEmpty(prefix) && kind.Length == 0
+                ? invoice.InvoiceNumber.ToString()
+                : $"{prefix}{kind}{invoice.InvoiceNumber}";
+        }
+
+        /// <summary>
         /// Admin recovery valve for a bill locked in a non-resubmittable FBR state
         /// (Submitting after a crash, or Uncertain after a timed-out submit). This
         /// is the ONLY sanctioned way to re-open such a bill, and it never POSTs to
@@ -1509,9 +1531,15 @@ namespace MyApp.Api.Services.Implementations
             {
                 invoice.FbrStatus = null;
                 invoice.FbrIRN = null;
-                invoice.FbrInvoiceNumber = null;
                 invoice.FbrErrorMessage = null;
                 invoice.FbrSubmittedAt = null;
+                // FbrInvoiceNumber is deliberately NOT cleared. It is assigned
+                // when the document is created (Company.InvoiceNumberPrefix +
+                // the number), not when it is filed, so clearing it here threw
+                // away the bill's own reference for good — nothing reassigns
+                // it, and it is the number printed on the customer's copy.
+                // Backfilled when an older row has none.
+                invoice.FbrInvoiceNumber ??= await BuildFbrInvoiceNumberAsync(invoice);
             }
             else if (string.Equals(mode, "recordExisting", StringComparison.OrdinalIgnoreCase))
             {
@@ -1519,7 +1547,13 @@ namespace MyApp.Api.Services.Implementations
                     return new FbrResetResult { Success = false, Message = "An IRN is required to record an existing FBR submission." };
                 invoice.FbrStatus = FbrSubmissionStatus.Submitted;
                 invoice.FbrIRN = irn.Trim();
-                invoice.FbrInvoiceNumber = $"INV-{invoice.InvoiceNumber}";
+                // The company's OWN prefix, not a hard-coded "INV-". A company
+                // filing as "PTC-" had its recorded invoices come back as
+                // INV-52 — a reference nobody could match against the copy the
+                // customer holds. `??=` because a document that already carries
+                // a reference carries the one that was PRINTED on it; recording
+                // a filing FBR already holds must not restate that number.
+                invoice.FbrInvoiceNumber ??= await BuildFbrInvoiceNumberAsync(invoice);
                 invoice.FbrErrorMessage = null;
                 invoice.FbrSubmittedAt = DateTime.UtcNow;
             }

@@ -222,7 +222,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
     <div class="bill-title">BILL</div>
     <div class="date-bill-box">
       <div class="date-row"><span class="lbl">Date:</span><span class="val">{{fmtDate date}}</span></div>
-      <div class="bill-num">BILL # {{invoiceNumber}}</div>
+      <div class="bill-num">BILL # {{or fbrInvoiceNumber invoiceNumber}}</div>
     </div>
     <div class="dc-info">DC # {{join challanNumbers}}</div>
     <div class="dc-date-line"><strong>D.C Date</strong> &nbsp;&nbsp;&nbsp; {{joinDates challanDates}}</div>
@@ -281,7 +281,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
     <table class="totals-table">
       <tr><td class="lbl">SUB TOTAL</td><td class="val">Rs{{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs{{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">GRAND TOTAL</td><td class="val">Rs{{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs{{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">GRAND TOTAL</td><td class="val">Rs{{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs{{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs{{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -430,7 +430,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
 
 <!-- Meta: Invoice No / Date / Time Of Supply -->
 <div class="meta-row">
-  <span><strong>Invoice No:</strong> &nbsp; {{invoiceNumber}}</span>
+  <span><strong>Invoice No:</strong> &nbsp; {{or fbrInvoiceNumber invoiceNumber}}</span>
   <span><strong>Date :</strong> &nbsp; {{fmtDate date}}</span>
   <span><strong>Time Of Supply:</strong></span>
 </div>
@@ -499,21 +499,19 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
       <td class="cell c">{{this.quantity}}</td>
       <td class="cell c">{{this.uom}}</td>
       <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
+      <td class="cell r">{{fmt this.valueExclTaxRounded}}</td>
       <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
+      <td class="cell r">{{fmt this.gstAmountRounded}}</td>
+      <td class="cell r">{{fmt this.totalInclTaxRounded}}</td>
     </tr>
     {{/each}}
   </tbody>
   <tfoot>
     <tr class="total-row">
       <td colspan="3" class="r">TOTAL :</td>
-      <td class="r">{{fmtDec subtotal}}</td>
+      <td class="r">{{fmt subtotalRounded}}</td>
       <td class="c">{{gstRate}}%</td>
-      <td class="r">{{fmtDec gstAmount}}</td>
-      <td class="r">{{fmtDec grandTotal}}</td>
-    </tr>
+      <td class="r">{{fmt gstAmountRounded}}</td><td class="r">{{fmt totalBeforeFurtherTaxRounded}}</td></tr>{{#if furtherTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt furtherTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="5" class="r">GRAND TOTAL :</td><td colspan="2" class="r">{{fmt grandTotalRounded}}</td></tr>{{/if}}{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td colspan="2" class="r">(-) {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr class="tfoot-row"><td colspan="5" class="r">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}} :</td><td colspan="2" class="r">{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="tfoot-row"><td colspan="5" class="r">NET PAYABLE :</td><td colspan="2" class="r">{{fmt collectibleRounded}}</td></tr>{{/if}}
   </tfoot>
 </table>
 
@@ -522,7 +520,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
   <div class="words-center">
     <div class="words-box">
       <span class="wlbl">Amount In Words</span>
-      <span class="wval">{{amountInWords}}</span>
+      <span class="wval">{{amountInWordsRounded}}</span>
     </div>
   </div>
 </div>

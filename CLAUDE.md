@@ -690,6 +690,16 @@ Accounts A/R balance.
 COMPANY level — FBR-submitted when FBR is on, any valid document when it is off.
 Do not reintroduce a "fully paid" test in either.
 
+**The Correct BUTTON is stricter than the server (2026-09-09).** A correction is
+a FILING correction — it exists to bill quantity under-reported on a document
+FBR already holds — so the button renders only when the company has FBR on AND
+that document is `Submitted`, on the Bills tab and the Invoices tab, card and
+table alike (one gate each in `InvoicePage.jsx` and `InvoiceTable.jsx`). It used
+to read `fbrEnabled ? isSubmitted : true`, which offered it on every bill of
+every FBR-off company, where there is no filing to correct and an ordinary edit
+is the right tool. `CreateSupplementAsync` still accepts the FBR-off case on
+purpose (above) — nothing in the API changed, only what is offered.
+
 ### 5b-9. Exporting the stock dashboard (2026-09-04)
 
 `GET /api/stock/company/{id}/onhand/excel` → `Helpers/StockExcelBuilder.cs`.

@@ -6,6 +6,7 @@ import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
 import StatusBadge from "../Components/StatusBadge";
 import { isFbrInFlight } from "../utils/fbrStatus";
+import { documentReference } from "../utils/invoiceReference";
 import SearchableSelect from "../Components/SearchableSelect";
 import DivisionSelect from "../Components/DivisionSelect";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
@@ -388,7 +389,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       const { data } = await getInvoicePrintBill(inv.id);
       const template = await resolvePrintTemplate(inv);
       const html = mergeTemplate(template, data);
-      await exportToPdf(html, `Bill # ${data.invoiceNumber} ${data.clientName}`);
+      await exportToPdf(html, `Bill # ${documentReference(data) || data.invoiceNumber} ${data.clientName}`);
     } catch { notify("Failed to export Bill PDF.", "error"); }
     finally { setExportingId(null); }
   };
@@ -399,7 +400,7 @@ export default function InvoicePage({ mode = "invoices" }) {
     try {
       const { data } = await getInvoicePrintBill(inv.id);
       const res = await exportExcel(selectedCompany.id, "Bill", data);
-      saveAs(res.data, `Bill # ${data.invoiceNumber} ${data.clientName}.xlsx`);
+      saveAs(res.data, `Bill # ${documentReference(data) || data.invoiceNumber} ${data.clientName}.xlsx`);
     } catch { notify("Failed to export Bill Excel.", "error"); }
     finally { setExportingId(null); }
   };
@@ -415,7 +416,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       // Bill exports (which keep the "Bill # ..." prefix). Note tabs name the
       // file after the note kind ("CREDIT NOTE # 3 ...").
       const pdfLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
-      await exportToPdf(html, `${pdfLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}`);
+      await exportToPdf(html, `${pdfLabel} # ${documentReference(data) || data.invoiceNumber} ${data.buyerName || data.clientName}`);
     } catch { notify("Failed to export Tax Invoice PDF.", "error"); }
     finally { setExportingId(null); }
   };
@@ -433,7 +434,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       // saveAs() overrides the server's Content-Disposition filename, so the
       // prefix MUST be correct on this line — fixing only the backend wasn't enough.
       const xlsLabel = isNotesMode ? noteLabel.toUpperCase() : "INVOICE";
-      saveAs(res.data, `${xlsLabel} # ${data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
+      saveAs(res.data, `${xlsLabel} # ${documentReference(data) || data.invoiceNumber} ${data.buyerName || data.clientName}.xlsx`);
     } catch { notify("Failed to export Tax Invoice Excel.", "error"); }
     finally { setExportingId(null); }
   };
@@ -1049,6 +1050,14 @@ export default function InvoicePage({ mode = "invoices" }) {
                       <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
                       {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
                     </h5>
+                    {/* The company's own prefix ("PTC-52"): the reference the
+                        customer quotes back. Hidden when it would just repeat
+                        the number above it. */}
+                    {documentReference(inv) && (
+                      <p style={{ ...cardStyles.text, fontFamily: "monospace", fontSize: "0.72rem", color: colors.textSecondary, margin: "0 0 0.35rem" }}>
+                        {documentReference(inv)}
+                      </p>
+                    )}
                     <p style={cardStyles.text}><strong>Client:</strong> {inv.clientName}</p>
                     {inv.divisionName && (
                       <p style={cardStyles.text}>
@@ -1530,13 +1539,16 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {/* Correct: bill the balance quantity under-reported on a
-                        locked original. Eligible when FBR is on AND the bill is
-                        submitted, OR FBR is off AND the bill is fully paid.
-                        Hidden once a live supplement already exists so no
-                        duplicate correction can be created. */}
+                        locked original.
+                                A correction is a FILING correction: it exists to bill quantity
+                        under-reported on a bill FBR already holds. So it needs both — FBR
+                        on for this company, and this bill actually submitted. With FBR off
+                        there is no filing to correct, and an ordinary edit is the right
+                        tool. Hidden once a live supplement exists (inv.hasSupplement) so
+                        no duplicate correction is created. */}
                     {canReverse && !inv.isCancelled && !inv.hasSupplement && !inv.isMigrated &&
                      inv.documentType !== 9 && inv.documentType !== 10 &&
-                     (fbrEnabled ? inv.fbrStatus === "Submitted" : true) && (
+                     fbrEnabled && inv.fbrStatus === "Submitted" && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#d6eee8", color: "#0a5d50", border: "1px solid #b6ddd3" }}
                         onClick={() => setCorrectTarget(inv)}

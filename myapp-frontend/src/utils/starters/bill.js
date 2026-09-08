@@ -64,7 +64,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
   </div>
   <div class="doc-block">
     <div class="doc-title">BILL</div>
-    <div class="doc-num">Bill # {{invoiceNumber}}</div>
+    <div class="doc-num">Bill # {{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="doc-date">{{fmtDate date}}</div>
     {{#if challanNumbers}}<div class="dc-ref">DC # {{join challanNumbers}}</div>{{/if}}
   </div>
@@ -93,7 +93,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -190,7 +190,7 @@ table.items th.c { text-align: center; }
   </div>
   <div class="doc-right">
     <div class="doc-label">Invoice</div>
-    <div class="doc-num"># {{invoiceNumber}}</div>
+    <div class="doc-num"># {{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="doc-date">{{fmtDate date}}</div>
     {{#if challanNumbers}}<div class="doc-date">DC # {{join challanNumbers}}</div>{{/if}}
   </div>
@@ -226,7 +226,7 @@ table.items th.c { text-align: center; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST {{gstRate}}%</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -322,7 +322,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
   </div>
   <div class="doc-box">
     <div class="doc-title">BILL</div>
-    <div class="doc-meta">Bill # {{invoiceNumber}}<br>{{fmtDate date}}{{#if challanNumbers}}<br>DC # {{join challanNumbers}}{{/if}}</div>
+    <div class="doc-meta">Bill # {{or fbrInvoiceNumber invoiceNumber}}<br>{{fmtDate date}}{{#if challanNumbers}}<br>DC # {{join challanNumbers}}{{/if}}</div>
   </div>
 </div>
 <div class="gold-rule"></div>
@@ -344,7 +344,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
@@ -440,7 +440,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
   </div>
   <div style="text-align:right">
     <div class="badge">BILL</div>
-    <div class="banner-meta"># {{invoiceNumber}}<br>{{fmtDate date}}{{#if challanNumbers}}<br>DC # {{join challanNumbers}}{{/if}}</div>
+    <div class="banner-meta"># {{or fbrInvoiceNumber invoiceNumber}}<br>{{fmtDate date}}{{#if challanNumbers}}<br>DC # {{join challanNumbers}}{{/if}}</div>
   </div>
 </div>
 <div class="divider"></div>
@@ -463,7 +463,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
@@ -556,7 +556,7 @@ table.items th.l { text-align: left; }
   </div>
   <div class="doc-box">
     <div class="doc-title">BILL</div>
-    <div class="doc-meta">Bill No: {{invoiceNumber}}<br>Date: {{fmtDate date}}{{#if challanNumbers}}<br>DC #: {{join challanNumbers}}{{/if}}</div>
+    <div class="doc-meta">Bill No: {{or fbrInvoiceNumber invoiceNumber}}<br>Date: {{fmtDate date}}{{#if challanNumbers}}<br>DC #: {{join challanNumbers}}{{/if}}</div>
   </div>
 </div>
 <div class="to-section">
@@ -586,7 +586,7 @@ table.items th.l { text-align: left; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -691,7 +691,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
   <div class="doc-area">
     <div class="doc-title">B<span>I</span>LL</div>
     <div class="doc-rule"></div>
-    <div class="doc-num">No. {{invoiceNumber}}</div>
+    <div class="doc-num">No. {{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="doc-date">{{fmtDate date}}</div>
     {{#if challanNumbers}}<div class="doc-date">DC # {{join challanNumbers}}</div>{{/if}}
   </div>
@@ -722,7 +722,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -815,7 +815,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
   </div>
   <div class="doc-box">
     <div class="doc-title">BILL</div>
-    <div class="doc-meta">No: {{invoiceNumber}}<br>{{fmtDate date}}{{#if challanNumbers}}<br>DC# {{join challanNumbers}}{{/if}}</div>
+    <div class="doc-meta">No: {{or fbrInvoiceNumber invoiceNumber}}<br>{{fmtDate date}}{{#if challanNumbers}}<br>DC# {{join challanNumbers}}{{/if}}</div>
   </div>
 </div>
 <div class="info-row">
@@ -835,7 +835,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -940,7 +940,7 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
   <div class="main">
     <div class="doc-hdr">
       <div class="doc-title">BILL</div>
-      <div class="doc-meta"><strong>Bill #</strong> {{invoiceNumber}}<br><strong>Date:</strong> {{fmtDate date}}{{#if challanNumbers}}<br><strong>DC #:</strong> {{join challanNumbers}}{{/if}}</div>
+      <div class="doc-meta"><strong>Bill #</strong> {{or fbrInvoiceNumber invoiceNumber}}<br><strong>Date:</strong> {{fmtDate date}}{{#if challanNumbers}}<br><strong>DC #:</strong> {{join challanNumbers}}{{/if}}</div>
     </div>
     <div class="to-section">
       <div class="to-row">
@@ -968,7 +968,7 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
         <table class="ttbl">
           <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
           <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-          <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+          {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
         </table>
       </div>
     </div>
@@ -1070,7 +1070,7 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
     </div>
     <div class="doc-area">
       <div class="doc-title">BILL</div>
-      <div class="doc-num"># {{invoiceNumber}}</div>
+      <div class="doc-num"># {{or fbrInvoiceNumber invoiceNumber}}</div>
       <div class="doc-date">{{fmtDate date}}</div>
     </div>
   </div>
@@ -1101,7 +1101,7 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -1203,7 +1203,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
   </div>
   <div class="doc-box">
     <div class="doc-title">BILL</div>
-    <div class="doc-num">Bill # {{invoiceNumber}}</div>
+    <div class="doc-num">Bill # {{or fbrInvoiceNumber invoiceNumber}}</div>
     <div class="doc-date">{{fmtDate date}}</div>
     {{#if challanNumbers}}<div class="dc-ref">DC # {{join challanNumbers}}</div>{{/if}}
   </div>
@@ -1232,7 +1232,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
   <div class="terms"><strong>Terms &amp; Conditions:</strong> Payment due within 30 days. Goods once sold will not be taken back. All disputes subject to local jurisdiction.</div>
@@ -1334,7 +1334,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
   </div>
   <div class="doc-right">
     <div class="doc-title">BILL</div>
-    <div class="doc-meta">Bill # {{invoiceNumber}}<br>Date: {{fmtDate date}}{{#if challanNumbers}}<br>DC # {{join challanNumbers}}{{/if}}</div>
+    <div class="doc-meta">Bill # {{or fbrInvoiceNumber invoiceNumber}}<br>Date: {{fmtDate date}}{{#if challanNumbers}}<br>DC # {{join challanNumbers}}{{/if}}</div>
   </div>
 </div>
 <div class="gold-line"></div>
@@ -1356,7 +1356,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
       </table>
     </div>
     <div class="bank-section">
@@ -1459,7 +1459,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
   </div>
   <div class="doc-right">
     <div class="doc-title">BILL</div>
-    <div class="doc-chip">No. {{invoiceNumber}}</div><br>
+    <div class="doc-chip">No. {{or fbrInvoiceNumber invoiceNumber}}</div><br>
     <div class="doc-chip">{{fmtDate date}}</div>
     {{#if challanNumbers}}<br><div class="doc-chip">DC # {{join challanNumbers}}</div>{{/if}}
   </div>
@@ -1497,7 +1497,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
@@ -1593,7 +1593,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </div>
 <div class="doc-strip">
   <div class="ds-title">BILL</div>
-  <div class="ds-meta">Bill # {{invoiceNumber}} &nbsp;|&nbsp; {{fmtDate date}}{{#if challanNumbers}} &nbsp;|&nbsp; DC # {{join challanNumbers}}{{/if}}</div>
+  <div class="ds-meta">Bill # {{or fbrInvoiceNumber invoiceNumber}} &nbsp;|&nbsp; {{fmtDate date}}{{#if challanNumbers}} &nbsp;|&nbsp; DC # {{join challanNumbers}}{{/if}}</div>
 </div>
 <div class="to-section">
   <div class="to-left">
@@ -1619,7 +1619,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
   <div class="terms"><strong>Terms:</strong> {{#if paymentTerms}}{{paymentTerms}}{{else}}Payment due within 30 days of invoice date. Goods once sold will not be taken back.{{/if}}</div>
@@ -1717,7 +1717,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
 </div>
 <div class="doc-bar">
   <div class="doc-title">BILL</div>
-  <div class="doc-meta"><strong>Bill #:</strong> {{invoiceNumber}}<br><strong>Date:</strong> {{fmtDate date}}{{#if challanNumbers}}<br><strong>DC #:</strong> {{join challanNumbers}}{{/if}}</div>
+  <div class="doc-meta"><strong>Bill #:</strong> {{or fbrInvoiceNumber invoiceNumber}}<br><strong>Date:</strong> {{fmtDate date}}{{#if challanNumbers}}<br><strong>DC #:</strong> {{join challanNumbers}}{{/if}}</div>
 </div>
 <div class="to-section">
   <div class="to-left">
@@ -1743,7 +1743,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -1844,7 +1844,7 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
     </div>
     <div class="fh-doc">
       <div class="fd-lbl">Bill No.</div>
-      <div class="fd-num">{{invoiceNumber}}</div>
+      <div class="fd-num">{{or fbrInvoiceNumber invoiceNumber}}</div>
       <div class="fd-lbl">Date</div>
       <div class="fd-date">{{fmtDate date}}</div>
       {{#if challanNumbers}}<div class="fd-lbl" style="margin-top:4px">DC #</div><div class="fd-date">{{join challanNumbers}}</div>{{/if}}
@@ -1876,7 +1876,7 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs {{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt collectible}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
