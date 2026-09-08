@@ -157,6 +157,7 @@ namespace MyApp.Api.Data
         public DbSet<GoodsReceiptItem> GoodsReceiptItems { get; set; }
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
+        public DbSet<OpeningStockLot> OpeningStockLots { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -2085,6 +2086,42 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<OpeningStockBalance>()
                 .HasIndex(osb => new { osb.CompanyId, osb.ItemTypeId })
                 .IsUnique();
+
+            // OpeningStockLot — the sheet rows behind one merged balance.
+            // Cascade from the balance and NOT from Company: the balance already
+            // restricts on Company, and a second path would give SQL Server two
+            // cascade routes to the same table.
+            modelBuilder.Entity<OpeningStockLot>()
+                .HasOne(l => l.OpeningStockBalance)
+                .WithMany(b => b.Lots)
+                .HasForeignKey(l => l.OpeningStockBalanceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OpeningStockLot>()
+                .HasIndex(l => l.OpeningStockBalanceId);
+            modelBuilder.Entity<OpeningStockLot>()
+                .HasIndex(l => l.ImportRunId);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.ItemNameOnSheet).HasMaxLength(300);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.HsCode).HasMaxLength(20);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.LotRef).HasMaxLength(100);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.Unit).HasMaxLength(50);
+            // Quantities mirror OpeningStockBalance.Quantity; money is 2dp; the
+            // stated unit price keeps 6 so a row's own value reproduces from it.
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.OpeningQuantity).HasPrecision(28, 12);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.ConsumedQuantity).HasPrecision(28, 12);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.BalanceQuantity).HasPrecision(28, 12);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.UnitPrice).HasColumnType("decimal(18,6)");
+            modelBuilder.Entity<OpeningStockLot>()
+                .Property(l => l.OpeningValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<OpeningStockLot>()
+                .Property(l => l.ConsumedValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<OpeningStockLot>()
+                .Property(l => l.BalanceValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<OpeningStockLot>()
+                .Property(l => l.OpeningSalesTaxRate).HasColumnType("decimal(5,2)");
+            modelBuilder.Entity<OpeningStockLot>()
+                .Property(l => l.ConsumedSalesTaxRate).HasColumnType("decimal(5,2)");
+            modelBuilder.Entity<OpeningStockLot>()
+                .Property(l => l.BalanceSalesTaxRate).HasColumnType("decimal(5,2)");
 
             // 2026-05-12: stock-quantity precision promotion. Both
             // StockMovement.Quantity and OpeningStockBalance.Quantity

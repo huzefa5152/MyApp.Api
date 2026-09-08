@@ -179,19 +179,91 @@ For 50-odd items this takes about an hour.
    - The other side posts to Retained earnings automatically. You do not need to
      make a balancing entry, and you should not.
 
+### The standard sheet — send this to every new client
+
+This is the shape the built-in layout reads with **no mapping at all**. Ask each
+new business for exactly this and the import is a three-click job.
+
+**Row 1** may hold the trading name. **Row 2** holds the band labels — `Opening`
+over column J, `Consumed` over column N, `Balance` over column R. **Row 3** holds
+the column headings below. **Data starts on row 4**, one row per customs
+declaration (a "lot"). A totals row at the bottom is fine and is ignored.
+
+| Col | Heading | Meaning | Used for |
+|---|---|---|---|
+| A | Claim Month | accountant's working | ignored |
+| B | **GD Number** | customs declaration reference | kept per lot |
+| C | **GD Date** | declaration date | kept per lot |
+| D | **4 Digit Hs Code** | tariff heading | fallback classification |
+| E | **8 Digit Hs Code** | full PCT code | **classification — this is the key** |
+| F | **Description** | product name | item name |
+| G | Sub Category | accountant's own grouping | ignored |
+| H | **Price** | landed unit cost | kept per lot |
+| I | **Unit** | Pcs, Kg, … | unit of measure |
+| J | Qty | opening quantity | kept per lot (history) |
+| K | Exl | opening value excl. tax | kept per lot (history) |
+| L | Rate | opening tax rate | kept per lot (history) |
+| M | S.Tax | opening tax amount | ignored (derived) |
+| N | Qty | consumed quantity | kept per lot (history) |
+| O | Consumed Exl | consumed value excl. tax | kept per lot (history) |
+| P | Rate | consumed tax rate | kept per lot (history) |
+| Q | S.Tax | consumed tax amount | ignored (derived) |
+| R | **Bal Qty** | **closing quantity** | **the opening stock quantity** |
+| S | **Bal Exl** | **closing value excl. tax** | **the opening stock value** |
+| T | **Rate** | **closing tax rate** | **the sales-tax rate** |
+| U | S.Tax | closing tax amount | compared against value × rate |
+
+Anything from column V onward (the cost-of-goods-sold block) is ignored.
+
+**Column order is forgiving where it matters.** The item name, both HS codes, the
+GD number, the GD date, the price and the unit are found by their HEADING, so a
+sheet that runs *Items, Sub cat, 4 Digit Hs Code, 8 Digit Hs Code* in columns
+D–G imports just as well, and `GDs No` is accepted for `GD Number`. The preview
+says so — *"4 Digit Hs Code was read from column 6 instead of column 4"* — so you
+can see it happened. Columns J onward are read by POSITION, because `Qty`,
+`Rate` and `S.Tax` each appear three times and no heading can tell them apart.
+
+### Five rules to give the client
+
+1. **Every row needs an 8-digit HS code that exists in the current Pakistan
+   tariff.** A retired code is refused, and it looks like an import failure when
+   it is a sheet error. `9405.9010` and `8513.6019` were both rejected on the
+   first two real sheets — the live lines are `9405.9110` and `8513.1090`.
+2. **Type rates as numbers, not text.** `0.18` or a percent-formatted `18%` are
+   both read; a cell someone typed over as the literal text `18%` used to import
+   as **no rate at all**, which quietly understated the tax. It is read correctly
+   now, but a number is still what you want.
+3. **One row per GD.** Do not pre-merge lots — the system adds them up and keeps
+   the individual declarations.
+4. **Balance columns must be the closing position**, not opening.
+5. **No blank rows inside the data.** Fifteen consecutive blanks end the sheet.
+
 ### What the sheet must contain
 
 | Needed | Where it comes from |
 |---|---|
-| Item name | the **Items** column |
+| Item name | the **Description** / **Items** column |
 | HS code | the 8-digit column preferred, 4-digit accepted |
 | Unit | Pcs, Kg, … |
-| Closing quantity | the **Balance → Qty** column, *not* Opening |
-| Closing value | the **Balance → Excl** column |
+| Closing quantity | the **Balance → Bal Qty** column, *not* Opening |
+| Closing value | the **Balance → Bal Exl** column |
+| Sales tax rate | the **Balance → Rate** column |
 
-Ignored: sub-category, GD number and date, purchase price, tax columns, and the
-cost-of-goods-sold block. Those are the accountant's working, not data the
-system keeps.
+### What happens to the rest of the row
+
+Items are grouped on the **HS code**, so several product names under one code
+become one stock line and their quantities add up. That is deliberate: an item
+type is identified by its code, and the opening balance is SET per item type, so
+grouping by name would let the last row written overwrite its siblings.
+
+The detail is not lost. **Every source row is stored as a lot** against the
+balance it fed — its own product name, GD number, GD date, landed unit price,
+and its own opening / consumed / balance figures. On the first two real sheets
+that kept 112 product names that the merge folds into 78 and 57 stock lines. Use
+it to reconcile a figure back to the declarations behind it.
+
+Still ignored: the sub-category column, the derived S.Tax amounts, and the
+cost-of-goods-sold block. Those are the accountant's working.
 
 ---
 

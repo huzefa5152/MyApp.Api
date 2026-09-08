@@ -224,8 +224,14 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
 
             // The shipped layout, so an unrecognised workbook still starts from
-            // something described rather than an empty form.
-            result.DefaultProfile = scored.FirstOrDefault(s => s.IsDefault);
+            // something described rather than an empty form. Best-scoring
+            // first: with more than one built-in for a kind, taking whichever
+            // happened to be listed first would offer the wrong one.
+            result.DefaultProfile = scored
+                .Where(s => s.IsDefault)
+                .OrderByDescending(s => s.Similarity)
+                .ThenBy(s => s.ProfileId)
+                .FirstOrDefault();
         }
 
         private static List<WorkbookSheetPreviewDto> DescribeSheets(IImportedWorkbook workbook)

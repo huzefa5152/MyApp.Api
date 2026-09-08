@@ -118,7 +118,10 @@ namespace MyApp.Api.Services.Implementations
         private sealed record LotRow(
             int SourceRow, string ItemName, string? HsCode, bool Partial,
             string? Unit, decimal Quantity, decimal Value,
-            decimal TaxRate, decimal? StatedTax, string? LotRef);
+            decimal TaxRate, decimal? StatedTax, string? LotRef,
+            DateTime? LotDate, decimal? UnitPrice,
+            decimal? OpeningQty, decimal? OpeningValue, decimal? OpeningTaxRate,
+            decimal? ConsumedQty, decimal? ConsumedValue, decimal? ConsumedTaxRate);
 
         private List<LotRow> ReadLots(
             byte[] bytes, string extension, LotRowsMapping mapping, OpeningStockPreviewDto preview)
@@ -137,10 +140,32 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var lastRow = wb.GetLastRow(sheet);
-            var cols = mapping.Columns;
+
+            // Column numbers first, then the sheet's own headings correct them.
+            // That is what lets ONE built-in layout read the two column orders
+            // real accountants hand over (see LotRowsMapping.HeaderAliases).
+            var cols = mapping.ResolveColumns(wb, sheet, out var relocations);
+            foreach (var note in relocations) preview.Warnings.Add(note);
+
             var blankStreak = 0;
 
-            for (int row = mapping.FirstDataRow; row <= lastRow && lots.Count < MaxSourceRows; row++)
+            // The heading row is never data, whatever the mapping says. A
+            // mapping edited on screen starts from a scaffold whose first data
+            // row is 2, and on a sheet with a title band the operator sets the
+            // heading row to 3 and leaves the other box alone — so row 3 was
+            // read as a product called "Description", with no HS code. It
+            // arrived as an extra item and a second blocking error, on a
+            // preview that was otherwise correct, which is a confusing way to
+            // learn that one box is off by one.
+            var firstRow = mapping.FirstDataRow;
+            if (mapping.HeaderRow > 0 && firstRow <= mapping.HeaderRow)
+            {
+                firstRow = mapping.HeaderRow + 1;
+                preview.Warnings.Add(
+                    $"The first data row was set to {mapping.FirstDataRow}, which is the heading row or above it. Reading from row {firstRow} instead.");
+            }
+
+            for (int row = firstRow; row <= lastRow && lots.Count < MaxSourceRows; row++)
             {
                 var name = wb.GetString(sheet, row, cols.ItemName).Trim();
                 var qty = cols.BalanceQty > 0 ? wb.GetDecimal(sheet, row, cols.BalanceQty) : null;
@@ -181,7 +206,17 @@ namespace MyApp.Api.Services.Implementations
                         ? wb.GetDecimal(sheet, row, cols.BalanceTaxRate.Value) : null),
                     StatedTax: cols.BalanceTax is > 0
                         ? wb.GetDecimal(sheet, row, cols.BalanceTax.Value) : null,
-                    LotRef: cols.LotRef is > 0 ? wb.GetString(sheet, row, cols.LotRef.Value).Trim() : null));
+                    LotRef: cols.LotRef is > 0 ? wb.GetString(sheet, row, cols.LotRef.Value).Trim() : null,
+                    LotDate: cols.LotDate is > 0 ? wb.GetDate(sheet, row, cols.LotDate.Value) : null,
+                    UnitPrice: cols.UnitPrice is > 0 ? wb.GetDecimal(sheet, row, cols.UnitPrice.Value) : null,
+                    OpeningQty: cols.OpeningQty is > 0 ? wb.GetDecimal(sheet, row, cols.OpeningQty.Value) : null,
+                    OpeningValue: cols.OpeningValue is > 0 ? wb.GetDecimal(sheet, row, cols.OpeningValue.Value) : null,
+                    OpeningTaxRate: cols.OpeningTaxRate is > 0
+                        ? AsPercentage(wb.GetDecimal(sheet, row, cols.OpeningTaxRate.Value)) : null,
+                    ConsumedQty: cols.ConsumedQty is > 0 ? wb.GetDecimal(sheet, row, cols.ConsumedQty.Value) : null,
+                    ConsumedValue: cols.ConsumedValue is > 0 ? wb.GetDecimal(sheet, row, cols.ConsumedValue.Value) : null,
+                    ConsumedTaxRate: cols.ConsumedTaxRate is > 0
+                        ? AsPercentage(wb.GetDecimal(sheet, row, cols.ConsumedTaxRate.Value)) : null));
             }
 
             if (lots.Count >= MaxSourceRows)
@@ -294,6 +329,29 @@ namespace MyApp.Api.Services.Implementations
                         SalesTax = tax,
                         ValueIncludingTax = value + tax,
                         LotRefs = refs.Count == 0 ? null : string.Join(", ", refs),
+                        // Merging is right for the stock position and lossy for
+                        // everything else on the row, so every source row is
+                        // carried through as well: its own name, declaration,
+                        // landed cost, and its own opening/consumed/balance.
+                        Lots = g.OrderBy(x => x.SourceRow).Select(x => new OpeningStockLotDto
+                        {
+                            SourceRow = x.SourceRow,
+                            ItemNameOnSheet = x.ItemName.Trim(),
+                            HsCode = x.HsCode,
+                            LotRef = string.IsNullOrWhiteSpace(x.LotRef) ? null : x.LotRef,
+                            LotDate = x.LotDate,
+                            Unit = string.IsNullOrWhiteSpace(x.Unit) ? null : x.Unit,
+                            UnitPrice = x.UnitPrice,
+                            OpeningQuantity = x.OpeningQty,
+                            OpeningValueExcludingTax = x.OpeningValue.HasValue ? Money(x.OpeningValue.Value) : null,
+                            OpeningSalesTaxRate = x.OpeningTaxRate,
+                            ConsumedQuantity = x.ConsumedQty,
+                            ConsumedValueExcludingTax = x.ConsumedValue.HasValue ? Money(x.ConsumedValue.Value) : null,
+                            ConsumedSalesTaxRate = x.ConsumedTaxRate,
+                            BalanceQuantity = x.Quantity,
+                            BalanceValueExcludingTax = Money(x.Value),
+                            BalanceSalesTaxRate = x.TaxRate,
+                        }).ToList(),
                     };
                 })
                 .OrderBy(r => r.ItemName, StringComparer.OrdinalIgnoreCase)
@@ -505,6 +563,7 @@ namespace MyApp.Api.Services.Implementations
                 await ItemDescriptionRegistry.EnsureNamesAsync(_db, rows.Select(r => r.ItemName));
 
                 var hsIds = await ResolveHsCodeIdsAsync(rows);
+                var lotsWritten = new List<OpeningStockLot>();
 
                 foreach (var row in rows)
                 {
@@ -512,7 +571,7 @@ namespace MyApp.Api.Services.Implementations
                         ? await UpdateItemTypeAsync(row, hsIds, result)
                         : await CreateItemTypeAsync(row, hsIds, result);
 
-                    await UpsertOpeningBalanceAsync(dto, row, itemTypeId);
+                    lotsWritten.AddRange(await UpsertOpeningBalanceAsync(dto, row, itemTypeId));
                     result.OpeningBalancesWritten++;
                     result.TotalQuantity += row.Quantity;
                     result.TotalValueExcludingTax += Money(row.Value);
@@ -540,12 +599,23 @@ namespace MyApp.Api.Services.Implementations
                         ["itemTypesCreated"] = result.ItemTypesCreated,
                         ["itemTypesUpdated"] = result.ItemTypesUpdated,
                         ["openingBalances"] = result.OpeningBalancesWritten,
+                        ["lots"] = lotsWritten.Count,
                     }),
                     ImportedByUserId = userId,
                     ImportedAt = DateTime.UtcNow,
                 };
                 _db.ImportRuns.Add(run);
                 await _db.SaveChangesAsync();
+
+                // Stamped after the run exists, so a lot always points at a
+                // real ImportRun rather than being written with a null and
+                // backfilled outside the transaction.
+                if (lotsWritten.Count > 0)
+                {
+                    foreach (var lot in lotsWritten) lot.ImportRunId = run.Id;
+                    await _db.SaveChangesAsync();
+                    result.LotsWritten = lotsWritten.Count;
+                }
 
                 await tx.CommitAsync();
                 result.ImportRunId = run.Id;
@@ -665,7 +735,7 @@ namespace MyApp.Api.Services.Implementations
             return item.Id;
         }
 
-        private async Task UpsertOpeningBalanceAsync(
+        private async Task<List<OpeningStockLot>> UpsertOpeningBalanceAsync(
             OpeningStockCommitDto dto, OpeningStockCommitRowDto row, int itemTypeId)
         {
             var note = string.IsNullOrWhiteSpace(row.LotRefs)
@@ -677,7 +747,7 @@ namespace MyApp.Api.Services.Implementations
 
             if (existing == null)
             {
-                _db.OpeningStockBalances.Add(new OpeningStockBalance
+                existing = new OpeningStockBalance
                 {
                     CompanyId = dto.CompanyId,
                     ItemTypeId = itemTypeId,
@@ -687,7 +757,8 @@ namespace MyApp.Api.Services.Implementations
                     AsOfDate = dto.AsOfDate.Date,
                     Notes = Trim(note, 500),
                     CreatedAt = DateTime.UtcNow,
-                });
+                };
+                _db.OpeningStockBalances.Add(existing);
             }
             else
             {
@@ -698,9 +769,49 @@ namespace MyApp.Api.Services.Implementations
                 existing.SalesTaxRate = row.SalesTaxRate;
                 existing.AsOfDate = dto.AsOfDate.Date;
                 existing.Notes = Trim(note, 500);
+
+                // The lots are set, not added, for the same reason as the
+                // figure they explain — leaving the previous sheet's rows beside
+                // the new ones would describe two different sheets at once.
+                var stale = await _db.OpeningStockLots
+                    .Where(l => l.OpeningStockBalanceId == existing.Id)
+                    .ToListAsync();
+                if (stale.Count > 0) _db.OpeningStockLots.RemoveRange(stale);
             }
 
             await _db.SaveChangesAsync();
+
+            var written = new List<OpeningStockLot>();
+            foreach (var lot in row.Lots)
+            {
+                var entity = new OpeningStockLot
+                {
+                    OpeningStockBalanceId = existing.Id,
+                    SourceRow = lot.SourceRow,
+                    ItemNameOnSheet = Trim(
+                        string.IsNullOrWhiteSpace(lot.ItemNameOnSheet) ? row.ItemName : lot.ItemNameOnSheet, 300),
+                    HsCode = Trim(lot.HsCode ?? row.HsCode, 20),
+                    LotRef = Trim(lot.LotRef, 100) is { Length: > 0 } r ? r : null,
+                    LotDate = lot.LotDate,
+                    Unit = Trim(lot.Unit ?? row.Unit, 50) is { Length: > 0 } u ? u : null,
+                    UnitPrice = lot.UnitPrice,
+                    OpeningQuantity = lot.OpeningQuantity,
+                    OpeningValueExcludingTax = lot.OpeningValueExcludingTax,
+                    OpeningSalesTaxRate = lot.OpeningSalesTaxRate,
+                    ConsumedQuantity = lot.ConsumedQuantity,
+                    ConsumedValueExcludingTax = lot.ConsumedValueExcludingTax,
+                    ConsumedSalesTaxRate = lot.ConsumedSalesTaxRate,
+                    BalanceQuantity = lot.BalanceQuantity,
+                    BalanceValueExcludingTax = lot.BalanceValueExcludingTax,
+                    BalanceSalesTaxRate = lot.BalanceSalesTaxRate,
+                    CreatedAt = DateTime.UtcNow,
+                };
+                _db.OpeningStockLots.Add(entity);
+                written.Add(entity);
+            }
+
+            if (written.Count > 0) await _db.SaveChangesAsync();
+            return written;
         }
 
         private async Task<bool> EnableTrackingAsync(int companyId, OpeningStockCommitResultDto result)

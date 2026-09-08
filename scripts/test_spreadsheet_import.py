@@ -48,6 +48,7 @@ import json
 import sys
 import uuid
 from datetime import date, datetime
+from pathlib import Path
 
 import requests
 
@@ -139,6 +140,60 @@ def stock_workbook(rows, month="Jul 2026", sheet_name=None):
 # Every HS code below is a REAL Pakistan tariff line. Validation is master-first,
 # so an invented code is rejected — and Pakistan splits some WCO subheadings into
 # national lines, which is why this uses 8536.5010 rather than 8536.5000.
+def full_stock_workbook(rows, month="Jul 2026", alt_order=False, text_rates=(),
+                        header_row=3, first_data_row=4):
+    """The STANDARD sheet, all 21 columns: Opening / Consumed / Balance blocks.
+
+    rows: (lot, hs4, hs8, name, subcat, unit, price, qty, value, rate)
+
+    alt_order swaps the identity columns to the second real client's shape --
+    Items, Sub cat, 4 Digit Hs Code, 8 Digit Hs Code in D-G, and "GDs No" for
+    the GD number. text_rates lists 0-based row offsets whose Balance rate cell
+    is written as the literal STRING "18%" instead of a number.
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = month
+    ws.cell(1, 6, "Opening Stock")
+    for col, text in ((10, "Opening"), (14, "Consumed"), (18, "Balance")):
+        ws.cell(2, col, text)
+
+    ident = ({4: "Items", 5: "Sub cat", 6: "4 Digit Hs Code", 7: "8 Digit Hs Code"}
+             if alt_order else
+             {4: "4 Digit Hs Code", 5: "8 Digit Hs Code", 6: "Description", 7: "Sub Category"})
+    headings = {1: "Claim Month", 2: "GDs No" if alt_order else "GD Number", 3: "GD Date",
+                **ident, 8: "Price", 9: "Unit",
+                10: "Qty", 11: "Exl", 12: "Rate", 13: "S.Tax",
+                14: "Qty", 15: "Consumed Exl", 16: "Rate", 17: "S.Tax",
+                18: "Bal Qty", 19: "Bal Exl", 20: "Rate", 21: "S.Tax"}
+    for col, text in headings.items():
+        ws.cell(header_row, col, text)
+
+    for i, (lot, hs4, hs8, name, subcat, unit, price, qty, value, rate) in enumerate(rows):
+        r = first_data_row + i
+        ws.cell(r, 1, month)
+        ws.cell(r, 2, lot)
+        ws.cell(r, 3, "23-07-2025")
+        if alt_order:
+            ws.cell(r, 4, name); ws.cell(r, 5, subcat)
+            ws.cell(r, 6, hs4);  ws.cell(r, 7, hs8)
+        else:
+            ws.cell(r, 4, hs4);  ws.cell(r, 5, hs8)
+            ws.cell(r, 6, name); ws.cell(r, 7, subcat)
+        ws.cell(r, 8, price)
+        ws.cell(r, 9, unit)
+        ws.cell(r, 10, qty); ws.cell(r, 11, value); ws.cell(r, 12, rate)
+        ws.cell(r, 13, round(value * rate, 2))
+        ws.cell(r, 14, 0); ws.cell(r, 16, rate); ws.cell(r, 17, 0)
+        ws.cell(r, 18, qty); ws.cell(r, 19, value)
+        ws.cell(r, 20, f"{int(rate * 100)}%" if i in text_rates else rate)
+        ws.cell(r, 21, round(value * rate, 2))
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def base_rows(tag):
     """Two lots of one item, plus three singles — 5 rows, 4 items."""
     return [
@@ -881,6 +936,199 @@ def main():
         check("the period supplied with the import is used",
               r.ok and (r.json().get("periodEnd") or "").startswith("2026-06-30"),
               f"http {r.status_code}, periodEnd={r.json().get('periodEnd') if r.ok else '-'}")
+
+        # -- 15. The standard sheet, read by the shipped layout ----------
+        # These cases exist because a real import of two client sheets landed
+        # with every sales-tax rate at zero and an extra phantom item, and the
+        # preview looked plausible throughout.
+        builtin = requests.get(f"{api}/import-profiles",
+                               headers=h, timeout=60,
+                               params={"kind": "OpeningStock", "companyId": company})
+        std = next((x for x in (builtin.json() if builtin.ok else []) if x.get("isDefault")), None)
+        check("the shipped stock layout is available to import with", std is not None)
+        std_params = {"companyId": company, "profileId": std["id"]} if std else params
+
+        # The template we hand a new client must be an EXACT match for the
+        # layout that reads it, or the operator is asked to confirm a mapping
+        # for the very file we published. This is what catches a drift between
+        # the template and DefaultImportLayouts.StockSignature.
+        tpl = Path(__file__).resolve().parent.parent / "myapp-frontend" / "public" / "templates" / "opening-stock-template.xlsx"
+        if tpl.exists():
+            r = upload(f"{api}/spreadsheet-import/identify", h, tpl.read_bytes(),
+                       "opening-stock-template.xlsx", None,
+                       {"companyId": company, "kind": "OpeningStock"})
+            ident_tpl = r.json() if r.ok else {}
+            matched = (ident_tpl.get("matchedProfile") or {}).get("name")
+            check("the shipped template recognises itself with no mapping",
+                  matched is not None,
+                  f"http {r.status_code} matched={matched} "
+                  f"sig={ident_tpl.get('signatureHash')}")
+            r = upload(stock_preview, h, tpl.read_bytes(), "opening-stock-template.xlsx",
+                       None, std_params)
+            tprev = r.json() if r.ok else {}
+            check("and its example rows import cleanly",
+                  r.ok and len(tprev.get("rows", [])) == 3
+                  and all(x["quantity"] > 0 and x["value"] > 0 and x["salesTaxRate"] > 0
+                          for x in tprev.get("rows", [])),
+                  f"http {r.status_code} rows={[(x['itemName'], x['quantity'], x['salesTaxRate']) for x in tprev.get('rows', [])]}")
+        else:
+            skip("the shipped template recognises itself with no mapping",
+                 "template file not present")
+
+        std_rows = [
+            ("GD-STD-1", "8423", "8423.9000:-", f"SCALE PARTS {tag}", "Scale", "Kg", 498.777888, 4037, 2013566.33, 0.18),
+            ("GD-STD-2", "9616", "9616.1000:-", f"ATOMIZER {tag}", "Automizer", "Kg", 2438.7608, 400, 975504.32, 0.25),
+        ]
+        std_tax = round(2013566.33 * 0.18 + 975504.32 * 0.25, 2)
+
+        # (a) The shipped layout reads the standard sheet with NO mapping, and
+        #     carries a rate. The mapping form used to offer no tax-rate box at
+        #     all, so a hand-mapped sheet could not carry one.
+        r = upload(stock_preview, h, full_stock_workbook(std_rows), "stock.xlsx", None, std_params)
+        sp = r.json() if r.ok else {}
+        check("the shipped layout reads the standard sheet unmapped",
+              r.ok and len(sp.get("rows", [])) == 2,
+              f"http {r.status_code} items={len(sp.get('rows', []))}")
+        check("it carries the sales-tax rate",
+              bool(sp.get("rows")) and all(x["salesTaxRate"] > 0 for x in sp["rows"]),
+              [x["salesTaxRate"] for x in sp.get("rows", [])])
+        check("the tax is value x rate",
+              abs(sp.get("totalSalesTax", 0) - std_tax) < 0.05,
+              f"tax={sp.get('totalSalesTax')} expected={std_tax}")
+        check("the sheet own tax column is not contradicted",
+              not any("sales-tax column totals" in w for w in sp.get("warnings", [])),
+              [w for w in sp.get("warnings", []) if "sales-tax" in w])
+
+        # (b) A rate typed over as TEXT. On the client sheet two of 120 rows
+        #     held the literal string "18%", which parsed as nothing -- and
+        #     because a merged item rate is weighted by value, those two rows
+        #     pulled a whole HS code from 18% to 14.74% and understated the tax
+        #     by 115,270.18. A plausible wrong number, not a crash.
+        r = upload(stock_preview, h, full_stock_workbook(std_rows, text_rates=(0, 1)),
+                   "stock.xlsx", None, std_params)
+        tp = r.json() if r.ok else {}
+        check("a rate written as the text 18% is still read as 18%",
+              r.ok and bool(tp.get("rows")) and all(x["salesTaxRate"] > 0 for x in tp["rows"]),
+              [x["salesTaxRate"] for x in tp.get("rows", [])])
+        check("a text rate gives the same tax as a numeric one",
+              abs(tp.get("totalSalesTax", 0) - std_tax) < 0.05,
+              f"text={tp.get('totalSalesTax')} numeric={std_tax}")
+
+        # (c) The second client column order. Both HS codes, the item name and
+        #     the GD number are found by their HEADING, so ONE built-in layout
+        #     reads both shapes -- and it says where it found them, because a
+        #     silent relocation is how a wrong column becomes a confident wrong
+        #     import.
+        r = upload(stock_preview, h, full_stock_workbook(std_rows, alt_order=True),
+                   "stock.xlsx", None, std_params)
+        ap = r.json() if r.ok else {}
+        check("the other column order reads with the same layout",
+              r.ok and len(ap.get("rows", [])) == 2,
+              f"http {r.status_code} items={len(ap.get('rows', []))}")
+        check("its item names are names, not HS codes",
+              bool(ap.get("rows")) and all(tag in (x.get("itemName") or "") for x in ap["rows"]),
+              [x.get("itemName") for x in ap.get("rows", [])])
+        check("its HS codes are read from the swapped column",
+              sorted((x.get("hsCode") or "") for x in ap.get("rows", [])) == ["8423.9000", "9616.1000"],
+              [x.get("hsCode") for x in ap.get("rows", [])])
+        check("the relocation is reported rather than silent",
+              any("read from column" in w for w in ap.get("warnings", [])),
+              ap.get("warnings"))
+        check("the totals are identical to the standard order",
+              abs(ap.get("totalValue", 0) - sp.get("totalValue", 0)) < 0.05
+              and abs(ap.get("totalSalesTax", 0) - sp.get("totalSalesTax", 0)) < 0.05,
+              f"{ap.get('totalValue')}/{ap.get('totalSalesTax')} vs "
+              f"{sp.get('totalValue')}/{sp.get('totalSalesTax')}")
+
+        # (d) The heading row is not data, whatever the mapping says. Leaving
+        #     the scaffold first-data-row of 2 against a heading row of 3
+        #     imported the heading "Description" as a product: one extra item
+        #     and a second blocking error on an otherwise correct preview.
+        std_mapping = json.loads(std["mappingJson"]) if std else dict(STOCK_MAPPING)
+        r = upload(stock_preview, h, full_stock_workbook(std_rows), "stock.xlsx",
+                   {"mappingJson": json.dumps(dict(std_mapping, firstDataRow=3))},
+                   {"companyId": company})
+        hp = r.json() if r.ok else {}
+        check("a first-data-row on the heading row does not import the heading",
+              r.ok and hp.get("sourceRowCount") == 2,
+              f"rows={hp.get('sourceRowCount')} items={len(hp.get('rows', []))}")
+        check("and it says the row was corrected",
+              any("heading row" in w for w in hp.get("warnings", [])), hp.get("warnings"))
+
+        # (e) Merging on the HS code is right for the stock position and lossy
+        #     for the row, so every source row is kept as a lot beside it.
+        lot_rows = [
+            ("GD-LOT-1", "8513", "8513.1090:-", f"LED ONE {tag}", "Electrical", "Pcs", 10.5, 46, 30000, 0.18),
+            ("GD-LOT-2", "8513", "8513.1090:-", f"LED TWO {tag}", "Electrical", "Pcs", 11.5, 110, 71191, 0.18),
+        ]
+        r = upload(stock_preview, h, full_stock_workbook(lot_rows), "stock.xlsx", None, std_params)
+        lp = r.json() if r.ok else {}
+        one = (lp.get("rows") or [{}])[0]
+        lots = one.get("lots") or []
+        check("two names under one code are still one stock item",
+              len(lp.get("rows", [])) == 1, f"{len(lp.get('rows', []))} items")
+        check("but both source rows are carried as lots", len(lots) == 2, f"{len(lots)} lots")
+        check("each lot keeps its own product name",
+              sorted((l.get("itemNameOnSheet") or "") for l in lots) == sorted(x[3] for x in lot_rows),
+              [l.get("itemNameOnSheet") for l in lots])
+        check("each lot keeps its GD number, date and landed price",
+              bool(lots) and all(l.get("lotRef") and l.get("lotDate") and l.get("unitPrice")
+                                 for l in lots),
+              [(l.get("lotRef"), l.get("lotDate"), l.get("unitPrice")) for l in lots])
+        check("each lot keeps the opening figures behind the balance",
+              bool(lots) and all(l.get("openingQuantity") is not None for l in lots),
+              [l.get("openingQuantity") for l in lots])
+        check("the lots add up to the item",
+              abs(sum(float(l["balanceQuantity"]) for l in lots) - float(one.get("quantity") or 0)) < 0.001,
+              f"item={one.get('quantity')}")
+
+        lot_co = make_company(api, h, f"Sheet Import Lots {tag}")
+        try:
+            lbody = {
+                "companyId": lot_co,
+                "fileSha256": lp["fileSha256"], "fileName": "stock.xlsx",
+                "fileSizeBytes": lp["fileSizeBytes"],
+                "asOfDate": date(2026, 7, 1).isoformat(),
+                "postInventoryValue": False, "enableInventoryTracking": True,
+                "rows": [{"itemName": x["itemName"], "hsCode": x["hsCode"],
+                          "isHsCodePartial": x["isHsCodePartial"], "unit": x["unit"],
+                          "quantity": x["quantity"], "value": x["value"],
+                          "salesTaxRate": x["salesTaxRate"], "lotRefs": x["lotRefs"],
+                          "itemTypeId": x["itemTypeId"], "lots": x["lots"]}
+                         for x in lp["rows"]],
+            }
+            r = requests.post(stock_commit, headers=h, timeout=300, json=lbody)
+            lr = r.json() if r.ok else {}
+            check("committing writes the lots alongside the balance",
+                  r.ok and lr.get("lotsWritten") == 2,
+                  f"http {r.status_code} lots={lr.get('lotsWritten')}")
+
+            # Re-importing a corrected sheet SETS the balance rather than adding
+            # to it, so the lots have to be replaced too -- leaving the previous
+            # sheet rows beside the new ones would describe two sheets at once.
+            lbody2 = dict(lbody, fileSha256=lp["fileSha256"][:-1]
+                          + ("0" if lp["fileSha256"][-1] != "0" else "1"))
+            r = requests.post(stock_commit, headers=h, timeout=300, json=lbody2)
+            lr2 = r.json() if r.ok else {}
+            check("re-importing replaces the lots rather than doubling them",
+                  r.ok and lr2.get("lotsWritten") == 2,
+                  f"http {r.status_code} lots={lr2.get('lotsWritten')}")
+
+            # A commit carrying no lots still imports. An older client, or a
+            # hand-built request, must not be refused for leaving them out.
+            nolots = make_company(api, h, f"Sheet Import NoLots {tag}")
+            try:
+                r = requests.post(stock_commit, headers=h, timeout=300, json=dict(
+                    lbody, companyId=nolots, fileSha256="d" * 64,
+                    rows=[{k: v for k, v in row.items() if k != "lots"}
+                          for row in lbody["rows"]]))
+                check("a commit with no lot detail still imports the balance",
+                      r.ok and (r.json().get("openingBalancesWritten") or 0) == 1,
+                      f"http {r.status_code}: {r.text[:120]}")
+            finally:
+                requests.delete(f"{api}/companies/{nolots}", headers=h, timeout=300)
+        finally:
+            requests.delete(f"{api}/companies/{lot_co}", headers=h, timeout=300)
 
         # ── 8. Isolation ────────────────────────────────────────────────
         r = upload(stock_preview, h, good, "stock.xlsx", form, {"companyId": 999999})

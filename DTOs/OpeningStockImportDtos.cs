@@ -29,6 +29,39 @@ namespace MyApp.Api.DTOs
         public const string Error = "error";
     }
 
+    /// <summary>
+    /// One row of the source sheet, as read. Carried on both the preview and
+    /// the commit so a merged item still says which customs declarations, at
+    /// which landed costs, add up to it. Persisted as
+    /// <c>Models.OpeningStockLot</c>; nothing derives the stock position from
+    /// these figures.
+    /// </summary>
+    public class OpeningStockLotDto
+    {
+        public int SourceRow { get; set; }
+        public string ItemNameOnSheet { get; set; } = "";
+        public string? HsCode { get; set; }
+        public string? LotRef { get; set; }
+        public DateTime? LotDate { get; set; }
+        public string? Unit { get; set; }
+
+        /// <summary>Landed unit cost as STATED on the row.</summary>
+        public decimal? UnitPrice { get; set; }
+
+        public decimal? OpeningQuantity { get; set; }
+        public decimal? OpeningValueExcludingTax { get; set; }
+        /// <summary>Rate as a PERCENTAGE (18), not the sheet's fraction.</summary>
+        public decimal? OpeningSalesTaxRate { get; set; }
+
+        public decimal? ConsumedQuantity { get; set; }
+        public decimal? ConsumedValueExcludingTax { get; set; }
+        public decimal? ConsumedSalesTaxRate { get; set; }
+
+        public decimal BalanceQuantity { get; set; }
+        public decimal BalanceValueExcludingTax { get; set; }
+        public decimal BalanceSalesTaxRate { get; set; }
+    }
+
     /// <summary>An existing item type offered as a choice on an ambiguous row.</summary>
     public class OpeningStockCandidateDto
     {
@@ -75,6 +108,9 @@ namespace MyApp.Api.DTOs
         /// <summary>Lot references behind this item, kept as the opening
         /// balance's note.</summary>
         public string? LotRefs { get; set; }
+
+        /// <summary>Every source row behind this item, in sheet order.</summary>
+        public List<OpeningStockLotDto> Lots { get; set; } = new();
 
         /// <summary>One of <see cref="OpeningStockRowStatus"/>.</summary>
         public string Status { get; set; } = OpeningStockRowStatus.WillCreate;
@@ -131,6 +167,13 @@ namespace MyApp.Api.DTOs
         public decimal SalesTaxRate { get; set; }
         public string? LotRefs { get; set; }
 
+        /// <summary>
+        /// The source rows behind this item. Optional: a caller that omits them
+        /// still imports the balance, it just keeps no lot detail — which is
+        /// what a hand-built request or an older client will do.
+        /// </summary>
+        public List<OpeningStockLotDto> Lots { get; set; } = new();
+
         /// <summary>Set to reuse that item type; null to create a new one. On an
         /// ambiguous row this carries the operator's choice.</summary>
         public int? ItemTypeId { get; set; }
@@ -178,6 +221,9 @@ namespace MyApp.Api.DTOs
         public int ItemTypesCreated { get; set; }
         public int ItemTypesUpdated { get; set; }
         public int OpeningBalancesWritten { get; set; }
+
+        /// <summary>Source sheet rows kept alongside those balances.</summary>
+        public int LotsWritten { get; set; }
         public int RowsSkippedAlreadyImported { get; set; }
         public decimal TotalQuantity { get; set; }
         public decimal TotalValueExcludingTax { get; set; }

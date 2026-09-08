@@ -276,6 +276,86 @@ branch in the parser.
   non-zero openings + no lock date).
 - Operator runbook: `SPREADSHEET_IMPORT_GUIDE.md`.
 
+### 5b-3b. THE opening stock sheet is one layout, found by heading (2026-09-08)
+
+There is exactly ONE built-in opening-stock layout, published as
+`myapp-frontend/public/templates/opening-stock-template.xlsx` and described in
+`SPREADSHEET_IMPORT_GUIDE.md`. Do not add a second layout for a client whose
+column order differs.
+
+- **`LotRowsMapping.HeaderAliases` corrects the column numbers against the
+  sheet's own heading row.** Numbers stay the contract; aliases only relocate.
+  Two real accountants agreed on everything from the Price column rightwards and
+  swapped the four identity columns (`Items, Sub cat, 4 Digit Hs Code, 8 Digit Hs
+  Code` vs `4 Digit Hs Code, 8 Digit Hs Code, Description, Sub Category`), and
+  titled one column `GDs No` against `GD Number`. Fixed numbers made the second
+  file import the heading `9506` as a product name.
+- **Aliases are resolved for ALL fields first and applied together.** Applying
+  them one at a time cannot express a SWAP — whichever moved first found the
+  other's column occupied and declined, leaving the layout half corrected. A
+  heading matching zero or more than one column leaves the mapped number alone,
+  which is what makes it safe to alias `balanceQty` (`Bal Qty` is unique on one
+  sheet, and plain `Qty` appears three times on the other).
+- **Columns 10-21 stay pinned by POSITION.** `Qty`, `Rate` and `S.Tax` each
+  appear once per Opening / Consumed / Balance block, so no heading can say which
+  block is meant; the row-2 band labels are for humans. Only the BALANCE block
+  drives the import.
+- **Every relocation is a preview warning.** A silently relocated column is how a
+  wrong column becomes a confident wrong import.
+- **The heading row is never data**, whatever `firstDataRow` says. `ReadLots`
+  starts at `max(firstDataRow, headerRow + 1)` and warns. The scaffold's old
+  `firstDataRow: 2` against a `headerRow: 3` imported the heading "Description"
+  as a product: one phantom item and a second blocking error.
+- **`StockSignature` / `StockTokens` are the TEMPLATE's own fingerprint**, so the
+  file we hand a client is an exact match. Regenerate both from the template (via
+  the identify step) whenever its headings change; the suite's "the shipped
+  template recognises itself" case is what catches drift. Keep `StockTokens`
+  TIGHT — similarity is Jaccard, so padding it with wording variants LOWERS every
+  score (pooling both clients' vocabularies scored them 0.76/0.67; the template's
+  own 25 tokens score them 0.92/0.68). Wording belongs in `headerAliases`.
+- **`DefaultImportLayouts.SeedAsync` upgrades a built-in whose CURRENT version was
+  written by `"system"`**, not `CurrentVersion == 1` — the version test froze the
+  moment the seeder itself shipped a v2. Its `changed` test covers every field the
+  seeder owns (mapping, name, signature, tokens, notes); testing the mapping alone
+  silently skipped a release that changed only the signature.
+- **A near-match is offered PRE-SELECTED in the UI.** Selecting nothing fell back
+  to `scaffold()`, a five-column stub with no tax, price or lot columns — so an
+  operator who corrected the boxes they could see still imported at 0% tax. The
+  scaffold is now the house template, and the preview reports what it read.
+- **Percent TEXT is a number.** `Helpers/ExcelImport/CellNumber.cs` is the single
+  text-to-number parser for both workbook readers, and a trailing `%` means a
+  percentage. Two rows of 120 held the literal string `18%`; they parsed as
+  nothing and, because a merged item's rate is weighted by value, dragged HS
+  8450.9000 from 18% to 14.74% and understated the tax by 115,270.18. Nothing
+  looked broken.
+- Suite: `scripts/test_spreadsheet_import.py` section 15.
+
+### 5b-3c. A merged stock line keeps its rows (2026-09-08)
+
+Grouping on the HS code is still correct (see 5b-3) and still lossy for
+everything else on the row. `Models/OpeningStockLot.cs` keeps one row per source
+sheet row against the balance it fed: its own product name, GD number, GD date,
+landed unit price, unit, and its own opening / consumed / balance triple.
+
+- **Nothing derives stock from this table.** `StockValuation`, the opening
+  balance and the dashboard are untouched — it is the audit trail that says which
+  declarations at which costs add up to the position. Do not start reading
+  quantities or values from it.
+- **Lots are SET, not added**, exactly as the balance is: a re-import deletes the
+  balance's existing lots before writing the new ones, or the two would describe
+  different sheets.
+- **The FK cascades from `OpeningStockBalance` and NOT from `Company`** — the
+  balance already restricts on Company, and a second path gives SQL Server two
+  cascade routes to one table. `CompanyService.DeleteAsync` needs no change: its
+  `ExecuteDeleteAsync` on the balances cascades in the database.
+- **`ImportRunId` is stamped after the run is inserted**, inside the same
+  transaction, so a lot never carries a null pointing at nothing.
+- **`OpeningStockCommitRowDto.Lots` is OPTIONAL.** Commit takes the reviewed rows
+  rather than the file, so the frontend passes them straight back; a caller that
+  omits them still imports the balance and simply keeps no detail.
+- On the two client sheets this preserves 112 product names each, against 78 and
+  57 stock lines.
+
 ### 5b-4. Stock carries a VALUE, not just a quantity (2026-09-02)
 
 `Helpers/StockValuation.cs` is the only place stock is valued. WEIGHTED AVERAGE,
@@ -872,7 +952,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Spreadsheet import (layouts, file checks, stock, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (101 checks) |
+| Spreadsheet import (layouts, heading aliases, stock, lots, ledger, list order) | `python scripts/test_spreadsheet_import.py` | `all PASS` (126 checks) |
 | Bill line pricing, advance tax (236G/236H) + further tax s.3(1A), incl. edit and GL posting | `python scripts/test_bill_pricing_advance_tax.py` | `102/102 checks passed` |
 | Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |

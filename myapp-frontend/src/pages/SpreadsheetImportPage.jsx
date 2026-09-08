@@ -43,8 +43,23 @@ const FIELDS = {
     { path: "columns.hsCodeShort", label: "HS code (4-digit)", kind: "col" },
     { path: "columns.unit", label: "Unit", kind: "col" },
     { path: "columns.balanceQty", label: "Closing quantity", kind: "col", required: true },
-    { path: "columns.balanceValue", label: "Closing value", kind: "col" },
+    { path: "columns.balanceValue", label: "Closing value (excl. tax)", kind: "col" },
+    // Without these two the import ran at 0% tax and said nothing: the layout
+    // supported them, the form did not, so a hand-mapped sheet could not carry
+    // a rate at all. The amount is read only to be checked against value x rate.
+    { path: "columns.balanceTaxRate", label: "Closing tax rate", kind: "col", hint: "0.18 or 18%" },
+    { path: "columns.balanceTax", label: "Closing tax amount", kind: "col", hint: "compared only" },
+    { path: "columns.unitPrice", label: "Landed unit price", kind: "col", hint: "kept per lot" },
     { path: "columns.lotRef", label: "Lot / GD number", kind: "col" },
+    { path: "columns.lotDate", label: "Lot / GD date", kind: "col" },
+    // History behind the closing figure. Read and kept per lot; never used to
+    // work out the stock position.
+    { path: "columns.openingQty", label: "Opening quantity", kind: "col", hint: "history only" },
+    { path: "columns.openingValue", label: "Opening value", kind: "col", hint: "history only" },
+    { path: "columns.openingTaxRate", label: "Opening tax rate", kind: "col", hint: "history only" },
+    { path: "columns.consumedQty", label: "Consumed quantity", kind: "col", hint: "history only" },
+    { path: "columns.consumedValue", label: "Consumed value", kind: "col", hint: "history only" },
+    { path: "columns.consumedTaxRate", label: "Consumed tax rate", kind: "col", hint: "history only" },
     { path: "headerRow", label: "Heading row", kind: "row" },
     { path: "firstDataRow", label: "First data row", kind: "row", required: true },
     { path: "hsCodeStripSuffix", label: "Strip from HS code", kind: "text", hint: "e.g. :-" },
@@ -103,11 +118,23 @@ const set = (obj, path, value) => {
 const scaffold = (kind, sheets) => {
   const first = sheets?.[0];
   if (kind === "OpeningStock") {
+    // The house template, not a five-column stub. The stub was reached whenever
+    // a workbook scored close to the built-in without matching it exactly, and
+    // it silently dropped the tax, price and lot columns — so an operator who
+    // corrected the four boxes they could see still imported at 0% tax. Start
+    // from the shape every one of these sheets actually has and let them adjust.
     return {
       sheetSelect: { mode: "byIndex", index: first?.index ?? 0 },
-      headerRow: 1, firstDataRow: 2,
-      columns: { itemName: 1, hsCodeFull: 2, unit: 3, balanceQty: 4, balanceValue: 5 },
-      hsCodeStripSuffix: "",
+      headerRow: 3, firstDataRow: 4,
+      columns: {
+        lotRef: 2, lotDate: 3,
+        hsCodeShort: 4, hsCodeFull: 5,
+        itemName: 6, unitPrice: 8, unit: 9,
+        openingQty: 10, openingValue: 11, openingTaxRate: 12,
+        consumedQty: 14, consumedValue: 15, consumedTaxRate: 16,
+        balanceQty: 18, balanceValue: 19, balanceTaxRate: 20, balanceTax: 21,
+      },
+      hsCodeStripSuffix: ":-",
     };
   }
   return {
@@ -239,9 +266,19 @@ export default function SpreadsheetImportPage() {
         setProfileId(String(data.matchedProfile.profileId));
         notify(`Recognised as "${data.matchedProfile.name}".`, "success");
       } else if (data.candidates?.length) {
-        // Close, not certain — offered, never assumed, because a wrong layout
-        // reads amounts out of the wrong column without complaining.
-        setProfileId("");
+        // Close, not certain. This used to select nothing, on the reasoning
+        // that a wrong layout reads amounts out of the wrong column without
+        // complaining — but selecting nothing fell back to the hand-editable
+        // scaffold, which is a WORSE described layout, and that is exactly how
+        // a real import landed with every sales-tax rate at zero. The layout
+        // is now offered pre-selected, and the preview says which columns it
+        // read and where it found them, so a wrong one is visible rather than
+        // silent. The operator can still switch it or edit the mapping.
+        setProfileId(String(data.candidates[0].profileId));
+        notify(
+          `Closest layout is "${data.candidates[0].name}" — check the columns in the preview before importing.`,
+          "warning",
+        );
       } else if (data.defaultProfile) {
         setProfileId(String(data.defaultProfile.profileId));
       }
@@ -311,6 +348,10 @@ export default function SpreadsheetImportPage() {
             unit: r.unit, quantity: r.quantity, value: r.value,
             salesTaxRate: r.salesTaxRate,
             lotRefs: r.lotRefs, itemTypeId: r.itemTypeId,
+            // Passed straight back so the source rows behind a merged item are
+            // stored with it. Commit takes the reviewed rows, not the file, so
+            // dropping these here would lose the lot detail entirely.
+            lots: r.lots,
           })),
         });
         setResult(data);
@@ -415,6 +456,22 @@ export default function SpreadsheetImportPage() {
             <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
               Excel only (.xls, .xlsx, .xlsm), up to 10 MB. Close the file in Excel first.
             </p>
+            {/* The published template. A new client sent this shape imports with
+                no mapping at all, so handing it over is the cheapest onboarding
+                step there is. BASE_URL, not a bare path: this app is served
+                under /admin/ in the customer build. */}
+            {isStock && (
+              <p style={{ margin: "0.35rem 0 0", fontSize: 12.5 }}>
+                <a href={`${(import.meta.env.BASE_URL || "/")}templates/opening-stock-template.xlsx`}
+                   download
+                   style={{ color: colors.blue, fontWeight: 600 }}>
+                  Download the standard opening stock sheet
+                </a>
+                <span style={{ color: colors.textSecondary }}>
+                  {" "}— send this to a new business and their file imports unmapped.
+                </span>
+              </p>
+            )}
             {busy === "identify" && <p style={{ fontSize: 13 }}>Reading the workbook…</p>}
           </div>
 

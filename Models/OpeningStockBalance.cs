@@ -50,5 +50,13 @@ namespace MyApp.Api.Models
         // Navigation
         public Company Company { get; set; } = null!;
         public ItemType ItemType { get; set; } = null!;
+
+        /// <summary>
+        /// The sheet rows this position was built from — one per customs lot,
+        /// written by the spreadsheet import and replaced wholesale on a
+        /// re-import. Empty for a balance typed in by hand. Nothing derives the
+        /// figures above from these; see <see cref="OpeningStockLot"/>.
+        /// </summary>
+        public ICollection<OpeningStockLot> Lots { get; set; } = new List<OpeningStockLot>();
     }
 }

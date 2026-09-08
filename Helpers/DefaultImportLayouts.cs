@@ -17,8 +17,10 @@ namespace MyApp.Api.Helpers
     ///
     /// Two rules keep them safe to re-seed on every startup:
     ///
-    ///   • CREATE ONLY. An existing built-in is never rewritten, so an operator
-    ///     who corrected a column keeps their correction across restarts.
+    ///   • AN OPERATOR'S EDIT IS NEVER OVERWRITTEN. A built-in whose current
+    ///     version was written by the seeder ("system") is upgraded in place
+    ///     when the shipped mapping moves on; one an operator has edited keeps
+    ///     their mapping for ever.
     ///   • NO DATES in the mapping. A period belongs to an import, not to a
     ///     layout — baking 2025-2026 into the shipped default would make it
     ///     wrong the following year. The ledger importer takes the period from
@@ -26,7 +28,7 @@ namespace MyApp.Api.Helpers
     /// </summary>
     public static class DefaultImportLayouts
     {
-        public const string StockName = "Standard stock sheet (built-in)";
+        public const string StockName = "Standard opening stock sheet (built-in)";
         public const string LedgerName = "Standard customer ledger (built-in)";
 
         /// <summary>
@@ -47,33 +49,86 @@ namespace MyApp.Api.Helpers
         /// "recognises its own layout after every value changes" case is what
         /// catches a drift here.
         /// </summary>
-        private const string StockSignature = "55fb6f8f6098d0aa5b31056229d685fa20aaecfd223b8848385879d97f295352";
+        private const string StockSignature = "3e42f32fcbc8858cf8cbdeb437cdf5e769abc10acc4e2ca0e9acb29094885b14";
+
+        /// <summary>
+        /// Heading vocabulary of the published template, exactly as it
+        /// fingerprints — so the file we hand a new client is an EXACT match for
+        /// the layout that reads it. Regenerate both this and
+        /// <see cref="StockSignature"/> from
+        /// <c>myapp-frontend/public/templates/opening-stock-template.xlsx</c>
+        /// whenever that template's headings change.
+        ///
+        /// Kept TIGHT on purpose. Similarity is Jaccard, so padding this with
+        /// every wording variant a real accountant might use LOWERS the score
+        /// for all of them — union grows faster than intersection. Pooling the
+        /// two client sheets' vocabularies into it scored them 0.76 and 0.67;
+        /// the template's own 25 tokens score the same two files 0.92 and 0.68.
+        /// Wording differences belong in <c>headerAliases</c>, which is where
+        /// they actually change how a column is read.
+        /// </summary>
         private const string StockTokens =
-            "alpha|balance|catory|claimed|code|consumed|cost|date|digit|excl|excluding|exl|good|items|month|number|opening|price|qty|rate|sold|stock|sub|tax|trader|unit|vat";
+            "bal|balance|category|claim|code|consumed|cost|date|description|digit|excl|exl|good|month|number|opening|price|qty|rate|sold|stock|sub|tax|unit|vat";
 
         private const string LedgerSignature = "5c6c11edc28753e5378470c5917ed30ef5cc24e4f637e410b0fb3d1dd6b1977b";
         private const string LedgerTokens =
             "accounts|acount|alpha|balance|chart|closing|credit|date|debit|ledger|name|opening|particulars|period|receivable|traders";
 
         /// <summary>
-        /// Customs-lot stock sheet: a title band, headings on row 3, one row per
-        /// lot from row 4. HS codes carry a ":-" tail, and the sub-category
-        /// column is the accountant's own grouping with no home in the system.
+        /// THE standard opening-stock sheet. A title band, headings on row 3,
+        /// one row per customs lot from row 4, and three blocks of the same four
+        /// figures — Opening, Consumed, Balance — from column 10.
+        ///
+        /// The column NUMBERS are the published template (see
+        /// <c>SPREADSHEET_IMPORT_GUIDE.md</c>): the identity columns run GD
+        /// number, GD date, 4-digit code, 8-digit code, description,
+        /// sub-category, price, unit. <c>headerAliases</c> then corrects them
+        /// against the sheet's own headings, which is what lets this ONE layout
+        /// read the variant that puts the product name and sub-category BEFORE
+        /// the two HS codes and titles them "Items" / "GDs No". Both real
+        /// client workbooks import with no mapping at all.
+        ///
+        /// Aliases are given for the identity columns only, on purpose. From
+        /// column 10 the headings repeat — "Qty", "Rate" and "S.Tax" appear once
+        /// per block — so an alias there would match three columns and be
+        /// declined anyway; those stay pinned by number, and the row-2 band
+        /// labels (Opening / Consumed / Balance) are what a human reads to check
+        /// them. "Bal Qty" and "Consumed Exl" are aliased because they ARE
+        /// unique where a sheet spells them out.
+        ///
+        /// Only the BALANCE block drives the import. Opening and Consumed are
+        /// read to be kept per lot as history (Models.OpeningStockLot) and never
+        /// feed the stock position. The S.Tax amount is mapped for comparison
+        /// only — it is always derived from value x rate.
         /// </summary>
         private const string StockMapping = """
         {
-          "sheetSelect": { "mode": "byHeaderText", "mustContain": ["GD Number"] },
+          "sheetSelect": { "mode": "byHeaderText", "mustContain": ["8 Digit Hs Code"] },
           "headerRow": 3,
           "firstDataRow": 4,
           "columns": {
             "lotRef": 2, "lotDate": 3,
             "hsCodeShort": 4, "hsCodeFull": 5,
-            "itemName": 6, "unit": 9,
+            "itemName": 6, "unitPrice": 8, "unit": 9,
+            "openingQty": 10, "openingValue": 11, "openingTaxRate": 12,
+            "consumedQty": 14, "consumedValue": 15, "consumedTaxRate": 16,
             "balanceQty": 18, "balanceValue": 19,
             "balanceTaxRate": 20, "balanceTax": 21
           },
+          "headerAliases": {
+            "lotRef": ["GD Number", "GDs No", "GD No", "GDs Number", "GD #"],
+            "lotDate": ["GD Date"],
+            "hsCodeShort": ["4 Digit Hs Code", "4 Digit HS Code"],
+            "hsCodeFull": ["8 Digit Hs Code", "8 Digit HS Code"],
+            "itemName": ["Description", "Items", "Item", "Item Name", "Particulars"],
+            "unitPrice": ["Price", "Unit Price"],
+            "unit": ["Unit", "UOM"],
+            "balanceQty": ["Bal Qty", "Balance Qty"],
+            "balanceValue": ["Bal Exl", "Bal Excl", "Balance Exl"],
+            "consumedValue": ["Consumed Exl", "Consumed Excl"]
+          },
           "hsCodeStripSuffix": ":-",
-          "ignoreColumns": [7]
+          "ignoreColumns": [1, 7, 13, 17]
         }
         """;
 
@@ -119,7 +174,7 @@ namespace MyApp.Api.Helpers
                 (Kind: ImportKinds.OpeningStock, Layout: ImportLayouts.LotRows,
                  Name: StockName, Mapping: StockMapping,
                  Hash: StockSignature, Tokens: StockTokens,
-                 Notes: "Ships with the product. Customs-lot stock sheet: headings on row 3, one row per lot below. Edit and save your own copy if your accountant's template differs."),
+                 Notes: "Ships with the product. Customs-lot stock sheet: headings on row 3, one row per lot below, Opening/Consumed/Balance blocks from column 10. Finds the item name, HS code, GD number, price and unit by their headings, so either column order imports unchanged. Edit and save your own copy if your accountant's template differs."),
 
                 (Kind: ImportKinds.CustomerLedger, Layout: ImportLayouts.IndexPlusPerClientSheets,
                  Name: LedgerName, Mapping: LedgerMapping,
@@ -143,27 +198,51 @@ namespace MyApp.Api.Helpers
                     // gaining its tax-rate columns, say — would then reach new
                     // installations and never the ones that needed it.
                     //
-                    // So: upgrade it, but only while it is still ours. Version 1
-                    // means nobody has edited it, since any operator edit bumps
-                    // the version and writes history. An edited built-in keeps
-                    // the operator's mapping.
-                    var untouched = existing.CurrentVersion == 1;
-                    var changed = !string.Equals(existing.MappingJson, w.Mapping, StringComparison.Ordinal);
+                    // So: upgrade it, but only while it is still ours. "Ours"
+                    // was originally "version 1", which broke the moment the
+                    // seeder itself shipped a second version — the third one
+                    // could then never reach an installation that had taken the
+                    // second. Authorship is the durable test: the seeder writes
+                    // "system", every operator edit writes the operator's name,
+                    // so a built-in nobody has touched still has a system-
+                    // authored current version however many times we have
+                    // improved it. An edited built-in keeps the operator's
+                    // mapping.
+                    var currentAuthor = await db.ImportProfileVersions.AsNoTracking()
+                        .Where(v => v.ImportProfileId == existing.Id && v.Version == existing.CurrentVersion)
+                        .Select(v => v.CreatedBy)
+                        .FirstOrDefaultAsync(ct);
+
+                    // No history row at all means a hand-inserted or very old
+                    // built-in; version 1 is the only safe thing to assume ours.
+                    var untouched = currentAuthor == null
+                        ? existing.CurrentVersion == 1
+                        : string.Equals(currentAuthor, "system", StringComparison.Ordinal);
+                    // Every field the seeder owns, not just the mapping. Testing
+                    // the mapping alone silently skipped a release that changed
+                    // only the published signature, so the shipped template
+                    // stopped recognising itself.
+                    var changed = !string.Equals(existing.MappingJson, w.Mapping, StringComparison.Ordinal)
+                                  || !string.Equals(existing.Name, w.Name, StringComparison.Ordinal)
+                                  || !string.Equals(existing.SignatureHash, w.Hash, StringComparison.OrdinalIgnoreCase)
+                                  || !string.Equals(existing.TokenSignature, w.Tokens, StringComparison.Ordinal)
+                                  || !string.Equals(existing.Notes, w.Notes, StringComparison.Ordinal);
 
                     if (untouched && changed)
                     {
                         existing.MappingJson = w.Mapping;
                         existing.Layout = w.Layout;
+                        existing.Name = w.Name;
                         existing.SignatureHash = w.Hash;
                         existing.TokenSignature = w.Tokens;
                         existing.Notes = w.Notes;
-                        existing.CurrentVersion = 2;
+                        existing.CurrentVersion += 1;
                         existing.UpdatedAt = DateTime.UtcNow;
 
                         db.ImportProfileVersions.Add(new ImportProfileVersion
                         {
                             ImportProfileId = existing.Id,
-                            Version = 2,
+                            Version = existing.CurrentVersion,
                             Layout = w.Layout,
                             MappingJson = w.Mapping,
                             ChangeNote = "Updated to the version shipped with this release",

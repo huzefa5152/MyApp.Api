@@ -289,6 +289,51 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — One standard opening stock sheet, and the tax it was losing
+
+- **Opening stock imports were quietly running at 0% sales tax.** The layout
+  supported a tax-rate column and the mapping form had no box for it, so any
+  workbook mapped by hand imported with no rate at all — the Rate column showed
+  a dash and Sales tax showed 0.00 on an otherwise correct preview. The form now
+  has boxes for the closing rate and amount, the landed price, the GD date, and
+  the Opening and Consumed blocks. On the two client sheets this recovered
+  13,662,430.93 and 12,737,692.46 of sales tax.
+- **A rate typed as text is read again.** Two rows of one sheet held the literal
+  string `18%` where the rest held `0.18`. Those parsed as nothing, and because a
+  merged item's rate is weighted by value they pulled a whole HS code from 18% to
+  14.74% — understating the tax by 115,270.18 with no error anywhere. Percent
+  text is now read as a percentage.
+- **The heading row can no longer be imported as a product.** Leaving "first data
+  row" at 2 against a heading row of 3 added a phantom item called "Description"
+  and a second blocking error. The heading row is now skipped whatever the mapping
+  says, and the preview says it corrected it.
+- **One built-in layout now reads both real column orders.** The item name, both
+  HS codes, the GD number, the GD date, the price and the unit are found by their
+  HEADING, so a sheet running *Items, Sub cat, 4 Digit Hs Code, 8 Digit Hs Code*
+  imports exactly as well as one running the codes first — and `GDs No` is
+  accepted for `GD Number`. Every relocation is reported ("4 Digit Hs Code was
+  read from column 6 instead of column 4"), because a silent one is how a wrong
+  column becomes a confident wrong import. The second client's file previously
+  failed outright with "the sheet this layout expects was not found".
+- **A close-but-not-exact layout is now offered pre-selected** instead of falling
+  back to a five-column stub. That fallback was the actual cause of the 0% tax
+  imports: the operator corrected the four boxes they could see and never knew
+  the tax columns had been dropped.
+- **A standard sheet you can send to a new client.** Download it from the top of
+  the Spreadsheet Import screen. It is recognised automatically — no mapping —
+  and carries a "how to fill this in" sheet: which three columns decide the stock,
+  and the five rules that stop an import failing (a current 8-digit HS code on
+  every row, rates as numbers, one row per GD, closing not opening figures, no
+  blank rows inside the data).
+- **Nothing on the sheet is thrown away any more.** Products sharing one HS code
+  still become one stock line with their quantities added — that has to stay,
+  because an item type is identified by its code — but every source row is now
+  kept beside it with its own product name, GD number, GD date, landed unit price
+  and its own opening / consumed / balance figures. On the two client files that
+  preserved 112 product names each, where the merge shows 78 and 57 stock lines.
+  A re-import replaces those rows rather than adding to them.
+- Suite: `python scripts/test_spreadsheet_import.py` — **126 checks** (was 101).
+
 ### 2026-09-08 — FBR: one submission per bill, and a way to record a withdrawal
 
 - **A bill can no longer be filed twice.** Pressing Submit twice, a double

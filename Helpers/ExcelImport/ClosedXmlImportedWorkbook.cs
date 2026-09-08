@@ -1,4 +1,3 @@
-using System.Globalization;
 using ClosedXML.Excel;
 
 namespace MyApp.Api.Helpers.ExcelImport
@@ -58,10 +57,7 @@ namespace MyApp.Api.Helpers.ExcelImport
                     return (decimal)cell.GetDouble();
             }
             catch { }
-            var s = GetString(sheetIndex, row, col);
-            if (string.IsNullOrWhiteSpace(s)) return null;
-            var cleaned = s.Replace(",", "").Trim();
-            return decimal.TryParse(cleaned, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : null;
+            return CellNumber.Parse(GetString(sheetIndex, row, col));
         }
 
         public int? GetInt(int sheetIndex, int row, int col)

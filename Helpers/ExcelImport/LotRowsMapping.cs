@@ -51,6 +51,27 @@ namespace MyApp.Api.Helpers.ExcelImport
         [JsonPropertyName("blankRowsEndData")]
         public int BlankRowsEndData { get; set; } = 15;
 
+        /// <summary>
+        /// Heading texts that identify a column wherever it happens to sit,
+        /// keyed by the same names <see cref="Columns"/> serialises under.
+        ///
+        /// Column NUMBERS remain the contract; this only corrects them. Two
+        /// accountants preparing the same customs-lot sheet agree on everything
+        /// from the Price column rightwards and disagree about the four columns
+        /// before it — one writes HS codes then the product name, the other
+        /// product name then HS codes — and they name the same column "GD
+        /// Number" or "GDs No". Fixed numbers made the second file import the
+        /// heading "9506" as a product; an alias finds it either way, so ONE
+        /// built-in layout covers both without the operator mapping anything.
+        ///
+        /// Deliberately conservative: a heading that matches no column, or more
+        /// than one, leaves the mapped number alone. The balance block repeats
+        /// "Qty" and "Rate" three times, so aliasing those correctly declines
+        /// rather than guessing which band was meant.
+        /// </summary>
+        [JsonPropertyName("headerAliases")]
+        public Dictionary<string, List<string>> HeaderAliases { get; set; } = new();
+
         public class LotRowsColumns
         {
             [JsonPropertyName("itemName")] public int ItemName { get; set; }
@@ -70,6 +91,27 @@ namespace MyApp.Api.Helpers.ExcelImport
             [JsonPropertyName("balanceTax")] public int? BalanceTax { get; set; }
             [JsonPropertyName("lotRef")] public int? LotRef { get; set; }
             [JsonPropertyName("lotDate")] public int? LotDate { get; set; }
+
+            /// <summary>
+            /// Landed unit cost as the sheet states it. Kept per LOT, never
+            /// merged: the stock position's unit cost is value / quantity and is
+            /// already derived, so a weighted average of this column would say
+            /// nothing new. What it records is what one customs declaration
+            /// cost, which is the figure an accountant reconciles against.
+            /// </summary>
+            [JsonPropertyName("unitPrice")] public int? UnitPrice { get; set; }
+
+            /// <summary>Opening block — what the lot arrived with, before any
+            /// of it was consumed. The BALANCE columns drive the import; these
+            /// are the history behind that balance.</summary>
+            [JsonPropertyName("openingQty")] public int? OpeningQty { get; set; }
+            [JsonPropertyName("openingValue")] public int? OpeningValue { get; set; }
+            [JsonPropertyName("openingTaxRate")] public int? OpeningTaxRate { get; set; }
+
+            /// <summary>Consumed block — what has gone out of the lot.</summary>
+            [JsonPropertyName("consumedQty")] public int? ConsumedQty { get; set; }
+            [JsonPropertyName("consumedValue")] public int? ConsumedValue { get; set; }
+            [JsonPropertyName("consumedTaxRate")] public int? ConsumedTaxRate { get; set; }
         }
 
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -126,5 +168,190 @@ namespace MyApp.Api.Helpers.ExcelImport
         };
 
         public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+
+        // ── Heading-driven column resolution ─────────────────────────────────
+
+        /// <summary>Setters for every column an alias may point at, keyed by the
+        /// field's JSON name. Explicit rather than reflected so a renamed
+        /// property fails to compile instead of silently stopping working.</summary>
+        private static readonly Dictionary<string, Action<LotRowsColumns, int>> Setters =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["itemName"] = (c, v) => c.ItemName = v,
+                ["hsCodeFull"] = (c, v) => c.HsCodeFull = v,
+                ["hsCodeShort"] = (c, v) => c.HsCodeShort = v,
+                ["unit"] = (c, v) => c.Unit = v,
+                ["balanceQty"] = (c, v) => c.BalanceQty = v,
+                ["balanceValue"] = (c, v) => c.BalanceValue = v,
+                ["balanceTaxRate"] = (c, v) => c.BalanceTaxRate = v,
+                ["balanceTax"] = (c, v) => c.BalanceTax = v,
+                ["lotRef"] = (c, v) => c.LotRef = v,
+                ["lotDate"] = (c, v) => c.LotDate = v,
+                ["unitPrice"] = (c, v) => c.UnitPrice = v,
+                ["openingQty"] = (c, v) => c.OpeningQty = v,
+                ["openingValue"] = (c, v) => c.OpeningValue = v,
+                ["openingTaxRate"] = (c, v) => c.OpeningTaxRate = v,
+                ["consumedQty"] = (c, v) => c.ConsumedQty = v,
+                ["consumedValue"] = (c, v) => c.ConsumedValue = v,
+                ["consumedTaxRate"] = (c, v) => c.ConsumedTaxRate = v,
+            };
+
+        /// <summary>Columns of the heading row that are read looking for aliases.</summary>
+        private const int AliasScanCols = 60;
+
+        /// <summary>
+        /// Every column the mapping points at, and which fields point at it.
+        /// Used to report a column two fields would read.
+        /// </summary>
+        private static List<int> MappedColumns(
+            LotRowsColumns c, out Dictionary<int, List<string>> byColumn)
+        {
+            var pairs = new (string Field, int? Col)[]
+            {
+                ("itemName", c.ItemName), ("balanceQty", c.BalanceQty),
+                ("hsCodeFull", c.HsCodeFull), ("hsCodeShort", c.HsCodeShort), ("unit", c.Unit),
+                ("balanceValue", c.BalanceValue), ("balanceTaxRate", c.BalanceTaxRate),
+                ("balanceTax", c.BalanceTax), ("lotRef", c.LotRef), ("lotDate", c.LotDate),
+                ("unitPrice", c.UnitPrice),
+                ("openingQty", c.OpeningQty), ("openingValue", c.OpeningValue),
+                ("openingTaxRate", c.OpeningTaxRate),
+                ("consumedQty", c.ConsumedQty), ("consumedValue", c.ConsumedValue),
+                ("consumedTaxRate", c.ConsumedTaxRate),
+            };
+
+            byColumn = pairs
+                .Where(p => p.Col is > 0)
+                .GroupBy(p => p.Col!.Value)
+                .ToDictionary(g => g.Key, g => g.Select(p => p.Field).ToList());
+
+            return byColumn.Keys.OrderBy(k => k).ToList();
+        }
+
+        /// <summary>Lower-cased, punctuation-free form, so "8 Digit Hs Code",
+        /// "8-digit HS code" and "8DigitHSCode" are one heading.</summary>
+        private static string Normalise(string? text) =>
+            new string((text ?? "").Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+
+        /// <summary>
+        /// Returns the columns to read with, after letting
+        /// <see cref="HeaderAliases"/> correct them against the sheet's own
+        /// heading row. <paramref name="notes"/> records every correction so the
+        /// preview can say a column was found somewhere other than where the
+        /// layout expected it — a silent relocation is how a wrong column
+        /// becomes a confident wrong import.
+        /// </summary>
+        public LotRowsColumns ResolveColumns(IImportedWorkbook workbook, int sheet, out List<string> notes)
+        {
+            notes = new List<string>();
+
+            var resolved = new LotRowsColumns
+            {
+                ItemName = Columns.ItemName,
+                HsCodeFull = Columns.HsCodeFull,
+                HsCodeShort = Columns.HsCodeShort,
+                Unit = Columns.Unit,
+                BalanceQty = Columns.BalanceQty,
+                BalanceValue = Columns.BalanceValue,
+                BalanceTaxRate = Columns.BalanceTaxRate,
+                BalanceTax = Columns.BalanceTax,
+                LotRef = Columns.LotRef,
+                LotDate = Columns.LotDate,
+                UnitPrice = Columns.UnitPrice,
+                OpeningQty = Columns.OpeningQty,
+                OpeningValue = Columns.OpeningValue,
+                OpeningTaxRate = Columns.OpeningTaxRate,
+                ConsumedQty = Columns.ConsumedQty,
+                ConsumedValue = Columns.ConsumedValue,
+                ConsumedTaxRate = Columns.ConsumedTaxRate,
+            };
+
+            if (HeaderAliases.Count == 0 || HeaderRow <= 0) return resolved;
+
+            // Heading text of the row, once.
+            var headings = new Dictionary<int, string>();
+            for (int col = 1; col <= AliasScanCols; col++)
+            {
+                var text = Normalise(workbook.GetString(sheet, HeaderRow, col));
+                if (text.Length > 0) headings[col] = text;
+            }
+            if (headings.Count == 0) return resolved;
+
+            // Every alias is resolved against the headings FIRST and applied
+            // afterwards. Applying them one at a time cannot express a SWAP: on
+            // the second column order the item name moves from 6 to 4 and the
+            // 4-digit code from 4 to 6, and whichever moved first would find the
+            // other's column occupied and decline — leaving the layout half
+            // corrected, which reads a heading as a product name.
+            var found = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (field, aliases) in HeaderAliases)
+            {
+                if (!Setters.ContainsKey(field) || aliases == null || aliases.Count == 0) continue;
+
+                var wanted = aliases.Select(Normalise).Where(a => a.Length > 0).ToHashSet();
+                if (wanted.Count == 0) continue;
+
+                var hits = headings.Where(h => wanted.Contains(h.Value)).Select(h => h.Key).ToList();
+                if (hits.Count == 0) continue;
+                if (hits.Count > 1)
+                {
+                    notes.Add($"\"{aliases[0]}\" appears in {hits.Count} columns, so column {CurrentColumn(resolved, field)} was kept.");
+                    continue;
+                }
+
+                found[field] = hits[0];
+            }
+
+            // Two fields naming one column means the aliases are wrong, not the
+            // sheet. Drop both rather than let the later one win.
+            foreach (var group in found.GroupBy(f => f.Value).Where(g => g.Count() > 1).ToList())
+            {
+                notes.Add($"Column {group.Key} matched more than one heading ({string.Join(", ", group.Select(g => g.Key))}), so the mapped columns were kept.");
+                foreach (var f in group) found.Remove(f.Key);
+            }
+
+            foreach (var (field, col) in found)
+            {
+                var current = CurrentColumn(resolved, field);
+                if (current == col) continue;       // already where the layout said
+
+                Setters[field](resolved, col);
+                notes.Add($"\"{HeaderAliases[field][0]}\" was read from column {col}" +
+                          (current is > 0 ? $" instead of column {current}." : "."));
+            }
+
+            // A number left pointing at a column an alias has taken over would
+            // read the same cells twice. Worth saying, not worth refusing —
+            // the mapped column may genuinely hold a second copy.
+            var duplicated = MappedColumns(resolved, out var byColumn)
+                .Where(c => byColumn[c].Count > 1)
+                .ToList();
+            foreach (var col in duplicated)
+                notes.Add($"Column {col} is mapped to more than one field ({string.Join(", ", byColumn[col])}). Check the layout.");
+
+            return resolved;
+        }
+
+        private static int? CurrentColumn(LotRowsColumns c, string field) => field.ToLowerInvariant() switch
+        {
+            "itemname" => c.ItemName,
+            "hscodefull" => c.HsCodeFull,
+            "hscodeshort" => c.HsCodeShort,
+            "unit" => c.Unit,
+            "balanceqty" => c.BalanceQty,
+            "balancevalue" => c.BalanceValue,
+            "balancetaxrate" => c.BalanceTaxRate,
+            "balancetax" => c.BalanceTax,
+            "lotref" => c.LotRef,
+            "lotdate" => c.LotDate,
+            "unitprice" => c.UnitPrice,
+            "openingqty" => c.OpeningQty,
+            "openingvalue" => c.OpeningValue,
+            "openingtaxrate" => c.OpeningTaxRate,
+            "consumedqty" => c.ConsumedQty,
+            "consumedvalue" => c.ConsumedValue,
+            "consumedtaxrate" => c.ConsumedTaxRate,
+            _ => null,
+        };
     }
 }
