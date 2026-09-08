@@ -906,6 +906,21 @@ namespace MyApp.Api.Controllers
             if (company == null) return NotFound();
 
             var previous = company.InventoryFlowVersion;
+
+            // V2 IS ONE-WAY (2026-09-08). Under V2 every item type is inventory,
+            // so a company accumulates stock positions on items V1 does not track
+            // at all. Going back would not untrack them -- it would leave their
+            // movements recorded and their on-hand invisible, which reads as
+            // stock vanishing. There is no safe automatic reverse, so the answer
+            // is not to offer one; a genuine mistake is a support job with the
+            // data in front of you, not a toggle.
+            if (previous >= (byte)InventoryFlowVersion.V2Standard && req.Version < previous)
+                return BadRequest(new
+                {
+                    error = "This company is on V2 inventory and cannot be moved back to V1. " +
+                            "Under V2 every item type is stock-tracked, so returning to V1 would hide " +
+                            "positions that still exist rather than removing them."
+                });
             if (previous == req.Version)
                 return Ok(new { companyId, inventoryFlowVersion = previous, changed = false });
 
@@ -942,6 +957,33 @@ namespace MyApp.Api.Controllers
         /// is the only place tracking can be tuned per item. Gated by
         /// stock.policy.manage.
         /// </summary>
+        /// <summary>
+        /// The item types this company actually tracks stock for -- ids only.
+        ///
+        /// The stock modals need it because "which items can hold a stock
+        /// position" is a SERVER rule (StockService.GetStockTrackedItemTypeIdsAsync):
+        /// V1 tracks HS-coded item types, V2 tracks all of them, and a per-company
+        /// CompanyItemTypeSetting overrides either. The dashboard used to guess,
+        /// and its guess and its own on-screen hint had already drifted apart --
+        /// the hint promised HS-less items were hidden while both pickers offered
+        /// all 335 of them. Ask the rule instead of restating it.
+        ///
+        /// Read-only, so it rides the dashboard permission rather than the
+        /// policy-management one.
+        /// </summary>
+        [HttpGet("company/{companyId}/tracked-itemtypes")]
+        [HasPermission("stock.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<int>>> GetTrackedItemTypes(int companyId)
+        {
+            var allIds = await _context.ItemTypes
+                .Where(it => !it.IsDeleted)
+                .Select(it => it.Id)
+                .ToListAsync();
+            var tracked = await _stock.GetStockTrackedItemTypeIdsAsync(companyId, allIds);
+            return Ok(tracked.OrderBy(i => i).ToList());
+        }
+
         [HttpPost("company/{companyId}/itemtype-policy")]
         [HasPermission("stock.policy.manage")]
         [AuthorizeCompany]

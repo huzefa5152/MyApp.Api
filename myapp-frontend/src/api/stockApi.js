@@ -26,6 +26,12 @@ export const exportStockOnHand = (companyId, search = "") =>
     params: search ? { search } : {},
     responseType: "blob",
   });
+// The item types this company actually tracks stock for. "Which items can
+// hold a position" is a server rule (V1 = HS-coded, V2 = all, per-company
+// overrides win either way), so the modals ask for it instead of guessing.
+export const getTrackedItemTypes = (companyId) =>
+  http.get(`/stock/company/${companyId}/tracked-itemtypes`);
+
 export const getOpeningBalances = (companyId) =>
   http.get(`/stock/company/${companyId}/opening`);
 export const upsertOpeningBalance = (payload) =>

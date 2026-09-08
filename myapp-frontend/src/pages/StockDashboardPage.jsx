@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload } from "react-icons/md";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand } from "../api/stockApi";
+import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -64,6 +64,11 @@ export default function StockDashboardPage() {
   const [movSize, setMovSize] = usePageSize("stockMovements");
   const [openings, setOpenings] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
+  // Ids the SERVER says are stock-tracked. null = not loaded yet, which is
+  // deliberately different from an empty set: an empty set legitimately means
+  // "this company tracks nothing", and a picker must not silently show the
+  // whole catalog just because a fetch has not landed.
+  const [trackedIds, setTrackedIds] = useState(null);
   const [units, setUnits] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -76,6 +81,12 @@ export default function StockDashboardPage() {
   const [drillLoading, setDrillLoading] = useState(null); // itemTypeId being fetched
 
   const [showOpening, setShowOpening] = useState(false);
+  // Set while RESTATING an existing opening balance rather than adding one.
+  // Correcting a mistyped opening is not a stock movement -- nothing moved,
+  // it was recorded wrong -- so it must not go through Adjust, which would
+  // put an event in the ledger that never happened. UpsertOpeningBalance
+  // already SETS rather than adds, so restating is a plain re-save.
+  const [openingEditId, setOpeningEditId] = useState(null);
   const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
   const [showAdjust, setShowAdjust] = useState(false);
   // "set" is the default: someone fixing a mistake knows what the figures
@@ -97,10 +108,11 @@ export default function StockDashboardPage() {
     if (!selectedCompany) return;
     setLoading(true);
     try {
-      const [oh, sm, op, it, mov] = await Promise.all([
+      const [oh, sm, op, tracked, it, mov] = await Promise.all([
         getStockOnHand(selectedCompany.id),
         getInventorySummary(selectedCompany.id).catch(() => ({ data: [] })),
         canManageOpening ? getOpeningBalances(selectedCompany.id) : Promise.resolve({ data: [] }),
+        getTrackedItemTypes(selectedCompany.id),
         getItemTypes(),
         // 2026-05-12: also pull the movements first page on initial load
         // so the "Movements (N)" tab label shows the correct count
@@ -114,6 +126,7 @@ export default function StockDashboardPage() {
       setOnhand(oh.data || []);
       setSummary(sm.data || []);
       setOpenings(op.data || []);
+      setTrackedIds(new Set(tracked.data || []));
       setItemTypes(it.data || []);
       setMovements(mov.data?.items || []);
       setMovTotal(mov.data?.totalCount || 0);
@@ -122,7 +135,7 @@ export default function StockDashboardPage() {
       // so drop the drill cache; keep the expanded row open to refetch.
       setDrill({});
     } catch {
-      setOnhand([]); setOpenings([]); setItemTypes([]);
+      setOnhand([]); setOpenings([]); setItemTypes([]); setTrackedIds(null);
     } finally {
       setLoading(false);
     }
@@ -188,7 +201,7 @@ export default function StockDashboardPage() {
   );
 
   // Switch the selected company between V1 (legacy HS-gated) and V2 (standard
-  // inventory). Reversible + audited server-side. Refresh the company list so
+  // inventory). ONE-WAY and audited server-side. Refresh the company list so
   // the badge + selectedCompany.inventoryFlowVersion update, then refetch.
   const switchVersion = async () => {
     if (!selectedCompany) return;
@@ -196,8 +209,8 @@ export default function StockDashboardPage() {
     const ok = await confirm({
       title: `Switch to ${target === 2 ? "V2 (Standard Inventory)" : "V1 (Legacy)"}`,
       message: target === 2
-        ? "Switch this company to V2 (Standard Inventory)? ALL item types become inventory (HS code becomes FBR metadata only), and over-commit / oversell will be hard-blocked. Reversible."
-        : "Switch this company back to V1 (Legacy)? Only HS-coded item types will be stock-tracked, as before. Reversible.",
+        ? "Switch this company to V2 (Standard Inventory)? ALL item types become inventory (HS code becomes FBR metadata only), and over-commit / oversell will be hard-blocked. This CANNOT be undone."
+        : "Switch this company back to V1 (Legacy)? Only HS-coded item types will be stock-tracked, as before.",
       confirmText: "Switch",
     });
     if (!ok) return;
@@ -242,6 +255,25 @@ export default function StockDashboardPage() {
     }
   };
 
+  const startEditOpening = (o) => {
+    setOpeningEditId(o.id);
+    setOpeningDraft({
+      itemTypeId: String(o.itemTypeId),
+      quantity: o.quantity,
+      valueExcludingTax: o.valueExcludingTax ?? "",
+      salesTaxRate: o.salesTaxRate ?? "",
+      asOfDate: (o.asOfDate || "").slice(0, 10) || todayYmd(),
+      notes: o.notes || "",
+    });
+    setShowOpening(true);
+  };
+
+  const startAddOpening = () => {
+    setOpeningEditId(null);
+    setOpeningDraft({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
+    setShowOpening(true);
+  };
+
   const submitOpening = async (e) => {
     e.preventDefault();
     if (!openingDraft.itemTypeId) return notify("Pick an item.", "error");
@@ -255,8 +287,9 @@ export default function StockDashboardPage() {
         asOfDate: openingDraft.asOfDate,
         notes: openingDraft.notes || null,
       });
-      notify("Opening balance saved.", "success");
+      notify(openingEditId ? "Opening balance updated." : "Opening balance saved.", "success");
       setShowOpening(false);
+      setOpeningEditId(null);
       setOpeningDraft({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
       fetchAll();
     } catch (err) {
@@ -437,13 +470,26 @@ export default function StockDashboardPage() {
   const adjustUom = adjustItem?.uom || "";
   const adjustAllowsDecimal = isDecimalUnit(adjustUom, units);
 
-  // Modal pickers list ALL catalog item types (HS-coded or not) — opening
-  // balances/adjustments are operational stock counts, not FBR submissions,
-  // so items without an HS code must be selectable too. Opening Balance still
-  // hides items already on the on-hand grid: those are corrected via the
-  // per-row Adjust action, not by seeding a second opening.
+  // Both pickers offer exactly what this company STOCK-TRACKS, and the server
+  // decides that (V1 = HS-coded only, V2 = everything, per-company overrides
+  // win either way). The page used to offer the whole catalog while telling the
+  // operator that HS-less items were hidden -- on a V2 company all 335 of them
+  // were selectable and the hint was simply false. Offering an untracked item
+  // is worse than cosmetic: the engine will never move it, so the operator
+  // would be seeding a position that can never change.
+  const trackable = (it) => trackedIds === null || trackedIds.has(it.id);
   const onhandIds = new Set(onhand.map(r => r.itemTypeId));
-  const openingPickerItems = itemTypes.filter(it => !onhandIds.has(it.id));
+
+  // Opening Balance ADDS a day-zero figure, so it offers only items that do not
+  // have one yet; restating an existing opening is the Edit action on the list
+  // below, which is a correction of a recorded fact rather than a movement.
+  const openingPickerItems = itemTypes.filter(
+    it => trackable(it) && !onhandIds.has(it.id));
+
+  // Adjust changes a COUNT, so it offers every tracked item whether or not it
+  // was ever opened -- recording found stock on an item with no opening is
+  // exactly what it is for.
+  const adjustPickerItems = itemTypes.filter(trackable);
 
   return (
     <div className="stock-page">
@@ -470,13 +516,18 @@ export default function StockDashboardPage() {
               {flowVersion === 2 ? "Inventory V2 · Standard" : "Inventory V1 · Legacy"}
             </span>
           )}
-          {canManagePolicy && selectedCompany && (
+          {/* V2 is one-way. Under V2 every item type is inventory, so a company
+              builds up positions on items V1 does not track; going back would
+              hide them rather than remove them, which reads as stock vanishing.
+              The server refuses it too -- this only stops us offering a button
+              whose answer is always no. */}
+          {canManagePolicy && selectedCompany && flowVersion !== 2 && (
             <button
               style={styles.altBtn}
               onClick={switchVersion}
-              title={flowVersion === 2 ? "Switch back to legacy tracking" : "Switch to standard inventory (V2)"}
+              title="Switch to standard inventory (V2). This cannot be undone."
             >
-              <MdSyncAlt size={16} /> {flowVersion === 2 ? "Switch to V1" : "Switch to V2"}
+              <MdSyncAlt size={16} /> Switch to V2
             </button>
           )}
           {canExport && selectedCompany && (
@@ -492,7 +543,7 @@ export default function StockDashboardPage() {
             </button>
           )}
           {canManageOpening && (
-            <button style={styles.altBtn} onClick={() => setShowOpening(true)}>
+            <button style={styles.altBtn} onClick={startAddOpening}>
               <MdTune size={16} /> Opening Balance
             </button>
           )}
@@ -950,6 +1001,7 @@ export default function StockDashboardPage() {
                             <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
                             <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
                             <td style={styles.td}>
+                              <button style={btnTiny} title="Restate this opening balance" onClick={() => startEditOpening(o)}><MdEdit size={14} /></button>
                               <button style={btnTiny} onClick={() => handleDeleteOpening(o)}><MdClose size={14} /></button>
                             </td>
                           </tr>
@@ -977,6 +1029,13 @@ export default function StockDashboardPage() {
                         {o.notes && (
                           <div className="stock-card__notes">{o.notes}</div>
                         )}
+                        <button
+                          className="stock-card__delete"
+                          style={{ color: colors.blue }}
+                          onClick={() => startEditOpening(o)}
+                        >
+                          <MdEdit size={14} /> Edit
+                        </button>
                         <button
                           className="stock-card__delete"
                           onClick={() => handleDeleteOpening(o)}
@@ -1097,8 +1156,16 @@ export default function StockDashboardPage() {
       )}
 
       {showOpening && (
-        <SmallModal title="Set Opening Balance" onClose={() => setShowOpening(false)} onSubmit={submitOpening}>
+        <SmallModal title={openingEditId ? "Edit Opening Balance" : "Set Opening Balance"} onClose={() => { setShowOpening(false); setOpeningEditId(null); }} onSubmit={submitOpening}>
           <Field label="Item">
+            {openingEditId ? (
+              <input
+                readOnly
+                value={itemTypes.find(it => String(it.id) === String(openingDraft.itemTypeId))?.name || ""}
+                style={{ ...mInput, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+                title="Restating this item's opening balance. To open a different item, close and use Opening Balance."
+              />
+            ) : (
             <SearchableItemTypeSelect
               items={openingPickerItems}
               value={openingDraft.itemTypeId}
@@ -1106,9 +1173,12 @@ export default function StockDashboardPage() {
               placeholder="Search & pick an item…"
               style={mInput}
             />
+            )}
             <div style={qtyHint}>
-              Items without an HS Code, or already on the stock grid, are hidden —
-              use the grid's Adjust action for tracked items.
+              {openingEditId
+                ? "Restating the opening balance already recorded for this item. This corrects a figure; it does not move stock."
+                : <>Items that already have an opening balance are hidden — edit theirs
+                   in the list instead. {flowVersion !== 2 && "On V1 only HS-coded items are tracked."}</>}
             </div>
           </Field>
           <Field label="Quantity">
@@ -1148,13 +1218,18 @@ export default function StockDashboardPage() {
             ) : (
               <>
                 <SearchableItemTypeSelect
-                  items={itemTypes}
+                  items={adjustPickerItems}
                   value={adjustDraft.itemTypeId}
                   onChange={(newId) => setAdjustDraft({ ...adjustDraft, itemTypeId: newId ? String(newId) : "" })}
                   placeholder="Search & pick an item…"
                   style={mInput}
                 />
-                <div style={qtyHint}>Items without an HS Code are hidden.</div>
+                <div style={qtyHint}>
+                  Every item this company tracks stock for, whether or not it has an
+                  opening balance — recording found stock on an item that was never
+                  opened is exactly what an adjustment is for.
+                  {flowVersion !== 2 && " On V1 that means HS-coded items only."}
+                </div>
               </>
             )}
           </Field>

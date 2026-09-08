@@ -512,7 +512,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             <>
                                 {!company && (
                                     <p style={{ margin: "0 0 0.5rem", padding: "0.6rem 0.7rem", borderRadius: 8, border: "1px solid #d6e4f5", backgroundColor: "#f2f8ff", fontSize: "0.78rem", color: "#33475b", lineHeight: 1.4 }}>
-                                        New companies start on <strong>V2 inventory</strong> — every item type is stock-tracked (HS code is FBR metadata only). Switch to V1 (only HS-coded items tracked) later from Inventory settings.
+                                        New companies start on <strong>V2 inventory</strong> — every item type is stock-tracked (HS code is FBR metadata only). This is permanent: a company on V2 cannot be moved back to V1, because its stock positions on non-HS items would be hidden rather than removed.
                                     </p>
                                 )}
                                 <label style={{ ...toggleCard, marginTop: 0 }}>
