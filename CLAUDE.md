@@ -773,6 +773,62 @@ rule to keep is that **auto-allocation only ever CHOOSES; it never settles.**
   outcomes) and `scripts/test_tenant_isolation.py` suite 13, which covers the
   id-based route that takes no company at all.
 
+### 5b-12. Inventory Overlay Behaviour — two books, one total (2026-09-08)
+
+`Company.InventoryOverlayEnabled` splits a sale into two books that share a
+subtotal. **OFF is the default and every existing company keeps it**, so none of
+this applies to them; the migration lands `defaultValue: false` and nothing
+reads the flag unless it is on.
+
+| | the BILL | the INVOICE |
+|---|---|---|
+| What it is | what the customer ordered and signed | the same money decomposed for FBR |
+| Item types | **no HS code** | **HS code required** |
+| Quantity / price | typed by hand | adjusted for the filing |
+| Stored on | `InvoiceItem` | `InvoiceItemAdjustment` |
+
+- **The one rule everything serves: adjusting the invoice never changes the
+  bill.** A customer who signed for 10 at 1,000 still sees 10 at 1,000 on the
+  bill, its edit form and its print, after the consultant has refiled it as
+  5 at 2,000.
+- **The overlay widens under the flag.** It was narrowed to numbers only on
+  2026-05-12 because item type / UOM / HS code are bill data — and that stays
+  true for a normal company, whose overlays are still cleared exactly as
+  before. An overlay company needs the classification to DIFFER between books,
+  so `AdjustedItemTypeId` / `AdjustedHSCode` / `AdjustedSaleType` / `AdjustedUOM`
+  live again, gated on the flag in `UpdateItemTypesAsync`.
+- **`asAdjustment` is forced true for an overlay company.** It cannot wait for
+  `dto.WriteMode` (the operator did not choose to keep two books line by line —
+  the company did) and must not require `fbrOn`: a company can separate the
+  commercial book from the tax book before it ever files anything.
+- **`myapp-frontend/src/utils/itemTypeBooks.js` is the one place the pickers
+  are split**, because three screens ask (standalone bill, challan bill, and the
+  edit form serving both tabs) and a picker disagreeing with its neighbour would
+  build a line the other book cannot hold.
+- **The scenario's sale-type filter is skipped on an overlay BILL.** It exists to
+  stop a mixed-sale-type FILING; a commercial no-HS item carries no sale type, so
+  applying both filters left the picker empty. It still applies on the Invoices
+  tab — that IS the filing.
+- **A bill line stops pricing itself from stock** under the flag. Not fetching is
+  the whole switch: with no pricing, `canPrice` is never true, `deriveFromTotal`
+  returns null and the form falls back to the qty x price path it already had.
+- **STALENESS IS THE TWO TOTALS DISAGREEING** — no version column, no hash, so
+  nothing can drift out of step with it. But the filed total must be **derived**:
+  an overlay only stores `AdjustedLineTotal` when it differs from the bill line,
+  and a redistribution is exactly the case where it does not (5 x 2,000 and
+  10 x 1,000 are both 10,000), so reading the column made every filing look
+  current however far the bill had moved. Use
+  `InvoiceService.EffectiveFiledLineTotal`, which both the DTO flag and the
+  `FbrService` gate call. When stale: `FbrReady` is forced false and validate,
+  submit AND the dry run are refused — hiding a button is not enough when the
+  endpoint is reachable without one.
+- Staleness is **overlay-only**. A normal company's overlay has always been
+  allowed to drift, and forcing `FbrReady` false there would change behaviour
+  for every existing customer.
+- Suite: `scripts/test_inventory_overlay.py` (51 checks). Its suite 2 walks a
+  NORMAL company through the same steps and is the one that catches a
+  regression in the behaviour existing customers rely on.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -1083,6 +1139,7 @@ them can be resolved from FBR.
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
+| Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` | `51/51 checks passed` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 

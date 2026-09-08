@@ -289,6 +289,29 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — Inventory Overlay: a bill and a tax invoice that differ on purpose
+
+- **New setting, off by default: "Enable Inventory Overlay Behaviour"** (Company →
+  Inventory). Every existing company is unaffected and keeps working exactly as
+  it does today — nothing about their bills, invoices, printing or FBR changes.
+- **With it on, a sale keeps two books that share one total.** The **bill** is
+  what the customer ordered and signed: you pick a plain commercial item (one
+  with no HS code), type the quantity and the unit price, and the line total
+  works itself out. The **invoice** is the same money written the way FBR needs
+  it: HS-coded items, with the quantity and unit price adjusted for the filing.
+- **Adjusting the invoice never touches the bill.** Bill 10 × 1,000; file it as
+  5 × 2,000 if that is the right decomposition — the customer's bill still reads
+  10 × 1,000 in the list, the edit screen, the print and the PDF. Only the total
+  has to match.
+- **If you change the bill afterwards, the invoice says so.** Edit the bill from
+  10 to 12 and the invoice is flagged **"Re-adjust for FBR"** on its card and in
+  the table, with a banner naming both totals. It cannot be validated or
+  submitted until the figures line up again — not merely a hidden button; the
+  server refuses it.
+- Works the same whether the bill was raised on its own or from a delivery
+  challan, and switching the setting off later leaves every existing document
+  exactly as it was.
+
 ### 2026-09-08 — Four FBR scenarios that never filed, now do
 
 - **Exempt sales were filed with the wrong word for their rate.** FBR wants its

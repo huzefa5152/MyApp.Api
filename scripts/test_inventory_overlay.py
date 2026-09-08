@@ -341,6 +341,80 @@ def main() -> int:
               and nfresh.get("fbrAdjustedSubtotal") is None,
               f"stale={nfresh.get('fbrAdjustmentStale')} adjSub={nfresh.get('fbrAdjustedSubtotal')}")
 
+        # ── 12. The challan route must not be a way round the split ─────────
+        # Delivery Challan -> Bill -> Invoice has to behave exactly like the
+        # standalone route: the bill is still the commercial book and the
+        # invoice is still the filed one. A separate create path is precisely
+        # where a rule like this gets forgotten.
+        print("\n=== 12. Challan -> Bill -> Invoice keeps the two books ===")
+        st, challan = http("POST", f"/api/deliverychallans/company/{overlay['id']}",
+                           args.base, token=tok, body={
+            "companyId": overlay["id"], "clientId": o_client,
+            "poNumber": f"PO-OVL-{sfx}", "poDate": today(), "deliveryDate": today(),
+            "site": None,
+            "items": [{"description": "Carton of fittings", "quantity": 10,
+                       "unit": "Numbers, pieces, units"}],
+            "warnings": [],
+        })
+        if check("a delivery challan is created", st in (200, 201), f"{st}: {err(challan)}"):
+            st, cbill = http("POST", "/api/invoices", args.base, token=tok, body={
+                "date": today(), "companyId": overlay["id"], "clientId": o_client,
+                "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+                "challanIds": [challan["id"]],
+                "items": [{"deliveryItemId": challan["items"][0]["id"],
+                           "itemTypeId": o_nohs, "unitPrice": 1000,
+                           "description": "Carton of fittings",
+                           "uom": "Numbers, pieces, units"}],
+                "poDateUpdates": {},
+            })
+            if check("a bill is raised from it with the commercial item",
+                     st in (200, 201), f"{st}: {err(cbill)}"):
+                cline = cbill["items"][0]
+                check("the challan-based bill is 10 x 1,000 = 10,000",
+                      near(cline["quantity"], 10) and near(cline["unitPrice"], 1000)
+                      and near(cbill.get("subtotal"), 10000),
+                      f"qty={cline['quantity']} price={cline['unitPrice']} sub={cbill.get('subtotal')}")
+                check("and it carries no HS code, same as the standalone route",
+                      not (cline.get("hsCode") or "").strip(),
+                      f"hsCode={cline.get('hsCode')}")
+
+                st, cadj = adjust(args.base, tok, cbill["id"],
+                                  [{"id": cline["id"], "itemTypeId": o_hs,
+                                    "quantity": 4, "unitPrice": 2500}])
+                if check("it can be adjusted to 4 x 2,500 for the filing",
+                         st == 200, f"{st}: {err(cadj)}"):
+                    line = cadj["items"][0]
+                    a = line.get("adjustment") or {}
+                    check("the challan-based BILL still reads 10 x 1,000",
+                          near(line["quantity"], 10) and near(line["unitPrice"], 1000),
+                          f"qty={line['quantity']} price={line['unitPrice']}")
+                    check("its filing book holds 4 x 2,500 and the HS item",
+                          near(a.get("adjustedQuantity"), 4)
+                          and near(a.get("adjustedUnitPrice"), 2500)
+                          and a.get("adjustedItemTypeId") == o_hs,
+                          f"overlay={a.get('adjustedQuantity')}x{a.get('adjustedUnitPrice')} type={a.get('adjustedItemTypeId')}")
+                    check("and the total is untouched at 10,000",
+                          near(cadj.get("subtotal"), 10000), f"sub={cadj.get('subtotal')}")
+
+        # ── 13. Turning the flag off leaves the data alone ──────────────────
+        # Switching a company back is a configuration change, not a migration:
+        # the bill keeps its numbers and the overlay keeps its own. What
+        # changes is only how the next edit behaves.
+        print("\n=== 13. Switching the setting off does not rewrite anything ===")
+        st, co = http("GET", f"/api/companies/{overlay['id']}", args.base, token=tok)
+        body = dict(co)
+        body["inventoryOverlayEnabled"] = False
+        st, _ = http("PUT", f"/api/companies/{overlay['id']}", args.base, token=tok, body=body)
+        check("the overlay setting can be switched off", st in (200, 204), f"{st}")
+        st, back = http("GET", f"/api/invoices/{obill['id']}", args.base, token=tok)
+        check("the bill still holds its original 10 x 1,000",
+              near(back["items"][0]["quantity"], 10)
+              and near(back["items"][0]["unitPrice"], 1000),
+              f"qty={back['items'][0]['quantity']} price={back['items'][0]['unitPrice']}")
+        check("the overlay row survives the switch",
+              (back["items"][0].get("adjustment") or {}).get("adjustedQuantity") is not None,
+              "the adjustment was dropped when the flag went off")
+
     finally:
         if args.keep:
             print(f"\n(kept companies {made})")
