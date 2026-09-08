@@ -159,6 +159,12 @@ namespace MyApp.Api.Services.Implementations
                 ["Goods at zero-rate"]               = "Goods at zero-rate",
                 ["Exempt Goods"]                     = "Exempt Goods",
                 ["Exempt goods"]                     = "Exempt Goods",
+                // FBR's transaction-type list has no space after the slash, and
+                // rejects the spaced form with [0204]. Both spellings are mapped
+                // so a bill already stored with the old string still files.
+                ["Processing/Conversion of Goods"]    = "Processing/Conversion of Goods",
+                ["Processing/ Conversion of Goods"]   = "Processing/Conversion of Goods",
+                ["Processing / Conversion of Goods"]  = "Processing/Conversion of Goods",
             };
 
         internal static string NormalizeSaleType(string? saleType)
@@ -460,7 +466,8 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Pre-validation (before calling FBR) ─────────────────
 
-        private async Task<FbrSubmissionResult?> PreValidate(Invoice invoice, Company company, Client buyer)
+        private async Task<FbrSubmissionResult?> PreValidate(
+            Invoice invoice, Company company, Client buyer, string? scenarioId = null)
         {
             var errors = new List<string>();
             // NTN / CNIC normalisation — delegate to the class-level shared helpers
@@ -614,10 +621,19 @@ namespace MyApp.Api.Services.Implementations
                 var engine = _services.GetService(typeof(ITaxMappingEngine)) as ITaxMappingEngine;
                 if (engine != null)
                 {
-                    // Auto-detect scenario from paymentTerms ("[SN00x]" prefix)
-                    // so the engine has the same view that PostInvoiceAsync uses.
-                    string? scen = null;
-                    if (!string.IsNullOrEmpty(invoice.PaymentTerms))
+                    // The scenario the caller is actually filing under wins.
+                    // This used to scrape "[SN00x]" out of PaymentTerms and
+                    // nothing else, so a bill submitted with ?scenarioId=SN024
+                    // whose payment terms carried no marker was pre-flighted
+                    // against the WRONG scenario -- and since the scenario is
+                    // where the SRO defaults live, the operator was told
+                    // "Rate 25% requires SRO Schedule reference" on a bill that
+                    // had one. The marker stays as a fallback: bills created
+                    // before scenarioId was threaded through still carry it.
+                    string? scen = string.IsNullOrWhiteSpace(scenarioId)
+                        ? null
+                        : scenarioId.Trim().ToUpperInvariant();
+                    if (scen == null && !string.IsNullOrEmpty(invoice.PaymentTerms))
                     {
                         var m = System.Text.RegularExpressions.Regex.Match(
                             invoice.PaymentTerms, @"\[\s*(SN\d{3})\s*\]",
@@ -640,7 +656,13 @@ namespace MyApp.Api.Services.Implementations
                             TransactionTypeId: null,
                             SaleTypeOverride: item.SaleType,
                             Uom: item.UOM,
-                            FbrUomId: item.FbrUOMId
+                            FbrUomId: item.FbrUOMId,
+                            // What the operator actually put on the line. Without
+                            // these the engine could only see the scenario's
+                            // default, so a hand-entered SRO reference was
+                            // invisible to the very check that demands one.
+                            SroScheduleNo: item.SroScheduleNo,
+                            SroItemSerialNo: item.SroItemSerialNo
                         );
                         var combo = await engine.ValidateCombinationAsync(
                             input, item.LineTotal, item.FixedNotifiedValueOrRetailPrice);
@@ -837,7 +859,7 @@ namespace MyApp.Api.Services.Implementations
             // when they actually click Validate / Submit).
             if (!dryRun)
             {
-                var preResult = await PreValidate(invoice, company, buyer);
+                var preResult = await PreValidate(invoice, company, buyer, scenarioId);
                 if (preResult != null) return preResult;
             }
 

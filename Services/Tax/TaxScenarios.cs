@@ -79,18 +79,35 @@ namespace MyApp.Api.Services.Tax
                 "Ship breaking", 18m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
 
+            // Serial left at 1. The sandbox has accepted this line and rejected
+            // it with [0078] across different runs of the SAME payload, so
+            // neither 1 nor 70 is demonstrably correct and changing it on a
+            // guess would be worse than leaving what has been seen to work.
             new("SN005", "Reduced rate sale",
                 "Goods at Reduced Rate", 5m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
                 DefaultSroScheduleNo: "EIGHTH SCHEDULE Table 1", DefaultSroItemSerialNo: "1"),
 
+            // The sandbox accepted this line ONCE with the SRO fields empty and
+            // refused it with [0046] on later runs of the same payload, so
+            // whether FBR wants an SRO reference on an exempt supply is not
+            // settled. Left as it was until the sandbox gives a repeatable
+            // answer -- see the note on REGISTERED_SHAPES in
+            // scripts/test_fbr_sandbox_e2e.py.
             new("SN006", "Exempt goods sale",
                 "Exempt Goods", 0m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
                 DefaultSroScheduleNo: "SIXTH SCHEDULE Table 1", DefaultSroItemSerialNo: "1"),
 
+            // Same as SN006: accepted once with the SRO fields empty, refused
+            // with [0077] on later identical runs. Unchanged pending a
+            // repeatable answer.
+            //
+            // One thing that IS settled: the HS code has to be a genuinely
+            // zero-rated commodity. 8481.8090 (valves) is refused [0052];
+            // 1001.1900 (wheat) is accepted.
             new("SN007", "Zero rated sale",
                 "Goods at zero-rate", 0m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
@@ -131,8 +148,13 @@ namespace MyApp.Api.Services.Tax
                 RequiresSroReference: true,
                 DefaultSroScheduleNo: "NINTH SCHEDULE", DefaultSroItemSerialNo: "1"),
 
+            // "Processing/Conversion of Goods" with NO space after the slash.
+            // That is how it appears in FBR's own transaction-type list, and the
+            // spaced form -- which this row carried until 2026-09-08 -- is
+            // rejected with [0204] "Sale type not match with provided scenario
+            // No. SN016". The scenario could not be filed at all.
             new("SN016", "Processing / Conversion of Goods",
-                "Processing/ Conversion of Goods", 18m, "Registered",
+                "Processing/Conversion of Goods", 18m, "Registered",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
 
             new("SN017", "Sale of Goods where FED is charged in ST mode",
@@ -163,8 +185,16 @@ namespace MyApp.Api.Services.Tax
                 "CNG Sales", 18m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
 
+            // Rate 25%, not 18%. That is the only rate FBR lists for this
+            // transaction type (rateId 742, from saletyperates) -- reference
+            // data, so it does not depend on a lucky sandbox run.
+            //
+            // The schedule STRING is left alone. "SRO 297(I)/2023 Table 1" was
+            // the one form that ever got past [0077], but the sandbox did not
+            // repeat it, so it is recorded in the suite rather than shipped as
+            // the default.
             new("SN024", "Goods sold that are listed in SRO 297(I)/2023",
-                "Goods as per SRO.297(|)/2023", 18m, "Any",
+                "Goods as per SRO.297(|)/2023", 25m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
                 DefaultSroScheduleNo: "SRO 297(I)/2023", DefaultSroItemSerialNo: "1"),

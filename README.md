@@ -289,6 +289,44 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — FBR: a scenario that could never be filed, and a check that blocked two more
+
+- **"Processing / Conversion of Goods" could not be filed at all.** Our sale type
+  carried a space FBR's own transaction-type list does not have
+  (`Processing/ Conversion` vs `Processing/Conversion`), and FBR answers
+  `[0204] Sale type not match with provided scenario No. SN016`. Corrected, and
+  all three spellings now map to the canonical one so a bill already saved with
+  the old string still files. Verified against the PRAL sandbox: SN016 now
+  returns real IRNs.
+- **An SRO reference is no longer demanded just because the rate isn't 18%.**
+  The pre-flight check refused any line at another rate without an SRO
+  schedule — but FBR *rejects* an SRO on an exempt or a zero-rated supply, and
+  both of those are 0%, so the check was blocking locally what FBR accepts. It
+  now follows the scenario, and a schedule supplied without an item serial is
+  caught up front as `[0078]` rather than by PRAL.
+- **An SRO reference typed on the line was invisible to the check that demanded
+  one.** The tax engine could only see the scenario's default, so an operator who
+  filled in the SRO Schedule and Item Serial was still told
+  "Rate 25% requires SRO Schedule reference". The line now wins over the
+  default, the same way the sale-type override already did.
+- **The pre-flight uses the scenario you are filing under.** It used to find the
+  scenario only by looking for an `[SN0xx]` marker in the payment terms, so a
+  bill submitted with an explicit scenario whose payment terms had no marker was
+  checked against the wrong one — and the scenario is where the SRO defaults
+  live.
+- **SRO 297(I)/2023 is charged at 25%, not 18%** — that is the only rate FBR
+  lists for the sale type.
+- The sandbox suite gained a stage that FILES each scenario and checks the IRN
+  FBR issued against the one stored, a `--cnic` option for a token issued to a
+  13-digit seller registration (the NTN path truncates to 7 digits and files as
+  the wrong seller), and a record of the exact line shape FBR accepts per
+  scenario. Of the eight scenarios an Importer / All Other Sectors registration
+  is enrolled for, three file today (SN001, SN002, SN016). The rest need answers
+  from PRAL: the valid SRO schedule and serial for reduced rate and for
+  SRO 297(I)/2023, the rate string for an exempt supply, and which HS codes are
+  accepted for `Goods (FED in ST Mode)` — 19 were refused `[0052]`, and FBR
+  publishes no sale-type-to-HS-code mapping.
+
 ### 2026-09-08 — The FBR digital-invoice block prints on bills too
 
 - **A filed bill now prints its FBR block**: the IRN, the submission date, the

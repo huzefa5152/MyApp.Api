@@ -219,8 +219,20 @@ namespace MyApp.Api.Services.Tax
             // 4) SRO reference — required when rate ≠ 18% (FBR rule 0077). Scenario
             //    catalog supplies a known-good fallback (SN028 → Eighth Schedule
             //    Table 1 / serial 70).
-            string? sroSchedule = scenario.DefaultSroScheduleNo;
-            string? sroItem = scenario.DefaultSroItemSerialNo;
+            // The LINE wins over the scenario default, for the same reason the
+            // sale-type override does above: the operator may know the
+            // notification better than this table. Before this, a hand-entered
+            // SroScheduleNo was dropped and the 0077 check below fired anyway.
+            string? sroSchedule = !string.IsNullOrWhiteSpace(input.SroScheduleNo)
+                ? input.SroScheduleNo!.Trim()
+                : scenario.DefaultSroScheduleNo;
+            string? sroItem = !string.IsNullOrWhiteSpace(input.SroItemSerialNo)
+                ? input.SroItemSerialNo!.Trim()
+                : scenario.DefaultSroItemSerialNo;
+            if (!string.IsNullOrWhiteSpace(input.SroScheduleNo)
+                && !string.Equals(input.SroScheduleNo!.Trim(), scenario.DefaultSroScheduleNo,
+                                  StringComparison.OrdinalIgnoreCase))
+                notes.Add($"SRO Schedule taken from the line (\"{sroSchedule}\"), not scenario {scenario.Code}'s default.");
             if (rate != 18m && string.IsNullOrEmpty(sroSchedule))
                 notes.Add("Rate ≠ 18% but no SRO Schedule on the scenario — operator must set SroScheduleNo + SroItemSerialNo on the line.");
 
@@ -232,6 +244,7 @@ namespace MyApp.Api.Services.Tax
                 ScenarioCode: scenario.Code,
                 IsThirdSchedule: scenario.IsThirdSchedule,
                 IsEndConsumerRetail: scenario.IsEndConsumerRetail,
+                RequiresSroReference: scenario.RequiresSroReference,
                 Notes: notes
             ));
         }
@@ -291,11 +304,28 @@ namespace MyApp.Api.Services.Tax
                 }
             }
 
-            // (c) Rate ≠ 18 % requires SRO references (FBR 0077/0078).
-            if (resolved.Rate != 18m
+            // (c) SRO references, when the SCENARIO needs them (FBR 0077/0078).
+            //
+            // This used to fire on "rate != 18%", which is not the rule. FBR
+            // REFUSES an SRO reference on an exempt sale ([0046]) and on a
+            // zero-rated one ([0078]) — and both are 0%, so the old test
+            // blocked, locally, two scenarios FBR accepts with the fields
+            // empty. The scenario catalog is where that distinction lives.
+            if (resolved.RequiresSroReference
                 && string.IsNullOrWhiteSpace(resolved.SroScheduleNo))
             {
-                errors.Add($"Rate {resolved.Rate}% requires SRO Schedule reference. [pre-flight 0077]");
+                errors.Add(
+                    $"Sale type \"{resolved.SaleType}\" requires an SRO Schedule reference "
+                    + $"at {resolved.Rate}%. [pre-flight 0077]");
+            }
+
+            // FBR pairs the two: a schedule with no serial is [0078].
+            if (!string.IsNullOrWhiteSpace(resolved.SroScheduleNo)
+                && string.IsNullOrWhiteSpace(resolved.SroItemSerialNo))
+            {
+                errors.Add(
+                    $"SRO Schedule \"{resolved.SroScheduleNo}\" needs an SRO Item Serial No. "
+                    + "[pre-flight 0078]");
             }
 
             // (d) 3rd Schedule items must have FixedNotifiedValueOrRetailPrice > 0

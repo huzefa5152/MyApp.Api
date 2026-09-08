@@ -105,7 +105,13 @@ namespace MyApp.Api.Services.Tax
         int? TransactionTypeId,          // FBR transaction-type id (default 18 = Goods)
         string? SaleTypeOverride,        // user-supplied; null → engine picks
         string? Uom = null,              // line UoM string — used by HS_UOM pre-flight check
-        int? FbrUomId = null             // line UoM id — used by HS_UOM pre-flight check
+        int? FbrUomId = null,            // line UoM id — used by HS_UOM pre-flight check
+        // SRO reference AS ENTERED ON THE LINE. The operator is closer to the
+        // notification than our scenario table is, and FBR rule 0077 is checked
+        // against what is actually filed — so what they typed has to be visible
+        // here or the check fires on a bill that satisfies it.
+        string? SroScheduleNo = null,
+        string? SroItemSerialNo = null
     );
 
     public record TaxResolution(
@@ -116,6 +122,10 @@ namespace MyApp.Api.Services.Tax
         string ScenarioCode,             // resolved code (never null)
         bool IsThirdSchedule,
         bool IsEndConsumerRetail,
+        // Whether FBR wants an SRO reference on this line at all. NOT the same
+        // as "the rate is not 18%": FBR REFUSES an SRO on an exempt or
+        // zero-rated line, and both of those are 0%.
+        bool RequiresSroReference,
         List<string> Notes               // human-readable explanation of decisions made
     );
 }

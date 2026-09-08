@@ -957,6 +957,54 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
   type (Bill/TaxInvoice had no FBR keys; the notes had `fbrIRN: ""`), so
   inserting the block previewed as nothing and looked broken. Keep those sample
   values populated.
+### 10b. Filing a scenario other than the standard rate (2026-09-08)
+
+Getting a non-standard scenario accepted turns on four values, and only two of
+them can be resolved from FBR.
+
+- **A sale type is FBR's string, verbatim.** `transactiontypes` is the authority
+  and it is not tidy: `'Goods at standard rate (default)'` is lower case,
+  `' 3rd Schedule Goods '` is padded, and `'Processing/Conversion of Goods'` has
+  no space after the slash. Our catalog carried the spaced form, so SN016 could
+  never be filed — `[0204] Sale type not match with provided scenario`.
+  `FbrService.SaleTypeCanonicalMap` is where a stored variant gets corrected;
+  add both spellings when you find one.
+- **The RATE comes from `saletyperates`, never from the catalog's headline.**
+  Reduced rate lists 21 rates (0.5% to Rs.700/MT); SRO 297(I)/2023 lists exactly
+  one, and it is 25%, not the 18% the catalog claimed. Reference data, so this
+  part is deterministic — resolve it (§10 already says never guess a rate).
+- **An SRO reference is required by the SCENARIO, not by "rate ≠ 18%".** FBR
+  REFUSES a schedule on an exempt supply (`[0046]`) and on a zero-rated one
+  (`[0078]`), and both are 0%. `TaxMappingEngine` used the rate test and so
+  blocked, locally, filings FBR would take. It now reads
+  `TaxResolution.RequiresSroReference`.
+- **`sroschedule` answers an EMPTY list for every rate of every one of these
+  transaction types.** So the schedule string cannot be resolved and has to come
+  from the scenario or from the operator. Which is why
+  `TaxResolutionInput.SroScheduleNo` / `SroItemSerialNo` exist: the LINE wins
+  over the catalog default. Before that the operator's own entry was invisible to
+  the very check that demanded it.
+- **The pre-flight must be told the scenario.** `PreValidate` takes `scenarioId`;
+  the `[SN0xx]` marker in `PaymentTerms` is only a fallback for bills written
+  before it was threaded through.
+- **A zero-rated line needs a genuinely zero-rated commodity.** `8481.8090`
+  (valves) is refused `[0052]`; `1001.1900` (wheat) is accepted. Same for the
+  HS/UoM pair — FBR names the units it will take, and the pre-flight surfaces
+  that before the call.
+- **THE SANDBOX DOES NOT ALWAYS REPEAT ITSELF.** SN005, SN006, SN007 and SN024
+  were each accepted once and then refused on a byte-identical payload; a plain
+  standard-rate submit once came back `[0090] Fixed/Notified Value or Retail
+  Price is mandatory` on a line that is not 3rd-Schedule. Request bodies were
+  compared and the only variable was time. So do NOT ship a catalog value on the
+  strength of one green run — record it in
+  `scripts/test_fbr_sandbox_e2e.py:REGISTERED_SHAPES` with
+  `filesInSuite=False` and promote it when the sandbox repeats. A suite that
+  goes red on PRAL's mood teaches nobody anything.
+- Suite: `scripts/test_fbr_sandbox_e2e.py` suite H (`--cnic` for a 13-digit
+  seller registration; `--file-codes` to choose what is actually filed).
+
+---
+
 ### 11. SQL Server gotchas
 
 - **A single batch that both ALTERs a table and references the new column will fail at parse time** even when execution is guarded by `IF NOT EXISTS`. Split into separate `ExecuteSqlRaw` calls. Wrap column-dependent statements in `EXEC('...')` so they're parsed only at execution time. See `Program.cs:SecurityStamp backfill` for the pattern.
