@@ -113,7 +113,9 @@ export default function StockDashboardPage() {
         getInventorySummary(selectedCompany.id).catch(() => ({ data: [] })),
         canManageOpening ? getOpeningBalances(selectedCompany.id) : Promise.resolve({ data: [] }),
         getTrackedItemTypes(selectedCompany.id),
-        getItemTypes(),
+        // Company-scoped: the catalog is installation-wide, so an unscoped
+        // call offered every other tenant's items in both stock modals.
+        getItemTypes(selectedCompany.id),
         // 2026-05-12: also pull the movements first page on initial load
         // so the "Movements (N)" tab label shows the correct count
         // BEFORE the operator clicks into the tab. Pre-fix this was 0

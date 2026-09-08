@@ -289,6 +289,28 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-09 — Item dropdowns now show your own items, not the whole installation
+
+- **Every item picker is scoped to the companies you can reach.** Until now the
+  item catalog was one installation-wide list: the Stock Dashboard's Opening
+  Balance and Adjustment modals, and every document picker, offered every item
+  type on the server — including ones belonging to unrelated companies. Passing
+  the company only ever changed the ORDER of that list, never its contents. On
+  one company here it meant a dropdown of 1,934 items where 38 were relevant.
+- **What counts as "yours" is worked out from your own records** — anything you
+  have an opening balance, stock movement, invoice, bill, purchase, debit note,
+  goods receipt, delivery challan, sales order or quote against. Nothing to set
+  up, nothing to migrate, and it corrects itself: the moment an item goes on one
+  of your documents it is in your list.
+- **A newly typed item is yours immediately**, before it reaches any document.
+- **HS tariff codes are still shared by everyone**, because they are FBR's
+  published tariff rather than anyone's data — so classifying an item, importing
+  a stock sheet or searching for a code all work exactly as before, including on
+  a company that has just been created and owns nothing yet.
+- **The Item Catalog screen follows the same rule**, so its page counts and its
+  search now describe your own catalog.
+- Suite: `python scripts/test_tenant_isolation.py` — new suite 18.
+
 ### 2026-09-08 — The stock modals only offer items that can hold stock, and V2 is permanent
 
 - **The item pickers on Opening Balance and Adjust now ask the server which

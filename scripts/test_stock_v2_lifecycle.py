@@ -438,8 +438,12 @@ def suite_v2_is_one_way(base, token, cid, suffix):
             check(suite, "V1 tracks strictly fewer item types than V2",
                   st == 200 and st2 == 200 and len(v1ids) < len(v2ids),
                   f"V1={len(v1ids) if st == 200 else st} V2={len(v2ids) if st2 == 200 else st2}")
-            http("DELETE", f"/api/companies/{probe['id']}", base, token=token)
-        http("DELETE", f"/api/companies/{v1co['id']}", base, token=token)
+            dp, _ = http("DELETE", f"/api/companies/{probe['id']}", base, token=token)
+            check(suite, "the V1 probe company is cleaned up", dp in (200, 204), f"http {dp}")
+        # Checked, not fired and forgotten: a delete that quietly failed
+        # left a probe company behind for an hour before anyone noticed.
+        dv, _ = http("DELETE", f"/api/companies/{v1co['id']}", base, token=token)
+        check(suite, "the forward-case company is cleaned up", dv in (200, 204), f"http {dv}")
 
 
 # ── Report / main ───────────────────────────────────────────────────

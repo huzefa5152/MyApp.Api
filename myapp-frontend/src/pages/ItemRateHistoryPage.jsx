@@ -58,10 +58,13 @@ export default function ItemRateHistoryPage() {
   );
 
   useEffect(() => {
-    getItemTypes()
+    // Scoped to the selected company -- unscoped, this filter listed every
+    // item type on the installation, including other tenants'.
+    if (!selectedCompany) { setItemTypes([]); return; }
+    getItemTypes(selectedCompany.id)
       .then((r) => setItemTypes(r.data || []))
       .catch(() => setItemTypes([]));
-  }, []);
+  }, [selectedCompany]);
 
   useEffect(() => {
     if (selectedCompany && canViewClients) {
