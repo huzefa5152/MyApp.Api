@@ -79,40 +79,41 @@ namespace MyApp.Api.Services.Tax
                 "Ship breaking", 18m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
 
-            // Serial left at 1. The sandbox has accepted this line and rejected
-            // it with [0078] across different runs of the SAME payload, so
-            // neither 1 nor 70 is demonstrably correct and changing it on a
-            // guess would be worse than leaving what has been seen to work.
+            // "EIGHTH SCHEDULE TABLE-1" + serial 82. Upper case, hyphenated, and
+            // that serial -- established by asking FBR's validator, which
+            // accepted this pair and refused "Table 1" with serials 1, 56, 70
+            // and 100. The line also needs a Fixed/Notified Value or Retail
+            // Price: once a schedule is in play FBR treats the line as
+            // 3rd-Schedule and asks for one ([0090]).
             new("SN005", "Reduced rate sale",
                 "Goods at Reduced Rate", 5m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
-                DefaultSroScheduleNo: "EIGHTH SCHEDULE Table 1", DefaultSroItemSerialNo: "1"),
+                DefaultSroScheduleNo: "EIGHTH SCHEDULE TABLE-1", DefaultSroItemSerialNo: "82"),
 
-            // The sandbox accepted this line ONCE with the SRO fields empty and
-            // refused it with [0046] on later runs of the same payload, so
-            // whether FBR wants an SRO reference on an exempt supply is not
-            // settled. Left as it was until the sandbox gives a repeatable
-            // answer -- see the note on REGISTERED_SHAPES in
-            // scripts/test_fbr_sandbox_e2e.py.
+            // "SIXTH SCHEDULE TABLE-I" -- a roman numeral I, not a digit 1 --
+            // with serial 63. Every "Table 1" and "TABLE-1" spelling was
+            // refused [0077], i.e. not recognised as a schedule at all.
+            // An exempt line ALSO needs its rate sent as the word "Exempt"
+            // rather than "0%"; see FbrService.IsExemptSaleType.
             new("SN006", "Exempt goods sale",
                 "Exempt Goods", 0m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
-                DefaultSroScheduleNo: "SIXTH SCHEDULE Table 1", DefaultSroItemSerialNo: "1"),
+                DefaultSroScheduleNo: "SIXTH SCHEDULE TABLE-I", DefaultSroItemSerialNo: "63"),
 
-            // Same as SN006: accepted once with the SRO fields empty, refused
-            // with [0077] on later identical runs. Unchanged pending a
-            // repeatable answer.
+            // "FIFTH SCHEDULE" with no table suffix -- the suffixed spellings
+            // are refused [0077] -- and serial 14. Serials 1, 9 and 82 all drew
+            // [0078].
             //
-            // One thing that IS settled: the HS code has to be a genuinely
-            // zero-rated commodity. 8481.8090 (valves) is refused [0052];
-            // 1001.1900 (wheat) is accepted.
+            // The HS code must also be a genuinely zero-rated commodity:
+            // 8481.8090 (valves) is refused [0052]; 1001.1900 (wheat) is
+            // accepted.
             new("SN007", "Zero rated sale",
                 "Goods at zero-rate", 0m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
-                DefaultSroScheduleNo: "FIFTH SCHEDULE", DefaultSroItemSerialNo: "1"),
+                DefaultSroScheduleNo: "FIFTH SCHEDULE", DefaultSroItemSerialNo: "14"),
 
             new("SN008", "Sale of 3rd schedule goods",
                 "3rd Schedule Goods", 18m, "Any",
@@ -189,15 +190,13 @@ namespace MyApp.Api.Services.Tax
             // transaction type (rateId 742, from saletyperates) -- reference
             // data, so it does not depend on a lucky sandbox run.
             //
-            // The schedule STRING is left alone. "SRO 297(I)/2023 Table 1" was
-            // the one form that ever got past [0077], but the sandbox did not
-            // repeat it, so it is recorded in the suite rather than shipped as
-            // the default.
+            // "SRO 297(I)/2023 TABLE-1" + serial 82. Eight other spellings of
+            // that schedule were refused [0077]; this is the one FBR knows.
             new("SN024", "Goods sold that are listed in SRO 297(I)/2023",
                 "Goods as per SRO.297(|)/2023", 25m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
-                DefaultSroScheduleNo: "SRO 297(I)/2023", DefaultSroItemSerialNo: "1"),
+                DefaultSroScheduleNo: "SRO 297(I)/2023 TABLE-1", DefaultSroItemSerialNo: "82"),
 
             new("SN025", "Drugs sold at fixed ST rate under serial 81 of Eighth Schedule Table 1",
                 "Non-Adjustable Supplies", 1m, "Any",

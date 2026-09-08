@@ -1001,6 +1001,24 @@ them can be resolved from FBR.
   (valves) is refused `[0052]`; `1001.1900` (wheat) is accepted. Same for the
   HS/UoM pair — FBR names the units it will take, and the pre-flight surfaces
   that before the call.
+- **SRO schedule strings are FBR's spellings, and nothing normalises them.**
+  `EIGHTH SCHEDULE TABLE-1` (upper case, hyphen), `SIXTH SCHEDULE TABLE-I`
+  (roman numeral I, not a digit), `FIFTH SCHEDULE` (no suffix at all),
+  `SRO 297(I)/2023 TABLE-1`. A spelling FBR does not know comes back as
+  `[0077] Valid SRO/Schedule No. is mandatory` — identical to sending none, which
+  is why this took so long to see. Right spelling, wrong serial is `[0078]`.
+  Those two codes tell you which half is wrong; the serials that work are 82
+  (eighth, SRO 297), 63 (sixth) and 14 (fifth).
+- **Once ANY schedule is in play FBR treats the line as 3rd-Schedule** and
+  requires a `FixedNotifiedValueOrRetailPrice` (`[0090]`). It is an operator
+  input, so the catalog does not default it — but a scenario with an SRO cannot
+  file without one.
+- **An exempt line's rate is the WORD "Exempt", not "0%".** `saletyperates`
+  returns `ratE_DESC` "Exempt" for transaction type 81, and FBR rejects `0%` with
+  `[0046]` "Provided Rate is not correct" — a vocabulary error wearing a rate
+  error's clothes. `FbrService.IsExemptSaleType` is where that is decided.
+- **A zero-rated line needs a zero-rated COMMODITY.** 8481.8090 is refused
+  `[0052]` however correct everything else is; 1001.1900 is accepted.
 - **THE SANDBOX DOES NOT ALWAYS REPEAT ITSELF.** SN005, SN006, SN007 and SN024
   were each accepted once and then refused on a byte-identical payload; a plain
   standard-rate submit once came back `[0090] Fixed/Notified Value or Retail

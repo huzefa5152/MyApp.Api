@@ -289,6 +289,41 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-08 — Four FBR scenarios that never filed, now do
+
+- **Exempt sales were filed with the wrong word for their rate.** FBR wants its
+  own rate description, and for an exempt supply that is `Exempt`, not `0%`.
+  Sending `0%` drew `[0046] Provided Rate is not correct`, which reads as a rate
+  problem and is a vocabulary one.
+- **The SRO schedule references were all spelled wrong**, and FBR's answer to a
+  spelling it does not know is `[0077] Valid SRO/Schedule No. is mandatory` — as
+  though none had been sent at all. The spellings it accepts, established by
+  asking its own validator: `EIGHTH SCHEDULE TABLE-1` with serial 82 (reduced
+  rate), `SIXTH SCHEDULE TABLE-I` — a roman numeral, not a digit — with serial
+  63 (exempt), `FIFTH SCHEDULE` with no suffix and serial 14 (zero-rated), and
+  `SRO 297(I)/2023 TABLE-1` with serial 82. Every previous default had never
+  been accepted.
+- **A zero-rated sale needs a genuinely zero-rated commodity.** Valves
+  (8481.8090) are refused `[0052]` whatever else is right; wheat (1001.1900) is
+  accepted.
+- **Where any SRO schedule applies, FBR also wants a Fixed/Notified Value or
+  Retail Price on the line** (`[0090]`). That is the operator's figure to supply,
+  so nothing defaults it — but it is now documented rather than discovered.
+- Four of the eight scenarios an Importer registration is enrolled for now file
+  real IRNs on demand, on both Importer and Exporter activities — up from two.
+  Three more (reduced rate, exempt, SRO 297) were accepted by FBR when their
+  shape was found and are refused on later identical payloads, so they ship as
+  the catalog defaults but the suite does not assert them. **SN017 (FED charged
+  in ST mode) still does not file**: FBR lists one rate for it, `18% and Rs. 80
+  per Liter`, and refuses `[0052]` for around sixty HS codes — beverages,
+  concentrates, flavourings, tobacco, edible oils, the whole of lubricants, LPG
+  and waxes, vehicles, cement. It publishes no sale-type-to-HS-code mapping, so
+  that one needs an answer from PRAL.
+- The sandbox suite now files each scenario and checks the IRN FBR issued against
+  the one stored. Its pass condition is that the submit path works end to end and
+  that a refusal never leaves a bill looking filed — not that PRAL accepts a
+  particular scenario today, because it does not do so repeatably.
+
 ### 2026-09-08 — A column-heading row can no longer block a stock import
 
 - **A stock sheet failed to import because its own heading row was read as a
