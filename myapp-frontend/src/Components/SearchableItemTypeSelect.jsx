@@ -42,6 +42,12 @@ export default function SearchableItemTypeSelect({
   // shortcut that opens the item-type form inline; on save the new type is
   // added to the list, auto-selected, and (optionally) bubbled to the parent.
   companyId = null, onItemTypeCreated, fbrOn = null,
+  // What to say when the list is empty and nothing has been typed. The
+  // default blames an empty catalog, which is only one of the reasons a
+  // caller can hand us nothing -- a filtered picker ("items with no opening
+  // balance yet") is empty precisely when its job is DONE, and telling the
+  // operator to go and add item types sends them somewhere pointless.
+  emptyText = null,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -348,9 +354,10 @@ export default function SearchableItemTypeSelect({
 
           {filteredItems.length === 0 && filteredNonInv.length === 0 && (
             <div style={styles.empty}>
-              {(items?.length === 0 && nonInventoryItems?.length === 0)
-                ? "No items in catalog yet. Add one on the Item Types page."
-                : `No items match "${query}".`}
+              {query
+                ? `No items match "${query}".`
+                : (emptyText
+                   || "No items in catalog yet. Add one on the Item Types page.")}
             </div>
           )}
 

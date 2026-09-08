@@ -1169,6 +1169,12 @@ export default function StockDashboardPage() {
               />
             ) : (
             <SearchableItemTypeSelect
+              emptyText={
+                itemTypes.length === 0
+                  ? "No items in this company's catalog yet. Create one below."
+                  : "Every item in this company's catalog already has an opening balance. "
+                    + "Edit one from its row, or create a new item type below."
+              }
               items={openingPickerItems}
               value={openingDraft.itemTypeId}
               onChange={(newId) => setOpeningDraft({ ...openingDraft, itemTypeId: newId ? String(newId) : "" })}

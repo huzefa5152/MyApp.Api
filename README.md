@@ -309,6 +309,7 @@ Publish output optimized from 79 MB to 37 MB via:
   a company that has just been created and owns nothing yet.
 - **The Item Catalog screen follows the same rule**, so its page counts and its
   search now describe your own catalog.
+- **The Opening Balance picker now says why it is empty.** It lists items that have no opening yet, so on a company whose catalog is fully opened there is correctly nothing to choose — but it claimed the catalog was empty and sent you to the Item Types page, which fixed nothing. It now says every item already has one, and points at Edit and at the create shortcut in the dropdown itself.
 - Suite: `python scripts/test_tenant_isolation.py` — new suite 18.
 
 ### 2026-09-08 — The stock modals only offer items that can hold stock, and V2 is permanent
