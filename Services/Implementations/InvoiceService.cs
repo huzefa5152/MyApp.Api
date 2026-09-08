@@ -193,9 +193,49 @@ namespace MyApp.Api.Services.Implementations
             return missing;
         }
 
+        /// <summary>How far the two books may drift before the filing counts
+        /// as out of date. MUST match the figure FbrService blocks on, or the
+        /// screen would offer a Submit the server then refuses.</summary>
+        internal const decimal AdjustmentDriftTolerancePkr = 2m;
+
+        /// <summary>What one line contributes to the FILED book: its own
+        /// adjusted total when the overlay stored one, else the adjusted
+        /// quantity times the adjusted price, else the bill line itself.</summary>
+        internal static decimal EffectiveFiledLineTotal(InvoiceItem ii)
+        {
+            var a = ii.Adjustment;
+            if (a == null) return ii.LineTotal;
+            if (a.AdjustedLineTotal.HasValue) return a.AdjustedLineTotal.Value;
+            if (a.AdjustedQuantity.HasValue || a.AdjustedUnitPrice.HasValue)
+                return Math.Round((a.AdjustedQuantity ?? ii.Quantity)
+                                  * (a.AdjustedUnitPrice ?? ii.UnitPrice),
+                                  2, MidpointRounding.AwayFromZero);
+            return ii.LineTotal;
+        }
+
         private static InvoiceDto ToDto(Invoice inv)
         {
             var missing = ComputeFbrMissing(inv);
+
+            // Two books that no longer agree on the total mean the bill moved
+            // after the filing book was built. ONLY for an overlay company: a
+            // normal company's overlay is the tax-claim decomposition, it has
+            // always been allowed to drift, and forcing FbrReady false there
+            // would change behaviour for every existing customer.
+            var overlayOn = inv.Company?.InventoryOverlayEnabled == true;
+            bool anyOverlay = overlayOn && inv.Items != null
+                              && inv.Items.Any(ii => ii.Adjustment != null);
+            // The filed line total has to be DERIVED, not read. An overlay only
+            // stores AdjustedLineTotal when it differs from the bill line, and
+            // the whole point of a redistribution is that it does not: 5 x 2,000
+            // and 10 x 1,000 are both 10,000, so the column is null and reading
+            // it falls back to the bill -- which made every filing look current,
+            // however far the bill had since moved.
+            decimal? fbrAdjustedSubtotal = anyOverlay
+                ? inv.Items!.Sum(ii => EffectiveFiledLineTotal(ii))
+                : (decimal?)null;
+            bool adjustmentStale = anyOverlay
+                && Math.Abs(fbrAdjustedSubtotal!.Value - inv.Subtotal) > AdjustmentDriftTolerancePkr;
             return new InvoiceDto
         {
             Id = inv.Id,
@@ -263,7 +303,9 @@ namespace MyApp.Api.Services.Implementations
             NoteAffectsStock = inv.NoteAffectsStock,
             PrintGroupBillByItemType = inv.PrintGroupBillByItemType,
             PrintGroupTaxInvoiceByItemType = inv.PrintGroupTaxInvoiceByItemType,
-            FbrReady = missing.Count == 0,
+            FbrReady = missing.Count == 0 && !adjustmentStale,
+            FbrAdjustmentStale = adjustmentStale,
+            FbrAdjustedSubtotal = fbrAdjustedSubtotal,
             FbrMissing = missing,
             Items = inv.Items.Select(ii => new InvoiceItemDto
             {

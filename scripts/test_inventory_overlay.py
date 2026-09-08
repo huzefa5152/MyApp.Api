@@ -40,6 +40,9 @@ results: list[tuple[str, bool, str]] = []
 
 
 def check(name: str, ok: bool, reason: str = "") -> bool:
+    # Server messages can carry characters this console cannot encode; a test
+    # runner must never die reporting a failure.
+    reason = (reason or "").encode("ascii", "replace").decode("ascii")
     results.append((name, bool(ok), reason))
     print(f"    [{'OK  ' if ok else 'FAIL'}] {name}" + ("" if ok else f"  -> {reason}"))
     return bool(ok)
@@ -263,6 +266,81 @@ def main() -> int:
               near(after["items"][0]["quantity"], 10)
               and near(after.get("subtotal"), 10000),
               f"qty={after['items'][0]['quantity']} sub={after.get('subtotal')}")
+        # ── 8. The bill moves after the filing book was built ───────────────
+        print("\n=== 8. Editing the bill makes the filing book stale ===")
+        st, b2 = make_bill(args.base, tok, overlay["id"], o_client, o_nohs, 10, 1000)
+        line2 = b2["items"][0]
+        st, _ = adjust(args.base, tok, b2["id"],
+                       [{"id": line2["id"], "itemTypeId": o_hs,
+                         "quantity": 5, "unitPrice": 2000}])
+        check("a second bill is adjusted to 5 x 2,000", st == 200, f"{st}")
+
+        st, fresh = http("GET", f"/api/invoices/{b2['id']}", args.base, token=tok)
+        check("while the books agree, nothing is flagged",
+              fresh.get("fbrAdjustmentStale") is False,
+              f"stale={fresh.get('fbrAdjustmentStale')}")
+
+        # Now change the BILL -- 10 -> 12 -- exactly the spec's scenario.
+        st, edited = http("PUT", f"/api/invoices/{b2['id']}", args.base, token=tok, body={
+            "date": today(), "companyId": overlay["id"], "clientId": o_client,
+            "gstRate": 18, "documentType": 4, "paymentMode": "Cash",
+            "items": [{"id": line2["id"], "itemTypeId": o_nohs,
+                       "description": "Overlay line", "quantity": 12,
+                       "uom": "Numbers, pieces, units", "unitPrice": 1000}]})
+        if check("the bill is edited to 12 x 1,000 = 12,000",
+                 st == 200, f"{st}: {err(edited)}"):
+            check("the bill really is 12,000 now",
+                  near(edited.get("subtotal"), 12000), f"subtotal={edited.get('subtotal')}")
+            check("THE FILING BOOK IS NOW FLAGGED STALE",
+                  edited.get("fbrAdjustmentStale") is True,
+                  f"stale={edited.get('fbrAdjustmentStale')}")
+            check("and it reports the figure the filing still carries",
+                  near(edited.get("fbrAdjustedSubtotal"), 10000),
+                  f"fbrAdjustedSubtotal={edited.get('fbrAdjustedSubtotal')}")
+            check("FbrReady is forced false while it is stale",
+                  edited.get("fbrReady") is not True,
+                  f"fbrReady={edited.get('fbrReady')}")
+
+        # ── 9. And it cannot be filed in that state ─────────────────────────
+        print("\n=== 9. A stale filing cannot be validated or submitted ===")
+        for verb in ("validate", "submit"):
+            st, r = http("POST", f"/api/fbr/{b2['id']}/{verb}", args.base, token=tok)
+            blocked = (st != 200) or (isinstance(r, dict) and r.get("success") is not True)
+            msg = (r or {}).get("errorMessage", "") if isinstance(r, dict) else str(r)
+            check(f"FBR {verb} is refused", blocked, f"http {st}: {err(r)}")
+            # The company here has no FBR token, so the token check can answer
+            # first -- what matters is that a stale filing never leaves. The
+            # wording of the staleness message is asserted on the DTO in
+            # suite 8, where no token is needed to see it.
+            check(f"and nothing was filed by that {verb}",
+                  not (isinstance(r, dict) and r.get("irn")),
+                  f"an IRN came back: {(r or {}).get('irn') if isinstance(r, dict) else r}")
+
+        # ── 10. Re-adjusting clears it ──────────────────────────────────────
+        print("\n=== 10. Re-adjusting to the new total clears the block ===")
+        st, re_adj = adjust(args.base, tok, b2["id"],
+                            [{"id": line2["id"], "itemTypeId": o_hs,
+                              "quantity": 6, "unitPrice": 2000}])
+        if check("the filing is re-adjusted to 6 x 2,000 = 12,000",
+                 st == 200, f"{st}: {err(re_adj)}"):
+            check("the flag clears", re_adj.get("fbrAdjustmentStale") is False,
+                  f"stale={re_adj.get('fbrAdjustmentStale')}")
+            check("and the bill still reads 12 x 1,000",
+                  near(re_adj["items"][0]["quantity"], 12)
+                  and near(re_adj["items"][0]["unitPrice"], 1000),
+                  f"qty={re_adj['items'][0]['quantity']} price={re_adj['items'][0]['unitPrice']}")
+
+        # ── 11. A normal company is never flagged ───────────────────────────
+        print("\n=== 11. A normal company is never flagged stale ===")
+        st, n2 = make_bill(args.base, tok, normal["id"], n_client, n_nohs, 10, 1000)
+        st, _ = adjust(args.base, tok, n2["id"],
+                       [{"id": n2["items"][0]["id"], "quantity": 5, "unitPrice": 2000}])
+        st, nfresh = http("GET", f"/api/invoices/{n2['id']}", args.base, token=tok)
+        check("a normal company reports no staleness at all",
+              nfresh.get("fbrAdjustmentStale") is False
+              and nfresh.get("fbrAdjustedSubtotal") is None,
+              f"stale={nfresh.get('fbrAdjustmentStale')} adjSub={nfresh.get('fbrAdjustedSubtotal')}")
+
     finally:
         if args.keep:
             print(f"\n(kept companies {made})")

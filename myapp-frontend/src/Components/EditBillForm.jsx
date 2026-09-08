@@ -1586,6 +1586,21 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   </div>
                 )}
 
+                {/* The filing book no longer matches the bill it was built
+                    from. Says both figures, because "re-adjust" is useless
+                    advice without the number to adjust TO. */}
+                {invoice?.fbrAdjustmentStale && (
+                  <div style={{ ...styles.narrowPermissionBanner, borderColor: colors.warn, background: "#fff4e0" }}>
+                    <MdInfo size={16} style={{ color: colors.warn, flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <b>This bill changed after it was adjusted for FBR.</b> The bill now totals{" "}
+                      <b>Rs. {Number(invoice.subtotal || 0).toLocaleString()}</b>, but the FBR adjustment totals{" "}
+                      <b>Rs. {Number(invoice.fbrAdjustedSubtotal ?? invoice.subtotal ?? 0).toLocaleString()}</b>.
+                      Re-adjust the quantities and unit prices here so they add up to the bill total,
+                      then validate again — the invoice cannot be validated or submitted until they match.
+                    </div>
+                  </div>
+                )}
                 {/* Narrow-permission banner */}
                 {itemTypeOnlyMode && !groupingOnly && (
                   <div style={styles.narrowPermissionBanner}>

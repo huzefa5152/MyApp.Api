@@ -575,6 +575,29 @@ namespace MyApp.Api.Services.Implementations
                 errors.Add("Invoice date cannot be in the future. [FBR 0043]");
 
             // ─ Items ─
+            // ── The filing book is out of date ──────────────────────────
+            // Under Inventory Overlay Behaviour the bill and the filing are two
+            // books that must agree on the total. If the bill was edited after
+            // the filing book was built, sending it would file a figure that
+            // disagrees with the document the buyer holds. Block validate AND
+            // submit AND the dry run -- hiding a button is not enough, because
+            // this endpoint is reachable without one.
+            if (company.InventoryOverlayEnabled
+                && invoice.Items != null && invoice.Items.Any(ii => ii.Adjustment != null))
+            {
+                var billSubtotal = invoice.Items.Sum(ii => ii.LineTotal);
+                // Same derivation the DTO uses -- see EffectiveFiledLineTotal.
+                var filedSubtotal = invoice.Items.Sum(InvoiceService.EffectiveFiledLineTotal);
+                var drift = Math.Abs(billSubtotal - filedSubtotal);
+                if (drift > InvoiceService.AdjustmentDriftTolerancePkr)
+                    errors.Add(
+                        $"This bill was changed after it was adjusted for FBR. The bill now totals " +
+                        $"Rs. {billSubtotal:N2}, but the FBR adjustment totals Rs. {filedSubtotal:N2} " +
+                        $"(off by Rs. {drift:N2}). Open the Invoices tab, re-adjust the quantities / " +
+                        $"unit prices so they match the bill total, then validate again. " +
+                        $"[Adjustment out of date]");
+            }
+
             if (invoice.Items == null || !invoice.Items.Any())
                 errors.Add("Invoice must have at least one item.");
             else

@@ -27,6 +27,9 @@ function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
       </StatusBadge>
     );
   }
+  if (inv.fbrAdjustmentStale) {
+    return <StatusBadge tone="warning" title={`The bill changed after it was adjusted for FBR — bill Rs. ${Number(inv.subtotal || 0).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal ?? 0).toLocaleString()}. Re-adjust on the Invoices tab before validating.`}>Re-adjust</StatusBadge>;
+  }
   if (inv.fbrStatus === "Submitting") {
     return <StatusBadge tone="info" title="A submission is in progress. Please wait and refresh — do not submit again.">Submitting…</StatusBadge>;
   }

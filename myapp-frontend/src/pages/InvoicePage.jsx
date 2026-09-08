@@ -1175,6 +1175,13 @@ export default function InvoicePage({ mode = "invoices" }) {
                         {inv.fbrIRN && <span style={styles.fbrPillIrn}>IRN {inv.fbrIRN}</span>}
                       </div>
                     )}
+                    {!inv.isCancelled && inv.fbrAdjustmentStale && (
+                      <div style={styles.fbrPillReadjust}
+                           title={`The bill was changed after it was adjusted for FBR. Bill Rs. ${Number(inv.subtotal || 0).toLocaleString()} vs FBR Rs. ${Number(inv.fbrAdjustedSubtotal ?? inv.subtotal ?? 0).toLocaleString()}. Open the Invoices tab, re-adjust the quantities and unit prices to match the bill total, then validate again.`}>
+                        <MdError size={14} color="#8a4b00" />
+                        <span>Re-adjust for FBR</span>
+                      </div>
+                    )}
                     {!inv.isCancelled && inv.fbrCancelledAt && (
                       <div style={styles.fbrPillCancelledAtFbr}
                            title={`Cancelled on the FBR portal on ${new Date(inv.fbrCancelledAt).toLocaleDateString()}`
@@ -1759,6 +1766,20 @@ const styles = {
   // matching border + an icon and label, sitting under the bill metadata
   // row so the operator gets a clear at-a-glance "locked / not yet" cue.
   fbrPillPending: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    marginTop: "0.5rem",
+    padding: "0.3rem 0.7rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    color: "#8a4b00",
+    backgroundColor: "#fff4e0",
+    border: "1px solid #ffcc80",
+    letterSpacing: "0.01em",
+  },
+  fbrPillReadjust: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.4rem",

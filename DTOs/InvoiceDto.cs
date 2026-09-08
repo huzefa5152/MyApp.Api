@@ -240,6 +240,23 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public List<string> FbrMissing { get; set; } = new();
         /// <summary>
+        /// Inventory Overlay only. True when the filing book exists but no
+        /// longer sums to the bill it was reconciled against — i.e. the bill
+        /// was edited after the consultant adjusted it, so the decomposition
+        /// is out of date. <see cref="FbrReady"/> is forced false while this
+        /// holds and FbrService blocks validate AND submit on the same test,
+        /// so a stale filing cannot be sent from anywhere.
+        ///
+        /// Detected by comparing the two books' totals rather than by a
+        /// version number or a hash: if they disagree, the adjustment is stale
+        /// by definition, and no extra column can drift out of step with that.
+        /// </summary>
+        public bool FbrAdjustmentStale { get; set; }
+        /// <summary>The subtotal the FILING book carries. Null when the
+        /// document has no overlay. Shown beside the bill's own total so the
+        /// operator can see both figures in the warning.</summary>
+        public decimal? FbrAdjustedSubtotal { get; set; }
+        /// <summary>
         /// Copy lineage — when this document was produced by the Copy action,
         /// the type and id of the document it was copied from. Null otherwise.
         /// </summary>
