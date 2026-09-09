@@ -47,7 +47,7 @@ jobs:
       - name: Deploy frontend via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: site61833.siteasp.net
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./myapp-frontend/dist/
@@ -100,7 +100,7 @@ jobs:
       - name: Stop app (upload app_offline.htm)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: site61833.siteasp.net
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./.github/offline/
@@ -113,7 +113,7 @@ jobs:
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: site61833.siteasp.net
+          server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./publish/
