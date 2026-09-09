@@ -975,4 +975,4 @@ MonsterASP.NET (IIS + .NET 9)
 | Runtime | .NET 9 (in-process) |
 | Database | SQL Server (same or remote) |
 | Static Files | Served by ASP.NET from `wwwroot/` |
-| FTP | `site61833.siteasp.net` |
+| FTP | `<prod-ftp-host>` — real value in the deploy workflow / GitHub secrets |
