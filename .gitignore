@@ -408,6 +408,12 @@ Data/po-audit/
 Data/uploads/
 Data/keys/
 
+# Sales and marketing collateral (brochures + SALES-STRATEGY.md). Internal:
+# the strategy document carries pricing bands, per-edition commercial structure
+# and notes naming a customer - and THIS REPOSITORY IS PUBLIC. Kept on disk,
+# never committed. Regenerate the rendered files with marketing/brochures/render.sh.
+marketing/
+
 # Claude Code user-local state
 .claude/
 
