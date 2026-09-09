@@ -66,6 +66,78 @@ builder.Host.UseSerilog((ctx, services, lc) => lc
         // Console sink keeps them at Warning so dev can still spot issues.
         restrictedToMinimumLevel: LogEventLevel.Information));
 
+// ── Branch-aware LOCAL database selection (Development only) ──
+// Three production installations live on three long-lived branches, each with
+// its own database and its own restored local copy. Checking out a branch is
+// meant to be the whole switch — see Helpers/LocalDevDatabase.cs and
+// docs/ENVIRONMENTS.md. Inert outside Development and outside a git checkout,
+// so a published deploy never sees it.
+if (builder.Environment.IsDevelopment())
+{
+    // An explicit override always wins and is honoured by NOT installing the
+    // branch source at all — that is how the python test scripts aim a run at
+    // a scratch database. Checked up front rather than by ordering providers:
+    // WebApplicationBuilder's source list already holds several environment
+    // providers (DOTNET_-prefixed host config among them) BEFORE the
+    // appsettings files, so "insert before the first environment provider"
+    // silently lands ahead of appsettings.Development.json and loses to it.
+    var explicitOverride =
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection"))
+        || args.Any(a => a.Contains("ConnectionStrings:DefaultConnection", StringComparison.OrdinalIgnoreCase));
+
+    var localDb = LocalDevDatabase.Resolve(builder.Environment.ContentRootPath);
+    if (explicitOverride)
+    {
+        Log.Information(
+            "Branch-aware local database skipped — ConnectionStrings:DefaultConnection was set explicitly.");
+    }
+    else if (localDb.ConnectionString is not null)
+    {
+        // Appended LAST so it beats every appsettings*.json. A stale connection
+        // string left in the gitignored appsettings.Development.json surviving
+        // a branch switch is exactly the accident this exists to stop.
+        builder.Configuration.Sources.Add(
+            new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
+            {
+                InitialData = new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:DefaultConnection"] = localDb.ConnectionString
+                }
+            });
+
+        Log.Information(
+            "Local database selected from branch {Branch}: {Server} / {Database}",
+            localDb.Branch, localDb.Server, localDb.Database);
+    }
+    else
+    {
+        Log.Warning(
+            "Branch-aware local database NOT applied ({Reason}). Falling back to the connection " +
+            "string in appsettings — confirm it is the right one for this branch. See docs/ENVIRONMENTS.md.",
+            localDb.Reason);
+    }
+
+    // Fail closed if what we ended up with is not a local server at all.
+    var effectiveConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+    DevelopmentSqlGuard.AssertLocal(
+        effectiveConnection,
+        Environment.MachineName,
+        builder.Configuration.GetValue<bool>(DevelopmentSqlGuard.AllowRemoteKey));
+
+    // Says what the app is ACTUALLY about to open, after every configuration
+    // provider has had its say — the line to check before trusting a local run.
+    try
+    {
+        var effective = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(effectiveConnection);
+        Log.Information("Effective database connection: {Server} / {Database}",
+            effective.DataSource, effective.InitialCatalog);
+    }
+    catch (ArgumentException)
+    {
+        // Unparseable — EF will report it far better than we could here.
+    }
+}
+
 // Add services to the container
 builder.Services.AddControllers(); // 👈 Needed for controllers
 builder.Services.AddDbContext<AppDbContext>(options =>
