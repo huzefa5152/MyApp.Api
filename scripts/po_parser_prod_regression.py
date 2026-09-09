@@ -23,7 +23,7 @@ SAFETY
     (/poimport/archives, /poimport/archives/{id}/file). Never parse/create/update
     against prod. (See the production-readonly rule in CLAUDE.md / team memory.)
   * The LOCAL backend does the re-parsing. Point it at a database that has the
-    SAME PO formats as prod (e.g. the prod-replica db46684) so format matching
+    SAME PO formats as prod (e.g. the prod-replica <master-prod-db>) so format matching
     behaves like production.
 
 USAGE

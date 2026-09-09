@@ -25,20 +25,20 @@ worktree to read it, e.g. `git worktree add --detach ../_ref-customize customize
 
 **Phase 3 progress (2026-07-23, uncommitted on this branch):**
 - ✅ **Backend** — `Models/Accounting/{Payment,PaymentAllocation}.cs` (Division-free; `BankAccountId`/`AccountId` kept as FK-less columns — no CoA); `PaymentService` (all 6 IPostingService calls + `_context.Accounts` + Division stripped; AR/AP `AmountPaid` reflow, over-allocation guard, per-direction numbering, cheque lifecycle kept); `PaymentRepository` (no `.Include(Division)`); `PaymentsController` (company guard only, no `IDivisionAccessGuard`; 8 `accounting.receipts/payments.*` keys); `PaymentDtos` + `AccountingPrintDtos` (PrintPaymentVoucherDto, Division-free); helpers `PakistanClock` + `PaymentStatusCalculator`; DI + AppDbContext config.
-- ✅ **Schema** — `AmountPaid`/`DueDate` on Invoice + PurchaseBill, surfaced (`AmountPaid`/`BalanceDue`/`PaymentStatus`/`DaysOverdue`) on both DTOs + paged lists; `SetDueDate` endpoints. **Idempotent guarded raw-SQL migration** `20260722081305_AddPaymentsAndReceipts` (db46684 was polluted with customer-era Payment tables missing `ReconciledDate`; the migration no-ops what exists, adds the missing column, and creates everything fresh on true prod). ParserFeedbacks stripped from migration + snapshot.
+- ✅ **Schema** — `AmountPaid`/`DueDate` on Invoice + PurchaseBill, surfaced (`AmountPaid`/`BalanceDue`/`PaymentStatus`/`DaysOverdue`) on both DTOs + paged lists; `SetDueDate` endpoints. **Idempotent guarded raw-SQL migration** `20260722081305_AddPaymentsAndReceipts` (<master-prod-db> was polluted with customer-era Payment tables missing `ReconciledDate`; the migration no-ops what exists, adds the missing column, and creates everything fresh on true prod). ParserFeedbacks stripped from migration + snapshot.
 - ✅ **Frontend** — `PaymentsPage` (mounted at `/receipts` + `/payments`), `PaymentForm` (free-text bank/cash; no Division/BankCashSelect/AttachmentManager), `PaymentHistoryDialog`, `paymentApi`, `accountingDocTemplates`; Accounting sidebar group + routes + permissionSections. **Separate Receipt + Payment print-template types** (11 total): Payments screen uses the `Payment` type (4 payment-voucher starters), Receipts the `Receipt` type — each voucher titled correctly; both bind the same DTO (`direction` marks which).
 - ✅ **Payment-status badge (extra ask, 2026-07-23)** — new perm `accounting.paymentstatus.view`; permission-gated `PaymentStatusBadge` on Invoice card + `InvoiceTable` (bills+invoices modes, excl. notes) and PurchaseBill card + `PurchaseBillTable`. Exported `colors` from `theme.js`.
 - ✅ **Verified** — dotnet build 0 err; frontend build clean; audit 67/67; basic 37/37; tenant-iso all-pass (added 4 Payments companyId cases); stock 76/76; backend API E2E (create/reflow/over-alloc/print/due-date/delete); browser E2E (receipt created via real form → invoice reflowed; badge shows for admin both modes; RBAC negative test — limited role lacks the key, badge hidden). **Zero Division / GL code** (only Division-free comments).
 - **⏳ AWAITING: user permission to commit, then (separately) to merge.** Nothing committed.
 
 **Phase 2 progress (2026-07-21, uncommitted on this branch):**
-- ✅ **Stage A — backend multi-template core**: PrintTemplate +Name/+IsDefault; `Helpers/PrintTemplateTypes.cs` (10 types); DTOs (Create/Update); repo id-based CRUD/set-default/delete/apply-starter/GetForExport; controller (id endpoints + audit, per-action `[AuthorizeCompany]`); perms `printtemplates.manage.delete`+`.starter.apply`; AppDbContext filtered-unique `UX_PrintTemplates_DefaultPerScope` on `(CompanyId,TemplateType)`; **idempotent migration `20260721084126_AddNameAndIsDefaultToPrintTemplate`** (guarded SQL, safe on db46684 which already had the columns + on true prod). Verified 24/24 smoke on db46684.
+- ✅ **Stage A — backend multi-template core**: PrintTemplate +Name/+IsDefault; `Helpers/PrintTemplateTypes.cs` (10 types); DTOs (Create/Update); repo id-based CRUD/set-default/delete/apply-starter/GetForExport; controller (id endpoints + audit, per-action `[AuthorizeCompany]`); perms `printtemplates.manage.delete`+`.starter.apply`; AppDbContext filtered-unique `UX_PrintTemplates_DefaultPerScope` on `(CompanyId,TemplateType)`; **idempotent migration `20260721084126_AddNameAndIsDefaultToPrintTemplate`** (guarded SQL, safe on <master-prod-db> which already had the columns + on true prod). Verified 24/24 smoke on <master-prod-db>.
 - ✅ **Stage B — print data + seeders**: PrintDtos +Company* block/note fields on PrintTaxInvoiceDto, +UnitPrice on PrintTaxItemDto, +PrintPurchaseBillDto/+PrintGoodsReceiptDto (Division-free); InvoiceService tax-invoice mapping fills Company*/UnitPrice/note fields (NoteKind 1=Debit/2=Credit, OriginalInvoice nav); NEW print endpoints `GET /purchasebills/{id}/print` + `GET /goodsreceipts/{id}/print` (+ perm `goodsreceipts.print.view`); ported `SalesMergeFieldSeeder`+`NoteAndPurchaseMergeFieldSeeder` (skipped Division one) wired in Program.cs. Verified: merge fields seeded (SQ44/SO35/CN49/DN49/PB45/GR26), print endpoints return correct payloads on real data, GR 404s gracefully.
 - ✅ **Stage C — frontend infra**: `printTemplateApi` id-based fns; `usePrintTemplates` hook (no divisionId, localStorage `printTpl:{company}:{type}`); `PrintTemplateSelect`; `templateEngine.js` adopted customer superset (+fmtDMY/fmtQty/richText, MERGE_FIELDS trimmed to Challan/Bill/TaxInvoice/Receipt); `templateSampleData.js` (10 types, Division-stripped, new-type defaults from starters[0]); 10 starter files + aggregator ported (Division tokens stripped from purchaseBill×2/receipt×4). `salesDocTemplates.js` already Division-free. **Frontend `npm run build` green.**
 - ✅ **Stage D — management screen**: `PrintTemplatesPage.jsx` (Division-free 3-tab manage: Print/Starter/Excel) + `TemplateEditorPage.jsx` upgraded to multi-template/by-id (create+edit, name field, type locked, id-based Excel) + `StarterGallery`/`ApplyStarterModal`/`A4PreviewFrame` ported. Routes: `/templates`→PrintTemplatesPage, `/templates/edit`→editor. **Browser-verified**: management page + 139-starter gallery + editor load, zero console errors, Hakimi untouched.
 - ✅ **Stage E — selector on 9 screens**: `usePrintTemplates`+`PrintTemplateSelect` on Challan/Bill/TaxInvoice/CreditNote/DebitNote (InvoicePage mode-keyed type), SalesQuote, SalesOrder + NEW Print/PDF flow (card+table) on PurchaseBills/GoodsReceipts (+ `getPurchaseBillPrintData`/`getGoodsReceiptPrintData` api fns). Receipt deferred to Phase 3. Browser-verified: picker shows where a template exists (Challan), hides where none (PurchaseBill), no errors.
 - ✅ **Stage F — docs+verify**: README changelog; PRINT_TEMPLATE_GUIDE.md + scripts/print_templates ported (Division-free note prepended). Regression GREEN: backend build 0 err, frontend build clean (657 mod), audit 67/67, basic flows 37/37, tenant iso all-pass; **zero Division code confirmed** (only a comment stating Division-free). Optional not-yet-done: port `test_print_templates_multidoc.py` as a dedicated regression + explicit tenant-iso cases for the 3 new endpoints (behavior already covered by the suite + browser E2E).
-- **DB migration** `20260721084126_AddNameAndIsDefaultToPrintTemplate` (idempotent, applied to db46684). Backend server running on :5134 vs db46684. Recon maps in scratchpad (`wafhydde0.output`, `reconB_*.md`).
+- **DB migration** `20260721084126_AddNameAndIsDefaultToPrintTemplate` (idempotent, applied to <master-prod-db>). Backend server running on :5134 vs <master-prod-db>. Recon maps in scratchpad (`wafhydde0.output`, `reconB_*.md`).
 - **⏳ AWAITING: user permission to commit + (later) merge.** Nothing committed. Do NOT commit/merge without explicit say-so.
 
 ---
@@ -242,7 +242,7 @@ Receipt is the money-in direction of a **unified `Payment`** entity
   2022 (v957, default `CRKRL-HUSSAHUZ1`) and SQL 2019 (v904, `\MSSQLSERVER2`). A
   `.bak` cannot restore to an older engine.** For real prod data locally use a
   **`.bacpac`** (version-independent, `sqlpackage`) or install SQL Server 2025.
-- **Dev DB in use: `db46684`** — real prod-replica data (Hakimi id=1 / Roshan
+- **Dev DB in use: `<master-prod-db>`** — real prod-replica data (Hakimi id=1 / Roshan
   id=2), default instance, loaded earlier from a `.bacpac`. It was polluted by an
   earlier customer-branch run: **empty** leftover `SalesQuotes/SalesOrders/…`
   (carrying a vestigial `DivisionId` master ignores) + Division/AmountPaid columns
@@ -256,17 +256,17 @@ Receipt is the money-in direction of a **unified `Payment`** entity
     rows, then let AutoMigrate rebuild. The app runs fine without this (it ignores
     the extra columns).
 - **`appsettings.Development.json` points at `DeliveryChallanDb` (branch DB on
-  `\MSSQLSERVER2`), NOT db46684** — so master needs a per-run override:
+  `\MSSQLSERVER2`), NOT <master-prod-db>** — so master needs a per-run override:
   ```bash
-  ConnectionStrings__DefaultConnection="Server=CRKRL-HUSSAHUZ1;Database=db46684;Trusted_Connection=True;TrustServerCertificate=True;" \
+  ConnectionStrings__DefaultConnection="Server=CRKRL-HUSSAHUZ1;Database=<master-prod-db>;Trusted_Connection=True;TrustServerCertificate=True;" \
   ASPNETCORE_ENVIRONMENT=Development Database__AutoMigrate=true \
   dotnet run --no-launch-profile --urls "http://localhost:5134"
   ```
-  There's also an empty **`db46684_salesport`** (built fresh by EF) for a clean,
+  There's also an empty **`<master-prod-db>_salesport`** (built fresh by EF) for a clean,
   no-real-data DB. Login: **admin / admin123**.
 - **Test companies** created while verifying (delete when convenient — never
   touch Hakimi id=1 / Roshan id=2): `SO Enhance Test Co` (~124), `… 2` / `… PO3`
-  (~125/126) on db46684; `Sales Port Test Co` on db46684_salesport.
+  (~125/126) on <master-prod-db>; `Sales Port Test Co` on <master-prod-db>_salesport.
 - **Frontend build needs Node 20** (nvm `v20.20.2`; PATH-prefix it — shell
   default node is 18): `cd myapp-frontend && npm run build`, then copy
   `dist/{assets,index.html,runtime-env.js}` → `wwwroot/` (wwwroot is gitignored;
@@ -284,7 +284,7 @@ Receipt is the money-in direction of a **unified `Payment`** entity
   `test_basic_flows.py`; `test_tenant_isolation.py`;
   `test_stock_itemtype_reflow.py`. Add tenant-isolation cases for every new
   companyId endpoint (SalesQuotes/SalesOrders now; Payments/PrintTemplates next).
-- Smoke-test each new flow against `db46684` on a fresh **test company** (never
+- Smoke-test each new flow against `<master-prod-db>` on a fresh **test company** (never
   Hakimi/Roshan).
 
 ## 7. Merge to master (only when all phases done)
