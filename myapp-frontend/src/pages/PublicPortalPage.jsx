@@ -4,12 +4,13 @@ import {
   MdOutlineInbox, MdErrorOutline, MdCheckCircle,
 } from "react-icons/md";
 import {
-  getPortal, getPortalInvoices, getPortalInvoice, getPortalPrintPayload,
+  getPortal, getPortalInvoices, getPortalInvoice, getPortalPrintPayload, resolvePortalBulk,
   portalTokenFromLocation,
 } from "../api/portalApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
+import BulkInvoiceDialog from "../Components/BulkInvoiceDialog";
 
 /**
  * The public Customer Portal.
@@ -100,6 +101,11 @@ export default function PublicPortalPage() {
   // double-click can't start two generations of the same document.
   const [busy, setBusy] = useState({});
   const [notice, setNotice] = useState("");
+  // Bulk download. The dialog, the rendering and the naming are the SAME
+  // ones the internal Invoices screen uses; the only difference is that
+  // this caller's scope comes from the portal token, and the customer is
+  // offered no template choice.
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Typing shouldn't fire a request per keystroke on someone's mobile data.
   useEffect(() => {
@@ -334,6 +340,12 @@ export default function PublicPortalPage() {
                 Clear
               </button>
             )}
+            {header.canPrint && (
+              <button type="button" className="portal-clear" style={s.clearFilters}
+                      onClick={() => setBulkOpen(true)}>
+                Download several
+              </button>
+            )}
           </div>
         </section>
 
@@ -487,6 +499,24 @@ export default function PublicPortalPage() {
                      canPrint={header.canPrint} onClose={() => setDetail(null)}
                      onPdf={handlePdf} onPrint={handlePrint} />
       )}
+
+      {/* Bulk download. NO template picker is passed: the customer gets the
+          document the operator configured for this portal, and the server
+          refuses to pin a template for a portal scope at all. The date boxes
+          on screen seed the dialog, so "download several" continues whatever
+          the customer was already looking at. */}
+      <BulkInvoiceDialog
+        open={bulkOpen && header.canPrint}
+        onClose={() => setBulkOpen(false)}
+        title="Download your invoices"
+        initialFrom={dateFrom}
+        initialTo={dateTo}
+        resolve={(request) => resolvePortalBulk(token, {
+          preset: request.preset,
+          dateFrom: request.dateFrom,
+          dateTo: request.dateTo,
+        })}
+      />
     </Frame>
   );
 }

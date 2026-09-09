@@ -983,6 +983,72 @@ Rules that must not be relaxed:
   suite 4 (IDOR) — that suite is the only automated proof the hand-rolled scope
   holds.
 
+### 5c-3. Bulk invoice download — ONE service, two authorization scopes (2026-09-09)
+
+`Services/Implementations/InvoiceBulkService.cs` resolves a batch of invoices to
+render, and it is the ONLY place that does. Both surfaces call it: the internal
+Invoices screen (`Controllers/InvoiceBulkController.cs`) and the public Customer
+Portal (`POST .../invoices/bulk`). **The only difference between them is the
+`InvoiceBulkScope`** — everything else (selection, template resolution, naming,
+date validation, the cap) is shared, so the two cannot drift.
+
+- **Rendering is in the BROWSER, and that is not a shortcut.** There is no
+  server-side PDF writer in this solution and the templates are arbitrary
+  HTML+CSS, so a .NET PDF library cannot render them without rewriting all ~233
+  of them. The split is: server decides WHAT (authorization, selection,
+  templates, names), `myapp-frontend/src/utils/bulkInvoiceDocuments.js` decides
+  HOW (merge, render, ZIP, consolidated). Both surfaces then share one renderer,
+  which is why a bulk PDF of one invoice equals its one-off PDF.
+- **`InvoiceBulkScope` has no public constructor** — only `ForUser` and
+  `ForPortal`. Same reasoning as `ResolvePortalAttribute` being a filter: the
+  check must be impossible to forget on the endpoint someone adds later. A
+  request's `clientId` / `divisionId` are FILTERS intersected with the scope and
+  can only narrow it.
+- **The portal's request type is deliberately smaller.** `PortalBulkRequestDto`
+  carries a date window and nothing else, so a customer POSTing `clientId` or
+  `templateId` is not rejected — the value has nowhere to land. Absent beats
+  validated.
+- **ONE request per batch, never one per invoice.** The portal is behind the
+  120-per-minute `"portal"` limiter, so a per-invoice loop would trip it at ~120
+  documents and look like abuse. The template HTML is therefore sent ONCE per
+  distinct template (8–15 KB each) rather than once per invoice.
+- **A pinned template must belong to the scope's company**, and a portal may
+  never pin one. A template row carries its company's letterhead, logo and
+  stamp, so rendering company A's invoice through company B's template produces
+  a document with the wrong business's identity on it — refused, not warned.
+- **Consolidated print is ONE PDF of real pages, not concatenated HTML.**
+  `printLayout.js` pins the signature with `position: fixed; bottom: 0` and a
+  document has exactly one such element, so a merged HTML document would print
+  invoice 1's signature on every page of invoices 2..N; template CSS is also
+  unscoped and would collide. Each invoice is rendered alone and appended with
+  `pdf.addPage()`, so the page breaks are physical.
+- **Cap is 200 (`InvoiceBulkService.MaxBatchSize`), and `Truncated` must be
+  surfaced.** The constraint is browser memory, not SQL. A truncated run that
+  reads as a complete one is the worst outcome this feature has.
+- Suites: `python scripts/test_invoice_bulk.py` (39 checks — runs the same
+  scenarios through BOTH callers and asserts they hand the browser byte-identical
+  template html and print data) and `node scripts/test_pdf_page_cuts.mjs`.
+
+### 5c-4. A PDF page break must not cut a line item (2026-09-09)
+
+`myapp-frontend/src/utils/pdfPageCuts.js` decides where each PDF page ends, and
+it is a separate dependency-free module so it can be tested under plain node.
+
+**A template cannot fix this.** html2canvas paints the whole document as ONE
+continuous bitmap with no concept of a page, so `page-break-inside: avoid` is
+inert on the PDF path — it only works on the browser print path, where
+`printDocument.js` injects it. The slicer used to advance by a fixed pixel
+height, which on a 40-line invoice cut a row through the middle: its top half at
+the foot of page 1, its bottom half at the head of page 2, unreadable on both.
+Reported against a real 2-page bulk PDF.
+
+`choosePageCuts` now ends each page at the largest block boundary that fits —
+the bottom edges of `tr` / `img` / `.no-break`, the same set the print path
+protects. A block taller than a page is still cut, because the alternative is an
+endless document, and a `minFillRatio` floor stops a page ending just after it
+began. All 32 built-in templates emit a `<tr>` per line item, so the fix reaches
+every one of them, every operator-created template, and single-invoice exports.
+
 ### 5c-2. Print-template artwork is a FILE, never inline base64 (2026-09-07)
 
 A bespoke print template must reference its logos, letterheads and banners by
@@ -1280,6 +1346,8 @@ them can be resolved from FBR.
 | Accounting reports | `python scripts/test_accounting_reports.py` | `326/326 checks passed` |
 | Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
 | Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
+| PDF page breaks never cut a line item (offline) | `node scripts/test_pdf_page_cuts.mjs` | `10 passed, 0 failed` |
+| Bulk invoice download / consolidated print, through BOTH callers | `python scripts/test_invoice_bulk.py` | `39 passed, 0 failed` |
 | HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
 | Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
 | Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |

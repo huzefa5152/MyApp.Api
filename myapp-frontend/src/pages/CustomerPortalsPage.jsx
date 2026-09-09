@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   MdPublic, MdAdd, MdContentCopy, MdOpenInNew, MdCheck, MdBlock,
-  MdPlayArrow, MdDelete, MdWarningAmber, MdDescription,
+  MdPlayArrow, MdDelete, MdWarningAmber, MdDescription, MdFilterAltOff,
 } from "react-icons/md";
 import {
   getCustomerPortals, createCustomerPortal, setCustomerPortalActive, deleteCustomerPortal,
@@ -44,6 +45,74 @@ export default function CustomerPortalsPage() {
   const [showForm, setShowForm] = useState(false);
   const [created, setCreated] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+
+  // ── Filters ───────────────────────────────────────────────────────────────
+  // CLIENT-SIDE, over the list this screen has already fetched in full. A
+  // portal is one row per (company, client) and an installation has tens of
+  // them, so a server round trip per keystroke would buy nothing; the endpoint
+  // is already scoped to the caller's accessible companies, which is the part
+  // that has to be server-side.
+  //
+  // Held in the QUERY STRING rather than component state so a filtered view is
+  // a link an operator can send, and so browser back/forward behaves — the same
+  // choice the Invoices screen already makes for its search and client filters.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const companyFilter = searchParams.get("companyId") || "";
+  const clientFilter = searchParams.get("clientId") || "";
+  const statusFilter = searchParams.get("status") || "";
+  const searchFilter = searchParams.get("q") || "";
+
+  const setFilters = useCallback((changes) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [k, v] of Object.entries(changes)) {
+      if (v === "" || v == null) next.delete(k);
+      else next.set(k, String(v));
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Options come from the PORTAL ROWS, not from the company and client
+  // catalogues. Two reasons: this screen filters portals, so a client with no
+  // portal is a dead option; and it makes the Company -> Client dependency fall
+  // out for free, with no per-company client fetch and nothing to keep in sync.
+  const companyOptions = useMemo(() => {
+    const seen = new Map();
+    for (const p of portals) if (!seen.has(p.companyId)) seen.set(p.companyId, p.companyName);
+    return [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [portals]);
+
+  const clientOptions = useMemo(() => {
+    const seen = new Map();
+    for (const p of portals) {
+      if (companyFilter && String(p.companyId) !== companyFilter) continue;
+      if (!seen.has(p.clientId)) seen.set(p.clientId, p.clientName);
+    }
+    return [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [portals, companyFilter]);
+
+  // A client selection that the chosen company cannot contain is dropped rather
+  // than left to filter everything away — a screen showing "no portals" because
+  // of an invisible stale filter reads as data loss.
+  useEffect(() => {
+    if (!clientFilter) return;
+    if (clientOptions.some((c) => String(c.id) === clientFilter)) return;
+    setFilters({ clientId: "" });
+  }, [clientFilter, clientOptions, setFilters]);
+
+  const visiblePortals = useMemo(() => {
+    const needle = searchFilter.trim().toLowerCase();
+    return portals.filter((p) => {
+      if (companyFilter && String(p.companyId) !== companyFilter) return false;
+      if (clientFilter && String(p.clientId) !== clientFilter) return false;
+      if (statusFilter === "active" && !p.isActive) return false;
+      if (statusFilter === "disabled" && p.isActive) return false;
+      if (needle && !`${p.clientName} ${p.companyName} ${p.documentTypeLabel}`.toLowerCase().includes(needle))
+        return false;
+      return true;
+    });
+  }, [portals, companyFilter, clientFilter, statusFilter, searchFilter]);
+
+  const hasFilters = !!(companyFilter || clientFilter || statusFilter || searchFilter);
   const [viewMode, setViewMode, isBigScreen] = useListViewMode("customerPortals");
 
   const reload = useCallback(async () => {
@@ -169,7 +238,11 @@ export default function CustomerPortalsPage() {
           <div>
             <h4 style={st.title}>Customer Portal</h4>
             <p style={st.subtitle}>
-              Public invoice links — {portals.length} portal{portals.length === 1 ? "" : "s"}
+              {/* When a filter is on, the phrase is "1 of 2 portals" — the
+                  plural follows the TOTAL, not the visible count. */}
+              Public invoice links — {visiblePortals.length}
+              {hasFilters ? ` of ${portals.length}` : ""} portal
+              {(hasFilters ? portals.length : visiblePortals.length) === 1 ? "" : "s"}
             </p>
           </div>
         </div>
@@ -192,8 +265,66 @@ export default function CustomerPortalsPage() {
         </span>
       </div>
 
+      {/* Filter bar. Shown whenever there is anything to filter, like the
+          Invoices screen's — NOT only once a second portal exists. Hiding it
+          below a threshold makes the control invisible to the person looking
+          for it and its absence indistinguishable from a bug. Styling reuses
+          the shared dropdown/form tokens so it matches every other filter bar
+          in the app. */}
+      {portals.length > 0 && (
+        <div style={st.filterBar}>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Company</span>
+            <select style={{ ...dropdownStyles.base, ...st.filterInput }} value={companyFilter}
+                    onChange={(e) => setFilters({ companyId: e.target.value, clientId: "" })}>
+              <option value="">All companies</option>
+              {companyOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Client</span>
+            <select style={{ ...dropdownStyles.base, ...st.filterInput }} value={clientFilter}
+                    onChange={(e) => setFilters({ clientId: e.target.value })}>
+              <option value="">All clients</option>
+              {clientOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label style={st.filterField}>
+            <span style={st.filterLabel}>Status</span>
+            <select style={{ ...dropdownStyles.base, ...st.filterInput }} value={statusFilter}
+                    onChange={(e) => setFilters({ status: e.target.value })}>
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </label>
+          <label style={{ ...st.filterField, flex: "2 1 180px" }}>
+            <span style={st.filterLabel}>Search</span>
+            <input type="search" style={st.filterInput} value={searchFilter}
+                   placeholder="Client, company or document"
+                   onChange={(e) => setFilters({ q: e.target.value })} />
+          </label>
+          {hasFilters && (
+            <button type="button" style={st.filterClear}
+                    onClick={() => setFilters({ companyId: "", clientId: "", status: "", q: "" })}>
+              <MdFilterAltOff size={15} /> Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div style={st.loading}><div style={st.spinner} /></div>
+      ) : portals.length > 0 && visiblePortals.length === 0 ? (
+        <div style={st.empty}>
+          <MdFilterAltOff size={40} color={colors.cardBorder} />
+          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
+            No portal matches these filters.
+          </p>
+          <button style={st.addBtn} onClick={() => setFilters({ companyId: "", clientId: "", status: "", q: "" })}>
+            Clear filters
+          </button>
+        </div>
       ) : portals.length === 0 ? (
         <div style={st.empty}>
           <MdPublic size={40} color={colors.cardBorder} />
@@ -204,7 +335,7 @@ export default function CustomerPortalsPage() {
       ) : viewMode === "table" ? (
         <DataTable
           columns={columns}
-          rows={portals}
+          rows={visiblePortals}
           rowKey={(p) => p.id}
           actions={renderActions}
           quickSearchPlaceholder="Quick filter visible rows..."
@@ -213,7 +344,7 @@ export default function CustomerPortalsPage() {
         />
       ) : (
         <div className="card-grid">
-          {portals.map((p) => (
+          {visiblePortals.map((p) => (
             <div key={p.id} style={cardStyles.card}
                  onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
                  onMouseLeave={(e) => Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })}>
@@ -499,6 +630,17 @@ const btn = {
 };
 
 const st = {
+  filterBar: { display: "flex", gap: "0.6rem", flexWrap: "wrap", alignItems: "flex-end",
+    background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10,
+    padding: "0.65rem 0.8rem", marginBottom: "0.9rem" },
+  filterField: { display: "flex", flexDirection: "column", gap: 4, flex: "1 1 150px", minWidth: 0 },
+  filterLabel: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: "0.05em", color: colors.textSecondary },
+  filterInput: { padding: "0.42rem 0.55rem", borderRadius: 7, border: `1px solid #d0d7e2`,
+    background: "#f8f9fb", fontSize: "0.84rem", color: colors.textPrimary, minHeight: 38, width: "100%" },
+  filterClear: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 38,
+    padding: "0.42rem 0.7rem", borderRadius: 7, border: `1px solid #d0d7e2`, background: "#fff",
+    color: colors.textPrimary, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center",
     marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" },
   icon: { width: 48, height: 48, borderRadius: 14,

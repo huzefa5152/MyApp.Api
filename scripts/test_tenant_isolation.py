@@ -299,6 +299,12 @@ endpoints_to_test = [
     ("GET",  "/api/suppliers/common?companyId={cid}"),
     ("GET",  "/api/invoices/company/{cid}"),
     ("GET",  "/api/invoices/company/{cid}/paged"),
+    # Bulk invoice download resolves a whole month of documents in one call, so
+    # an unguarded one would hand over another tenant's entire sales book. The
+    # POST body carries only filters; the company is in the route, behind
+    # [AuthorizeCompany] — which runs before model binding, so a bodyless probe
+    # still has to be refused.
+    ("POST", "/api/invoices/bulk/company/{cid}"),
     ("GET",  "/api/invoices/count?companyId={cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}/paged"),

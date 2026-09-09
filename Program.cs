@@ -421,6 +421,10 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IDocumentCopyService, DocumentCopyService>();
 // Customer Portal: internal management + the public token-scoped read surface.
 builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
+// Bulk invoice download / consolidated print. ONE service behind BOTH the
+// internal Invoices screen and the public Customer Portal — only the
+// authorization scope differs (see IInvoiceBulkService).
+builder.Services.AddScoped<IInvoiceBulkService, InvoiceBulkService>();
 builder.Services.AddScoped<IItemTypeService, ItemTypeService>();
 builder.Services.AddScoped<IHsCodeService, HsCodeService>();
 builder.Services.AddScoped<IClientImportService, ClientImportService>();

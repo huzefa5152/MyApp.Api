@@ -44,6 +44,35 @@ async function portalGet(path, params) {
   return res.json();
 }
 
+/**
+ * POST with the same properties as portalGet: no Authorization header, no
+ * interceptors, no redirect on failure, and the same generic message for a
+ * token that does not work. A bulk request is a POST because it carries a
+ * body, not because it changes anything — nothing on this controller writes.
+ */
+async function portalPost(path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    credentials: "omit",
+    body: JSON.stringify(body || {}),
+  });
+
+  if (!res.ok) {
+    let message = "This customer portal is no longer available.";
+    try {
+      const b = await res.json();
+      // A 400 is the customer's own date input and says something useful; a
+      // 404 keeps the generic wording so a stranger learns nothing.
+      if (b && (b.error || b.message)) message = b.error || b.message;
+    } catch { /* non-JSON error body — keep the generic message */ }
+    const err = new Error(message);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
 /** Reads the token out of /portal/<token> — the page renders outside the router. */
 export function portalTokenFromLocation() {
   const m = window.location.pathname.match(/\/portal\/([A-Za-z0-9_-]+)/);
@@ -61,3 +90,12 @@ export const getPortalInvoice = (token, invoiceNumber) =>
 
 export const getPortalPrintPayload = (token, invoiceNumber) =>
   portalGet(`/public/customer-portal/${token}/invoices/${invoiceNumber}/print`);
+
+/**
+ * Every invoice in a date range, for "download all PDFs" and "consolidated
+ * print". The body carries ONLY the window — the client, company and template
+ * come from the token server-side, and the request shape has nowhere to put
+ * them. Resolved by the same service the internal Invoices screen uses.
+ */
+export const resolvePortalBulk = (token, body) =>
+  portalPost(`/public/customer-portal/${token}/invoices/bulk`, body);

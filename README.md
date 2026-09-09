@@ -314,6 +314,43 @@ Publish output optimized from 79 MB to 37 MB via:
   they arrive. `CLAUDE.md` now opens with the environment rules, including that
   the three production lines are never merged into one another.
 
+### 2026-09-09 — Bulk invoice download, consolidated print, and portal filters
+
+- **Every invoice in a date range can now be downloaded at once**, from the
+  Invoices and Bills tabs and from a customer's own portal link. Two outputs:
+  a **ZIP of one PDF per invoice**, or a **consolidated PDF** with every invoice
+  in sequence, each starting on its own page and keeping its own layout,
+  signature and totals. Before this, a month-end pack of 40 invoices meant
+  opening and saving 40 documents by hand.
+- **One implementation serves both.** The office screen and the public portal
+  call the same service and the same renderer; the only thing that differs is
+  how the server works out which invoices the caller is allowed to see. So a
+  customer's copy of an invoice is the same document the office would print,
+  and there is no second code path to keep in step.
+- **A customer can only ever reach their own invoices.** The portal request
+  carries a date range and nothing else — no client, company or template
+  identifier exists on it to tamper with — and the scope comes from the link's
+  own token. The office side asserts company access twice and refuses a template
+  belonging to another company outright, since a template carries its company's
+  letterhead and stamp.
+- **A page break no longer cuts a line item in half.** On an invoice long enough
+  to need a second page, the PDF was sliced at a fixed height: a row landed half
+  at the foot of one page and half at the top of the next, readable on neither.
+  Page breaks now fall in the gap between rows. This was never fixable in a
+  template — the PDF is a picture of the whole document, so the templates' own
+  page-break rules had no effect on it — and fixing the renderer instead means
+  every template gets it, including ones operators built themselves, and
+  single-invoice downloads too.
+- **A batch is capped at 200 invoices**, and a run that hits the cap says how
+  many matched so it can never be mistaken for a complete set. Rendering shows
+  progress, can be cancelled, and reports any document it could not produce
+  rather than failing the whole batch.
+- **The Customer Portal management screen has filters**: company, client, status
+  and search, with the client list narrowing to the chosen company. Filters live
+  in the address bar, so a filtered view is a link and browser Back behaves.
+- Suites: `python scripts/test_invoice_bulk.py` — **39 checks**, run through both
+  callers — and `node scripts/test_pdf_page_cuts.mjs` — **10 checks**.
+
 ### 2026-09-09 — The three optional taxes print, and a bill shows its own reference number
 
 - **Further tax, withholding tax and advance income tax now appear on every
