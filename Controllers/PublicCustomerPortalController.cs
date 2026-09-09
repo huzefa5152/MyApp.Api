@@ -38,11 +38,14 @@ namespace MyApp.Api.Controllers
     public class PublicCustomerPortalController : ControllerBase
     {
         private readonly ICustomerPortalService _service;
+        private readonly IInvoiceBulkService _bulk;
         private readonly int _defaultPageSize;
 
-        public PublicCustomerPortalController(ICustomerPortalService service, IConfiguration configuration)
+        public PublicCustomerPortalController(
+            ICustomerPortalService service, IInvoiceBulkService bulk, IConfiguration configuration)
         {
             _service = service;
+            _bulk = bulk;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -113,6 +116,64 @@ namespace MyApp.Api.Controllers
                     statusCode = StatusCodes.Status404NotFound,
                 });
             return Ok(payload);
+        }
+
+        /// <summary>
+        /// Every document in a date range, for "download all PDFs" and
+        /// "consolidated print" — resolved by the SAME
+        /// <see cref="IInvoiceBulkService"/> the internal Invoices screen uses,
+        /// so a customer's copy of an invoice is byte-for-byte the document the
+        /// office would produce for it.
+        ///
+        /// The body carries a DATE RANGE and nothing else. There is no client,
+        /// company, template or invoice id to tamper with: the scope is built
+        /// from the resolved token, and the customer always gets the company's
+        /// configured template (the service refuses to pin one for a portal).
+        /// A request naming another client cannot express anything, because the
+        /// parameter does not exist — absent beats validated.
+        ///
+        /// ONE request for the whole batch, not one per invoice: this endpoint
+        /// is behind the 120-per-minute "portal" limiter, and a per-invoice loop
+        /// would trip it at ~120 documents and look exactly like abuse.
+        /// </summary>
+        [HttpPost("invoices/bulk")]
+        public async Task<ActionResult<InvoiceBulkBatchDto>> ResolveBulk(
+            [FromBody] PortalBulkRequestDto body)
+        {
+            // The portal serves the document the operator chose when the link
+            // was issued. NULL is a portal issued before that column existed and
+            // means "decide automatically" — resolved here exactly as
+            // CustomerPortalService.ResolveDocumentAsync does it for a single
+            // invoice: Bill when the company has one (its data is complete
+            // whether or not the invoice was ever filed), else Tax Invoice.
+            // Asking the existing options resolver rather than re-deriving it
+            // keeps the two answers from drifting apart.
+            var documentType = Portal.DocumentType;
+            if (documentType == null)
+            {
+                var options = await _service.GetDocumentOptionsAsync(Portal.CompanyId);
+                documentType = options.Any(o => o.Type == "Bill" && o.Available) ? "Bill" : "TaxInvoice";
+            }
+
+            var request = new InvoiceBulkRequestDto
+            {
+                Preset = body?.Preset,
+                DateFrom = body?.DateFrom,
+                DateTo = body?.DateTo,
+                DocumentType = documentType,
+            };
+
+            try
+            {
+                return Ok(await _bulk.ResolveBatchAsync(InvoiceBulkScope.ForPortal(Portal), request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                // The customer's own date input. A 400 with the reason is right
+                // here — the identical-404 rule exists to stop TOKEN probing,
+                // and the token has already resolved by this point.
+                return BadRequest(new { error = ex.Message });
+            }
         }
     }
 }

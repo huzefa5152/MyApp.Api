@@ -1,4 +1,5 @@
 import { saveAs } from "file-saver";
+import { choosePageCuts } from "./pdfPageCuts";
 
 /**
  * Parse full HTML document, extract CSS from <style> tags and body content.
@@ -72,11 +73,50 @@ function detachPrintFooter(wrapper, content) {
 /**
  * Export rendered template HTML to PDF.
  */
-export async function exportToPdf(html, filename) {
-  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
-  ]);
+/**
+ * Where the rasterised page may be cut WITHOUT slicing a line item in half.
+ *
+ * html2canvas paints the whole document as one continuous bitmap — it has no
+ * concept of a page — so a template's `page-break-inside: avoid` does nothing
+ * on this path. The slicer used to advance by a fixed number of pixels, which
+ * put the page boundary wherever it happened to fall: on a 40-line invoice a
+ * row was sliced through the middle, its top half at the foot of page 1 and its
+ * bottom half at the head of page 2. Neither half is readable, so the line item
+ * is effectively missing from the document.
+ *
+ * This returns the BOTTOM EDGE of every block that must not be broken, in
+ * canvas pixels, so the slicer can cut in the gap between rows instead. The
+ * selector matches what printDocument.js protects on the browser print path
+ * (`tr`, `img`, `.no-break`), so the PDF and the print break in the same places.
+ *
+ * A block is never itself forced to fit: if a row is taller than a page it
+ * still has to be cut, and the caller falls back to the hard limit.
+ */
+function atomicCutPoints(content, scale) {
+  const top = content.getBoundingClientRect().top;
+  const points = new Set();
+  for (const el of content.querySelectorAll("tr, img, .no-break")) {
+    const r = el.getBoundingClientRect();
+    if (r.height <= 0) continue;
+    points.add(Math.round((r.bottom - top) * scale));
+  }
+  return [...points].sort((a, b) => a - b);
+}
+
+/**
+ * Draw one document into an existing jsPDF, starting a new page when the
+ * caller already owns page one.
+ *
+ * Split out of exportToPdf so a bulk operation can append many documents to one
+ * PDF without a second renderer: a consolidated invoice pack is then a sequence
+ * of real pages, each drawn exactly as that document prints on its own.
+ */
+export async function renderIntoPdf(pdf, html, opts = {}) {
+  const { default: html2canvas } = await import("html2canvas");
+  // Every document after the first opens its own page. That is what keeps
+  // invoice 2 off the end of invoice 1 -- a physical page break, not a CSS one
+  // the rasteriser would ignore.
+  if (opts.newPage) pdf.addPage();
   const { css, bodyHtml } = parseHtml(html);
   const { wrapper, content } = createStyledContainer(css, bodyHtml);
   const footerHolder = detachPrintFooter(wrapper, content);
@@ -94,7 +134,6 @@ export async function exportToPdf(html, filename) {
       ? await html2canvas(footerHolder, { scale: 2, useCORS: true, letterRendering: true, windowWidth: 796 })
       : null;
     const imgData = canvas.toDataURL("image/jpeg", 0.98);
-    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     const pageW = 210;
     const pageH = 297;
     const imgH = (canvas.height * pageW) / canvas.width;
@@ -109,9 +148,11 @@ export async function exportToPdf(html, filename) {
       if (footerData) pdf.addImage(footerData, "PNG", 0, pageH - marginMm - footerMmH, pageW, footerMmH);
     };
 
+    let pagesAdded = 0;
     if (imgH <= pageH * 1.02) {
       pdf.addImage(imgData, "JPEG", 0, 0, pageW, Math.min(imgH, pageH));
       stampFooter();
+      pagesAdded = 1;
     } else {
       // Multi-page: leave a top + bottom white margin on EVERY page so
       // consecutive pages don't butt together — page 1 ends with a bottom
@@ -121,11 +162,18 @@ export async function exportToPdf(html, filename) {
       // (pageH − 2·margin) tall bands, each drawn `marginMm` down from the top.
       const contentMm = pageH - marginMm * 2;
       const pageCanvasH = (canvas.width * contentMm) / pageW;   // slice height in canvas px
+
+      // Cut in the gaps between rows rather than at fixed offsets. The scale is
+      // MEASURED off the canvas rather than assumed: html2canvas rounds, and a
+      // half-pixel error compounds down a long document.
+      const cuts = atomicCutPoints(content, canvas.height / (content.scrollHeight || 1));
+      const pageEnds = choosePageCuts(cuts, pageCanvasH, canvas.height);
+
       let y = 0;
       let pageNum = 0;
-      while (y < canvas.height) {
+      for (const end of pageEnds) {
         if (pageNum > 0) pdf.addPage();
-        const sliceH = Math.min(pageCanvasH, canvas.height - y);
+        const sliceH = end - y;
         const page = document.createElement("canvas");
         page.width = canvas.width;
         page.height = sliceH;
@@ -134,14 +182,28 @@ export async function exportToPdf(html, filename) {
         const sliceMmH = (sliceH * pageW) / canvas.width;
         pdf.addImage(sliceData, "JPEG", 0, marginMm, pageW, sliceMmH);
         stampFooter();
-        y += pageCanvasH;
+        y = end;
         pageNum++;
       }
+      pagesAdded = pageNum;
     }
-    pdf.save(`${filename}.pdf`);
+    return pagesAdded;
   } finally {
     document.body.removeChild(wrapper);
   }
+}
+
+/**
+ * Render HTML to a PDF and save it. The original one-document entry point,
+ * behaviour unchanged -- it now just owns the jsPDF instance and the save,
+ * while renderIntoPdf above does the drawing. Every bulk operation reuses that
+ * same primitive, so a bulk PDF of one invoice is identical to this one.
+ */
+export async function exportToPdf(html, filename) {
+  const { default: jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  await renderIntoPdf(pdf, html);
+  pdf.save(`${filename}.pdf`);
 }
 
 /**

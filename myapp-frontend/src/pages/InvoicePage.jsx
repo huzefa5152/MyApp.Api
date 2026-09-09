@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -29,6 +29,8 @@ import { defaultBillTemplate, defaultTaxInvoiceTemplate } from "../utils/default
 import { defaultCreditNoteTemplate, defaultDebitNoteTemplate } from "../utils/purchaseNoteDocTemplates";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
+import BulkInvoiceDialog from "../Components/BulkInvoiceDialog";
+import { resolveInvoiceBulk } from "../api/invoiceApi";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
 import { notify } from "../utils/notify";
@@ -123,6 +125,10 @@ export default function InvoicePage({ mode = "invoices" }) {
   const canPrintBill = has("bills.print.view");
   const canPrintTax  = has("invoices.print.view");
   const canPrint = isBillsMode ? canPrintBill : canPrintTax;
+  // Bulk download produces the same documents the per-row Print / PDF
+  // buttons do, so it carries the same permission. Notes are excluded:
+  // a credit/debit note has its own numbering and is not an invoice.
+  const canBulkPrint = canPrint && !isNotesMode;
   // Each tab prints with its own template type: Bills → Bill, Invoices →
   // TaxInvoice, note tabs → CreditNote / DebitNote (notes previously reused
   // the TaxInvoice template; they now have their own type + starter set).
@@ -201,6 +207,10 @@ export default function InvoicePage({ mode = "invoices" }) {
   // without bouncing through each card's per-bill "View FBR" button.
   // 2026-05-13: added.
   const [showBulkFbrPreview, setShowBulkFbrPreview] = useState(false);
+  // Bulk invoice download / consolidated print. The dialog and the
+  // rendering are shared with the public Customer Portal; only the
+  // resolve call differs, because only the authorization differs.
+  const [bulkPrintOpen, setBulkPrintOpen] = useState(false);
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   // Bill currently open in the correction wizard (null when closed). Opens the
@@ -936,6 +946,17 @@ export default function InvoicePage({ mode = "invoices" }) {
                 <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
               )}
               <PrintTemplateSelect picker={tplPicker} />
+              {canBulkPrint && (
+                <button
+                  type="button"
+                  className="filter-clear-btn"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                  onClick={() => setBulkPrintOpen(true)}
+                  title={`Download every ${printTemplateType === "TaxInvoice" ? "Sales Tax Invoice" : "Bill"} matching these filters`}
+                >
+                  <MdDownload size={14} /> Bulk PDF
+                </button>
+              )}
               {isBigScreen && (
                 <div style={{ marginLeft: "auto" }}>
                   <ViewModeToggle
@@ -1513,6 +1534,30 @@ export default function InvoicePage({ mode = "invoices" }) {
           sourceLabel={copy.source.label}
           onClose={copy.close}
           onCopied={copy.onCopied}
+        />
+      )}
+
+      {/* Bulk download / consolidated print. Seeded with the screen's own date
+          filter and carrying the same client / division / search filters, so it
+          operates on exactly the set the operator is looking at. */}
+      {selectedCompany && (
+        <BulkInvoiceDialog
+          open={bulkPrintOpen}
+          onClose={() => setBulkPrintOpen(false)}
+          title={printTemplateType === "TaxInvoice" ? "Download Sales Tax Invoices" : "Download Bills"}
+          documentType={printTemplateType}
+          templates={tplPicker.templates}
+          initialFrom={dateFrom}
+          initialTo={dateTo}
+          extraFilters={{
+            clientId: clientFilter ? Number(clientFilter) : null,
+            divisionId: divisionFilter ? Number(divisionFilter) : null,
+            search: search || null,
+          }}
+          resolve={async (request) => {
+            const { data } = await resolveInvoiceBulk(selectedCompany.id, request);
+            return data;
+          }}
         />
       )}
 

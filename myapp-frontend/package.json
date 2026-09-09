@@ -24,6 +24,7 @@
     "grapesjs-preset-webpage": "^1.0.3",
     "handlebars": "^4.7.9",
     "html2pdf.js": "^0.14.0",
+    "jszip": "^3.10.1",
     "react": "^19.1.1",
     "react-bootstrap": "^2.10.10",
     "react-countup": "^6.5.3",

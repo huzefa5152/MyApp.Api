@@ -66,6 +66,11 @@ def public(path: str, base: str, timeout: int = 60) -> tuple[int, Any]:
     return http("GET", path, base, token=None, timeout=timeout)
 
 
+def public_post(path: str, base: str, body: Any, timeout: int = 120) -> tuple[int, Any]:
+    """Anonymous POST — the shape the bulk-download endpoint is called with."""
+    return http("POST", path, base, token=None, body=body, timeout=timeout)
+
+
 def check(suite: str, name: str, ok: bool, reason: str = "") -> None:
     results.append((suite, name, PASS if ok else f"FAIL — {reason}"))
 
@@ -336,6 +341,53 @@ def test_isolation(base, token, a, b, a1, a2, b1, portal_a, portal_a2, portal_b,
         check(suite, f"4g ?{label} cannot change the client shown",
               st == 200 and got == {inv_a1["invoiceNumber"]},
               f"got {st} {got} — expected only {inv_a1['invoiceNumber']}")
+
+    # ── Bulk download: the same boundary, on a POST body ─────────────
+    # POST /invoices/bulk takes a date range. Its request type carries no
+    # client, company or template field at all, so a forged one has nowhere to
+    # land -- but that is a claim worth testing rather than trusting.
+    ALL_DATES = {"preset": "allPeriods"}
+
+    # The boundary is which invoices the batch CONSIDERED, renderable or not.
+    # These fixture companies have no print template, so every row lands in
+    # `skipped` with a reason — correct behaviour, and irrelevant to isolation.
+    def considered(payload):
+        if not payload:
+            return None
+        return ({i["invoiceNumber"] for i in payload.get("invoices", [])}
+                | {k["invoiceNumber"] for k in payload.get("skipped", [])})
+
+    st, bulk_a = public_post(f"/api/public/customer-portal/{tok_a}/invoices/bulk", base, ALL_DATES)
+    own = considered(bulk_a) if st == 200 else None
+    check(suite, "4k bulk download lists only the portal's own client",
+          st == 200 and own == {inv_a1["invoiceNumber"]},
+          f"got {st} {own} — expected only {inv_a1['invoiceNumber']}")
+
+    body_forgeries = [
+        ({**ALL_DATES, "clientId": a2["id"]}, "clientId"),
+        ({**ALL_DATES, "companyId": b["id"]}, "companyId"),
+        ({**ALL_DATES, "portalClientId": b1["id"]}, "portalClientId"),
+        ({**ALL_DATES, "invoiceIds": [inv_b1["id"]]}, "invoiceIds"),
+        ({**ALL_DATES, "ClientId": a2["id"], "CompanyId": b["id"]}, "cased clientId+companyId"),
+        ({**ALL_DATES, "documentType": "Bill", "templateId": 999999}, "foreign templateId"),
+    ]
+    for body, label in body_forgeries:
+        st, got = public_post(f"/api/public/customer-portal/{tok_a}/invoices/bulk", base, body)
+        nums = considered(got) if st == 200 else None
+        # A 200 must return the portal's own set; anything else must not be a
+        # success carrying somebody else's invoice.
+        clean = (st == 200 and nums == {inv_a1["invoiceNumber"]}) or (st != 200 and st != 500)
+        check(suite, f"4l bulk body {label} cannot widen the scope", clean,
+              f"got {st} {nums}")
+
+    st, cross_bulk = public_post(f"/api/public/customer-portal/{tok_b}/invoices/bulk", base, ALL_DATES)
+    b_nums = considered(cross_bulk) if st == 200 else None
+    check(suite, "4m each portal's bulk batch is its own client's",
+          st == 200 and b_nums == {inv_b1["invoiceNumber"]}, f"got {st} {b_nums}")
+
+    st, _ = public_post("/api/public/customer-portal/not-a-token/invoices/bulk", base, ALL_DATES)
+    check(suite, "4n bulk on an unknown token is the same 404 as every other route",
+          st == 404, f"got {st}")
 
     # ── Token substitution on a nested route ─────────────────────────
     st, wrong_tok = public(

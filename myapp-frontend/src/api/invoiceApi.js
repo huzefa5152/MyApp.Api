@@ -131,3 +131,12 @@ export const getAwaitingPurchase = (companyId) =>
 // ItemType so 28 "Medicines" entries collapse to one procurement row.
 export const getPurchaseTemplate = (invoiceId) =>
   httpClient.get(`/invoices/${invoiceId}/purchase-template`);
+
+/**
+ * Resolve the batch of invoices to render for a bulk download or consolidated
+ * print. Company comes from the ROUTE and is asserted server-side; clientId /
+ * divisionId / search in the body only narrow the set, and templateId is
+ * refused unless it belongs to that company.
+ */
+export const resolveInvoiceBulk = (companyId, body) =>
+  httpClient.post(`/invoices/bulk/company/${companyId}`, body);
