@@ -1554,6 +1554,17 @@ export default function InvoicePage({ mode = "invoices" }) {
             divisionId: divisionFilter ? Number(divisionFilter) : null,
             search: search || null,
           }}
+          // Named, not id'd: "Client: 75" tells an operator nothing. Without
+          // this the dialog reports a count the operator cannot account for —
+          // over a wide date range, an inherited client filter looks exactly
+          // like a broken query.
+          inheritedFilters={[
+            clientFilter
+              ? `Client: ${clients.find((c) => String(c.id) === String(clientFilter))?.name || clientFilter}`
+              : null,
+            divisionFilter ? "Division filter" : null,
+            search ? `Search: "${search}"` : null,
+          ].filter(Boolean)}
           resolve={async (request) => {
             const { data } = await resolveInvoiceBulk(selectedCompany.id, request);
             return data;
