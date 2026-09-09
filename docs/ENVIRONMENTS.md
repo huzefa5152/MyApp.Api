@@ -79,9 +79,9 @@ Backup root on the maintainer's machine:
 `C:\Users\hussahuz\Downloads\Database Backup\{master,customize,importer}`
 
 **`<…-prod-db>` is a placeholder on purpose — do not fill it in.** The
-production databases are hosted at `<name>.public.databaseasp.net` and the SQL
-username IS the database name, so writing the real name in a public repository
-gives away two thirds of a credential. The real names live in the gitignored
+production databases sit on a public host whose subdomain IS the database
+name, and the SQL username is the database name too — so writing the real
+name in a public repository gives away two thirds of a credential. The real names live in the gitignored
 `production.databases.json`, and `RESTORE FILELISTONLY` reads them straight out
 of any backup you actually hold.
 
