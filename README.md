@@ -281,6 +281,31 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-09 — The branch decides which local database you are on
+
+- **Three production installations, three local databases, and no connection
+  string to edit.** `master`, `customize-solution-for-other` and
+  `feat/importer-ledger-receipts` are three separately hosted systems; each now
+  has a restored local copy of its own production database
+  (`MyApp_Master_Local`, `MyApp_Customize_Local`, `MyApp_Importer_Local`), and
+  `Helpers/LocalDevDatabase.cs` picks the right one by reading the checked-out
+  branch at startup. Checking out a branch is the entire switch. The map lives
+  in the tracked, secret-free `local.databases.json`; a per-machine
+  `local.databases.local.json` overrides it, and an explicit
+  `ConnectionStrings__DefaultConnection` still wins for test runs.
+- **A local run can no longer point at a production server.**
+  `Helpers/DevelopmentSqlGuard.cs` refuses to start a Development process whose
+  SQL host is not this machine — an allowlist, not a blocklist, so an
+  unrecognised host fails closed. Production deploys are untouched (the guard
+  and the branch map are both Development-only, and the map additionally needs a
+  `.git` directory, so a published site sees neither).
+- **The standard is written down.** `docs/ENVIRONMENTS.md` covers the branch
+  policy, the branch-to-database map, how to restore a fresh production backup,
+  and the read-only rules for production SQL access;
+  `production.databases.example.json` is the template for those credentials when
+  they arrive. `CLAUDE.md` now opens with the environment rules, including that
+  the three production lines are never merged into one another.
+
 ### 2026-09-04 — Reversing a sale gives the goods back
 
 - **A credit note that reverses a bill in full now releases its delivery challans.** Until now the challans stayed marked Invoiced against the reversed bill, so the goods could never be billed again on a fresh number — they simply disappeared from the pending list. Three challans were stranded that way behind bills 3912 and 3913. A **partial** credit note still leaves them billed: part of that bill stands.
