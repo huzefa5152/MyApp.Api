@@ -11,6 +11,15 @@ appsettings.Production.json
 appsettings.Local.json
 appsettings.*.local.json
 
+# Per-machine override of the tracked branch -> local-database map
+# (local.databases.json). Same shape, merged field by field, so a developer
+# whose SQL instance is named differently never has to edit - and risk
+# committing - the shared map. Still no secrets: Windows auth only.
+local.databases.local.json
+
+# Read-only PRODUCTION SQL credentials for investigation (docs/ENVIRONMENTS.md
+# Production access). Never committed - the .example file is the template.
+
 # Runtime user uploads — operator-provided files (PO PDFs archived for
 # parser triage, etc.). Never commit; they may contain customer-confidential
 # document scans. Each year/month subdirectory is created on demand.

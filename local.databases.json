@@ -1,0 +1,37 @@
+{
+  "_readme": [
+    "Branch -> LOCAL database map. Read ONLY when ASPNETCORE_ENVIRONMENT=Development",
+    "and only when a .git directory is present, so it is inert in a published deploy.",
+    "Checking out a branch is all it takes to switch database - nothing to edit.",
+    "",
+    "Holds NO secret: every entry is Windows-authenticated against a local SQL Server",
+    "instance, which is why this file is tracked in git.",
+    "",
+    "Keep this file IDENTICAL on every branch. It lists all of them, so it never",
+    "conflicts on a merge or a cherry-pick between the three production lines.",
+    "",
+    "Per-machine override (gitignored, same shape, merges field by field):",
+    "  local.databases.local.json",
+    "Highest precedence is still the environment variable, for test scripts:",
+    "  ConnectionStrings__DefaultConnection=...",
+    "",
+    "Full standard, including how these databases were restored: docs/ENVIRONMENTS.md"
+  ],
+
+  "enabled": true,
+
+  "server": ".\\MSSQLSERVER02",
+
+  "connectionTemplate": "Server={server};Database={database};Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True;",
+
+  "branches": {
+    "master": "MyApp_Master_Local",
+    "customize-solution-for-other": "MyApp_Customize_Local",
+    "feat/importer-ledger-receipts": "MyApp_Importer_Local",
+    "fix/audit-2026-08-02": "MyApp_Master_Local",
+
+    "master-*": "MyApp_Master_Local",
+    "customize-*": "MyApp_Customize_Local",
+    "importer-*": "MyApp_Importer_Local"
+  }
+}
