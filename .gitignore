@@ -19,6 +19,7 @@ local.databases.local.json
 
 # Read-only PRODUCTION SQL credentials for investigation (docs/ENVIRONMENTS.md
 # Production access). Never committed - the .example file is the template.
+production.databases.json
 
 # Runtime user uploads — operator-provided files (PO PDFs archived for
 # parser triage, etc.). Never commit; they may contain customer-confidential
