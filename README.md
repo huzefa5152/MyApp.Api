@@ -333,6 +333,17 @@ Publish output optimized from 79 MB to 37 MB via:
   writing a hard-coded "INV-" prefix when recording an existing filing, ignoring
   whatever the company actually files under.
 
+### 2026-09-09 — The Bills tab says why there is no "New Bill (No Challan)" button
+
+- **A company set to require a Sales Order now explains itself.** The button
+  simply was not rendered, with nothing in its place — so on a company with the
+  setting on it read as a missing feature rather than a deliberate rule, while
+  the same user saw the button on every other company.
+- The note names the company, points at **New Bill** and its Sales Order
+  challans as the way to raise the bill, and — only for someone who can edit
+  companies — says where the setting lives. Nothing changes for a company that
+  does not have the setting on: the button is exactly where it was.
+
 ### 2026-09-09 — Item dropdowns now show your own items, not the whole installation
 
 - **Every item picker is scoped to the companies you can reach.** Until now the

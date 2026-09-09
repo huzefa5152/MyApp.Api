@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdLocalShipping } from "react-icons/md";
+import { MdInfoOutline, MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdLocalShipping } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -89,6 +89,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   // the standalone create button. A role can be granted only this without
   // also gaining the regular create-from-challan flow, or vice-versa.
   const canCreateStandalone = has("bills.manage.create.standalone");
+  // Only point at the setting if the reader can actually change it.
+  const canManageCompany = has("companies.manage.update");
   const canUpdate = has("bills.manage.update");
   // Users with only the narrow ItemType-only permission still need the
   // Edit button to reach the form, even though they can only change the
@@ -797,8 +799,10 @@ export default function InvoicePage({ mode = "invoices" }) {
         </div>
         {/* Creation buttons live on the Bills tab only — Invoices tab is
             for FBR classification & submission of existing records. */}
+        {/* alignItems flex-start, or the row stretches New Bill to the
+            height of the SO-only note beside it. */}
         {isBillsMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "flex-start" }}>
             {canCreate && (
               <button style={styles.addBtn} onClick={() => setShowForm(true)}>
                 <MdAdd size={18} /> New Bill
@@ -812,6 +816,27 @@ export default function InvoicePage({ mode = "invoices" }) {
               >
                 <MdAdd size={18} /> New Bill (No Challan)
               </button>
+            )}
+            {/* Say why the button is not here. An operator who has the
+                standalone-create permission has seen that button on another
+                company, so its silent absence reads as a fault rather than as
+                the setting it is -- the same reasoning as FbrOnlyNotice. Shown
+                ONLY to someone who would otherwise have had the button;
+                without the permission there is nothing to explain. */}
+            {canCreateStandalone && requireSO && (
+              <div style={styles.soOnlyNote}>
+                <MdInfoOutline size={18} style={{ color: "#0d47a1", flexShrink: 0, marginTop: 1 }} />
+                <div style={{ minWidth: 0 }}>
+                  <strong style={{ display: "block", color: "#1a2332" }}>
+                    Bills without a challan are turned off for {selectedCompany?.brandName || selectedCompany?.name || "this company"}.
+                  </strong>
+                  <span style={{ color: "#5f6d7e" }}>
+                    This company requires every bill to come from a Sales Order, so
+                    use <strong>New Bill</strong> and pick one of that order's delivery challans.
+                    {canManageCompany && " To bill without a challan, turn off “Require a Sales Order for billing” in Settings → Companies → Document Numbers."}
+                  </span>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1758,6 +1783,13 @@ const styles = {
   // makes the standalone path the secondary action without losing
   // discoverability for roles that also have the primary permission.
   addBtnSecondary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: `1px solid ${colors.blue}`, background: "#fff", color: colors.blue, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
+  soOnlyNote: {
+    display: "flex", alignItems: "flex-start", gap: 10,
+    flex: "1 1 320px", minWidth: 0, maxWidth: 620,
+    padding: "0.55rem 0.75rem", borderRadius: 10,
+    background: "#eef4ff", border: "1px solid #cddcf7", borderLeft: "3px solid #0d47a1",
+    fontSize: "0.8rem", lineHeight: 1.45,
+  },
   loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
