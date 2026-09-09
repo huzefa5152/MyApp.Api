@@ -91,16 +91,11 @@ SKIP_SUFFIXES = {
 # Each entry is (path, substring that may appear, why it is still here).
 # Add to this ONLY with the maintainer's agreement, and only with a reason that
 # says what would have to happen for it to go away.
-EXCEPTIONS = [
-    (
-        ".github/workflows/deploy.yml",
-        re.compile(r"\bsite\d+\.siteasp\.net\b", re.I),
-        "The master deploy still hardcodes its FTP host. Moving it to a secret "
-        "requires the maintainer to create FTP_SERVER first — swapping it in "
-        "before that secret exists would break the Production #1 deploy. "
-        "deploy-other.yml and deploy-importer.yml already use secrets.",
-    ),
-]
+# Empty, and that is the intended state: no production identifier is named in a
+# tracked file anywhere. An entry here is a temporary concession, never a place
+# to park a leak — add one only with the maintainer's agreement, and only with a
+# reason that says what has to happen for it to go away.
+EXCEPTIONS = []
 
 # This file is skipped, not excepted. It is the rule's definition, so it has to
 # describe the shapes it forbids; scanning it means every pattern matches its
