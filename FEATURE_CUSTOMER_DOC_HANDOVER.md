@@ -117,7 +117,7 @@ UPDATE Invoices
 
 Gate on the marker so it runs exactly once. Note the SQL-Server split-batch rule: the `ALTER TABLE ADD COLUMN` (from the migration) and any statement referencing the new column must be in separate batches / `EXEC('...')` (see `Program.cs` SecurityStamp backfill pattern) — but here the column is added by the EF migration first, so the backfill block (running after `Migrate()`) can reference it directly.
 
-Migration: additive columns + FK + optional index. Applied per the branch process — on `master`/prod via CI migration; on the local `db46684` replica by hand if `AutoMigrate` is off there (see `project_ef_designtime_factory_db` / `project_audit_fix_branch` memory for the sqlcmd `-I` recipe).
+Migration: additive columns + FK + optional index. Applied per the branch process — on `master`/prod via CI migration; on the local `<master-prod-db>` replica by hand if `AutoMigrate` is off there (see `project_ef_designtime_factory_db` / `project_audit_fix_branch` memory for the sqlcmd `-I` recipe).
 
 ---
 
@@ -180,7 +180,7 @@ No change to: FBR submission logic, invoice/tax calculations, payment logic, pri
 
 ## 12. Implementation checklist (ordered, for the future session)
 
-1. **Model + migration:** add `HandoverAt`, `HandoverByUserId` (FK `SetNull`), `HandoverRemark` to `Invoice` + `AppDbContext` config (+ optional `(CompanyId, HandoverAt)` index). Generate the EF migration; apply to `db46684` by hand if needed.
+1. **Model + migration:** add `HandoverAt`, `HandoverByUserId` (FK `SetNull`), `HandoverRemark` to `Invoice` + `AppDbContext` config (+ optional `(CompanyId, HandoverAt)` index). Generate the EF migration; apply to `<master-prod-db>` by hand if needed.
 2. **Backfill block** in `Program.cs` (marker `HANDOVER_BACKFILL_V1`).
 3. **DTO:** extend `InvoiceDto` with the derived status + audit fields; update the mapper.
 4. **Service:** `MarkHandoverAsync`, `RevertHandoverAsync`, `BulkMarkHandoverAsync` in `InvoiceService`; `handoverFilter` in `GetPagedByCompanyAsync` (server-side, in `InvoiceRepository`).

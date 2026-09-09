@@ -93,7 +93,7 @@ behind the single version gate so a healthy boot runs one cheap check.
 ## Verification (per phase)
 
 - `dotnet build` 0 err; `dotnet test` green (C-2 suite).
-- Boot against the db46684 replica: app serves, no `Fatal`, expected markers present.
+- Boot against the <master-prod-db> replica: app serves, no `Fatal`, expected markers present.
 - `test_stock_itemtype_reflow.py` 140/140, `test_basic_flows.py`, `test_tenant_isolation.py`.
 - **Second boot** does near-zero DB work (verify via EF/SQL logging — the whole point).
 - Rollback: each phase is a revert of its own PR; group-A deletions are recoverable

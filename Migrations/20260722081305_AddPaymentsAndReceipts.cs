@@ -9,7 +9,7 @@ namespace MyApp.Api.Migrations
     public partial class AddPaymentsAndReceipts : Migration
     {
         // IDEMPOTENT guarded raw SQL (not the generated AddColumn/CreateTable
-        // calls). The dev prod-replica DB (db46684) was polluted by an earlier
+        // calls). The dev prod-replica DB (<master-prod-db>) was polluted by an earlier
         // customer-branch run: it already has Invoices/PurchaseBills.AmountPaid +
         // DueDate and the Payments/PaymentAllocations tables (with an extra,
         // unmapped DivisionId and WITHOUT ReconciledDate). A plain AddColumn /
@@ -72,7 +72,7 @@ BEGIN
             REFERENCES dbo.Companies (Id) ON DELETE NO ACTION
     );
 END");
-            // db46684's pre-existing Payments table predates ReconciledDate — add it.
+            // <master-prod-db>'s pre-existing Payments table predates ReconciledDate — add it.
             migrationBuilder.Sql(@"
 IF OBJECT_ID('dbo.Payments','U') IS NOT NULL AND COL_LENGTH('dbo.Payments','ReconciledDate') IS NULL
     ALTER TABLE dbo.Payments ADD ReconciledDate datetime2 NULL;");

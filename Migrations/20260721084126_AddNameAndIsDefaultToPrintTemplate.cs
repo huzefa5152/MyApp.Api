@@ -11,7 +11,7 @@ namespace MyApp.Api.Migrations
     /// unique "one default per type" index.
     ///
     /// Authored as IDEMPOTENT guarded SQL rather than the raw EF operations because
-    /// the branch dev DB (db46684) already carries this schema from an earlier
+    /// the branch dev DB (<master-prod-db>) already carries this schema from an earlier
     /// customer-branch run (Division-era columns + indexes), while true master/prod
     /// (hakimitraders) does not. The guards make it a genuine ADD where the columns
     /// are missing and a no-op where they already exist. EF ignores the extra
@@ -58,7 +58,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PrintTemplates_Company
     CREATE INDEX [IX_PrintTemplates_CompanyId_TemplateType] ON [PrintTemplates] ([CompanyId], [TemplateType]);
 ");
 
-            // 5. Filtered unique "one default per type" index. Skipped on db46684 where
+            // 5. Filtered unique "one default per type" index. Skipped on <master-prod-db> where
             //    an equivalent (customer-era, division-keyed) index already exists —
             //    with all master rows at DivisionId = NULL it enforces the same rule.
             migrationBuilder.Sql(@"

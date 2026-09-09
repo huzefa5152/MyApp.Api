@@ -16,7 +16,7 @@
 
 **Session 2026-08-10 — Critical/High batch shipped on this branch (committed, not yet pushed):** C-2 (CI test gate + new xUnit project), H-7 (ValidationException + EF-internal denylist), H-8 (vendored PdfPig for reproducible restore), H-9 (item-type FBR enrich fast-fail), and the H-1 import-committer tail. New unit suite = **39/39 green**; PO corpus **ALL REGRESSION CORPORA PASSED**; clean-runner restore proven (PdfPig resolves from the local feed). C-1 and H-6 written up as executable specs (`C1_STARTUP_DDL_RETIREMENT_DESIGN.md`, `H6_GODFILE_REFACTOR_TEST_ROADMAP.md`). Per user: H-7 and H-9 are **accepted intentional behavior changes**; everything else is strictly no-logic-change.
 
-**⚠ Verification note for whoever picks this up:** this branch does **not** auto-deploy (only `master` and `customize-solution-for-other` trigger CI→prod). The new xUnit suite covers the pure-logic units (pagination, redactor, H-7 classifier, H-9 budget); **DB-coupled invariants are NOT unit-covered**, and the **FBR-import committer (H-1 tail) has no automated gate** — verify it manually (upload an FBR purchase file on db46684) before trusting it. **Before merging any of this to `master`, run the full pre-push gate** — `scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py` — see the resume recipe at the end of this section.
+**⚠ Verification note for whoever picks this up:** this branch does **not** auto-deploy (only `master` and `customize-solution-for-other` trigger CI→prod). The new xUnit suite covers the pure-logic units (pagination, redactor, H-7 classifier, H-9 budget); **DB-coupled invariants are NOT unit-covered**, and the **FBR-import committer (H-1 tail) has no automated gate** — verify it manually (upload an FBR purchase file on <master-prod-db>) before trusting it. **Before merging any of this to `master`, run the full pre-push gate** — `scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py` — see the resume recipe at the end of this section.
 
 **Legend:** ✅ done+committed · 🟡 partial · ⏸ deferred (see why) · ⬜ not started · 📝 documented-only (not fixed).
 
@@ -29,7 +29,7 @@
 | H-1 | Per-row stock writes (purchase) | ✅ | `849a79c` core + **2026-08-10 import tail** — `FbrPurchaseImportCommitter` now batches via `RecordMovementsAsync` (behavior-identical: same rows/filter/counter/atomicity). No import gate — verify manually. |
 | H-2 | Unbounded tracked cartesian invoice read | ✅ | `a7fbb95` |
 | H-3 | Challan list writes on every read | ✅ | `2524bf8` (batched transitions) |
-| H-4 | Missing date-range indexes | ✅ | `d529cfa` — migration `20260802200706`, applied to db46684 by hand |
+| H-4 | Missing date-range indexes | ✅ | `d529cfa` — migration `20260802200706`, applied to <master-prod-db> by hand |
 | H-5 | No frontend code-splitting | ✅ | `22e526d` — 3.7MB → ~0.5MB initial |
 | H-6 | God files + no unit tests | ⬜📝 | **spec written** → `H6_GODFILE_REFACTOR_TEST_ROADMAP.md` (seams + one-unit-per-PR + test approach). C-2 test project now exists to build on. Multi-day. |
 | H-7 | `InvalidOperationException`→400 leak | ✅ | **2026-08-10** — `Helpers/ValidationException` + `Helpers/ExceptionClassifier`; middleware routes EF-internal IOEs → opaque 500, deliberate validation stays 400 + message. **Accepted behavior change.** |
@@ -89,11 +89,11 @@ Specs written, not implemented **2** (C-1, H-6).
 
 ### 0.4 Resume recipe (how to verify on this branch)
 
-- **DB:** `appsettings.Development.json` (gitignored) already points at **db46684** (prod-replica, `AutoMigrate=false`). Login `admin`/`admin123`.
+- **DB:** `appsettings.Development.json` (gitignored) already points at **<master-prod-db>** (prod-replica, `AutoMigrate=false`). Login `admin`/`admin123`.
 - **Run:** `ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile --no-build --urls "http://localhost:5134"` (wait-for-ready: `curl --retry-connrefused`).
 - **Gates:** `python scripts/test_stock_itemtype_reflow.py` (140/140), `test_basic_flows.py` (37/37), `test_tenant_isolation.py`.
 - **Gotchas:** (1) `POST /api/itemtypes` calls **live FBR** (`ItemTypeService.EnrichFromFbrAsync`) but **H-9 now bounds it to 5s** — a brownout no longer hangs the request ~90s; it falls back to the local UOM. (2) **Stop the backend before `dotnet build`** — it locks the exe (kill the PID on 5134 first). (3) New unit gate: `dotnet test tests/MyApp.Api.Tests/MyApp.Api.Tests.csproj -c Release` (39/39).
-- **Index migration on db46684:** apply only the new migration's own IF-NOT-EXISTS-guarded statements + one `__EFMigrationsHistory` row. **Do NOT** run the full `dotnet ef migrations script --idempotent` — it re-emits already-dropped indexes (e.g. `IX_Invoices_CompanyId_InvoiceNumber`) and hits history-vs-actual drift. `sqlcmd` needs `-I` (QUOTED_IDENTIFIER ON) or `CREATE INDEX` errors.
+- **Index migration on <master-prod-db>:** apply only the new migration's own IF-NOT-EXISTS-guarded statements + one `__EFMigrationsHistory` row. **Do NOT** run the full `dotnet ef migrations script --idempotent` — it re-emits already-dropped indexes (e.g. `IX_Invoices_CompanyId_InvoiceNumber`) and hits history-vs-actual drift. `sqlcmd` needs `-I` (QUOTED_IDENTIFIER ON) or `CREATE INDEX` errors.
 
 ---
 

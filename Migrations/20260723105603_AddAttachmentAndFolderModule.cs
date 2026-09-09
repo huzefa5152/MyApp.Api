@@ -8,7 +8,7 @@ namespace MyApp.Api.Migrations
     public partial class AddAttachmentAndFolderModule : Migration
     {
         // IDEMPOTENT guarded raw SQL (not the generated CreateTable calls). The
-        // dev prod-replica DB (db46684) was seeded by an earlier customer-branch
+        // dev prod-replica DB (<master-prod-db>) was seeded by an earlier customer-branch
         // run and ALREADY has Folders + Attachments (its Attachments has no
         // DivisionId — matching this Division-free model exactly). A plain
         // CreateTable would throw "table already exists" there. These guards

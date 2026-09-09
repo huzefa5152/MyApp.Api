@@ -7,7 +7,7 @@
 > from the Division-enabled customer build): there is no division picker, no
 > `divisionId` on any endpoint/DTO, and no `division*` merge tokens. Working-company
 > examples here mention Al-Qahera (2178); on master the real tenants are **Hakimi
-> Traders (1)** and **Roshan Traders (2)** and the dev DB is `db46684`. Supported
+> Traders (1)** and **Roshan Traders (2)** and the dev DB is `<master-prod-db>`. Supported
 > template types on master: `Challan, Bill, TaxInvoice, SalesQuote, SalesOrder,
 > PurchaseBill, GoodsReceipt, DebitNote, CreditNote, Receipt` (see
 > `Helpers/PrintTemplateTypes.cs`). Everything else — the PDF→field-mapping workflow,
