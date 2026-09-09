@@ -12,6 +12,41 @@ them in their message.
 
 ---
 
+## Environments — READ `docs/ENVIRONMENTS.md` BEFORE TOUCHING ANYTHING
+
+There are **three separate production installations** on MonsterASP, not one
+product with three stages. Each has its own live database, its own deploy
+workflow and its own long-lived branch. A fourth branch carries audit work.
+
+| Branch | Role | Local database |
+|---|---|---|
+| `master` | Production #1 (`deploy.yml`) | `MyApp_Master_Local` |
+| `customize-solution-for-other` | Production #2 (`deploy-other.yml`) | `MyApp_Customize_Local` |
+| `feat/importer-ledger-receipts` | Production #3 (`deploy-importer.yml`) | `MyApp_Importer_Local` |
+| `fix/audit-2026-08-02` | Audit / security, ahead of `master` — not an environment | `MyApp_Master_Local` |
+
+**These four are the only valid branches.** A short-lived working branch is
+fine; delete it when the work lands. Never delete a branch with unique commits.
+
+**Never merge one production line into another.** They have deliberately
+diverged (site shape, dozens of migrations). A change asked for on one branch
+stays there unless the maintainer asks for a port. Security fixes usually
+should reach all three — but each port is a deliberate, reviewed act.
+
+**The branch picks the database by itself.** `Helpers/LocalDevDatabase.cs`
+reads `.git/HEAD` at startup and looks the branch up in `local.databases.json`.
+Checking out a branch is the whole switch — never edit a connection string to
+change environment. Startup prints the database it chose; check that line.
+
+**Local runs never touch a production server.** `Helpers/DevelopmentSqlGuard.cs`
+refuses to start a Development process pointed at anything but this machine.
+Production databases are **READ-ONLY**, queried from a SQL client for
+investigation only — never `INSERT` / `UPDATE` / `DELETE` / `MERGE` /
+`TRUNCATE` / `ALTER` / `DROP` / `CREATE` / migrations without a written
+override from the maintainer.
+
+---
+
 ## Stack & layout
 
 - Backend: **.NET 9**, **EF Core 9**, **SQL Server**, Serilog
@@ -39,9 +74,19 @@ data/keys/                   ASP.NET DataProtection key ring (gitignored, must p
 
 ## Running locally
 
+The database comes from the branch (see Environments above) — nothing to edit.
+Startup logs `Effective database connection: <server> / <database>`; if that is
+not what `docs/ENVIRONMENTS.md` maps to the current branch, stop and find out
+why before doing anything else.
+
 ```bash
-# Backend (Development env loads appsettings.Development.json → Jwt:Key)
+# Backend (Development env loads appsettings.Development.json → Jwt:Key;
+# the connection string comes from local.databases.json via the branch)
 ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile --urls "http://localhost:5134"
+
+# Aim one run at a scratch database instead (skips the branch map entirely)
+ConnectionStrings__DefaultConnection="Server=.\MSSQLSERVER02;Database=Scratch;Trusted_Connection=True;TrustServerCertificate=True;" \
+  ASPNETCORE_ENVIRONMENT=Development dotnet run --no-launch-profile --urls "http://localhost:5135"
 
 # Frontend dev server (hot reload, separate port)
 cd myapp-frontend && npm run dev

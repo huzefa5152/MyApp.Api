@@ -24,6 +24,18 @@
          cannot go missing on a deploy that only ships the binaries. -->
     <EmbeddedResource Include="Data/HsCodes/pakistan-customs-tariff.csv" />
 
+    <!-- The branch -> local-database map is developer tooling, read from the
+         REPO ROOT (next to .git) and only in Development. Keeping it out of
+         the publish output means a deploy cannot carry a local connection
+         string at all, belt and braces with the two runtime conditions in
+         Helpers/LocalDevDatabase.cs. -->
+    <Content Remove="local.databases.json" />
+    <Content Remove="local.databases.local.json" />
+    <None Remove="local.databases.json" />
+    <None Remove="local.databases.local.json" />
+    <Content Remove="production.databases*.json" />
+    <None Remove="production.databases*.json" />
+
     <Content Remove="scripts/**/*" />
     <None Remove="scripts/**/*" />
     <EmbeddedResource Remove="scripts/**/*" />

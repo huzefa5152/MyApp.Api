@@ -1,0 +1,53 @@
+{
+  "_readme": [
+    "TEMPLATE. Copy to production.databases.json (gitignored) and fill in the",
+    "READ-ONLY credentials for each production environment.",
+    "",
+    "These are for a SQL CLIENT (sqlcmd, SSMS, Azure Data Studio) used to",
+    "investigate real data. They are NOT the running application's connection:",
+    "Helpers/DevelopmentSqlGuard.cs refuses to start a Development process that",
+    "points at a non-local server, and it is meant to.",
+    "",
+    "Allowed against production: SELECT, schema metadata, query plans, comparing",
+    "data between the three installations.",
+    "",
+    "NEVER without a written override from the maintainer: INSERT, UPDATE,",
+    "DELETE, MERGE, TRUNCATE, ALTER, DROP, CREATE, EF migrations, EXEC of any",
+    "procedure that may mutate state, or any automated test that writes.",
+    "",
+    "See docs/ENVIRONMENTS.md for the full standard."
+  ],
+
+  "environments": {
+    "master": {
+      "branch": "master",
+      "productionDatabase": "db46684",
+      "localCounterpart": "MyApp_Master_Local",
+      "server": "REPLACE_WITH_PROD_SQL_HOST",
+      "database": "db46684",
+      "userId": "REPLACE_WITH_READONLY_USER",
+      "password": "REPLACE_WITH_READONLY_PASSWORD",
+      "readOnly": true
+    },
+    "customize-solution-for-other": {
+      "branch": "customize-solution-for-other",
+      "productionDatabase": "db55808",
+      "localCounterpart": "MyApp_Customize_Local",
+      "server": "REPLACE_WITH_PROD_SQL_HOST",
+      "database": "db55808",
+      "userId": "REPLACE_WITH_READONLY_USER",
+      "password": "REPLACE_WITH_READONLY_PASSWORD",
+      "readOnly": true
+    },
+    "feat/importer-ledger-receipts": {
+      "branch": "feat/importer-ledger-receipts",
+      "productionDatabase": "db65900",
+      "localCounterpart": "MyApp_Importer_Local",
+      "server": "REPLACE_WITH_PROD_SQL_HOST",
+      "database": "db65900",
+      "userId": "REPLACE_WITH_READONLY_USER",
+      "password": "REPLACE_WITH_READONLY_PASSWORD",
+      "readOnly": true
+    }
+  }
+}
