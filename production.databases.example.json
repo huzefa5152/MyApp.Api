@@ -21,30 +21,30 @@
   "environments": {
     "master": {
       "branch": "master",
-      "productionDatabase": "db46684",
+      "productionDatabase": "REPLACE_WITH_PROD_DB_NAME",
       "localCounterpart": "MyApp_Master_Local",
       "server": "REPLACE_WITH_PROD_SQL_HOST",
-      "database": "db46684",
+      "database": "REPLACE_WITH_PROD_DB_NAME",
       "userId": "REPLACE_WITH_READONLY_USER",
       "password": "REPLACE_WITH_READONLY_PASSWORD",
       "readOnly": true
     },
     "customize-solution-for-other": {
       "branch": "customize-solution-for-other",
-      "productionDatabase": "db55808",
+      "productionDatabase": "REPLACE_WITH_PROD_DB_NAME",
       "localCounterpart": "MyApp_Customize_Local",
       "server": "REPLACE_WITH_PROD_SQL_HOST",
-      "database": "db55808",
+      "database": "REPLACE_WITH_PROD_DB_NAME",
       "userId": "REPLACE_WITH_READONLY_USER",
       "password": "REPLACE_WITH_READONLY_PASSWORD",
       "readOnly": true
     },
     "feat/importer-ledger-receipts": {
       "branch": "feat/importer-ledger-receipts",
-      "productionDatabase": "db65900",
+      "productionDatabase": "REPLACE_WITH_PROD_DB_NAME",
       "localCounterpart": "MyApp_Importer_Local",
       "server": "REPLACE_WITH_PROD_SQL_HOST",
-      "database": "db65900",
+      "database": "REPLACE_WITH_PROD_DB_NAME",
       "userId": "REPLACE_WITH_READONLY_USER",
       "password": "REPLACE_WITH_READONLY_PASSWORD",
       "readOnly": true
