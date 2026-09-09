@@ -382,6 +382,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
+| No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 
 **PO parser / import changes — MANDATORY.** Any change to
 `Services/Implementations/RuleBasedPOParser.cs` or the import flow
@@ -543,8 +544,43 @@ migrations). This is a hard rule, on par with the test-discipline checks.
 
 ---
 
+## Never name production in a tracked file
+
+**This repository is PUBLIC.** The production databases sit on a public host
+whose subdomain IS the database name, and the SQL username is the database name
+too — so a database name written into a comment, a guide or a docstring hands
+out two thirds of a working credential. The MonsterASP FTP hosts are the same
+shape.
+
+**Never commit** a production database name, SQL host, FTP host, login,
+password, API key or FBR token — not in prose, not in a code comment, not in a
+migration comment, not in a docstring, not in a commit message. Write a
+placeholder:
+
+```
+<master-prod-db>   <customize-prod-db>   <importer-prod-db>
+<prod-sql-host>    <prod-ftp-host>
+```
+
+Real values live in the gitignored `production.databases.json` and in GitHub
+Actions secrets. `RESTORE FILELISTONLY` reads the real logical names straight
+out of a backup, so a runbook never needs to state them.
+
+`python scripts/verify_no_production_identifiers.py` enforces this — run it
+whenever you touch docs, comments or scripts. Deliberate exceptions live in an
+explicit list inside that script, each with a reason saying what would have to
+happen for it to go away.
+
+**Scrubbing after the fact is not a fix.** It cleans the current tip; the names
+stay in the pushed history and are recoverable from it. That is why the rule is
+"never write it down", not "clean it up later" — on 2026-09-09 a scrub across
+16 files was needed precisely because that had not been the rule.
+
+---
+
 ## Anti-patterns I keep finding (don't repeat them)
 
+- ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
 - ❌ Trusting `dto.CompanyId` from request body without `_access.AssertAccessAsync`
 - ❌ Grouping dashboard aggregates by `ClientId+Name` (causes duplicate rows on Common Clients)
 - ❌ Returning `ex.Message` to the client (leaks internals — log + return a generic message)
