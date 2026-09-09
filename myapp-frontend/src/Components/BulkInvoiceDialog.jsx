@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MdClose, MdDownload, MdPictureAsPdf, MdWarningAmber } from "react-icons/md";
+import { MdClose, MdDownload, MdFilterAlt, MdPictureAsPdf, MdWarningAmber } from "react-icons/md";
 import { downloadInvoiceZip, downloadConsolidatedPdf } from "../utils/bulkInvoiceDocuments";
 
 /**
@@ -22,6 +22,7 @@ import { downloadInvoiceZip, downloadConsolidatedPdf } from "../utils/bulkInvoic
  */
 const PRESETS = [
   { value: "thisMonth", label: "This month" },
+  { value: "allPeriods", label: "All dates" },
   { value: "lastMonth", label: "Last month" },
   { value: "thisQuarter", label: "This quarter" },
   { value: "thisYear", label: "This year" },
@@ -41,6 +42,18 @@ export default function BulkInvoiceDialog({
   title = "Download invoices",
   /** Internal caller only — extra filters to carry through (client, division, search). */
   extraFilters = null,
+  /**
+   * Human-readable list of the SCREEN filters this batch inherits, e.g.
+   * ["Client: Marketing Vision"].
+   *
+   * Not decoration. The batch operates on the filtered set, which is what was
+   * asked for — but over a wide date range "2 invoices ready" then looks
+   * identical to a broken query, and an operator who has forgotten a client
+   * filter is on would either think bulk download is faulty or ship an
+   * incomplete pack believing it complete. Saying what is applied is the
+   * difference between a correct number and a trustworthy one.
+   */
+  inheritedFilters = null,
   documentType = "TaxInvoice",
   theme = null,
 }) {
@@ -168,6 +181,16 @@ export default function BulkInvoiceDialog({
               </select>
             </label>
           </div>
+        )}
+
+        {inheritedFilters && inheritedFilters.length > 0 && (
+          <p style={s.inherited}>
+            <MdFilterAlt size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              Also applying the filters on screen: <strong>{inheritedFilters.join(" · ")}</strong>.
+              Clear them on the list to include everything.
+            </span>
+          </p>
         )}
 
         {rangeError && <p style={s.err}><MdWarningAmber size={15} /> {rangeError}</p>}
@@ -304,6 +327,9 @@ const s = {
   muted: { margin: "0.4rem 0 0", fontSize: "0.78rem", color: "#5f6d7e" },
   warn: { display: "flex", alignItems: "flex-start", gap: 6, margin: "0.35rem 0",
     fontSize: "0.8rem", color: "#8a5300", background: "#fff8e1", border: "1px solid #ffe0a3",
+    borderRadius: 7, padding: "0.45rem 0.6rem" },
+  inherited: { display: "flex", alignItems: "flex-start", gap: 6, margin: "0.35rem 0",
+    fontSize: "0.78rem", color: "#0d3c61", background: "#e8f2fb", border: "1px solid #bcdcf5",
     borderRadius: 7, padding: "0.45rem 0.6rem" },
   err: { display: "flex", alignItems: "flex-start", gap: 6, margin: "0.35rem 0",
     fontSize: "0.8rem", color: "#8c1d18", background: "#fdecea", border: "1px solid #f5c6c2",
