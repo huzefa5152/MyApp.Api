@@ -37,7 +37,12 @@
     <None Remove="tools/**/*" />
     <EmbeddedResource Remove="tools/**/*" />
     <!-- tests/ holds the xUnit test project (MyApp.Api.Tests, audit C-2). It
-         has its own .csproj and must never be globbed into the web assembly. -->
+         has its own .csproj and must never be globbed into the web assembly.
+         It matters even when the suite is not checked out on THIS branch:
+         only the root obj/ and bin/ are excluded by DefaultItemExcludes, so a
+         leftover tests/**/obj/**/*.AssemblyInfo.cs from another branch's build
+         gets swallowed by the default **/*.cs glob and the build dies with
+         8 x CS0579 duplicate assembly attributes. -->
     <Compile Remove="tests/**/*.cs" />
     <Content Remove="tests/**/*" />
     <None Remove="tests/**/*" />
