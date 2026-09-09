@@ -26,7 +26,7 @@ Outputs (to --outdir, default scripts/_prod_dump_out):
 SAFETY
   PROD is strictly read-only: exactly one POST (/auth/login) + GETs
   (/poimport/archives, /poimport/archives/{id}/file). All re-parsing happens on
-  the LOCAL backend(s). Point local at the prod-replica db46684 so format
+  the LOCAL backend(s). Point local at the prod-replica <master-prod-db> so format
   matching behaves like production.
 
 USAGE

@@ -25,7 +25,7 @@ be faked through the API and every path here is only reachable on a filed bill.
 
 Usage:
   python scripts/test_fbr_cancellation.py --base http://localhost:5135 \
-      --db "Server=CRKRL-HUSSAHUZ1;Database=db46684;Trusted_Connection=True"
+      --db "Server=CRKRL-HUSSAHUZ1;Database=<master-prod-db>;Trusted_Connection=True"
 """
 from __future__ import annotations
 

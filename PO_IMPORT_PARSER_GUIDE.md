@@ -178,7 +178,7 @@ format or extract fewer items than production recorded.
 
 ```bash
 # One-time: run a LOCAL backend on a DB that has the same PO formats as prod
-# (the prod-replica db46684), so format matching behaves like production.
+# (the prod-replica <master-prod-db>), so format matching behaves like production.
 set PROD_USER=...&&  set PROD_PASS=...           # production read-only account
 python scripts/po_parser_prod_regression.py \
     --prod https://hakimitraders.runasp.net --local http://localhost:5134 --outcome ok

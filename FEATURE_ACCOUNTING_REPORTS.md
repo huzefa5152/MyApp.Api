@@ -243,7 +243,7 @@ Deferred to Phase 2 (party ledgers): `JournalLine (PartyType, PartyId)`.
 
 Migration is additive index-only. `dotnet ef` design-time factory targets
 `DeliveryChallanDb`, **not** the branch DB — apply manually to
-`db55808_custom` on `localhost\MSSQLSERVER02` and strip any spurious drift from the
+`<customize-prod-db>_custom` on `localhost\MSSQLSERVER02` and strip any spurious drift from the
 generated migration.
 
 ### 4.6 Permissions — no access regression
@@ -376,7 +376,7 @@ via HTTP), frontend second, docs/gate last.
   Gate: build + live GET; Cash Book closing == `GetAccountBalancesAsync`.
 - [x] **T4 — Indexes + permission backfill.** `AppDbContext` index config,
   additive index-only migration, `ACCT_REPORTS_EXPORT_BACKFILL_V1` idempotent
-  grant. Apply manually to `db55808_custom` (design-time factory targets
+  grant. Apply manually to `<customize-prod-db>_custom` (design-time factory targets
   `DeliveryChallanDb`). Gate: migration applied, no drift, existing roles can export.
 - [x] **T5 — Frontend shell.** `config/accountingReports.js`,
   `Components/ReportFilterBar.jsx`, `Components/ReportShell.jsx`,

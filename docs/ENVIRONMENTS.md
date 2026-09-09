@@ -70,13 +70,20 @@ production database. Nothing local ever talks to a production server.
 
 | Branch | Local database | Restored from |
 |---|---|---|
-| `master` | `MyApp_Master_Local` | `…\Database Backup\master\db46684_custom_*.bak` (prod DB `db46684`) |
-| `customize-solution-for-other` | `MyApp_Customize_Local` | `…\Database Backup\customize\db55808_custom_*.bak` (prod DB `db55808`) |
-| `feat/importer-ledger-receipts` | `MyApp_Importer_Local` | `…\Database Backup\importer\db65900_custom_*.bak` (prod DB `db65900`) |
+| `master` | `MyApp_Master_Local` | `…\Database Backup\master\<master-prod-db>_custom_*.bak` (prod DB `<master-prod-db>`) |
+| `customize-solution-for-other` | `MyApp_Customize_Local` | `…\Database Backup\customize\<customize-prod-db>_custom_*.bak` (prod DB `<customize-prod-db>`) |
+| `feat/importer-ledger-receipts` | `MyApp_Importer_Local` | `…\Database Backup\importer\<importer-prod-db>_custom_*.bak` (prod DB `<importer-prod-db>`) |
 | `fix/audit-2026-08-02` | `MyApp_Master_Local` | same backup as `master` |
 
 Backup root on the maintainer's machine:
 `C:\Users\hussahuz\Downloads\Database Backup\{master,customize,importer}`
+
+**`<…-prod-db>` is a placeholder on purpose — do not fill it in.** The
+production databases are hosted at `<name>.public.databaseasp.net` and the SQL
+username IS the database name, so writing the real name in a public repository
+gives away two thirds of a credential. The real names live in the gitignored
+`production.databases.json`, and `RESTORE FILELISTONLY` reads them straight out
+of any backup you actually hold.
 
 Local SQL Server instance: **`.\MSSQLSERVER02`** (SQL Server 2025, 17.0).
 That instance is not a preference — the production backups are taken on SQL
@@ -148,13 +155,13 @@ RESTORE FILELISTONLY FROM DISK = N'C:\Users\Public\SqlRestoreStaging\<file>.bak'
 
 RESTORE DATABASE [MyApp_Master_Local]
 FROM DISK = N'C:\Users\Public\SqlRestoreStaging\<file>.bak'
-WITH MOVE N'db46684'     TO N'D:\SqlData\MyAppLocal\MyApp_Master_Local.mdf',
-     MOVE N'db46684_log' TO N'D:\SqlData\MyAppLocal\MyApp_Master_Local_log.ldf',
+WITH MOVE N'<master-prod-db>'     TO N'D:\SqlData\MyAppLocal\MyApp_Master_Local.mdf',
+     MOVE N'<master-prod-db>_log' TO N'D:\SqlData\MyAppLocal\MyApp_Master_Local_log.ldf',
      RECOVERY, STATS = 25;
 ```
 
 The logical file names inside the backup are the **production** database names
-(`db46684`, `db55808`, `db65900`) — always read them from `FILELISTONLY` rather
+(`<master-prod-db>`, `<customize-prod-db>`, `<importer-prod-db>`) — always read them from `FILELISTONLY` rather
 than assuming, and always `MOVE` them to the local path so nothing lands on a
 production file location. Use `WITH REPLACE` only when you intend to overwrite
 the existing local copy.

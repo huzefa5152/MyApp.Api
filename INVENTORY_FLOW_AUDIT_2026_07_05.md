@@ -70,7 +70,7 @@ standalone-invoice concurrent ItemType-usage-counter race is untouched (out of s
 a synthesis pass, 12 adversarial claim verifications (each attempting to *refute* a
 load-bearing claim), 4 independent architecture proposals, a 3-lens judge panel, a final
 comparative arbiter, and a completeness critic — plus read-only SQL profiling of the
-prod-replica (`db46684`) and branch (`DeliveryChallanDb`) databases.
+prod-replica (`<master-prod-db>`) and branch (`DeliveryChallanDb`) databases.
 
 ---
 
@@ -141,7 +141,7 @@ with the corrections noted in §1.1 and §3 (PR-01).
 
 ## 2. Live data profile (read-only SELECTs, 2026-07-05)
 
-### Prod replica `db46684` (Hakimi CompanyId=1, Roshan=2, Sms Enterprise=3)
+### Prod replica `<master-prod-db>` (Hakimi CompanyId=1, Roshan=2, Sms Enterprise=3)
 
 - **All 3 companies have `InventoryTrackingEnabled = 1`.**
 - ItemTypes: 156 total → active: **33 HS / 18 no-HS**; soft-deleted: 105.

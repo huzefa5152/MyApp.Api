@@ -2,7 +2,7 @@
 
 **Scope:** every PO PDF ever uploaded to production (`hakimitraders.runasp.net`) —
 **124 `ok` + 1 `no-format` = 125 archives** — re-parsed read-only against a local
-backend on the prod-replica DB `db46684`, comparing the **new generic
+backend on the prod-replica DB `<master-prod-db>`, comparing the **new generic
 (column-primary) parser** on `master` HEAD `77cefb5` against the **parser
 production currently runs** (parent `2577301`, adjacency-primary).
 
@@ -187,7 +187,7 @@ script miscounted as misses. The dump script now paces requests and retries `429
 Format matching is fine — all 125 match.
 
 ### Cleanup pending your OK
-- The read-only re-parse wrote ~246 append-only rows to `db46684.PoImportArchives`
+- The read-only re-parse wrote ~246 append-only rows to `<master-prod-db>.PoImportArchives`
   (Id > 125). Harmless (the analysis lists from prod, not local; this is the
   documented behaviour of the prod-check tool) but I can delete `Id > 125` to
   restore the replica if you want.
