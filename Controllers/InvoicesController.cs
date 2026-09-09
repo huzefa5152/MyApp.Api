@@ -426,6 +426,40 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Record that this filed invoice was cancelled on the FBR portal.
+        ///
+        /// FBR lets a submitted invoice be withdrawn there within 72 hours. The
+        /// withdrawal happens on THEIR portal; this records it and does what it
+        /// implies here — the bill stops counting as a sale, its delivery
+        /// challans return to the billable pool, and its stock comes back unless
+        /// a credit note already returned it. The bill itself stays visible with
+        /// its number and IRN, carrying the marker. No note document is created.
+        ///
+        /// Gated by `bills.manage.void`: it is the same class of act as voiding
+        /// — undoing a document — and anyone trusted with one is trusted with
+        /// the other.
+        /// </summary>
+        [HttpPost("{id}/fbr-cancelled")]
+        [HasPermission("bills.manage.void")]
+        public async Task<ActionResult<InvoiceDto>> MarkFbrCancelled(
+            int id, [FromBody] CancelBillRequest? body)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            try
+            {
+                var updated = await _service.MarkFbrCancelledAsync(id, body?.Reason, User.Identity?.Name);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
         /// adjustment note (Credit Note for a return/reversal — the default —
         /// or Debit Note for an upward correction). The note is created

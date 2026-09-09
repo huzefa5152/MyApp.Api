@@ -46,6 +46,16 @@ namespace MyApp.Api.DTOs
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }
 
+        // Cancelled at the FBR portal (their 72-hour window). NOT a void: the
+        // bill stays visible and keeps its number and IRN, but stops counting
+        // as a sale. Null = still filed.
+        public DateTime? FbrCancelledAt { get; set; }
+        public string? FbrCancelledReason { get; set; }
+
+        // True when a live Credit Note reverses this bill IN FULL. Drives the
+        // "reversed" marker, and is why the bill drops out of the Sales Report.
+        public bool IsFullyReversed { get; set; }
+
         // ── Credit / Debit Note linkage (2026-07-01) ─────────────────────
         /// <summary>Local id of the original invoice this note reverses/adjusts (null for ordinary sale invoices).</summary>
         public int? OriginalInvoiceId { get; set; }

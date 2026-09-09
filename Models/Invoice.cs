@@ -72,6 +72,23 @@ namespace MyApp.Api.Models
         public DateTime? CancelledAt { get; set; }
         public string? CancelReason { get; set; }
 
+        // ── Cancelled at the FBR portal (2026-09-03) ─────────────────────
+        //
+        // FBR allows a submitted invoice to be cancelled on their own portal
+        // within 72 hours of filing. That happens THERE, not here, so this
+        // records what the operator did rather than performing it: the IRN is
+        // withdrawn at FBR and the document stops being a sale.
+        //
+        // Deliberately NOT IsCancelled. A void hides the bill; this one stays
+        // visible and keeps its number, its IRN and its history, carrying a
+        // marker that says the filing was withdrawn. It is dropped from the
+        // Sales Report the same way a fully credit-noted invoice is.
+        //
+        // Null = still filed. Set = withdrawn at FBR on that date.
+        public DateTime? FbrCancelledAt { get; set; }
+        public string? FbrCancelledReason { get; set; }
+        public string? FbrCancelledBy { get; set; }
+
         // ── Credit / Debit Note linkage (2026-07-01) ─────────────────────
         // A Credit Note (DocumentType 10) or Debit Note (DocumentType 9) is
         // itself an Invoice row that ADJUSTS an earlier FBR-submitted sale.

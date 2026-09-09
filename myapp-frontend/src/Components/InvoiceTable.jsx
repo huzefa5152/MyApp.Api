@@ -130,6 +130,20 @@ export default function InvoiceTable({
               {i.originalInvoiceNumber ? ` ↩ #${i.originalInvoiceNumber}` : ""}
             </span>
           )}
+          {i.documentType !== 9 && i.documentType !== 10 && i.fbrCancelledAt && (
+            <span
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 3, alignSelf: "flex-start",
+                fontSize: 10, fontWeight: 700, lineHeight: 1.2, padding: "2px 6px",
+                borderRadius: 6, background: "#f9dedc", color: "#b3261e", border: "1px solid #f2b8b5",
+              }}
+              title={`Cancelled on the FBR portal on ${new Date(i.fbrCancelledAt).toLocaleDateString()}`
+                + (i.fbrCancelledReason ? ` — ${i.fbrCancelledReason}` : "")
+                + ". The bill keeps its number and IRN but no longer counts as a sale."}
+            >
+              <MdBlock size={11} /> FBR CANCELLED
+            </span>
+          )}
           {i.documentType !== 9 && i.documentType !== 10 && i.reversedByCreditNoteNumber && (
             <span
               style={{
@@ -446,7 +460,7 @@ export default function InvoiceTable({
             <MdCancel size={14} />
           </button>
         )}
-        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.reversedByCreditNoteNumber &&
+        {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.fbrCancelledAt &&
          inv.documentType !== 9 && inv.documentType !== 10 && (
           <button
             style={btn.reverse}
