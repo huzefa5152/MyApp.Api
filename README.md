@@ -289,6 +289,29 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-10 — An FBR token the server cannot read is no longer erased
+
+- **Losing the encryption key no longer loses the token.** The FBR bearer
+  token is encrypted at rest with a key ring kept in `data/keys/`. If that
+  key ring is ever replaced — a redeploy that wipes the folder, or a second
+  server process started with its own keys — the stored token can no longer
+  be read, and until now the very next save of the company (which every new
+  bill performs to advance the invoice number) wrote the unreadable value
+  back as *nothing*. The token was gone for good, silently, and the operator
+  only found out when the next filing failed. The encrypted value now stays
+  in the database untouched until someone deliberately replaces it.
+- **What the operator sees is unchanged.** While the token cannot be read the
+  company shows *no FBR token*, filings are refused with the usual "token not
+  configured" message, and re-entering the token on the Company form (the
+  `companies.manage.fbrtoken` permission) replaces the old value. Clearing
+  the field still clears it. The difference is that restoring the original
+  key ring now brings the original token back, because it was never
+  destroyed.
+- **Pinned by** `scripts/test_fbr_token_unreadable_survives_save.py`, which
+  plants an undecryptable payload on an ephemeral company and proves an
+  unrelated edit and a new bill leave it byte-for-byte intact, while an
+  explicit re-entry and an explicit clear still take effect.
+
 ### 2026-09-09 — The branch decides which local database you are on
 
 - **Three production installations, three local databases, and no connection
