@@ -99,16 +99,32 @@ namespace MyApp.Api.Controllers
             var targetRoleIds = (dto.RoleIds ?? new List<int>()).Distinct().ToList();
             if (targetRoleIds.Count > 0)
             {
-                var found = await _context.Roles.Where(r => targetRoleIds.Contains(r.Id)).Select(r => r.Id).ToListAsync();
-                if (found.Count != targetRoleIds.Count)
+                // Only roles the caller can see may be handed out: system
+                // roles, legacy rows, and custom roles from the caller's own
+                // chain. A sibling Administrator's role id is "invalid" here.
+                var visible = await RolesController.VisibleRoleIdsAsync(_context, _scope, CurrentUserId() ?? 0);
+                if (targetRoleIds.Any(id => !visible.Contains(id)))
                     return BadRequest(new { message = "One or more role IDs are invalid" });
+            }
+
+            // Roles the target already holds that the caller cannot see stay
+            // untouched — the caller is editing the part of the set it can see.
+            var hiddenExisting = new HashSet<int>();
+            if (!_scope.IsSeedAdmin(CurrentUserId() ?? 0))
+            {
+                var visibleNow = await RolesController.VisibleRoleIdsAsync(_context, _scope, CurrentUserId() ?? 0);
+                hiddenExisting = (await _context.UserRoles
+                        .Where(ur => ur.UserId == userId && !visibleNow.Contains(ur.RoleId))
+                        .Select(ur => ur.RoleId)
+                        .ToListAsync())
+                    .ToHashSet();
             }
 
             var existing = await _context.UserRoles.Where(ur => ur.UserId == userId).ToListAsync();
             var existingIds = existing.Select(ur => ur.RoleId).ToHashSet();
             var target = targetRoleIds.ToHashSet();
 
-            foreach (var ur in existing.Where(ur => !target.Contains(ur.RoleId)).ToList())
+            foreach (var ur in existing.Where(ur => !target.Contains(ur.RoleId) && !hiddenExisting.Contains(ur.RoleId)).ToList())
                 _context.UserRoles.Remove(ur);
 
             var assignedBy = CurrentUserId();

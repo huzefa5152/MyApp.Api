@@ -18,11 +18,55 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
+        private readonly IManagementScopeService _scope;
 
-        public RolesController(AppDbContext context, IPermissionService permissions)
+        public RolesController(AppDbContext context, IPermissionService permissions, IManagementScopeService scope)
         {
             _context = context;
             _permissions = permissions;
+            _scope = scope;
+        }
+
+        // ── Role scope (2026-09-11) ──
+        // System roles and legacy rows (no creator) are shared with everyone.
+        // A custom role is visible along its creator's chain: to the creator,
+        // to everyone the creator manages (so it can be assigned to them and
+        // they can see what they hold) and to the creator's ancestors. It is
+        // editable/deletable only by its creator, an ancestor of the creator,
+        // or the seed admin. Two sibling Administrators therefore never see
+        // each other's roles.
+        private async Task<HashSet<int>> VisibleCreatorIdsAsync(int userId)
+        {
+            var set = await _scope.GetManageableUserIdsAsync(userId);
+            set.Add(userId);
+            foreach (var a in await _scope.GetAncestorUserIdsAsync(userId)) set.Add(a);
+            return set;
+        }
+
+        private static bool RoleVisibleTo(Role r, HashSet<int> creators) =>
+            r.IsSystemRole || r.CreatedByUserId == null || creators.Contains(r.CreatedByUserId.Value);
+
+        private async Task<bool> CanEditRoleAsync(Role r, int userId)
+        {
+            if (_scope.IsSeedAdmin(userId)) return true;
+            if (r.CreatedByUserId == null) return false;
+            if (r.CreatedByUserId == userId) return true;
+            return await _scope.CanManageUserAsync(userId, r.CreatedByUserId.Value);
+        }
+
+        /// <summary>Ids of the roles the caller may see or assign (seed: all).</summary>
+        internal static async Task<HashSet<int>> VisibleRoleIdsAsync(AppDbContext db, IManagementScopeService scope, int userId)
+        {
+            if (scope.IsSeedAdmin(userId))
+                return (await db.Roles.Select(r => r.Id).ToListAsync()).ToHashSet();
+            var creators = await scope.GetManageableUserIdsAsync(userId);
+            creators.Add(userId);
+            foreach (var a in await scope.GetAncestorUserIdsAsync(userId)) creators.Add(a);
+            var rows = await db.Roles
+                .Where(r => r.IsSystemRole || r.CreatedByUserId == null || creators.Contains(r.CreatedByUserId.Value))
+                .Select(r => r.Id)
+                .ToListAsync();
+            return rows.ToHashSet();
         }
 
         private int? CurrentUserId()
@@ -36,12 +80,22 @@ namespace MyApp.Api.Controllers
         [HasPermission("rbac.roles.view")]
         public async Task<ActionResult<List<RoleDto>>> GetAll()
         {
+            var me = CurrentUserId() ?? 0;
             var roles = await _context.Roles
                 .Include(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
                 .Include(r => r.UserRoles)
                 .OrderByDescending(r => r.IsSystemRole)
                 .ThenBy(r => r.Name)
                 .ToListAsync();
+
+            if (!_scope.IsSeedAdmin(me))
+            {
+                var creators = await VisibleCreatorIdsAsync(me);
+                roles = roles.Where(r => RoleVisibleTo(r, creators)).ToList();
+            }
+            // UserCount counts only users the caller can see, so a shared
+            // role never reveals how many accounts exist in other trees.
+            var visibleUsers = await _scope.GetVisibleUserIdsAsync(me);
 
             var dto = roles.Select(r => new RoleDto
             {
@@ -50,7 +104,7 @@ namespace MyApp.Api.Controllers
                 Description = r.Description,
                 IsSystemRole = r.IsSystemRole,
                 CreatedAt = r.CreatedAt,
-                UserCount = r.UserRoles.Count,
+                UserCount = r.UserRoles.Count(ur => visibleUsers.Contains(ur.UserId)),
                 PermissionKeys = r.RolePermissions
                     .Where(rp => rp.Permission != null)
                     .Select(rp => rp.Permission!.Key)
@@ -65,11 +119,15 @@ namespace MyApp.Api.Controllers
         [HasPermission("rbac.roles.view")]
         public async Task<ActionResult<RoleDto>> Get(int id)
         {
+            var me = CurrentUserId() ?? 0;
             var role = await _context.Roles
                 .Include(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
                 .Include(r => r.UserRoles)
                 .FirstOrDefaultAsync(r => r.Id == id);
             if (role == null) return NotFound(new { message = "Role not found" });
+            if (!_scope.IsSeedAdmin(me) && !RoleVisibleTo(role, await VisibleCreatorIdsAsync(me)))
+                return NotFound(new { message = "Role not found" });
+            var visibleUsers = await _scope.GetVisibleUserIdsAsync(me);
 
             return Ok(new RoleDto
             {
@@ -78,7 +136,7 @@ namespace MyApp.Api.Controllers
                 Description = role.Description,
                 IsSystemRole = role.IsSystemRole,
                 CreatedAt = role.CreatedAt,
-                UserCount = role.UserRoles.Count,
+                UserCount = role.UserRoles.Count(ur => visibleUsers.Contains(ur.UserId)),
                 PermissionKeys = role.RolePermissions
                     .Where(rp => rp.Permission != null)
                     .Select(rp => rp.Permission!.Key)
@@ -143,6 +201,10 @@ namespace MyApp.Api.Controllers
             if (role.IsSystemRole)
                 return BadRequest(new { message = "System roles cannot be edited" });
 
+            // Role scope: only the creator's chain (or the seed admin) edits it.
+            if (!await CanEditRoleAsync(role, CurrentUserId() ?? 0))
+                return NotFound(new { message = "Role not found" });
+
             if (!string.IsNullOrWhiteSpace(dto.Name))
             {
                 var newName = dto.Name.Trim();
@@ -186,6 +248,9 @@ namespace MyApp.Api.Controllers
 
             if (role.IsSystemRole)
                 return BadRequest(new { message = "System roles cannot be deleted" });
+
+            if (!await CanEditRoleAsync(role, CurrentUserId() ?? 0))
+                return NotFound(new { message = "Role not found" });
 
             if (role.UserRoles.Count > 0)
                 return BadRequest(new

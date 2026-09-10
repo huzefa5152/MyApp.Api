@@ -101,7 +101,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
     const next = {};
     if (!formData.name.trim()) next.name = "Name is required";
     if (showNtn && !formData.ntn.trim()) next.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
-    if (showStrn && !formData.strn.trim()) next.strn = "STRN is required";
+    // STRN optional (2026-09-11): not part of any FBR payload; see ClientForm.
     if (showCnic && !formData.cnic.trim()) next.cnic = "CNIC is required for this registration type";
     if (showCnic && formData.cnic.trim() && formData.cnic.replace(/\D/g, "").length !== 13) {
       next.cnic = "CNIC must be 13 digits";
@@ -300,7 +300,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                   )}
                   {showStrn && (
                     <div style={formGroup}>
-                      <label style={label}>STRN *</label>
+                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
                       <input
                         type="text"
                         name="strn"

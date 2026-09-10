@@ -52,3 +52,8 @@ export const getFbrScenarios = () => httpClient.get("/fbr/scenarios");
 // profile.
 export const getFbrApplicableScenarios = (companyId) =>
   httpClient.get(`/fbr/scenarios/applicable/${companyId}`);
+
+// Ask FBR (Get_Reg_Type) whether an NTN/CNIC is sales-tax registered. Backed
+// by POST /api/fbr/regtype/{companyId}; needs fbr.config.view + company access.
+export const getFbrRegistrationType = (companyId, regNo) =>
+  httpClient.post(`/fbr/regtype/${companyId}?regNo=${encodeURIComponent(regNo)}`);

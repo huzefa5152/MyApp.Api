@@ -118,6 +118,10 @@ for name in ["scopeUserA1", "scopeUserB1", "scopeAdminA", "scopeAdminB"]:
             request("DELETE", f"/api/users/{u['id']}", token=seed)
 
 s, roles = request("GET", "/api/roles", token=seed)
+for r in roles or []:
+    if r["name"] in ("Scope Role A", "Scope Role A2", "Scope Role B"):
+        request("DELETE", f"/api/roles/{r['id']}", token=seed)
+s, roles = request("GET", "/api/roles", token=seed)
 admin_role = next(r for r in roles if r["name"] == "Administrator")
 
 
@@ -266,6 +270,75 @@ s, rows = request("GET", "/api/companies", token=tUA1)
 check("userA1", "companies = A1 + A2 (granted by A)", ids(rows) == {coA1["id"], coA2["id"]}, f"got {sorted(ids(rows))}")
 
 # ─────────────────────────────────────────────────────────────────────
+print("\n=== ROLES: custom roles stay inside the creator's chain ===")
+s, roleA = request("POST", "/api/roles", token=tA, body={"name": "Scope Role A", "description": "t", "permissionKeys": ["bills.list.view"]})
+check("roles", "A creates a custom role -> 201", s == 201, f"{s} {roleA}")
+s, roleB = request("POST", "/api/roles", token=tB, body={"name": "Scope Role B", "description": "t", "permissionKeys": ["bills.list.view"]})
+check("roles", "B creates a custom role -> 201", s == 201, f"{s} {roleB}")
+s, rows = request("GET", "/api/roles", token=tA)
+names = {r["name"] for r in rows}
+check("roles", "A sees Administrator + own role, not B's", "Administrator" in names and "Scope Role A" in names and "Scope Role B" not in names, str(sorted(names)))
+s, _ = request("GET", f"/api/roles/{roleB['id']}", token=tA)
+check("roles", "A GET B's role -> 404", s == 404, str(s))
+s, _ = request("PUT", f"/api/roles/{roleB['id']}", token=tA, body={"name": "hacked"})
+check("roles", "A PUT B's role -> 404", s == 404, str(s))
+s, _ = request("DELETE", f"/api/roles/{roleB['id']}", token=tA)
+check("roles", "A DELETE B's role -> 404", s == 404, str(s))
+s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=tA, body={"roleIds": [roleB["id"]]})
+check("roles", "A assigns B's role to own user -> 400", s == 400, f"{s} {d}")
+s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=tA, body={"roleIds": [roleA["id"]]})
+check("roles", "A assigns own role to own user -> 200", s == 200 and {r["id"] for r in d["roles"]} == {roleA["id"]}, f"{s} {d}")
+s, rows = request("GET", "/api/roles", token=tUA1)
+check("roles", "userA1 (no rbac perm) -> 403 on roles list", s == 403, str(s))
+s, rows = request("GET", "/api/roles", token=seed)
+check("roles", "seed sees both custom roles", {"Scope Role A", "Scope Role B"} <= {r["name"] for r in rows})
+s, d = request("PUT", f"/api/roles/{roleA['id']}", token=tA, body={"name": "Scope Role A2"})
+check("roles", "A renames own role -> 200", s == 200, f"{s} {d}")
+# seed grants B's role to userA1 directly; A must keep it when editing the visible part
+s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=seed, body={"roleIds": [roleA["id"], roleB["id"]]})
+check("roles", "seed adds B's role to userA1", s == 200 and len(d["roles"]) == 2, f"{s} {d}")
+s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=tA, body={"roleIds": []})
+got = {r["id"] for r in (d or {}).get("roles", [])}
+check("roles", "A clears own roles from userA1, hidden role survives", s == 200 and roleA["id"] not in got, f"{s} {d}")
+s, d = request("GET", f"/api/users/{uA1['id']}/roles", token=seed)
+check("roles", "userA1 still holds B's role (seed view)", roleB["id"] in {r["id"] for r in d["roles"]}, f"{d}")
+s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=seed, body={"roleIds": []})
+
+# ─────────────────────────────────────────────────────────────────────
+print("\n=== COMMON CLIENTS: shared only across companies the caller holds ===")
+def mk_client(tok, company_id, name, ntn):
+    s, d = request("POST", "/api/clients", token=tok, body={
+        "name": name, "address": "x", "phone": "1", "email": "", "ntn": ntn, "strn": "",
+        "registrationType": "Registered", "cnic": "", "fbrProvinceCode": 8, "companyId": company_id})
+    assert s in (200, 201), f"create client {name} in {company_id}: {s} {d}"
+    return d
+cA1 = mk_client(tA, coA1["id"], "Scope Shared Client", "7654321")
+cB1 = mk_client(tB, coB1["id"], "Scope Shared Client", "7654321")
+s, rows = request("GET", f"/api/clients/common?companyId={coA1['id']}", token=tA)
+check("common", "A (A1 only has it) sees NO common client despite B1 sharing the NTN", s == 200 and rows == [], f"{s} {rows}")
+s, rows = request("GET", f"/api/clients/common?companyId={coB1['id']}", token=tB)
+check("common", "B sees NO common client", s == 200 and rows == [], f"{s} {rows}")
+s, _ = request("GET", "/api/clients/common?companyId=" + str(coB1["id"]), token=tA)
+check("common", "A asking common for B1 -> 403", s == 403, str(s))
+cA2 = mk_client(tA, coA2["id"], "Scope Shared Client", "7654321")
+s, rows = request("GET", f"/api/clients/common?companyId={coA1['id']}", token=tA)
+check("common", "A now sees it as common across A1 + A2 only", s == 200 and len(rows) == 1 and rows[0]["companyCount"] == 2 and set(rows[0]["companyNames"]) == {coA1["name"], coA2["name"]}, f"{s} {rows}")
+gid = rows[0]["groupId"] if rows else None
+if gid:
+    s, d = request("GET", f"/api/clients/common/{gid}", token=tA)
+    check("common", "A's detail lists only A's members", s == 200 and {m["companyId"] for m in d["members"]} == {coA1["id"], coA2["id"]}, f"{s} {d}")
+    s, d = request("GET", f"/api/clients/common/{gid}", token=tB)
+    check("common", "B's detail of the same group shows B1 member only or 404", s == 404 or (s == 200 and {m["companyId"] for m in d["members"]} == {coB1["id"]}), f"{s} {d}")
+    s, d = request("PUT", f"/api/clients/common/{gid}", token=tA, body={"name": "Scope Shared Client Renamed", "ntn": "7654321", "address": "y", "phone": "1", "email": "", "strn": "", "registrationType": "Registered", "cnic": "", "fbrProvinceCode": 8})
+    check("common", "A edits common once -> 200", s == 200, f"{s} {d}")
+    s, d = request("GET", f"/api/clients/{cB1['id']}", token=tB)
+    check("common", "B's row untouched by A's common edit", s == 200 and d["name"] == "Scope Shared Client", f"{s} {d}")
+s, rows = request("GET", f"/api/clients/common?companyId={coA1['id']}", token=tUA1)
+check("common", "userA1 (no clients perm) common list -> 403", s == 403, str(s))
+s, rows = request("GET", "/api/clients/groups", token=tB)
+check("common", "B's groups list carries B1 member only", s == 200 and all(set(g["companyNames"]) <= {coB1["name"]} for g in rows), f"{s} {rows}")
+
+# ─────────────────────────────────────────────────────────────────────
 print("\n=== SEED protects out-of-scope grants from A ===")
 # seed grants B1 directly to userA1; A must neither see nor be able to remove it
 s, d = request("PUT", f"/api/usercompanies/user/{uA1['id']}", token=seed,
@@ -329,4 +402,7 @@ for c in (coA1, coA2, coB1):
     request("DELETE", f"/api/companies/{c['id']}", token=seed)
 for u in (uA1, uB1, B):
     request("DELETE", f"/api/users/{u['id']}", token=seed)
+for r in (roleA, roleB):
+    if r and r.get("id"):
+        request("DELETE", f"/api/roles/{r['id']}", token=seed)
 print("all checks passed")

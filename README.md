@@ -323,7 +323,26 @@ Publish output optimized from 79 MB to 37 MB via:
   Audit Logs) stay reachable. The allowed-company list is re-fetched when the
   tab regains focus and whenever the server refuses a company, so a stale
   `selectedCompanyId` in localStorage cannot outlive a revoked grant.
-- **Test.** `scripts/test_admin_scope_isolation.py` (91 checks): seed / Admin A
+- **Roles follow the same chain.** A custom role is visible to its creator, to
+  everyone the creator manages and to the creator's ancestors; system roles and
+  legacy rows stay shared. Only the creator's chain (or the seed admin) edits or
+  deletes it, and a role id outside the caller's view is "invalid" on assign.
+  Role user-counts count only visible users. An Administrator can therefore
+  build restricted roles and hand them to its own users without ever seeing a
+  sibling Administrator's roles.
+- **Client / supplier forms: STRN optional.** FBR's buyer block carries
+  NTN/CNIC, name, province and registration type, never STRN, so demanding one
+  kept real buyers out of FBR. CNIC is optional for every registration type.
+  The client form gains "Check with FBR" (Get_Reg_Type via the existing
+  `POST /api/fbr/regtype/{companyId}`) to set the registration type from FBR's
+  own answer. Ported from the importer line; the accounting fields there were
+  deliberately not ported.
+- **Common clients / suppliers.** Confirmed server-side: "common" is counted
+  only over companies the caller can reach, so a user holding one company sees
+  no Common panel even when another Administrator's company shares the NTN;
+  detail, update and delete touch reachable members only. Covered by the new
+  test (a shared NTN across two trees stays invisible to both).
+- **Test.** `scripts/test_admin_scope_isolation.py` (115 checks): seed / Admin A
   / Admin B matrix, IDOR probes on every affected endpoint, revocation bites
   immediately, delete re-parents. `test_tenant_isolation.py` now honours
   `MYAPP_BASE` so both suites can target a second local backend.
