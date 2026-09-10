@@ -103,12 +103,21 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     return () => { cancelled = true; };
   }, [groupId]);
 
-  // Same registration-type → identity-fields mapping as ClientForm.
+  // Same registration-type → identity-fields mapping as ClientForm, and the
+  // same minimum: name, registration type, province, NTN for a registered
+  // buyer. Registration type and province are mandatory only when at least
+  // one member company files with FBR -- a common client kept purely for
+  // non-FBR companies must stay saveable without them.
   const regType = form.registrationType;
   const showNtn  = regType === "Registered" || regType === "FTN";
   const showStrn = regType === "Registered";
   const showCnic = regType === "Unregistered" || regType === "CNIC";
   const ntnLabel = regType === "FTN" ? "FTN" : "NTN";
+  const fbrRequired = (detail?.members || []).some((m) => {
+    const co = (companies || []).find((c) => Number(c.id) === Number(m.companyId));
+    return !!co?.fbrEnabled;
+  });
+  const star = fbrRequired ? " *" : "";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -267,19 +276,23 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     // Type-driven identity validation — same rules as ClientForm so the
     // common edit can't save a half-filled identity that would fail FBR
     // submission later.
+    if (fbrRequired && !form.registrationType) {
+      setError("Registration Type is required — one of this client's companies files with FBR.");
+      return;
+    }
+    if (fbrRequired && (form.fbrProvinceCode === "" || form.fbrProvinceCode == null)) {
+      setError("Province is required — one of this client's companies files with FBR.");
+      return;
+    }
     if (showNtn && !form.ntn?.trim()) {
       setError(`${ntnLabel} is required for ${regType} entities.`);
       return;
     }
     // STRN is optional (2026-09-10): FBR's buyer block does not carry it.
-    if (false) {
-      setError("STRN is required for Registered entities.");
-      return;
-    }
+    // An unregistered buyer's CNIC is optional too; only its format is checked.
     if (showCnic) {
       const digits = (form.cnic || "").replace(/\D/g, "");
-      if (!digits) { setError("CNIC is required for this registration type."); return; }
-      if (digits.length !== 13) { setError("CNIC must be 13 digits."); return; }
+      if (digits && digits.length !== 13) { setError("CNIC must be 13 digits."); return; }
     }
     setSaving(true);
     setError("");
@@ -371,7 +384,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     stale NTN doesn't propagate to every member company. */}
                 <div className="form-grid-2col">
                   <div style={formStyles.formGroup}>
-                    <label style={formStyles.label}>Registration Type</label>
+                    <label style={formStyles.label}>Registration Type{star}</label>
                     <select
                       name="registrationType"
                       value={form.registrationType}
@@ -418,7 +431,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
 
                 {showCnic && (
                   <div style={formStyles.formGroup}>
-                    <label style={formStyles.label}>CNIC (13 digits) *</label>
+                    <label style={formStyles.label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
                     <input
                       name="cnic"
                       value={form.cnic}
@@ -428,7 +441,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       maxLength={13}
                     />
                     <span style={s.fieldHelp}>
-                      Unregistered buyers don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                      Optional — FBR files an unregistered buyer without one. Give the CNIC when you have it.
                     </span>
                   </div>
                 )}
@@ -438,7 +451,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     the responsive utility class in index.css. */}
                 <div className="form-grid-3col">
                   <div style={formStyles.formGroup}>
-                    <label style={formStyles.label}>FBR Province</label>
+                    <label style={formStyles.label}>FBR Province{star}</label>
                     <select
                       name="fbrProvinceCode"
                       value={form.fbrProvinceCode ?? ""}
