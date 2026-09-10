@@ -106,8 +106,10 @@ namespace MyApp.Api.Services.Implementations
             // Unregistered buyer's registration number is optional.
             if (string.IsNullOrWhiteSpace(client.RegistrationType)) return false;
             if (client.FbrProvinceCode == null) return false;
-            if (client.RegistrationType == "Registered"
-                && string.IsNullOrWhiteSpace(client.NTN) && string.IsNullOrWhiteSpace(client.CNIC)) return false;
+            // FbrBuyerIdentity: a registered buyer needs a 7-digit NTN or a
+            // 13-digit CNIC; a letter-prefixed NTN needs the CNIC beside it.
+            if (!FbrBuyerIdentity.CanFile(client, client.RegistrationType == "Registered" || client.RegistrationType == "FTN"))
+                return false;
 
             return true;
         }
@@ -172,9 +174,9 @@ namespace MyApp.Api.Services.Implementations
             {
                 if (string.IsNullOrWhiteSpace(client.RegistrationType)) dto.Warnings.Add("Client Registration Type missing");
                 if (client.FbrProvinceCode == null) dto.Warnings.Add("Client FBR Province missing");
-                if (client.RegistrationType == "Registered"
-                    && string.IsNullOrWhiteSpace(client.NTN) && string.IsNullOrWhiteSpace(client.CNIC))
-                    dto.Warnings.Add("Client NTN or CNIC missing (registered buyer)");
+                var (_, identityError) = FbrBuyerIdentity.Resolve(client.NTN, client.CNIC,
+                    client.RegistrationType == "Registered" || client.RegistrationType == "FTN");
+                if (identityError != null) dto.Warnings.Add("Client: " + identityError);
             }
 
             return dto;

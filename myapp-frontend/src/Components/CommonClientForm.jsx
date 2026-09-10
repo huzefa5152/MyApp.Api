@@ -115,7 +115,11 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
   const regType = form.registrationType;
   const showNtn  = regType === "Registered" || regType === "FTN";
   const showStrn = regType === "Registered";
-  const showCnic = regType === "Unregistered" || regType === "CNIC";
+  // CNIC for every type (see ClientForm): a registered buyer whose NTN has a
+  // letter prefix (A113680-1) must be filed under the CNIC.
+  const showCnic = !!regType;
+  const ntnHasLetter = /[A-Za-z]/.test(form.ntn || "");
+  const cnicNeededForNtn = showNtn && ntnHasLetter;
   const ntnLabel = regType === "FTN" ? "FTN" : "NTN";
   const fbrRequired = (detail?.members || []).some((m) => {
     const co = (companies || []).find((c) => Number(c.id) === Number(m.companyId));
@@ -142,9 +146,12 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
           registrationType: type,
           ntn: type === "Registered" ? (f.ntn || regNo) : "",
           strn: type === "Registered" ? f.strn : "",
-          cnic: type === "Registered" ? "" : (f.cnic || (regNo.replace(/\D/g, "").length === 13 ? regNo : "")),
+          cnic: f.cnic || (regNo.replace(/\D/g, "").length === 13 ? regNo : ""),
         }));
-        setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` });
+        const letter = /[A-Za-z]/.test(regNo) && !/^\d{13}$/.test(regNo.replace(/\D/g, ""));
+        setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` + (letter && type === "Registered"
+          ? " — but an NTN with a letter prefix cannot go on an invoice; enter the buyer's 13-digit CNIC below."
+          : "") });
       } else {
         setFbrCheck({ busy: false, result: "FBR gave no registration type for this number." });
       }
@@ -163,7 +170,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         registrationType: value,
         ntn:  (value === "Registered" || value === "FTN") ? f.ntn  : "",
         strn: (value === "Registered")                    ? f.strn : "",
-        cnic: (value === "Unregistered" || value === "CNIC") ? f.cnic : "",
+        cnic: f.cnic,
       }));
       return;
     }
@@ -327,6 +334,10 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     if (showCnic) {
       const digits = (form.cnic || "").replace(/\D/g, "");
       if (digits && digits.length !== 13) { setError("CNIC must be 13 digits."); return; }
+      if (cnicNeededForNtn && !digits) {
+        setError("FBR cannot file an NTN with a letter prefix — enter the buyer's 13-digit CNIC.");
+        return;
+      }
     }
     setSaving(true);
     setError("");
@@ -481,7 +492,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
 
                 {showCnic && (
                   <div style={formStyles.formGroup}>
-                    <label style={formStyles.label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
+                    <label style={formStyles.label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: cnicNeededForNtn ? "#b71c1c" : "#5f6d7e" }}>{cnicNeededForNtn ? "(required — this NTN has a letter prefix)" : "(optional)"}</span></label>
                     <input
                       name="cnic"
                       value={form.cnic}
@@ -491,7 +502,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       maxLength={13}
                     />
                     <span style={s.fieldHelp}>
-                      Optional — FBR files an unregistered buyer without one. Give the CNIC when you have it.
+                      {cnicNeededForNtn
+                        ? "FBR's invoice API only accepts a 7-digit NTN or a 13-digit CNIC. An NTN like A113680-1 is a real registration, but the invoice must carry the buyer's CNIC instead."
+                        : "Optional — FBR files an unregistered buyer without one. Give the CNIC when you have it."}
                     </span>
                   </div>
                 )}
