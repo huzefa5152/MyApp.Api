@@ -521,6 +521,29 @@ def test_future_date_guard(base: str, token: str, company: dict, client: dict,
 
 
 # ── Reporter ───────────────────────────────────────────────────────
+def test_default_print_templates(base: str, token: str, company: dict) -> None:
+    """A new company must start with a company-wide Challan, Bill and Tax
+    Invoice print template (Helpers/DefaultPrintTemplates.cs), so its first
+    document can be printed and the operator has something to edit."""
+    suite = "13. New company gets default print templates"
+    status, rows = http("GET", f"/api/printtemplates/company/{company['id']}", base, token=token)
+    if not must("list print templates", status):
+        check(suite, "template list loads", False, f"status {status}")
+        return
+    rows = rows if isinstance(rows, list) else []
+    by_type = {}
+    for r in rows:
+        if r.get("divisionId") is None:
+            by_type.setdefault(r.get("templateType"), []).append(r)
+    for t in ("Challan", "Bill", "TaxInvoice"):
+        have = by_type.get(t, [])
+        check(suite, f"{t} template exists", len(have) >= 1, f"{len(have)} found")
+        check(suite, f"{t} template is the default and has content",
+              any(r.get("isDefault") for r in have)
+              and any((r.get("htmlContent") or "").strip() for r in have),
+              "no default row / empty html")
+
+
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
     fail = 0
@@ -843,6 +866,7 @@ def main() -> int:
         test_item_description_casing(args.base, token, company, client)
         test_twelve_decimal_precision(args.base, token, company, client)
         test_description_not_overridden(args.base, token, company, client)
+        test_default_print_templates(args.base, token, company)
     finally:
         teardown(args.base, token, company, args.keep)
 

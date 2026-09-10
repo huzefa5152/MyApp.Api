@@ -23,6 +23,9 @@
          scripts/build_hscode_dataset.py. Embedded rather than copied so it
          cannot go missing on a deploy that only ships the binaries. -->
     <EmbeddedResource Include="Data/HsCodes/pakistan-customs-tariff.csv" />
+    <!-- Built-in print templates, generated from myapp-frontend/src/utils/defaultTemplates.js
+         by scripts/sync_default_print_templates.mjs (see Helpers/DefaultPrintTemplates.cs). -->
+    <EmbeddedResource Include="Data/DefaultPrintTemplates/*.html" />
 
     <!-- The branch -> local-database map is developer tooling, read from the
          REPO ROOT (next to .git) and only in Development. Keeping it out of

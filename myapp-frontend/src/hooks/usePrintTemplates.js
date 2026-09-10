@@ -3,6 +3,21 @@ import { getTemplatesByCompany } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { withStamp } from "../utils/stampSlot";
 import { usePermissions } from "../contexts/PermissionsContext";
+import {
+  defaultChallanTemplate, defaultBillTemplate, defaultTaxInvoiceTemplate,
+} from "../utils/defaultTemplates";
+
+// The document types with a built-in template. A company (or division) with no
+// saved template of one of these prints through the built-in instead of seeing
+// a disabled button (2026-09-10) — the same HTML the API seeds onto a new
+// company (Helpers/DefaultPrintTemplates.cs) and uses for the bulk download.
+// Types not listed here keep the original behaviour: no template, no print.
+const BUILT_IN = {
+  Challan: defaultChallanTemplate,
+  Bill: defaultBillTemplate,
+  TaxInvoice: defaultTaxInvoiceTemplate,
+};
+export const BUILT_IN_TEMPLATE_NAME = "Built-in default";
 
 // Generic per-document-type print-template picker state, shared by every
 // document screen (quotes, orders, challans, bills, tax invoices, notes,
@@ -185,10 +200,16 @@ export function usePrintTemplates(templateType, { divisionId = null } = {}) {
   }, [templatesOfType, scopeDivisionId]);
 
   // Gating signal for the picker + Print/PDF buttons: true once we've CONFIRMED
-  // the SELECTED SCOPE has zero templates (and the operator can list templates).
-  // Print-only roles (no printtemplates.manage.view) can't load the list, so
-  // this stays false for them — they keep the built-in fallback.
-  const noTemplate = canViewTemplates && templatesLoaded && templates.length === 0;
+  // the SELECTED SCOPE has zero templates (and the operator can list templates)
+  // AND there is no built-in template to fall back on. Challan / Bill / Tax
+  // Invoice always have one, so those screens never block: an empty scope
+  // prints through the built-in design (and, for a division scope, through the
+  // company-wide default first — see resolveAuto). Print-only roles (no
+  // printtemplates.manage.view) can't load the list, so this stays false for
+  // them — they keep the built-in fallback.
+  const builtInHtml = BUILT_IN[templateType] || null;
+  const scopeEmpty = canViewTemplates && templatesLoaded && templates.length === 0;
+  const noTemplate = scopeEmpty && !builtInHtml;
   const noTemplateReason = scopeDivisionId == null
     ? "No company-wide print template exists for this document type yet. Add one on the Print Templates page (Configuration → Print Templates), or select a division that has one."
     : "The selected division has no print template for this document type. Add one on the Print Templates page (Configuration → Print Templates), or switch division.";
@@ -217,8 +238,21 @@ export function usePrintTemplates(templateType, { divisionId = null } = {}) {
   // scope. Sorted on a COPY so the memoized `templates` array is never mutated.
   const resolveAuto = useCallback(() => {
     const inScope = [...templates].sort((a, b) => a.id - b.id);
-    return inScope.find((t) => t.isDefault) || inScope[0] || null;
-  }, [templates]);
+    const hit = inScope.find((t) => t.isDefault) || inScope[0] || null;
+    if (hit) return hit;
+    // A division with no template of its own prints through the company-wide
+    // default, then the built-in design — never nothing.
+    if (scopeDivisionId != null) {
+      const companyWide = templatesOfType.filter((t) => !t.divisionId).sort((a, b) => a.id - b.id);
+      const cw = companyWide.find((t) => t.isDefault) || companyWide[0] || null;
+      if (cw) return cw;
+    }
+    if (builtInHtml) {
+      return { id: 0, companyId, divisionId: null, templateType, name: BUILT_IN_TEMPLATE_NAME,
+               isDefault: true, htmlContent: builtInHtml, isBuiltIn: true };
+    }
+    return null;
+  }, [templates, templatesOfType, scopeDivisionId, builtInHtml, companyId, templateType]);
 
   const selectedTemplate = useMemo(
     () => (selectedId === "" ? null : templates.find((t) => String(t.id) === selectedId) || null),
@@ -263,8 +297,10 @@ export function usePrintTemplates(templateType, { divisionId = null } = {}) {
     // want to label or reason about it.
     scopeDivisionId,
     // Show the selector whenever the operator can view templates AND the active
-    // scope has at least one template. A scope with none hides the picker (the
-    // screen also blocks Print/PDF via `noTemplate`).
-    canChoose: canViewTemplates && !noTemplate,
+    // scope has at least one saved template. A scope with none hides the picker
+    // (there is nothing to choose between) and prints through the fallback.
+    canChoose: canViewTemplates && templatesLoaded && templates.length > 0,
+    // True when the active scope prints through the built-in design.
+    usingBuiltIn: scopeEmpty && !!builtInHtml,
   };
 }

@@ -1049,6 +1049,19 @@ endless document, and a `minFillRatio` floor stops a page ending just after it
 began. All 32 built-in templates emit a `<tr>` per line item, so the fix reaches
 every one of them, every operator-created template, and single-invoice exports.
 
+### 5c-1b. Default print templates — one source, two copies (2026-09-10)
+
+`myapp-frontend/src/utils/defaultTemplates.js` is the ONLY place the built-in
+Challan / Bill / Tax Invoice designs are written. `scripts/sync_default_print_
+templates.mjs` copies them to `Data/DefaultPrintTemplates/*.html`, embedded in
+the API for `Helpers/DefaultPrintTemplates.cs`, which (a) seeds the three rows
+onto every NEW company in `CompanyService.CreateAsync` and (b) stands in for a
+missing row in the bulk download. `usePrintTemplates` does the same on screen:
+a scope with no saved template of one of those types prints through the
+built-in (division -> company-wide -> built-in), never a disabled button. Run
+`node scripts/sync_default_print_templates.mjs` after editing a default and
+keep `--check` green; the two copies must never be edited by hand.
+
 ### 5c-2. Print-template artwork is a FILE, never inline base64 (2026-09-07)
 
 A bespoke print template must reference its logos, letterheads and banners by
@@ -1352,7 +1365,7 @@ them can be resolved from FBR.
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
-| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (65 checks) |
+| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
@@ -1378,6 +1391,7 @@ them can be resolved from FBR.
 | Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
+| Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
 | Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (64 checks) |
 | Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (37 checks) |
 | FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
