@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MdClose, MdInfo, MdBusiness, MdCheckCircle, MdDelete, MdAdd } from "react-icons/md";
 import { getCommonClientById, updateCommonClient, deleteCommonClient, deleteClient, copyClientToCompanies } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
+import { getFbrRegistrationType } from "../api/fbrApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { useConfirm } from "./ConfirmDialog";
@@ -31,6 +32,9 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // "Check with FBR" — same as ClientForm. The lookup needs a company whose
+  // token can be used, so it goes through the first FBR-enabled member.
+  const [fbrCheck, setFbrCheck] = useState({ busy: false, result: "" });
   const [deleting, setDeleting] = useState(false);
   // While a per-member delete is in flight, this holds that member's
   // clientId so we can spin only the right row's button + lock all the
@@ -118,6 +122,36 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
     return !!co?.fbrEnabled;
   });
   const star = fbrRequired ? " *" : "";
+  const fbrCompanyId = (detail?.members || [])
+    .map((m) => (companies || []).find((c) => Number(c.id) === Number(m.companyId)))
+    .find((c) => c?.fbrEnabled)?.id || null;
+  const canAskFbr = has("fbr.config.view") && !!fbrCompanyId;
+
+  const checkRegistrationWithFbr = async () => {
+    const regNo = (form.ntn || form.cnic || "").trim();
+    if (!regNo || !fbrCompanyId) return;
+    setFbrCheck({ busy: true, result: "" });
+    try {
+      const { data } = await getFbrRegistrationType(fbrCompanyId, regNo);
+      const type = (data?.registratioN_TYPE || data?.registrationType || "").trim();
+      if (type === "Registered" || type === "Unregistered") {
+        // Same field-clearing as a manual switch, so a stale CNIC/STRN never
+        // propagates to every member company.
+        setForm((f) => ({
+          ...f,
+          registrationType: type,
+          ntn: type === "Registered" ? (f.ntn || regNo) : "",
+          strn: type === "Registered" ? f.strn : "",
+          cnic: type === "Registered" ? "" : (f.cnic || (regNo.replace(/\D/g, "").length === 13 ? regNo : "")),
+        }));
+        setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` });
+      } else {
+        setFbrCheck({ busy: false, result: "FBR gave no registration type for this number." });
+      }
+    } catch (err) {
+      setFbrCheck({ busy: false, result: err?.response?.data?.message || "Could not reach FBR — try again." });
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -397,6 +431,22 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                       <option value="FTN">FTN</option>
                       <option value="CNIC">CNIC</option>
                     </select>
+                    {canAskFbr && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          disabled={fbrCheck.busy || !(form.ntn || form.cnic || "").trim()}
+                          title="Ask FBR whether this NTN/CNIC is registered for sales tax and set the type accordingly"
+                          onClick={checkRegistrationWithFbr}
+                          style={{ ...formStyles.input, width: "auto", minHeight: 44, padding: "0 0.8rem", cursor: fbrCheck.busy ? "wait" : "pointer", background: "#fff", color: "#0d47a1", fontWeight: 700, borderColor: "#0d47a1" }}
+                        >
+                          {fbrCheck.busy ? "Asking FBR…" : "Check with FBR"}
+                        </button>
+                        {fbrCheck.result && (
+                          <span style={{ fontSize: "0.78rem", color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "#b71c1c" }}>{fbrCheck.result}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
