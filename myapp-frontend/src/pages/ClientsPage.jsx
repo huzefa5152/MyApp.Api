@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { MdPeople, MdAdd, MdSearch, MdBusiness, MdUploadFile } from "react-icons/md";
 import ClientList from "../Components/ClientList";
 import ClientDetailModal from "../Components/ClientDetailModal";
 import ClientForm from "../Components/ClientForm";
-import CommonClientsPanel from "../Components/CommonClientsPanel";
 import CommonClientForm from "../Components/CommonClientForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import ClientImportModal from "../Components/ClientImportModal";
@@ -51,16 +50,19 @@ export default function ClientsPage() {
   // metric cell clicked, or null when the name was clicked), null when closed.
   const [detailTarget, setDetailTarget] = useState(null);
 
-  // The set of multi-company group IDs visible right now — used to
-  // hide those clients from the per-company list below the dropdown.
-  // Same data the CommonClientsPanel renders (kept in sync via
-  // commonRefreshKey), only the IDs are needed here so it's a thin
-  // shadow query rather than a duplicate fetch.
-  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+  // Multi-company client groups this company takes part in, keyed by
+  // groupId -> the names of the OTHER companies (within the caller's
+  // access) that share the client. The table badges those rows "Common",
+  // lists the companies under the name, and routes their Edit to the
+  // propagating form. The separate Common Clients panel that used to sit
+  // above the table is gone (2026-09-10): one list, one place.
+  const [commonGroups, setCommonGroups] = useState(() => new Map());
+  // "all" | "common" | "own" — which rows the table shows.
+  const [scope, setScope] = useState("all");
 
   useEffect(() => {
     if (!selectedCompany) {
-      setCommonGroupIds(new Set());
+      setCommonGroups(new Map());
       return;
     }
     let cancelled = false;
@@ -68,10 +70,17 @@ export default function ClientsPage() {
       try {
         const { data } = await getCommonClients(selectedCompany.id);
         if (!cancelled) {
-          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
+          const me = (selectedCompany.brandName || selectedCompany.name || "").trim().toLowerCase();
+          const map = new Map();
+          (data || []).forEach((g) => {
+            const others = (g.companyNames || []).filter((n) => (n || "").trim().toLowerCase() !== me
+              && (n || "").trim().toLowerCase() !== (selectedCompany.name || "").trim().toLowerCase());
+            map.set(g.groupId, others);
+          });
+          setCommonGroups(map);
         }
       } catch {
-        if (!cancelled) setCommonGroupIds(new Set());
+        if (!cancelled) setCommonGroups(new Map());
       }
     })();
     return () => { cancelled = true; };
@@ -108,6 +117,12 @@ export default function ClientsPage() {
   }, [selectedCompany]);
 
   const handleEdit = (client) => {
+    // A client shared with other companies is edited through the Common
+    // Client form so the change propagates to every sibling row.
+    if (isCommon(client)) {
+      setEditingGroupId(client.clientGroupId);
+      return;
+    }
     setSelectedClient(client);
     setShowModal(true);
   };
@@ -117,18 +132,24 @@ export default function ClientsPage() {
     setShowModal(true);
   };
 
-  // Hide clients that already appear in the Common Clients panel
-  // above — operator wants exactly ONE place to edit each client,
-  // not the same name listed twice on the same page.
-  const uncommonClients = useMemo(() => {
-    if (commonGroupIds.size === 0) return clients;
-    return clients.filter((c) => !c.clientGroupId || !commonGroupIds.has(c.clientGroupId));
-  }, [clients, commonGroupIds]);
+  // Every client of the selected company is listed below, common ones
+  // included (2026-09-10). They used to be hidden here so each client had
+  // exactly one place to be edited — but the card in the Common Clients
+  // panel carries no per-company figures, so a shared customer's invoices,
+  // A/R and WHT for THIS company were visible nowhere. The single edit
+  // path is kept differently: a common row's pencil opens the propagating
+  // Common Client form (see handleEdit) instead of the per-company one.
+  const isCommon = (c) => !!c.clientGroupId && commonGroups.has(c.clientGroupId);
+  // Names of the other companies sharing this client (empty for a company-only one).
+  const sharedWith = (c) => (isCommon(c) ? commonGroups.get(c.clientGroupId) || [] : []);
+  const commonCount = clients.filter(isCommon).length;
 
-  const filtered = uncommonClients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
-    (c.phone || "").includes(search)
+  const filtered = clients.filter((c) =>
+    (scope === "all" || (scope === "common" ? isCommon(c) : !isCommon(c))) && (
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
+      (c.phone || "").includes(search)
+    )
   );
 
   return (
@@ -143,7 +164,7 @@ export default function ClientsPage() {
             <h2 style={styles.pageTitle}>Clients</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${uncommonClients.length} company-specific client${uncommonClients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                ? `${clients.length} client${clients.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                 : "Select a company to view clients"}
             </p>
           </div>
@@ -171,17 +192,6 @@ export default function ClientsPage() {
           </div>
         )}
       </div>
-
-      {/* Common Clients panel — shows ONLY when this company shares
-          a client (by NTN, fallback to name) with at least one other
-          company. Empty / single-tenant setups render nothing here. */}
-      {selectedCompany && (
-        <CommonClientsPanel
-          companyId={selectedCompany.id}
-          refreshKey={commonRefreshKey}
-          onEdit={(c) => setEditingGroupId(c.groupId)}
-        />
-      )}
 
       {/* Company Selector */}
       {loadingCompanies ? (
@@ -225,6 +235,30 @@ export default function ClientsPage() {
         </div>
       )}
 
+      {/* Scope: every client, only those shared with other companies the
+          operator can reach, or only this company's own. Rendered only when
+          there is something to split. */}
+      {selectedCompany && commonCount > 0 && (
+        <div style={styles.scopeRow} role="tablist" aria-label="Which clients to show">
+          {[
+            ["all", `All (${clients.length})`],
+            ["common", `Common (${commonCount})`],
+            ["own", `Only ${selectedCompany.brandName || selectedCompany.name} (${clients.length - commonCount})`],
+          ].map(([key, text]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={scope === key}
+              onClick={() => setScope(key)}
+              style={{ ...styles.scopeChip, ...(scope === key ? styles.scopeChipOn : null) }}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Client List */}
       {loadingClients ? (
         <div style={styles.loadingContainer}>
@@ -235,13 +269,21 @@ export default function ClientsPage() {
         <div style={styles.emptyState}>
           <MdPeople size={40} color={colors.cardBorder} />
           <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {clients.length === 0 ? "No clients for this company yet." : "No clients match your search."}
+            {clients.length === 0
+              ? "No clients for this company yet."
+              : scope === "common"
+                ? "No client here is shared with another company you can reach."
+                : scope === "own"
+                  ? "Every client of this company is shared with another company."
+                  : "No clients match your search."}
           </p>
         </div>
       ) : (
         <ClientList
           clients={filtered}
           summaryById={summaryById}
+          isCommon={isCommon}
+          sharedWith={sharedWith}
           onEdit={handleEdit}
           onCopy={(client) => setCopyingClient(client)}
           fetchClients={() => fetchClients(selectedCompany?.id)}
@@ -416,6 +458,9 @@ const styles = {
     transition: "filter 0.2s, transform 0.2s",
     boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
   },
+  scopeRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" },
+  scopeChip: { minHeight: 44, padding: "0 1rem", borderRadius: 22, border: "1px solid #b7d4f0", background: "#fff", color: "#0d47a1", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" },
+  scopeChipOn: { background: "#0d47a1", color: "#fff", borderColor: "#0d47a1" },
   searchWrap: {
     position: "relative",
     marginBottom: "1.25rem",

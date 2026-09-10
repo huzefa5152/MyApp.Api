@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { MdLocalShipping, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import SupplierList from "../Components/SupplierList";
@@ -122,17 +122,20 @@ export default function SuppliersPage() {
     return () => { cancelled = true; };
   }, [selectedCompany, canViewBills]);
 
-  const handleEdit = (s) => { setSelectedSupplier(s); setShowModal(true); };
+  // A supplier shared with other companies is edited through the Common
+  // Supplier form so the change propagates to every sibling row.
+  const isCommon = (s) => !!s.supplierGroupId && commonGroupIds.has(s.supplierGroupId);
+  const handleEdit = (s) => {
+    if (isCommon(s)) { setEditingGroupId(s.supplierGroupId); return; }
+    setSelectedSupplier(s); setShowModal(true);
+  };
   const handleAdd = () => { setSelectedSupplier(null); setShowModal(true); };
 
-  // Hide suppliers that already appear in the Common Suppliers panel
-  // above — each supplier visible in exactly one place on the page.
-  const uncommonSuppliers = useMemo(() => {
-    if (commonGroupIds.size === 0) return suppliers;
-    return suppliers.filter((s) => !s.supplierGroupId || !commonGroupIds.has(s.supplierGroupId));
-  }, [suppliers, commonGroupIds]);
-
-  const filtered = uncommonSuppliers.filter((s) =>
+  // Every supplier of the selected company is listed, common ones included
+  // (2026-09-10) — the Common Suppliers card carries no per-company bills or
+  // payables, so hiding shared suppliers here left those figures nowhere.
+  // Common rows are badged and their Edit propagates (handleEdit above).
+  const filtered = suppliers.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
     (s.ntn || "").toLowerCase().includes(search.toLowerCase()) ||
     (s.email || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -150,7 +153,7 @@ export default function SuppliersPage() {
             <h2 style={styles.pageTitle}>Suppliers</h2>
             <p style={styles.pageSubtitle}>
               {selectedCompany
-                ? `${uncommonSuppliers.length} company-specific supplier${uncommonSuppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+                ? `${suppliers.length} supplier${suppliers.length !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
                 : "Select a company to view suppliers"}
             </p>
           </div>
@@ -232,6 +235,7 @@ export default function SuppliersPage() {
       ) : (
         <SupplierList
           suppliers={filtered}
+          isCommon={isCommon}
           onEdit={handleEdit}
           onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
