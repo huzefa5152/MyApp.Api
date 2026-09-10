@@ -308,7 +308,11 @@ the API for `Helpers/DefaultPrintTemplates.cs`, which (a) seeds the three rows
 onto every NEW company in `CompanyService.CreateAsync` and (b) stands in for a
 missing row in the bulk download. `usePrintTemplates` does the same on screen:
 a scope with no saved template of one of those types prints through the
-built-in (division -> company-wide -> built-in), never a disabled button. Run
+built-in (division -> company-wide -> built-in), never a disabled button. The
+CUSTOMER PORTAL is excluded from the fallback on purpose (5c: the operator's
+document choice is absolute; a missing template turns portal printing OFF).
+Suites that need a company WITHOUT a template must delete the seeded row first
+(`drop_templates` / `drop_seeded_bill_template`). Run
 `node scripts/sync_default_print_templates.mjs` after editing a default and
 keep `--check` green; the two copies must never be edited by hand.
 

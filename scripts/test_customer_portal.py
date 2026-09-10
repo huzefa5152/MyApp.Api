@@ -129,6 +129,16 @@ def pay_invoice(base, token, company_id, client_id, invoice_id, amount, division
     })
 
 
+def drop_seeded_bill_template(base: str, token: str, company: dict) -> None:
+    """A new company is seeded with default Challan / Bill / Tax Invoice
+    templates (2026-09-10). This suite's document-choice cases need a company
+    with NO Bill template, so the seeded one is removed up front."""
+    st, rows = http("GET", f"/api/printtemplates/company/{company['id']}", base, token=token)
+    for t in (rows if st == 200 and isinstance(rows, list) else []):
+        if t.get("templateType") == "Bill":
+            http("DELETE", f"/api/printtemplates/{t['id']}", base, token=token)
+
+
 def setup(base: str, admin_user: str, admin_pw: str):
     print(f"\n=== Logging in as {admin_user} ===")
     status, data = http("POST", "/api/auth/login", base,
@@ -142,6 +152,8 @@ def setup(base: str, admin_user: str, admin_pw: str):
     print(f"\n=== Creating two ephemeral companies ===")
     a = make_company(base, token, f"_test_portal_A {suffix}", suffix)
     b = make_company(base, token, f"_test_portal_B {suffix}", suffix)
+    drop_seeded_bill_template(base, token, a)
+    drop_seeded_bill_template(base, token, b)
     print(f"  company A id={a['id']}  company B id={b['id']}")
 
     a1 = make_client(base, token, a["id"], f"Portal A Client One {suffix}")
@@ -323,9 +335,15 @@ def test_isolation(base, token, a, b, a1, a2, b1, portal_a, portal_a2, portal_b,
     check(suite, "4e portal A cannot fetch the OTHER COMPANY's invoice",
           not leaked_co, f"LEAK: got {st} {cross_co}")
 
+    # Invoice NUMBERS collide across companies (both start at 1), so a 200 here
+    # may legitimately be portal A's OWN invoice with that number. The leak to
+    # assert on is company B's money (3333) appearing in the print data.
     st, cross_print = public(
         f"/api/public/customer-portal/{tok_a}/invoices/{inv_b1['invoiceNumber']}/print", base)
-    check(suite, "4f portal A cannot print another company's invoice", st == 404, f"got {st} {cross_print}")
+    printed_total = float(((cross_print or {}).get("printData") or {}).get("grandTotal") or 0) if st == 200 else 0
+    check(suite, "4f portal A cannot print another company's invoice",
+          st == 404 or abs(printed_total - 3333) > 0.01,
+          f"LEAK: got {st} grandTotal={printed_total}")
 
     # ── Query-string tampering: the classic attempts ────────────────
     forgeries = [

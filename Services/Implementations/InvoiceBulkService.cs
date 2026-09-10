@@ -93,11 +93,16 @@ namespace MyApp.Api.Services.Implementations
                     var cacheKey = row.DivisionId ?? 0;
                     if (!templateCache.TryGetValue(cacheKey, out template))
                     {
-                        template = await ResolveTemplateAsync(scope.CompanyId, row.DivisionId, documentType)
-                            // The screen prints such a company through the
-                            // built-in template rather than refusing; the bulk
-                            // download must not disagree with it (2026-09-10).
-                            ?? DefaultPrintTemplates.AsTemplate(scope.CompanyId, documentType);
+                        template = await ResolveTemplateAsync(scope.CompanyId, row.DivisionId, documentType);
+                        // The office screen prints such a company through the
+                        // built-in template rather than refusing, and this
+                        // download must not disagree with it (2026-09-10). The
+                        // CUSTOMER PORTAL is the exception, as CLAUDE.md 5c says:
+                        // the operator's document choice is absolute there, and
+                        // a missing template turns portal printing OFF rather
+                        // than handing the customer a design nobody configured.
+                        if (template == null && !scope.IsCustomerPortal)
+                            template = DefaultPrintTemplates.AsTemplate(scope.CompanyId, documentType);
                         templateCache[cacheKey] = template;
                     }
                 }

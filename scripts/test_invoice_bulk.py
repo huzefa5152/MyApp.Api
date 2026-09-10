@@ -121,6 +121,17 @@ def make_template(company_id, template_type="TaxInvoice", name="Bulk Suite"):
     return t["id"]
 
 
+def drop_templates(company_id, template_type):
+    """A new company is seeded with a default Challan / Bill / Tax Invoice
+    template (2026-09-10), so a "no template" state has to be made."""
+    st, rows = call("GET", f"/printtemplates/company/{company_id}", None, TOKEN)
+    assert st == 200, (st, rows)
+    for t in rows:
+        if t.get("templateType") == template_type:
+            st, _ = call("DELETE", f"/printtemplates/{t['id']}", None, TOKEN)
+            assert st in (200, 204), (st, _)
+
+
 def make_invoice(company_id, client_id, item_type_id, date, lines=1, unit_price=5000):
     st, inv = call("POST", "/invoices/standalone", {
         "companyId": company_id, "clientId": client_id, "date": date, "gstRate": 18,
@@ -299,17 +310,20 @@ try:
     check("a window with no invoices is an empty batch, not an error",
           st == 200 and body["matchedCount"] == 0 and body["invoices"] == [], f"http {st}")
 
-    # A company with invoices but NO template of the requested type: every
-    # invoice is skipped WITH A REASON rather than rendered on a template that
-    # is not that company's.
+    # A company with invoices but NO saved template of the requested type: the
+    # office download renders through the BUILT-IN design, exactly as the Bills
+    # screen does (2026-09-10) -- never a batch of skips for a printable bill.
+    drop_templates(co, "Bill")
     st, body = call("POST", f"/invoices/bulk/company/{co}",
                     {**AUG, "documentType": "Bill"}, TOKEN)
-    check("with no Bill template configured, nothing is rendered", st == 200 and not body["invoices"],
-          f"http {st} {len(body['invoices']) if st == 200 else ''} invoices")
+    check("with no saved Bill template, every invoice renders through the built-in Bill",
+          st == 200 and len(body["invoices"]) == 5 and not body["skipped"],
+          f"http {st} {len(body['invoices']) if st == 200 else ''} invoices, {len(body['skipped']) if st == 200 else ''} skipped")
     if st == 200:
-        check("...and every skipped invoice says why",
-              len(body["skipped"]) == 5 and all("template" in s["reason"].lower() for s in body["skipped"]),
-              f"{len(body['skipped'])} skipped: {body['skipped'][0]['reason'] if body['skipped'] else ''}")
+        check("...and the batch names the built-in template",
+              len(body["templates"]) == 1 and body["templates"][0]["name"] == "Built-in default"
+              and body["templates"][0]["id"] == 0,
+              f"{[(t['id'], t['name']) for t in body['templates']]}")
 
     st, body = call("POST", f"/invoices/bulk/company/{other_co}", {**AUG}, TOKEN)
     check("a company with no invoices at all resolves cleanly",
