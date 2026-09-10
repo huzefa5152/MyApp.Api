@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { MdLocalShipping, MdAdd, MdSearch, MdBusiness } from "react-icons/md";
 import SupplierList from "../Components/SupplierList";
 import SupplierForm from "../Components/SupplierForm";
-import CommonSuppliersPanel from "../Components/CommonSuppliersPanel";
 import CommonSupplierForm from "../Components/CommonSupplierForm";
 import CopyToCompaniesDialog from "../Components/CopyToCompaniesDialog";
 import { getSuppliersByCompany, getCommonSuppliers, copySupplierToCompanies, getSupplierSummary } from "../api/supplierApi";
@@ -50,14 +49,19 @@ export default function SuppliersPage() {
   // Copy-to-companies dialog source.
   const [copyingSupplier, setCopyingSupplier] = useState(null);
 
-  // Multi-company group ids that show in the Common Suppliers panel —
-  // used to filter them out of the per-company list below the dropdown
-  // (each supplier appears in exactly one place on the page).
-  const [commonGroupIds, setCommonGroupIds] = useState(() => new Set());
+  // Multi-company supplier groups this company takes part in, keyed by
+  // groupId -> the names of the OTHER companies (within the caller's access)
+  // that share the supplier. The grid badges those cards "Common", names the
+  // companies, and routes their Edit to the propagating form. The separate
+  // Common Suppliers panel above the grid is gone (2026-09-10), as on the
+  // Clients page: one list, one place.
+  const [commonGroups, setCommonGroups] = useState(() => new Map());
+  // "all" | "common" | "own" — which cards the grid shows.
+  const [scope, setScope] = useState("all");
 
   useEffect(() => {
     if (!selectedCompany) {
-      setCommonGroupIds(new Set());
+      setCommonGroups(new Map());
       return;
     }
     let cancelled = false;
@@ -65,10 +69,16 @@ export default function SuppliersPage() {
       try {
         const { data } = await getCommonSuppliers(selectedCompany.id);
         if (!cancelled) {
-          setCommonGroupIds(new Set((data || []).map((g) => g.groupId)));
+          const mine = new Set([selectedCompany.brandName, selectedCompany.name]
+            .filter(Boolean).map((n) => n.trim().toLowerCase()));
+          const map = new Map();
+          (data || []).forEach((g) => {
+            map.set(g.groupId, (g.companyNames || []).filter((n) => !mine.has((n || "").trim().toLowerCase())));
+          });
+          setCommonGroups(map);
         }
       } catch {
-        if (!cancelled) setCommonGroupIds(new Set());
+        if (!cancelled) setCommonGroups(new Map());
       }
     })();
     return () => { cancelled = true; };
@@ -123,7 +133,10 @@ export default function SuppliersPage() {
 
   // A supplier shared with other companies is edited through the Common
   // Supplier form so the change propagates to every sibling row.
-  const isCommon = (s) => !!s.supplierGroupId && commonGroupIds.has(s.supplierGroupId);
+  const isCommon = (s) => !!s.supplierGroupId && commonGroups.has(s.supplierGroupId);
+  // Names of the other companies sharing this supplier (empty for a company-only one).
+  const sharedWith = (s) => (isCommon(s) ? commonGroups.get(s.supplierGroupId) || [] : []);
+  const commonCount = suppliers.filter(isCommon).length;
   const handleEdit = (s) => {
     if (isCommon(s)) { setEditingGroupId(s.supplierGroupId); return; }
     setSelectedSupplier(s); setShowModal(true);
@@ -135,6 +148,7 @@ export default function SuppliersPage() {
   // payables, so hiding shared suppliers here left those figures nowhere.
   // Common rows are badged and their Edit propagates (handleEdit above).
   const filtered = suppliers.filter((s) =>
+    (scope === "all" || (scope === "common" ? isCommon(s) : !isCommon(s))) &&
     s.name.toLowerCase().includes(search.toLowerCase()) ||
     (s.ntn || "").toLowerCase().includes(search.toLowerCase()) ||
     (s.email || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -168,16 +182,6 @@ export default function SuppliersPage() {
           </button>
         )}
       </div>
-
-      {/* Common Suppliers panel — auto-hides for tenants with no
-          multi-company duplicates. Stable across the company dropdown. */}
-      {selectedCompany && (
-        <CommonSuppliersPanel
-          companyId={selectedCompany.id}
-          refreshKey={commonRefreshKey}
-          onEdit={(s) => setEditingGroupId(s.groupId)}
-        />
-      )}
 
       {loadingCompanies ? (
         <div style={styles.loadingContainer}>
@@ -219,6 +223,29 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      {/* Scope: every supplier, only those shared with other companies the
+          operator can reach, or only this company's own. */}
+      {selectedCompany && commonCount > 0 && (
+        <div style={styles.scopeRow} role="tablist" aria-label="Which suppliers to show">
+          {[
+            ["all", `All (${suppliers.length})`],
+            ["common", `Common (${commonCount})`],
+            ["own", `Only ${selectedCompany.brandName || selectedCompany.name} (${suppliers.length - commonCount})`],
+          ].map(([key, text]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={scope === key}
+              onClick={() => setScope(key)}
+              style={{ ...styles.scopeChip, ...(scope === key ? styles.scopeChipOn : null) }}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loadingSuppliers ? (
         <div style={styles.loadingContainer}>
           <div style={styles.spinner} />
@@ -228,13 +255,20 @@ export default function SuppliersPage() {
         <div style={styles.emptyState}>
           <MdLocalShipping size={40} color={colors.cardBorder} />
           <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {suppliers.length === 0 ? "No suppliers for this company yet." : "No suppliers match your search."}
+            {suppliers.length === 0
+              ? "No suppliers for this company yet."
+              : scope === "common"
+                ? "No supplier here is shared with another company you can reach."
+                : scope === "own"
+                  ? "Every supplier of this company is shared with another company."
+                  : "No suppliers match your search."}
           </p>
         </div>
       ) : (
         <SupplierList
           suppliers={filtered}
           isCommon={isCommon}
+          sharedWith={sharedWith}
           onEdit={handleEdit}
           onCopy={(s) => setCopyingSupplier(s)}
           fetchSuppliers={() => fetchSuppliers(selectedCompany?.id)}
@@ -322,6 +356,9 @@ const styles = {
   pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0d47a1, #00897b)", color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s, transform 0.2s", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  scopeRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" },
+  scopeChip: { minHeight: 44, padding: "0 1rem", borderRadius: 22, border: "1px solid #b7d4f0", background: "#fff", color: "#0d47a1", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" },
+  scopeChipOn: { background: "#0d47a1", color: "#fff", borderColor: "#0d47a1" },
   searchWrap: { position: "relative", marginBottom: "1.25rem", maxWidth: 360 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "1.1rem" },
   searchInput: { width: "100%", padding: "0.55rem 0.75rem 0.55rem 2.3rem", border: "1px solid #d0d7e2", borderRadius: 10, fontSize: "0.88rem", backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none", transition: "border-color 0.2s" },

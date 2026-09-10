@@ -373,8 +373,8 @@ Publish output optimized from 79 MB to 37 MB via:
   name the other companies (within the operator's access) that share them, and
   their pencil opens the propagating Common Client form, so there is still one
   edit path. Chips filter the list to All / Common / only this company. The
-  header counts all clients. The Suppliers page lists shared suppliers in its
-  grid the same way (its panel stays).
+  header counts all clients. The Suppliers page got the identical treatment:
+  panel gone, badged cards naming the sharing companies, the same chips.
 
 ### 2026-09-09 — The branch decides which local database you are on
 
