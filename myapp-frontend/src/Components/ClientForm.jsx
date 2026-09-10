@@ -119,14 +119,15 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
   }, []);
 
   // Registration-type → which identity fields apply.
-  // Pakistan FBR taxonomy:
-  //   • Registered    — NTN (7 digits) + STRN (13 digits) required.
-  //   • FTN           — Federal Tax Number lives in the NTN column;
-  //                     STRN is optional (most FTN entities don't have one).
-  //   • Unregistered  — no NTN/STRN; CNIC is the identity (13 digits).
+  // What FBR's buyer block actually needs (V1.12, proven against the sandbox
+  // 2026-09-10): name, registration type, province, and an NTN/CNIC for a
+  // REGISTERED buyer. Everything else on this form is optional -- STRN is not
+  // sent at all, an unregistered buyer's CNIC is optional, and FBR accepted a
+  // buyer with no address. So:
+  //   • Registered    — NTN (7 digits) required.
+  //   • FTN           — Federal Tax Number lives in the NTN column; required.
+  //   • Unregistered  — no NTN; CNIC optional (13 digits when given).
   //   • CNIC          — same as Unregistered for the form's purposes.
-  // Anything else / blank — show all fields with no auto-validation, so
-  // the operator picks the type first.
   const regType = formData.registrationType;
   const showNtn  = regType === "Registered" || regType === "FTN";
   const showStrn = regType === "Registered"; // STRN truly required only for Registered
@@ -170,7 +171,8 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
       // STRN is deliberately NOT required (2026-09-10): the FBR buyer block
       // carries NTN/CNIC, name, province, address and registration type --
       // no STRN -- and demanding one here kept real buyers out of FBR.
-      if (showCnic && !formData.cnic.trim()) newErrors.cnic = "CNIC is required for this registration type";
+      // An unregistered buyer's CNIC is optional on FBR's side (buyerNTNCNIC
+      // may be empty for Unregistered) -- only its format is checked below.
     }
     // CNIC must be 13 digits whenever one is entered (Pakistan ID format) —
     // checked even when FBR is off, so a typo never gets saved.
@@ -422,7 +424,7 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
 
               {showCnic && (
                 <div style={{ ...formGroup, marginTop: "0.5rem" }}>
-                  <label style={label}>CNIC (13 digits){star}</label>
+                  <label style={label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
                   <input
                     type="text"
                     name="cnic"
@@ -434,7 +436,7 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                   />
                   {errorMsg("cnic")}
                   <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                    Unregistered buyers don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                    Optional — FBR files an unregistered buyer without one. Give the CNIC when you have it.
                   </span>
                 </div>
               )}

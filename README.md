@@ -332,6 +332,12 @@ Publish output optimized from 79 MB to 37 MB via:
   needs an NTN or CNIC; an Unregistered buyer needs neither. The Client and
   Common Client forms mark STRN optional, and an NTN typed without its dash
   is accepted (FBR receives the 7 digits either way).
+- **Client forms ask only for what FBR needs.** Name, registration type,
+  province, and an NTN for a registered buyer are mandatory on an FBR company;
+  STRN, an unregistered buyer's CNIC, address, phone, email and sites are
+  optional (FBR accepted an unregistered buyer without a CNIC and a buyer
+  without an address in the sandbox). The Common Client editor applies the same
+  minimum, and only when one of its member companies files with FBR.
 - **The sandbox scenario follows the buyer.** A bill that named no scenario
   always went out as SN001, so every bill for an Unregistered buyer was refused
   `[0205]`. It now defaults to SN002 for an unregistered buyer, SN001 otherwise.
