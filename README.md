@@ -298,8 +298,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
-### 2026-09-11 — Fourth production line documented
+### 2026-09-11 — Login to ERP button on the landing page; fourth production line documented
 
+- **Landing page: "Login to ERP" button** in the navigation bar and in the hero,
+  linking straight to the ERP login screen, so operators no longer type `/admin`
+  into the address bar. The footer "Client Portal Login" link stays.
 - The repository now carries a fourth production branch, `TraderFbrInvoicingSystem`
   (its own MonsterASP site and `deploy-trader.yml`). On this branch only the
   documentation changed: the branch policy in `docs/ENVIRONMENTS.md` and `CLAUDE.md`,
