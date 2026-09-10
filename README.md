@@ -260,7 +260,16 @@ MyApp.Api/
 
 ## Deployment
 
-Automated via GitHub Actions on push to `master`:
+Automated via GitHub Actions. Each long-lived production branch has its own
+workflow and its own MonsterASP site, so a push to one of these branches **is**
+the deploy of that installation (branch policy: `docs/ENVIRONMENTS.md`):
+
+| Branch | Workflow | Site shape |
+|---|---|---|
+| `master` | `deploy.yml` | ERP at `/` |
+| `customize-solution-for-other` | `deploy-other.yml` | landing page at `/`, ERP under `/admin/` |
+| `feat/importer-ledger-receipts` | `deploy-importer.yml` | landing page at `/`, ERP under `/admin/` |
+| `TraderFbrInvoicingSystem` | `deploy-trader.yml` | landing page at `/`, ERP under `/admin/` |
 
 - **Frontend-only changes** -> Builds React, FTP-deploys static files (no app restart, ~2 min)
 - **Backend changes** -> Full build, publish, stop app, FTP deploy, restart (~5 min)
@@ -288,6 +297,14 @@ Publish output optimized from 79 MB to 37 MB via:
 > feature or bug fix appends a dated entry here (newest first)** — README is the
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
+
+### 2026-09-11 — Fourth production line documented
+
+- The repository now carries a fourth production branch, `TraderFbrInvoicingSystem`
+  (its own MonsterASP site and `deploy-trader.yml`). On this branch only the
+  documentation changed: the branch policy in `docs/ENVIRONMENTS.md` and `CLAUDE.md`,
+  the README deployment table, the local branch-to-database map and the
+  production-access template now list the new line. No functional change here.
 
 ### 2026-09-10 — An FBR token the server cannot read is no longer erased
 
