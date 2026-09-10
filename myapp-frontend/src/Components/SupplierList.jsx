@@ -15,8 +15,17 @@ export default function SupplierList({
   onShowLedger,
   // Marks a supplier shared with other companies; its Edit propagates.
   isCommon,
+  // Names of the other companies (within the operator's access) sharing it.
+  sharedWith,
 }) {
   const common = (supplier) => typeof isCommon === "function" && isCommon(supplier);
+  const others = (supplier) => (typeof sharedWith === "function" ? sharedWith(supplier) : []) || [];
+  const sharedTitle = (supplier) => {
+    const names = others(supplier);
+    return names.length
+      ? `Shared with ${names.join(", ")} — edits propagate to all`
+      : "Shared with other companies — edits propagate to all";
+  };
   const confirm = useConfirm();
   const { has } = usePermissions();
   // Below 768px the payables drill-down grows to a real 44px tap target
@@ -67,7 +76,12 @@ export default function SupplierList({
             <div>
               <h5 style={cardStyles.title}>{supplier.name}</h5>
               {common(supplier) && (
-                <span style={commonBadge} title="Shared with other companies — edits propagate to all">Common</span>
+                <div style={{ marginBottom: "0.4rem" }}>
+                  <span style={commonBadge} title={sharedTitle(supplier)}>Common</span>
+                  {others(supplier).length > 0 && (
+                    <div style={sharedLine}>Shared with {others(supplier).join(" · ")}</div>
+                  )}
+                </div>
               )}
 
               {/* Accounts payable + status. The figure is clickable and opens the
@@ -206,7 +220,8 @@ const payRow = {
   display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem",
   margin: "0.4rem 0 0.2rem",
 };
-const commonBadge = { display: "inline-block", marginBottom: "0.4rem", padding: "0.05rem 0.45rem", borderRadius: 10, border: "1px solid #b7d4f0", background: "#f0f7ff", color: "#0d47a1", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase" };
+const commonBadge = { display: "inline-block", padding: "0.05rem 0.45rem", borderRadius: 10, border: "1px solid #b7d4f0", background: "#f0f7ff", color: "#0d47a1", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase" };
+const sharedLine = { fontSize: "0.7rem", color: "#0d47a1", marginTop: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
 const payLabel = { color: "#5f6d7e", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em" };
 const payAmount = { fontSize: "0.86rem", fontWeight: 700, color: "#1a2332", fontVariantNumeric: "tabular-nums" };
 const payAmountBtn = {
