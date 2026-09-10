@@ -19,6 +19,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { useConfirm } from "./ConfirmDialog";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
@@ -51,6 +52,7 @@ const colors = {
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
 export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
+  const confirm = useConfirm();
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
   // classification is the Invoices tab's responsibility). Existing item-
@@ -1133,6 +1135,63 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const isChallanLinked = !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
   const lockClient      = lockNonItemType || isChallanLinked;
 
+  // ── Soft stock warning (2026-09-11) ─────────────────────────────────
+  // Only HS-coded item types move stock, and only the invoice-mode
+  // classification decides which HS type a line leaves stock under, so
+  // this is where an oversell becomes visible. The dropdown list already
+  // carries each item type's on-hand (`availableQty`, per company); that
+  // figure INCLUDES this invoice's own OUT rows, so what this invoice
+  // currently takes is added back before the edited lines are subtracted:
+  //     projected = availableQty + posted(this invoice) − planned(edited)
+  // Below zero → inline warning on the line and a confirm on Save. Bill
+  // mode never warns (non-HS lines carry no stock). Server-side the same
+  // check runs after the stock sync; with Company.StockGuardHardBlock on
+  // it refuses the save outright.
+  const stockProjection = useMemo(() => {
+    const map = new Map();
+    if (billsMode) return map;
+    const byId = new Map((itemTypes || []).map((it) => [it.id, it]));
+    const tracked = (id) => {
+      const it = byId.get(id);
+      return !!(it && it.hsCode && String(it.hsCode).trim() && it.availableQty != null);
+    };
+    const bump = (id, field, qty) => {
+      if (!id || !tracked(id)) return;
+      const it = byId.get(id);
+      const cur = map.get(id) || { name: it.name, onHandNow: Number(it.availableQty) || 0, posted: 0, planned: 0 };
+      cur[field] += qty;
+      map.set(id, cur);
+    };
+    for (const bi of originalItemsRef.current || []) {
+      const adj = bi.adjustment;
+      const effType = adj?.adjustedItemTypeId ?? bi.itemTypeId;
+      const effQty = parseFloat(adj?.adjustedQuantity ?? bi.quantity) || 0;
+      bump(effType, "posted", effQty);
+    }
+    for (const it of items) {
+      bump(it.itemTypeId, "planned", parseFloat(it.quantity) || 0);
+    }
+    for (const w of map.values()) {
+      w.onHand = w.onHandNow + w.posted;   // on-hand as if this invoice did not exist
+      w.projected = w.onHand - w.planned;  // on-hand after this save
+    }
+    return map;
+  }, [items, itemTypes, billsMode]);
+  const stockNegatives = useMemo(
+    () => Array.from(stockProjection.values()).filter((w) => w.projected < 0),
+    [stockProjection]);
+  const fmtQty = (n) => Number(n).toLocaleString("en-PK", { maximumFractionDigits: 4 });
+  const stockWarnFor = (itemTypeId) => {
+    const w = stockProjection.get(itemTypeId);
+    if (!w || w.projected >= 0) return null;
+    return (
+      <div style={styles.stockHint} title="This item type is HS-coded, so this quantity leaves stock. The figure is on-hand after this save.">
+        <MdWarning size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />
+        Out of stock for {w.name}: on-hand {fmtQty(w.onHand)}, this bill takes {fmtQty(w.planned)}, leaves {fmtQty(w.projected)}
+      </div>
+    );
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setError("");
@@ -1146,6 +1205,23 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         `Select an Item Type for every line — ${unclassified} line${unclassified === 1 ? "" : "s"} still missing one. ` +
         `Use "Apply same Item Type to all" to classify in bulk.`
       );
+    }
+
+    // Soft stock warning: the operator decides. Cancel keeps the form open
+    // with everything they typed. (Hard-block companies are refused by the
+    // server regardless of this answer.)
+    if (!billsMode && stockNegatives.length > 0) {
+      const lines = stockNegatives
+        .map((w) => `${w.name}: on-hand ${fmtQty(w.onHand)}, this bill takes ${fmtQty(w.planned)}, leaves ${fmtQty(w.projected)}`)
+        .join("\n");
+      const ok = await confirm({
+        title: "You are out of this inventory",
+        message: `Saving takes stock below zero for:\n${lines}\n\nSave anyway?`,
+        variant: "warning",
+        confirmText: "Save anyway",
+        cancelText: "Go back",
+      });
+      if (!ok) return;
     }
 
     setSaving(true);
@@ -1694,6 +1770,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   {!hasItemType && (
                                     <div style={styles.requiredHint}>Required</div>
                                   )}
+                                  {stockWarnFor(item.itemTypeId)}
                                 </>
                               )}
                             </div>
@@ -1802,6 +1879,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   style={styles.tableInput}
                                 />
                               )}
+                              {stockWarnFor(group.itemTypeId)}
                             </td>
                             <td style={styles.td}>
                               <div style={styles.readOnlyText}>{group.itemTypeName || group.description || <span style={styles.muted}>—</span>}</div>
@@ -1887,6 +1965,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   {!hasItemType && (
                                     <div style={styles.requiredHint}>Required</div>
                                   )}
+                                  {stockWarnFor(item.itemTypeId)}
                                 </>
                               )}
                             </td>
@@ -1971,6 +2050,31 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     (+price) mode. Lets the operator see in real time
                     whether their qty/price edits balance back to the
                     original subtotal. Save is blocked until they do. */}
+                {!billsMode && stockNegatives.length > 0 && (
+                  <div style={{
+                    ...styles.totalsBox,
+                    background: "#fff4e0",
+                    borderColor: "#ffcc80",
+                    borderLeft: "4px solid #e65100",
+                    marginTop: "0.6rem",
+                  }}>
+                    <div style={{ fontSize: "0.78rem", color: "#c62828", marginBottom: "0.4rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      <MdWarning size={16} /> Stock warning — this save takes inventory below zero
+                    </div>
+                    {stockNegatives.map((w) => (
+                      <div key={w.name} style={styles.totalsRow}>
+                        <span>{w.name}</span>
+                        <strong style={{ color: "#c62828" }}>
+                          on-hand {fmtQty(w.onHand)} − {fmtQty(w.planned)} = {fmtQty(w.projected)}
+                        </strong>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.35rem" }}>
+                      You will be asked to confirm on Save. Companies with the hard stock guard on cannot save this at all.
+                    </div>
+                  </div>
+                )}
+
                 {showTotalsGuard && (
                   <div style={{
                     ...styles.totalsBox,
@@ -3518,6 +3622,7 @@ const styles = {
   groupedRow: { backgroundColor: "#fbfcfe" },
   groupMeta: { marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary, fontStyle: "italic" },
   requiredHint: { marginTop: 2, fontSize: "0.66rem", color: colors.warn, fontWeight: 700 },
+  stockHint: { marginTop: 2, fontSize: "0.66rem", color: "#c62828", fontWeight: 700, lineHeight: 1.3 },
   totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 8, maxWidth: 360, marginLeft: "auto" },
   totalsRow: { display: "flex", justifyContent: "space-between", fontSize: "0.88rem", color: colors.textPrimary, padding: "0.2rem 0" },
 };

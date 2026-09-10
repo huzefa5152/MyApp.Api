@@ -130,6 +130,15 @@ namespace MyApp.Api.Services.Interfaces
         /// 2026-05-12: added; quantity-source flipped to overlay-first.
         /// </summary>
         Task SyncInvoiceStockMovementsAsync(Models.Invoice invoice);
+
+        /// <summary>
+        /// Which of the given item types currently stand below zero on-hand
+        /// for the company. Tracked (HS-coded) item types only; empty when
+        /// inventory tracking is off. Read AFTER a sync so the answer reflects
+        /// the movements the save just wrote (same DbContext, same
+        /// transaction).
+        /// </summary>
+        Task<List<MyApp.Api.DTOs.StockWarningDto>> GetNegativePositionsAsync(int companyId, IEnumerable<int> itemTypeIds);
     }
 
     /// <summary>One item demand on a bill: how much do we need.</summary>

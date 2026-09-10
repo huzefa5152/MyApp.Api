@@ -290,6 +290,34 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-11 — Oversell guard on invoice edit (soft warning / hard block)
+
+- **Where stock actually leaves.** Only HS-coded item types move stock, and on a
+  bill only the consultant's invoice-mode classification decides which HS type a
+  line leaves stock under. Bill mode (non-HS item types) never deducts. That was
+  already so; the gap was that neither invoice edit nor the consultant adjustment
+  checked on-hand, so stock went negative silently.
+- **Soft warning (default).** On the invoice edit form, as soon as a line's item
+  type or quantity would take that item below zero, the line shows "Out of stock
+  for X: on-hand a, this bill takes b, leaves a−b" and a banner lists every such
+  item. Save asks "You are out of this inventory … Save anyway?"; Go back keeps the
+  form. Projection = on-hand + what this invoice already takes − what the edited
+  lines will take, computed from the item-type list's per-company `availableQty`.
+- **Server side.** `UpdateAsync` and `UpdateItemTypesAsync` run the same check
+  after the stock sync, inside the transaction. Soft: the response carries
+  `stockWarnings` (additive on `InvoiceDto`). Hard: with
+  `Company.StockGuardHardBlock` on, the save is refused with 400 and rolled back,
+  mirroring bill creation.
+- **`StockGuardHardBlock` is now an operator setting.** Exposed on the company
+  DTOs and as "Refuse saves that take stock below zero" under the inventory toggle
+  on the company form. It existed since the inventory module but could only be set
+  by SQL.
+- **Test.** `scripts/test_stock_itemtype_reflow.py` gains suite 14 (oversell
+  guard: soft save with warnings, in-stock save clean, hard-block refusal on the
+  adjustment path and on revert-to-base, full-edit under a live overlay still
+  governed by the filed qty). Gate is now 161/161. The harness confirms
+  near-duplicate item types with `isFavorite` so it runs on small catalogs.
+
 ### 2026-09-11 — Hierarchical admin scope (seed admin → Administrators → users)
 
 - **Ownership columns.** `Users.CreatedByUserId` and `Companies.CreatedByUserId`

@@ -1287,6 +1287,50 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        /// <summary>
+        /// Stock guard for the edit paths (2026-09-11). Runs AFTER
+        /// <see cref="IStockService.SyncInvoiceStockMovementsAsync"/> has
+        /// rewritten this invoice's OUT rows, inside the same transaction, and
+        /// asks the ledger which of the invoice's effective item types now
+        /// stand below zero. Company.StockGuardHardBlock = true → throw, so the
+        /// caller's transaction rolls the save back (mirrors bill creation).
+        /// Otherwise the list is returned for the client to show — the
+        /// operator already confirmed on the form, this is the record of it.
+        /// Effective type = Adjusted ?? physical, the same resolution the
+        /// stock sync uses.
+        /// </summary>
+        private async Task<List<StockWarningDto>> EnforceStockGuardAfterSyncAsync(Invoice invoice)
+        {
+            var flags = await _context.Companies
+                .AsNoTracking()
+                .Where(c => c.Id == invoice.CompanyId)
+                .Select(c => new { c.InventoryTrackingEnabled, c.StockGuardHardBlock })
+                .FirstOrDefaultAsync();
+            if (flags == null || !flags.InventoryTrackingEnabled)
+                return new List<StockWarningDto>();
+
+            var effectiveTypeIds = invoice.Items
+                .Select(ii => ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId)
+                .Where(t => t.HasValue)
+                .Select(t => t!.Value)
+                .Distinct()
+                .ToList();
+            if (effectiveTypeIds.Count == 0) return new List<StockWarningDto>();
+
+            var negatives = await _stock.GetNegativePositionsAsync(invoice.CompanyId, effectiveTypeIds);
+            if (negatives.Count == 0) return negatives;
+
+            if (flags.StockGuardHardBlock)
+            {
+                var names = string.Join(", ", negatives.Select(n =>
+                    $"{n.ItemTypeName} (on-hand would be {n.OnHand:0.####})"));
+                throw new InvalidOperationException(
+                    "Insufficient stock to save this invoice: " + names +
+                    ". Reduce the quantity or receive stock first.");
+            }
+            return negatives;
+        }
+
         public async Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
@@ -1491,10 +1535,16 @@ namespace MyApp.Api.Services.Implementations
                 // 2026-05-12: stock-out on save (full-edit path).
                 // See UpdateItemTypesAsync for rationale.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // Stock guard (2026-09-11): hard-block rolls back here,
+                // soft mode rides back on the DTO as warnings.
+                var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
                 await transaction.CommitAsync();
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
-                return reloaded == null ? null : ToDto(reloaded);
+                if (reloaded == null) return null;
+                var dtoOut = ToDto(reloaded);
+                if (stockWarnings.Count > 0) dtoOut.StockWarnings = stockWarnings;
+                return dtoOut;
             }
             catch (Exception ex)
             {
@@ -1903,6 +1953,12 @@ namespace MyApp.Api.Services.Implementations
                 // before this code shipped) gets them now. No-op when
                 // inventory tracking is off for the company.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // Stock guard (2026-09-11): the consultant's classification is
+                // what actually takes HS stock out, so this is where an
+                // oversell is caught. Hard-block → exception → rollback →
+                // 400 at the controller. Soft → warnings on the response;
+                // the client has already asked the operator to confirm.
+                var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
                 await transaction.CommitAsync();
 
                 // ── Audit log (after commit so we don't log a rolled-back op) ──
@@ -1973,7 +2029,10 @@ namespace MyApp.Api.Services.Implementations
                 catch { /* audit must never break the save */ }
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
-                return reloaded == null ? null : ToDto(reloaded);
+                if (reloaded == null) return null;
+                var dtoOut = ToDto(reloaded);
+                if (stockWarnings.Count > 0) dtoOut.StockWarnings = stockWarnings;
+                return dtoOut;
             }
             catch (Exception ex)
             {

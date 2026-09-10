@@ -56,6 +56,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         // Inventory module — off by default. Operator turns it on once
         // they've recorded opening balances and are ready to track stock.
         inventoryTrackingEnabled: false,
+        // Oversell policy: false = warn and let the operator confirm; true = refuse.
+        stockGuardHardBlock: false,
         startingPurchaseBillNumber: 0,
         startingGoodsReceiptNumber: 0,
         startingSalesQuoteNumber: 1,
@@ -130,6 +132,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultPaymentModeRegistered: freshCompany.fbrDefaultPaymentModeRegistered || "",
                 fbrDefaultPaymentModeUnregistered: freshCompany.fbrDefaultPaymentModeUnregistered || "",
                 inventoryTrackingEnabled: !!freshCompany.inventoryTrackingEnabled,
+                stockGuardHardBlock: !!freshCompany.stockGuardHardBlock,
                 startingPurchaseBillNumber: freshCompany.startingPurchaseBillNumber || 0,
                 startingGoodsReceiptNumber: freshCompany.startingGoodsReceiptNumber || 0,
                 startingSalesQuoteNumber: freshCompany.startingSalesQuoteNumber || 1,
@@ -584,6 +587,26 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     <strong style={{ display: "block" }}>Enable inventory tracking</strong>
                                     <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
                                         Stock IN moves on Purchase Bill save, Stock OUT moves on FBR submission. Pre-check blocks FBR submit when oversold. Leave OFF until you've recorded opening balances.
+                                    </span>
+                                </span>
+                            </label>
+
+                            {/* Oversell policy (2026-09-11). Applies to bill creation and to
+                                every invoice edit / consultant adjustment: soft = the form warns
+                                and asks the operator to confirm; hard = the server refuses. */}
+                            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: form.inventoryTrackingEnabled ? "pointer" : "not-allowed", opacity: form.inventoryTrackingEnabled ? 1 : 0.55, marginTop: "0.5rem" }}>
+                                <input
+                                    type="checkbox"
+                                    name="stockGuardHardBlock"
+                                    checked={!!form.stockGuardHardBlock}
+                                    disabled={!form.inventoryTrackingEnabled}
+                                    onChange={handleChange}
+                                    style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                />
+                                <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
+                                    <strong style={{ display: "block" }}>Refuse saves that take stock below zero</strong>
+                                    <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
+                                        Off: the invoice form warns "you are out of this inventory" and lets the operator confirm. On: bill creation and invoice edits that oversell an HS item are refused.
                                     </span>
                                 </span>
                             </label>

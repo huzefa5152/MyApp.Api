@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class CompanyDto
     {
@@ -38,6 +38,10 @@
         // FBR submission is silent. Operators flip this on once they've
         // entered opening balances and are ready to track inventory.
         public bool InventoryTrackingEnabled { get; set; }
+        // Oversell policy (2026-09-11). False = soft: an invoice save that
+        // takes an HS item below zero on-hand succeeds and returns
+        // StockWarnings. True = hard: such a save is refused (400).
+        public bool StockGuardHardBlock { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int CurrentPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }

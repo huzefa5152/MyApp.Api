@@ -220,7 +220,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 > `master`** (a direct push, or a merge/PR that lands on it), you MUST:
 > 1. have a backend running against a schema-current DB, and
 > 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
->    passed`** (currently **140/140**).
+>    passed`** (currently **161/161**).
 >
 > If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
 > in/out flow must never reach master — ever. Run it even when the change looks
@@ -236,7 +236,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
-| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `140/140`) |
+| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `161/161`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
@@ -284,6 +284,7 @@ tracking-enabled company and asserts on-hand after each edit:
 - Purchase bill: create IN, change item type (reverse old + add new), change qty, switch to an un-classified (no-HS) item (no IN), delete (reverse).
 - Classify-after-create **phantom guard**: a bill created against a no-HS item records no IN; classifying the item then editing must NOT fabricate a negative reversal.
 - Invoice OUT via **narrow** item-type edit (`PATCH /itemtypes`), **full** edit (`PUT /{id}`), and the **challan-driven** add/remove/qty path — each reverses the old item's OUT and re-records on the new, restores on clear/remove, and reverses on delete.
+- **Oversell guard (suite 14, 2026-09-11)** — an invoice edit or consultant adjustment that takes an HS item below zero saves with `stockWarnings` on the response while `Company.StockGuardHardBlock` is off, and is refused (400, rolled back) when it is on; a full edit under a live overlay stays governed by the filed qty. The form shows the same projection inline and asks "You are out of this inventory. Save anyway?".
 - **FBR dual-book overlay matrix (suites 8–13)** — the tax-consultant adjustment path (`PATCH /invoices/{id}/itemtypes-and-qty` `writeMode:"adjustment"`, which writes `InvoiceItemAdjustment.AdjustedItemTypeId`/`AdjustedQuantity` and leaves the physical line untouched). Stock keys off the **effective** type/qty (`Adjusted?? physical`, mirroring `FbrService`): a non-HS base reclassified to HS gets its OUT on the HS type; an HS→HS→HS reclassification chain reverts the old type and OUTs the new each hop; a bill (PUT) edit under an overlay reflows physical qty only while no filed qty is set, then the filed qty wins; repeated qty re-adjustment tracks the latest; multi-line overlays stay independent; challan qty changes reflow onto the overlay type; every case reverses on revert-to-base and on delete.
 
 ---

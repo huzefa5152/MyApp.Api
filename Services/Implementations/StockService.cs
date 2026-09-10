@@ -423,6 +423,38 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        public async Task<List<MyApp.Api.DTOs.StockWarningDto>> GetNegativePositionsAsync(int companyId, IEnumerable<int> itemTypeIds)
+        {
+            var result = new List<MyApp.Api.DTOs.StockWarningDto>();
+            if (!await IsTrackingEnabledAsync(companyId)) return result;
+
+            var ids = itemTypeIds?.Where(i => i > 0).Distinct().ToList() ?? new List<int>();
+            if (ids.Count == 0) return result;
+
+            var tracked = await GetStockTrackedItemTypeIdsAsync(ids);
+            if (tracked.Count == 0) return result;
+
+            var onHand = await GetOnHandBulkAsync(companyId, tracked);
+            var negative = onHand.Where(kv => kv.Value < 0m).Select(kv => kv.Key).ToList();
+            if (negative.Count == 0) return result;
+
+            var names = await _context.ItemTypes
+                .Where(it => negative.Contains(it.Id))
+                .Select(it => new { it.Id, it.Name })
+                .ToDictionaryAsync(x => x.Id, x => x.Name);
+
+            foreach (var id in negative)
+            {
+                result.Add(new MyApp.Api.DTOs.StockWarningDto
+                {
+                    ItemTypeId = id,
+                    ItemTypeName = names.GetValueOrDefault(id) ?? $"Item type {id}",
+                    OnHand = onHand[id],
+                });
+            }
+            return result.OrderBy(w => w.ItemTypeName).ToList();
+        }
+
         public async Task<List<StockShortage>> CheckAvailabilityAsync(
             int companyId,
             IEnumerable<StockRequirement> required)
