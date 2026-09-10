@@ -48,6 +48,16 @@
       "userId": "REPLACE_WITH_READONLY_USER",
       "password": "REPLACE_WITH_READONLY_PASSWORD",
       "readOnly": true
+    },
+    "TraderFbrInvoicingSystem": {
+      "branch": "TraderFbrInvoicingSystem",
+      "productionDatabase": "REPLACE_WITH_PROD_DB_NAME",
+      "localCounterpart": "MyApp_Trader_Local",
+      "server": "REPLACE_WITH_PROD_SQL_HOST",
+      "database": "REPLACE_WITH_PROD_DB_NAME",
+      "userId": "REPLACE_WITH_READONLY_USER",
+      "password": "REPLACE_WITH_READONLY_PASSWORD",
+      "readOnly": true
     }
   }
 }

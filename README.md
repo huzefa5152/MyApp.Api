@@ -257,7 +257,16 @@ MyApp.Api/
 
 ## Deployment
 
-Automated via GitHub Actions on push to `master`:
+Automated via GitHub Actions. Each long-lived production branch has its own
+workflow and its own MonsterASP site, so a push to one of these branches **is**
+the deploy of that installation (branch policy: `docs/ENVIRONMENTS.md`):
+
+| Branch | Workflow | Site shape |
+|---|---|---|
+| `master` | `deploy.yml` | ERP at `/` |
+| `customize-solution-for-other` | `deploy-other.yml` | landing page at `/`, ERP under `/admin/` |
+| `feat/importer-ledger-receipts` | `deploy-importer.yml` | landing page at `/`, ERP under `/admin/` |
+| `TraderFbrInvoicingSystem` | `deploy-trader.yml` | landing page at `/`, ERP under `/admin/` |
 
 - **Frontend-only changes** -> Builds React, FTP-deploys static files (no app restart, ~2 min)
 - **Backend changes** -> Full build, publish, stop app, FTP deploy, restart (~5 min)
@@ -280,6 +289,20 @@ Publish output optimized from 79 MB to 37 MB via:
 ---
 
 ## Changelog
+
+### 2026-09-11 — Fourth production line: `TraderFbrInvoicingSystem`
+
+- **New production branch `TraderFbrInvoicingSystem`**, cut from `master`, with
+  its own deploy workflow (`.github/workflows/deploy-trader.yml`) and its own
+  MonsterASP site. Same site shape as the customize and importer lines: the
+  marketing landing page at `/`, the ERP under `/admin/`, and `/admin` opening
+  the login screen. No application code changed — the shape is build-time
+  configuration (`VITE_BASE_PATH=/admin/`) plus the static `landing/index.html`.
+- **Landing page: "Login to ERP" button** in the navigation bar and in the hero,
+  linking straight to the ERP login screen, so operators no longer type `/admin`
+  into the address bar. The footer "Client Portal Login" link stays.
+- Branch policy docs (`docs/ENVIRONMENTS.md`, `CLAUDE.md`), the local branch map
+  and the production-access template now list four production installations.
 
 ### 2026-09-09 — The branch decides which local database you are on
 

@@ -29,9 +29,11 @@
     "customize-solution-for-other": "MyApp_Customize_Local",
     "feat/importer-ledger-receipts": "MyApp_Importer_Local",
     "fix/audit-2026-08-02": "MyApp_Master_Local",
+    "TraderFbrInvoicingSystem": "MyApp_Trader_Local",
 
     "master-*": "MyApp_Master_Local",
     "customize-*": "MyApp_Customize_Local",
-    "importer-*": "MyApp_Importer_Local"
+    "importer-*": "MyApp_Importer_Local",
+    "trader-*": "MyApp_Trader_Local"
   }
 }

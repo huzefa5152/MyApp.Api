@@ -3,27 +3,28 @@
 **This file is the standard. Read it before changing anything in this
 repository.** `CLAUDE.md` points here; nothing below is optional.
 
-One codebase serves **three separate production installations** on MonsterASP.
-They are not stages of one pipeline — they are three different customers'
+One codebase serves **four separate production installations** on MonsterASP.
+They are not stages of one pipeline — they are four different customers'
 systems, each with its own live database, its own deploy workflow, and its own
-long-lived branch. A fourth branch carries security/audit work that is ahead of
+long-lived branch. A fifth branch carries security/audit work that is ahead of
 `master`.
 
 ---
 
 ## 1. Branch policy
 
-Exactly four branches are valid, locally and on `origin`:
+Exactly five branches are valid, locally and on `origin`:
 
 | Branch | Role | Deploy workflow | Local database |
 |---|---|---|---|
 | `master` | **Production #1** | `.github/workflows/deploy.yml` | `MyApp_Master_Local` |
 | `customize-solution-for-other` | **Production #2** | `.github/workflows/deploy-other.yml` | `MyApp_Customize_Local` |
 | `feat/importer-ledger-receipts` | **Production #3** (the current importer line) | `.github/workflows/deploy-importer.yml` | `MyApp_Importer_Local` |
+| `TraderFbrInvoicingSystem` | **Production #4** (the trader line, cut from `master` on 2026-09-11) | `.github/workflows/deploy-trader.yml` | `MyApp_Trader_Local` |
 | `fix/audit-2026-08-02` | Audit / security fixes, **ahead of `master`** — not a production environment | none (merged into `master` when accepted) | `MyApp_Master_Local` |
 
 Each production workflow triggers on a push to its own branch, so **a push to
-any of the three deploys a real customer's system.** Confirm with the maintainer
+any of the four deploys a real customer's system.** Confirm with the maintainer
 before every push.
 
 Rules:
@@ -31,22 +32,24 @@ Rules:
 - **Do not create long-lived branches.** A short-lived `fix/…` or `feat/…`
   branch for one piece of work is fine; delete it as soon as the work has
   landed. Anything still around after that is cleanup debt.
-- **Do not rename these four branches.** The deploy workflows key off the branch
-  name, and the importer branch name is embedded in `deploy-importer.yml`.
+- **Do not rename these five branches.** The deploy workflows key off the branch
+  name, and the importer and trader branch names are embedded in
+  `deploy-importer.yml` and `deploy-trader.yml`.
 - **Do not delete a branch that has unique commits.** Check with
-  `git rev-list --count <branch> ^master ^customize-solution-for-other ^feat/importer-ledger-receipts ^fix/audit-2026-08-02`
+  `git rev-list --count <branch> ^master ^customize-solution-for-other ^feat/importer-ledger-receipts ^TraderFbrInvoicingSystem ^fix/audit-2026-08-02`
   before removing anything; `0` means every commit is already preserved.
 - Commit identity for this repo is the **personal** GitHub account — see the
   Git workflow section of `CLAUDE.md`. It is set repo-local, so it covers every
   branch automatically.
 
-### 1a. The three lines are NOT to be silently merged
+### 1a. The four lines are NOT to be silently merged
 
-`master`, `customize-solution-for-other` and `feat/importer-ledger-receipts` are
-three deployed products that happen to share ancestry. They have deliberately
-diverged: the customize and importer sites serve the ERP under `/admin/` with a
-landing page at `/`, master serves it at the root, and the schemas differ by
-dozens of migrations (see §3).
+`master`, `customize-solution-for-other`, `feat/importer-ledger-receipts` and
+`TraderFbrInvoicingSystem` are four deployed products that happen to share
+ancestry. They have deliberately diverged: the customize, importer and trader
+sites serve the ERP under `/admin/` with a landing page at `/`, master serves it
+at the root, and the schemas differ by dozens of migrations (see §3). The trader
+line starts life identical to `master` — it will drift like the others.
 
 So:
 
@@ -54,7 +57,7 @@ So:
   maintainer asks for it to be ported.
 - Never "tidy up" by merging one production line into another.
 - **Security and audit fixes are the exception that still needs a decision** —
-  they usually SHOULD reach all three, but each port is a deliberate act with
+  they usually SHOULD reach all four, but each port is a deliberate act with
   its own review, not an automatic merge.
 - When porting, cherry-pick the specific commits and say in the message that it
   is a port. A cherry-pick keeps the ORIGINAL author, so follow it with
@@ -65,14 +68,16 @@ So:
 
 ## 2. Local database policy
 
-Every branch runs against **its own local restored copy** of that environment's
-production database. Nothing local ever talks to a production server.
+Every branch runs against **its own local copy** of that environment's database —
+restored from a production backup, or created empty for a brand-new installation
+that has no production data yet. Nothing local ever talks to a production server.
 
 | Branch | Local database | Restored from |
 |---|---|---|
 | `master` | `MyApp_Master_Local` | `…\Database Backup\master\<master-prod-db>_custom_*.bak` (prod DB `<master-prod-db>`) |
 | `customize-solution-for-other` | `MyApp_Customize_Local` | `…\Database Backup\customize\<customize-prod-db>_custom_*.bak` (prod DB `<customize-prod-db>`) |
 | `feat/importer-ledger-receipts` | `MyApp_Importer_Local` | `…\Database Backup\importer\<importer-prod-db>_custom_*.bak` (prod DB `<importer-prod-db>`) |
+| `TraderFbrInvoicingSystem` | `MyApp_Trader_Local` | nothing — created empty on 2026-09-11 (`CREATE DATABASE`); the first local run applies every migration and seeds the admin user. If your `appsettings.Development.json` sets `Database:AutoMigrate` to `false` (it does on the maintainer's machine, for the restored-backup branches), run that first start with `Database__AutoMigrate=true` in the environment — an empty database with migrations off fails at startup on the first backfill (`Invalid object name 'AuditLogs'`) |
 | `fix/audit-2026-08-02` | `MyApp_Master_Local` | same backup as `master` |
 
 Backup root on the maintainer's machine:
@@ -120,9 +125,9 @@ Two conditions gate the whole mechanism, and a deployed site meets neither:
 so the file cannot even reach a server.
 
 The map holds **no secret** — every entry is Windows-authenticated against a
-local instance — which is why it is tracked in git and identical on all four
+local instance — which is why it is tracked in git and identical on all five
 branches. Keeping it identical is what stops it conflicting on every merge and
-cherry-pick between the three production lines.
+cherry-pick between the four production lines.
 
 Startup says which database it picked:
 
@@ -132,7 +137,7 @@ Local database selected from branch feat/importer-ledger-receipts: .\MSSQLSERVER
 
 If a branch has no entry, the app logs a warning, applies no override, and falls
 back to `appsettings` — it never guesses. Add the branch to `local.databases.json`
-(or rely on the `master-*` / `customize-*` / `importer-*` wildcards).
+(or rely on the `master-*` / `customize-*` / `importer-*` / `trader-*` wildcards).
 
 ### 2b. Another machine
 
@@ -173,7 +178,7 @@ brings its restored copy up to that branch's migrations.
 
 ## 3. Schema is per environment
 
-The three databases are at genuinely different schema levels, which is another
+The four databases are at genuinely different schema levels, which is another
 reason they are never interchangeable:
 
 | Local database | Tables | Last applied migration |
@@ -181,6 +186,7 @@ reason they are never interchangeable:
 | `MyApp_Master_Local` | 47 | `20260903183946_AddInvoiceFbrCancelled` |
 | `MyApp_Customize_Local` | 63 | `20260902084604_WidenPriceAndQuantityTo12Decimals` |
 | `MyApp_Importer_Local` | 68 | `20260908155639_AddCompanyInventoryOverlay` |
+| `MyApp_Trader_Local` | 46 | `20260903183946_AddInvoiceFbrCancelled` (same as `master` at the cut — master's extra table is the one-off `FbrSubmitSnapshot_2026_05_29`, which no migration creates) |
 
 Each matches the last migration on its branch exactly.
 
@@ -228,7 +234,7 @@ Loud, temporary, and typed on purpose. Do not put it in a settings file.
 
 ## 5. Production database access — READ ONLY
 
-Read-only credentials for the three production databases will be added later.
+Read-only credentials for the four production databases will be added later.
 When they are:
 
 - Put them in **`production.databases.json`** at the repo root. It is
@@ -247,7 +253,7 @@ inspection, comparing data between environments.
 any automated test that writes.
 
 Production is for investigating real data, diagnosing a reported problem,
-comparing behaviour between the three installations, and understanding schema
+comparing behaviour between the four installations, and understanding schema
 differences. Nothing else.
 
 If a fix needs a data change in production, write the statement, show it to the
