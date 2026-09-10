@@ -290,6 +290,44 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-11 — Hierarchical admin scope (seed admin → Administrators → users)
+
+- **Ownership columns.** `Users.CreatedByUserId` and `Companies.CreatedByUserId`
+  (both nullable, migration `AddManagementOwnership`). Every account created
+  through `POST /api/users` and every company created through
+  `POST /api/companies` now records its creator. NULL means root-level (the
+  seed admin itself, or a row that pre-dates the column) and is managed by the
+  seed admin only.
+- **One scope service.** `IManagementScopeService` answers who may administer
+  whom: the single seed admin manages everyone; an Administrator manages
+  exactly the accounts beneath it in the CreatedBy chain and may delegate only
+  the companies it holds itself. Applied server-side in Users, UserRoles,
+  UserCompanies (Tenant Access) and Companies — no endpoint URL, verb, request
+  or response shape changed. Out-of-scope ids answer 404 so nothing leaks.
+- **Tenant Access is scoped.** An Administrator's grid lists only its own users
+  × its own companies; `PUT /api/usercompanies/user/{id}` rejects company ids
+  outside that set (403) and never touches grants it cannot see (a company the
+  seed admin granted directly survives the Administrator's edits).
+- **Company create grants up the chain.** The creator and every ancestor short
+  of the seed admin receive a UserCompanies row, so an Administrator sees what
+  its users create.
+- **Deleting a user re-parents** its users and companies to the deleted user's
+  own parent, inside one transaction.
+- **Seed-admin console.** New `Administration → Administrators` screen (seed
+  admin only, backed by `GET /api/administrators`): each top-level account with
+  its users, companies and company access; create an Administrator, edit any
+  account's access, delete. Writes reuse the existing endpoints.
+- **No Company Configured.** One shared screen replaces the per-page empty
+  states whenever the signed-in account can reach no company; company-free
+  screens (Companies, Users, Roles, Tenant Access, Administrators, Profile,
+  Audit Logs) stay reachable. The allowed-company list is re-fetched when the
+  tab regains focus and whenever the server refuses a company, so a stale
+  `selectedCompanyId` in localStorage cannot outlive a revoked grant.
+- **Test.** `scripts/test_admin_scope_isolation.py` (91 checks): seed / Admin A
+  / Admin B matrix, IDOR probes on every affected endpoint, revocation bites
+  immediately, delete re-parents. `test_tenant_isolation.py` now honours
+  `MYAPP_BASE` so both suites can target a second local backend.
+
 ### 2026-09-11 — Fourth production line: `TraderFbrInvoicingSystem`
 
 - **New production branch `TraderFbrInvoicingSystem`**, cut from `master`, with

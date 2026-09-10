@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -496,6 +496,9 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 // the UserCompany table when Company.IsTenantIsolated=true; passes
 // through otherwise (preserves Hakimi/Roshan behaviour).
 builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
+// Hierarchical admin scope (2026-09-11): who may administer which users
+// and delegate which companies. See IManagementScopeService.
+builder.Services.AddScoped<IManagementScopeService, ManagementScopeService>();
 
 // CORS — origins read from configuration (Cors:AllowedOrigins, comma-
 // separated). Empty / missing collapses to "no cross-origin allowed",

@@ -29,13 +29,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ICompanyAccessGuard _access;
+        private readonly IManagementScopeService _scope;
         private readonly int _seedAdminUserId;
         private readonly ILogger<UserCompaniesController> _logger;
 
-        public UserCompaniesController(AppDbContext context, ICompanyAccessGuard access, IConfiguration configuration, ILogger<UserCompaniesController> logger)
+        public UserCompaniesController(AppDbContext context, ICompanyAccessGuard access, IManagementScopeService scope, IConfiguration configuration, ILogger<UserCompaniesController> logger)
         {
             _context = context;
             _access = access;
+            _scope = scope;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
             _logger = logger;
         }
@@ -56,8 +58,16 @@ namespace MyApp.Api.Controllers
         [HasPermission("tenantaccess.manage.view")]
         public async Task<ActionResult<List<UserCompanyAssignmentDto>>> GetAll()
         {
+            // Management scope (2026-09-11): the grid is filtered SERVER-
+            // side. Seed admin: every non-seed user x every company (the
+            // original behaviour). An Administrator: only the accounts
+            // beneath it x only the companies it holds itself. Response
+            // shape is unchanged.
+            var manageable = await _scope.GetManageableUserIdsAsync(CurrentUserId);
+            var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
+
             var users = await _context.Users
-                .Where(u => u.Id != _seedAdminUserId)
+                .Where(u => u.Id != _seedAdminUserId && manageable.Contains(u.Id))
                 .OrderBy(u => u.FullName)
                 .Select(u => new
                 {
@@ -66,11 +76,14 @@ namespace MyApp.Api.Controllers
                 .ToListAsync();
 
             var companies = await _context.Companies
+                .Where(c => assignable.Contains(c.Id))
                 .OrderBy(c => c.Name)
                 .Select(c => new { c.Id, c.Name, c.IsTenantIsolated })
                 .ToListAsync();
 
+            var userIds = users.Select(u => u.Id).ToList();
             var assignments = await _context.UserCompanies
+                .Where(uc => userIds.Contains(uc.UserId) && assignable.Contains(uc.CompanyId))
                 .Select(uc => new { uc.UserId, uc.CompanyId, uc.AssignedAt })
                 .ToListAsync();
             var byUser = assignments
@@ -109,13 +122,18 @@ namespace MyApp.Api.Controllers
             if (userId == _seedAdminUserId)
                 return BadRequest(new { message = "The seed admin always has access to every company." });
 
+            if (!await _scope.CanManageUserAsync(CurrentUserId, userId))
+                return NotFound();
+
             var user = await _context.Users
                 .Where(u => u.Id == userId)
                 .Select(u => new { u.Id, u.Username, u.FullName, u.AvatarPath })
                 .FirstOrDefaultAsync();
             if (user == null) return NotFound();
 
+            var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
             var companies = await _context.Companies
+                .Where(c => assignable.Contains(c.Id))
                 .OrderBy(c => c.Name)
                 .Select(c => new { c.Id, c.Name, c.IsTenantIsolated })
                 .ToListAsync();
@@ -155,6 +173,10 @@ namespace MyApp.Api.Controllers
             if (!await _context.Users.AnyAsync(u => u.Id == userId))
                 return NotFound(new { message = "User not found." });
 
+            // Management scope: the target must be beneath the caller.
+            if (!await _scope.CanManageUserAsync(CurrentUserId, userId))
+                return NotFound(new { message = "User not found." });
+
             var requested = (dto.CompanyIds ?? new List<int>()).Distinct().ToList();
             if (requested.Count > 0)
             {
@@ -167,11 +189,28 @@ namespace MyApp.Api.Controllers
                     return BadRequest(new { message = $"Unknown company id(s): {string.Join(", ", unknown)}." });
             }
 
+            // An Administrator may hand out only what it holds itself.
+            // Seed admin's assignable set is every company, so this is a
+            // no-op for it and the original semantics are preserved.
+            var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
+            var outOfScope = requested.Where(id => !assignable.Contains(id)).ToList();
+            if (outOfScope.Count > 0)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = $"Access denied: you are not authorized for company {string.Join(", ", outOfScope)}."
+                });
+            }
+
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Grants outside the caller's assignable set are invisible
+                // to it and must survive untouched - e.g. a company the
+                // seed admin granted directly to this user. Only rows the
+                // caller could have created are candidates for removal.
                 var existing = await _context.UserCompanies
-                    .Where(uc => uc.UserId == userId)
+                    .Where(uc => uc.UserId == userId && assignable.Contains(uc.CompanyId))
                     .ToListAsync();
                 var existingSet = existing.Select(e => e.CompanyId).ToHashSet();
                 var requestedSet = requested.ToHashSet();

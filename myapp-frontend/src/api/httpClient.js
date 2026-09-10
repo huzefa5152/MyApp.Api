@@ -143,6 +143,13 @@ httpClient.interceptors.response.use(
       // "You don't have permission" toast.
       const m = error.response?.data?.message;
       notify(m || "You don't have permission to perform this action.", "warning");
+      // Tenant guard refusal ("Access denied: you are not authorized for
+      // company N" / "You do not have access to company N") — the
+      // selected company may have been revoked while this tab was open.
+      // CompanyContext listens and re-fetches the allowed list.
+      if (typeof m === "string" && /company\s+\d+/i.test(m) && /access|authori[sz]ed/i.test(m)) {
+        try { window.dispatchEvent(new Event("company-access-denied")); } catch { /* non-fatal */ }
+      }
     } else if (status >= 500) {
       notify("Something went wrong on the server. Please try again.", "error");
     } else if (!error.response) {

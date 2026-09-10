@@ -7,6 +7,7 @@ using MyApp.Api.Controllers;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
+using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
 {
@@ -16,11 +17,19 @@ namespace MyApp.Api.Controllers
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IManagementScopeService _scope;
+        private readonly ILogger<UsersController> _logger;
         private readonly int _seedAdminUserId;
 
-        public UsersController(AppDbContext context, IConfiguration configuration)
+        public UsersController(
+            AppDbContext context,
+            IConfiguration configuration,
+            IManagementScopeService scope,
+            ILogger<UsersController> logger)
         {
             _context = context;
+            _scope = scope;
+            _logger = logger;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
@@ -34,7 +43,13 @@ namespace MyApp.Api.Controllers
         [HasPermission("users.manage.view")]
         public async Task<ActionResult> GetUsers()
         {
+            // Management scope (2026-09-11): an Administrator sees itself
+            // and the accounts beneath it in the CreatedBy chain — never
+            // the seed admin, never a sibling Administrator's tree. The
+            // seed admin sees everyone. Same response shape as before.
+            var visible = await _scope.GetVisibleUserIdsAsync(CurrentUserId);
             var users = await _context.Users
+                .Where(u => visible.Contains(u.Id))
                 .OrderByDescending(u => u.CreatedAt)
                 .Select(u => new
                 {
@@ -55,6 +70,11 @@ namespace MyApp.Api.Controllers
         [HasPermission("users.manage.view")]
         public async Task<ActionResult> GetUser(int id)
         {
+            // Out-of-scope ids answer 404, not 403, so an Administrator
+            // cannot probe which ids exist in another tree.
+            if (id != CurrentUserId && !await _scope.CanManageUserAsync(CurrentUserId, id))
+                return NotFound(new { message = "User not found" });
+
             var user = await _context.Users
                 .Where(u => u.Id == id)
                 .Select(u => new
@@ -114,11 +134,16 @@ namespace MyApp.Api.Controllers
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
                 Role = desiredRole,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                // Ownership: the creator manages this account from now on
+                // (and so does everyone above the creator). Seed-created
+                // accounts are the top-level Administrators.
+                CreatedByUserId = CurrentUserId == 0 ? (int?)null : CurrentUserId
             };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+            _scope.InvalidateAll();
 
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, new
             {
@@ -137,6 +162,14 @@ namespace MyApp.Api.Controllers
         {
             if (id == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin account cannot be modified" });
+
+            // Management scope: the seed admin, an ancestor in the CreatedBy
+            // chain, or the account itself (the Users page offers Edit on
+            // the caller's own card, as it always has). Roles are NOT set
+            // here — UserRolesController refuses self-assignment — and the
+            // privileged legacy "Admin" text stays seed-only below.
+            if (id != CurrentUserId && !await _scope.CanManageUserAsync(CurrentUserId, id))
+                return NotFound(new { message = "User not found" });
 
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound(new { message = "User not found" });
@@ -201,6 +234,9 @@ namespace MyApp.Api.Controllers
             if (id == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin account cannot be deleted" });
 
+            if (!await _scope.CanManageUserAsync(CurrentUserId, id))
+                return NotFound(new { message = "User not found" });
+
             // Prevent self-deletion
             var currentUsername = User.FindFirstValue(ClaimTypes.Name);
             var user = await _context.Users.FindAsync(id);
@@ -209,8 +245,33 @@ namespace MyApp.Api.Controllers
             if (user.Username == currentUsername)
                 return BadRequest(new { message = "You cannot delete your own account" });
 
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
+            // Re-parent whatever this account created to its own parent so
+            // ownership stays honest: an Administrator's users and
+            // companies move up to whoever managed that Administrator
+            // (the seed admin, for a top-level one). Without this the
+            // NoAction FKs would reject the delete outright.
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var newParent = user.CreatedByUserId;
+                var childUsers = await _context.Users.Where(u => u.CreatedByUserId == id).ToListAsync();
+                foreach (var c in childUsers) c.CreatedByUserId = newParent;
+                var childCompanies = await _context.Companies.Where(c => c.CreatedByUserId == id).ToListAsync();
+                foreach (var c in childCompanies) c.CreatedByUserId = newParent;
+                if (childUsers.Count > 0 || childCompanies.Count > 0)
+                    await _context.SaveChangesAsync();
+
+                _context.Users.Remove(user);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "DeleteUser transaction failed for userId={UserId}", id);
+                await tx.RollbackAsync();
+                throw;
+            }
+            _scope.InvalidateAll();
 
             return Ok(new { message = "User deleted" });
         }

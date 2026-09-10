@@ -30,7 +30,8 @@ from __future__ import annotations
 import json, sys, urllib.request, urllib.error
 from typing import Any
 
-BASE = "http://localhost:5134"
+import os
+BASE = os.environ.get("MYAPP_BASE", "http://localhost:5134")
 
 PASS = "PASS"
 FAIL = "FAIL"

@@ -38,9 +38,12 @@ import {
   MdReceiptLong,
   MdPayments,
   MdFolder,
+  MdSupervisorAccount,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
+import { useCompany } from "../contexts/CompanyContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
+import NoCompanyConfigured from "../Components/NoCompanyConfigured";
 import { getAvatarUrl } from "../utils/avatarUrl";
 import "./DashboardLayout.css";
 
@@ -198,7 +201,28 @@ export default function DashboardLayout() {
   const canSeePurchases     = hasAny(purchasesKeys);
   const canSeeAccounting    = hasAny(accountingKeys);
   const canSeeReports       = hasAny(reportsKeys);
-  const canSeeAdmin         = hasAny(adminKeys);
+  const canSeeAdmin         = hasAny(adminKeys) || !!user?.isSeedAdmin;
+
+  // ── No Company Configured gate (2026-09-11) ──
+  // When the signed-in account can reach no company at all — nothing
+  // created yet, or every grant revoked — every company-dependent screen
+  // renders the same "No Company Configured" state instead of its own
+  // ad-hoc empty state (or an exception). Screens that do NOT need a
+  // company stay reachable so the situation can be fixed from inside the
+  // app. The server refuses unauthorised companyIds regardless; this is
+  // presentation only.
+  const { companies, loading: companiesLoading } = useCompany();
+  const companyFreeRoute = useMemo(() => {
+    const p = location.pathname.toLowerCase();
+    return p.startsWith("/profile")
+      || p.startsWith("/companies")
+      || p.startsWith("/users")
+      || p.startsWith("/roles")
+      || p.startsWith("/tenant-access")
+      || p.startsWith("/administrators")
+      || p.startsWith("/audit-logs");
+  }, [location.pathname]);
+  const showNoCompany = !companiesLoading && companies.length === 0 && !companyFreeRoute;
 
   // Per-group counts (visible-child count for the section's "[N]" badge).
   // Computed from the same permission keys the section gating uses, so
@@ -223,7 +247,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
-    if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/audit-logs")) return "administration";
+    if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")) return "administration";
     return "main";
   }, [location.pathname]);
 
@@ -561,6 +585,12 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "administration"}
               isChildActive={activeSection === "administration"}
             >
+              {user?.isSeedAdmin && (
+                <NavLink to="/administrators" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdSupervisorAccount className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Administrators</span>
+                </NavLink>
+              )}
               <Can permission="users.manage.view">
                 <NavLink to="/users" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdGroupAdd className="dl-subitem__icon" aria-hidden="true" />
@@ -685,7 +715,7 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="dl-main" id="main-content">
-          <Outlet />
+          {showNoCompany ? <NoCompanyConfigured /> : <Outlet />}
         </main>
       </div>
     </div>
@@ -724,6 +754,7 @@ function getBreadcrumb(pathname) {
     "/fbr-sandbox": "Configuration / FBR Sandbox",
     "/fbr-monitor": "Configuration / FBR Monitor",
     "/tenant-access": "Administration / Tenant Access",
+    "/administrators": "Administration / Administrators",
     "/audit-logs": "Administration / Audit Logs",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");

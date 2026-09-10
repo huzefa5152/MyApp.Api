@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +19,7 @@ namespace MyApp.Api.Controllers
         private readonly ICompanyService _companyService;
         private readonly ICompanyAccessGuard _access;
         private readonly IPermissionService _permissions;
+        private readonly IManagementScopeService _scope;
         private readonly IWebHostEnvironment _env;
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
@@ -27,6 +28,7 @@ namespace MyApp.Api.Controllers
             ICompanyService companyService,
             ICompanyAccessGuard access,
             IPermissionService permissions,
+            IManagementScopeService scope,
             IWebHostEnvironment env,
             AppDbContext context,
             IConfiguration configuration)
@@ -34,6 +36,7 @@ namespace MyApp.Api.Controllers
             _companyService = companyService;
             _access = access;
             _permissions = permissions;
+            _scope = scope;
             _env = env;
             _context = context;
             _configuration = configuration;
@@ -103,24 +106,51 @@ namespace MyApp.Api.Controllers
                 // Seed admin gets implicit access via CompanyAccessGuard, so we
                 // skip the row for them — keeps the table free of redundant rows.
                 var seedAdminUserId = _configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
+
+                // Ownership (2026-09-11): record who created the company.
+                // Written straight on the entity so CreateCompanyDto and
+                // CompanyDto stay exactly as they were.
+                if (CurrentUserId > 0)
+                {
+                    var entity = await _context.Companies.FindAsync(createdCompany.Id);
+                    if (entity != null)
+                    {
+                        entity.CreatedByUserId = CurrentUserId;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
                 if (CurrentUserId > 0 && CurrentUserId != seedAdminUserId)
                 {
-                    var already = await _context.UserCompanies
-                        .AnyAsync(uc => uc.UserId == CurrentUserId && uc.CompanyId == createdCompany.Id);
-                    if (!already)
+                    // Grant the creator AND everyone above the creator in
+                    // the CreatedBy chain (seed admin excluded - it needs
+                    // no row). Whoever manages the creator can then see
+                    // and administer what the creator made.
+                    var grantees = new List<int> { CurrentUserId };
+                    grantees.AddRange(await _scope.GetAncestorUserIdsAsync(CurrentUserId));
+                    var alreadyGranted = await _context.UserCompanies
+                        .Where(uc => uc.CompanyId == createdCompany.Id && grantees.Contains(uc.UserId))
+                        .Select(uc => uc.UserId)
+                        .ToListAsync();
+                    var added = false;
+                    foreach (var uid in grantees.Except(alreadyGranted))
                     {
                         _context.UserCompanies.Add(new UserCompany
                         {
-                            UserId = CurrentUserId,
+                            UserId = uid,
                             CompanyId = createdCompany.Id,
                             AssignedAt = DateTime.UtcNow,
                             AssignedByUserId = CurrentUserId,
                         });
+                        added = true;
+                    }
+                    if (added)
+                    {
                         await _context.SaveChangesAsync();
-                        // Drop this user's cached accessible-set so the next
-                        // request sees the new grant immediately instead of
-                        // waiting out the 60s sliding TTL.
-                        _access.InvalidateUser(CurrentUserId);
+                        // Drop the cached accessible-sets so the next
+                        // request sees the new grants immediately instead
+                        // of waiting out the 60s sliding TTL.
+                        foreach (var uid in grantees) _access.InvalidateUser(uid);
                     }
                 }
 

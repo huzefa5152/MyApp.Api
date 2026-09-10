@@ -14,7 +14,10 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5134',
+        // Dev-only. Override when a second local backend is running (e.g.
+        // a rehearsal instance on 5135); the default keeps the historic
+        // behaviour so nothing changes for anyone who never sets it.
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:5134',
         changeOrigin: true,
       },
     },

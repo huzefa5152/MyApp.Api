@@ -29,6 +29,7 @@ import ProfilePage from "./pages/ProfilePage";
 import UsersPage from "./pages/UsersPage";
 import RolesPage from "./pages/RolesPage";
 import TenantAccessPage from "./pages/TenantAccessPage";
+import AdministratorsPage from "./pages/AdministratorsPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
 import PrintTemplatesPage from "./pages/PrintTemplatesPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/roles" element={<RolesPage />} />
           <Route path="/tenant-access" element={<TenantAccessPage />} />
+          <Route path="/administrators" element={<AdministratorsPage />} />
           <Route path="/templates" element={<PrintTemplatesPage />} />
           <Route path="/templates/edit" element={<TemplateEditorPage />} />
           {/* Configuration → Navigation Menu: the folder document library +

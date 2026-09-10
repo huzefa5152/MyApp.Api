@@ -24,5 +24,14 @@ namespace MyApp.Api.Models
         public int FailedLoginAttempts { get; set; }
         public DateTime? LockoutUntil { get; set; }
         public DateTime? LastFailedLogin { get; set; }
+
+        // Management ownership (2026-09-11). The user who created this
+        // account. Drives the hierarchical admin scope: an Administrator
+        // manages exactly the users beneath it in this chain, the single
+        // seed admin manages everyone. NULL = root-level (the seed admin
+        // itself, or a legacy account created before this column existed)
+        // — root-level accounts are visible to the seed admin only. See
+        // IManagementScopeService.
+        public int? CreatedByUserId { get; set; }
     }
 }

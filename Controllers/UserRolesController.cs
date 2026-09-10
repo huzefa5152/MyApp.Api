@@ -23,12 +23,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
+        private readonly IManagementScopeService _scope;
         private readonly int _seedAdminUserId;
 
-        public UserRolesController(AppDbContext context, IPermissionService permissions, IConfiguration configuration)
+        public UserRolesController(AppDbContext context, IPermissionService permissions, IManagementScopeService scope, IConfiguration configuration)
         {
             _context = context;
             _permissions = permissions;
+            _scope = scope;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
@@ -43,6 +45,12 @@ namespace MyApp.Api.Controllers
         [HasPermission("rbac.userroles.view")]
         public async Task<ActionResult<UserRolesDto>> Get(int userId)
         {
+            // Management scope (2026-09-11): own row or a descendant only;
+            // out-of-scope ids read as 404 so nothing leaks about them.
+            var actor = CurrentUserId() ?? 0;
+            if (userId != actor && !await _scope.CanManageUserAsync(actor, userId))
+                return NotFound(new { message = "User not found" });
+
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null) return NotFound(new { message = "User not found" });
 
@@ -81,6 +89,12 @@ namespace MyApp.Api.Controllers
 
             if (userId == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin's roles cannot be modified" });
+
+            // Management scope: only the seed admin or an ancestor may
+            // change this account's roles (an Administrator cannot
+            // re-role itself or anyone outside its tree).
+            if (!await _scope.CanManageUserAsync(CurrentUserId() ?? 0, userId))
+                return NotFound(new { message = "User not found" });
 
             var targetRoleIds = (dto.RoleIds ?? new List<int>()).Distinct().ToList();
             if (targetRoleIds.Count > 0)

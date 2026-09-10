@@ -84,6 +84,30 @@ export function CompanyProvider({ children }) {
     }
   }, [selectedCompany, setSelectedCompany]);
 
+  // ── Access revalidation (2026-09-11) ──
+  // /api/companies is the server's answer to "which companies may this
+  // account use right now". A grant revoked while the tab is open must
+  // not survive on a stale selectedCompanyId in localStorage, so re-ask:
+  //   • when the tab regains focus / becomes visible again, and
+  //   • whenever any request is refused for the company (httpClient
+  //     raises "company-access-denied" on that 403).
+  // If the selected company is gone it is dropped and the first company
+  // still allowed takes over; with none left the layout shows the
+  // "No Company Configured" screen.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const revalidate = () => { refreshCompanies().catch(() => { /* transient */ }); };
+    const onVisible = () => { if (document.visibilityState === "visible") revalidate(); };
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("company-access-denied", revalidate);
+    return () => {
+      window.removeEventListener("focus", revalidate);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("company-access-denied", revalidate);
+    };
+  }, [isAuthenticated, refreshCompanies]);
+
   return (
     <CompanyContext.Provider
       value={{ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading, companyStamps, refreshStamps }}

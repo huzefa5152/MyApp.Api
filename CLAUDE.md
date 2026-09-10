@@ -234,6 +234,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `91/91`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `140/140`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
@@ -261,7 +262,10 @@ run the live per-company template, and `--engines chromium,firefox` for
 cross-engine coverage.
 
 If you add a new endpoint that takes `companyId`, add a tenant-isolation
-case to `scripts/test_tenant_isolation.py`. If you touch invoice/bill
+case to `scripts/test_tenant_isolation.py`. If you add or change an endpoint that
+reads or writes users, roles-on-users or tenant-access grants, add the
+seed / Admin A / Admin B case to `scripts/test_admin_scope_isolation.py`
+(see the **Management scope** section in `IManagementScopeService`). If you touch invoice/bill
 math, add the case to `scripts/test_basic_flows.py`. If you touch stock
 movement reflow (purchase/invoice/challan edits, StockService), add the
 case to `scripts/test_stock_itemtype_reflow.py`.

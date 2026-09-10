@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.Models
+namespace MyApp.Api.Models
 {
     public class Company
     {
@@ -97,6 +97,13 @@
         // users with an explicit UserCompany row can reach it. See
         // ICompanyAccessGuard.
         public bool IsTenantIsolated { get; set; }
+
+        // Management ownership (2026-09-11): the user who created the
+        // company. Day-to-day visibility still runs on UserCompanies
+        // grants; this column lets the seed admin see which
+        // Administrator's tree a company belongs to even after every
+        // grant has been revoked. NULL = legacy / created by seed.
+        public int? CreatedByUserId { get; set; }
 
         public List<DeliveryChallan> DeliveryChallans { get; set; } = new();
         public List<Client> Clients { get; set; } = new();

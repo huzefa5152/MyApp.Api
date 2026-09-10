@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 
@@ -870,6 +870,28 @@ namespace MyApp.Api.Data
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<UserCompany>()
                 .HasIndex(uc => uc.CompanyId);
+
+            // ── Management ownership (2026-09-11) ──
+            // Who created a user / company. Optional self-reference on
+            // Users and a plain optional FK on Companies. NoAction on
+            // delete — UsersController re-parents children to the deleted
+            // user's own parent inside its transaction, and SQL Server
+            // would reject SET NULL here anyway (multiple cascade paths
+            // through UserCompanies).
+            modelBuilder.Entity<User>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(u => u.CreatedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.CreatedByUserId);
+            modelBuilder.Entity<Company>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(c => c.CreatedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Company>()
+                .HasIndex(c => c.CreatedByUserId);
 
             // ── Purchase + Inventory module ────────────────────────────────
 
