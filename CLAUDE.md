@@ -209,6 +209,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - Reads: `.AsNoTracking()`.
 - Migrations auto-apply at startup when `Database:AutoMigrate` is true (default). Production may flip false.
 - DataProtection encrypts `Company.FbrToken` via EF value converter; legacy plaintext payloads pass through reads and re-encrypt on next save.
+- **A null `Company.FbrToken` is never written over an existing value.** `Unprotect` fails closed to null when the key ring cannot read an `enc:v1:` payload, so `AppDbContext.PreserveUnreadableFbrTokens` (runs inside every `SaveChanges`) drops the property from a Modified Company's UPDATE whenever its CLR value is null — `DbSet.Update()` marks every column modified and would otherwise erase the ciphertext on the first bill. Null means "unreadable or absent", never "clear"; the API clears with `""`. Suite: `scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` (22 checks).
 
 ---
 
@@ -236,6 +237,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `161/161`) |
+| Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
@@ -337,7 +339,7 @@ original author is honest provenance for a transplanted commit.
 
 - Live host: **MonsterASP** at `hakimitraders.runasp.net`
 - `appsettings.Production.json` provides `Jwt:Key` + `ConnectionStrings` — never committed (gitignored)
-- DataProtection keys persist to `data/keys/` — if MonsterASP wipes that on redeploy, previously-encrypted `Company.FbrToken` values become unreadable (Unprotect returns null → operator re-enters token). Verify persistence after first deploy.
+- DataProtection keys persist to `data/keys/` — if MonsterASP wipes that on redeploy, previously-encrypted `Company.FbrToken` values become unreadable (Unprotect returns null → operator re-enters token). The ciphertext itself is preserved — `AppDbContext.PreserveUnreadableFbrTokens` keeps a Company save from writing that null back (2026-09-10) — so restoring the original key ring restores the token. Verify persistence after first deploy.
 - `ForwardedHeaders:KnownProxies` should be populated with MonsterASP's proxy IPs once known (audit C-12) so the rate-limit partition key uses the real client IP.
 - Two real tenants currently: **Hakimi Traders** (CompanyId=1) and **Roshan Traders** (CompanyId=2). Do not modify their existing data without explicit say-so.
 
@@ -425,6 +427,7 @@ stay in the pushed history and are recoverable from it. That is why the rule is
 - ❌ Retrying POSTs to FBR (can issue duplicate IRN)
 - ❌ Logging passwords / JWTs / FBR tokens (use `SensitiveDataRedactor`)
 - ❌ Cross-tenant entity links (`Invoice.ClientId` pointing at a `Client` whose `CompanyId` doesn't match)
+- ❌ Treating a null `Company.FbrToken` as "clear the token" — null is what an unreadable ciphertext decrypts to, and writing it back destroys the token (2026-09-10). Clear with `""`; `AppDbContext.PreserveUnreadableFbrTokens` drops null from every Company UPDATE.
 
 ---
 
