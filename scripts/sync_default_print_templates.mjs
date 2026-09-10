@@ -40,8 +40,13 @@ for (const [type, exportName] of Object.entries(MAP)) {
     process.exit(1);
   }
   const file = join(outDir, `${type}.html`);
+  // Compare with line endings normalised: git's autocrlf may hand us CRLF
+  // copies on Windows, and that is not drift.
+  const norm = (t) => t.replace(/
+/g, "
+");
   const current = existsSync(file) ? readFileSync(file, "utf8") : null;
-  if (current === html) {
+  if (current != null && norm(current) === norm(html)) {
     console.log(`${type}.html  in sync`);
     continue;
   }
