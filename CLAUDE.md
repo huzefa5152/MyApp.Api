@@ -12,24 +12,25 @@ them in their message.
 
 ## Environments — READ `docs/ENVIRONMENTS.md` BEFORE TOUCHING ANYTHING
 
-There are **three separate production installations** on MonsterASP, not one
-product with three stages. Each has its own live database, its own deploy
-workflow and its own long-lived branch. A fourth branch carries audit work.
+There are **four separate production installations** on MonsterASP, not one
+product with four stages. Each has its own live database, its own deploy
+workflow and its own long-lived branch. A fifth branch carries audit work.
 
 | Branch | Role | Local database |
 |---|---|---|
 | `master` | Production #1 (`deploy.yml`) | `MyApp_Master_Local` |
 | `customize-solution-for-other` | Production #2 (`deploy-other.yml`) | `MyApp_Customize_Local` |
 | `feat/importer-ledger-receipts` | Production #3 (`deploy-importer.yml`) | `MyApp_Importer_Local` |
+| `TraderFbrInvoicingSystem` | Production #4 (`deploy-trader.yml`) | `MyApp_Trader_Local` |
 | `fix/audit-2026-08-02` | Audit / security, ahead of `master` — not an environment | `MyApp_Master_Local` |
 
-**These four are the only valid branches.** A short-lived working branch is
+**These five are the only valid branches.** A short-lived working branch is
 fine; delete it when the work lands. Never delete a branch with unique commits.
 
 **Never merge one production line into another.** They have deliberately
 diverged (site shape, dozens of migrations). A change asked for on one branch
 stays there unless the maintainer asks for a port. Security fixes usually
-should reach all three — but each port is a deliberate, reviewed act.
+should reach all four — but each port is a deliberate, reviewed act.
 
 **The branch picks the database by itself.** `Helpers/LocalDevDatabase.cs`
 reads `.git/HEAD` at startup and looks the branch up in `local.databases.json`.
