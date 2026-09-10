@@ -24,6 +24,14 @@ namespace MyApp.Api.DTOs
         public string? FbrErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsEditable { get; set; }
+
+        /// <summary>
+        /// Item types this save drove below zero on-hand (2026-09-11). Null
+        /// on reads and on saves that left stock non-negative; populated only
+        /// by the edit / adjustment paths when the company's stock guard is
+        /// soft. Additive — existing consumers ignore it.
+        /// </summary>
+        public List<StockWarningDto>? StockWarnings { get; set; }
         /// <summary>
         /// True when this is the LATEST (highest-numbered) bill for its
         /// company — only the latest bill can be deleted. Earlier bills

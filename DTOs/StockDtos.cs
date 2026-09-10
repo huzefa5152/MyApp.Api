@@ -1,6 +1,20 @@
 namespace MyApp.Api.DTOs
 {
     /// <summary>
+    /// One item type whose on-hand went below zero as a result of an invoice
+    /// save (2026-09-11). Returned on the invoice DTO as a SOFT warning when
+    /// the company's stock guard is not set to hard-block; with hard-block on
+    /// the save is refused instead and this never reaches the client.
+    /// </summary>
+    public class StockWarningDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        /// <summary>On-hand AFTER the save — negative by construction.</summary>
+        public decimal OnHand { get; set; }
+    }
+
+    /// <summary>
     /// One row on the Stock Dashboard: an item from the catalog with its
     /// current on-hand for the selected company and the most recent
     /// movement date. Drives the at-a-glance "what do we have?" view.
