@@ -5,20 +5,20 @@ namespace MyApp.Api.Helpers
     /// <summary>
     /// The registration number a BUYER goes on an FBR invoice under.
     ///
-    /// FBR's invoice API takes <c>buyerNTNCNIC</c> as either a 7-digit NTN or a
-    /// 13-digit CNIC and nothing else. But IRIS also issues NTNs like
-    /// <c>A113680-1</c> — letter-prefixed, a real registered taxpayer (verified on
-    /// IRIS 2026-09-10, active since 2022). Three live buyers had one. Stripping
-    /// the letter to <c>1136801</c> produced a number FBR does not know, so the
-    /// registration lookup said Unregistered and every bill was refused
-    /// <c>[0205]</c>; sending the letter form verbatim is refused <c>[0002]</c>
-    /// "not in proper format". Both proven against the sandbox. What FBR accepts
-    /// for such a buyer is the person's 13-digit CNIC.
+    /// FBR's invoice API takes <c>buyerNTNCNIC</c> as a 7-CHARACTER NTN or a
+    /// 13-digit CNIC. IRIS issues NTNs like <c>A113680-1</c>: the letter is one
+    /// of the seven characters and <c>-1</c> is the check digit. Proven against
+    /// the sandbox on 2026-09-10 for a real registered taxpayer:
+    ///   "A113680"    Valid                         (letter kept, check digit dropped)
+    ///   "A113680-1"  [0002] not in proper format   (check digit sent)
+    ///   "1136801"    [0205] unregistered           (letter stripped: a DIFFERENT number)
+    ///   "A1136801"   [0002] not in proper format   (eight characters)
+    /// Three live buyers carried such NTNs and the old digits-only sanitiser
+    /// turned every one of their bills into a [0205].
     ///
     /// So this is the ONE rule, used by pre-flight, the payload and the challan
-    /// readiness gate: a plain numeric NTN files as its 7 digits; a
-    /// letter-prefixed NTN cannot be filed and the buyer's CNIC must stand in
-    /// for it; a CNIC alone files as its 13 digits.
+    /// readiness gate: an NTN files as its first seven letters-or-digits with
+    /// the check digit dropped; a CNIC alone files as its 13 digits.
     /// </summary>
     public static class FbrBuyerIdentity
     {
@@ -45,9 +45,21 @@ namespace MyApp.Api.Helpers
         public static string Digits(string? v)
             => string.IsNullOrWhiteSpace(v) ? "" : new string(v.Where(char.IsDigit).ToArray());
 
-        /// <summary>"A113680-1", "C650414-2": an NTN IRIS knows but the invoice API refuses.</summary>
+        /// <summary>"A113680-1", "C650414-2": an NTN whose first character is a letter.</summary>
         public static bool IsLetterPrefixed(string? ntn)
             => !string.IsNullOrWhiteSpace(ntn) && ntn.Any(char.IsLetter);
+
+        /// <summary>
+        /// "A113680-1" -> "A113680": the seven characters FBR files, letter kept,
+        /// check digit dropped. Fewer than seven come back as-is for the caller
+        /// to report.
+        /// </summary>
+        public static string SanitizeLetterNtn(string? ntn)
+        {
+            if (string.IsNullOrWhiteSpace(ntn)) return "";
+            var core = new string(ntn.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            return core.Length <= 7 ? core : core.Substring(0, 7);
+        }
 
         /// <summary>
         /// The number to file for this buyer, or the reason none can be.
@@ -62,11 +74,11 @@ namespace MyApp.Api.Helpers
 
             if (IsLetterPrefixed(ntn))
             {
+                var letterNtn = SanitizeLetterNtn(ntn);
+                if (letterNtn.Length == 7) return (letterNtn, null);
                 if (hasCnic) return (cnicDigits, null);
                 if (!registered) return ("", null);
-                return ("", $"Buyer NTN '{ntn!.Trim()}' has a letter prefix, which FBR's invoice API does not accept " +
-                            "([0002] not in proper format) and whose digits alone FBR does not recognise ([0205]). " +
-                            "Enter the buyer's 13-digit CNIC on the client record; FBR files such a buyer under it.");
+                return ("", $"Buyer NTN '{ntn!.Trim()}' must be 7 characters before the check digit (current: {letterNtn.Length}). [FBR 0002]");
             }
 
             var ntnDigits = SanitizeNtn(ntn);

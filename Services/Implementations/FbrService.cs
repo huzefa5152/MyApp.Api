@@ -493,10 +493,9 @@ namespace MyApp.Api.Services.Implementations
             if (string.IsNullOrWhiteSpace(regType))
                 errors.Add("Buyer Registration Type is required. [FBR 0012]");
 
-            // One rule for the buyer's number (FbrBuyerIdentity): a letter-prefixed
-            // NTN such as A113680-1 is a real registration IRIS knows, but the
-            // invoice API refuses it in either form -- the buyer's 13-digit CNIC
-            // must stand in for it. The payload below resolves the same way.
+            // One rule for the buyer's number (FbrBuyerIdentity): 7 characters of
+            // NTN with the check digit dropped -- "A113680-1" files as "A113680",
+            // letter kept -- or the 13-digit CNIC. The payload resolves the same way.
             var (_, buyerIdentityError) = FbrBuyerIdentity.Resolve(buyer.NTN, buyer.CNIC, regType == "Registered");
             if (buyerIdentityError != null)
                 errors.Add(buyerIdentityError);
@@ -873,8 +872,8 @@ namespace MyApp.Api.Services.Implementations
             var sellerNtnCnic = !string.IsNullOrWhiteSpace(company.CNIC)
                 ? StripAllDigits(company.CNIC)
                 : SanitizeNtn(company.NTN);
-            // Buyer: the same FbrBuyerIdentity rule pre-flight applied -- 7-digit
-            // NTN, or the 13-digit CNIC when the NTN is letter-prefixed or absent.
+            // Buyer: the same FbrBuyerIdentity rule pre-flight applied -- the
+            // 7-character NTN (letter kept, check digit dropped) or the 13-digit CNIC.
             buyerNtnCnic = FbrBuyerIdentity.Resolve(buyer.NTN, buyer.CNIC, buyerRegType == "Registered").Value;
 
             // ── Build V1.12 request ──
@@ -1740,18 +1739,15 @@ namespace MyApp.Api.Services.Implementations
             if (company == null || string.IsNullOrEmpty(company.FbrToken)) return null;
 
             var httpClient = CreateClient(company);
-            // Get_Reg_Type knows a letter-prefixed NTN ("A113680-1" -> Registered;
-            // its digits 1136801 -> Unregistered), so such a number is asked about
-            // VERBATIM. A plain NTN goes as its 7 digits and a CNIC as its 13, the
-            // forms the invoice carries. Whether the answer can be FILED is a
-            // separate question (FbrBuyerIdentity): the letter form needs the
-            // buyer's CNIC on the invoice, which the client form explains.
-            regNo = (regNo ?? "").Trim();
-            if (!FbrBuyerIdentity.IsLetterPrefixed(regNo))
-            {
-                var digitsOnly = StripAllDigits(regNo);
-                regNo = digitsOnly.Length == 13 ? digitsOnly : SanitizeNtn(regNo);
-            }
+            // Ask about the number the INVOICE carries (FbrBuyerIdentity): a
+            // 13-digit CNIC as its digits, an NTN as its 7 characters with the
+            // check digit dropped and any letter KEPT -- "A113680-1" -> "A113680",
+            // which FBR knows as Registered, where the digits-only "1136801" is
+            // an unknown number it calls Unregistered (2026-09-10).
+            var typed = (regNo ?? "").Trim();
+            var isCnic = FbrBuyerIdentity.Digits(typed).Length == 13;
+            var (filed, _) = FbrBuyerIdentity.Resolve(isCnic ? null : typed, isCnic ? typed : null, registered: true);
+            regNo = filed.Length > 0 ? filed : typed;
             if (regNo.Length == 0) return null;
             // Use default options (no CamelCase) for this specific request since the field is "Registration_No"
             var requestBody = JsonSerializer.Serialize(new { Registration_No = regNo });

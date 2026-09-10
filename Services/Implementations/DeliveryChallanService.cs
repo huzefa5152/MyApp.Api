@@ -106,8 +106,8 @@ namespace MyApp.Api.Services.Implementations
             // Unregistered buyer's registration number is optional.
             if (string.IsNullOrWhiteSpace(client.RegistrationType)) return false;
             if (client.FbrProvinceCode == null) return false;
-            // FbrBuyerIdentity: a registered buyer needs a 7-digit NTN or a
-            // 13-digit CNIC; a letter-prefixed NTN needs the CNIC beside it.
+            // FbrBuyerIdentity: a registered buyer needs a 7-character NTN or a
+            // 13-digit CNIC.
             if (!FbrBuyerIdentity.CanFile(client, client.RegistrationType == "Registered" || client.RegistrationType == "FTN"))
                 return false;
 
