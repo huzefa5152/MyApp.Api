@@ -17,6 +17,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { matchesScenarioSaleType } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
@@ -350,9 +351,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // shows ALL item types — same fallback as the create form.
   const filteredItemTypes = useMemo(() => {
     if (!chosenScenario) return itemTypes;
-    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    // An item type with NO sale type counts as the standard-rate default
+    // (utils/saleType.js) -- otherwise the bill\'s own item vanished from
+    // this list and the picker rendered blank on edit.
     return itemTypes.filter(
-      (it) => (it.saleType || "").trim().toLowerCase() === target,
+      (it) => matchesScenarioSaleType(it, chosenScenario.saleType),
     );
   }, [itemTypes, chosenScenario]);
 

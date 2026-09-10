@@ -14,6 +14,7 @@ import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { matchesScenarioSaleType } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
@@ -434,9 +435,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // building a mixed-sale-type bill that FBR will reject with 0052.
   const filteredItemTypes = useMemo(() => {
     if (!chosenScenario) return itemTypes;
-    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    // An item type with NO sale type counts as the standard-rate default
+    // (utils/saleType.js) -- otherwise the bill\'s own item vanished from
+    // this list and the picker rendered blank on edit.
     return itemTypes.filter(
-      (it) => (it.saleType || "").trim().toLowerCase() === target,
+      (it) => matchesScenarioSaleType(it, chosenScenario.saleType),
     );
   }, [itemTypes, chosenScenario]);
 

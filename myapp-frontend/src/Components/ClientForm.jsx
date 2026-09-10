@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { createClient, createClientBatch, updateClient } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
+import { getFbrRegistrationType } from "../api/fbrApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
 
@@ -47,6 +49,13 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
   const [errors, setErrors] = useState({});
   const [provinces, setProvinces] = useState([]);
   const [regTypes, setRegTypes] = useState([]);
+  // "Check with FBR": FBR's Get_Reg_Type answer for the typed NTN/CNIC. The
+  // registration type decides the scenario a bill files under, and a buyer
+  // recorded as Registered whom FBR holds as Unregistered is refused [0205]
+  // on every bill -- three live bills hit exactly that (2026-09-10).
+  const { has } = usePermissions();
+  const canAskFbr = has("fbr.config.view");
+  const [fbrCheck, setFbrCheck] = useState({ busy: false, result: "" });
 
   // Multi-company picker state (CREATE mode only). Default-selected
   // is the currently-active company so the existing single-company
@@ -125,6 +134,25 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
   const star = fbrRequired ? " *" : "";
   const ntnLabel = (regType === "FTN" ? "FTN" : "NTN") + star;
 
+  const checkRegistrationWithFbr = async () => {
+    const regNo = (formData.ntn || formData.cnic || "").trim();
+    if (!regNo || !companyId) return;
+    setFbrCheck({ busy: true, result: "" });
+    try {
+      const { data } = await getFbrRegistrationType(companyId, regNo);
+      const type = (data?.registratioN_TYPE || data?.registrationType || "").trim();
+      if (type === "Registered" || type === "Unregistered") {
+        setFormData((f) => ({ ...f, registrationType: type, ...(type === "Unregistered" ? { strn: "" } : {}) }));
+        setErrors((e) => ({ ...e, registrationType: "" }));
+        setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` });
+      } else {
+        setFbrCheck({ busy: false, result: "FBR gave no registration type for this number." });
+      }
+    } catch (err) {
+      setFbrCheck({ busy: false, result: err?.response?.data?.message || "Could not reach FBR — try again." });
+    }
+  };
+
   const validate = () => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = "Name is required";
@@ -139,7 +167,9 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
       // form-level fields are still in state — if the operator switched
       // type they get blanked on switch, so this stays in sync.
       if (showNtn && !formData.ntn.trim()) newErrors.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
-      if (showStrn && !formData.strn.trim()) newErrors.strn = "STRN is required";
+      // STRN is deliberately NOT required (2026-09-10): the FBR buyer block
+      // carries NTN/CNIC, name, province, address and registration type --
+      // no STRN -- and demanding one here kept real buyers out of FBR.
       if (showCnic && !formData.cnic.trim()) newErrors.cnic = "CNIC is required for this registration type";
     }
     // CNIC must be 13 digits whenever one is entered (Pakistan ID format) —
@@ -321,6 +351,22 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                     ))}
                   </select>
                   {errorMsg("registrationType")}
+                  {canAskFbr && companyId && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        disabled={fbrCheck.busy || !(formData.ntn || formData.cnic).trim()}
+                        title="Ask FBR whether this NTN/CNIC is registered for sales tax and set the type accordingly"
+                        onClick={checkRegistrationWithFbr}
+                        style={{ ...input, width: "auto", minHeight: 44, padding: "0 0.8rem", cursor: fbrCheck.busy ? "wait" : "pointer", background: "#fff", color: "#0d47a1", fontWeight: 700, borderColor: "#0d47a1" }}
+                      >
+                        {fbrCheck.busy ? "Asking FBR…" : "Check with FBR"}
+                      </button>
+                      {fbrCheck.result && (
+                        <span style={{ fontSize: "0.78rem", color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "#b71c1c" }}>{fbrCheck.result}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div style={formGroup}>
                   <label style={label}>Province{star}</label>
@@ -359,7 +405,7 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                   )}
                   {showStrn && (
                     <div style={formGroup}>
-                      <label style={label}>STRN{star}</label>
+                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional — not sent to FBR)</span></label>
                       <input
                         type="text"
                         name="strn"

@@ -312,6 +312,47 @@ Publish output optimized from 79 MB to 37 MB via:
   unrelated edit and a new bill leave it byte-for-byte intact, while an
   explicit re-entry and an explicit clear still take effect.
 
+### 2026-09-10 — An item type with no sale type can be filed
+
+- **"Sale Type is required" no longer blocks a bill.** The HS tariff import
+  creates item types with no sale type, and nothing asks for one when such an
+  item is adopted and billed — so every real item on a live tenant's bills
+  carried none, Validate refused every invoice, and the Bills / Invoices edit
+  forms showed a blank item-type picker (the scenario filter dropped the bill's
+  own item). An empty sale type now files as the company's default sale type
+  (standard rate unless Company settings say otherwise), on the server and in
+  all three bill forms alike.
+- **"Pcs" reaches FBR as "Numbers, pieces, units".** The unit on a filing is
+  resolved against the HS code's own valid units first, recognising common
+  local spellings (Pcs, Kgs, Mtr, Ltr, Doz …). FBR's catalog also lists "Pcs"
+  as a unit of its own, so an exact match sent it and FBR answered `[0099]`.
+- **A buyer no longer needs an STRN to be FBR-ready.** The FBR buyer block
+  carries NTN/CNIC, name, province, address and registration type — no STRN —
+  so challans stopped parking in "Setup Required" over it. A Registered buyer
+  needs an NTN or CNIC; an Unregistered buyer needs neither. The Client and
+  Common Client forms mark STRN optional, and an NTN typed without its dash
+  is accepted (FBR receives the 7 digits either way).
+- **The sandbox scenario follows the buyer.** A bill that named no scenario
+  always went out as SN001, so every bill for an Unregistered buyer was refused
+  `[0205]`. It now defaults to SN002 for an unregistered buyer, SN001 otherwise.
+- **"Check with FBR" on the client form** asks FBR whether the typed NTN/CNIC
+  is Registered or Unregistered and sets the registration type from the answer
+  — two live buyers recorded as Registered turned out to be Unregistered at
+  FBR, which is what `[0205]` had been saying.
+
+### 2026-09-10 — One client list, with the shared clients in it
+
+- **The Common Clients panel above the table is gone; the table carries
+  everything.** Shared clients used to be hidden from the per-company list and
+  shown only as cards with no per-company figures, so a shared customer's
+  invoices, A/R and WHT for the selected company were visible nowhere. Every
+  client of the company is now one row: shared rows carry a **Common** badge and
+  name the other companies (within the operator's access) that share them, and
+  their pencil opens the propagating Common Client form, so there is still one
+  edit path. Chips filter the list to All / Common / only this company. The
+  header counts all clients. The Suppliers page lists shared suppliers in its
+  grid the same way (its panel stays).
+
 ### 2026-09-09 — The branch decides which local database you are on
 
 - **Three production installations, three local databases, and no connection

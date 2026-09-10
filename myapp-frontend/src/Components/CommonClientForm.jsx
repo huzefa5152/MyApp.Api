@@ -271,7 +271,8 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
       setError(`${ntnLabel} is required for ${regType} entities.`);
       return;
     }
-    if (showStrn && !form.strn?.trim()) {
+    // STRN is optional (2026-09-10): FBR's buyer block does not carry it.
+    if (false) {
       setError("STRN is required for Registered entities.");
       return;
     }
@@ -402,7 +403,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                     )}
                     {showStrn && (
                       <div style={formStyles.formGroup}>
-                        <label style={formStyles.label}>STRN *</label>
+                        <label style={formStyles.label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional — not sent to FBR)</span></label>
                         <input
                           name="strn"
                           value={form.strn}

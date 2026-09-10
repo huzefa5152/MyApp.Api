@@ -345,6 +345,25 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 
 - POST to FBR (`/submit`, `/validate`) is **never retried** by the Polly resilience handler — see `Program.cs: Retry.ShouldHandle` skipping `HttpMethod.Post`. Retrying a POST after a timeout can issue a duplicate IRN.
 - Reference-data endpoints (`/provinces`, `/hscodes`, …): gated by `fbr.reference.read`. Never bleed one tenant's token to fetch catalogs for another tenant.
+- **An EMPTY sale type is not an error; it is the company default** (2026-09-10).
+  `Helpers/FbrSaleTypeDefaults.cs` resolves it (company `FbrDefaultSaleType`,
+  else FBR's `Goods at Standard Rate (default)`), and `utils/saleType.js`
+  mirrors it for the three bill forms' scenario filter. The HS tariff import
+  creates item types with no sale type and nothing asks for one on adoption, so
+  a live tenant's every item carried NULL: pre-flight refused every invoice
+  and the edit forms' picker dropped the bill's own item. Do not reintroduce a
+  "Sale Type is required" check or a `saleType === target` filter.
+- **Resolve a line's UoM against the HS CODE's valid list, not the company-wide
+  one** (`FbrService.ResolveUomDesc`, HS first). FBR's catalog lists "Pcs",
+  "NO" and "Kilogram" as units in their own right, so an exact match against
+  the whole list sent "Pcs" for 8481.1000 and FBR answered `[0099]`; only
+  "Numbers, pieces, units" is valid there. `Helpers/FbrUomAliases.SameUnit` is
+  the ONE spelling rule (families: pcs/nos/units, kg/kgs, mtr/m, …) and both
+  the pre-flight and the payload builder use it, so what passes is what is sent.
+- **A buyer's STRN is not an FBR field.** The buyer block is NTN/CNIC, name,
+  province, address, registration type. `DeliveryChallanService.IsFbrReady`
+  gates a Registered buyer on NTN-or-CNIC and an Unregistered one on nothing;
+  it used to demand an STRN and an NTN from every client.
 
 ### 11. SQL Server gotchas
 

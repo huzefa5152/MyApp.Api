@@ -177,8 +177,10 @@ namespace MyApp.Api.Services.Implementations
                 var n = i + 1;
                 if (string.IsNullOrWhiteSpace(it.HSCode))
                     missing.Add($"Item {n}: HS Code");
-                if (string.IsNullOrWhiteSpace(it.SaleType))
-                    missing.Add($"Item {n}: Sale Type");
+                // Sale Type is deliberately NOT a missing field: an empty one
+                // files as the company default (FbrSaleTypeDefaults), the same
+                // rule FbrService's pre-flight applies. Listing it here made the
+                // card say "FBR Setup Incomplete" for a bill Validate accepts.
                 if (it.FbrUOMId == null && string.IsNullOrWhiteSpace(it.UOM))
                     missing.Add($"Item {n}: UOM");
                 if (it.UnitPrice <= 0)

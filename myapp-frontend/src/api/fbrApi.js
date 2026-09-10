@@ -41,6 +41,11 @@ export const validateInvoiceWithFbr = (invoiceId) =>
 // by sale type compatibility.
 export const getFbrScenarios = () => httpClient.get("/fbr/scenarios");
 
+/** Ask FBR whether an NTN/CNIC is Registered or Unregistered for sales tax.
+ *  POST by FBR's own design; regNo is the digits only (dashes are fine). */
+export const getFbrRegistrationType = (companyId, regNo) =>
+  httpClient.post(`/fbr/regtype/${companyId}?regNo=${encodeURIComponent(regNo)}`);
+
 // Subset of scenarios applicable to a company's BusinessActivity × Sector
 // profile.
 export const getFbrApplicableScenarios = (companyId) =>

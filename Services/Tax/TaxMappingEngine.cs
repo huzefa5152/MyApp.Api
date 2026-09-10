@@ -198,11 +198,11 @@ namespace MyApp.Api.Services.Tax
                     bool ok = false;
                     if (input.FbrUomId.HasValue)
                         ok = validUoms.Any(u => u.UOM_ID == input.FbrUomId.Value);
+                    // "Pcs" means "Numbers, pieces, units": the same alias rule the
+                    // payload builder applies (FbrUomAliases), so a unit that
+                    // passes here is the unit that reaches FBR.
                     if (!ok && !string.IsNullOrWhiteSpace(input.Uom))
-                        ok = validUoms.Any(u => string.Equals(
-                            (u.Description ?? "").Trim(),
-                            input.Uom!.Trim(),
-                            StringComparison.OrdinalIgnoreCase));
+                        ok = validUoms.Any(u => FbrUomAliases.SameUnit(input.Uom, u.Description));
 
                     if (!ok)
                     {

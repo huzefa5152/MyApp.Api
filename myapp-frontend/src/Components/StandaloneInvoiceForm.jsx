@@ -12,6 +12,7 @@ import { todayYmd } from "../utils/dateInput";
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import { matchesScenarioSaleType } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -583,9 +584,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // errors at FBR validation.
   const filteredItemTypes = useMemo(() => {
     if (!chosenScenario) return itemTypes;
-    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    // An item type with NO sale type counts as the standard-rate default
+    // (utils/saleType.js) -- otherwise the bill\'s own item vanished from
+    // this list and the picker rendered blank on edit.
     return itemTypes.filter(
-      (t) => (t.saleType || "").trim().toLowerCase() === target,
+      (t) => matchesScenarioSaleType(t, chosenScenario.saleType),
     );
   }, [itemTypes, chosenScenario]);
 

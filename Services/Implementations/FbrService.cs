@@ -410,13 +410,14 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>
         /// Resolves a UOM for the FBR payload.
         ///  1. If FbrUOMId is set and maps to an FBR UOM description → use that.
-        ///  2. Else if the fallback (local UOM) matches an FBR UOM description
-        ///     (case-insensitive, punctuation-tolerant) → use the FBR description.
-        ///  3. Else fall back to the raw local UOM.
+        ///  2. Else if the local UOM means one of the HS code's VALID units
+        ///     (FbrUomAliases: case/punctuation-tolerant, or same family) → that.
+        ///  3. Else the same match against the company-wide FBR UOM list.
+        ///  4. Else fall back to the raw local UOM.
         /// This lets users submit to FBR even if they didn't explicitly pick an
         /// FBR UOM id, as long as their local unit name matches the FBR catalog.
         /// </summary>
-        private async Task<string> ResolveUomDesc(Company company, int? uomId, string? fallback)
+        private async Task<string> ResolveUomDesc(Company company, int? uomId, string? fallback, string? hsCode = null)
         {
             if (!_uomCache.TryGetValue(company.Id, out var map))
             {
@@ -433,19 +434,36 @@ namespace MyApp.Api.Services.Implementations
             if (uomId.HasValue && map.TryGetValue(uomId.Value, out var desc))
                 return desc;
 
-            // 2. Try to fuzzy-match the local UOM string against FBR descriptions
             if (!string.IsNullOrWhiteSpace(fallback))
             {
-                var normalized = Normalize(fallback);
-                var match = map.Values.FirstOrDefault(v => Normalize(v) == normalized);
+                // 2. The HS code's OWN valid units come first (2026-09-10). FBR's
+                //    company-wide list also contains "Pcs", "NO" and "Kilogram" as
+                //    units in their own right, so matching there sent "Pcs" for
+                //    HS 8481.1000 -- which accepts only "Numbers, pieces, units"
+                //    -- and FBR answered [0099]. This is the list the pre-flight
+                //    in TaxMappingEngine checks, through the same FbrUomAliases
+                //    rule, so a unit that passes there is the unit filed.
+                if (!string.IsNullOrWhiteSpace(hsCode)
+                    && _services.GetService(typeof(ITaxMappingEngine)) is ITaxMappingEngine engine)
+                {
+                    try
+                    {
+                        var forHs = await engine.GetValidUomsForHsCodeAsync(company.Id, hsCode);
+                        var hsMatch = forHs.FirstOrDefault(u => FbrUomAliases.SameUnit(fallback, u.Description));
+                        if (hsMatch != null && !string.IsNullOrWhiteSpace(hsMatch.Description))
+                            return hsMatch.Description;
+                    }
+                    catch { /* fall through to the company-wide list */ }
+                }
+
+                // 3. Then the company-wide list: same text ignoring case and
+                //    punctuation, or a spelling from the same family.
+                var match = map.Values.FirstOrDefault(v => FbrUomAliases.SameUnit(fallback, v));
                 if (match != null) return match;
             }
 
-            // 3. Fall back to the local UOM string (FBR may still accept it)
+            // 4. Fall back to the local UOM string (FBR may still accept it)
             return fallback ?? "";
-
-            static string Normalize(string s) =>
-                new string(s.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
         }
 
         // ── Pre-validation (before calling FBR) ─────────────────
@@ -559,8 +577,12 @@ namespace MyApp.Api.Services.Implementations
                     var n = i + 1;
                     if (string.IsNullOrWhiteSpace(item.HSCode))
                         errors.Add($"Item {n}: HS Code is required. [FBR 0019]");
+                    // An untyped line files as the company default sale type
+                    // (standard rate unless the company says otherwise) -- see
+                    // FbrSaleTypeDefaults. itemList holds copies, so this also
+                    // feeds the tax-engine pass below without touching the row.
                     if (string.IsNullOrWhiteSpace(item.SaleType))
-                        errors.Add($"Item {n}: Sale Type is required. [FBR 0013]");
+                        item.SaleType = FbrSaleTypeDefaults.ForCompany(company);
                     // UOM: we accept either FbrUOMId (preferred) OR a non-empty UOM string
                     // that will be matched against the FBR UOM list at submit time.
                     if (item.FbrUOMId == null && string.IsNullOrWhiteSpace(item.UOM))
@@ -653,6 +675,11 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// Map our RegistrationType values to FBR's expected "Registered"/"Unregistered"
+        /// <summary>The standard-rate scenario a buyer of this registration type
+        /// files under when nobody chose one: SN002 unregistered, SN001 registered.</summary>
+        internal static string DefaultScenarioFor(Client buyer)
+            => MapBuyerRegType(buyer.RegistrationType) == "Unregistered" ? "SN002" : "SN001";
+
         private static string MapBuyerRegType(string? regType) => (regType ?? "Registered") switch
         {
             "Registered" => "Registered",
@@ -737,6 +764,16 @@ namespace MyApp.Api.Services.Implementations
             if (buyer == null)
                 return Fail("Invoice client data is missing.");
 
+            // Sandbox needs a scenario on every payload, and when neither the
+            // caller nor the bill's [SNxxx] marker named one this used to fall
+            // back to SN001 unconditionally -- so every bill for an Unregistered
+            // buyer was refused "[0205] Provided scenario not valid for
+            // unregistered user" (three live bills, 2026-09-10). The default
+            // now follows the buyer: SN002 for an unregistered one, SN001
+            // otherwise. Production sends no scenario, so this is sandbox-only.
+            if (string.IsNullOrWhiteSpace(scenarioId))
+                scenarioId = DefaultScenarioFor(buyer);
+
             bool isSandbox = company.FbrEnvironment != "production";
 
             // ── Refresh FBR-classification fields from the live ItemType ──
@@ -783,7 +820,15 @@ namespace MyApp.Api.Services.Implementations
                         if (line.HSCode       != t.HSCode)        { line.HSCode = t.HSCode;        anyChanged = true; }
                         if ((line.UOM ?? "")  != (t.UOM ?? ""))   { line.UOM = t.UOM ?? "";        anyChanged = true; }
                         if (line.FbrUOMId     != t.FbrUOMId)      { line.FbrUOMId = t.FbrUOMId;    anyChanged = true; }
-                        if (line.SaleType     != t.SaleType)      { line.SaleType = t.SaleType;    anyChanged = true; }
+                        // An item type with NO sale type used to copy its null onto the
+                        // line here, and pre-flight then refused the bill for the very
+                        // field this sync had just erased. The catalog wins when it has
+                        // a value; otherwise the line keeps its own, or takes the
+                        // company default (FbrSaleTypeDefaults, 2026-09-10).
+                        var syncedSaleType = !string.IsNullOrWhiteSpace(t.SaleType)
+                            ? t.SaleType
+                            : FbrSaleTypeDefaults.Resolve(line.SaleType, company);
+                        if (line.SaleType     != syncedSaleType) { line.SaleType = syncedSaleType; anyChanged = true; }
                         if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
                     }
 
@@ -810,7 +855,6 @@ namespace MyApp.Api.Services.Implementations
             // (so on-hand goes negative), and the dashboard surfaces that
             // in red. Operator catches up by recording the matching
             // PurchaseBill or an opening-balance adjustment later.
-
 
             // ── Resolve province names ──
             var sellerProvince = await ResolveProvinceNameAsync(company, company.FbrProvinceCode);
@@ -954,7 +998,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var (salesTax, furtherTax, retailPrice) =
                     ComputeFbrTaxes(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId);
-                var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM);
+                var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM, item.HSCode);
                 // Normalise the sale-type string to the §9 canonical form.
                 // Older seed rows + manually-entered bills sometimes carry
                 // lowercase "Goods at standard rate (default)" which FBR
@@ -962,7 +1006,7 @@ namespace MyApp.Api.Services.Implementations
                 // were tolerated historically. Mapping to the spec form
                 // here means the FBR payload is always canonical regardless
                 // of what the row stored.
-                var saleType = NormalizeSaleType(item.SaleType);
+                var saleType = NormalizeSaleType(FbrSaleTypeDefaults.Resolve(item.SaleType, company));
 
                 // FBR rule [0077]: "Valid SRO/Schedule No. is mandatory where rate
                 // is not 18%." Prefer the operator-set value on the item; fall
