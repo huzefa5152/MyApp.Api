@@ -322,10 +322,14 @@ Publish output optimized from 79 MB to 37 MB via:
   only a Tax Invoice template, so Bill / Bill PDF were greyed out on the Bills
   screen and the bulk download skipped every bill. The built-in Bill carries the
   FBR block, so a filed bill prints with its IRN and QR code.
-- **"Check with FBR" on the Common Client editor too**, and the lookup now asks
-  about the number the invoice would carry (digits, 7-digit NTN or 13-digit
-  CNIC). FBR answered "Registered" for `C650414-2` typed verbatim and
-  "Unregistered" for its filed form `6504142`; only the second answer is true.
+- **"Check with FBR" on the Common Client editor too.**
+- **A buyer with a letter-prefixed NTN (`A113680-1`) files under their CNIC.**
+  Such NTNs are real registrations (IRIS confirms them) but FBR's invoice API
+  accepts only a 7-digit NTN or a 13-digit CNIC: the letter form is refused
+  and the digits alone are an unknown number. Pre-flight now says so plainly,
+  the client forms show the CNIC field for a registered buyer and require it
+  when the NTN has a letter, and "Check with FBR" asks about the number as
+  typed and warns when a CNIC is needed.
 
 ### 2026-09-10 — An item type with no sale type can be filed
 

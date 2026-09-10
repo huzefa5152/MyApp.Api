@@ -131,7 +131,13 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
   const regType = formData.registrationType;
   const showNtn  = regType === "Registered" || regType === "FTN";
   const showStrn = regType === "Registered"; // STRN truly required only for Registered
-  const showCnic = regType === "Unregistered" || regType === "CNIC";
+  // CNIC shows for every type once one is picked: an unregistered buyer may
+  // give one, and a REGISTERED buyer whose NTN has a letter prefix (A113680-1)
+  // MUST -- FBR's invoice API refuses that NTN form and files the buyer under
+  // the CNIC instead (2026-09-10).
+  const showCnic = !!regType;
+  const ntnHasLetter = /[A-Za-z]/.test(formData.ntn || "");
+  const cnicNeededForNtn = showNtn && ntnHasLetter;
   const star = fbrRequired ? " *" : "";
   const ntnLabel = (regType === "FTN" ? "FTN" : "NTN") + star;
 
@@ -145,7 +151,10 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
       if (type === "Registered" || type === "Unregistered") {
         setFormData((f) => ({ ...f, registrationType: type, ...(type === "Unregistered" ? { strn: "" } : {}) }));
         setErrors((e) => ({ ...e, registrationType: "" }));
-        setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` });
+        const letter = /[A-Za-z]/.test(regNo) && !/^\d{13}$/.test(regNo.replace(/\D/g, ""));
+        setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` + (letter && type === "Registered"
+          ? " — but an NTN with a letter prefix cannot go on an invoice; enter the buyer's 13-digit CNIC below."
+          : "") });
       } else {
         setFbrCheck({ busy: false, result: "FBR gave no registration type for this number." });
       }
@@ -172,7 +181,10 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
       // carries NTN/CNIC, name, province, address and registration type --
       // no STRN -- and demanding one here kept real buyers out of FBR.
       // An unregistered buyer's CNIC is optional on FBR's side (buyerNTNCNIC
-      // may be empty for Unregistered) -- only its format is checked below.
+      // may be empty for Unregistered). A registered buyer with a
+      // letter-prefixed NTN cannot be filed without one.
+      if (cnicNeededForNtn && !formData.cnic.trim())
+        newErrors.cnic = "FBR cannot file an NTN with a letter prefix — enter the buyer's 13-digit CNIC";
     }
     // CNIC must be 13 digits whenever one is entered (Pakistan ID format) —
     // checked even when FBR is off, so a typo never gets saved.
@@ -199,10 +211,8 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
       const next = { ...formData, registrationType: value };
       const willShowNtn  = value === "Registered" || value === "FTN";
       const willShowStrn = value === "Registered";
-      const willShowCnic = value === "Unregistered" || value === "CNIC";
       if (!willShowNtn)  next.ntn  = "";
       if (!willShowStrn) next.strn = "";
-      if (!willShowCnic) next.cnic = "";
       setFormData(next);
       setErrors({ ...errors, registrationType: "", ntn: "", strn: "", cnic: "" });
       return;
@@ -424,7 +434,7 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
 
               {showCnic && (
                 <div style={{ ...formGroup, marginTop: "0.5rem" }}>
-                  <label style={label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
+                  <label style={label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: cnicNeededForNtn ? "#b71c1c" : "#5f6d7e" }}>{cnicNeededForNtn ? "(required — this NTN has a letter prefix)" : "(optional)"}</span></label>
                   <input
                     type="text"
                     name="cnic"
@@ -436,7 +446,9 @@ export default function ClientForm({ client, companyId, companies = [], fbrEnabl
                   />
                   {errorMsg("cnic")}
                   <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                    Optional — FBR files an unregistered buyer without one. Give the CNIC when you have it.
+                    {cnicNeededForNtn
+                      ? "FBR's invoice API only accepts a 7-digit NTN or a 13-digit CNIC. An NTN like A113680-1 is a real registration, but the invoice must carry the buyer's CNIC instead."
+                      : "Optional — FBR files an unregistered buyer without one. Give the CNIC when you have it."}
                   </span>
                 </div>
               )}

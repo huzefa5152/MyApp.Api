@@ -1216,6 +1216,14 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
   "Numbers, pieces, units" is valid there. `Helpers/FbrUomAliases.SameUnit` is
   the ONE spelling rule (families: pcs/nos/units, kg/kgs, mtr/m, …) and both
   the pre-flight and the payload builder use it, so what passes is what is sent.
+- **A LETTER-PREFIXED NTN (`A113680-1`) is real but cannot be filed** (2026-09-10).
+  IRIS issues them and `Get_Reg_Type` answers Registered for the letter form,
+  yet the invoice API refuses it `[0002]` and its digits alone `[0205]`
+  (unknown number). The buyer files under their 13-digit CNIC.
+  `Helpers/FbrBuyerIdentity.Resolve` is the ONE rule for a buyer's number
+  (pre-flight, payload, challan readiness); the client forms show CNIC for a
+  registered buyer and require it when the NTN carries a letter. Never "fix"
+  this by stripping the letter -- that is the bug it replaced.
 - **A buyer's STRN is not an FBR field.** The buyer block is NTN/CNIC, name,
   province, address, registration type. `DeliveryChallanService.IsFbrReady`
   gates a Registered buyer on NTN-or-CNIC and an Unregistered one on nothing;
