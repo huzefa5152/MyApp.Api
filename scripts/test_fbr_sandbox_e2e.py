@@ -512,6 +512,70 @@ def suite_g_negative(base, token, cid, client_id, item_id, label):
     else:
         skip(suite, "unclassified line", f"challan create failed: {err(challan)}")
 
+    # An item type with NO sale type and a local unit spelling ("Pcs") -- the
+    # shape the HS tariff import leaves behind and the one every real item on
+    # a live tenant had. It must file as the standard-rate default, not be
+    # refused for the very field nobody was asked for (FbrSaleTypeDefaults,
+    # 2026-09-10), and "Pcs" must reach FBR as "Numbers, pieces, units".
+    st, untyped = http("POST", f"/api/itemtypes?companyId={cid}", base, token=token, body={
+        "name": f"Untyped valve {datetime.now().strftime('%H%M%S%f')}", "uom": "Pcs",
+        "hsCode": "8481.8090", "companyId": cid, "isFavorite": True,
+    })
+    if st in (200, 201):
+        st, inv = http("POST", "/api/invoices/standalone", base, token=token, body={
+            "date": today(), "companyId": cid, "clientId": client_id, "gstRate": 18,
+            "documentType": 4, "paymentMode": "Bank Transfer", "paymentTerms": "[SN001] untyped",
+            "items": [{"description": "Untyped valve", "quantity": 1, "uom": "Pcs",
+                       "unitPrice": 100, "itemTypeId": untyped["id"]}],
+        })
+        if st in (200, 201):
+            uid = inv["id"]
+            check(suite, "a bill on an item type with no sale type is FBR-ready",
+                  inv.get("fbrReady") is True, f"fbrReady={inv.get('fbrReady')}")
+            st, r = fbr_call("POST", f"/api/fbr/{uid}/validate?scenarioId=SN001", base, token=token)
+            msg = err(r)
+            check(suite, "and pre-flight does not demand a sale type",
+                  "Sale Type is required" not in msg, msg)
+            check(suite, "and FBR validates it as a standard-rate line",
+                  st == 200 and r.get("success") is True, f"http {st}: {msg}")
+            st, log_rows = http("GET", f"/api/fbr-monitor?companyId={cid}&invoiceId={uid}&page=1&pageSize=20",
+                                base, token=token)
+            rows = log_rows.get("items", log_rows) if isinstance(log_rows, dict) else log_rows
+            sent = " ".join((x.get("requestBodyMasked") or "") for x in (rows or []) if x.get("invoiceId") == uid)
+            check(suite, "and 'Pcs' reached FBR as 'Numbers, pieces, units'",
+                  "Numbers, pieces, units" in sent and '"uoM":"Pcs"' not in sent,
+                  sent[:200] or "no communication log row")
+            http("DELETE", f"/api/invoices/{uid}", base, token=token)
+        else:
+            skip(suite, "untyped item type bill", f"could not create: {err(inv)}")
+        http("DELETE", f"/api/itemtypes/{untyped['id']}", base, token=token)
+    else:
+        skip(suite, "untyped item type", f"could not create item type: {err(untyped)}")
+
+    # An UNREGISTERED buyer on a bill that names no scenario: the sandbox
+    # default must follow the buyer (SN002), not fall back to SN001 -- which
+    # FBR refuses "[0205] Provided scenario not valid for unregistered user".
+    st, unreg = make_client(base, token, cid, f"Walk-in {datetime.now().strftime('%H%M%S%f')}", registered=False)
+    if st in (200, 201):
+        st, inv = http("POST", "/api/invoices/standalone", base, token=token, body={
+            "date": today(), "companyId": cid, "clientId": unreg["id"], "gstRate": 18,
+            "documentType": 4, "paymentMode": "Cash",
+            "items": [{"description": "Walk-in valve", "quantity": 1, "uom": "Numbers, pieces, units",
+                       "unitPrice": 100, "itemTypeId": item_id, "hsCode": "8481.8090", "fbrUOMId": 69,
+                       "saleType": "Goods at Standard Rate (default)"}],
+        })
+        if st in (200, 201):
+            wid = inv["id"]
+            st, r = fbr_call("POST", f"/api/fbr/{wid}/validate", base, token=token)
+            check(suite, "an unregistered buyer's bill validates with no scenario named (defaults to SN002)",
+                  st == 200 and r.get("success") is True, f"http {st}: {err(r)}")
+            http("DELETE", f"/api/invoices/{wid}", base, token=token)
+        else:
+            skip(suite, "unregistered buyer bill", f"could not create: {err(inv)}")
+        http("DELETE", f"/api/clients/{unreg['id']}", base, token=token)
+    else:
+        skip(suite, "unregistered buyer", f"could not create client: {err(unreg)}")
+
     # A submit for a bill that does not exist.
     st, r = fbr_call("POST", "/api/fbr/999999999/submit", base, token=token)
     check(suite, "submitting a non-existent bill is a clean 404", st == 404,

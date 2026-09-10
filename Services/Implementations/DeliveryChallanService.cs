@@ -97,14 +97,17 @@ namespace MyApp.Api.Services.Implementations
             if (string.IsNullOrWhiteSpace(company.FbrToken)) return false;
             if (string.IsNullOrWhiteSpace(company.FbrEnvironment)) return false;
 
-            // Client fields
-            if (string.IsNullOrWhiteSpace(client.NTN)) return false;
-            if (string.IsNullOrWhiteSpace(client.STRN)) return false;
+            // Client fields -- exactly what the FBR buyer block carries
+            // (V1.12: buyerNTNCNIC, buyerBusinessName, buyerProvince,
+            // buyerAddress, buyerRegistrationType). STRN is NOT on it, and
+            // gating on it here parked every bill for a buyer without one in
+            // "Setup Required" (2026-09-10). Same rule as FbrService's
+            // pre-flight: a Registered buyer needs an NTN or a CNIC; an
+            // Unregistered buyer's registration number is optional.
             if (string.IsNullOrWhiteSpace(client.RegistrationType)) return false;
             if (client.FbrProvinceCode == null) return false;
-            // CNIC required for Unregistered/CNIC registration types
-            if ((client.RegistrationType == "Unregistered" || client.RegistrationType == "CNIC")
-                && string.IsNullOrWhiteSpace(client.CNIC)) return false;
+            if (client.RegistrationType == "Registered"
+                && string.IsNullOrWhiteSpace(client.NTN) && string.IsNullOrWhiteSpace(client.CNIC)) return false;
 
             return true;
         }
@@ -168,12 +171,11 @@ namespace MyApp.Api.Services.Implementations
             }
             if (client != null && company != null && company.FbrEnabled)
             {
-                if (string.IsNullOrWhiteSpace(client.NTN)) dto.Warnings.Add("Client NTN missing");
-                if (string.IsNullOrWhiteSpace(client.STRN)) dto.Warnings.Add("Client STRN missing");
                 if (string.IsNullOrWhiteSpace(client.RegistrationType)) dto.Warnings.Add("Client Registration Type missing");
                 if (client.FbrProvinceCode == null) dto.Warnings.Add("Client FBR Province missing");
-                if ((client.RegistrationType == "Unregistered" || client.RegistrationType == "CNIC")
-                    && string.IsNullOrWhiteSpace(client.CNIC)) dto.Warnings.Add("Client CNIC missing");
+                if (client.RegistrationType == "Registered"
+                    && string.IsNullOrWhiteSpace(client.NTN) && string.IsNullOrWhiteSpace(client.CNIC))
+                    dto.Warnings.Add("Client NTN or CNIC missing (registered buyer)");
             }
 
             return dto;

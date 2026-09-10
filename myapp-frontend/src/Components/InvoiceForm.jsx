@@ -16,6 +16,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
+import { matchesScenarioSaleType } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
@@ -454,9 +455,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // empty and the operator with nothing to choose.
     if (overlayOn) return forBook;
     if (!chosenScenario) return forBook;
-    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    // An item type with NO sale type counts as the standard-rate default
+    // (utils/saleType.js) -- otherwise the bill's own item vanished from
+    // this list and the picker rendered blank on edit.
     return forBook.filter(
-      (it) => (it.saleType || "").trim().toLowerCase() === target,
+      (it) => matchesScenarioSaleType(it, chosenScenario.saleType),
     );
   }, [itemTypes, chosenScenario, overlayOn]);
 

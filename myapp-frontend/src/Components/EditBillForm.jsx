@@ -19,6 +19,7 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
+import { matchesScenarioSaleType } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
@@ -401,9 +402,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     // On the Invoices tab the sale type still matters -- that IS the filing.
     if (inventoryOverlay && billsMode) return forBook;
     if (!chosenScenario) return forBook;
-    const target = (chosenScenario.saleType || "").trim().toLowerCase();
+    // An item type with NO sale type counts as the standard-rate default
+    // (utils/saleType.js) -- otherwise the bill's own item vanished from
+    // this list and the picker rendered blank on edit.
     return forBook.filter(
-      (it) => (it.saleType || "").trim().toLowerCase() === target,
+      (it) => matchesScenarioSaleType(it, chosenScenario.saleType),
     );
   }, [itemTypes, chosenScenario, inventoryOverlay, billsMode]);
 
