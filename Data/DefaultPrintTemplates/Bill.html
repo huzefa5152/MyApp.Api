@@ -1,0 +1,215 @@
+<!DOCTYPE html><html><head><title>Bill #{{invoiceNumber}}</title>
+<meta name="format-detection" content="telephone=no">
+<style>
+  a { color: inherit !important; text-decoration: none !important; }
+  @media print {
+    @page { size: A4; margin: 6mm 10mm; }
+    @page:first { margin-top: 6mm; }
+    html, body { height: 100%; margin: 0; }
+    thead { display: table-header-group; }
+    .totals-wrap { page-break-inside: avoid; }
+    .footer-section { page-break-inside: avoid; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+  }
+  html, body { height: 100%; }
+  body { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 12pt; color: #000;
+         display: flex; flex-direction: column; min-height: 100vh;
+         padding: 6mm 10mm; }
+  .main-content { flex: 1; }
+  .footer-section { margin-top: auto; }
+
+  /* ---- Header ---- */
+  .company-name { font-size: 30pt; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+  .bill-title { font-size: 26pt; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+
+  /* ---- Address + logo row ---- */
+  .header-detail { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0; }
+  .header-left { flex: 1; }
+  .header-right { text-align: center; padding-left: 20px; white-space: nowrap; }
+  .addr-row { display: flex; align-items: flex-start; gap: 10px; }
+  .addr-row img { height: 45px; margin-top: 2px; }
+  .company-address { font-size: 10pt; font-weight: bold; line-height: 1.45; }
+  .company-contact { font-size: 10pt; font-weight: bold; margin-top: 3px; line-height: 1.4; color: #000; }
+
+  /* ---- Date / Bill / DC info (right column) ---- */
+  .date-bill-box { display: inline-block; border: 1.5px solid #000; font-size: 10pt; }
+  .date-row { display: flex; }
+  .date-row .lbl { padding: 2px 8px; border-right: 1.5px solid #000; font-style: italic; }
+  .date-row .val { padding: 2px 12px; min-width: 80px; }
+  .bill-num { font-size: 12pt; font-weight: bold; font-style: italic; text-align: center;
+              padding: 2px 8px; border-top: 1.5px solid #000; }
+  .dc-info { font-size: 12pt; font-weight: bold; font-style: italic; margin-top: 4px; }
+  .dc-date-line { font-size: 10pt; margin-top: 3px; }
+  .dc-date-line strong { font-weight: bold; }
+
+  /* ---- Client / NTN section ---- */
+  .client-row { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 10px; }
+  .client-left { flex: 1; }
+  .client-right { text-align: right; white-space: nowrap; }
+  .to-label { font-size: 11pt; }
+  .client-name { font-size: 11pt; font-weight: normal; display: inline; margin-left: 20px; }
+  .ntn-line { font-size: 10pt; margin-bottom: 1px; font-weight: bold; }
+
+  /* ---- PO section ---- */
+  .po-section { margin-top: 6px; margin-bottom: 6px; }
+  .po-table { border-collapse: collapse; }
+  .po-table td { font-size: 11pt; font-weight: bold; padding: 1px 0; }
+  .po-table td.po-val { padding-left: 40px; font-weight: normal; }
+
+  /* ---- Table ---- */
+  table.items { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  table.items thead { display: table-header-group; }
+  table.items th { background-color: #4472C4 !important; color: #fff !important; font-weight: bold;
+       font-size: 9pt; text-transform: uppercase; padding: 5px 8px;
+       border: 1px solid #4472C4; text-align: center; }
+  table.items th.left { text-align: left; }
+  .cell { border: 1px solid #bbb; padding: 3px 8px; font-size: 10pt; height: 22px; }
+  .c { text-align: center; }
+  .r { text-align: right; }
+  table.items tbody tr:nth-child(odd) td { background-color: #ffffff !important; }
+  table.items tbody tr:nth-child(even) td { background-color: #D9E2F3 !important; }
+
+  /* ---- Totals (right after table) ---- */
+  .totals-wrap { page-break-inside: avoid; }
+  .totals-section { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 0; }
+  .words-section { flex: 1; padding-right: 20px; }
+  .words-label { font-size: 11pt; font-weight: bold; font-style: italic; }
+  .words-text { font-size: 13pt; font-weight: bold; margin-top: 10px; }
+  .totals-table { border-collapse: collapse; }
+  .totals-table td { border: 1px solid #bbb; padding: 2px 10px; font-size: 10pt; }
+  .totals-table td.lbl { font-weight: bold; text-transform: uppercase; }
+  .totals-table td.val { text-align: right; min-width: 90px; }
+  .totals-table tr:nth-child(odd) td { background-color: #ffffff !important; }
+  .totals-table tr:nth-child(even) td { background-color: #D9E2F3 !important; }
+  .totals-table tr.grand td { font-weight: bold; border-top: 2px solid #000; border-bottom: 2px solid #000; }
+
+  /* ---- Signature ---- */
+  .sig-row { display: flex; justify-content: space-between; margin-top: 40px; padding: 0 40px; }
+  .sig-text { font-size: 11pt; text-decoration: underline; }
+
+  /* ---- Types footer ---- */
+  .types-footer { text-align: center; margin-top: 20px; font-size: 12pt; font-weight: bold;
+                   text-transform: uppercase; letter-spacing: 2px; }
+  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
+</style></head><body>
+
+<div class="main-content">
+<!-- Header: Company name on left, BILL on right -->
+<div class="header-detail">
+  <div class="header-left">
+    {{#unless companyLogoPath}}<div class="company-name">{{companyBrandName}}</div>{{/unless}}
+    <div class="addr-row">
+      {{#if companyLogoPath}}<img src="{{companyLogoPath}}" />{{/if}}
+      <div class="company-address">{{{nl2br companyAddress}}}</div>
+    </div>
+    <div class="company-contact">{{{nl2br companyPhone}}}</div>
+  </div>
+  <div class="header-right">
+    <div class="bill-title">BILL</div>
+    <div class="date-bill-box">
+      <div class="date-row"><span class="lbl">Date:</span><span class="val">{{fmtDate date}}</span></div>
+      <div class="bill-num">BILL # {{or fbrInvoiceNumber invoiceNumber}}</div>
+    </div>
+    <div class="dc-info">DC # {{join challanNumbers}}</div>
+    <div class="dc-date-line"><strong>D.C Date</strong> &nbsp;&nbsp;&nbsp; {{joinDates challanDates}}</div>
+  </div>
+</div>
+
+<!-- Client + NTN/GST -->
+<div class="client-row">
+  <div class="client-left">
+    <span class="to-label">To;</span>
+    <span class="client-name">{{clientName}}</span>
+  </div>
+  <div class="client-right">
+    {{#if clientNTN}}<div class="ntn-line">NTN # {{clientNTN}}</div>{{/if}}
+    {{#if clientSTRN}}<div class="ntn-line">GST # {{clientSTRN}}</div>{{/if}}
+  </div>
+</div>
+
+<!-- Purchase Order -->
+<div class="po-section">
+  <table class="po-table">
+    <tr><td>Purchase Order</td><td class="po-val">{{#if poNumber}}{{poNumber}}{{else}}\u2014{{/if}}</td></tr>
+    {{#if poDate}}<tr><td>P.O  Date</td><td class="po-val">{{fmtDate poDate}}</td></tr>{{/if}}
+  </table>
+</div>
+
+<!-- Items Table -->
+<table class="items">
+  <thead><tr>
+    <th style="width:35px">S #</th>
+    <th style="width:70px">Quantity</th>
+    <th class="left">Item Details</th>
+    <th style="width:85px">Unit Price</th>
+    <th style="width:95px">Total Price</th>
+  </tr></thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td class="cell c">{{this.sNo}}</td>
+      <td class="cell c">{{this.quantity}}</td>
+      <td class="cell">{{{richText this.description}}}</td>
+      <td class="cell r">Rs{{fmt this.unitPrice}}</td>
+      <td class="cell r">Rs &nbsp; {{fmt this.lineTotal}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+
+<!-- Totals (immediately after table) -->
+<div class="totals-wrap">
+  <div class="totals-section">
+    <div class="words-section">
+      <div class="words-label">Amount In Words:</div>
+      <div class="words-text">{{amountInWords}}</div>
+    </div>
+    <table class="totals-table">
+      <tr><td class="lbl">SUB TOTAL</td><td class="val">Rs{{fmt subtotal}}</td></tr>
+      <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs{{fmt gstAmount}}</td></tr>
+      {{#if furtherTaxAmount}}<tr><td class="lbl">Further Tax{{#if furtherTaxRate}} ({{fmtQty furtherTaxRate}}%){{/if}}</td><td class="val">Rs{{fmt furtherTaxAmount}}</td></tr>{{/if}}<tr class="grand"><td class="lbl">GRAND TOTAL</td><td class="val">Rs{{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs{{fmt withholdingTaxAmount}}</td></tr>{{/if}}{{#if advanceTaxAmount}}<tr><td class="lbl">{{#if advanceTaxLabel}}{{advanceTaxLabel}}{{else}}Advance Income Tax{{/if}}{{#if advanceTaxRate}} ({{fmtQty advanceTaxRate}}%){{/if}}</td><td class="val">Rs{{fmt advanceTaxAmount}}</td></tr>{{/if}}{{#if (or withholdingTaxAmount advanceTaxAmount)}}<tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs{{fmt collectible}}</td></tr>{{/if}}
+    </table>
+  </div>
+</div>
+</div>
+
+{{#if fbrIRN}}
+<!-- FBR Digital Invoicing. Rendered only on a bill that actually holds an IRN.
+     The QR is a base64 PNG built server-side, so the printed PDF needs no
+     external fetch and the IRN never reaches a third-party image host --
+     TRIPLE braces, or Handlebars escapes the data URI and the image breaks.
+     fbrLogoUrl is RELATIVE by design (CLAUDE.md 5c-2): this installation
+     mounts the app under /admin/, where a root-relative path 404s. -->
+<div style="page-break-inside:avoid">
+  <div style="margin-top:14px;padding:10px;border:2px solid #1a5276;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <div style="font-weight:bold;color:#1a5276">FBR Digital Invoice</div>
+      <div><strong>IRN:</strong> {{fbrIRN}}</div>
+      {{#if fbrSubmittedAt}}<div style="font-size:8pt">Submitted: {{fmtDate fbrSubmittedAt}}</div>{{/if}}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
+      <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+    </div>
+  </div>
+  <!-- Reserves the strip the page-bottom signature sits in. A trailing margin
+       would collapse at the page boundary, so this has to be a real box. -->
+  <div style="height:30pt"></div>
+</div>
+{{/if}}
+
+<!-- Footer: signature + types (pushed to bottom) -->
+<div class="footer-section">
+  <div class="sig-row">
+    <span class="sig-text"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>Signature and Stamp</span>
+    <span class="sig-text">Receiver Signature and Stamp</span>
+  </div>
+
+  <div class="types-footer">SALES | HARDWARE | GENERAL ORDER |</div>
+</div>
+
+</body></html>

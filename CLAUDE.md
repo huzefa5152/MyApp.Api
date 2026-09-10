@@ -297,6 +297,68 @@ endless document, and a `minFillRatio` floor stops a page ending just after it
 began. All 32 built-in templates emit a `<tr>` per line item, so the fix reaches
 every one of them, every operator-created template, and single-invoice exports.
 
+<<<<<<< HEAD
+=======
+### 5c-1b. Default print templates — one source, two copies (2026-09-10)
+
+`myapp-frontend/src/utils/defaultTemplates.js` is the ONLY place the built-in
+Challan / Bill / Tax Invoice designs are written. `scripts/sync_default_print_
+templates.mjs` copies them to `Data/DefaultPrintTemplates/*.html`, embedded in
+the API for `Helpers/DefaultPrintTemplates.cs`, which (a) seeds the three rows
+onto every NEW company in `CompanyService.CreateAsync` and (b) stands in for a
+missing row in the bulk download. `usePrintTemplates` does the same on screen:
+a scope with no saved template of one of those types prints through the
+built-in (division -> company-wide -> built-in), never a disabled button. Run
+`node scripts/sync_default_print_templates.mjs` after editing a default and
+keep `--check` green; the two copies must never be edited by hand.
+
+### 5c-2. Print-template artwork is a FILE, never inline base64 (2026-09-07)
+
+A bespoke print template must reference its logos, letterheads and banners by
+URL. Do not paste a `data:image/...;base64,...` URI into a template.
+
+Why: on the Alpha Traders templates the inline artwork was **87% of the Bill
+template (65KB) and 90% of the Challan (43KB)**. Those bytes are stored in the
+row, re-sent on every render, every editor load and every preview, and they
+bloat the print HTML (80KB -> 11KB once hosted).
+
+Where the files go:
+
+```
+myapp-frontend/public/print-assets/company-<id>/<name>-<WxH>.png
+```
+
+Vite copies `public/` into `dist/`, CI copies `dist/` into `wwwroot/`, so the
+asset deploys with the app. It is version-controlled, identical in every
+environment, and needs no new public-file mount (it is NOT under `data/`, so
+`§5d`'s allowlist does not apply). Uploads under `data/` would also survive —
+the FTP action runs `dangerous-clean-slate: false` — but they are not in git and
+a fresh environment would render without them.
+
+**Reference it RELATIVELY**, with no leading slash:
+
+```html
+<img src="print-assets/company-4/bill-header-915x168.png">
+```
+
+`mergeTemplate` injects `<base href="{origin}{BASE_URL}">`, so a relative path
+resolves wherever the app is mounted — this installation serves the ERP under
+`/admin/`. A ROOT-relative path (`/print-assets/...`) ignores the base path and
+404s here; that is exactly why `PrintBillDto.FbrLogoUrl`'s
+`/images/fbr-logo.png` does not resolve on a based deployment.
+
+**Both export paths wait for images.** `printDocument.writeAndPrint` has since
+the Jorbai Sales Quote bug (2026-06-27); `exportToPdf` and `exportToExcel` gained
+it on 2026-09-07 (`waitForImages`, awaiting `decode()` with a 5s cap). Without
+that, html2canvas rasterises a still-loading image as nothing and the PDF loses
+a logo while its text renders fine. If you add another export path, wait there
+too or hosted artwork will be intermittently blank.
+
+Prove a swap changed nothing: merge the template before and after and compare
+the flow height (`.tail` bottom) — it must be identical to the pixel. On the
+Bill it was 1049px both ways.
+
+>>>>>>> f902702 (Seed default print templates on new companies, fall back to built-in)
 ### 5d. Public file allowlist
 
 `data/` holds user uploads. Program.cs mounts ONLY the folders a browser must
@@ -387,7 +449,11 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
+<<<<<<< HEAD
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
+=======
+| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
+>>>>>>> f902702 (Seed default print templates on new companies, fall back to built-in)
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
@@ -401,6 +467,17 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | PDF page breaks never cut a line item (offline) | `node scripts/test_pdf_page_cuts.mjs` | `10 passed, 0 failed` |
 | Bulk invoice download / consolidated print, through BOTH callers | `python scripts/test_invoice_bulk.py` | `39 passed, 0 failed` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
+<<<<<<< HEAD
+=======
+| Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
+| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (64 checks) |
+| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (37 checks) |
+| FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
+| FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
+| FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
+| FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
+| Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
+>>>>>>> f902702 (Seed default print templates on new companies, fall back to built-in)
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |

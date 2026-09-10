@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Repositories.Interfaces;
 using MyApp.Api.Services.Interfaces;
@@ -196,6 +197,23 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repository.AddAsync(company);
+
+            // New-company default: a Challan, Bill and Tax Invoice print template,
+            // so the first document prints and the operator has something to
+            // edit instead of an empty Print Templates page (2026-09-10). Like
+            // the GL below, a failure here must not fail the company create.
+            try
+            {
+                var seeded = await DefaultPrintTemplates.SeedForCompanyAsync(_context, created.Id, _logger);
+                if (seeded.Count > 0)
+                    _logger.LogInformation("Company {CompanyId}: seeded default print templates {Types}.",
+                        created.Id, string.Join(", ", seeded));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Company {CompanyId} created, but seeding its default print templates failed.",
+                    created.Id);
+            }
 
             // New-company default: turn the General Ledger on so the Chart of
             // Accounts + posting exist from day one. Routed through the GL enable

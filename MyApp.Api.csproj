@@ -14,6 +14,9 @@
        own .csproj. -->
   <ItemGroup>
     <Compile Remove="scripts/**/*.cs" />
+    <!-- Built-in print templates, generated from myapp-frontend/src/utils/defaultTemplates.js
+         by scripts/sync_default_print_templates.mjs (see Helpers/DefaultPrintTemplates.cs). -->
+    <EmbeddedResource Include="Data/DefaultPrintTemplates/*.html" />
     <!-- The branch -> local-database map is developer tooling, read from the
          REPO ROOT (next to .git) and only in Development. Keeping it out of
          the publish output means a deploy cannot carry a local connection

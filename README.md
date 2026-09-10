@@ -312,6 +312,21 @@ Publish output optimized from 79 MB to 37 MB via:
   unrelated edit and a new bill leave it byte-for-byte intact, while an
   explicit re-entry and an explicit clear still take effect.
 
+### 2026-09-10 — Every company can print, from day one
+
+- **A new company is created with a default Challan, Bill and Tax Invoice
+  print template**, so its first document prints and the operator has a
+  design to edit rather than an empty Print Templates page.
+- **A company (or division) with no saved template prints through the
+  built-in design instead of a disabled button.** All three live tenants had
+  only a Tax Invoice template, so Bill / Bill PDF were greyed out on the Bills
+  screen and the bulk download skipped every bill. The built-in Bill carries the
+  FBR block, so a filed bill prints with its IRN and QR code.
+- **"Check with FBR" on the Common Client editor too**, and the lookup now asks
+  about the number the invoice would carry (digits, 7-digit NTN or 13-digit
+  CNIC). FBR answered "Registered" for `C650414-2` typed verbatim and
+  "Unregistered" for its filed form `6504142`; only the second answer is true.
+
 ### 2026-09-10 — An item type with no sale type can be filed
 
 - **"Sale Type is required" no longer blocks a bill.** The HS tariff import
