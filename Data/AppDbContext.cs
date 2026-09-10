@@ -22,6 +22,59 @@ namespace MyApp.Api.Data
             _fbrTokenProtector = fbrTokenProtector;
         }
 
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            PreserveUnreadableFbrTokens();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
+            CancellationToken cancellationToken = default)
+        {
+            PreserveUnreadableFbrTokens();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        /// <summary>
+        /// A <c>Company.FbrToken</c> the key ring cannot read must never be
+        /// overwritten (2026-09-10).
+        ///
+        /// The value converter in OnModelCreating returns <c>null</c> when
+        /// <see cref="IFbrTokenProtector.Unprotect"/> fails — the key ring
+        /// lost the key that encrypted the payload, or the payload is
+        /// corrupt. The entity is then materialised with a null token, and
+        /// any later save of that row would write the null back, destroying
+        /// the ciphertext for good. <c>DbSet.Update()</c> makes this
+        /// certain, because it marks every column modified — and that is
+        /// how invoice numbering saves the company on every bill. A key
+        /// ring that merely could not read the token became a token that no
+        /// longer existed, silently, on the first bill after the loss.
+        ///
+        /// A null CLR value is never an explicit write. The API clears a
+        /// token with the empty string and treats null as "no change", so
+        /// null on a Modified row can only mean "unreadable" or "was already
+        /// null" — and neither is a reason to touch the column. Dropping the
+        /// property from the UPDATE keeps the stored ciphertext exactly as
+        /// it was; a later re-entry by the operator (a non-null value, gated
+        /// by <c>companies.manage.fbrtoken</c>) still replaces it, and a
+        /// clear ("") still clears it. Added rows are untouched: inserting a
+        /// null there is the normal "no token yet" state. Nothing here reads
+        /// or logs the token value.
+        ///
+        /// Regression suite: <c>scripts/test_fbr_token_unreadable_survives_save.py</c>.
+        /// </summary>
+        private void PreserveUnreadableFbrTokens()
+        {
+            if (ChangeTracker.AutoDetectChangesEnabled) ChangeTracker.DetectChanges();
+
+            foreach (var entry in ChangeTracker.Entries<Company>())
+            {
+                if (entry.State != EntityState.Modified) continue;
+                var token = entry.Property(c => c.FbrToken);
+                if (token.IsModified && token.CurrentValue == null) token.IsModified = false;
+            }
+        }
+
         public DbSet<Company> Companies { get; set; }
         public DbSet<Division> Divisions { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
@@ -152,6 +205,9 @@ namespace MyApp.Api.Data
             // writes encrypt the operator-typed value. When DI didn't
             // hand us a protector (design-time / migrations / tests)
             // we skip the converter so EF can still inspect the model.
+            //
+            // Unprotect fails closed to null. That null must not be
+            // written back — see PreserveUnreadableFbrTokens above.
             if (_fbrTokenProtector != null)
             {
                 var protector = _fbrTokenProtector;
