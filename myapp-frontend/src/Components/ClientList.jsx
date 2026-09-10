@@ -31,7 +31,19 @@ const EMPTY = {
   qtyToDeliver: 0, qtyToInvoice: 0, accountsReceivable: 0, withholdingTaxReceivable: 0, status: "Paid",
 };
 
-export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, fetchClients, onOpenDetail }) {
+export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, fetchClients, onOpenDetail, isCommon, sharedWith }) {
+  // A client shared with other companies (grouped by NTN / name) is badged so
+  // the operator knows its pencil edits every company's copy at once, and the
+  // row names the other companies (within the operator's access) that share it.
+  const common = (client) => typeof isCommon === "function" && isCommon(client);
+  const others = (client) => (typeof sharedWith === "function" ? sharedWith(client) : []) || [];
+  const sharedTitle = (client) => {
+    const names = others(client);
+    return names.length
+      ? `Shared with ${names.join(", ")} — edits propagate to all`
+      : "Shared with other companies — edits propagate to all";
+  };
+  const editTitle = (client) => (common(client) ? "Edit (propagates to all companies)" : "Edit");
   const confirm = useConfirm();
   const { has } = usePermissions();
   const isNarrow = useIsNarrow();
@@ -131,8 +143,14 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
                 )}
                 <span style={{ ...styles.pill, background: stt.bg, color: stt.fg, borderColor: stt.border }}>{s.status}</span>
               </div>
-              {(client.ntn || client.phone) && (
-                <div style={styles.sub}>{client.ntn ? `NTN ${client.ntn}` : client.phone}</div>
+              {(client.ntn || client.phone || common(client)) && (
+                <div style={styles.sub}>
+                  {client.ntn ? `NTN ${client.ntn}` : client.phone}
+                  {common(client) && <span style={styles.commonBadge} title={sharedTitle(client)}>Common</span>}
+                </div>
+              )}
+              {common(client) && others(client).length > 0 && (
+                <div style={styles.sharedLine}>Shared with {others(client).join(" · ")}</div>
               )}
 
               <div style={styles.mGrid}>
@@ -153,7 +171,7 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
               {showActions && (
                 <div style={styles.mActions}>
                   {canUpdate && (
-                    <button style={{ ...styles.mIconBtn, ...styles.edit }} title="Edit" onClick={() => onEdit(client)}><MdEdit size={18} /></button>
+                    <button style={{ ...styles.mIconBtn, ...styles.edit }} title={editTitle(client)} onClick={() => onEdit(client)}><MdEdit size={18} /></button>
                   )}
                   {canCopy && onCopy && (
                     <button style={{ ...styles.mIconBtn, ...styles.copy }} title="Copy to another company" onClick={() => onCopy(client)}><MdContentCopy size={17} /></button>
@@ -212,8 +230,14 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
                   ) : (
                     <div style={styles.name}>{client.name}</div>
                   )}
-                  {(client.ntn || client.phone) && (
-                    <div style={styles.sub}>{client.ntn ? `NTN ${client.ntn}` : client.phone}</div>
+                  {(client.ntn || client.phone || common(client)) && (
+                    <div style={styles.sub}>
+                      {client.ntn ? `NTN ${client.ntn}` : client.phone}
+                      {common(client) && <span style={styles.commonBadge} title={sharedTitle(client)}>Common</span>}
+                    </div>
+                  )}
+                  {common(client) && others(client).length > 0 && (
+                    <div style={styles.sharedLine}>Shared with {others(client).join(" · ")}</div>
                   )}
                 </td>
                 <td style={styles.tdNum}>{drill(client, s.salesQuotes > 0, "quotes", s.salesQuotes || "")}</td>
@@ -232,7 +256,7 @@ export default function ClientList({ clients, summaryById = {}, onEdit, onCopy, 
                   <td style={styles.tdActions}>
                     <div style={styles.actionRow}>
                       {canUpdate && (
-                        <button style={{ ...styles.iconBtn, ...styles.edit }} title="Edit" onClick={() => onEdit(client)}>
+                        <button style={{ ...styles.iconBtn, ...styles.edit }} title={editTitle(client)} onClick={() => onEdit(client)}>
                           <MdEdit size={16} />
                         </button>
                       )}
@@ -284,7 +308,9 @@ const styles = {
   name: { fontWeight: 700, color: "#1a2332", lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
   nameBtn: { background: "none", border: "none", padding: 0, margin: 0, textAlign: "left", cursor: "pointer", fontWeight: 700, color: "#1a2332", lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", fontFamily: "inherit", fontSize: "inherit", transition: "color 0.15s" },
   drill: { background: "none", border: "none", padding: 0, margin: 0, font: "inherit", color: "#0d47a1", fontWeight: 600, cursor: "pointer", fontVariantNumeric: "tabular-nums" },
-  sub: { fontSize: "0.7rem", color: "#94a3b8", marginTop: 2 },
+  sub: { fontSize: "0.7rem", color: "#94a3b8", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  sharedLine: { fontSize: "0.68rem", color: "#0d47a1", marginTop: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  commonBadge: { display: "inline-block", padding: "0.05rem 0.4rem", borderRadius: 10, border: "1px solid #b7d4f0", background: "#f0f7ff", color: "#0d47a1", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase" },
   pill: { display: "inline-block", padding: "0.15rem 0.55rem", borderRadius: 12, border: "1px solid", fontSize: "0.7rem", fontWeight: 700 },
   actionRow: { display: "flex", gap: 4, justifyContent: "flex-end" },
   iconBtn: { display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, border: "none", cursor: "pointer" },

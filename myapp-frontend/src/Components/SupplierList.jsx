@@ -12,7 +12,10 @@ export default function SupplierList({
   // showed before rather than rendering "Rs 0.00" as if it were settled.
   summary = {},
   onShowLedger,
+  // Marks a supplier shared with other companies; its Edit propagates.
+  isCommon,
 }) {
+  const common = (supplier) => typeof isCommon === "function" && isCommon(supplier);
   const confirm = useConfirm();
   const { has } = usePermissions();
   const canUpdate = has("suppliers.manage.update");
@@ -58,6 +61,9 @@ export default function SupplierList({
           <div style={cardStyles.cardContent}>
             <div>
               <h5 style={cardStyles.title}>{supplier.name}</h5>
+              {common(supplier) && (
+                <span style={commonBadge} title="Shared with other companies — edits propagate to all">Common</span>
+              )}
 
               {/* Accounts payable + status. The figure is clickable and opens the
                   supplier's ledger, the same affordance the customer A/R cell has. */}
@@ -138,6 +144,7 @@ export default function SupplierList({
                   <button
                     style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
                     onClick={() => onEdit(supplier)}
+                    title={common(supplier) ? "Edit (propagates to all companies)" : "Edit"}
                   >
                     <MdEdit /> Edit
                   </button>
@@ -194,6 +201,7 @@ const payRow = {
   display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem",
   margin: "0.4rem 0 0.2rem",
 };
+const commonBadge = { display: "inline-block", marginBottom: "0.4rem", padding: "0.05rem 0.45rem", borderRadius: 10, border: "1px solid #b7d4f0", background: "#f0f7ff", color: "#0d47a1", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase" };
 const payLabel = { color: "#5f6d7e", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em" };
 const payAmount = { fontSize: "0.86rem", fontWeight: 700, color: "#1a2332", fontVariantNumeric: "tabular-nums" };
 const payAmountBtn = {
