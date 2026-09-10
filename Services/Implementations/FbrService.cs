@@ -2063,6 +2063,16 @@ namespace MyApp.Api.Services.Implementations
             if (company == null || string.IsNullOrEmpty(company.FbrToken)) return null;
 
             var httpClient = CreateClient(company);
+            // Ask about the number the INVOICE would carry, not the string the
+            // operator typed. FBR answered "Registered" for "C650414-2" taken
+            // verbatim and "Unregistered" for its sanitised form 6504142 -- and
+            // 6504142 is what the payload sends (buyerNTNCNIC), so the verbatim
+            // answer would have set a type every bill then failed on [0205].
+            // Same rule as the payload: 13 digits is a CNIC, otherwise the
+            // 7-digit NTN via SanitizeNtn (2026-09-10).
+            var digitsOnly = StripAllDigits(regNo);
+            regNo = digitsOnly.Length == 13 ? digitsOnly : SanitizeNtn(regNo);
+            if (regNo.Length == 0) return null;
             // Use default options (no CamelCase) for this specific request since the field is "Registration_No"
             var requestBody = JsonSerializer.Serialize(new { Registration_No = regNo });
             var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
