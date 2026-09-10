@@ -290,6 +290,16 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-11 — Client / supplier forms: STRN optional, "Check with FBR"
+
+- FBR's buyer block carries NTN/CNIC, name, province and registration type, never
+  STRN, so demanding an STRN kept real buyers out of FBR. STRN is now optional on
+  the client and supplier forms, and CNIC is optional for every registration type
+  (format still checked when typed). NTN stays required for Registered / FTN.
+- The client form gains "Check with FBR" (Get_Reg_Type through the existing
+  `POST /api/fbr/regtype/{companyId}`, needs `fbr.config.view`) to set the
+  registration type from FBR's own answer. Ported from the Trader line.
+
 ### 2026-09-11 — Oversell guard on invoice edit (soft warning / hard block)
 
 - **Where stock actually leaves.** Only HS-coded item types move stock, and on a
