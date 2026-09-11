@@ -30,7 +30,9 @@ export function hasWithholdingBlock(html) {
 export const WITHHOLDING_TEMPLATE_TYPES = ["Bill", "TaxInvoice", "PurchaseBill", "CreditNote", "DebitNote"];
 
 const TR_RE = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
-const GRAND_RE = /\{\{\s*(fmt|fmtDec|fmtPrice)\s+grandTotal\s*\}\}/;
+// The grand total is `grandTotal`, or `grandTotalRounded` on designs that
+// print whole rupees (the further-tax tax-invoice starters).
+const GRAND_RE = /\{\{\s*(fmt|fmtDec|fmtPrice)\s+grandTotal(?:Rounded)?\s*\}\}/;
 
 function tdsOf(tr) {
   return tr.match(/<td\b[^>]*>[\s\S]*?<\/td>/gi) || [];
@@ -48,6 +50,25 @@ function colspanOf(td) {
 function withColspan(open, n) {
   const stripped = open.replace(/\s+colspan\s*=\s*"?\d+"?/i, "");
   return n > 1 ? stripped.replace(/^<td/i, `<td colspan="${n}"`) : stripped;
+}
+
+/** Net Handlebars `{{#if}}` depth of a fragment: opens minus closes. */
+function countIf(fragment) {
+  const opens = (fragment.match(/\{\{#if\b/g) || []).length;
+  const closes = (fragment.match(/\{\{\/if\}\}/g) || []).length;
+  return opens - closes;
+}
+
+/** Index just after the `{{/if}}` that brings `depth` back below its value at `from`. */
+function closingIfAfter(html, from, depth) {
+  const tag = /\{\{(#if\b|\/if\}\})/g;
+  tag.lastIndex = from;
+  let d = depth, m;
+  while ((m = tag.exec(html))) {
+    if (m[1].startsWith("#if")) d++;
+    else if (--d < depth) return m.index + m[0].length;
+  }
+  return -1;
 }
 
 /**
@@ -103,7 +124,17 @@ export function injectWithholdingBlock(html) {
       `{{/if}}`;
   }
 
-  const at = html.indexOf(grandRow) + grandRow.length;
+  // A grand-total row may sit INSIDE a conditional -- the further-tax designs
+  // print "TOTAL", then `{{#if furtherTaxAmount}} Further Tax / GRAND TOTAL {{/if}}`.
+  // Inserting inside that block would show withholding only when further tax
+  // applies, so the block goes after the conditional's closing {{/if}} instead.
+  const rowStart = html.indexOf(grandRow);
+  let at = rowStart + grandRow.length;
+  const depthBefore = countIf(html.slice(0, rowStart));
+  if (depthBefore > 0) {
+    const close = closingIfAfter(html, at, depthBefore);
+    if (close > at) at = close;
+  }
   return {
     html: html.slice(0, at) + block + html.slice(at),
     anchor: tds.length === 2 ? "totals-row" : "footer-row",
