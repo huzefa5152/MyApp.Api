@@ -13,10 +13,15 @@ import { MdPrint } from "react-icons/md";
 // (see usePrintTemplates): company-wide templates when "All Divisions" is
 // selected, or that division's templates for a specific division.
 //
-// Renders nothing when the operator can't list templates (no
-// printtemplates.manage.view) OR the active scope has no template — in the
-// latter case the screen also blocks Print/PDF (picker.noTemplate), so we
-// never offer a picker that can't resolve to a valid template.
+// Renders nothing when the operator cannot list templates (no
+// printtemplates.manage.view) OR the active scope has fewer than two templates
+// -- with one there is nothing to choose, and the screen prints it (or the
+// built-in fallback) without asking.
+//
+// The list has NO separate "Auto" row. Every template is listed once; the
+// scope's default carries a star and is what an unpinned screen prints.
+// Picking the starred one returns the screen to "follow the default", so a
+// later change of default is picked up; picking any other pins it.
 export default function PrintTemplateSelect({ picker, style }) {
   if (!picker?.canChoose) return null;
 
@@ -37,23 +42,27 @@ export default function PrintTemplateSelect({ picker, style }) {
   }
 
   const autoDefault = picker.resolveAuto();
-  const autoLabel = autoDefault ? `Default — ${autoDefault.name}` : "Default";
+  const autoId = autoDefault ? String(autoDefault.id) : "";
+  // An unpinned screen shows the default as selected; pinning the default
+  // itself is the same thing as not pinning, so it is stored as "" (follow).
+  const value = picker.selectedId || autoId;
+  const onChange = (e) => picker.setSelectedId(e.target.value === autoId ? "" : e.target.value);
+  const following = !picker.selectedId;
 
   return (
-    <div className="print-template-picker" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }} title="Print template used by Print / PDF">
+    <div className="print-template-picker" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }}
+         title={following ? "Print template: following the default for this scope" : "Print template pinned for this screen"}>
       <MdPrint size={15} color="#5f6d7e" aria-hidden="true" />
       <select
         className="filter-select"
         aria-label="Print template"
-        value={picker.selectedId}
-        onChange={(e) => picker.setSelectedId(e.target.value)}
+        value={value}
+        onChange={onChange}
         style={{ flex: 1, minWidth: 0, maxWidth: 260 }}
       >
-        <option value="">{`★ ${autoLabel}`}</option>
         {picker.templates.map((t) => (
           <option key={t.id} value={String(t.id)}>
-            {t.name}
-            {t.isDefault ? " ★" : ""}
+            {String(t.id) === autoId ? `★ ${t.name} (default)` : t.name}
           </option>
         ))}
       </select>

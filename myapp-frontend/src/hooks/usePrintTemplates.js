@@ -296,10 +296,11 @@ export function usePrintTemplates(templateType, { divisionId = null } = {}) {
     // The active division scope (null = All / company-wide), for callers that
     // want to label or reason about it.
     scopeDivisionId,
-    // Show the selector whenever the operator can view templates AND the active
-    // scope has at least one saved template. A scope with none hides the picker
-    // (there is nothing to choose between) and prints through the fallback.
-    canChoose: canViewTemplates && templatesLoaded && templates.length > 0,
+    // Show the selector only when there is a CHOICE: two or more saved
+    // templates in the active scope. One template used to render as two rows
+    // ("Default -- X" and "X") that meant the same thing (2026-09-11); a lone
+    // template, or none, prints through resolveTemplate with no picker.
+    canChoose: canViewTemplates && templatesLoaded && templates.length > 1,
     // True when the active scope prints through the built-in design.
     usingBuiltIn: scopeEmpty && !!builtInHtml,
   };
