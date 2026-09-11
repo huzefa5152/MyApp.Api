@@ -1067,7 +1067,25 @@ Suites that need a company WITHOUT a template must delete the seeded row first
 `node scripts/sync_default_print_templates.mjs` after editing a default and
 keep `--check` green; the two copies must never be edited by hand.
 
-<<<<<<< HEAD
+**Withholding tax lines (2026-09-11).** `utils/withholdingBlock.js` is the ONE
+place the s.153 block is written: two rows after the grand-total row, cloning
+that row's own tags, wrapped in `{{#if withholdingTaxAmount}}` so a document
+with no withholding prints exactly as before. Every Bill / TaxInvoice /
+PurchaseBill / CreditNote / DebitNote starter and default carries it, and
+`node scripts/test_print_templates_wht.mjs` proves each one renders the lines
+with withholding, stays silent without, has a stamp slot, and that the injector
+can still place the block into the bare design (that is what the "Add
+withholding tax lines" actions on the Print Templates screen rely on for the
+rows already saved on a live installation). `PrintTemplateDto.HasWithholdingBlock`
+is computed server-side so the list can badge a row without shipping bodies.
+The rate is a DECIMAL percentage: format it with `fmtQty`, never `fmt`.
+
+**The template picker lists each template ONCE** (`PrintTemplateSelect`,
+`usePrintTemplates.canChoose`): it renders only when the scope has two or more
+templates, the default carries a star, and choosing the starred one stores ""
+("follow the default"). The old separate "Default — X" row plus "X ★" made a
+lone template read as two choices.
+
 ### 5c-2. Print-template artwork is a FILE, never inline base64 (2026-09-07)
 
 A bespoke print template must reference its logos, letterheads and banners by
@@ -1113,26 +1131,6 @@ too or hosted artwork will be intermittently blank.
 Prove a swap changed nothing: merge the template before and after and compare
 the flow height (`.tail` bottom) — it must be identical to the pixel. On the
 Bill it was 1049px both ways.
-=======
-**Withholding tax lines (2026-09-11).** `utils/withholdingBlock.js` is the ONE
-place the s.153 block is written: two rows after the grand-total row, cloning
-that row's own tags, wrapped in `{{#if withholdingTaxAmount}}` so a document
-with no withholding prints exactly as before. Every Bill / TaxInvoice /
-PurchaseBill / CreditNote / DebitNote starter and default carries it, and
-`node scripts/test_print_templates_wht.mjs` proves each one renders the lines
-with withholding, stays silent without, has a stamp slot, and that the injector
-can still place the block into the bare design (that is what the "Add
-withholding tax lines" actions on the Print Templates screen rely on for the
-rows already saved on a live installation). `PrintTemplateDto.HasWithholdingBlock`
-is computed server-side so the list can badge a row without shipping bodies.
-The rate is a DECIMAL percentage: format it with `fmtQty`, never `fmt`.
-
-**The template picker lists each template ONCE** (`PrintTemplateSelect`,
-`usePrintTemplates.canChoose`): it renders only when the scope has two or more
-templates, the default carries a star, and choosing the starred one stores ""
-("follow the default"). The old separate "Default — X" row plus "X ★" made a
-lone template read as two choices.
->>>>>>> fc4d540 (Print Templates screen: keep filters, group by type, fix bar)
 
 ### 5d. Public file allowlist
 
@@ -1426,7 +1424,7 @@ them can be resolved from FBR.
 | Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
-<<<<<<< HEAD
+| Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
 | Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (64 checks) |
 | Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (37 checks) |
 | FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
@@ -1434,9 +1432,6 @@ them can be resolved from FBR.
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
-=======
-| Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
->>>>>>> fc4d540 (Print Templates screen: keep filters, group by type, fix bar)
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
