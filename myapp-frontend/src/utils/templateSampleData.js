@@ -171,13 +171,36 @@ export const SAMPLE_DATA = {
     subtotal: 150000,
     gstRate: 18,
     gstAmount: 27000,
-    grandTotal: 177000,
-    // Withholding income tax (s.153): the preview must show the block
-    // templates render only when withholdingTaxAmount is non-zero.
+    // All three taxes carry a value so the starter gallery and the editor
+    // preview show every block a design can render (2026-09-11). Templates
+    // print each only when its amount is non-zero. The figures tie up:
+    //   further tax s.3(1A)  4%   of 150,000            =  6,000
+    //   grand total          150,000 + 27,000 + 6,000   = 183,000
+    //   withholding s.153    4.5% of 150,000            =  6,750  (deducted)
+    //   advance tax 236G     0.1% of 183,000            =    183  (added)
+    //   collectible          183,000 - 6,750 + 183      = 176,433
+    furtherTaxRate: 4,
+    furtherTaxAmount: 6000,
+    totalBeforeFurtherTax: 177000,
+    grandTotal: 183000,
     withholdingTaxRate: 4.5,
-    withholdingTaxAmount: 7965,
-    balanceDueAfterWht: 169035,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    withholdingTaxAmount: 6750,
+    balanceDueAfterWht: 176250,
+    advanceTaxSection: "236G",
+    advanceTaxFilerActive: true,
+    advanceTaxRate: 0.1,
+    advanceTaxAmount: 183,
+    advanceTaxLabel: "Advanced Income Tax 236-G",
+    totalWithAdvanceTax: 183183,
+    collectible: 176433,
+    // Whole-rupee variants the rounded designs bind.
+    subtotalRounded: 150000,
+    gstAmountRounded: 27000,
+    totalBeforeFurtherTaxRounded: 177000,
+    grandTotalRounded: 183000,
+    collectibleRounded: 176433,
+    amountInWords: "One Hundred Eighty Three Thousand Rupees Only",
+    amountInWordsRounded: "One Hundred Eighty Three Thousand Rupees Only",
     items: [
       { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
       { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },
@@ -208,16 +231,39 @@ export const SAMPLE_DATA = {
     subtotal: 150000,
     gstRate: 18,
     gstAmount: 27000,
-    grandTotal: 177000,
-    // Withholding income tax (s.153): the preview must show the block
-    // templates render only when withholdingTaxAmount is non-zero.
+    // All three taxes carry a value so the starter gallery and the editor
+    // preview show every block a design can render (2026-09-11). Templates
+    // print each only when its amount is non-zero. The figures tie up:
+    //   further tax s.3(1A)  4%   of 150,000            =  6,000
+    //   grand total          150,000 + 27,000 + 6,000   = 183,000
+    //   withholding s.153    4.5% of 150,000            =  6,750  (deducted)
+    //   advance tax 236G     0.1% of 183,000            =    183  (added)
+    //   collectible          183,000 - 6,750 + 183      = 176,433
+    furtherTaxRate: 4,
+    furtherTaxAmount: 6000,
+    totalBeforeFurtherTax: 177000,
+    grandTotal: 183000,
     withholdingTaxRate: 4.5,
-    withholdingTaxAmount: 7965,
-    balanceDueAfterWht: 169035,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    withholdingTaxAmount: 6750,
+    balanceDueAfterWht: 176250,
+    advanceTaxSection: "236G",
+    advanceTaxFilerActive: true,
+    advanceTaxRate: 0.1,
+    advanceTaxAmount: 183,
+    advanceTaxLabel: "Advanced Income Tax 236-G",
+    totalWithAdvanceTax: 183183,
+    collectible: 176433,
+    // Whole-rupee variants the rounded designs bind.
+    subtotalRounded: 150000,
+    gstAmountRounded: 27000,
+    totalBeforeFurtherTaxRounded: 177000,
+    grandTotalRounded: 183000,
+    collectibleRounded: 176433,
+    amountInWords: "One Hundred Eighty Three Thousand Rupees Only",
+    amountInWordsRounded: "One Hundred Eighty Three Thousand Rupees Only",
     items: [
-      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
-      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
+      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400, valueExclTaxRounded: 80000, totalInclTaxRounded: 94400 },
+      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600, valueExclTaxRounded: 70000, totalInclTaxRounded: 82600 },
     ],
     // FBR digital invoicing -- preview values so the {{#if fbrIRN}} block
     // actually draws in the editor. Real values come from the print DTO.

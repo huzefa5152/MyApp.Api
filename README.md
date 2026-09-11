@@ -347,6 +347,9 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-09-11 — Print templates: withholding tax on every design, one picker, filters that stay
 
+- **The starter gallery and the editor preview show further tax and advance
+  tax too.** The sample document now carries all three taxes with figures that
+  tie up, so a design's every block is visible before it is picked.
 - **Every Purchase Bill, Credit Note and Debit Note starter now prints
   withholding income tax (s.153), joining the Bill and Sales Tax Invoice
   designs that already did.** Two lines under the grand total — the tax
