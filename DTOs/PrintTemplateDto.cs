@@ -35,6 +35,11 @@ namespace MyApp.Api.DTOs
         // block". Computed server-side so the list view can show it without
         // shipping template HTML.
         public string StampState { get; set; } = "none";
+        // True when the HTML binds the withholding merge fields
+        // (withholdingTaxAmount / balanceDueAfterWht). Drives the "Add
+        // withholding tax lines" action on the Print Templates screen without
+        // shipping template bodies to the list (2026-09-11).
+        public bool HasWithholdingBlock { get; set; }
 
         public DateTime UpdatedAt { get; set; }
     }

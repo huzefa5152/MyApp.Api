@@ -127,6 +127,8 @@ namespace MyApp.Api.Controllers
                 // and it re-reads the template by id there.
                 StampSlug = t.Stamp?.Slug,
                 StampState = StampSlot.Detect(t.HtmlContent),
+                HasWithholdingBlock = !string.IsNullOrEmpty(t.HtmlContent)
+                    && (t.HtmlContent.Contains("withholdingTaxAmount") || t.HtmlContent.Contains("balanceDueAfterWht")),
                 UpdatedAt = t.UpdatedAt
             };
         }

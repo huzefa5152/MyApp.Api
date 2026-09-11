@@ -282,6 +282,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
       <tr><td class="lbl">SUB TOTAL</td><td class="val">Rs{{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs{{fmt gstAmount}}</td></tr>
       <tr class="grand"><td class="lbl">GRAND TOTAL</td><td class="val">Rs{{fmt grandTotal}}</td></tr>
+      {{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs{{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs{{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -300,15 +301,35 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 </body></html>`;
 
 
-export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax Invoice #{{invoiceNumber}}</title>
+export const defaultTaxInvoiceTemplate = `<!DOCTYPE html>
+<html>
+<head>
+<title>Tax Invoice #{{invoiceNumber}}</title>
 <meta name="format-detection" content="telephone=no">
+
 <style>
-  a { color: inherit !important; text-decoration: none !important; }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
   @media print {
-    @page { size: A4; margin: 6mm 10mm; }
-    html, body { height: 100%; margin: 0; }
-    .footer-section { page-break-inside: avoid; }
-    .words-wrap { page-break-inside: avoid; }
+    @page {
+      size: A4;
+      margin: 6mm 10mm;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    .footer-section,
+    .words-wrap {
+      page-break-inside: avoid;
+    }
+
     table.items th,
     table.items td,
     .num-row td,
@@ -318,221 +339,938 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
       color-adjust: exact !important;
     }
   }
-  * { box-sizing: border-box; margin: 0; padding: 0;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      color-adjust: exact !important;
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
-  html, body { height: 100%; }
-  body { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 11pt; color: #000;
-         display: flex; flex-direction: column; min-height: 100vh;
-         padding: 6mm 10mm; }
-  .main-content { flex: 1; }
-  .footer-section { margin-top: auto; }
 
-  /* ---- Title ---- */
-  .title { text-align: center; margin-bottom: 12px; }
-  .title span { font-size: 22pt; font-weight: bold; text-transform: uppercase;
-                border: 2px solid #000; padding: 6px 0; letter-spacing: 3px;
-                text-decoration: underline; text-underline-offset: 4px;
-                background-color: #d9d9d9 !important; display: block;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important; }
+  html,
+  body {
+    height: 100%;
+  }
 
-  /* ---- Meta row: Invoice No / Date / Time Of Supply ---- */
-  .meta-row { display: flex; gap: 30px; font-size: 10pt; margin-bottom: 10px; padding: 0 10px; }
-  .meta-row span { white-space: nowrap; text-decoration: underline; }
-  .meta-row strong { font-weight: bold; }
+  body {
+    font-family: Calibri, "Segoe UI", Arial, sans-serif;
+    font-size: 11pt;
+    color: #000;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 6mm 10mm;
+  }
 
-  /* ---- Supplier / Buyer boxes ---- */
-  .parties { display: flex; gap: 20px; margin-bottom: 8px; }
-  .party { flex: 1; border: 1px solid #000; padding: 6px 10px; font-size: 10pt; line-height: 1.5; }
-  .party-header { font-size: 9pt; margin-bottom: 1px; text-decoration: underline; }
-  .party-name { font-size: 13pt; font-weight: bold; font-style: italic; }
-  .buyer-name { font-weight: bold; }
-  .party-table { width: 100%; border-collapse: collapse; }
-  .party-table td { padding: 0 0 1px 0; vertical-align: top; font-size: 10pt; }
-  .party-table td.plbl { font-weight: bold; white-space: nowrap; width: 90px; }
-  .party-table td.pval { text-align: right; }
+  .main-content {
+    flex: 1;
+  }
 
-  /* ---- Term of Sale ---- */
-  .term-line { font-size: 11pt; font-weight: bold; font-style: italic; margin-bottom: 6px; }
+  .footer-section {
+    margin-top: auto;
+  }
 
-  /* ---- Table ---- */
-  table.items { width: 100%; border-collapse: collapse; margin-top: 4px; }
-  table.items thead { display: table-row-group; }
+
+  /* =========================================================
+     TITLE
+     ========================================================= */
+
+  .title {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .title span {
+    font-size: 22pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    border: 2px solid #000;
+    padding: 6px 0;
+    letter-spacing: 3px;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    background-color: #d9d9d9 !important;
+    display: block;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+
+  /* =========================================================
+     INVOICE META
+     ========================================================= */
+
+  .meta-row {
+    display: flex;
+    gap: 30px;
+    font-size: 10pt;
+    margin-bottom: 10px;
+    padding: 0 10px;
+  }
+
+  .meta-row span {
+    white-space: nowrap;
+    text-decoration: underline;
+  }
+
+  .meta-row strong {
+    font-weight: bold;
+  }
+
+
+  /* =========================================================
+     SUPPLIER / BUYER
+     Equal width + equal height
+     ========================================================= */
+
+  .parties {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 8px;
+
+    /* IMPORTANT:
+       Makes both boxes equal height automatically. */
+    align-items: stretch;
+  }
+
+  .party {
+    /*
+      flex-basis: 0 makes both boxes exactly equal width,
+      regardless of the content inside them.
+    */
+    flex: 1 1 0;
+    width: 0;
+
+    border: 1px solid #000;
+    padding: 6px 10px;
+
+    font-size: 10pt;
+    line-height: 1.5;
+
+    /*
+      No fixed height is required.
+      Flexbox stretches the smaller box to match the taller one.
+    */
+    min-height: 215px;
+  }
+
+  .party-header {
+    font-size: 9pt;
+    margin-bottom: 1px;
+    text-decoration: underline;
+  }
+
+  .party-name {
+    font-size: 13pt;
+    font-weight: bold;
+    font-style: italic;
+  }
+
+  .buyer-name {
+    font-weight: bold;
+  }
+
+  .party-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .party-table td {
+    padding: 0 0 1px 0;
+    vertical-align: top;
+    font-size: 10pt;
+  }
+
+  .party-table td.plbl {
+    font-weight: bold;
+    white-space: nowrap;
+    width: 90px;
+  }
+
+  .party-table td.pval {
+    text-align: center;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+
+
+  /* =========================================================
+     TERM OF SALE
+     ========================================================= */
+
+  .term-line {
+    font-size: 11pt;
+    font-weight: bold;
+    font-style: italic;
+    margin-bottom: 6px;
+  }
+
+
+  /* =========================================================
+     ITEMS TABLE
+     ========================================================= */
+
+  table.items {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+  }
+
+  table.items thead {
+    display: table-row-group;
+  }
+
   table.items th {
-       background: #d9d9d9 !important; background-color: #d9d9d9 !important;
-       color: #000 !important; font-weight: bold;
-       font-size: 9pt; padding: 4px 6px; border: 1px solid #000; text-align: center;
-       vertical-align: middle;
-       -webkit-print-color-adjust: exact !important;
-       print-color-adjust: exact !important;
+    background: #d9d9d9 !important;
+    background-color: #d9d9d9 !important;
+    color: #000 !important;
+    font-weight: bold;
+    font-size: 9pt;
+    padding: 4px 6px;
+    border: 1px solid #000;
+    text-align: center;
+    vertical-align: middle;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  table.items th.left { text-align: left; }
-  .cell { border: 1px solid #000; padding: 3px 6px; font-size: 10pt; height: 22px; }
-  .c { text-align: center; }
-  .r { text-align: right; }
-  table.items tbody tr:nth-child(odd) td { background-color: #ffffff !important; }
-  table.items tbody tr:nth-child(even) td { background-color: #f2f2f2 !important; }
 
-  /* ---- Number row under headers ---- */
-  .num-row td { text-align: center; font-size: 9pt; font-weight: bold;
-                border: 1px solid #000; padding: 2px; background-color: #fff !important; }
+  table.items th.left {
+    text-align: left;
+  }
 
-  /* ---- Total row ---- */
-  .total-row td { font-weight: bold; font-size: 10pt; border: 1px solid #000; padding: 3px 6px;
-                   background-color: #d9d9d9 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .cell {
+    border: 1px solid #000;
+    padding: 3px 6px;
+    font-size: 10pt;
+    height: 22px;
+  }
 
-  /* ---- Amount In Words box ---- */
-  .words-wrap { page-break-inside: avoid; }
-  .words-box { display: inline-flex; border: 1px solid #000; margin-top: 10px; margin-left: auto; margin-right: auto; }
-  .words-box .wlbl { padding: 4px 12px; font-weight: bold; font-size: 10pt; border-right: 1px solid #000; white-space: nowrap; }
-  .words-box .wval { padding: 4px 16px; font-size: 11pt; font-weight: bold; }
-  .words-center { text-align: center; }
+  .c {
+    text-align: center;
+  }
 
-  /* ---- Signature ---- */
-  .sig-row { display: flex; justify-content: space-between; margin-top: 40px; padding: 0 50px; }
-  .sig-block { text-align: center; }
-  .sig-block .line { width: 220px; border-top: 1px solid #000; margin-bottom: 3px; }
-  .sig-block .label { font-size: 9pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-  .stamp-img { height: 64px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 2px; }
-</style></head><body>
+  .r {
+    text-align: right;
+  }
+
+  table.items tbody tr:nth-child(odd) td {
+    background-color: #ffffff !important;
+  }
+
+  table.items tbody tr:nth-child(even) td {
+    background-color: #f2f2f2 !important;
+  }
+
+
+  /* =========================================================
+     NUMBER ROW
+     ========================================================= */
+
+  .num-row td {
+    text-align: center;
+    font-size: 9pt;
+    font-weight: bold;
+    border: 1px solid #000;
+    padding: 2px;
+    background-color: #fff !important;
+  }
+
+
+  /* =========================================================
+     TOTAL ROW
+     ========================================================= */
+
+  .total-row td {
+    font-weight: bold;
+    font-size: 10pt;
+    border: 1px solid #000;
+    padding: 3px 6px;
+    background-color: #d9d9d9 !important;
+
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+
+  /* =========================================================
+     AMOUNT IN WORDS
+     ========================================================= */
+
+  .words-wrap {
+    page-break-inside: avoid;
+  }
+
+  .words-box {
+    display: inline-flex;
+    border: 1px solid #000;
+    margin-top: 10px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .words-box .wlbl {
+    padding: 4px 12px;
+    font-weight: bold;
+    font-size: 10pt;
+    border-right: 1px solid #000;
+    white-space: nowrap;
+  }
+
+  .words-box .wval {
+    padding: 4px 16px;
+    font-size: 11pt;
+    font-weight: bold;
+  }
+
+  .words-center {
+    text-align: center;
+  }
+
+
+  /* =========================================================
+     SIGNATURE
+     ========================================================= */
+
+  .sig-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+    padding: 0 50px;
+  }
+
+  .sig-block {
+    text-align: center;
+  }
+
+  .sig-block .line {
+    width: 220px;
+    border-top: 1px solid #000;
+    margin-bottom: 3px;
+  }
+
+  .sig-block .label {
+    font-size: 9pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+.stamp-img { height: 90px; max-width: 220px; object-fit: contain; }</style>
+
+</head>
+
+<body>
 
 <div class="main-content">
-<!-- Title -->
-<div class="title"><span>SALES TAX INVOICE</span></div>
 
-<!-- Meta: Invoice No / Date / Time Of Supply -->
-<div class="meta-row">
-  <span><strong>Invoice No:</strong> &nbsp; {{invoiceNumber}}</span>
-  <span><strong>Date :</strong> &nbsp; {{fmtDate date}}</span>
-  <span><strong>Time Of Supply:</strong></span>
-</div>
+  <!-- =======================================================
+       TITLE
+       ======================================================= -->
 
-<!-- Supplier / Buyer boxes -->
-<div class="parties">
-  <div class="party">
-    <div class="party-header"><strong>Supplier's</strong></div>
-    <table style="width:100%;border-collapse:collapse">
-      <tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">Name:</td><td style="text-align:center;vertical-align:top;padding:0 0 1px 0"><span style="font-family:'Monotype Corsiva','Palace Script MT',cursive;font-size:16pt;font-weight:bold;font-style:italic">{{supplierName}}</span></td></tr>
-      {{#if supplierAddress}}<tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">Address :</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{{nl2br supplierAddress}}}</td></tr>{{/if}}
-      {{#if supplierPhone}}<tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">Telephone # :</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{{nl2br supplierPhone}}}</td></tr>{{/if}}
-      {{#if supplierSTRN}}<tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">STRN #:</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{supplierSTRN}}</td></tr>{{/if}}
-      {{#if supplierNTN}}<tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">NTN # :</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{supplierNTN}}</td></tr>{{/if}}
-    </table>
+  <div class="title">
+    <span>SALES TAX INVOICE</span>
   </div>
-  <div class="party">
-    <div class="party-header"><strong>Buyer's</strong></div>
-    <table style="width:100%;border-collapse:collapse">
-      <tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">Name:</td><td style="text-align:center;vertical-align:top;font-size:10pt;font-weight:bold;padding:0 0 1px 0">{{buyerName}}</td></tr>
-      {{#if buyerAddress}}<tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">Address :</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{{nl2br buyerAddress}}}</td></tr>{{/if}}
-      <tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">Telephone # :</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{#if buyerPhone}}{{buyerPhone}}{{/if}}</td></tr>
-      {{#if buyerSTRN}}<tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">STRN #:</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{buyerSTRN}}</td></tr>{{/if}}
-      {{#if buyerNTN}}<tr><td style="font-weight:bold;white-space:nowrap;width:90px;vertical-align:top;font-size:10pt;padding:0 0 1px 0">NTN # :</td><td style="text-align:center;vertical-align:top;font-size:10pt;padding:0 0 1px 0">{{buyerNTN}}</td></tr>{{/if}}
-    </table>
+
+
+  <!-- =======================================================
+       META INFORMATION
+       ======================================================= -->
+
+  <div class="meta-row">
+    <span>
+      <strong>Invoice No:</strong>
+      &nbsp; {{invoiceNumber}}
+    </span>
+
+    <span>
+      <strong>Date :</strong>
+      &nbsp; {{fmtDate date}}
+    </span>
+
+    <span>
+      <strong>Time Of Supply:</strong>
+    </span>
   </div>
-</div>
 
-<!-- Conditional PO number for Lotte Kolson — sits just below the buyer
-     box, right-aligned, so the operator sees it next to the client it
-     applies to rather than on the Term Of Sale line. -->
-{{#if (eq buyerName "LOTTE Kolson (Pvt.) Limited")}}{{#if poNumber}}
-<div style="text-align:right;font-size:10pt;font-weight:bold;margin:0 0 6px 0;padding-right:4px">PO NO: {{poNumber}}</div>
-{{/if}}{{/if}}
 
-<!-- Term of Sale -->
-<div class="term-line">Term Of Sale: Credit</div>
+  <!-- =======================================================
+       SUPPLIER / BUYER
 
-<!-- Items Table -->
-<table class="items">
-  <thead>
-    <tr>
-      <th colspan="2" style="width:80px;background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Quantity</th>
-      <th rowspan="2" style="background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Description</th>
-      <th rowspan="2" style="width:90px;background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Value Excluding<br>Sales Tax</th>
-      <th rowspan="2" style="width:50px;background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Rate Of<br>Sales<br>Tax</th>
-      <th rowspan="2" style="width:80px;background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Total Sales Tax<br>Payable</th>
-      <th rowspan="2" style="width:90px;background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Value Including<br>Sales Tax</th>
-    </tr>
-    <tr>
-      <th style="width:35px;background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Qty</th>
-      <th style="width:40px;background:#d9d9d9 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important">Unit</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr class="num-row">
-      <td colspan="2">&nbsp;</td>
-      <td>1</td>
-      <td>2</td>
-      <td>3</td>
-      <td>4</td>
-      <td>5</td>
-    </tr>
-    {{#each items}}
-    <tr>
-      <td class="cell c">{{this.quantity}}</td>
-      <td class="cell c">{{this.uom}}</td>
-      <td class="cell">{{#if this.hsCode}}{{this.hsCode}} - {{{richText this.description}}}{{else}}{{{richText this.description}}}{{/if}}</td>
-      <td class="cell r">{{fmtDec this.valueExclTax}}</td>
-      <td class="cell c">{{this.gstRate}}%</td>
-      <td class="cell r">{{fmtDec this.gstAmount}}</td>
-      <td class="cell r">{{fmtDec this.totalInclTax}}</td>
-    </tr>
-    {{/each}}
-  </tbody>
-  <tfoot>
-    <tr class="total-row">
-      <td colspan="3" class="r">TOTAL :</td>
-      <td class="r">{{fmtDec subtotal}}</td>
-      <td class="c">{{gstRate}}%</td>
-      <td class="r">{{fmtDec gstAmount}}</td>
-      <td class="r">{{fmtDec grandTotal}}</td>
-    </tr>
-  </tfoot>
-</table>
+       Both boxes are now:
+       - 50/50 width
+       - Equal height
+       - Automatically expand for longer content
+       ======================================================= -->
 
-<!-- Amount In Words (immediately after table) -->
-<div class="words-wrap">
-  <div class="words-center">
-    <div class="words-box">
-      <span class="wlbl">Amount In Words</span>
-      <span class="wval">{{amountInWords}}</span>
+  <div class="parties">
+
+    <!-- SUPPLIER -->
+
+    <div class="party">
+
+      <div class="party-header">
+        <strong>Supplier's</strong>
+      </div>
+
+      <table class="party-table">
+
+        <tr>
+          <td class="plbl">
+            Name:
+          </td>
+
+          <td
+            class="pval"
+            style="
+              font-family:'Monotype Corsiva','Palace Script MT',cursive;
+              font-size:16pt;
+              font-weight:bold;
+              font-style:italic;
+            ">
+            {{supplierName}}
+          </td>
+        </tr>
+
+
+        {{#if supplierAddress}}
+        <tr>
+          <td class="plbl">
+            Address :
+          </td>
+
+          <td class="pval">
+            {{{nl2br supplierAddress}}}
+          </td>
+        </tr>
+        {{/if}}
+
+
+        {{#if supplierPhone}}
+        <tr>
+          <td class="plbl">
+            Telephone # :
+          </td>
+
+          <td class="pval">
+            {{{nl2br supplierPhone}}}
+          </td>
+        </tr>
+        {{/if}}
+
+
+        {{#if supplierSTRN}}
+        <tr>
+          <td class="plbl">
+            STRN #:
+          </td>
+
+          <td class="pval">
+            {{supplierSTRN}}
+          </td>
+        </tr>
+        {{/if}}
+
+
+        {{#if supplierNTN}}
+        <tr>
+          <td class="plbl">
+            NTN # :
+          </td>
+
+          <td class="pval">
+            {{supplierNTN}}
+          </td>
+        </tr>
+        {{/if}}
+
+      </table>
+
     </div>
-  </div>
-</div>
 
-{{#if fbrIRN}}
-<!-- FBR Digital Invoicing Section.
-     QR and logo are now self-contained: the QR is a base64 PNG rendered
-     server-side ({{{fbrQrPngDataUrl}}} — triple braces so Handlebars
-     doesn't HTML-escape the data URI), and the FBR logo is served from
-     wwwroot/images so it deploys with the bundle. Replaces the earlier
-     dependency on external image hosts. -->
-<div style="margin-top:14px;padding:8px 12px;border:1.5px solid #1a5276;border-radius:4px;display:flex;justify-content:space-between;align-items:center;gap:16px">
-  <div style="flex:1">
-    <div style="font-size:9pt;font-weight:bold;color:#1a5276;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">FBR Digital Invoice</div>
-    <div style="font-size:9pt"><strong>IRN:</strong> {{fbrIRN}}</div>
-    <div style="font-size:8pt;color:#555;margin-top:2px">Submitted: {{fmtDate fbrSubmittedAt}}</div>
-    <div style="font-size:7pt;color:#888;margin-top:2px">This invoice is registered with the Federal Board of Revenue (FBR) Digital Invoicing System</div>
-  </div>
-  <div style="display:flex;gap:10px;align-items:center">
-    <div style="text-align:center">
-      <img src="{{{fbrQrPngDataUrl}}}" style="width:96px;height:96px;border:1px solid #ccc" alt="FBR Verify QR" />
-      <div style="font-size:7pt;color:#555;margin-top:2px">Scan to verify</div>
+
+    <!-- BUYER -->
+
+    <div class="party">
+
+      <div class="party-header">
+        <strong>Buyer's</strong>
+      </div>
+
+      <table class="party-table">
+
+        <tr>
+          <td class="plbl">
+            Name:
+          </td>
+
+          <td
+            class="pval"
+            style="font-weight:bold;">
+            {{buyerName}}
+          </td>
+        </tr>
+
+
+        {{#if buyerAddress}}
+        <tr>
+          <td class="plbl">
+            Address :
+          </td>
+
+          <td class="pval">
+            {{{nl2br buyerAddress}}}
+          </td>
+        </tr>
+        {{/if}}
+
+
+        <tr>
+          <td class="plbl">
+            Telephone # :
+          </td>
+
+          <td class="pval">
+            {{#if buyerPhone}}
+              {{buyerPhone}}
+            {{/if}}
+          </td>
+        </tr>
+
+
+        {{#if buyerSTRN}}
+        <tr>
+          <td class="plbl">
+            STRN #:
+          </td>
+
+          <td class="pval">
+            {{buyerSTRN}}
+          </td>
+        </tr>
+        {{/if}}
+
+
+        {{#if buyerNTN}}
+        <tr>
+          <td class="plbl">
+            NTN # :
+          </td>
+
+          <td class="pval">
+            {{buyerNTN}}
+          </td>
+        </tr>
+        {{/if}}
+
+      </table>
+
     </div>
-    <img src="{{fbrLogoUrl}}" style="width:80px;height:80px;object-fit:contain" alt="FBR" />
+
   </div>
-</div>
-{{/if}}
+
+
+  <!-- =======================================================
+       LOTTE KOLSON PO NUMBER
+       ======================================================= -->
+
+  {{#if (eq buyerName "LOTTE Kolson (Pvt.) Limited")}}
+    {{#if poNumber}}
+
+      <div
+        style="
+          text-align:right;
+          font-size:10pt;
+          font-weight:bold;
+          margin:0 0 6px 0;
+          padding-right:4px;
+        ">
+        PO NO: {{poNumber}}
+      </div>
+
+    {{/if}}
+  {{/if}}
+
+
+  <!-- =======================================================
+       TERM OF SALE
+       ======================================================= -->
+
+  <div class="term-line">
+    Term Of Sale: Credit
+  </div>
+
+
+  <!-- =======================================================
+       ITEMS
+       ======================================================= -->
+
+  <table class="items">
+
+    <thead>
+
+      <tr>
+
+        <th
+          colspan="2"
+          style="
+            width:80px;
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Quantity
+        </th>
+
+        <th
+          rowspan="2"
+          style="
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Description
+        </th>
+
+        <th
+          rowspan="2"
+          style="
+            width:90px;
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Value Excluding<br>
+          Sales Tax
+        </th>
+
+        <th
+          rowspan="2"
+          style="
+            width:50px;
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Rate Of<br>
+          Sales<br>
+          Tax
+        </th>
+
+        <th
+          rowspan="2"
+          style="
+            width:80px;
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Total Sales Tax<br>
+          Payable
+        </th>
+
+        <th
+          rowspan="2"
+          style="
+            width:90px;
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Value Including<br>
+          Sales Tax
+        </th>
+
+      </tr>
+
+
+      <tr>
+
+        <th
+          style="
+            width:35px;
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Qty
+        </th>
+
+        <th
+          style="
+            width:40px;
+            background:#d9d9d9 !important;
+            -webkit-print-color-adjust:exact !important;
+            print-color-adjust:exact !important;
+          ">
+          Unit
+        </th>
+
+      </tr>
+
+    </thead>
+
+
+    <tbody>
+
+      <!-- COLUMN NUMBERS -->
+
+      <tr class="num-row">
+        <td colspan="2">&nbsp;</td>
+        <td>1</td>
+        <td>2</td>
+        <td>3</td>
+        <td>4</td>
+        <td>5</td>
+      </tr>
+
+
+      <!-- INVOICE ITEMS -->
+
+      {{#each items}}
+
+      <tr>
+
+        <td class="cell c">
+          {{this.quantity}}
+        </td>
+
+        <td class="cell c">
+          {{this.uom}}
+        </td>
+
+        <td class="cell">
+          {{#if this.hsCode}}
+            {{this.hsCode}} - {{{richText this.description}}}
+          {{else}}
+            {{{richText this.description}}}
+          {{/if}}
+        </td>
+
+        <td class="cell r">
+          {{fmtDec this.valueExclTax}}
+        </td>
+
+        <td class="cell c">
+          {{this.gstRate}}%
+        </td>
+
+        <td class="cell r">
+          {{fmtDec this.gstAmount}}
+        </td>
+
+        <td class="cell r">
+          {{fmtDec this.totalInclTax}}
+        </td>
+
+      </tr>
+
+      {{/each}}
+
+    </tbody>
+
+
+    <tfoot>
+
+      <tr class="total-row">
+
+        <td colspan="3" class="r">
+          TOTAL :
+        </td>
+
+        <td class="r">
+          {{fmtDec subtotal}}
+        </td>
+
+        <td class="c">
+          {{gstRate}}%
+        </td>
+
+        <td class="r">
+          {{fmtDec gstAmount}}
+        </td>
+
+        <td class="r">
+          {{fmtDec grandTotal}}
+        </td>
+
+      </tr>{{#if withholdingTaxAmount}}<tr class="total-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="total-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}
+
+    </tfoot>
+
+  </table>
+
+
+  <!-- =======================================================
+       AMOUNT IN WORDS
+       ======================================================= -->
+
+  <div class="words-wrap">
+
+    <div class="words-center">
+
+      <div class="words-box">
+
+        <span class="wlbl">
+          Amount In Words
+        </span>
+
+        <span class="wval">
+          {{amountInWords}}
+        </span>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =======================================================
+       FBR DIGITAL INVOICE
+       ======================================================= -->
+
+  {{#if fbrIRN}}
+
+  <div
+    style="
+      margin-top:14px;
+      padding:8px 12px;
+      border:1.5px solid #1a5276;
+      border-radius:4px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:16px;
+    ">
+
+    <div style="flex:1">
+
+      <div
+        style="
+          font-size:9pt;
+          font-weight:bold;
+          color:#1a5276;
+          text-transform:uppercase;
+          letter-spacing:1px;
+          margin-bottom:4px;
+        ">
+        FBR Digital Invoice
+      </div>
+
+      <div style="font-size:9pt">
+        <strong>IRN:</strong>
+        {{fbrIRN}}
+      </div>
+
+      <div
+        style="
+          font-size:8pt;
+          color:#555;
+          margin-top:2px;
+        ">
+        Submitted: {{fmtDate fbrSubmittedAt}}
+      </div>
+
+      <div
+        style="
+          font-size:7pt;
+          color:#888;
+          margin-top:2px;
+        ">
+        This invoice is registered with the Federal Board of Revenue
+        (FBR) Digital Invoicing System
+      </div>
+
+    </div>
+
+
+    <div
+      style="
+        display:flex;
+        gap:10px;
+        align-items:center;
+      ">
+
+      <div style="text-align:center">
+
+        <img
+          src="{{{fbrQrPngDataUrl}}}"
+          style="
+            width:96px;
+            height:96px;
+            border:1px solid #ccc;
+          "
+          alt="FBR Verify QR"
+        />
+
+        <div
+          style="
+            font-size:7pt;
+            color:#555;
+            margin-top:2px;
+          ">
+          Scan to verify
+        </div>
+
+      </div>
+
+
+      <img
+        src="{{fbrLogoUrl}}"
+        style="
+          width:80px;
+          height:80px;
+          object-fit:contain;
+        "
+        alt="FBR"
+      />
+
+    </div>
+
+  </div>
+
+  {{/if}}
+
 </div>
 
-<!-- Footer -->
+
+<!-- =========================================================
+     FOOTER
+     ========================================================= -->
+
 <div class="footer-section">
+
   <div class="sig-row">
-    <div class="sig-block"><span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span><div class="line"></div><div class="label">Signature and Stamp</div></div>
-    <div class="sig-block"><div class="line"></div><div class="label">Receiver Signature and Stamp</div></div>
+
+    <div class="sig-block">
+
+      <span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>
+
+      <div class="line"></div>
+
+      <div class="label">
+        Signature and Stamp
+      </div>
+
+    </div>
+
+
+    <div class="sig-block">
+
+      <div class="line"></div>
+
+      <div class="label">
+        Receiver Signature and Stamp
+      </div>
+
+    </div>
+
   </div>
+
 </div>
 
-</body></html>`;
+</body>
+</html>`;

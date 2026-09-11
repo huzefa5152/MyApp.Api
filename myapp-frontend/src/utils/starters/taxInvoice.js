@@ -106,7 +106,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
 {{#if fbrIRN}}
@@ -233,7 +233,7 @@ table.items thead th.left { text-align: left; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="totals-row">
   <div class="words-box"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
@@ -357,7 +357,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
 {{#if fbrIRN}}
@@ -483,7 +483,7 @@ tbody tr:nth-child(even) td { background: #e8f5e9 !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="bot-area">
   <div class="words-box"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
@@ -595,7 +595,7 @@ table.items th.left { text-align: left; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
 </div>
@@ -716,7 +716,7 @@ tbody tr:nth-child(even) td { background: #faf7ef !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="bot-section">
   <div class="words-block"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
@@ -836,7 +836,7 @@ tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
 {{#if fbrIRN}}
@@ -963,7 +963,7 @@ tbody tr:nth-child(even) td { background: #edf2fb !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
 </div>
@@ -1082,7 +1082,7 @@ table.items th.left { text-align: left; }
         <td class="cell r">{{fmtDec this.totalInclTax}}</td>
       </tr>{{/each}}
     </tbody>
-    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
   </table>
   <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
   {{#if fbrIRN}}
@@ -1215,7 +1215,7 @@ tbody tr:nth-child(even) td { background: #fdf6e3 !important; }
         <td class="cell r">{{fmtDec this.totalInclTax}}</td>
       </tr>{{/each}}
     </tbody>
-    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
   </table>
   <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
   {{#if fbrIRN}}
@@ -1346,7 +1346,7 @@ tbody tr:nth-child(even) td { background: #f1f8e9 !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="bot-row">
   <div class="words-block"><div class="words-lbl">Amount In Words</div><div class="words-val">{{amountInWords}}</div></div>
@@ -1481,7 +1481,7 @@ tbody tr:nth-child(even) td { background: #e0f2f1 !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
 {{#if fbrIRN}}
@@ -1621,7 +1621,7 @@ tbody tr:nth-child(even) td { background: #f5f5f5 !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-area"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
 {{#if fbrIRN}}
@@ -1750,7 +1750,7 @@ tbody tr:nth-child(even) td { background: #e8eaf6 !important; }
       <td class="cell r">{{fmtDec this.totalInclTax}}</td>
     </tr>{{/each}}
   </tbody>
-  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+  <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
 </table>
 <div class="words-center"><div class="words-box"><span class="wlbl">Amount In Words</span><span class="wval">{{amountInWords}}</span></div></div>
 {{#if fbrIRN}}
@@ -1910,7 +1910,7 @@ tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
         <td class="cell r">{{fmtDec this.totalInclTax}}</td>
       </tr>{{/each}}
     </tbody>
-    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr></tfoot>
+    <tfoot><tr class="tfoot-row"><td colspan="3" class="r">TOTAL :</td><td class="r">{{fmtDec subtotal}}</td><td class="c">{{gstRate}}%</td><td class="r">{{fmtDec gstAmount}}</td><td class="r">{{fmtDec grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="tfoot-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="tfoot-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}</tfoot>
   </table>
   <div class="words-row"><span class="words-lbl">Amount In Words:</span><span class="words-val">{{amountInWords}}</span></div>
   {{#if fbrIRN}}

@@ -93,7 +93,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f0f0 !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -202,7 +202,7 @@ table.items th.c { text-align: center; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST {{gstRate}}%</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -296,7 +296,7 @@ table.items tbody tr:nth-child(even) td { background: #f0f4f8 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
@@ -391,7 +391,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
@@ -490,7 +490,7 @@ table.items th.l { text-align: left; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -602,7 +602,7 @@ table.items tbody tr:nth-child(even) td { background: #f9f6ef !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -691,7 +691,7 @@ table.items tbody tr:nth-child(even) td { background: #eef2fa !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -800,7 +800,7 @@ table.items tbody tr:nth-child(even) td { background: #edf1f7 !important; }
         <table class="ttbl">
           <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
           <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-          <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+          <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
         </table>
       </div>
     </div>
@@ -909,7 +909,7 @@ table.items tbody tr:nth-child(even) td { background: #f4f4f4 !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -1016,7 +1016,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdf4 !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
   <div class="terms"><strong>Terms &amp; Conditions:</strong> Payment due within 30 days. Goods once sold will not be taken back. All disputes subject to local jurisdiction.</div>
@@ -1116,7 +1116,7 @@ table.items tbody tr:nth-child(even) td { background: #f7f7e8 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
       </table>
     </div>
     <div class="bank-section">
@@ -1233,7 +1233,7 @@ table.items tbody tr:nth-child(even) td { background: #f0fdfa !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
@@ -1331,7 +1331,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
   <div class="terms"><strong>Terms:</strong> {{#if paymentTerms}}{{paymentTerms}}{{else}}Payment due within 30 days of invoice date. Goods once sold will not be taken back.{{/if}}</div>
@@ -1431,7 +1431,7 @@ table.items tbody tr:nth-child(even) td { background: #eff6ff !important; }
     <table class="ttbl">
       <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+      <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
     </table>
   </div>
 </div>
@@ -1540,7 +1540,7 @@ table.items tbody tr:nth-child(even) td { background: #f2f2f2 !important; }
       <table class="ttbl">
         <tr><td class="lbl">Sub Total</td><td class="val">Rs {{fmt subtotal}}</td></tr>
         <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs {{fmt gstAmount}}</td></tr>
-        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>
+        <tr class="grand"><td class="lbl">Grand Total</td><td class="val">Rs {{fmt grandTotal}}</td></tr>{{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs {{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs {{fmt balanceDueAfterWht}}</td></tr>{{/if}}
       </table>
     </div>
   </div>
