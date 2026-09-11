@@ -347,12 +347,11 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-09-11 — Print templates: withholding tax on every design, one picker, filters that stay
 
-- **Every Bill, Sales Tax Invoice, Purchase Bill, Credit Note and Debit Note
-  starter and built-in default now prints withholding income tax (s.153).**
-  Two lines under the grand total — the tax withheld with its rate, and the
-  net payable — shown only on documents where withholding applies. Not one of
-  the 77 shipped designs did this before, and a buyer who withholds 4.5% got a
-  document whose only total was the gross.
+- **Every Purchase Bill, Credit Note and Debit Note starter now prints
+  withholding income tax (s.153), joining the Bill and Sales Tax Invoice
+  designs that already did.** Two lines under the grand total — the tax
+  withheld with its rate, and the net payable — shown only on documents where
+  withholding applies.
 - **Existing templates get the same lines in one click.** The Print Templates
   screen shows what a company's templates still lack — withholding lines, a
   signature block — and adds them to every affected template at once, or one
