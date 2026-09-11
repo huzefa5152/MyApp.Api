@@ -172,6 +172,11 @@ export const SAMPLE_DATA = {
     gstRate: 18,
     gstAmount: 27000,
     grandTotal: 177000,
+    // Withholding income tax (s.153): the preview must show the block
+    // templates render only when withholdingTaxAmount is non-zero.
+    withholdingTaxRate: 4.5,
+    withholdingTaxAmount: 7965,
+    balanceDueAfterWht: 169035,
     amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
     items: [
       { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
@@ -204,6 +209,11 @@ export const SAMPLE_DATA = {
     gstRate: 18,
     gstAmount: 27000,
     grandTotal: 177000,
+    // Withholding income tax (s.153): the preview must show the block
+    // templates render only when withholdingTaxAmount is non-zero.
+    withholdingTaxRate: 4.5,
+    withholdingTaxAmount: 7965,
+    balanceDueAfterWht: 169035,
     amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
     items: [
       { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
@@ -297,6 +307,11 @@ export const SAMPLE_DATA = {
     gstRate: 18,
     gstAmount: 9000,
     grandTotal: 59000,
+    // Withholding income tax (s.153): the preview must show the block
+    // templates render only when withholdingTaxAmount is non-zero.
+    withholdingTaxRate: 4.5,
+    withholdingTaxAmount: 2655,
+    balanceDueAfterWht: 56345,
     amountInWords: "Fifty Nine Thousand Rupees Only",
     items: [
       { quantity: 5, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", valueExclTax: 40000, gstRate: 18, gstAmount: 7200, totalInclTax: 47200 },
@@ -335,6 +350,11 @@ export const SAMPLE_DATA = {
     gstRate: 18,
     gstAmount: 4500,
     grandTotal: 29500,
+    // Withholding income tax (s.153): the preview must show the block
+    // templates render only when withholdingTaxAmount is non-zero.
+    withholdingTaxRate: 4.5,
+    withholdingTaxAmount: 1327.5,
+    balanceDueAfterWht: 28172.5,
     amountInWords: "Twenty Nine Thousand Five Hundred Rupees Only",
     items: [
       { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.1000", valueExclTax: 25000, gstRate: 18, gstAmount: 4500, totalInclTax: 29500 },
@@ -371,6 +391,11 @@ export const SAMPLE_DATA = {
     gstRate: 18,
     gstAmount: 21600,
     grandTotal: 141600,
+    // Withholding income tax (s.153): the preview must show the block
+    // templates render only when withholdingTaxAmount is non-zero.
+    withholdingTaxRate: 4.5,
+    withholdingTaxAmount: 6372,
+    balanceDueAfterWht: 135228,
     amountInWords: "One Hundred Forty One Thousand Six Hundred Rupees Only",
     items: [
       { sNo: 1, itemTypeName: "Pneumatic", description: "Sample Item One", quantity: 20, uom: "Pcs", unitPrice: 4000, lineTotal: 80000, hsCode: "8481.1000" },
