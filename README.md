@@ -348,6 +348,29 @@ Publish output optimized from 79 MB to 37 MB via:
   unrelated edit and a new bill leave it byte-for-byte intact, while an
   explicit re-entry and an explicit clear still take effect.
 
+### 2026-09-11 — Print templates: withholding tax on every design, one picker, filters that stay
+
+- **Every Bill, Sales Tax Invoice, Purchase Bill, Credit Note and Debit Note
+  starter and built-in default now prints withholding income tax (s.153).**
+  Two lines under the grand total — the tax withheld with its rate, and the
+  net payable — shown only on documents where withholding applies. Not one of
+  the 77 shipped designs did this before, and a buyer who withholds 4.5% got a
+  document whose only total was the gross.
+- **Existing templates get the same lines in one click.** The Print Templates
+  screen shows what a company's templates still lack — withholding lines, a
+  signature block — and adds them to every affected template at once, or one
+  template at a time from its card. Nothing else in a template changes.
+- **The built-in Sales Tax Invoice default is the equal-width party layout**
+  (supplier and buyer boxes always 50/50 and the same height), with the
+  withholding lines and a stamp slot in its signature block.
+- **One template, no picker.** A document screen with a single template used to
+  offer two identical choices ("Default — X" and "X ★"). The picker now appears
+  only when there are two or more templates, lists each once, stars the default,
+  and picking the starred one means "follow the default".
+- **The Print Templates screen keeps its filters** across an edit round trip and
+  a company switch, shows per-type counts in the type filter, groups the cards
+  by document type, and marks the template you just edited.
+
 ### 2026-09-10 — Every company can print, from day one
 
 - **A new company is created with a default Challan, Bill and Tax Invoice

@@ -315,6 +315,25 @@ Suites that need a company WITHOUT a template must delete the seeded row first
 `node scripts/sync_default_print_templates.mjs` after editing a default and
 keep `--check` green; the two copies must never be edited by hand.
 
+**Withholding tax lines (2026-09-11).** `utils/withholdingBlock.js` is the ONE
+place the s.153 block is written: two rows after the grand-total row, cloning
+that row's own tags, wrapped in `{{#if withholdingTaxAmount}}` so a document
+with no withholding prints exactly as before. Every Bill / TaxInvoice /
+PurchaseBill / CreditNote / DebitNote starter and default carries it, and
+`node scripts/test_print_templates_wht.mjs` proves each one renders the lines
+with withholding, stays silent without, has a stamp slot, and that the injector
+can still place the block into the bare design (that is what the "Add
+withholding tax lines" actions on the Print Templates screen rely on for the
+rows already saved on a live installation). `PrintTemplateDto.HasWithholdingBlock`
+is computed server-side so the list can badge a row without shipping bodies.
+The rate is a DECIMAL percentage: format it with `fmtQty`, never `fmt`.
+
+**The template picker lists each template ONCE** (`PrintTemplateSelect`,
+`usePrintTemplates.canChoose`): it renders only when the scope has two or more
+templates, the default carries a star, and choosing the starred one stores ""
+("follow the default"). The old separate "Default — X" row plus "X ★" made a
+lone template read as two choices.
+
 ### 5d. Public file allowlist
 
 `data/` holds user uploads. Program.cs mounts ONLY the folders a browser must
@@ -428,6 +447,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Bulk invoice download / consolidated print, through BOTH callers | `python scripts/test_invoice_bulk.py` | `39 passed, 0 failed` |
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
+| Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |

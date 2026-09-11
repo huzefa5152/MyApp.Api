@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import {
   MdDescription, MdBusiness, MdSearch, MdAdd, MdAutoAwesome, MdGridOn,
   MdEdit, MdDelete, MdStar, MdStarBorder, MdVisibility, MdBrush, MdContentCopy,
-  MdUploadFile, MdClose, MdLock, MdCheckCircle, MdApproval,
+  MdUploadFile, MdClose, MdLock, MdCheckCircle, MdApproval, MdReceiptLong, MdAutoFixHigh,
 } from "react-icons/md";
 import {
   getTemplatesByCompany, getTemplateById, createTemplate, setDefaultTemplate, deleteTemplate,
-  uploadExcelTemplateById, deleteExcelTemplateById,
+  uploadExcelTemplateById, deleteExcelTemplateById, updateTemplateById,
 } from "../api/printTemplateApi";
+import { injectWithholdingBlock, WITHHOLDING_TEMPLATE_TYPES } from "../utils/withholdingBlock";
 import { uploadStamp, deleteStamp, updateStamp, setDefaultStamp } from "../api/stampApi";
 import { setTemplateStamp } from "../api/printTemplateApi";
 import StampPicker from "../Components/templateEditor/StampPicker";
@@ -96,11 +97,147 @@ export default function PrintTemplatesPage() {
   }, [selectedCompany]);
 
   useEffect(() => { load(); }, [load]);
-  // Switching company clears the text search, the division scope and the
-  // default-only toggle, but deliberately KEEPS the document-type filter: an
-  // operator comparing the same document type across companies should not have
-  // to re-pick it every switch.
-  useEffect(() => { setSearch(""); setDivFilter(""); setDefaultOnly(false); }, [selectedCompany?.id]);
+  // The filters and the active tab survive leaving the page (2026-09-11).
+  // Editing a template takes the operator to /templates/edit and back; before,
+  // that round trip reset every filter to "all", so a Challan-only view had to
+  // be re-picked after every edit. They are kept per company in sessionStorage
+  // and restored whenever the company (or the page) comes back; the document
+  // type also carries across companies when a company has nothing stored yet.
+  const filtersKey = (cid) => `pt.filters.${cid}`;
+  const restoredFor = useRef(null);
+  useEffect(() => {
+    const cid = selectedCompany?.id;
+    if (!cid || restoredFor.current === cid) return;
+    restoredFor.current = cid;
+    let stored = null;
+    try { stored = JSON.parse(sessionStorage.getItem(filtersKey(cid)) || "null"); } catch { /* ignore */ }
+    if (stored) {
+      setTab(stored.tab || "print");
+      setTypeFilter(stored.typeFilter || "");
+      setDivFilter(stored.divFilter || "");
+      setDefaultOnly(!!stored.defaultOnly);
+      setSearch(stored.search || "");
+    } else {
+      setSearch(""); setDivFilter(""); setDefaultOnly(false);
+    }
+  }, [selectedCompany?.id]);
+  useEffect(() => {
+    const cid = selectedCompany?.id;
+    if (!cid || restoredFor.current !== cid) return;
+    try {
+      sessionStorage.setItem(filtersKey(cid), JSON.stringify({ tab, typeFilter, divFilter, defaultOnly, search }));
+    } catch { /* private mode */ }
+  }, [selectedCompany?.id, tab, typeFilter, divFilter, defaultOnly, search]);
+
+  // The template the operator was just editing is marked when they return, so
+  // the eye lands on it instead of on a wall of identical cards.
+  const [recentId, setRecentId] = useState(() => Number(localStorage.getItem("te.templateId")) || null);
+  useEffect(() => {
+    if (!recentId || loading) return;
+    const el = document.getElementById(`tpl-card-${recentId}`);
+    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    const t = setTimeout(() => setRecentId(null), 6000);
+    return () => clearTimeout(t);
+  }, [recentId, loading]);
+
+  // Per-type counts for the type filter, so "Bill / Invoice (3)" says at a
+  // glance what the company has before the operator narrows to it.
+  const countsByType = useMemo(() => {
+    const m = {};
+    templates.forEach((t) => { m[t.templateType] = (m[t.templateType] || 0) + 1; });
+    return m;
+  }, [templates]);
+
+  // ── Withholding tax lines (s.153) on the documents that carry them ──────
+  // Fills the gap the survey found on a live installation: 80 templates, none
+  // rendering withholding. One template at a time from its card, or every
+  // template that lacks it in one go from the fix bar.
+  const needsWht = (t) => WITHHOLDING_TEMPLATE_TYPES.includes(t.templateType) && !t.hasWithholdingBlock;
+  const whtAnchorText = (anchor) => (anchor === "totals-row" ? "after the grand total row"
+    : anchor === "footer-row" ? "after the totals footer row"
+    : anchor === "already-present" ? "already there"
+    : "nowhere — no grand-total row was found");
+  const addWithholdingTo = async (t) => {
+    const { data: full } = await getTemplateById(t.id);
+    const { html, anchor, changed } = injectWithholdingBlock(full.htmlContent || "");
+    if (!changed) return { ok: false, anchor };
+    await updateTemplateById(t.id, { name: full.name, htmlContent: html, templateJson: full.templateJson, editorMode: full.editorMode });
+    return { ok: true, anchor };
+  };
+  const handleAddWithholdingBlock = async (t) => {
+    setBusyId(t.id);
+    try {
+      const ok = await confirm({
+        title: "Add withholding tax lines?",
+        message: `"${t.name}" will gain two lines under its grand total — the withholding income tax deducted (with its rate) `
+          + `and the net payable — shown only on documents where withholding applies. Nothing else in the template changes.`,
+        confirmText: "Add lines",
+      });
+      if (!ok) return;
+      const r = await addWithholdingTo(t);
+      if (!r.ok) { notify(`Nothing added: ${whtAnchorText(r.anchor)}. Add the lines in the editor instead.`, r.anchor === "already-present" ? "info" : "warning"); return; }
+      invalidatePrintTemplateCache(selectedCompany?.id);
+      await load();
+      notify(`Withholding tax lines added ${whtAnchorText(r.anchor)}.`, "success");
+    } catch (err) {
+      notify(err.response?.data?.error || "Failed to add withholding tax lines.", "error");
+    } finally { setBusyId(null); }
+  };
+
+  // ── Fix bar: what this company's templates still lack, fixable in one click ─
+  const [bulk, setBulk] = useState(null); // { label, done, total } while running
+  const missingWht = useMemo(() => templates.filter(needsWht), [templates]);
+  const missingSig = useMemo(() => templates.filter((t) => (t.stampState || "none") === "none"), [templates]);
+  const runBulk = async (label, rows, worker) => {
+    setBulk({ label, done: 0, total: rows.length });
+    const skipped = [];
+    let fixed = 0;
+    try {
+      for (const t of rows) {
+        try {
+          const r = await worker(t);
+          if (r.ok) fixed++; else skipped.push(`${t.name} (${TEMPLATE_TYPE_LABEL[t.templateType] || t.templateType}): ${whtAnchorText(r.anchor)}`);
+        } catch (err) {
+          skipped.push(`${t.name}: ${err.response?.data?.error || "save failed"}`);
+        }
+        setBulk((b) => (b ? { ...b, done: b.done + 1 } : b));
+      }
+    } finally {
+      setBulk(null);
+      invalidatePrintTemplateCache(selectedCompany?.id);
+      await load();
+    }
+    if (skipped.length) notify(`${fixed} updated, ${skipped.length} skipped: ${skipped.slice(0, 3).join("; ")}${skipped.length > 3 ? "; …" : ""}`, "warning");
+    else notify(`${fixed} template${fixed === 1 ? "" : "s"} updated.`, "success");
+  };
+  const handleBulkWithholding = async () => {
+    const ok = await confirm({
+      title: `Add withholding tax lines to ${missingWht.length} template${missingWht.length === 1 ? "" : "s"}?`,
+      message: `Every Bill, Sales Tax Invoice, Purchase Bill, Credit Note and Debit Note template of ${selectedCompany?.brandName || selectedCompany?.name} `
+        + `that does not yet show withholding tax gets the two lines under its grand total. They print only when withholding applies. `
+        + `Templates whose totals row cannot be found are left alone and listed.`,
+      confirmText: "Add to all",
+    });
+    if (!ok) return;
+    await runBulk("withholding tax lines", missingWht, addWithholdingTo);
+  };
+  const handleBulkSignature = async () => {
+    const ok = await confirm({
+      title: `Add a signature block to ${missingSig.length} template${missingSig.length === 1 ? "" : "s"}?`,
+      message: `Each template without a signature slot gets one — inside its signature row where there is one, otherwise at the end of the document. `
+        + `The company's default stamp is assigned; every template can be switched to another stamp afterwards.`,
+      confirmText: "Add to all",
+    });
+    if (!ok) return;
+    const firstStamp = companyStamps.find((x) => x.isDefault) || companyStamps[0] || null;
+    await runBulk("signature blocks", missingSig, async (t) => {
+      const { data: full } = await getTemplateById(t.id);
+      const { html, anchor, changed } = injectSignatureBlock(full.htmlContent || "");
+      if (!changed) return { ok: false, anchor };
+      await setTemplateStamp(t.id, firstStamp?.id ?? null, html);
+      return { ok: true, anchor };
+    });
+  };
 
   const divisionById = useMemo(() => Object.fromEntries(divisions.map((d) => [d.id, d])), [divisions]);
 
@@ -363,9 +500,13 @@ export default function PrintTemplatesPage() {
         <MdSearch size={15} className="filter-search-icon" />
         <input type="text" placeholder="Search by name or type…" className="filter-search-input" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
-      <select className="filter-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-        <option value="">All document types</option>
-        {TEMPLATE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+      <select className="filter-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Document type">
+        <option value="">All document types ({templates.length})</option>
+        {TEMPLATE_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}{countsByType[t.value] ? ` (${countsByType[t.value]})` : tab === "starter" ? "" : " (none yet)"}
+          </option>
+        ))}
       </select>
       {divisions.length > 0 && (
         <select className="filter-select" value={divFilter} onChange={(e) => setDivFilter(e.target.value)}>
@@ -438,12 +579,46 @@ export default function PrintTemplatesPage() {
           {tab === "print" && (
             <>
               {filtersBar}
+              {/* What this company's templates still lack, fixable in one click.
+                  This is the path for the rows already saved on a live
+                  installation: the starters and defaults carry both from now on. */}
+              {!loading && canManage && (missingWht.length > 0 || missingSig.length > 0) && (
+                <div style={st.fixBar} role="status">
+                  <MdAutoFixHigh size={18} color={colors.blue} aria-hidden="true" />
+                  <span style={{ fontWeight: 700, color: colors.textPrimary }}>Finish these templates:</span>
+                  {missingWht.length > 0 && (
+                    <button type="button" style={st.fixBtn} disabled={!!bulk || busy} onClick={handleBulkWithholding}>
+                      <MdReceiptLong size={14} /> Add withholding tax lines to {missingWht.length}
+                    </button>
+                  )}
+                  {missingSig.length > 0 && canViewStamps && (
+                    <button type="button" style={st.fixBtn} disabled={!!bulk || busy} onClick={handleBulkSignature}>
+                      <MdApproval size={14} /> Add a signature block to {missingSig.length}
+                    </button>
+                  )}
+                  {bulk && <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>Adding {bulk.label}… {bulk.done}/{bulk.total}</span>}
+                </div>
+              )}
               {loading ? <Spinner label="Loading templates…" /> : printRows.length === 0 ? (
                 <Empty label="No print templates match your filters. Create one, or start from a starter." />
               ) : (
-                <div style={st.grid}>
-                  {printRows.map((t) => (
-                    <div key={t.id} style={st.card}>
+                // Grouped by document type when no type is picked, so a company
+                // with a dozen kinds of document reads as a dozen short shelves
+                // instead of one long wall of cards.
+                (typeFilter ? [[typeFilter, printRows]] : Object.entries(printRows.reduce((acc, t) => {
+                  (acc[t.templateType] ||= []).push(t); return acc;
+                }, {}))).map(([type, rows]) => (
+                  <section key={type} style={st.section} aria-label={TEMPLATE_TYPE_LABEL[type] || type}>
+                    {!typeFilter && (
+                      <div style={st.sectionHead}>
+                        <span style={st.sectionTitle}>{TEMPLATE_TYPE_LABEL[type] || type}</span>
+                        <span style={st.sectionCount}>{rows.length}</span>
+                        <button type="button" style={st.sectionLink} onClick={() => setTypeFilter(type)}>Only this type</button>
+                      </div>
+                    )}
+                    <div style={st.grid}>
+                      {rows.map((t) => (
+                    <div key={t.id} id={`tpl-card-${t.id}`} style={{ ...st.card, ...(recentId === t.id ? st.cardRecent : null) }}>
                       <div style={st.cardTop}>
                         <span style={st.tName} title={t.name}>{t.name}</span>
                         {t.isDefault
@@ -456,6 +631,13 @@ export default function PrintTemplatesPage() {
                       </div>
                       <div style={st.metaLine}>
                         {t.hasExcelTemplate && <span style={st.excelChip}><MdGridOn size={11} /> Excel</span>}
+                        {WITHHOLDING_TEMPLATE_TYPES.includes(t.templateType) && (
+                          t.hasWithholdingBlock
+                            ? <span style={st.okChip} title="Prints the withholding income tax deducted and the net payable when withholding applies"><MdReceiptLong size={11} /> Withholding</span>
+                            : canManage
+                              ? <button type="button" style={st.fixChipBtn} disabled={busy} title="Add the withholding tax lines under the grand total" onClick={() => handleAddWithholdingBlock(t)}><MdReceiptLong size={11} /> Add withholding lines</button>
+                              : <span style={st.warnChip}>No withholding lines</span>
+                        )}
                         <span style={{ color: colors.textSecondary }}>Updated {fmtDate(t.updatedAt)}</span>
                       </div>
                       {canViewStamps && (
@@ -483,8 +665,10 @@ export default function PrintTemplatesPage() {
                         {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} title="Delete" disabled={busy} onClick={() => handleDelete(t)}><MdDelete size={15} /></button>}
                       </div>
                     </div>
-                  ))}
-                </div>
+                      ))}
+                    </div>
+                  </section>
+                ))
               )}
             </>
           )}
@@ -740,6 +924,17 @@ const Spinner = ({ label }) => <div style={st.loading}><div style={st.spin} /><s
 const Empty = ({ label }) => <div style={st.empty}><MdDescription size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>{label}</p></div>;
 
 const st = {
+  cardRecent: { boxShadow: "0 0 0 3px #b7d4f0, 0 1px 4px rgba(16,42,80,0.04)", borderColor: "#0d47a1" },
+  section: { marginBottom: "1.25rem" },
+  sectionHead: { display: "flex", alignItems: "center", gap: "0.5rem", margin: "0 0 0.6rem" },
+  sectionTitle: { fontWeight: 800, color: "#1a2332", fontSize: "0.95rem" },
+  sectionCount: { fontSize: "0.72rem", fontWeight: 700, color: "#0d47a1", background: "#e8f0fe", borderRadius: 10, padding: "1px 8px" },
+  sectionLink: { marginLeft: "auto", background: "none", border: "none", color: "#0d47a1", fontWeight: 600, fontSize: "0.78rem", cursor: "pointer", minHeight: 32, fontFamily: "inherit" },
+  fixBar: { display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", padding: "0.6rem 0.8rem", marginBottom: "0.9rem", borderRadius: 10, border: "1px solid #b7d4f0", background: "#f0f7ff" },
+  fixBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 36, padding: "0 0.8rem", borderRadius: 8, border: "1px solid #0d47a1", background: "#fff", color: "#0d47a1", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" },
+  fixChipBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.68rem", fontWeight: 700, color: "#b26a00", background: "#fff4e5", border: "1px solid #ffd699", padding: "2px 8px", borderRadius: 5, cursor: "pointer", fontFamily: "inherit", minHeight: 24 },
+  okChip: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.68rem", fontWeight: 700, color: "#1b5e20", background: "#e8f5e9", padding: "2px 8px", borderRadius: 5 },
+  warnChip: { fontSize: "0.68rem", fontWeight: 700, color: "#b26a00", background: "#fff4e5", padding: "2px 8px", borderRadius: 5 },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" },
   icon: { width: 46, height: 46, borderRadius: 13, background: "linear-gradient(135deg,#0d47a1,#00897b)", display: "flex", alignItems: "center", justifyContent: "center" },
   title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
