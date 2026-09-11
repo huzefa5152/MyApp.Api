@@ -290,6 +290,19 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-11 — FBR: exempt goods file as "Exempt"; Processing/FED clear the SRO pre-flight
+
+- **Exempt sale lines are now transmitted to FBR with the rate `Exempt`, not
+  `0%`.** FBR rejects `0%` for an exempt sale type (`[0046]`), so exempt goods
+  could not be filed before this fix.
+- **The local "rate ≠ 18% requires an SRO schedule" pre-flight no longer fires
+  for Processing/Conversion or Goods (FED in ST Mode) sale types**, which FBR
+  itself accepts with no SRO (per its SN016/SN017 sample payloads). Those
+  scenarios were being blocked before the invoice ever reached FBR.
+- Verified end-to-end against the FBR sandbox (SN006 exempt and SN016 processing
+  submitted successfully); regression test `scripts/test_fbr_ratemap_preflight.py`.
+  Ported from `master`.
+
 ### 2026-09-11 — Oversell guard on invoice edit (soft warning / hard block)
 
 - **Where stock actually leaves.** Only HS-coded item types move stock, and on a

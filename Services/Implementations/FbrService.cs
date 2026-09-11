@@ -1110,7 +1110,12 @@ namespace MyApp.Api.Services.Implementations
                 {
                     HsCode = item.HSCode ?? "",
                     ProductDescription = SanitizeForFbr(item.Description),
-                    Rate = $"{invoice.GSTRate:0.##}%",
+                    // Exempt goods carry the literal rate "Exempt", not a
+                    // percentage — FBR rejects "0%" for an exempt sale type
+                    // with [0046]. Every other sale type uses the numeric rate.
+                    Rate = saleType.IndexOf("Exempt", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? "Exempt"
+                        : $"{invoice.GSTRate:0.##}%",
                     UoM = uomDesc,
                     Quantity = item.Quantity,
                     TotalValues = 0,
