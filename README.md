@@ -298,6 +298,22 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-11 — Stock hard-block is opt-in only; the bill modal stops hiding save errors
+
+- **Switching a company to Inventory V2 no longer silently turns on the hard
+  stock block.** The oversell hard-block (`StockGuardHardBlock`) is now enabled
+  only when the operator ticks it on the company form and saves — changing the
+  inventory tracking version leaves it exactly as the operator set it. A V2
+  switch had been auto-enabling it, which stranded a company whose items sat at
+  zero recorded stock: every bill for such an item was refused with
+  "Insufficient stock to issue this bill". Company creation already defaults the
+  block off, and a company update only changes it from the form's checkbox.
+- **The Create/Edit Bill modal now scrolls its error into view.** The error
+  banner sits at the top of a scrollable modal body, so a failed save (e.g. the
+  stock block above) rendered off-screen while the operator was scrolled down at
+  the Save button — the click looked like it did nothing. The banner now scrolls
+  into view on any save failure, on the challan-billed, standalone and edit forms.
+
 ### 2026-09-11 — Login to ERP button on the landing page; fourth production line documented
 
 - **Landing page: "Login to ERP" button** in the navigation bar and in the hero,

@@ -176,6 +176,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // True once we've found an explicit [SNxxx] tag on load — suppresses the
   // buyer-inferred default below so we never override an operator's choice.
   const hadScenarioTagRef = useRef(false);
+  // Error banner is at the top of a scrollable modal body; on a failed save the
+  // user is usually scrolled down at the Save button and never sees it. Scroll
+  // it into view whenever an error appears (server 409 or client validation).
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
   // ── Inline "+ New Item Type" + HS Stock panel state ────────────────
   // showAddItemType: drives the shared ItemTypeForm modal.
   // hsStockSummary:  cache of the latest /tax-claim/hs-stock-summary
@@ -1267,7 +1274,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
               </div>
             ) : (
               <>
-                {error && <div style={styles.errorAlert}>{error}</div>}
+                {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
 
                 {!readOnly && isChallanLinked && (
                   <div style={styles.infoBox}>

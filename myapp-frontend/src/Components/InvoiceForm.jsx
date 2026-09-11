@@ -141,6 +141,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const attachmentRef = useRef(null);
+  // The error banner sits at the top of a scrollable modal body; when a save
+  // fails the user is usually scrolled down at the "Create Bill" button, so the
+  // message renders off-screen and the click looks like it did nothing. Scroll
+  // it into view whenever an error appears (server 409 or client validation).
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
 
   // ── FBR optional fields (per item + invoice-level) ──
   // Document Type is locked to Sale Invoice (4) on the new-bill flow.
@@ -969,7 +977,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>

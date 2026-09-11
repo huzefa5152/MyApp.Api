@@ -421,12 +421,12 @@ namespace MyApp.Api.Controllers
                 return Ok(new { companyId, inventoryFlowVersion = previous, changed = false });
 
             company.InventoryFlowVersion = req.Version;
-            // Q4: over-commit/oversell is hard-blocked by default under V2.
-            // Turning V2 on enables the guard; operators can still switch it to
-            // soft mode afterwards via the company update. Leaving V2 keeps the
-            // operator's current setting (no forced change on the way back).
-            if (req.Version == (byte)InventoryFlowVersion.V2Standard && !company.StockGuardHardBlock)
-                company.StockGuardHardBlock = true;
+            // StockGuardHardBlock is NEVER touched here. The hard oversell block
+            // is opt-in: it may only ever be turned on by the operator ticking it
+            // on the company form and saving. Changing the inventory tracking
+            // version must not silently start blocking a company's billing —
+            // that is exactly what stranded ABBAS ALI & SONS (a V2 switch had
+            // auto-enabled the block, so every bill for a zero-stock item 409'd).
             await _context.SaveChangesAsync();
 
             await _audit.LogAsync(new AuditLog
