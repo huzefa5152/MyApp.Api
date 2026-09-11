@@ -223,6 +223,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const attachmentRef = useRef(null);
+  // Error banner lives at the top of a scrollable modal body; on a failed save
+  // the user is normally scrolled down at the submit button and never sees it.
+  // Scroll it into view whenever an error appears (server 409 or validation).
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
 
   // ── Sales-Order prefill (FBR-off companies only) ──────────────────
   // The operator can seed the bill from an Open Sales Order: client,
@@ -1004,7 +1011,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
-            {error && <div style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading…</div>
