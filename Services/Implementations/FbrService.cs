@@ -1088,6 +1088,25 @@ namespace MyApp.Api.Services.Implementations
                 // of what the row stored.
                 var saleType = NormalizeSaleType(item.SaleType);
 
+                // FED-in-ST-mode carries a COMPOUND published rate that a plain
+                // "N%" cannot express — e.g. Finance Act 2026's petroleum rate
+                // "18% and Rs. 80 per Liter" (SaleTypeToRate ratE_ID 1043). FBR's
+                // DI spec (§5.8) requires the invoice's `rate` to be the exact
+                // ratE_DESC from the reference, and the per-unit FED to be folded
+                // into salesTaxApplicable. Resolve it from the reference; on any
+                // failure fall back to the plain percentage below (best effort,
+                // scoped to FED-in-ST so no other sale type changes behaviour).
+                string? publishedRate = null;
+                if (saleType.IndexOf("FED in ST", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var compound = await ResolveFbrRateAsync(company, saleType, invoice.GSTRate, invoice.Date);
+                    if (compound is { } cr)
+                    {
+                        publishedRate = cr.RateDesc;
+                        salesTax += cr.PerUnitAmount * item.Quantity;
+                    }
+                }
+
                 // FBR rule [0077]: "Valid SRO/Schedule No. is mandatory where rate
                 // is not 18%." Prefer the operator-set value on the item; fall
                 // back to the canonical EIGHTH SCHEDULE Table 1 + serial 82 for
@@ -1115,7 +1134,7 @@ namespace MyApp.Api.Services.Implementations
                     // with [0046]. Every other sale type uses the numeric rate.
                     Rate = saleType.IndexOf("Exempt", StringComparison.OrdinalIgnoreCase) >= 0
                         ? "Exempt"
-                        : $"{invoice.GSTRate:0.##}%",
+                        : publishedRate ?? $"{invoice.GSTRate:0.##}%",
                     UoM = uomDesc,
                     Quantity = item.Quantity,
                     TotalValues = 0,
@@ -1963,6 +1982,53 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<List<FbrUOMDto>> GetUOMsAsync(int companyId)
             => await GetReferenceData<FbrUOMDto>(companyId, $"{RefBaseV1}/uom");
+
+        // Resolves the FBR-published rate descriptor for a sale type from the
+        // SaleTypeToRate reference (DI spec §5.8: the invoice's `rate` must be the
+        // exact ratE_DESC, never a locally built "N%"). Returns that descriptor
+        // plus any per-unit amount embedded in a COMPOUND rate such as
+        // "18% and Rs. 80 per Liter" (Finance Act 2026 FED-in-ST petroleum, which
+        // must add Rs 80 × litres to salesTaxApplicable). Best effort — returns
+        // null on any lookup/parse failure so the caller keeps its plain
+        // percentage. The date MUST be dd-MMM-yyyy: FBR's SaleTypeToRate returns
+        // HTTP 500 on an ISO date.
+        private async Task<(string RateDesc, decimal PerUnitAmount)?> ResolveFbrRateAsync(
+            Company company, string saleType, decimal rateValue, DateTime invoiceDate)
+        {
+            try
+            {
+                var txTypes = await GetTransactionTypesAsync(company.Id);
+                var tt = txTypes.FirstOrDefault(t =>
+                    string.Equals((t.TRANSACTION_DESC ?? "").Trim(), saleType.Trim(),
+                        StringComparison.OrdinalIgnoreCase));
+                if (tt == null) return null;
+
+                var date = invoiceDate.ToString("dd-MMM-yyyy", System.Globalization.CultureInfo.InvariantCulture);
+                var rates = await GetSaleTypeRatesAsync(
+                    company.Id, date, tt.TRANSACTION_TYPE_ID, company.FbrProvinceCode ?? 0);
+                if (rates.Count == 0) return null;
+
+                var row = rates.FirstOrDefault(r => r.RATE_VALUE == rateValue) ?? rates[0];
+                if (string.IsNullOrWhiteSpace(row.RATE_DESC)) return null;
+
+                // Pull a per-unit component out of a compound descriptor, e.g.
+                // "18% and Rs. 80 per Liter" -> 80. A plain "18%" yields 0.
+                decimal perUnit = 0m;
+                var m = System.Text.RegularExpressions.Regex.Match(
+                    row.RATE_DESC, @"Rs\.?\s*([\d,]+(?:\.\d+)?)\s*(?:/|per)\b",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (m.Success)
+                    decimal.TryParse(m.Groups[1].Value.Replace(",", ""),
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out perUnit);
+
+                return (row.RATE_DESC, perUnit);
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         public async Task<List<FbrTransactionTypeDto>> GetTransactionTypesAsync(int companyId)
             => await GetReferenceData<FbrTransactionTypeDto>(companyId, $"{RefBaseV1}/transtypecode");

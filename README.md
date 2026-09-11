@@ -299,8 +299,17 @@ Publish output optimized from 79 MB to 37 MB via:
   for Processing/Conversion or Goods (FED in ST Mode) sale types**, which FBR
   itself accepts with no SRO (per its SN016/SN017 sample payloads). Those
   scenarios were being blocked before the invoice ever reached FBR.
-- Verified end-to-end against the FBR sandbox (SN006 exempt and SN016 processing
-  submitted successfully); regression test `scripts/test_fbr_ratemap_preflight.py`.
+- **A compound FBR rate is now transmitted exactly as FBR publishes it.** For
+  Goods (FED in ST Mode), the invoice's `rate` is taken from FBR's `SaleTypeToRate`
+  reference (DI spec §5.8) instead of a locally built `"N%"` — e.g. Finance Act
+  2026's petroleum rate `"18% and Rs. 80 per Liter"` for HS `2710.1942` — and the
+  per-unit FED (Rs 80 × litres) is folded into `salesTaxApplicable`. Scoped to
+  FED-in-ST so no other sale type changes behaviour, with a graceful fallback to
+  the plain percentage if the reference is unavailable. This was the last piece
+  needed to file scenario SN017.
+- Verified end-to-end against the FBR sandbox (SN006 exempt, SN016 processing and
+  SN017 FED-in-ST all submitted successfully — completing the full 12-scenario
+  sandbox set); regression test `scripts/test_fbr_ratemap_preflight.py`.
 
 ### 2026-09-11 — Client / supplier forms: STRN optional, "Check with FBR"
 

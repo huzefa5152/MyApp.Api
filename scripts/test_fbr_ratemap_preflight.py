@@ -100,6 +100,32 @@ def main():
             check("SN006 exempt payload rate == 'Exempt' (not '0%')",
                   rate.strip().lower() == "exempt", f"rate was '{rate}'")
 
+    # Fix 3 — FED-in-ST carries the compound ratE_DESC from SaleTypeToRate
+    # (e.g. "18% and Rs. 80 per Liter"), never a plain "18%", and the per-unit
+    # FED is folded into salesTaxApplicable. Requires the SN017 bill set to a
+    # Second-Schedule petroleum HS (2710.1942) at 18%.
+    fed = sn.get("SN017")
+    if not fed:
+        check("SN017 bill present (seed first)", False, "no [SN017] bill")
+    else:
+        _, prev = call(args.base_url, "GET",
+                       f"/api/fbr/{fed['id']}/preview-payload?scenarioId=SN017", token)
+        try:
+            it = json.loads(prev["preview"]["json"])["items"][0]
+            rate = it.get("rate") or ""
+            stax = float(it.get("salesTaxApplicable") or 0)
+            val = float(it.get("valueSalesExcludingST") or 0)
+        except Exception as e:
+            check("SN017 preview payload readable", False, str(e))
+            rate = None
+        if rate is not None:
+            check("SN017 FED rate is the compound ratE_DESC, not a plain '%'",
+                  ("rs." in rate.lower()) or ("per" in rate.lower()), f"rate was '{rate}'")
+            # salesTaxApplicable must exceed the plain 18% ad-valorem (the
+            # per-litre FED is added on top).
+            check("SN017 salesTaxApplicable includes the per-unit FED",
+                  stax > round(val * 0.18, 2) + 0.001, f"stax={stax} val={val}")
+
     # Fix 2 — SRO pre-flight must not block Processing (SN016) / FED (SN017).
     for code in ("SN016", "SN017"):
         b = sn.get(code)
