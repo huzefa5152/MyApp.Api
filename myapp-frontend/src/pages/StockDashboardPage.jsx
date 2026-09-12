@@ -28,6 +28,9 @@ const colors = {
   inputBorder: "#d0d7e2",
   rowAlt: "#fafbfd",
   bandBg: "#f0f7ff",
+  // Same red already used throughout this file for a negative on-hand/available
+  // figure — named here so a negative margin can reuse it instead of a new literal.
+  negative: "#c62828",
 };
 
 const money = (v) =>
@@ -48,6 +51,9 @@ export default function StockDashboardPage() {
   const canViewMovements = has("stock.movements.view");
   const canManagePolicy = has("stock.policy.manage");
   const canExport = has("stock.dashboard.export");
+  // Task 9 adds this key; has() reads false for an unknown key, so the
+  // Actual Cost / Margin columns and the picker stay hidden until it lands.
+  const canViewActualCost = has("stock.actualcost.view");
   const flowVersion = Number(selectedCompany?.inventoryFlowVersion) === 2 ? 2 : 1;
 
   const [onhandPage, setOnhandPage] = useState(1);
@@ -91,7 +97,10 @@ export default function StockDashboardPage() {
   // put an event in the ledger that never happened. UpsertOpeningBalance
   // already SETS rather than adds, so restating is a plain re-save.
   const [openingEditId, setOpeningEditId] = useState(null);
-  const [openingDraft, setOpeningDraft] = useState({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
+  const [openingDraft, setOpeningDraft] = useState({
+    itemTypeId: "", quantity: 0, valueExcludingTax: "", actualCostExcludingTax: "",
+    salesTaxRate: "", asOfDate: todayYmd(), notes: "",
+  });
   const [showAdjust, setShowAdjust] = useState(false);
   // "set" is the default: someone fixing a mistake knows what the figures
   // SHOULD be, not the size of their error, so the form takes the truth and
@@ -267,6 +276,9 @@ export default function StockDashboardPage() {
       itemTypeId: String(o.itemTypeId),
       quantity: o.quantity,
       valueExcludingTax: o.valueExcludingTax ?? "",
+      // 0 means "not known" (see OpeningStockBalanceDto) — show an empty box,
+      // not a misleading zero the operator might mistake for a real cost.
+      actualCostExcludingTax: o.actualCostExcludingTax || "",
       salesTaxRate: o.salesTaxRate ?? "",
       asOfDate: (o.asOfDate || "").slice(0, 10) || todayYmd(),
       notes: o.notes || "",
@@ -276,7 +288,10 @@ export default function StockDashboardPage() {
 
   const startAddOpening = () => {
     setOpeningEditId(null);
-    setOpeningDraft({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
+    setOpeningDraft({
+      itemTypeId: "", quantity: 0, valueExcludingTax: "", actualCostExcludingTax: "",
+      salesTaxRate: "", asOfDate: todayYmd(), notes: "",
+    });
     setShowOpening(true);
   };
 
@@ -284,19 +299,29 @@ export default function StockDashboardPage() {
     e.preventDefault();
     if (!openingDraft.itemTypeId) return notify("Pick an item.", "error");
     try {
-      await upsertOpeningBalance({
+      const actual = openingDraft.actualCostExcludingTax;
+      const payload = {
         companyId: selectedCompany.id,
-        itemTypeId: parseInt(openingDraft.itemTypeId),
-        quantity: parseFloat(openingDraft.quantity) || 0,
-        valueExcludingTax: parseFloat(openingDraft.valueExcludingTax) || 0,
-        salesTaxRate: parseFloat(openingDraft.salesTaxRate) || 0,
+        itemTypeId: Number(openingDraft.itemTypeId),
+        quantity: Number(openingDraft.quantity) || 0,
+        valueExcludingTax: Number(openingDraft.valueExcludingTax) || 0,
+        salesTaxRate: Number(openingDraft.salesTaxRate) || 0,
         asOfDate: openingDraft.asOfDate,
         notes: openingDraft.notes || null,
-      });
+        // Omitted entirely when the box is blank: the server then keeps whatever
+        // cost the import established. Sending 0 would erase it.
+        ...(actual === "" || actual === null || actual === undefined
+          ? {}
+          : { actualCostExcludingTax: Number(actual) || 0 }),
+      };
+      await upsertOpeningBalance(payload);
       notify(openingEditId ? "Opening balance updated." : "Opening balance saved.", "success");
       setShowOpening(false);
       setOpeningEditId(null);
-      setOpeningDraft({ itemTypeId: "", quantity: 0, valueExcludingTax: "", salesTaxRate: "", asOfDate: todayYmd(), notes: "" });
+      setOpeningDraft({
+        itemTypeId: "", quantity: 0, valueExcludingTax: "", actualCostExcludingTax: "",
+        salesTaxRate: "", asOfDate: todayYmd(), notes: "",
+      });
       fetchAll();
     } catch (err) {
       notify(err.response?.data?.error || "Failed to save opening balance.", "error");
@@ -438,6 +463,18 @@ export default function StockDashboardPage() {
     if (!(excl > 0) || !(rate > 0)) return null;
     const tax = Math.round(excl * rate) / 100;
     return { tax: money(tax), incl: money(excl + tax) };
+  })();
+
+  // Live margin preview while the operator types: selling value less actual
+  // cost. Only shown once a positive cost is entered — a blank/zero cost
+  // means "not known", not "free", so there is nothing honest to preview yet.
+  const openingMarginPreview = (() => {
+    const sell = parseFloat(openingDraft.valueExcludingTax);
+    const cost = parseFloat(openingDraft.actualCostExcludingTax);
+    if (!isFinite(sell) || !isFinite(cost) || cost <= 0) return null;
+    const margin = sell - cost;
+    const pct = sell > 0 ? (margin * 100) / sell : 0;
+    return { margin, pct };
   })();
 
   const openingItem = itemTypes.find(it => String(it.id) === String(openingDraft.itemTypeId));
@@ -988,6 +1025,8 @@ export default function StockDashboardPage() {
                           <th style={{ ...styles.th, textAlign: "right" }}>S.Tax %</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
+                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
+                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
                           <th style={styles.th}>As Of</th>
                           <th style={styles.th}>Notes</th>
                           <th style={{ ...styles.th, width: 60 }}></th>
@@ -1002,6 +1041,19 @@ export default function StockDashboardPage() {
                             <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>
                             <td style={styles.tdMoney}>{money(o.salesTax)}</td>
                             <td style={{ ...styles.tdMoney, fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>
+                            {canViewActualCost && (
+                              <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
+                                {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
+                              </td>
+                            )}
+                            {canViewActualCost && (
+                              <td style={{ ...styles.tdMoney, fontWeight: 600, color: o.margin < 0 ? colors.negative : colors.textPrimary }}>
+                                {money(o.margin)}
+                                <div style={{ fontSize: "0.72rem", fontWeight: 400, color: colors.textSecondary, whiteSpace: "nowrap" }}>
+                                  {o.marginPercent != null ? `${num(o.marginPercent)}%` : "—"}
+                                </div>
+                              </td>
+                            )}
                             <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
                             <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
                             <td style={styles.td}>
@@ -1030,6 +1082,22 @@ export default function StockDashboardPage() {
                             </span>
                           </div>
                         </div>
+                        {canViewActualCost && (
+                          <div className="stock-card__stats">
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Actual Cost</span>
+                              <span className="stock-card__stat-value">
+                                {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
+                              </span>
+                            </div>
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Margin</span>
+                              <span className="stock-card__stat-value" style={{ color: o.margin < 0 ? colors.negative : undefined }}>
+                                {money(o.margin)} {o.marginPercent != null ? `(${num(o.marginPercent)}%)` : "(—)"}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         {o.notes && (
                           <div className="stock-card__notes">{o.notes}</div>
                         )}
@@ -1197,10 +1265,22 @@ export default function StockDashboardPage() {
               <div style={qtyHint}>UOM: <strong>{openingUom || "—"}</strong> · {openingAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
             )}
           </Field>
-          <Field label="Value excluding sales tax">
-            <input type="number" min={0} step="0.01" style={mInput} value={openingDraft.valueExcludingTax} onChange={e => setOpeningDraft({ ...openingDraft, valueExcludingTax: e.target.value })} placeholder="0.00" />
-            <div style={qtyHint}>What the opening quantity is worth in total, not per unit.</div>
-          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+            <Field label="Value excluding sales tax">
+              <input type="number" min={0} step="0.01" style={mInput} value={openingDraft.valueExcludingTax} onChange={e => setOpeningDraft({ ...openingDraft, valueExcludingTax: e.target.value })} placeholder="0.00" />
+              <div style={qtyHint}>What the opening quantity is worth in total, not per unit.</div>
+            </Field>
+            <Field label="Actual cost (excl. tax)">
+              <input type="number" min={0} step="0.01" style={mInput} value={openingDraft.actualCostExcludingTax} onChange={e => setOpeningDraft({ ...openingDraft, actualCostExcludingTax: e.target.value })} placeholder="0.00" />
+              <div style={qtyHint}>
+                {openingMarginPreview
+                  ? <span style={{ color: openingMarginPreview.margin < 0 ? colors.negative : qtyHint.color, fontWeight: 600 }}>
+                      Margin {money(openingMarginPreview.margin)} ({openingMarginPreview.pct.toFixed(2)}%)
+                    </span>
+                  : "Leave blank to keep whatever cost is already stored (e.g. from a GD import)."}
+              </div>
+            </Field>
+          </div>
           <Field label="Sales tax rate %">
             <input type="number" min={0} max={100} step="0.01" style={mInput} value={openingDraft.salesTaxRate} onChange={e => setOpeningDraft({ ...openingDraft, salesTaxRate: e.target.value })} placeholder="18" />
             <div style={qtyHint}>
