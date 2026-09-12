@@ -369,6 +369,11 @@ namespace MyApp.Api.Controllers
             if (!await CompanyExistsAsync(dto.CompanyId))
                 return NotFound(new { message = "That company no longer exists." });
 
+            // Opening balances are company-level inventory state, which a
+            // division-restricted user may not write (policy D2) — the same
+            // guard the Opening Balances and Customer Ledger commits apply.
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
+
             if (dto.Lines == null || dto.Lines.Count == 0)
                 return BadRequest(new { message = "There is nothing to import." });
             if (dto.Lines.Count > Services.Implementations.GdCostingImportService.MaxSourceRows)

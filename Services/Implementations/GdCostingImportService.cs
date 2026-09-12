@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Helpers.ExcelImport;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
@@ -128,17 +129,24 @@ namespace MyApp.Api.Services.Implementations
         /// Loads the company's opening stock balances (with their item type)
         /// and lots ONCE — small across every real installation (174 balances,
         /// 237 lots across all three companies) — and indexes them for in-memory
-        /// matching. Read-only: <see cref="CommitAsync"/> re-queries the
-        /// specific balances it will mutate, tracked, rather than reusing this.
+        /// matching.
+        ///
+        /// <paramref name="tracking"/> is false for <see cref="PreviewAsync"/>
+        /// (read-only) and true for <see cref="CommitAsync"/>, which mutates
+        /// <c>OpeningStockBalance.ActualCostExcludingTax</c> on these exact
+        /// tracked instances — and, just as importantly, re-runs <see cref="Match"/>
+        /// against this SAME fresh, company-scoped index rather than trusting a
+        /// client-claimed <c>OpeningStockBalanceId</c> on its own.
         /// </summary>
-        private async Task<MatchIndex> BuildMatchIndexAsync(int companyId)
+        private async Task<MatchIndex> BuildMatchIndexAsync(int companyId, bool tracking = false)
         {
-            var balances = await _db.OpeningStockBalances
-                .AsNoTracking()
+            IQueryable<OpeningStockBalance> query = _db.OpeningStockBalances
                 .Include(b => b.ItemType)
                 .Include(b => b.Lots)
-                .Where(b => b.CompanyId == companyId)
-                .ToListAsync();
+                .Where(b => b.CompanyId == companyId);
+            if (!tracking) query = query.AsNoTracking();
+
+            var balances = await query.ToListAsync();
 
             var byLot = new Dictionary<(string, string), List<int>>();
             var byHsCode = new Dictionary<string, List<int>>();
@@ -171,21 +179,27 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// Candidate balance ids for one line: (a) an exact GD number + cleaned
-        /// HS code hit against the company's own lots; (b) otherwise, every
-        /// balance whose item type's HS code cleans to the same code. (b) only
-        /// runs when (a) found nothing — evaluated per LINE rather than per
-        /// company, which gives the same answer as a per-company branch for
-        /// every company seen so far (AY/PAK match entirely through (a), Alpha
-        /// entirely through (b) since it has no lots at all) while also being
-        /// correct for a company with a genuine mix of the two.
+        /// Candidate balance ids for one GD number + HS code: (a) an exact hit
+        /// against the company's own lots; (b) otherwise, every balance whose
+        /// item type's HS code cleans to the same code. (b) only runs when (a)
+        /// found nothing — evaluated per LINE rather than per company, which
+        /// gives the same answer as a per-company branch for every company seen
+        /// so far (AY/PAK match entirely through (a), Alpha entirely through
+        /// (b) since it has no lots at all) while also being correct for a
+        /// company with a genuine mix of the two.
+        ///
+        /// Takes the two raw fields rather than a <see cref="GdCostingSheetRow"/>
+        /// so <see cref="CommitAsync"/> can call the exact same resolution
+        /// against a reviewed <see cref="GdCostingLineDto"/>'s own GdNumber/HsCode
+        /// — re-deriving the match from server truth instead of trusting the
+        /// line's claimed <c>OpeningStockBalanceId</c>.
         /// </summary>
-        private static List<int> Match(GdCostingSheetRow row, MatchIndex index)
+        private static List<int> Match(string? gdNumber, string? hsCode, MatchIndex index)
         {
-            var hsKey = GdCostingMapping.CleanHsCode(row.HsCode);
+            var hsKey = GdCostingMapping.CleanHsCode(hsCode);
             if (hsKey.Length == 0) return new List<int>();
 
-            var gdKey = NormalizeGd(row.GdNumber);
+            var gdKey = NormalizeGd(gdNumber);
 
             if (index.ByLot.TryGetValue((gdKey, hsKey), out var lotHit) && lotHit.Count > 0)
                 return lotHit;
@@ -210,7 +224,7 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private static LineOutcome[] MatchAll(List<GdCostingSheetRow> rows, MatchIndex index)
         {
-            var matches = rows.Select(r => Match(r, index)).ToList();
+            var matches = rows.Select(r => Match(r.GdNumber, r.HsCode, index)).ToList();
             var outcomes = new LineOutcome?[rows.Count];
 
             var byBalance = new Dictionary<int, List<int>>();
@@ -389,24 +403,18 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                // Tenant safety: a line claiming CostOnly carries an
-                // OpeningStockBalanceId from the reviewed preview, but a body
-                // field is never trusted on its own (CLAUDE.md: never trust
-                // dto.CompanyId — the same applies to any id a body carries).
-                // Only balances genuinely owned by THIS company can be costed.
-                var claimedBalanceIds = lines
-                    .Where(l => string.Equals(l.Disposition, GdCostingDispositionNames.CostOnly, StringComparison.OrdinalIgnoreCase)
-                                && l.OpeningStockBalanceId.HasValue)
-                    .Select(l => l.OpeningStockBalanceId!.Value)
-                    .Distinct()
-                    .ToList();
-
-                var balanceMap = claimedBalanceIds.Count == 0
-                    ? new Dictionary<int, OpeningStockBalance>()
-                    : (await _db.OpeningStockBalances
-                            .Where(b => b.CompanyId == dto.CompanyId && claimedBalanceIds.Contains(b.Id))
-                            .ToListAsync())
-                        .ToDictionary(b => b.Id);
+                // Server truth, never the client's claim: a fresh, company-
+                // scoped, TRACKED match index. A line claiming CostOnly is
+                // re-matched below from its OWN GdNumber/HsCode against this —
+                // the same resolution preview used — rather than merely
+                // checking that the claimed OpeningStockBalanceId happens to
+                // belong to this company. "Belongs to this company" is not
+                // "is the match this line's own GD/HS would produce"; trusting
+                // the former let a forged line write a real cost onto an
+                // unrelated item under any HS code in the company. Tracked, so
+                // the same instances this verifies against are the ones the
+                // derived-cost step below mutates.
+                var index = await BuildMatchIndexAsync(dto.CompanyId, tracking: true);
 
                 // One ImportConsignment per GD, grouping on the same
                 // case/whitespace-insensitive key the matcher used, so a sheet
@@ -457,17 +465,35 @@ namespace MyApp.Api.Services.Implementations
                     }
                     else if (disposition == GdCostingDisposition.CostOnly)
                     {
-                        if (line.OpeningStockBalanceId is int claimedId && balanceMap.ContainsKey(claimedId))
+                        // Never trust the claimed OpeningStockBalanceId on its
+                        // own — re-run the SAME match this line's own
+                        // GdNumber/HsCode would produce against the fresh,
+                        // company-scoped index, and require the claim to be
+                        // the SOLE result. Anything else is a claim that does
+                        // not hold up against this company's own records —
+                        // whether that is a stale preview, an edited request,
+                        // a deleted balance, or a line pointed at an unrelated
+                        // item under a different HS code entirely.
+                        var candidates = Match(line.GdNumber, line.HsCode, index);
+
+                        if (candidates.Count == 1 && line.OpeningStockBalanceId == candidates[0])
                         {
-                            balanceIdToWrite = claimedId;
+                            balanceIdToWrite = candidates[0];
+                        }
+                        else if (candidates.Count > 1)
+                        {
+                            disposition = GdCostingDisposition.Ambiguous;
+                            var names = candidates
+                                .Select(id => index.Balances.TryGetValue(id, out var b) ? (b.ItemType?.Name ?? $"item #{id}") : $"item #{id}")
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+                            dispositionNote = $"Matches more than one opening balance under HS code {line.HsCode}: {string.Join(", ", names)}. No cost was written — resolve manually.";
                         }
                         else
                         {
-                            // A stale preview, a tampered request, or a balance
-                            // deleted since preview all land here — recorded,
-                            // never trusted blind.
                             disposition = GdCostingDisposition.Skipped;
-                            dispositionNote = "The matched opening balance could not be verified for this company. Nothing was written for this line.";
+                            dispositionNote = "The claimed opening balance does not match this line's own GD number and HS code, re-checked against this company's own records. Nothing was written for this line.";
                         }
                     }
                     else if (disposition == GdCostingDisposition.Ambiguous)
@@ -482,6 +508,39 @@ namespace MyApp.Api.Services.Implementations
                         var trimmedNote = Trim(line.MatchNote, 500);
                         dispositionNote = trimmedNote.Length > 0 ? trimmedNote : null;
                     }
+
+                    // Server truth for the money, too: recompute from this
+                    // line's OWN raw inputs via the same calculator preview
+                    // used, rather than trusting the echoed Cost/SalesTax/
+                    // Ast/IncomeTax/SellingValue. A mismatch does not fail the
+                    // line — the recomputed figures are used and it is noted,
+                    // never silently accepted either way.
+                    var computed = ImportCostingCalculator.Compute(new ImportCostingCalculator.ImportCostingInput(
+                        AssessedValue: line.AssessedValue,
+                        CustomsDuty: line.CustomsDuty,
+                        Acd: line.Acd,
+                        RegulatoryDuty: line.RegulatoryDuty,
+                        Others: line.Others,
+                        SalesTaxRate: line.SalesTaxRate,
+                        AstRate: line.AstRate,
+                        IncomeTaxRate: line.IncomeTaxRate,
+                        AddOnProfit: line.AddOnProfit));
+
+                    if (Math.Abs(computed.Cost - line.Cost) > 0.01m
+                        || Math.Abs(computed.SellingValue - line.SellingValue) > 0.01m)
+                    {
+                        const string mismatch = "The submitted cost figures did not match this line's own raw inputs; the recomputed figures were used instead.";
+                        dispositionNote = string.IsNullOrEmpty(dispositionNote) ? mismatch : $"{dispositionNote} {mismatch}";
+                    }
+
+                    // A genuine sheet-stated selling-value override is
+                    // legitimate data an operator typed by hand (nine of
+                    // PAK's 83 lines rely on one) — kept as-is rather than
+                    // "corrected" by the recompute, which only touches the
+                    // DERIVED figures.
+                    var sellingValue = line.SheetSellingValue.HasValue
+                        ? Money(line.SheetSellingValue.Value)
+                        : Money(computed.SellingValue);
 
                     var entity = new ImportConsignmentLine
                     {
@@ -504,14 +563,14 @@ namespace MyApp.Api.Services.Implementations
                         AstRate = line.AstRate,
                         IncomeTaxRate = line.IncomeTaxRate,
                         AddOnProfit = Money(line.AddOnProfit),
-                        CostExcludingTax = Money(line.Cost),
-                        SellingValueExcludingTax = Money(line.SellingValue),
+                        CostExcludingTax = Money(computed.Cost),
+                        SellingValueExcludingTax = sellingValue,
                         Disposition = disposition,
-                        DispositionNote = dispositionNote,
-                        // Only a VERIFIED match earns an ItemTypeId — the
-                        // balance map above already checked tenancy, so this
-                        // reads the server's own resolution, not the client's.
-                        ItemTypeId = balanceIdToWrite.HasValue ? balanceMap[balanceIdToWrite.Value].ItemTypeId : null,
+                        DispositionNote = Trim(dispositionNote, 500) is { Length: > 0 } dn ? dn : null,
+                        // Only a VERIFIED match earns an ItemTypeId — this
+                        // reads the server's own re-resolution above, never
+                        // the client's claim.
+                        ItemTypeId = balanceIdToWrite.HasValue ? index.Balances[balanceIdToWrite.Value].ItemTypeId : null,
                         OpeningStockBalanceId = balanceIdToWrite,
                         CreatedAt = DateTime.UtcNow,
                     };
@@ -522,22 +581,23 @@ namespace MyApp.Api.Services.Implementations
                         costedBalanceIds.Add(balanceIdToWrite.Value);
                 }
 
-                // The unit cost is recomputed here from the reviewed lines'
-                // own Cost/Quantity — not trusted from the client's
-                // DerivedActualCost — because it is an AGGREGATE over however
-                // many lines matched one balance; trusting a per-line copy of
-                // a shared figure invites a "last line wins" bug the moment two
-                // lines disagree. Same formula as preview, applied to exactly
-                // the lines the operator approved as cost-only for this balance.
+                // The unit cost is derived here from the WRITTEN entities' own
+                // (server-recomputed, verified) Cost/Quantity — never from the
+                // client's claimed DerivedActualCost, and never from the
+                // client's raw Cost either, now that each line's CostExcludingTax
+                // above is itself the recomputed figure. It is an AGGREGATE over
+                // however many lines matched one balance; trusting a per-line
+                // copy of a shared figure invites a "last line wins" bug the
+                // moment two lines disagree. Same formula as preview, applied to
+                // exactly the lines that verified as cost-only for this balance.
                 foreach (var balanceId in costedBalanceIds)
                 {
-                    var balance = balanceMap[balanceId];
-                    var matching = lines.Where(l =>
-                        string.Equals(l.Disposition, GdCostingDispositionNames.CostOnly, StringComparison.OrdinalIgnoreCase)
-                        && l.OpeningStockBalanceId == balanceId).ToList();
+                    var balance = index.Balances[balanceId];
+                    var matching = writtenLines.Where(e =>
+                        e.Disposition == GdCostingDisposition.CostOnly && e.OpeningStockBalanceId == balanceId).ToList();
 
-                    var totalCost = matching.Sum(l => l.Cost);
-                    var totalQty = matching.Sum(l => l.Quantity);
+                    var totalCost = matching.Sum(e => e.CostExcludingTax);
+                    var totalQty = matching.Sum(e => e.Quantity);
                     var unitCost = totalQty != 0m ? totalCost / totalQty : 0m;
                     balance.ActualCostExcludingTax = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
                 }
