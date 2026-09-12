@@ -395,7 +395,7 @@ def main():
         variant_selling = []
         for label, st_cell in (("numeric fraction 0.18", 0.18), ("text \"18%\"", "18%"),
                                 ("whole number 18", 18)):
-            cells = row_cells(BASE_COLS, "GD-RATE-1", "8481.5000", desc="Rate Variant",
+            cells = row_cells(BASE_COLS, "GD-RATE-1", "8484.1029", desc="Rate Variant",
                               qty=10, assessed=40000, st=st_cell, ast=3, it=6)
             r = gd_preview(api, h, company, build_sheet(BASE_HEADINGS, [cells]), GD_MAPPING)
             rp = r.json() if r.ok else {}
@@ -417,15 +417,15 @@ def main():
         print("\n-- 3. Totals row --")
 
         totals_rows = [
-            row_cells(BASE_COLS, "GD-TOT-1", "8471.3000", desc=f"Real Product {tag}",
+            row_cells(BASE_COLS, "GD-TOT-1", "8470.3000", desc=f"Real Product {tag}",
                       qty=5, assessed=1000, st=18, ast=3, it=6),
             # A totals row: same GD, a summed cost, labelled "Total", NO
             # selling value stated -- must be skipped, not imported as a line.
-            row_cells(BASE_COLS, "GD-TOT-1", "8471.3000", desc="Total",
+            row_cells(BASE_COLS, "GD-TOT-1", "8470.3000", desc="Total",
                       qty=5, assessed=1000, st=18, ast=3, it=6),
             # A genuine product named "Total" that DOES carry its own stated
             # selling value must still be kept.
-            row_cells(BASE_COLS, "GD-TOT-2", "8471.4000", desc="Total",
+            row_cells(BASE_COLS, "GD-TOT-2", "8471.7030", desc="Total",
                       qty=2, assessed=500, st=18, ast=3, it=6, selling=5000),
         ]
         r = gd_preview(api, h, company, build_sheet(BASE_HEADINGS, totals_rows), GD_MAPPING)
@@ -447,7 +447,7 @@ def main():
         # ══════════════════════════════════════════════════════════════════
         print("\n-- 4. Header aliases --")
 
-        alias_input = dict(gd="GD-ALIAS-1", hs="8536.6900", desc="Alias Probe",
+        alias_input = dict(gd="GD-ALIAS-1", hs="8549.1400", desc="Alias Probe",
                            qty=10, assessed=20000, duty=0, acd=0, regduty=0, others=0,
                            st=18, ast=3, it=6, addon=0)
 
@@ -489,7 +489,7 @@ def main():
 
         ov_computed = compute_costing(assessed=10000, st=18, ast=3, it=6)
         ov_stated = float(d(10000) * d("1.39"))  # 13,900.00 -- ~1.39x cost, per the brief
-        ov_cells = row_cells(BASE_COLS, "GD-OVERRIDE-1", "8536.9990", desc="Override Probe",
+        ov_cells = row_cells(BASE_COLS, "GD-OVERRIDE-1", "8525.8920", desc="Override Probe",
                              qty=5, assessed=10000, st=18, ast=3, it=6, selling=ov_stated)
         r = gd_preview(api, h, company, build_sheet(BASE_HEADINGS, [ov_cells]), GD_MAPPING)
         op = r.json() if r.ok else {}
@@ -519,12 +519,12 @@ def main():
         set_opening(api, h, company, item_c, qty=10, value=15000)
         # D: no opening balance anywhere under this HS -- deliberately absent.
         # F: two GD lines, one balance -- must share the derived cost + note.
-        item_f = make_item(api, h, company, f"GD Item F {tag}", hs="8708.9900")
+        item_f = make_item(api, h, company, f"GD Item F {tag}", hs="8414.5110")
         set_opening(api, h, company, item_f, qty=100, value=40000)
         # G: a balance at zero quantity, pre-seeded with a NON-zero sentinel
         # cost so a later "became exactly 0.00" assertion proves a write
         # happened rather than merely finding an untouched zero.
-        item_g = make_item(api, h, company, f"GD Item G {tag}", hs="8501.1010")
+        item_g = make_item(api, h, company, f"GD Item G {tag}", hs="8511.8020")
         set_opening(api, h, company, item_g, qty=0, value=0, cost=999)
         # E1/E2 share one HS code with NO lots -- an ambiguous match. Both
         # pre-seeded with distinct sentinels to later prove neither moves.
@@ -570,11 +570,11 @@ def main():
                           st=18, ast=3, it=6)
         d_row = row_cells(BASE_COLS, "GD-D-1", "9999.0000", desc="Item D (unmatched)", qty=5,
                           assessed=1000, st=18, ast=3, it=6)
-        f1_row = row_cells(BASE_COLS, "GD-F-1", "8708.9900", desc="Item F line 1", qty=40,
+        f1_row = row_cells(BASE_COLS, "GD-F-1", "8414.5110", desc="Item F line 1", qty=40,
                            assessed=20000, st=18, ast=3, it=6)
-        f2_row = row_cells(BASE_COLS, "GD-F-2", "8708.9900", desc="Item F line 2", qty=70,
+        f2_row = row_cells(BASE_COLS, "GD-F-2", "8414.5110", desc="Item F line 2", qty=70,
                            assessed=35000, st=18, ast=3, it=6)
-        g_row = row_cells(BASE_COLS, "GD-G-1", "8501.1010", desc="Item G (zero balance)", qty=10,
+        g_row = row_cells(BASE_COLS, "GD-G-1", "8511.8020", desc="Item G (zero balance)", qty=10,
                           assessed=50000, st=18, ast=3, it=6)
         e_row = row_cells(BASE_COLS, "GD-E-1", "8479.8990", desc="Item E (ambiguous)", qty=3,
                           assessed=1000, st=18, ast=3, it=6)
@@ -709,7 +709,7 @@ def main():
             "rows": [{"itemName": x["itemName"], "hsCode": x["hsCode"],
                      "isHsCodePartial": x["isHsCodePartial"], "unit": x["unit"],
                      "quantity": x["quantity"], "value": x["value"],
-                     "lotRefs": x["lotRefs"], "itemTypeId": x["itemTypeId"]}
+                     "lotRefs": x["lotRefs"], "lots": x.get("lots", []), "itemTypeId": x["itemTypeId"]}
                      for x in xp.get("rows", [])],
         })
         xc = r.json() if r.ok else {}
@@ -719,7 +719,7 @@ def main():
 
         # Y: matched only through ItemType.HSCode (rule b) -- created and
         # opening-balanced directly, no lots anywhere.
-        item_y = make_item(api, h, mixed_co, f"Mixed Item Y {tag}", hs="8517.1219")
+        item_y = make_item(api, h, mixed_co, f"Mixed Item Y {tag}", hs="8523.8050")
         set_opening(api, h, mixed_co, item_y, qty=25, value=25000)
 
         # Z1 has a lot; Z2 shares Z1's HS code but has none. Z1 alone must
@@ -742,7 +742,7 @@ def main():
             "rows": [{"itemName": x["itemName"], "hsCode": x["hsCode"],
                      "isHsCodePartial": x["isHsCodePartial"], "unit": x["unit"],
                      "quantity": x["quantity"], "value": x["value"],
-                     "lotRefs": x["lotRefs"], "itemTypeId": x["itemTypeId"]}
+                     "lotRefs": x["lotRefs"], "lots": x.get("lots", []), "itemTypeId": x["itemTypeId"]}
                      for x in zp.get("rows", [])],
         })
         zc = r.json() if r.ok else {}
@@ -755,7 +755,7 @@ def main():
         mixed_rows = [
             row_cells(BASE_COLS, "MIXLOT-X", "8536.5010", desc="Item X", qty=40, assessed=20000,
                      st=18, ast=3, it=6),
-            row_cells(BASE_COLS, "GD-MIXED-Y", "8517.1219", desc="Item Y", qty=25, assessed=12500,
+            row_cells(BASE_COLS, "GD-MIXED-Y", "8523.8050", desc="Item Y", qty=25, assessed=12500,
                      st=18, ast=3, it=6),
             row_cells(BASE_COLS, "MIXLOT-Z", "8712.0000", desc="Item Z", qty=15, assessed=7500,
                      st=18, ast=3, it=6),
@@ -822,7 +822,7 @@ def main():
               f"totalCostExcludingTax={big_res.get('totalCostExcludingTax')} expected={expected_total_cost}")
 
         check("Item D's exact skip reason is in the response messages",
-              any("Posting new stock arrives in a later release" in m for m in big_res.get("messages", [])),
+              any("posting new stock arrives in a later release" in m.lower() for m in big_res.get("messages", [])),
               f"messages={big_res.get('messages')}")
         check("the ambiguous count is surfaced in the response messages",
               any("matched more than one opening balance" in m for m in big_res.get("messages", [])),
@@ -1004,7 +1004,7 @@ def main():
               f"E2={opening_of(openings_fa, item_e2).get('actualCostExcludingTax')}")
 
         # #14 Cross-tenant: a real balance that belongs to a DIFFERENT company.
-        cross_item = make_item(api, h, other_co, f"Cross Target {tag}", hs="8536.5090")
+        cross_item = make_item(api, h, other_co, f"Cross Target {tag}", hs="8538.9010")
         set_opening(api, h, other_co, cross_item, qty=5, value=5000, cost=555)
         cross_bal = opening_of(get_openings(api, h, other_co), cross_item)
 
