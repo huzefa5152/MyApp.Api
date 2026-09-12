@@ -33,6 +33,22 @@ namespace MyApp.Api.Models
         public decimal ValueExcludingTax { get; set; }
 
         /// <summary>
+        /// What that opening quantity actually COST, excluding sales tax —
+        /// assessed customs value plus duties, from the GD costing sheet.
+        ///
+        /// Deliberately separate from <see cref="ValueExcludingTax"/>, which on
+        /// these installations is the SELLING value: the stock sheet's "Balance
+        /// Excl" is the costing sheet's "Selling Value", verified to the paisa
+        /// against the client's own workbook. The two differ by the tax-driven
+        /// uplift, so one column cannot serve both.
+        ///
+        /// Internal only. Nothing prices, files or posts from this figure — it
+        /// exists so margin is answerable. Zero means "not known", which is what
+        /// every row held before the costing import existed.
+        /// </summary>
+        public decimal ActualCostExcludingTax { get; set; }
+
+        /// <summary>
         /// Sales tax rate on that value, as a PERCENTAGE (18.00, 25.00) to match
         /// <see cref="Invoice.GSTRate"/>. The stock sheet writes it as a
         /// fraction (0.18); the importer converts.

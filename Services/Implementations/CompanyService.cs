@@ -458,6 +458,17 @@ namespace MyApp.Api.Services.Implementations
                 // 5. Delete print templates
                 await _context.PrintTemplates.Where(pt => pt.CompanyId == id).ExecuteDeleteAsync();
 
+                // 5d. GD costing import consignments. ImportConsignment.CompanyId
+                //     is Restrict (would block the company row below), and
+                //     ImportConsignmentLine.OpeningStockBalanceId is ALSO
+                //     Restrict (would block the OpeningStockBalances delete in
+                //     step 6, just below). Lines cascade with their consignment,
+                //     so deleting the consignments here clears both blockers in
+                //     one statement — the same trap CompanyItemTypeSettings and
+                //     DeliveryItems.InvoiceItemId already caught elsewhere in
+                //     this method.
+                await _context.ImportConsignments.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
+
                 // 6. Purchase module: stock movements / opening balances /
                 //    goods-receipt items + receipts / purchase-bill items +
                 //    bills / suppliers — all FK back to Company directly or

@@ -211,6 +211,8 @@ namespace MyApp.Api.Data
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
         public DbSet<OpeningStockLot> OpeningStockLots { get; set; }
+        public DbSet<ImportConsignment> ImportConsignments { get; set; }
+        public DbSet<ImportConsignmentLine> ImportConsignmentLines { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -1440,6 +1442,11 @@ namespace MyApp.Api.Data
                 .Property(o => o.ValueExcludingTax).HasColumnType("decimal(18,2)");
             modelBuilder.Entity<OpeningStockBalance>()
                 .Property(o => o.SalesTaxRate).HasColumnType("decimal(5,2)");
+            // GD costing import (2026-09-12): the cost side of the same
+            // opening position. See the property's own doc comment for why it
+            // cannot share a column with ValueExcludingTax.
+            modelBuilder.Entity<OpeningStockBalance>()
+                .Property(o => o.ActualCostExcludingTax).HasColumnType("decimal(18,2)");
             modelBuilder.Entity<StockMovement>()
                 .Property(m => m.UnitCostExcludingTax).HasColumnType("decimal(18,4)");
             modelBuilder.Entity<StockMovement>()
@@ -2178,6 +2185,87 @@ namespace MyApp.Api.Data
                 .Property(l => l.ConsumedSalesTaxRate).HasColumnType("decimal(5,2)");
             modelBuilder.Entity<OpeningStockLot>()
                 .Property(l => l.BalanceSalesTaxRate).HasColumnType("decimal(5,2)");
+
+            // ── ImportConsignment / ImportConsignmentLine — GD costing import
+            // (2026-09-12). The cost-side counterpart to OpeningStockLot; see
+            // ImportConsignment's class comment for how the two relate. This
+            // is entities only — nothing writes to a line's OpeningStockBalance
+            // match or posts a StockMovement from it yet; that is Task 10.
+            modelBuilder.Entity<ImportConsignment>(e =>
+            {
+                // GdNumber is externally issued by customs, unique per company.
+                // NumberAllocationRetry deliberately does not apply — see the
+                // property's own doc comment.
+                e.HasIndex(c => new { c.CompanyId, c.GdNumber }).IsUnique();
+                e.Property(c => c.GdNumber).HasMaxLength(64);
+                e.Property(c => c.TotalCostExcludingTax).HasPrecision(18, 2);
+                e.Property(c => c.TotalInputTax).HasPrecision(18, 2);
+                e.Property(c => c.TotalIncomeTax).HasPrecision(18, 2);
+                e.Property(c => c.TotalSellingValue).HasPrecision(18, 2);
+                e.HasIndex(c => c.ImportRunId);
+
+                // Restrict: CompanyService.DeleteAsync must delete a company's
+                // consignments (their lines cascade with them, below) before
+                // the company row itself — the same trap CompanyItemTypeSettings
+                // and DeliveryItems.InvoiceItemId already caught.
+                e.HasOne(c => c.Company).WithMany()
+                    .HasForeignKey(c => c.CompanyId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ImportConsignmentLine>(e =>
+            {
+                e.Property(l => l.DescriptionOnSheet).HasMaxLength(300);
+                e.Property(l => l.HsCode).HasMaxLength(20);
+                e.Property(l => l.Unit).HasMaxLength(50);
+                e.Property(l => l.DispositionNote).HasMaxLength(500);
+
+                e.Property(l => l.Quantity).HasPrecision(18, 4);
+
+                // Cost inputs and resolved money outcomes: 2dp, matching every
+                // other stored PKR amount in this codebase.
+                e.Property(l => l.AssessedValue).HasPrecision(18, 2);
+                e.Property(l => l.CustomsDuty).HasPrecision(18, 2);
+                e.Property(l => l.Acd).HasPrecision(18, 2);
+                e.Property(l => l.RegulatoryDuty).HasPrecision(18, 2);
+                e.Property(l => l.Others).HasPrecision(18, 2);
+                // AddOnProfit is a flat PKR add-on despite sitting beside the
+                // rate columns below — Helpers.ImportCostingCalculator adds it
+                // directly onto a money term and the sheet reader fills it from
+                // an amount cell, not a rate cell (see the property's own doc
+                // comment) — so this is money precision, not rate precision.
+                e.Property(l => l.AddOnProfit).HasPrecision(18, 2);
+                e.Property(l => l.CostExcludingTax).HasPrecision(18, 2);
+                e.Property(l => l.SellingValueExcludingTax).HasPrecision(18, 2);
+
+                // Rates: percentages (18.00, not 0.18), precision (18,4).
+                e.Property(l => l.SalesTaxRate).HasPrecision(18, 4);
+                e.Property(l => l.AstRate).HasPrecision(18, 4);
+                e.Property(l => l.IncomeTaxRate).HasPrecision(18, 4);
+
+                e.HasIndex(l => l.OpeningStockBalanceId);
+                e.HasIndex(l => l.ImportRunId);
+
+                e.HasOne(l => l.ImportConsignment).WithMany(c => c.Lines)
+                    .HasForeignKey(l => l.ImportConsignmentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Restrict, NOT Cascade: OpeningStockBalance already restricts
+                // on Company (above), and a second cascade path into the same
+                // table is exactly what SQL Server refuses to create.
+                //
+                // StockMovementId and ImportRunId stay plain nullable columns
+                // with NO HasOne/foreign key and no navigation property — the
+                // same choice Invoice.CopiedFromId and OpeningStockLot.ImportRunId
+                // already make. A third cascade path into StockMovements is
+                // exactly what SQL Server refuses, and neither pointer needs
+                // referential enforcement. ItemTypeId is the same: ItemType is
+                // a global, company-less catalog (CLAUDE.md 5b-2), so it too
+                // stays an unconstrained column.
+                e.HasOne(l => l.OpeningStockBalance).WithMany()
+                    .HasForeignKey(l => l.OpeningStockBalanceId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
 
             // 2026-05-12: stock-quantity precision promotion. Both
             // StockMovement.Quantity and OpeningStockBalance.Quantity
