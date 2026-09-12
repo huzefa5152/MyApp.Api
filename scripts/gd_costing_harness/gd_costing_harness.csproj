@@ -18,5 +18,7 @@
          would rebuild MyApp.Api and fail while the dev backend holds a lock on
          its apphost. -->
     <Compile Include="..\..\Helpers\ImportCostingCalculator.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\CellNumber.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\PercentRate.cs" />
   </ItemGroup>
 </Project>

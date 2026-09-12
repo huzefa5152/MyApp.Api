@@ -1,4 +1,5 @@
 using MyApp.Api.Helpers;
+using MyApp.Api.Helpers.ExcelImport;
 using static MyApp.Api.Helpers.ImportCostingCalculator;
 
 var failures = new List<string>();
@@ -82,6 +83,39 @@ void Check(string name, decimal actual, decimal expected, decimal tolerance = 0.
         100000m, 0m, 0m, 0m, 0m, 25m, 3m, 6m, 0m));
     Check("rate25.sellingValue", r.SellingValue, 112000m);
 }
+
+void CheckRate(string name, decimal? actual, decimal? expected)
+{
+    checks++;
+    if (actual is null != expected is null
+        || (actual is not null && Math.Abs(actual.Value - expected!.Value) > 0.0001m))
+        failures.Add($"{name}: expected {expected?.ToString() ?? "null"}, got {actual?.ToString() ?? "null"}");
+}
+
+// PAK writes the rate as a fraction in a numeric cell.
+CheckRate("rate.fraction", PercentRate.ToPercent(0.18m, "0.18"), 18m);
+CheckRate("rate.fractionAst", PercentRate.ToPercent(0.03m, "0.03"), 3m);
+
+// Alpha and AY write AST as the literal text "3%". CellNumber reads that as
+// 0.03, i.e. already a fraction.
+CheckRate("rate.percentText", PercentRate.ToPercent(null, "3%"), 3m);
+CheckRate("rate.percentText18", PercentRate.ToPercent(null, "18%"), 18m);
+
+// AY writes the income tax rate as the whole number 6, meaning 6%.
+CheckRate("rate.whole", PercentRate.ToPercent(6m, "6"), 6m);
+CheckRate("rate.whole25", PercentRate.ToPercent(25m, "25"), 25m);
+
+// Zero is a real rate, not a missing one.
+CheckRate("rate.zero", PercentRate.ToPercent(0m, "0"), 0m);
+
+// A blank or non-numeric cell has no rate at all.
+CheckRate("rate.blank", PercentRate.ToPercent(null, ""), null);
+CheckRate("rate.text", PercentRate.ToPercent(null, "n/a"), null);
+
+// Exactly 1 is ambiguous - 1% or 100%. Treated as the fraction, because every
+// rate these sheets carry is written as a fraction or a whole number above 1,
+// and 100% is a rate that exists while 1% is not one any of them use.
+CheckRate("rate.one", PercentRate.ToPercent(1m, "1"), 100m);
 
 Console.WriteLine($"{checks} checks, {failures.Count} failed");
 foreach (var f in failures) Console.WriteLine("  FAIL " + f);
