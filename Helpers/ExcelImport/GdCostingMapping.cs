@@ -230,8 +230,6 @@ namespace MyApp.Api.Helpers.ExcelImport
         /// </summary>
         public GdCostingColumns Resolve(IImportedWorkbook wb, int sheet, List<string> notes)
         {
-            notes ??= new List<string>();
-
             var resolved = new GdCostingColumns
             {
                 GdNumber = Columns.GdNumber,

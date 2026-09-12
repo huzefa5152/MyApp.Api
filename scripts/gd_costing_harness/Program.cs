@@ -169,6 +169,89 @@ CheckBool("totals.descOnly", GdCostingMapping.LooksLikeTotalsRow("Total", 0m), f
     Check("parse.sellingValue", m.Columns.SellingValue ?? 0, 23m);
 }
 
+// Resolve: THE SWAP (rule 2). The mapping's defaults have Description and
+// Quantity genuinely crossed relative to what the heading row says, so a
+// one-at-a-time apply (move the first field, find the second one's target
+// column already occupied, decline) cannot produce the right answer for
+// both. Only resolve-all-first-then-apply gets both fields to move.
+{
+    var wb = new FakeWorkbook();
+    wb.Set(0, 1, 3, "Quantity");
+    wb.Set(0, 1, 4, "Description");
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        Columns = new GdCostingMapping.GdCostingColumns { Description = 3, Quantity = 4 },
+        HeaderAliases = new Dictionary<string, List<string>>
+        {
+            ["description"] = new List<string> { "Description" },
+            ["quantity"] = new List<string> { "Quantity" },
+        },
+    };
+    var notes = new List<string>();
+    var resolved = mapping.Resolve(wb, 0, notes);
+    Check("resolve.swap.description", resolved.Description, 4);
+    Check("resolve.swap.quantity", resolved.Quantity, 3);
+    CheckBool("resolve.swap.notes", notes.Count >= 2, true);
+}
+
+// Resolve: MANY HITS (rule 3). The same heading text sits on two columns, so
+// the mapped number is left alone and a note explains why.
+{
+    var wb = new FakeWorkbook();
+    wb.Set(0, 1, 10, "Rate");
+    wb.Set(0, 1, 11, "Rate");
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        Columns = new GdCostingMapping.GdCostingColumns { Unit = 5 },
+        HeaderAliases = new Dictionary<string, List<string>> { ["unit"] = new List<string> { "Rate" } },
+    };
+    var notes = new List<string>();
+    var resolved = mapping.Resolve(wb, 0, notes);
+    Check("resolve.manyHits.unchanged", resolved.Unit ?? 0, 5);
+    CheckBool("resolve.manyHits.notes", notes.Count >= 1, true);
+}
+
+// Resolve: COLLISION (rule 4). Two different fields' aliases both resolve to
+// the one column "Misc" names, so the aliases are wrong, not the sheet --
+// both are dropped and each keeps its own mapped number.
+{
+    var wb = new FakeWorkbook();
+    wb.Set(0, 1, 20, "Misc");
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        Columns = new GdCostingMapping.GdCostingColumns { Acd = 8, Others = 9 },
+        HeaderAliases = new Dictionary<string, List<string>>
+        {
+            ["acd"] = new List<string> { "Misc" },
+            ["others"] = new List<string> { "Misc" },
+        },
+    };
+    var notes = new List<string>();
+    var resolved = mapping.Resolve(wb, 0, notes);
+    Check("resolve.collision.acd", resolved.Acd ?? 0, 8);
+    Check("resolve.collision.others", resolved.Others ?? 0, 9);
+    CheckBool("resolve.collision.notes", notes.Count >= 1, true);
+}
+
+// Resolve: ZERO HITS. An alias matching no heading leaves the mapped number
+// alone. Unlike the many-hits case, this path adds no note, so none is
+// asserted here.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        Columns = new GdCostingMapping.GdCostingColumns { HsCode = 6 },
+        HeaderAliases = new Dictionary<string, List<string>> { ["hsCode"] = new List<string> { "NoSuchHeading" } },
+    };
+    var notes = new List<string>();
+    var resolved = mapping.Resolve(wb, 0, notes);
+    Check("resolve.zeroHits.unchanged", resolved.HsCode, 6);
+}
+
 Console.WriteLine($"{checks} checks, {failures.Count} failed");
 foreach (var f in failures) Console.WriteLine("  FAIL " + f);
 if (failures.Count > 0) return 1;
