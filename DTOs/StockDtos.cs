@@ -276,18 +276,31 @@
     }
 
     /// <summary>
-    /// One item on the stock export: the same on-hand figures the dashboard
-    /// shows, plus the movements behind them. The movements ride WITH the item
-    /// rather than in a flat list so the workbook can nest them under the row
-    /// they explain — the exported shape has to match the screen's drill-down.
+    /// One item on the stock export — one ROW of the customs-lot stock sheet:
+    /// the on-hand figures the dashboard shows, plus the customs declaration
+    /// they arrived on where the item names exactly one.
+    ///
+    /// No movement history: the exported sheet is the client's own layout,
+    /// which has one row per item and nowhere to nest a drill-down. Movement
+    /// detail lives on the Stock Movements page.
     /// </summary>
     public class StockExportItemDto
     {
         public StockOnHandRowDto Summary { get; set; } = new();
 
-        /// <summary>Oldest first — a drill-down reads like a bank statement.
-        /// Empty when the caller may not see movements, or the item has none.</summary>
-        public List<StockMovementRowDto> Movements { get; set; } = new();
+        /// <summary>
+        /// Customs declaration reference for this item, and its date — the
+        /// stock sheet's "GDs No" and "GD Date".
+        ///
+        /// Filled ONLY when every <c>OpeningStockLot</c> behind the item names
+        /// the SAME declaration. An item held across several GDs has no single
+        /// answer, and the export is one row per item: naming the first one
+        /// would attribute the whole position to a declaration that covers part
+        /// of it. Blank is the honest answer, and it is what an item bought on
+        /// purchase bills (no lots at all) reports too.
+        /// </summary>
+        public string? LotRef { get; set; }
+        public DateTime? LotDate { get; set; }
     }
 
     /// <summary>Everything the stock workbook needs, resolved server-side.</summary>
@@ -299,10 +312,6 @@
 
         /// <summary>Provenance line: what shaped this export (search, scope).</summary>
         public List<string> FiltersApplied { get; set; } = new();
-
-        /// <summary>False when the caller lacks stock.movements.view — the
-        /// workbook then says so rather than silently shipping bare rows.</summary>
-        public bool IncludeMovements { get; set; }
 
         public List<StockExportItemDto> Items { get; set; } = new();
     }

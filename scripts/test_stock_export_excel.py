@@ -3,19 +3,25 @@ Live end-to-end test for the Stock dashboard Excel export.
 
   GET /api/stock/company/{id}/onhand/excel?search=
 
-The offline harness (scripts/stock_export_harness) already pins the LAYOUT
-against synthetic rows. This suite pins the things only a running server can
-answer:
+The export reproduces the customs-lot stock sheet the importer clients keep by
+hand (Helpers/StockExcelBuilder.cs). The offline harness
+(scripts/stock_export_harness) already pins that LAYOUT against synthetic rows.
+This suite pins the things only a running server can answer:
 
   1. the workbook's figures equal what GET .../onhand returns, row for row —
      the export and the grid come out of one valuation walk, and the whole
      point of that is that they cannot disagree;
-  2. the totals row ties to the item rows AND to the API's own sum;
-  3. the drill-down agrees with the movements feed;
-  4. the two-permission split behaves: stock.dashboard.export alone yields a
-     workbook that SAYS its movement detail is missing, both permissions yield
-     the collapsed drill-down, and neither yields 403;
-  5. the search term reaches the workbook and is named on its face.
+  2. the derived columns are derived the way the builder says: Opening is
+     opening + total in, Consumed is total out, and Balance is the LIVE
+     position rather than Opening minus Consumed;
+  3. the totals row sums the right range, and the rows it covers tie to the
+     API's own sum;
+  4. the customs-declaration columns name a GD only where the item's lots
+     agree on one, and never invent one for an item bought on bills;
+  5. stock.dashboard.export alone yields the complete workbook (the old
+     movement-detail split is gone with the drill-down), and a user without
+     that permission gets 403;
+  6. the search term reaches the workbook and is named on its Summary sheet.
 
 Any user or role this suite creates is deleted in a finally block — the local
 branch database is meant to stay at one company.
@@ -47,29 +53,27 @@ BASE = "http://localhost:5134"
 OUT = tempfile.mkdtemp(prefix="stock-export-")
 
 # Column layout — must match Helpers/StockExcelBuilder.cs.
-C_ITEM, C_HS, C_UOM = 1, 2, 3
-# Each quantity is followed by its own money (2026-09-04).
-C_OPEN, C_OPENVAL = 4, 5
-C_IN, C_INVAL = 6, 7
-C_OUT, C_OUTVAL = 8, 9
-C_ONHAND = 10
-C_UNIT, C_EXCL, C_RATE, C_TAX, C_INCL = 11, 12, 13, 14, 15
+C_CLAIM, C_GDNO, C_GDDATE, C_ITEM, C_SUBCAT = 1, 2, 3, 4, 5
+C_HS4, C_HS8, C_PRICE, C_UNIT = 6, 7, 8, 9
+C_OPEN_QTY, C_OPEN_EXL, C_OPEN_RATE, C_OPEN_TAX = 10, 11, 12, 13
+C_CONS_QTY, C_CONS_EXL, C_CONS_RATE, C_CONS_TAX = 14, 15, 16, 17
+C_BAL_QTY, C_BAL_EXL, C_BAL_RATE, C_BAL_TAX = 18, 19, 20, 21
+C_STRIPE = 22
+C_COGS_OPEN_EXL, C_COGS_OPEN_TAX, C_COGS_OPEN_VAT = 24, 25, 26
+C_COGS_CONS_EXL, C_COGS_CONS_TAX, C_COGS_CONS_VAT = 27, 28, 29
+C_COGS_BAL_EXL, C_COGS_BAL_TAX, C_COGS_BAL_VAT = 30, 31, 32
 
-# DTO field -> column, for the row-for-row comparison against the grid.
-FIELD_COLUMNS = {
-    "openingBalance": C_OPEN,
-    "openingValueExcludingTax": C_OPENVAL,
-    "totalIn": C_IN,
-    "valueIn": C_INVAL,
-    "totalOut": C_OUT,
-    "valueOut": C_OUTVAL,
-    "onHand": C_ONHAND,
-    "unitCost": C_UNIT,
-    "valueExcludingTax": C_EXCL,
-    "salesTaxRate": C_RATE,
-    "salesTax": C_TAX,
-    "valueIncludingTax": C_INCL,
-}
+BAND_ROW, HEADER_ROW, FIRST_DATA_ROW = 2, 3, 4
+
+# Columns the totals row sums, in the builder's own order.
+TOTALLED = [
+    C_OPEN_QTY, C_OPEN_EXL, C_OPEN_TAX,
+    C_CONS_QTY, C_CONS_EXL, C_CONS_TAX,
+    C_BAL_QTY, C_BAL_EXL, C_BAL_TAX,
+    C_COGS_OPEN_EXL, C_COGS_OPEN_TAX, C_COGS_OPEN_VAT,
+    C_COGS_CONS_EXL, C_COGS_CONS_TAX, C_COGS_CONS_VAT,
+    C_COGS_BAL_EXL, C_COGS_BAL_TAX, C_COGS_BAL_VAT,
+]
 
 passed = 0
 failed = 0
@@ -126,77 +130,90 @@ def dec(value) -> Decimal:
     return Decimal(str(value if value is not None else 0))
 
 
-def sheet_of(path: str):
-    return openpyxl.load_workbook(path).active
+# Excel stores every number as an IEEE-754 double, and a workbook serialises
+# roughly 15 significant digits. A stock quantity out of the weighted-average
+# walk is a C# decimal that can carry more than that — the opening-stock import
+# produces figures like 1266.702219595555 — so the sheet legitimately holds
+# 1266.70221959556 and NO writer could do better. That is a storage limit, not a
+# disagreement: the column renders at 0dp, so both paint "1,267".
+#
+# The tolerance is therefore the loss of one decimal -> double round trip and
+# nothing more. At 1e-12 relative it is still four orders of magnitude tighter
+# than a paisa on any figure these books hold, so a wrong column, a wrong
+# derivation or a dropped sign still fails.
+ROUND_TRIP_TOLERANCE = Decimal("1e-12")
 
 
-def outline_level(ws, row: int) -> int:
-    dim = ws.row_dimensions.get(row)
-    return dim.outlineLevel if dim else 0
+def same(got: Decimal, want: Decimal) -> bool:
+    if got == want:
+        return True
+    scale = max(abs(got), abs(want))
+    if scale == 0:
+        return False
+    return abs(got - want) / scale < ROUND_TRIP_TOLERANCE
+
+
+def book(path: str):
+    """(data sheet, summary sheet). The data sheet is named for the month, so
+    it is taken by position — its name moves with the calendar."""
+    wb = openpyxl.load_workbook(path)
+    return wb.worksheets[0], wb["Summary"]
 
 
 def anatomy(ws):
-    """(header row, item rows, grouped rows, total row) of a stock workbook."""
-    header = next(r for r in range(1, 40) if ws.cell(r, C_ITEM).value == "Item")
-    total = next(r for r in range(header, ws.max_row + 1)
-                 if str(ws.cell(r, C_ITEM).value or "").startswith("TOTAL"))
-    items = [r for r in range(header + 1, total) if outline_level(ws, r) == 0]
-    grouped = [r for r in range(header + 1, total) if outline_level(ws, r) > 0]
-    return header, items, grouped, total
+    """(item rows, totals row) of a stock workbook. Data starts at a fixed row
+    and every data row is an item row — there is no drill-down to skip."""
+    last = FIRST_DATA_ROW - 1
+    for r in range(FIRST_DATA_ROW, ws.max_row + 1):
+        if ws.cell(r, C_ITEM).value in (None, ""):
+            break
+        last = r
+    items = list(range(FIRST_DATA_ROW, last + 1))
+    totals = last + 3 if items else None
+    return items, totals
 
 
-def column_text(ws, row: int) -> str:
-    return " ".join(str(ws.cell(row, c).value or "") for c in range(1, 15))
-
-
-def all_text(ws) -> str:
-    return " ".join(column_text(ws, r) for r in range(1, ws.max_row + 1))
-
-
-def rendered(cell) -> str:
-    """What Excel will actually paint in the cell — the thing that can clip."""
-    value = cell.value
-    if value is None:
-        return ""
-    if hasattr(value, "year"):
-        return "00-00-0000"
-    if isinstance(value, (int, float)):
-        fmt = cell.number_format or ""
-        if "0.####" in fmt:
-            text = f"{abs(value):,.4f}".rstrip("0").rstrip(".")
-        else:
-            text = f"{abs(value):,.4f}" if "0.0000" in fmt else f"{abs(value):,.2f}"
-        if value < 0:
-            text = "-" + text
-        if '"%"' in fmt:
-            text += "%"
-        return text
-    return str(value)
+def sheet_text(ws) -> str:
+    return " ".join(
+        str(ws.cell(r, c).value or "")
+        for r in range(1, ws.max_row + 1)
+        for c in range(1, ws.max_column + 1))
 
 
 def clipped_cells(ws) -> list[str]:
+    """Values that will not fit their column. Formula cells are skipped — what
+    Excel paints is the RESULT, which openpyxl has not computed."""
     widths = {letter: dim.width for letter, dim in ws.column_dimensions.items()}
     merged = {c.coordinate for rng in ws.merged_cells.ranges
               for row in ws[str(rng)] for c in row}
     out = []
     for row in ws.iter_rows():
         for cell in row:
-            # A merged banner spans all 14 columns, and a wrapped cell grows its
-            # row instead of clipping — neither can lose text.
             if cell.coordinate in merged:
                 continue
             if cell.alignment and cell.alignment.wrap_text:
                 continue
-            text = rendered(cell)
-            if not text:
+            value = cell.value
+            if value is None:
                 continue
+            if isinstance(value, str) and value.startswith("="):
+                continue
+            if hasattr(value, "year"):
+                text = "00-00-0000"
+            elif isinstance(value, (int, float)):
+                fmt = cell.number_format or ""
+                text = f"{abs(value):,.2f}"
+                if value < 0:
+                    text = "-" + text
+                if "%" in fmt:
+                    text = f"{abs(value) * 100:,.2f}%"
+            else:
+                text = str(value)
             width = widths.get(cell.column_letter)
             if width is None:
                 continue
-            indent = (cell.alignment.indent or 0) if cell.alignment else 0
-            if len(text) + indent > width:
-                out.append(f"{cell.coordinate} needs {len(text) + indent:.0f} "
-                           f"has {width:.1f}: {text[:40]}")
+            if len(text) > width:
+                out.append(f"{cell.coordinate} needs {len(text)} has {width:.1f}: {text[:40]}")
     return out
 
 
@@ -220,8 +237,8 @@ def main() -> int:
     company = next((c for c in companies if c["id"] == cid), None)
     if company is None:
         sys.exit(f"company {cid} is not accessible to admin")
-    expected_banner = company.get("brandName") or company["name"]
-    print(f"\nBase {BASE}  ·  company {cid} ({expected_banner})")
+    expected_name = company.get("brandName") or company["name"]
+    print(f"\nBase {BASE}  ·  company {cid} ({expected_name})")
 
     made_users: list[int] = []
     made_roles: list[int] = []
@@ -255,8 +272,8 @@ def main() -> int:
         return login(username, "test1234")
 
     try:
-        # ── Suite 1: the workbook cannot disagree with the grid ──────────────
-        print("\n  Suite 1 — the workbook equals the on-hand grid")
+        # ── Suite 1: the sheet is the client's layout ────────────────────────
+        print("\n  Suite 1 — the customs-lot stock sheet layout")
         _, grid, _ = request("GET", f"/api/stock/company/{cid}/onhand", token=admin)
         status, blob, headers = request(
             "GET", f"/api/stock/company/{cid}/onhand/excel", token=admin, binary=True)
@@ -269,152 +286,212 @@ def main() -> int:
               f"{headers.get('Content-Type')} / {headers.get('Content-Disposition')}")
 
         path = save(blob, "onhand.xlsx")
-        ws = sheet_of(path)
-        header, items, grouped, total = anatomy(ws)
-        print(f"    {len(grid)} items on the grid; workbook has {len(items)} item rows, "
-              f"{len(grouped)} grouped rows")
+        ws, summary = book(path)
+        items, totals = anatomy(ws)
+        print(f"    {len(grid)} items on the grid; workbook has {len(items)} item rows")
+
+        check("s1", "row 1 carries the Cost of Good Sold banner",
+              ws.cell(1, C_COGS_OPEN_EXL).value == "Cost of Good Sold",
+              str(ws.cell(1, C_COGS_OPEN_EXL).value))
+        for col, label in [(C_OPEN_QTY, "Opening"), (C_CONS_QTY, "Consumed"),
+                           (C_BAL_QTY, "Balance")]:
+            check("s1", f"band label over column {col} is {label!r}",
+                  ws.cell(BAND_ROW, col).value == label,
+                  str(ws.cell(BAND_ROW, col).value))
+        expected_header = {
+            C_CLAIM: "Claim Month", C_GDNO: "GDs No", C_GDDATE: "GD Date",
+            C_ITEM: "Items", C_SUBCAT: "Sub cat",
+            C_HS4: "4 Digit Hs Code", C_HS8: "8 Digit Hs Code",
+            C_PRICE: "Price", C_UNIT: "Unit",
+            C_OPEN_QTY: "Qty", C_OPEN_EXL: "Exl", C_OPEN_RATE: "Rate", C_OPEN_TAX: "S.Tax",
+            C_CONS_QTY: "Qty", C_CONS_EXL: "Consumed Exl",
+            C_BAL_QTY: "Qty", C_BAL_EXL: "Bal Exl",
+            C_COGS_OPEN_EXL: "Exl", C_COGS_BAL_VAT: "Vat",
+        }
+        wrong = [f"col {c}: {ws.cell(HEADER_ROW, c).value!r} != {want!r}"
+                 for c, want in expected_header.items()
+                 if ws.cell(HEADER_ROW, c).value != want]
+        check("s1", "every header sits in its client-sheet column", not wrong,
+              " | ".join(wrong[:4]))
 
         check("s1", "one workbook row per on-hand item", len(items) == len(grid),
               f"{len(items)} vs {len(grid)}")
-        check("s1", "banner carries the company name (brand wins)",
-              ws.cell(1, C_ITEM).value == expected_banner,
-              f"{ws.cell(1, C_ITEM).value!r} vs {expected_banner!r}")
+        check("s1", "the data starts on row 4", len(items) == 0 or items[0] == FIRST_DATA_ROW)
+        check("s1", "the Summary sheet names the company",
+              expected_name in sheet_text(summary), expected_name)
 
+        # ── Suite 2: the figures, and how they are derived ───────────────────
+        print("\n  Suite 2 — the workbook cannot disagree with the grid")
         by_name = {r["itemTypeName"]: r for r in grid}
         drift = []
         for row in items:
             name = ws.cell(row, C_ITEM).value
-            source = by_name.get(name)
-            if source is None:
+            s = by_name.get(name)
+            if s is None:
                 drift.append(f"r{row}: {name!r} absent from the grid")
                 continue
-            for field, col in FIELD_COLUMNS.items():
-                want, got = dec(source[field]), dec(ws.cell(row, col).value)
-                if want != got:
-                    drift.append(f"r{row} {name!r}.{field}: sheet {got} vs grid {want}")
-        check("s1", "every figure matches the grid exactly", not drift,
+            # Opening is EVERYTHING RECEIVED: the client's sheet has no
+            # "received" block, so purchases fold into Opening — which is what
+            # keeps Balance = Opening - Consumed true on a company that buys.
+            for col, want, label in [
+                (C_OPEN_QTY, dec(s["openingBalance"]) + dec(s["totalIn"]), "opening qty"),
+                (C_OPEN_EXL, dec(s["openingValueExcludingTax"]) + dec(s["valueIn"]), "opening exl"),
+                (C_CONS_QTY, dec(s["totalOut"]), "consumed qty"),
+                (C_CONS_EXL, dec(s["valueOut"]), "consumed exl"),
+                # Balance is the LIVE position, never =J-N: StockValuation
+                # clamps value to zero on an emptied bin, so the subtraction can
+                # legitimately differ from the walk.
+                (C_BAL_QTY, dec(s["onHand"]), "balance qty"),
+                (C_BAL_EXL, dec(s["valueExcludingTax"]), "balance exl"),
+                (C_BAL_TAX, dec(s["salesTax"]), "balance s.tax"),
+                (C_OPEN_RATE, dec(s["salesTaxRate"]) / 100, "rate"),
+                (C_BAL_RATE, dec(s["salesTaxRate"]) / 100, "balance rate"),
+            ]:
+                got = ws.cell(row, col).value
+                if isinstance(got, str) and got.startswith("="):
+                    drift.append(f"r{row} {name!r}.{label} is a formula: {got}")
+                elif not same(dec(got), want):
+                    drift.append(f"r{row} {name!r}.{label}: sheet {dec(got)} vs grid {want}")
+            check_hs = ws.cell(row, C_HS8).value
+            if (s["hsCode"] or "") != (check_hs or ""):
+                drift.append(f"r{row} {name!r}.hsCode: sheet {check_hs!r} vs grid {s['hsCode']!r}")
+        check("s2", "every figure matches the grid exactly", not drift,
               " | ".join(drift[:4]))
 
-        # ── Suite 2: totals ─────────────────────────────────────────────────
-        print("\n  Suite 2 — totals tie to the rows and to the API")
-        for field, col in [("openingBalance", C_OPEN), ("openingValueExcludingTax", C_OPENVAL),
-                           ("totalIn", C_IN), ("valueIn", C_INVAL),
-                           ("totalOut", C_OUT), ("valueOut", C_OUTVAL),
-                           ("onHand", C_ONHAND),
-                           ("valueExcludingTax", C_EXCL), ("salesTax", C_TAX),
-                           ("valueIncludingTax", C_INCL)]:
-            summed = sum(dec(ws.cell(r, col).value) for r in items)
-            stated = dec(ws.cell(total, col).value)
-            api_sum = sum(dec(r[field]) for r in grid)
-            check("s2", f"TOTAL {field} = rows = API",
-                  summed == stated == api_sum,
-                  f"rows {summed} / total {stated} / api {api_sum}")
-        # A weighted average and a percentage do not add up.
-        check("s2", "TOTAL leaves Unit Cost blank", ws.cell(total, C_UNIT).value is None)
-        check("s2", "TOTAL leaves Tax Rate blank", ws.cell(total, C_RATE).value is None)
+        # The columns the dashboard does NOT report stay the client's formulas,
+        # so the sheet recomputes as an accountant edits it.
+        bad_formulas = []
+        for row in items:
+            for col, want in [
+                (C_HS4, f"=LEFT(G{row},4)"),
+                (C_PRICE, f'=IFERROR(K{row}/J{row},"")'),
+                (C_OPEN_TAX, f"=L{row}*K{row}"),
+                (C_CONS_RATE, f"=L{row}"),
+                (C_CONS_TAX, f"=O{row}*P{row}"),
+                (C_COGS_OPEN_TAX, f"=X{row}*L{row}"),
+                (C_COGS_CONS_EXL, f"=Q{row}/(L{row}+3%)"),
+                (C_COGS_BAL_EXL, f"=X{row}-AA{row}"),
+            ]:
+                got = ws.cell(row, col).value
+                if got != want:
+                    bad_formulas.append(f"r{row} col {col}: {got!r} != {want!r}")
+        check("s2", "the derived columns carry the client's formulas", not bad_formulas,
+              " | ".join(bad_formulas[:3]))
+        check("s2", "Cost of Good Sold Opening Exl is left for the accountant",
+              all(ws.cell(r, C_COGS_OPEN_EXL).value is None for r in items))
+        check("s2", "Claim Month and Sub cat are left blank",
+              all(ws.cell(r, C_CLAIM).value is None and ws.cell(r, C_SUBCAT).value is None
+                  for r in items))
+        check("s2", "the workbook carries no movement drill-down",
+              all((ws.row_dimensions[r].outlineLevel if r in ws.row_dimensions else 0) == 0
+                  for r in range(1, ws.max_row + 1)))
 
-        # ── Suite 3: the drill-down ─────────────────────────────────────────
-        print("\n  Suite 3 — the drill-down agrees with the movements feed")
-        _, feed, _ = request("GET",
-                             f"/api/stock/company/{cid}/movements?pageSize=200",
-                             token=admin)
-        rows = feed["items"]
-        print(f"    movements feed: {feed['totalCount']} rows")
-        if not rows:
-            print("    [skip] no movements on this company — nothing to nest")
+        # ── Suite 3: totals ─────────────────────────────────────────────────
+        print("\n  Suite 3 — totals sum the right range and tie to the API")
+        if not items:
+            print("    [skip] no items on this company — no totals row is written")
         else:
-            check("s3", "workbook nests movement rows", len(grouped) > 0)
-            check("s3", "every nested row starts hidden (collapsed)",
-                  all(ws.row_dimensions[r].hidden for r in grouped),
-                  f"{sum(1 for r in grouped if not ws.row_dimensions[r].hidden)} visible")
-            # One sub-header per grouped item, then that item's movement lines.
-            sub_headers = [r for r in grouped if ws.cell(r, C_ITEM).value == "Date"]
-            lines = [r for r in grouped if r not in sub_headers]
-            check("s3", "one column sub-header per grouped item",
-                  0 < len(sub_headers) <= len(items), f"{len(sub_headers)} sub-headers")
-            # Same-document folding can only ever REDUCE the line count.
-            check("s3", "movement lines never exceed the feed",
-                  0 < len(lines) <= min(feed["totalCount"], 200),
-                  f"{len(lines)} lines vs {feed['totalCount']} feed rows")
-            sheet_qty = sum(dec(ws.cell(r, C_IN).value) + dec(ws.cell(r, C_OUT).value)
-                            for r in lines)
-            feed_qty = sum(dec(m["quantity"]) for m in rows)
-            check("s3", "nested quantities sum to the feed's quantities",
-                  sheet_qty == feed_qty, f"sheet {sheet_qty} vs feed {feed_qty}")
-            check("s3", "a movement never fills both Qty In and Qty Out",
-                  all(ws.cell(r, C_IN).value is None or ws.cell(r, C_OUT).value is None
-                      for r in lines))
+            last = totals - 1
+            letters = {c: openpyxl.utils.get_column_letter(c) for c in TOTALLED}
+            wrong = [f"col {letters[c]}: {ws.cell(totals, c).value!r}"
+                     for c in TOTALLED
+                     if ws.cell(totals, c).value
+                        != f"=SUM({letters[c]}{FIRST_DATA_ROW}:{letters[c]}{last})"]
+            check("s3", "every totalled column sums the data range", not wrong,
+                  " | ".join(wrong[:3]))
+            check("s3", "the SUM reaches past the blank rows so an appended row counts",
+                  last == items[-1] + 2, f"last row in range {last}, data ends {items[-1]}")
+            for col, what in [(C_OPEN_RATE, "Opening Rate"), (C_CONS_RATE, "Consumed Rate"),
+                              (C_BAL_RATE, "Balance Rate"), (C_PRICE, "Price")]:
+                check("s3", f"TOTAL leaves {what} blank",
+                      ws.cell(totals, col).value is None, str(ws.cell(totals, col).value))
 
-        # ── Suite 4: nothing clipped, on real data ──────────────────────────
-        print("\n  Suite 4 — nothing is cut off")
+            # The rows the SUM covers must themselves tie to the API, which is
+            # what makes the formula's answer right rather than merely present.
+            for col, want, label in [
+                (C_BAL_QTY, sum(dec(r["onHand"]) for r in grid), "on hand"),
+                (C_BAL_EXL, sum(dec(r["valueExcludingTax"]) for r in grid), "excluding tax"),
+                (C_BAL_TAX, sum(dec(r["salesTax"]) for r in grid), "sales tax"),
+                (C_CONS_QTY, sum(dec(r["totalOut"]) for r in grid), "consumed qty"),
+            ]:
+                got = sum(dec(ws.cell(r, col).value) for r in items)
+                check("s3", f"the summed rows tie to the API's {label}", same(got, want),
+                      f"rows {got} vs api {want}")
+
+        # ── Suite 4: the customs declaration columns ────────────────────────
+        print("\n  Suite 4 — GDs No / GD Date")
+        named = [r for r in items if ws.cell(r, C_GDNO).value]
+        print(f"    {len(named)} of {len(items)} items name a declaration")
+        check("s4", "a GD date never appears without its GD number",
+              all(ws.cell(r, C_GDDATE).value is None
+                  for r in items if not ws.cell(r, C_GDNO).value))
+        check("s4", "a named declaration is a non-empty string",
+              all(isinstance(ws.cell(r, C_GDNO).value, str)
+                  and ws.cell(r, C_GDNO).value.strip() for r in named))
+        check("s4", "the 8-digit code matches the grid's HS code",
+              all((ws.cell(r, C_HS8).value or "")
+                  == (by_name[ws.cell(r, C_ITEM).value]["hsCode"] or "")
+                  for r in items if ws.cell(r, C_ITEM).value in by_name))
+
+        # ── Suite 5: nothing clipped, on real data ──────────────────────────
+        print("\n  Suite 5 — nothing is cut off")
         clipped = clipped_cells(ws)
-        check("s4", "no clipped cell in the full export", not clipped,
+        check("s5", "no clipped cell in the full export", not clipped,
               " | ".join(clipped[:4]))
 
-        # ── Suite 5: the two-permission split ───────────────────────────────
-        print("\n  Suite 5 — export vs movement-detail permissions")
-        tok = provision("stkexp_nomov", "StkExport NoMovements (test)",
+        # ── Suite 6: permissions ────────────────────────────────────────────
+        # The old stock.dashboard.export / stock.movements.view split went with
+        # the drill-down: the sheet has no movement detail for a second
+        # permission to gate, so the export permission alone is the whole gate.
+        print("\n  Suite 6 — export permission is the whole gate")
+        tok = provision("stkexp_only", "StkExport Only (test)",
                         ["stock.dashboard.view", "stock.dashboard.export"])
         status, blob, _ = request("GET", f"/api/stock/company/{cid}/onhand/excel",
                                   token=tok, binary=True)
-        check("s5", "stock.dashboard.export alone returns 200", status == 200, f"got {status}")
+        check("s6", "stock.dashboard.export alone returns 200", status == 200, f"got {status}")
         if status == 200:
-            ws_nm = sheet_of(save(blob, "no-movements.xlsx"))
-            check("s5", "that workbook carries NO drill-down",
-                  all(outline_level(ws_nm, r) == 0 for r in range(1, ws_nm.max_row + 1)))
-            text = all_text(ws_nm)
-            check("s5", "it says movement detail is not included",
-                  "Movement detail is not included" in text)
-            check("s5", "its provenance line admits the omission",
-                  "Movement detail omitted" in text)
-            check("s5", "it still carries the figures and a total",
-                  "TOTAL" in text and ws_nm.cell(6, C_ONHAND).value == "On Hand")
-            check("s5", "no clipped cell without the drill-down",
-                  not clipped_cells(ws_nm))
-
-        tok = provision("stkexp_full", "StkExport Full (test)",
-                        ["stock.dashboard.view", "stock.dashboard.export",
-                         "stock.movements.view"])
-        status, blob, _ = request("GET", f"/api/stock/company/{cid}/onhand/excel",
-                                  token=tok, binary=True)
-        check("s5", "both permissions return 200", status == 200, f"got {status}")
-        if status == 200 and rows:
-            ws_full = sheet_of(save(blob, "with-movements.xlsx"))
-            g = [r for r in range(1, ws_full.max_row + 1) if outline_level(ws_full, r) > 0]
-            check("s5", "that workbook carries the drill-down", len(g) > 0)
-            check("s5", "and it starts collapsed",
-                  all(ws_full.row_dimensions[r].hidden for r in g))
-            check("s5", "its legend explains how to expand",
-                  "start collapsed" in all_text(ws_full))
+            ws_e, sum_e = book(save(blob, "export-only.xlsx"))
+            e_items, e_totals = anatomy(ws_e)
+            check("s6", "and yields the COMPLETE workbook, not a reduced one",
+                  len(e_items) == len(items), f"{len(e_items)} vs {len(items)}")
+            check("s6", "it carries the same layout",
+                  ws_e.cell(HEADER_ROW, C_ITEM).value == "Items"
+                  and ws_e.cell(1, C_COGS_OPEN_EXL).value == "Cost of Good Sold")
+            check("s6", "no clipped cell for that user either", not clipped_cells(ws_e))
 
         tok = provision("stkexp_none", "StkExport ViewOnly (test)",
                         ["stock.dashboard.view"])
         status, body, _ = request("GET", f"/api/stock/company/{cid}/onhand/excel", token=tok)
-        check("s5", "403 without stock.dashboard.export", status == 403, f"got {status} {body}")
+        check("s6", "403 without stock.dashboard.export", status == 403, f"got {status} {body}")
         status, _, _ = request("GET", f"/api/stock/company/{cid}/onhand", token=tok)
-        check("s5", "the grid itself still works for that user", status == 200, f"got {status}")
+        check("s6", "the grid itself still works for that user", status == 200, f"got {status}")
 
-        # ── Suite 6: the search term ────────────────────────────────────────
-        print("\n  Suite 6 — the search reaches the workbook")
-        term = grid[0]["itemTypeName"][:6]
-        expected = [r for r in grid
-                    if term.lower() in r["itemTypeName"].lower()
-                    or term.lower() in (r["hsCode"] or "").lower()]
-        status, blob, _ = request(
-            "GET", f"/api/stock/company/{cid}/onhand/excel"
-                   f"?search={urllib.parse.quote(term)}", token=admin, binary=True)
-        check("s6", "export with a search term returns 200", status == 200, f"got {status}")
-        if status == 200:
-            ws_s = sheet_of(save(blob, "searched.xlsx"))
-            _, s_items, _, s_total = anatomy(ws_s)
-            check("s6", f"narrowed to the {len(expected)} matching item(s)",
-                  len(s_items) == len(expected),
-                  f"{len(s_items)} rows vs {len(expected)} expected")
-            check("s6", "the search is named on the sheet",
-                  f'Search: "{term}"' in column_text(ws_s, 3), column_text(ws_s, 3)[:110])
-            check("s6", "the narrowed total ties to the narrowed rows",
-                  sum(dec(ws_s.cell(r, C_INCL).value) for r in s_items)
-                  == dec(ws_s.cell(s_total, C_INCL).value))
+        # ── Suite 7: the search term ────────────────────────────────────────
+        print("\n  Suite 7 — the search reaches the workbook")
+        if not grid:
+            print("    [skip] no items to search for")
+        else:
+            term = grid[0]["itemTypeName"][:6]
+            expected = [r for r in grid
+                        if term.lower() in r["itemTypeName"].lower()
+                        or term.lower() in (r["hsCode"] or "").lower()]
+            status, blob, _ = request(
+                "GET", f"/api/stock/company/{cid}/onhand/excel"
+                       f"?search={urllib.parse.quote(term)}", token=admin, binary=True)
+            check("s7", "export with a search term returns 200", status == 200, f"got {status}")
+            if status == 200:
+                ws_s, sum_s = book(save(blob, "searched.xlsx"))
+                s_items, s_totals = anatomy(ws_s)
+                check("s7", f"narrowed to the {len(expected)} matching item(s)",
+                      len(s_items) == len(expected),
+                      f"{len(s_items)} rows vs {len(expected)} expected")
+                check("s7", "the search is named on the Summary sheet",
+                      f'Search: "{term}"' in sheet_text(sum_s), sheet_text(sum_s)[:140])
+                if s_items:
+                    check("s7", "the narrowed total sums only the narrowed rows",
+                          ws_s.cell(s_totals, C_BAL_EXL).value
+                          == f"=SUM(S{FIRST_DATA_ROW}:S{s_totals - 1})",
+                          str(ws_s.cell(s_totals, C_BAL_EXL).value))
 
     finally:
         print("\n  Cleanup")

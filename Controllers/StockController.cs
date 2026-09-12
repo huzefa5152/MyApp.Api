@@ -27,13 +27,12 @@ namespace MyApp.Api.Controllers
         private readonly IAuditLogService _audit;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
-        private readonly IPermissionService _permissions;
         private readonly ILogger<StockController> _logger;
         private readonly int _defaultPageSize;
 
         public StockController(AppDbContext context, IStockService stock, IInventoryReadService inventory,
             IAuditLogService audit, ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess, IPermissionService permissions,
+            IDivisionAccessGuard divisionAccess,
             ILogger<StockController> logger, IConfiguration configuration)
         {
             _context = context;
@@ -42,7 +41,6 @@ namespace MyApp.Api.Controllers
             _audit = audit;
             _access = access;
             _divisionAccess = divisionAccess;
-            _permissions = permissions;
             _logger = logger;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
@@ -293,8 +291,11 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<IActionResult> ExportOnHand(int companyId, [FromQuery] string? search = null)
         {
-            var withMovements = await _permissions.HasPermissionAsync(CurrentUserId, "stock.movements.view");
-            var (rows, movements) = await BuildOnHandAsync(companyId, withMovements);
+            // The workbook is the client's customs-lot stock sheet — one row per
+            // item, no movement drill-down — so the walk is asked for totals
+            // only. That also drops the old stock.movements.view split: there is
+            // no movement detail in the sheet for a second permission to gate.
+            var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
 
             // Same match the dashboard's search box makes (name OR HS code), so
             // an operator who filtered the screen gets the sheet they can see.
@@ -319,7 +320,8 @@ namespace MyApp.Api.Controllers
             // that does not admit that is a wrong number waiting to be quoted.
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             if (divScope != null) filters.Add("Scope: your divisions only");
-            if (!withMovements) filters.Add("Movement detail omitted");
+
+            var lots = await LotRefsByItemAsync(companyId, rows.Select(r => r.ItemTypeId).ToList());
 
             var data = new StockExportDto
             {
@@ -327,13 +329,15 @@ namespace MyApp.Api.Controllers
                 Title = "Stock Valuation Report",
                 GeneratedAt = PakistanClock.Now,
                 FiltersApplied = filters,
-                IncludeMovements = withMovements,
-                Items = rows.Select(r => new StockExportItemDto
+                Items = rows.Select(r =>
                 {
-                    Summary = r,
-                    Movements = withMovements
-                        ? MergeSameDocumentMovements(movements.GetValueOrDefault(r.ItemTypeId))
-                        : new List<StockMovementRowDto>(),
+                    lots.TryGetValue(r.ItemTypeId, out var lot);
+                    return new StockExportItemDto
+                    {
+                        Summary = r,
+                        LotRef = lot.Ref,
+                        LotDate = lot.Date,
+                    };
                 }).ToList(),
             };
 
@@ -356,77 +360,46 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
-        /// Fold CONSECUTIVE movements that belong to the same source document
-        /// and direction into one line, exactly as the dashboard's drill-down
-        /// does. One bill can touch the same item on several lines, and a reader
-        /// wants "Purchase Bill #204 — 300 in", not three thirds of it.
+        /// The customs declaration behind each item, for the stock sheet's
+        /// "GDs No" / "GD Date" columns.
         ///
-        /// Rows with no SourceId (adjustments, opening stock, reversals of a
-        /// deleted document) never merge — there is no document to merge them
-        /// under. Running quantity and value come from the LAST movement in the
-        /// fold, so the line reports the position after the whole document.
+        /// Answered ONLY where every <c>OpeningStockLot</c> under the item names
+        /// the SAME declaration. The export is one row per item, so an item held
+        /// across several GDs has no single answer — naming the first would
+        /// attribute the whole position to a declaration covering part of it. An
+        /// item with no lots at all (bought on purchase bills) is absent here and
+        /// prints blank, which is the same honest answer.
         /// </summary>
-        private static List<StockMovementRowDto> MergeSameDocumentMovements(
-            List<StockMovementRowDto>? rows)
+        private async Task<Dictionary<int, (string? Ref, DateTime? Date)>>
+            LotRefsByItemAsync(int companyId, List<int> itemTypeIds)
         {
-            var merged = new List<StockMovementRowDto>();
-            if (rows == null || rows.Count == 0) return merged;
+            var result = new Dictionary<int, (string? Ref, DateTime? Date)>();
+            if (itemTypeIds.Count == 0) return result;
 
-            string? lastKey = null;
-            var foldedLines = 0;
+            var lots = await _context.OpeningStockLots
+                .AsNoTracking()
+                .Where(l => l.OpeningStockBalance.CompanyId == companyId
+                         && itemTypeIds.Contains(l.OpeningStockBalance.ItemTypeId)
+                         && l.LotRef != null && l.LotRef != "")
+                .Select(l => new
+                {
+                    l.OpeningStockBalance.ItemTypeId,
+                    l.LotRef,
+                    l.LotDate,
+                })
+                .ToListAsync();
 
-            foreach (var m in rows)
+            foreach (var g in lots.GroupBy(l => l.ItemTypeId))
             {
-                var key = m.SourceId.HasValue
-                    ? $"{m.SourceType}:{m.SourceId}:{m.Direction}"
-                    : null;
-
-                if (key != null && key == lastKey)
-                {
-                    var last = merged[^1];
-                    last.Quantity += m.Quantity;
-                    last.Value += m.Value;
-                    last.RunningQuantity = m.RunningQuantity;
-                    last.RunningValue = m.RunningValue;
-                    last.MovementDate = m.MovementDate;
-                    foldedLines++;
-                    // The per-line notes each carried their own quantity
-                    // breakdown, which is meaningless once summed — keep the
-                    // document's own prefix and say how many lines went in.
-                    var prefix = (last.Notes ?? "").Split(" (")[0];
-                    last.Notes = string.IsNullOrWhiteSpace(prefix)
-                        ? $"{foldedLines + 1} line items summed"
-                        : $"{prefix} — {foldedLines + 1} line items summed";
-                    // A merged line's unit cost is the value it moved over the
-                    // quantity it moved, not any one line's average.
-                    last.UnitCost = last.Quantity > 0m
-                        ? Math.Round(last.Value / last.Quantity, 4, MidpointRounding.AwayFromZero)
-                        : 0m;
-                    continue;
-                }
-
-                merged.Add(new StockMovementRowDto
-                {
-                    Id = m.Id,
-                    ItemTypeId = m.ItemTypeId,
-                    ItemTypeName = m.ItemTypeName,
-                    Direction = m.Direction,
-                    Quantity = m.Quantity,
-                    SourceType = m.SourceType,
-                    SourceId = m.SourceId,
-                    SourceDocNumber = m.SourceDocNumber,
-                    MovementDate = m.MovementDate,
-                    Notes = m.Notes,
-                    UnitCost = m.UnitCost,
-                    Value = m.Value,
-                    RunningQuantity = m.RunningQuantity,
-                    RunningValue = m.RunningValue,
-                });
-                lastKey = key;
-                foldedLines = 0;
+                var refs = g.Select(x => x.LotRef!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (refs.Count != 1) continue;
+                // The date can still vary between lots of one declaration; only
+                // state it when that is unambiguous too.
+                var dates = g.Select(x => x.LotDate).Distinct().ToList();
+                result[g.Key] = (refs[0], dates.Count == 1 ? dates[0] : null);
             }
 
-            return merged;
+            return result;
         }
         /// <summary>Audit feed of every movement, newest first.</summary>
         [HttpGet("company/{companyId}/movements")]

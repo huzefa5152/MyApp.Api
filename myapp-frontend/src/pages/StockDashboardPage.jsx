@@ -541,9 +541,7 @@ export default function StockDashboardPage() {
               style={{ ...styles.altBtn, ...(exporting ? styles.altBtnBusy : null) }}
               onClick={downloadExcel}
               disabled={exporting || loading}
-              title={canViewMovements
-                ? "Download the stock dashboard as Excel — every item's movement history nested underneath, collapsed"
-                : "Download the stock dashboard as Excel (movement detail needs the Movements ▸ View permission)"}
+              title="Download the stock dashboard as the customs-lot stock sheet — one row per item, Opening / Consumed / Balance, with the Cost of Good Sold block left to fill in"
             >
               <MdFileDownload size={16} /> {exporting ? "Preparing…" : "Export Excel"}
             </button>

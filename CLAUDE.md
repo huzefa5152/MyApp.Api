@@ -758,56 +758,88 @@ every FBR-off company, where there is no filing to correct and an ordinary edit
 is the right tool. `CreateSupplementAsync` still accepts the FBR-off case on
 purpose (above) — nothing in the API changed, only what is offered.
 
-### 5b-9. Exporting the stock dashboard (2026-09-04)
+### 5b-9. Exporting the stock dashboard — the customs-lot stock sheet (2026-09-12)
 
 `GET /api/stock/company/{id}/onhand/excel` → `Helpers/StockExcelBuilder.cs`.
-One row per item (Opening / Total In / Total Out / On Hand / Unit Cost /
-Excluding / Tax Rate / Sales Tax / Including / Last Movement), with that item's
-movement history nested underneath as a **collapsed Excel outline group**.
 
-- **The grid and the export come out of ONE walk.**
-  `StockController.BuildOnHandAsync(companyId, withMovements)` serves both, and
-  `withMovements` decides only whether `StockValuation`'s `Step` trace is
-  collected. A movement's cost is the weighted average standing when it
-  happened, so the per-movement money exists only as a by-product of valuing
-  the item — computing it twice would be two chances to disagree, and the
-  workbook would then contradict the screen it was taken from.
-- **Movement detail is a separate capability.** The route is gated by
-  `stock.dashboard.export`; the drill-down is included only when the caller
-  ALSO holds `stock.movements.view`, checked imperatively via
-  `IPermissionService`. A workbook without it says so on its face rather than
-  shipping bare rows that look complete.
-- **Item rows and movement rows share the same columns** wherever they mean the
-  same thing (Qty In / Qty Out / balance / unit cost / value), with a sub-header
-  inside each group naming the movement meanings. Do not give movements their
-  own sheet: the screen's drill-down is per item, and a flat movement sheet
-  loses which figures a movement explains.
-- **Column widths are measured from the longest value actually written**, banner
-  text excluded (a merged 14-column title would otherwise stretch column A to
-  nothing useful). Item names and notes WRAP — they are the two fields no cap
-  can size away, and the row carries no explicit height so Excel grows it.
-  `scripts/stock_export_harness` fails on any clipped cell.
-- **ClosedXML 0.104.2 files the ROW outline depth under
-  `sheetFormatPr/@outlineLevelCol` and never writes `@outlineLevelRow`** —
-  reproduced both ways (rows-only and columns-only grouping both emit
-  `outlineLevelCol="1"`). `StockExcelBuilder.FixRowOutlineLevel` corrects the
-  saved part. It is deliberately conservative: an unexpected element shape
-  returns the bytes untouched, so a fixed ClosedXML cannot be made wrong by it.
-- **Consecutive movements on the same document and direction fold into one
-  line**, as the dashboard's drill-down does — one bill can touch an item on
-  several lines, and a reader wants "Purchase Bill #204 — 300 in", not three
-  thirds of it. Rows with no `SourceId` (adjustments, opening stock, reversals)
-  never fold.
+The workbook IS the stock sheet the importer clients keep by hand — the same
+layout the opening-stock import reads (§5b-3b), so what the system exports and
+what an accountant hands back are one shape rather than two. Three blocks across
+one row per item: `A..I` identity, `J..M` **Opening**, `N..Q` **Consumed**,
+`R..U` **Balance**, then `X..AF` **Cost of Good Sold** in the same three blocks
+× Exl / S.Tax / Vat. Verified cell-for-cell against a client workbook: labels,
+merges, row heights and all 32 column widths are identical.
+
+- **A figure the DASHBOARD reports is a VALUE; a figure it does not is the
+  client's own FORMULA.** So Balance Qty is `OnHand` and Balance Exl is
+  `ValueExcludingTax` — never `=J-N` / `=K-O`, however natural those look on the
+  face of the sheet. `StockValuation` clamps value to zero on an emptied bin and
+  on a revaluation, so the subtraction can legitimately differ from the walk, and
+  a workbook that disagrees with the screen it was taken from is the one failure
+  this export must not have. Price, the 4-digit code, Opening/Consumed S.Tax and
+  the whole Cost of Good Sold block have no figure on the screen, so they stay
+  formulas and recompute as the sheet is edited.
+- **The OPENING block is EVERYTHING RECEIVED** — opening balance plus purchases
+  since (`TotalIn` / `ValueIn`). The client's sheet has no "received" block: its
+  arithmetic is Balance = Opening − Consumed, and folding purchases into Opening
+  is what keeps that true on a company that buys as well as imports. On an
+  importer whose stock all arrives on GDs, `TotalIn` is zero and the column is
+  the opening balance exactly.
+- **Cost of Good Sold is an INPUT block.** Its opening Exl (X) sits on a basis
+  nothing here derives — on the client's own sheet it runs below the stock value
+  by a ratio that varies with the tax rate — so X is left EMPTY and everything
+  around it is formula. The client's literal `/21%` and `*18%` are generalised to
+  the row's own rate (`(L+3%)`, `*L`), so a 25% line does not silently use an 18%
+  basis. Vat is a flat 3%, as on the source sheet.
+- **`Claim Month` and `Sub cat` are left blank on purpose.** Nothing in this
+  system records either. Do not fill them with a plausible-looking substitute —
+  the Summary sheet says they are the operator's.
+- **`GDs No` / `GD Date` are stated only where every `OpeningStockLot` under the
+  item names the SAME declaration** (`StockController.LotRefsByItemAsync`). The
+  export is one row per item, so an item held across several GDs has no single
+  answer and naming the first would attribute the whole position to a declaration
+  covering part of it. An item bought on purchase bills has no lots and prints
+  blank — the same honest answer.
+- **The movement drill-down is GONE**, and with it the old
+  `stock.movements.view` split: the sheet is one row per item with nowhere to
+  nest movements, so `stock.dashboard.export` alone is the whole gate. Movement
+  history lives on the Stock Movements page. Do not re-add a flat movements
+  sheet — it loses which item's figures each movement explains.
+- **Provenance lives on the SUMMARY sheet.** The data sheet has to BE the
+  client's layout, which starts at its band labels with no banner; but an export
+  that cannot say it was filtered, division-scoped or truncated is not auditable.
+  Sheet 2 carries that, plus the four headline figures and what the operator has
+  to fill in.
+- **Two deliberate departures from the client's file, both because it is wrong
+  to copy them:** the date format is `dd-mm-yyyy` (theirs is `mm-dd-yy`), and the
+  rate format is `0.##%` (theirs is `0%`, which paints 12.5% as 13% — the
+  silent-wrong-tax-rate failure §5b-3b was written about).
+- **ClosedXML 0.104.2 treats `IXLColumn.Width` as the CONTENT width** and adds
+  the default font's padding on save, so setting the client's stored 11.5703125
+  writes 12.280625 and every column comes out ~0.71 characters wide.
+  `StockExcelBuilder.WidthPadding` subtracts it. The harness asserts against the
+  SAVED XML rather than the ClosedXML property for exactly this reason.
+- **Items, GDs No and Unit WRAP.** Their widths are the client's and may not
+  move, and these are the fields no width can size away — a `UOM` here is FBR's
+  DESCRIPTION ("Numbers, pieces, units", 22 characters in a 10-wide column), not
+  the "Pcs" the client's own sheet holds. Caught by the live suite on real data
+  after the offline fixtures missed it.
 - **Two suites, because they answer different questions.** The LAYOUT is pinned
   offline against synthetic rows by `scripts/stock_export_harness`
-  (`dotnet run -c Release`, 64 checks — it links the real builder rather than a
-  copy, so no database and no running server). That the workbook cannot
-  DISAGREE with the screen is pinned live by
-  `scripts/test_stock_export_excel.py` (37 checks): it compares the sheet
-  row-for-row against `GET .../onhand`, ties the totals to the API's own sum,
-  reconciles the drill-down against the movements feed, and exercises both
-  halves of the permission split with throwaway roles it deletes afterwards.
-  A new column belongs in the harness; a new figure belongs in both.
+  (`dotnet run -c Release`, 255 checks — it links the real builder rather than a
+  copy, so no database and no running server). That the workbook cannot DISAGREE
+  with the screen is pinned live by `scripts/test_stock_export_excel.py`
+  (39 checks): it compares the sheet row-for-row against `GET .../onhand`, ties
+  the summed rows to the API's own totals, checks the SUM ranges, and exercises
+  the permission gate with throwaway roles it deletes afterwards. A new column
+  belongs in the harness; a new figure belongs in both.
+- **The live suite compares with a 1e-12 relative tolerance, and that is not
+  slack.** Excel stores every number as an IEEE-754 double at ~15 significant
+  digits; a stock quantity out of the weighted-average walk is a `decimal` that
+  can carry more (`1266.702219595555`), so the sheet holds `1266.70221959556` and
+  no writer could do better. It is a storage limit, not a disagreement — the
+  column renders at 0dp and both paint "1,267".
+
 
 ### 5b-10. Further tax s.3(1A) — the THIRD tax, and the only one inside the total (2026-09-07)
 
@@ -1437,8 +1469,8 @@ them can be resolved from FBR.
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
 | Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
-| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (64 checks) |
-| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (37 checks) |
+| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (255 checks) |
+| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (39 checks) |
 | FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |

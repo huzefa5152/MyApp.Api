@@ -298,6 +298,45 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-12 — The stock export is now the customs-lot stock sheet
+
+- **Stock dashboard Excel export rebuilt to the client's own layout.** The
+  workbook now IS the customs-lot stock sheet the importer clients keep by hand
+  — the same shape the opening-stock import reads — instead of a separate design
+  they had to re-key. One row per item across three blocks: **Opening** (Qty /
+  Exl / Rate / S.Tax), **Consumed**, **Balance**, plus the **Cost of Good Sold**
+  band and the identity columns (Claim Month, GDs No, GD Date, Items, Sub cat,
+  4- and 8-digit HS code, Price, Unit). Verified cell-for-cell against a real
+  client workbook: headings, merged band labels, row heights and all 32 column
+  widths are identical.
+- **The figures still cannot disagree with the screen.** Balance is the live
+  weighted-average position written as a value, never `=Opening − Consumed` —
+  stock valuation clamps an emptied bin to zero, so the subtraction can
+  legitimately differ from the walk. Opening folds in purchases since, which is
+  what keeps the sheet's own arithmetic true for a company that buys as well as
+  imports. Columns the dashboard does not report (Price, S.Tax, the 4-digit
+  code, the whole Cost of Good Sold block) are live formulas, so the sheet
+  recomputes as an accountant edits it.
+- **Cost of Good Sold is left to be filled in.** Its opening Excluding column is
+  empty for the accountant to key; sales tax, VAT and the consumed and balance
+  blocks follow by formula the moment they do. Those formulas use each row's own
+  tax rate, so a 25% line is not quietly costed at 18%.
+- **GDs No and GD Date are stated only where an item's customs lots agree on one
+  declaration.** An item held across several GDs, or bought on purchase bills,
+  leaves them blank rather than attributing the whole position to one
+  declaration. Claim Month and Sub cat stay blank — the system records neither.
+- **Provenance moved to a Summary sheet** (company, period, headline totals, the
+  filters and scope applied, and what the operator has to fill in), so the data
+  sheet can be the client's layout exactly while the export can still admit when
+  it was filtered or truncated.
+- **Fixed:** a long unit description ("Numbers, pieces, units") was cut off in
+  the Unit column; Items, GDs No and Unit now wrap instead of clipping.
+- **Changed:** the export no longer nests each item's movement history, so it no
+  longer needs the Movements ▸ View permission — "Export stock dashboard" alone
+  is the whole gate. Movement history remains on the Stock Movements page.
+- Suites: `scripts/stock_export_harness` (255 offline layout checks) and
+  `scripts/test_stock_export_excel.py` (39 live checks).
+
 ### 2026-09-12 — Billing the last of a fractional bin
 
 - **"Bill all" on a standalone bill line.** Stock on a whole-unit item can be

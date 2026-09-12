@@ -1,657 +1,651 @@
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using MyApp.Api.DTOs;
 
 namespace MyApp.Api.Helpers
 {
     /// <summary>
-    /// Turns the stock dashboard into a styled .xlsx: one row per item carrying
-    /// the five figures the dashboard shows (Opening, In, Out, On-Hand, and the
-    /// money — Excluding / Rate / Sales Tax / Including), with that item's
-    /// movement history nested UNDER it as a collapsed Excel outline group.
+    /// Turns the stock dashboard into the customs-lot stock sheet the importer
+    /// clients already keep by hand — the same workbook shape the opening-stock
+    /// IMPORT reads (see CLAUDE.md §5b-3b), so what the system exports and what
+    /// an accountant hands back are one layout rather than two.
     ///
-    /// Why an outline group rather than a second sheet: the screen's drill-down
-    /// is per item, and a flat movement sheet loses which figures a movement
-    /// explains. Excel's own grouping reproduces the screen exactly — every item
-    /// starts closed, and the ± in the left margin opens one.
+    /// The sheet is three quantity/money blocks across one row per item:
     ///
-    /// Layout rules this file exists to keep:
-    ///  • Item rows and movement rows share the SAME columns wherever they mean
-    ///    the same thing (In / Out / balance / unit cost / value), so the sheet
-    ///    reads as one grid instead of two stacked tables. A sub-header inside
-    ///    each group names the movement meanings, so nothing is ambiguous.
-    ///  • Column widths are measured from the longest value actually written
-    ///    (banner text excluded, or the merged title would stretch column A), so
-    ///    no figure or note is ever cut off. Notes wrap instead of being clipped.
-    ///  • Totals are an ORDINARY bold row, never an <c>IXLTable</c> totals row —
-    ///    ClosedXML 0.104.2 corrupts those on SaveAs (known issue in this repo).
+    ///   A..I   identity      Claim Month · GDs No · GD Date · Items · Sub cat ·
+    ///                        4/8 Digit Hs Code · Price · Unit
+    ///   J..M   OPENING       Qty · Exl · Rate · S.Tax      (everything received)
+    ///   N..Q   CONSUMED      Qty · Consumed Exl · Rate · S.Tax
+    ///   R..U   BALANCE       Qty · Bal Exl · Rate · S.Tax  (the live position)
+    ///   X..AF  COST OF GOOD SOLD, in the same three blocks × Exl · S.Tax · Vat
+    ///
+    /// Rules this file exists to keep:
+    ///
+    ///  • <b>A figure the dashboard reports is written as a VALUE; a figure it
+    ///    does not is written as the client's own FORMULA.</b> So Balance Qty is
+    ///    <c>OnHand</c> and Balance Exl is <c>ValueExcludingTax</c> — never
+    ///    <c>=J-N</c> / <c>=K-O</c>, however natural those look on the face of
+    ///    the sheet. <c>StockValuation</c> clamps value to zero on an emptied
+    ///    bin and on a revaluation, so the subtraction can legitimately differ
+    ///    from the walk, and a workbook that disagrees with the screen it was
+    ///    taken from is the one failure this export must not have (§5b-9).
+    ///    Opening/Consumed S.Tax, Price and the 4-digit code have no figure on
+    ///    the screen, so they stay formulas and recompute as the sheet is edited.
+    ///
+    ///  • <b>The OPENING block is everything that came in</b> — the opening
+    ///    balance PLUS purchases since (<c>TotalIn</c> / <c>ValueIn</c>). The
+    ///    client's sheet has no "received" block: its arithmetic is
+    ///    Balance = Opening − Consumed, and folding purchases into Opening is
+    ///    what keeps that true on a company that buys as well as imports. On an
+    ///    importer whose stock all arrives on GDs, <c>TotalIn</c> is zero and
+    ///    the column is the opening balance exactly.
+    ///
+    ///  • <b>Cost of Good Sold is an INPUT block.</b> Its opening Exl (X) sits
+    ///    on a basis nothing in this system derives — on the client's own sheet
+    ///    it runs below the stock value by a ratio that varies with the tax rate
+    ///    — so X is left empty for the accountant, and S.Tax / Vat / Consumed /
+    ///    Balance around it are the client's formulas, which fill the moment X
+    ///    is keyed. Vat is 3% throughout, as on the source sheet.
+    ///
+    ///  • <b>Provenance lives on the Summary sheet, not the data sheet.</b> The
+    ///    data sheet has to BE the client's layout, which has no banner; but an
+    ///    export that cannot say it was filtered, division-scoped or truncated
+    ///    is not auditable. Sheet 2 carries that, as the source workbook's own
+    ///    second sheet carries its title block.
+    ///
     ///  • Every operator-supplied string routes through
     ///    <see cref="ExcelTemplateEngine.CsvSafe"/>, so an item named
     ///    <c>=WEBSERVICE(...)</c> cannot execute in the recipient's Excel.
     /// </summary>
     public static class StockExcelBuilder
     {
-        // Palette — the product's blue, so the workbook is recognisably ours.
-        private static readonly XLColor Navy = XLColor.FromHtml("#0D47A1");
-        private static readonly XLColor NavyLight = XLColor.FromHtml("#1565C0");
-        private static readonly XLColor KpiFill = XLColor.FromHtml("#E8F1FB");
-        private static readonly XLColor HeaderFill = XLColor.FromHtml("#0D47A1");
-        private static readonly XLColor SubHeadFill = XLColor.FromHtml("#EDF4FC");
-        private static readonly XLColor ZebraFill = XLColor.FromHtml("#FAFBFD");
-        private static readonly XLColor TotalFill = XLColor.FromHtml("#DCE9F8");
+        // ── Palette, lifted from the client's workbook ────────────────────────
+        // The three blocks are colour-coded the same way on the data sheet and
+        // in the Cost of Good Sold band, so a reader tracks one block across.
+        private static readonly XLColor OpeningFill = XLColor.FromHtml("#FFFF00"); // yellow
+        private static readonly XLColor ConsumedFill = XLColor.FromHtml("#FFC000"); // amber
+        private static readonly XLColor BalanceFill = XLColor.FromHtml("#A9D08E"); // Accent6, lighter 40%
+        private static readonly XLColor CogsBalanceFill = XLColor.FromHtml("#D0CECE"); // Background2, darker 10%
+        private static readonly XLColor CogsTitleFill = XLColor.FromHtml("#E7E6E6"); // Background2
+        private static readonly XLColor SeparatorFill = XLColor.FromHtml("#00B0F0"); // the sheet's own divider stripe
         private static readonly XLColor Muted = XLColor.FromHtml("#5F6D7E");
-        private static readonly XLColor Rule = XLColor.FromHtml("#D6DEE9");
-        private static readonly XLColor InGreen = XLColor.FromHtml("#1B6E32");
-        private static readonly XLColor OutRed = XLColor.FromHtml("#B3261E");
+        private static readonly XLColor Navy = XLColor.FromHtml("#0D47A1");
 
-        private const string Money = "#,##0.00;[Red]-#,##0.00";
-        private const string Qty = "#,##0.####;[Red]-#,##0.####";
-        private const string Cost = "#,##0.0000;[Red]-#,##0.0000";
-        private const string Rate = "0.00\"%\"";
-        private const string DateFmt = "dd-MM-yyyy";
+        private const string Face = "Calibri Light";
+
+        // Accounting formats, as the source sheet uses them: a zero renders as
+        // "-" rather than 0, which is what makes an unkeyed Cost of Good Sold
+        // column read as empty instead of as a claim that it is nil.
+        private const string Acct0 = "_(* #,##0_);_(* \\(#,##0\\);_(* \"-\"??_);_(@_)";
+        private const string Acct2 = "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \"-\"??_);_(@_)";
+
+        /// <summary>Rate column. The source sheet uses a bare <c>0%</c>, which
+        /// rounds 12.5% to 13% — on a tax sheet that is the silent-wrong-number
+        /// failure §5b-3b was written about. <c>0.##%</c> renders 18% and 25%
+        /// identically and keeps a fractional rate legible.</summary>
+        private const string Pct = "0.##%";
+        private const string DateFmt = "dd-mm-yyyy";
 
         /// <summary>Hard ceiling on written rows. Past this the workbook says it
         /// was truncated rather than growing into a file that never opens.</summary>
         public const int MaxRows = 60_000;
 
-        private const int Cols = 17;
+        // ── Column map ────────────────────────────────────────────────────────
+        // Named once so the header, the data rows and the totals row cannot
+        // drift apart. Letters are in the comments because every formula this
+        // file writes, and the client's own sheet, speak in letters.
+        private const int CClaim = 1;       // A  Claim Month
+        private const int CGdNo = 2;        // B  GDs No
+        private const int CGdDate = 3;      // C  GD Date
+        private const int CItem = 4;        // D  Items
+        private const int CSubCat = 5;      // E  Sub cat
+        private const int CHs4 = 6;         // F  4 Digit Hs Code
+        private const int CHs8 = 7;         // G  8 Digit Hs Code
+        private const int CPrice = 8;       // H  Price
+        private const int CUnit = 9;        // I  Unit
 
-        // Column indices, named once so the two row shapes cannot drift apart.
-        // Each of the three quantity columns is followed by its own money, so
-        // a reader never has to hold a figure in their head across the sheet
-        // (operator request 2026-09-04). The value columns are blank on a
-        // movement sub-row, as Opening / Tax Rate / Sales Tax already are --
-        // a movement's own money stays where it has always been, under Value
-        // and Running Value, so nothing existing changed meaning.
-        private const int CName = 1;      // Item             | Date
-        private const int CCode = 2;      // HS Code          | Document
-        private const int CUom = 3;       // UOM              | Direction
-        private const int COpen = 4;      // Opening          | —
-        private const int COpenVal = 5;   // Opening Value    | —
-        private const int CIn = 6;        // Total In         | Qty In
-        private const int CInVal = 7;     // Total In Value   | —
-        private const int COut = 8;       // Total Out        | Qty Out
-        private const int COutVal = 9;    // Total Out Value  | —
-        private const int COnHand = 10;   // On Hand          | Balance
-        private const int CUnit = 11;     // Unit Cost        | Unit Cost
-        private const int CExcl = 12;     // Excluding        | Value
-        private const int CRate = 13;     // Tax Rate %       | —
-        private const int CTax = 14;      // Sales Tax        | —
-        private const int CIncl = 15;     // Including        | Running Value
-        private const int CLast = 16;     // Last Movement    | —
-        private const int CNotes = 17;    // —                | Notes
+        private const int COpenQty = 10;    // J  Opening   Qty
+        private const int COpenExl = 11;    // K            Exl
+        private const int COpenRate = 12;   // L            Rate
+        private const int COpenTax = 13;    // M            S.Tax
+
+        private const int CConsQty = 14;    // N  Consumed  Qty
+        private const int CConsExl = 15;    // O            Consumed Exl
+        private const int CConsRate = 16;   // P            Rate
+        private const int CConsTax = 17;    // Q            S.Tax
+
+        private const int CBalQty = 18;     // R  Balance   Qty
+        private const int CBalExl = 19;     // S            Bal Exl
+        private const int CBalRate = 20;    // T            Rate
+        private const int CBalTax = 21;     // U            S.Tax
+
+        private const int CStripe = 22;     // V  divider stripe (no data)
+        private const int CGap = 23;        // W  gap
+
+        private const int CCogsOpenExl = 24;  // X   COGS Opening   Exl
+        private const int CCogsOpenTax = 25;  // Y                  S.Tax
+        private const int CCogsOpenVat = 26;  // Z                  Vat
+        private const int CCogsConsExl = 27;  // AA  COGS Consumed  Exl
+        private const int CCogsConsTax = 28;  // AB                 S.Tax
+        private const int CCogsConsVat = 29;  // AC                 Vat
+        private const int CCogsBalExl = 30;   // AD  COGS Balance   Exl
+        private const int CCogsBalTax = 31;   // AE                 S.Tax
+        private const int CCogsBalVat = 32;   // AF                 Vat
+
+        private const int Cols = 32;
+
+        /// <summary>Row the band labels sit on, the header row, and the first
+        /// data row — the source sheet's 2 / 3 / 4.</summary>
+        private const int BandRow = 2;
+        private const int HeaderRow = 3;
+        private const int FirstDataRow = 4;
+
+        /// <summary>Further VAT charged alongside sales tax in the Cost of Good
+        /// Sold block. Flat 3% on the client's sheet.</summary>
+        private const string VatRate = "3%";
+
+        /// <summary>
+        /// Column widths, verbatim from the client's workbook AS STORED — the
+        /// widths ARE part of the layout being reproduced, so they are pinned
+        /// rather than measured from content. Items (D) wraps instead, so a name
+        /// longer than its 65-wide column grows the row rather than being
+        /// clipped.
+        /// </summary>
+        private static readonly (int Col, double Width)[] Widths =
+        {
+            (CClaim, 11.5703125), (CGdNo, 16.0), (CGdDate, 13.85546875),
+            (CItem, 65.140625), (CSubCat, 26.42578125),
+            (CHs4, 21.0), (CHs8, 21.0), (CPrice, 12.140625), (CUnit, 10.140625),
+            (COpenQty, 10.85546875), (COpenExl, 14.5703125), (COpenRate, 10.28515625), (COpenTax, 14.5703125),
+            (CConsQty, 10.85546875), (CConsExl, 21.140625), (CConsRate, 10.28515625), (CConsTax, 13.140625),
+            (CBalQty, 10.85546875), (CBalExl, 18.0), (CBalRate, 10.42578125), (CBalTax, 16.5703125),
+            (CStripe, 9.140625), (CGap, 8.28515625),
+            (CCogsOpenExl, 18.0), (CCogsOpenTax, 16.5703125), (CCogsOpenVat, 14.5703125),
+            (CCogsConsExl, 14.7109375), (CCogsConsTax, 13.28515625), (CCogsConsVat, 11.28515625),
+            (CCogsBalExl, 18.0), (CCogsBalTax, 16.5703125), (CCogsBalVat, 14.5703125),
+        };
+
+        /// <summary>
+        /// ClosedXML 0.104.2 treats <c>IXLColumn.Width</c> as the CONTENT width
+        /// and adds the cell's padding when it serialises, so setting the
+        /// client's stored 11.5703125 writes 12.280625 and every column comes
+        /// out ~0.71 characters wider than the sheet being reproduced. The
+        /// padding is a constant of the workbook's default font (Calibri 11) —
+        /// verified across all 32 columns, the delta is 0.710625 on every one.
+        ///
+        /// Subtracted here so the SAVED width is the client's. The harness
+        /// asserts against the saved XML rather than the ClosedXML property for
+        /// exactly this reason: if a future ClosedXML stops padding, the
+        /// generated widths shift and that check is what catches it.
+        /// </summary>
+        private const double WidthPadding = 0.710625;
 
         public static byte[] Build(StockExportDto data)
         {
             using var wb = new XLWorkbook();
-            var ws = wb.Worksheets.Add("Stock");
+            var ws = wb.Worksheets.Add(SheetName(data.GeneratedAt));
 
-            // Summary rows sit ABOVE their detail, so the ± sits on the item row
-            // itself rather than after the movements it opens.
-            ws.Outline.SummaryVLocation = XLOutlineSummaryVLocation.Top;
+            WriteCogsTitle(ws);
+            WriteBandLabels(ws);
+            WriteHeader(ws);
 
-            // Longest string written per column, so widths can be measured from
-            // real content at the end. Banner rows are deliberately not measured.
-            var widths = new double[Cols + 1];
-
-            var r = WriteBanner(ws, data);
-            var headerRow = r;
-            WriteHeader(ws, r, widths);
-            r++;
-
+            var r = FirstDataRow;
             var truncated = false;
-            var zebra = false;
-            var totals = new Totals();
-            // Deepest row outline actually written — 0 when nothing is grouped,
-            // which is what tells the fix-up below there is nothing to declare.
-            var grouped = 0;
 
             foreach (var item in data.Items)
             {
                 if (r > MaxRows) { truncated = true; break; }
-
-                WriteItemRow(ws, r, item.Summary, zebra, widths);
-                totals.Add(item.Summary);
-                zebra = !zebra;
+                WriteItemRow(ws, r, item);
                 r++;
-
-                if (!data.IncludeMovements || item.Movements.Count == 0) continue;
-
-                var groupStart = r;
-                WriteMovementSubHeader(ws, r, widths);
-                r++;
-
-                foreach (var m in item.Movements)
-                {
-                    if (r > MaxRows) { truncated = true; break; }
-                    WriteMovementRow(ws, r, m, widths);
-                    r++;
-                }
-
-                // Group the sub-header WITH its rows: collapsing the item must
-                // take its column captions away too, or a closed item leaves a
-                // stray caption band behind.
-                var rows = ws.Rows(groupStart, r - 1);
-                rows.Group();
-                rows.Collapse();
-                grouped = 1;
-
-                if (truncated) break;
             }
 
-            WriteTotals(ws, r, totals, data, widths);
-            r += 2;
+            var lastDataRow = r - 1;
 
-            if (truncated)
-            {
-                ws.Cell(r, CName).Value =
-                    $"Truncated at {MaxRows:N0} rows — narrow the search for a complete export.";
-                ws.Range(r, CName, r, Cols).Merge()
-                  .Style.Font.SetItalic().Font.SetFontColor(XLColor.DarkRed);
-                r += 2;
-            }
+            // Two blank rows then the totals, exactly as the source sheet lays
+            // them out: the gap is what lets an operator append a row without
+            // it landing inside the SUM range.
+            var totalsRow = lastDataRow + 3;
+            WriteTotals(ws, totalsRow, lastDataRow);
 
-            WriteLegend(ws, r, data);
+            ApplyWidths(ws);
 
-            ApplyWidths(ws, widths);
-
-            // Freeze the header AND the item-name column, so scrolling right
+            // Freeze the header AND the identity columns, so scrolling right
             // never leaves a row of figures with nothing naming it.
-            ws.SheetView.Freeze(headerRow, CName);
+            ws.SheetView.Freeze(HeaderRow, CUnit);
 
             ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
             ws.PageSetup.FitToPages(1, 0);
-            ws.PageSetup.SetRowsToRepeatAtTop(headerRow, headerRow);
+            ws.PageSetup.SetRowsToRepeatAtTop(HeaderRow, HeaderRow);
             ws.PageSetup.Margins.Left = 0.3;
             ws.PageSetup.Margins.Right = 0.3;
 
+            WriteSummarySheet(wb, data, truncated);
+
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
-            return FixRowOutlineLevel(ms.ToArray(), grouped);
+            return ms.ToArray();
         }
 
-        // ── ClosedXML outline workaround ──────────────────────────────────────
+        /// <summary>"Aug 2026" — the client names the data sheet for the month
+        /// it reports, and a workbook they file month on month reads better for
+        /// keeping that.</summary>
+        private static string SheetName(DateTime asAt) =>
+            asAt.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
 
-        /// <summary>
-        /// ClosedXML 0.104.2 writes the sheet's ROW outline depth into
-        /// <c>sheetFormatPr/@outlineLevelCol</c> and never emits
-        /// <c>@outlineLevelRow</c> — verified with an isolated repro: a workbook
-        /// with only rows grouped, and one with only columns grouped, both come
-        /// out as <c>outlineLevelCol="1"</c>. The result is a declared COLUMN
-        /// outline this sheet does not have (an empty gutter strip above the
-        /// column headers) and a row outline of depth 0 on paper, even though
-        /// every detail row carries <c>outlineLevel="1"</c>.
-        ///
-        /// The drill-down is the point of this export, so the two attributes are
-        /// corrected in the saved part rather than left to the reader's
-        /// tolerance. Deliberately conservative: if the element does not look
-        /// exactly as expected the bytes are returned untouched, so a future
-        /// ClosedXML that fixes this cannot be made wrong by this method.
-        /// </summary>
-        private static byte[] FixRowOutlineLevel(byte[] xlsx, int maxRowLevel)
+        // ── Row 1: the Cost of Good Sold banner ───────────────────────────────
+
+        private static void WriteCogsTitle(IXLWorksheet ws)
         {
-            if (maxRowLevel <= 0) return xlsx;
+            var band = ws.Range(1, CCogsOpenExl, 1, CCogsBalVat).Merge();
+            ws.Cell(1, CCogsOpenExl).Value = "Cost of Good Sold";
+            band.Style.Font.SetBold().Font.SetFontName(Face);
+            band.Style.Fill.BackgroundColor = CogsTitleFill;
+            band.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            band.Style.NumberFormat.Format = Acct0;
+            Outline(band);
+            ws.Row(1).Height = 15.75;
+        }
 
-            try
+        // ── Row 2: the block band labels ──────────────────────────────────────
+
+        private static readonly (int First, int Last, string Label, string Fill)[] Bands =
+        {
+            (COpenQty, COpenTax, "Opening", "open"),
+            (CConsQty, CConsTax, "Consumed", "cons"),
+            (CBalQty, CBalTax, "Balance", "bal"),
+            (CCogsOpenExl, CCogsOpenVat, "Opening", "open"),
+            (CCogsConsExl, CCogsConsVat, "Consumed", "cons"),
+            (CCogsBalExl, CCogsBalVat, "Balance", "cogsbal"),
+        };
+
+        private static void WriteBandLabels(IXLWorksheet ws)
+        {
+            foreach (var (first, last, label, fill) in Bands)
             {
-                using var ms = new MemoryStream();
-                ms.Write(xlsx, 0, xlsx.Length);
-                ms.Position = 0;
+                var band = ws.Range(BandRow, first, BandRow, last).Merge();
+                ws.Cell(BandRow, first).Value = label;
+                band.Style.Font.SetFontName(Face);
+                band.Style.Fill.BackgroundColor = FillFor(fill);
+                band.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                band.Style.NumberFormat.Format = Acct0;
+                Outline(band);
+            }
+            // Only the first band on the row is bold on the source sheet; the
+            // rest carry the same face at regular weight.
+            ws.Cell(BandRow, COpenQty).Style.Font.SetBold();
+            ws.Row(BandRow).Height = 15.75;
+        }
 
-                using (var zip = new System.IO.Compression.ZipArchive(
-                    ms, System.IO.Compression.ZipArchiveMode.Update, leaveOpen: true))
+        private static XLColor FillFor(string key) => key switch
+        {
+            "open" => OpeningFill,
+            "cons" => ConsumedFill,
+            "bal" => BalanceFill,
+            _ => CogsBalanceFill,
+        };
+
+        // ── Row 3: the header ─────────────────────────────────────────────────
+
+        private static readonly (int Col, string Label, string? Fill)[] HeaderCells =
+        {
+            (CClaim,  "Claim Month",      null),
+            (CGdNo,   "GDs No",           null),
+            (CGdDate, "GD Date",          null),
+            (CItem,   "Items",            null),
+            (CSubCat, "Sub cat",          null),
+            (CHs4,    "4 Digit Hs Code",  null),
+            (CHs8,    "8 Digit Hs Code",  null),
+            (CPrice,  "Price",            null),
+            (CUnit,   "Unit",             null),
+
+            (COpenQty,  "Qty",    "open"),
+            (COpenExl,  "Exl",    "open"),
+            (COpenRate, "Rate",   "open"),
+            (COpenTax,  "S.Tax",  "open"),
+
+            (CConsQty,  "Qty",            "cons"),
+            (CConsExl,  "Consumed Exl",   "cons"),
+            (CConsRate, "Rate",           "cons"),
+            (CConsTax,  "S.Tax",          "cons"),
+
+            (CBalQty,  "Qty",      "bal"),
+            (CBalExl,  "Bal Exl",  "bal"),
+            (CBalRate, "Rate",     "bal"),
+            (CBalTax,  "S.Tax",    "bal"),
+
+            (CStripe, "", "stripe"),
+
+            (CCogsOpenExl, "Exl",   "open"),
+            (CCogsOpenTax, "S.Tax", "open"),
+            (CCogsOpenVat, "Vat",   "open"),
+            (CCogsConsExl, "Exl",   "cons"),
+            (CCogsConsTax, "S.Tax", "cons"),
+            (CCogsConsVat, "Vat",   "cons"),
+            (CCogsBalExl,  "Exl",   "cogsbal"),
+            (CCogsBalTax,  "S.Tax", "cogsbal"),
+            (CCogsBalVat,  "Vat",   "cogsbal"),
+        };
+
+        private static void WriteHeader(IXLWorksheet ws)
+        {
+            foreach (var (col, label, fill) in HeaderCells)
+            {
+                var cell = ws.Cell(HeaderRow, col);
+                if (label.Length > 0) cell.Value = label;
+                cell.Style.Font.SetBold().Font.SetFontName(Face);
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+                if (fill == "stripe")
                 {
-                    var sheets = zip.Entries
-                        .Where(e => e.FullName.StartsWith("xl/worksheets/", StringComparison.Ordinal)
-                                 && e.FullName.EndsWith(".xml", StringComparison.Ordinal))
-                        .ToList();
-
-                    foreach (var entry in sheets)
-                    {
-                        string xml;
-                        using (var reader = new StreamReader(entry.Open()))
-                            xml = reader.ReadToEnd();
-
-                        var patched = PatchSheetFormatPr(xml, maxRowLevel);
-                        if (ReferenceEquals(patched, xml)) continue;
-
-                        var name = entry.FullName;
-                        entry.Delete();
-                        var fresh = zip.CreateEntry(name);
-                        using var writer = new StreamWriter(
-                            fresh.Open(), new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-                        writer.Write(patched);
-                    }
+                    // A colour-only divider between the stock blocks and the
+                    // Cost of Good Sold band, carried down the data rows too.
+                    cell.Style.Fill.BackgroundColor = SeparatorFill;
+                    continue;
                 }
 
-                return ms.ToArray();
+                if (fill != null)
+                {
+                    cell.Style.Fill.BackgroundColor = FillFor(fill);
+                    cell.Style.NumberFormat.Format = Acct0;
+                    Outline(cell);
+                }
+                else
+                {
+                    cell.Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+                }
             }
-            catch (Exception)
+
+            // "Claim Month" is the one header that does not fit its column.
+            var claim = ws.Cell(HeaderRow, CClaim).Style;
+            claim.Alignment.WrapText = true;
+            claim.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+            claim.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+
+            ws.Row(HeaderRow).Height = 31.5;
+        }
+
+        // ── Data rows ─────────────────────────────────────────────────────────
+
+        private static void WriteItemRow(IXLWorksheet ws, int r, StockExportItemDto item)
+        {
+            var s = item.Summary;
+
+            // A — Claim Month. The client stamps their customs claim period here
+            // by hand; nothing in this system records one, so it is left for
+            // them rather than filled with a month that would only look official.
+            Text(ws, r, CGdNo, item.LotRef);
+            if (item.LotDate.HasValue) Date(ws, r, CGdDate, item.LotDate.Value);
+
+            // The three free-text columns WRAP rather than clip. Their widths are
+            // the client's and may not move, and these are the fields no width
+            // can size away: an item name runs past any column, a GD reference
+            // is the operator's own string, and a UOM here is FBR's DESCRIPTION
+            // ("Numbers, pieces, units" — 22 characters in a 10-wide column),
+            // not the "Pcs" the client's own sheet holds. The row carries no
+            // explicit height, so Excel grows it. (Same failure the dashboard
+            // hit with nowrap+ellipsis: "MEKO FABRICS" and "MEKO DENIM" read
+            // identical.)
+            Text(ws, r, CItem, s.ItemTypeName);
+            foreach (var col in new[] { CItem, CGdNo, CUnit })
             {
-                // A workbook with a stale outline hint still opens and still
-                // holds every figure; failing the whole export over a cosmetic
-                // attribute would be the worse trade.
-                return xlsx;
-            }
-        }
-
-        private static string PatchSheetFormatPr(string xml, int maxRowLevel)
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(
-                xml, @"<(?<p>[A-Za-z0-9]+:)?sheetFormatPr\b(?<attrs>[^>]*?)/>",
-                System.Text.RegularExpressions.RegexOptions.None,
-                TimeSpan.FromSeconds(2));
-            if (!match.Success) return xml;
-
-            var attrs = match.Groups["attrs"].Value;
-            if (attrs.Contains("outlineLevelRow", StringComparison.Ordinal)) return xml;
-
-            // Drop the misfiled column depth; this sheet groups rows only.
-            attrs = System.Text.RegularExpressions.Regex.Replace(
-                attrs, @"\s+outlineLevelCol=""[^""]*""", "");
-
-            var prefix = match.Groups["p"].Value;
-            var replacement =
-                $"<{prefix}sheetFormatPr{attrs} outlineLevelRow=\"{maxRowLevel}\" />";
-
-            return xml.Remove(match.Index, match.Length).Insert(match.Index, replacement);
-        }
-
-        // ── Banner ────────────────────────────────────────────────────────────
-
-        private static int WriteBanner(IXLWorksheet ws, StockExportDto data)
-        {
-            var r = 1;
-
-            ws.Cell(r, CName).Value = Safe(data.CompanyName);
-            var title = ws.Range(r, CName, r, Cols).Merge();
-            title.Style.Font.SetFontSize(18).Font.SetBold().Font.SetFontColor(XLColor.White);
-            title.Style.Fill.BackgroundColor = Navy;
-            title.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            title.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            ws.Row(r).Height = 30;
-            r++;
-
-            ws.Cell(r, CName).Value = Safe(data.Title);
-            var sub = ws.Range(r, CName, r, Cols).Merge();
-            sub.Style.Font.SetFontSize(12.5).Font.SetFontColor(XLColor.White);
-            sub.Style.Fill.BackgroundColor = NavyLight;
-            sub.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            sub.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            ws.Row(r).Height = 21;
-            r++;
-
-            // Provenance. A stock sheet with no statement of what shaped it is
-            // not auditable — the reader cannot tell a filtered export from a
-            // complete one.
-            var parts = new List<string>();
-            parts.AddRange(data.FiltersApplied);
-            parts.Add($"{data.Items.Count:N0} item{(data.Items.Count == 1 ? "" : "s")}");
-            parts.Add($"Generated {data.GeneratedAt:dd-MM-yyyy HH:mm}");
-
-            ws.Cell(r, CName).Value = Safe(string.Join("  ·  ", parts));
-            var meta = ws.Range(r, CName, r, Cols).Merge();
-            meta.Style.Font.SetItalic().Font.SetFontColor(Muted);
-            meta.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            ws.Row(r).Height = 17;
-            r++;
-
-            // Headline figures, written as one centred line rather than tiles:
-            // tiles built out of merged column pairs come out ragged, because
-            // the grid's columns are deliberately different widths.
-            var t = new Totals();
-            foreach (var i in data.Items) t.Add(i.Summary);
-            ws.Cell(r, CName).Value = Safe(
-                $"Quantity on hand {t.Qty:N4}   ·   Excluding tax {t.Excl:N2}   ·   " +
-                $"Sales tax {t.Tax:N2}   ·   Including tax {t.Incl:N2}");
-            var kpi = ws.Range(r, CName, r, Cols).Merge();
-            kpi.Style.Font.SetBold().Font.SetFontSize(11).Font.SetFontColor(Navy);
-            kpi.Style.Fill.BackgroundColor = KpiFill;
-            kpi.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            kpi.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            ws.Row(r).Height = 22;
-            r++;
-
-            ws.Row(r).Height = 7; // spacer
-            r++;
-            return r;
-        }
-
-        // ── Header ────────────────────────────────────────────────────────────
-
-        private static readonly (int Col, string Label, bool Right)[] HeaderCells =
-        {
-            (CName,   "Item",          false),
-            (CCode,   "HS Code",       false),
-            (CUom,    "UOM",           false),
-            (COpen,   "Opening",       true),
-            (COpenVal, "Opening Value", true),
-            (CIn,     "Total In",      true),
-            (CInVal,  "Total In Value", true),
-            (COut,    "Total Out",     true),
-            (COutVal, "Total Out Value", true),
-            (COnHand, "On Hand",       true),
-            (CUnit,   "Unit Cost",     true),
-            (CExcl,   "Excluding",     true),
-            (CRate,   "Tax Rate",      true),
-            (CTax,    "Sales Tax",     true),
-            (CIncl,   "Including",     true),
-            (CLast,   "Last Movement", false),
-            (CNotes,  "Notes",         false),
-        };
-
-        private static void WriteHeader(IXLWorksheet ws, int r, double[] widths)
-        {
-            foreach (var (col, label, right) in HeaderCells)
-            {
-                var cell = ws.Cell(r, col);
-                cell.Value = label;
-                cell.Style.Font.SetBold().Font.SetFontColor(XLColor.White);
-                cell.Style.Fill.BackgroundColor = HeaderFill;
-                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-                cell.Style.Alignment.Horizontal = right
-                    ? XLAlignmentHorizontalValues.Right
-                    : XLAlignmentHorizontalValues.Left;
-                cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
-                cell.Style.Border.BottomBorderColor = XLColor.White;
-                Measure(widths, col, label);
-            }
-            ws.Row(r).Height = 22;
-        }
-
-        // ── Item row ──────────────────────────────────────────────────────────
-
-        private static void WriteItemRow(IXLWorksheet ws, int r, StockOnHandRowDto s,
-                                         bool zebra, double[] widths)
-        {
-            Text(ws, r, CName, s.ItemTypeName, widths);
-            Text(ws, r, CCode, s.HSCode, widths);
-            Text(ws, r, CUom, s.UOM, widths);
-
-            Number(ws, r, COpen, s.OpeningBalance, Qty, widths);
-            // Straight from the row the API built: the opening's stored value
-            // and the walk's own ValueIn / ValueOut. No arithmetic here -- the
-            // weighted-average walk in Helpers/StockValuation is the only place
-            // stock is valued, and a second sum here could disagree with it.
-            Number(ws, r, COpenVal, s.OpeningValueExcludingTax, Money, widths);
-            Number(ws, r, CIn, s.TotalIn, Qty, widths);
-            Number(ws, r, CInVal, s.ValueIn, Money, widths);
-            Number(ws, r, COut, s.TotalOut, Qty, widths);
-            Number(ws, r, COutVal, s.ValueOut, Money, widths);
-            Number(ws, r, COnHand, s.OnHand, Qty, widths);
-            Number(ws, r, CUnit, s.UnitCost, Cost, widths);
-            Number(ws, r, CExcl, s.ValueExcludingTax, Money, widths);
-            Number(ws, r, CRate, s.SalesTaxRate, Rate, widths);
-            Number(ws, r, CTax, s.SalesTax, Money, widths);
-            Number(ws, r, CIncl, s.ValueIncludingTax, Money, widths);
-
-            if (s.LastMovementAt.HasValue)
-                Date(ws, r, CLast, s.LastMovementAt.Value, widths);
-
-            var row = ws.Range(r, CName, r, Cols);
-            if (zebra) row.Style.Fill.BackgroundColor = ZebraFill;
-            row.Style.Border.BottomBorder = XLBorderStyleValues.Hair;
-            row.Style.Border.BottomBorderColor = Rule;
-
-            // The item's identity and its headline figures carry the weight;
-            // the flow columns behind them stay light so the eye lands on the
-            // three that answer "what have I got, and what is it worth".
-            ws.Cell(r, CName).Style.Font.SetBold();
-            ws.Cell(r, COnHand).Style.Font.SetBold();
-            ws.Cell(r, CIncl).Style.Font.SetBold();
-            ws.Range(r, COpen, r, COutVal).Style.Font.SetFontColor(Muted);
-
-            // Item names run past any sane column width, and the HS code in the
-            // next cell means a long one has nothing to spill into — it would be
-            // clipped on screen and in print. Wrapping is what keeps the whole
-            // name readable; the row carries no explicit height, so Excel grows
-            // it to fit. (This is the same failure the dashboard hit with
-            // nowrap+ellipsis: "MEKO FABRICS" and "MEKO DENIM" read identical.)
-            ws.Cell(r, CName).Style.Alignment.WrapText = true;
-            ws.Cell(r, CName).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-        }
-
-        // ── Movement sub-header + rows ────────────────────────────────────────
-
-        private static readonly (int Col, string Label, bool Right)[] MovementHeaderCells =
-        {
-            (CName,   "Date",          false),
-            (CCode,   "Document",      false),
-            (CUom,    "Direction",     false),
-            (CIn,     "Qty In",        true),
-            (COut,    "Qty Out",       true),
-            (COnHand, "Balance",       true),
-            (CUnit,   "Unit Cost",     true),
-            (CExcl,   "Value",         true),
-            (CIncl,   "Running Value", true),
-            (CNotes,  "Notes",         false),
-        };
-
-        private static void WriteMovementSubHeader(IXLWorksheet ws, int r, double[] widths)
-        {
-            foreach (var (col, label, right) in MovementHeaderCells)
-            {
-                var cell = ws.Cell(r, col);
-                cell.Value = label;
-                cell.Style.Font.SetBold().Font.SetFontSize(9).Font.SetFontColor(Navy);
-                cell.Style.Alignment.Horizontal = right
-                    ? XLAlignmentHorizontalValues.Right
-                    : XLAlignmentHorizontalValues.Left;
-                Measure(widths, col, label);
-            }
-            ws.Cell(r, CName).Style.Alignment.Indent = 2;
-            ws.Range(r, CName, r, Cols).Style.Fill.BackgroundColor = SubHeadFill;
-            ws.Row(r).Height = 15;
-        }
-
-        private static void WriteMovementRow(IXLWorksheet ws, int r,
-                                             StockMovementRowDto m, double[] widths)
-        {
-            var isIn = string.Equals(m.Direction, "In", StringComparison.OrdinalIgnoreCase);
-
-            Date(ws, r, CName, m.MovementDate, widths);
-            ws.Cell(r, CName).Style.Alignment.Indent = 2;
-
-            var source = Humanise(m.SourceType);
-            var doc = string.IsNullOrWhiteSpace(m.SourceDocNumber)
-                ? source
-                : $"{source} #{m.SourceDocNumber}";
-            Text(ws, r, CCode, doc, widths);
-
-            Text(ws, r, CUom, isIn ? "IN" : "OUT", widths);
-            ws.Cell(r, CUom).Style.Font.SetBold().Font.SetFontColor(isIn ? InGreen : OutRed);
-
-            // In and Out live in their own columns rather than one signed
-            // column: a reader scanning down should be able to total either
-            // side without first reading every sign.
-            if (isIn) Number(ws, r, CIn, m.Quantity, Qty, widths);
-            else Number(ws, r, COut, m.Quantity, Qty, widths);
-
-            Number(ws, r, COnHand, m.RunningQuantity, Qty, widths);
-            Number(ws, r, CUnit, m.UnitCost, Cost, widths);
-            Number(ws, r, CExcl, m.Value, Money, widths);
-            Number(ws, r, CIncl, m.RunningValue, Money, widths);
-            ws.Cell(r, CIncl).Style.Font.SetFontColor(Muted);
-
-            if (!string.IsNullOrWhiteSpace(m.Notes))
-            {
-                var cell = ws.Cell(r, CNotes);
-                cell.Value = Safe(m.Notes);
-                cell.Style.Alignment.WrapText = true;
-                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
-                cell.Style.Font.SetFontColor(Muted);
-                // Notes are the one free-text field here and run long. Wrapping
-                // is what keeps them whole; the width cap below stops one long
-                // note stretching the column past a printable page.
-                Measure(widths, CNotes, m.Notes!);
+                ws.Cell(r, col).Style.Alignment.WrapText = true;
+                ws.Cell(r, col).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
             }
 
-            ws.Range(r, CName, r, Cols).Style.Font.SetFontSize(10);
+            // E — Sub cat. The client's own product grouping; the catalog has no
+            // such field, so the column stays theirs to fill.
+
+            // The 4-digit heading is the first four characters of the 8-digit
+            // code, and stays a FORMULA so correcting a code corrects both.
+            Formula(ws, r, CHs4, $"LEFT(G{r},4)", Acct0);
+            Text(ws, r, CHs8, s.HSCode);
+
+            // Landed unit price — what the opening block paid per unit. A
+            // formula, as on the source sheet, so it follows an edited value.
+            Formula(ws, r, CPrice, $"IFERROR(K{r}/J{r},\"\")", Acct0);
+            Text(ws, r, CUnit, s.UOM);
+
+            // ── Opening: everything that came in ─────────────────────────────
+            // Opening balance PLUS purchases since. See the class comment: the
+            // client's sheet has no "received" block, and this is what keeps
+            // Balance = Opening − Consumed true on a company that buys as well
+            // as imports.
+            Number(ws, r, COpenQty, s.OpeningBalance + s.TotalIn, Acct0);
+            Number(ws, r, COpenExl, s.OpeningValueExcludingTax + s.ValueIn, Acct0);
+            Number(ws, r, COpenRate, s.SalesTaxRate / 100m, Pct);
+            Formula(ws, r, COpenTax, $"L{r}*K{r}", Acct2);
+
+            // ── Consumed: what the walk took out ─────────────────────────────
+            Number(ws, r, CConsQty, s.TotalOut, Acct0);
+            Number(ws, r, CConsExl, s.ValueOut, Acct0);
+            Formula(ws, r, CConsRate, $"L{r}", Pct);
+            Formula(ws, r, CConsTax, $"O{r}*P{r}", Acct0);
+
+            // ── Balance: the live position, as VALUES ────────────────────────
+            // Never =J-N / =K-O. StockValuation clamps value to zero on an
+            // emptied bin and on a revaluation, so the subtraction can differ
+            // from the walk — and the workbook must not contradict the screen.
+            Number(ws, r, CBalQty, s.OnHand, Acct0);
+            Number(ws, r, CBalExl, s.ValueExcludingTax, Acct0);
+            Number(ws, r, CBalRate, s.SalesTaxRate / 100m, Pct);
+            Number(ws, r, CBalTax, s.SalesTax, Acct0);
+
+            ws.Cell(r, CStripe).Style.Fill.BackgroundColor = SeparatorFill;
+
+            // ── Cost of Good Sold: X is keyed, the rest follows ──────────────
+            // X (opening Exl) is deliberately empty — see the class comment. The
+            // consumed Exl is backed out of the consumed sales tax at the
+            // combined rate the way the client's own sheet does it (their
+            // literal /21% generalised to the row's rate + VAT, so a 25% line
+            // does not silently use an 18% basis).
+            Blank(ws, r, CCogsOpenExl, Acct0);
+            Formula(ws, r, CCogsOpenTax, $"X{r}*L{r}", Acct2);
+            Formula(ws, r, CCogsOpenVat, $"X{r}*{VatRate}", Acct0);
+            Formula(ws, r, CCogsConsExl, $"Q{r}/(L{r}+{VatRate})", Acct0);
+            Formula(ws, r, CCogsConsTax, $"AA{r}*L{r}", Acct0);
+            Formula(ws, r, CCogsConsVat, $"AA{r}*{VatRate}", Acct0);
+            Formula(ws, r, CCogsBalExl, $"X{r}-AA{r}", Acct2);
+            Formula(ws, r, CCogsBalTax, $"Y{r}-AB{r}", Acct2);
+            Formula(ws, r, CCogsBalVat, $"Z{r}-AC{r}", Acct2);
+
+            // The block edges, carried down the data rows as on the source sheet
+            // so the three blocks stay visually separate all the way down.
+            foreach (var col in new[] { COpenQty, CCogsOpenExl })
+                ws.Cell(r, col).Style.Border.LeftBorder = XLBorderStyleValues.Medium;
+            foreach (var col in new[] { COpenTax, CConsTax, CBalTax,
+                                        CCogsOpenVat, CCogsConsVat, CCogsBalVat })
+                ws.Cell(r, col).Style.Border.RightBorder = XLBorderStyleValues.Medium;
+
+            ws.Range(r, CClaim, r, Cols).Style.Font.SetFontName(Face);
         }
 
         // ── Totals ────────────────────────────────────────────────────────────
 
-        private sealed class Totals
+        /// <summary>
+        /// Written as SUM formulas over the data range, as on the source sheet —
+        /// an accountant who deletes a row expects the totals to follow, and
+        /// every data row here is an item row, so the range is contiguous.
+        ///
+        /// Rate columns (L / P / T) and Price (H) are deliberately not summed: a
+        /// percentage and a weighted unit cost do not add up, and a column of
+        /// them totalled is a number that means nothing.
+        /// </summary>
+        private static readonly int[] TotalledColumns =
         {
-            public decimal Opening, In, Out, Qty, Excl, Tax, Incl;
-            public decimal OpeningVal, InVal, OutVal;
+            COpenQty, COpenExl, COpenTax,
+            CConsQty, CConsExl, CConsTax,
+            CBalQty, CBalExl, CBalTax,
+            CCogsOpenExl, CCogsOpenTax, CCogsOpenVat,
+            CCogsConsExl, CCogsConsTax, CCogsConsVat,
+            CCogsBalExl, CCogsBalTax, CCogsBalVat,
+        };
 
-            public void Add(StockOnHandRowDto s)
+        private static void WriteTotals(IXLWorksheet ws, int r, int lastDataRow)
+        {
+            // No data rows: a SUM over an empty range would be =SUM(J4:J3),
+            // which Excel refuses to open. Total nothing instead.
+            if (lastDataRow < FirstDataRow) return;
+
+            var last = r - 1; // the blank row above, so an appended row is caught
+            foreach (var col in TotalledColumns)
             {
-                Opening += s.OpeningBalance;
-                OpeningVal += s.OpeningValueExcludingTax;
-                In += s.TotalIn;
-                InVal += s.ValueIn;
-                Out += s.TotalOut;
-                OutVal += s.ValueOut;
-                Qty += s.OnHand;
-                Excl += s.ValueExcludingTax;
-                Tax += s.SalesTax;
-                Incl += s.ValueIncludingTax;
+                var letter = ColumnLetter(col);
+                Formula(ws, r, col, $"SUM({letter}{FirstDataRow}:{letter}{last})", Acct0);
+                ws.Cell(r, col).Style.Font.SetBold();
             }
+            ws.Range(r, CClaim, r, Cols).Style.Font.SetFontName(Face);
         }
 
-        private static void WriteTotals(IXLWorksheet ws, int r, Totals t,
-                                        StockExportDto data, double[] widths)
+        private static string ColumnLetter(int col)
         {
-            var label = $"TOTAL — {data.Items.Count:N0} item{(data.Items.Count == 1 ? "" : "s")}";
-            ws.Cell(r, CName).Value = label;
-            ws.Cell(r, CName).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            Measure(widths, CName, label);
-
-            Number(ws, r, COpen, t.Opening, Qty, widths);
-            Number(ws, r, COpenVal, t.OpeningVal, Money, widths);
-            Number(ws, r, CIn, t.In, Qty, widths);
-            Number(ws, r, CInVal, t.InVal, Money, widths);
-            Number(ws, r, COut, t.Out, Qty, widths);
-            Number(ws, r, COutVal, t.OutVal, Money, widths);
-            Number(ws, r, COnHand, t.Qty, Qty, widths);
-            Number(ws, r, CExcl, t.Excl, Money, widths);
-            Number(ws, r, CTax, t.Tax, Money, widths);
-            Number(ws, r, CIncl, t.Incl, Money, widths);
-
-            // No total unit cost or tax rate: a weighted average and a
-            // percentage do not add up, and a column of them summed is a
-            // number that means nothing.
-            var row = ws.Range(r, CName, r, Cols);
-            row.Style.Font.SetBold();
-            row.Style.Fill.BackgroundColor = TotalFill;
-            row.Style.Border.TopBorder = XLBorderStyleValues.Double;
-            row.Style.Border.TopBorderColor = Navy;
-            ws.Row(r).Height = 20;
+            var s = "";
+            while (col > 0)
+            {
+                var m = (col - 1) % 26;
+                s = (char)('A' + m) + s;
+                col = (col - 1) / 26;
+            }
+            return s;
         }
 
-        // ── Legend ────────────────────────────────────────────────────────────
+        // ── Summary sheet ─────────────────────────────────────────────────────
 
-        private static void WriteLegend(IXLWorksheet ws, int r, StockExportDto data)
+        /// <summary>
+        /// The title block and the provenance. It is a second sheet because the
+        /// data sheet has to BE the client's layout, which starts at its band
+        /// labels with no banner above them — but an export that cannot say it
+        /// was filtered, division-scoped or truncated is not auditable, and
+        /// §5b-9's rule that a workbook must admit what it left out still holds.
+        /// </summary>
+        private static void WriteSummarySheet(XLWorkbook wb, StockExportDto data, bool truncated)
         {
+            var ws = wb.Worksheets.Add("Summary");
+
+            var r = 1;
+            ws.Cell(r, 1).Value = Safe(data.CompanyName);
+            ws.Cell(r, 1).Style.Font.SetBold().Font.SetFontSize(14).Font.SetFontColor(Navy);
+            r++;
+
+            ws.Cell(r, 1).Value = "Stock Sheet";
+            ws.Cell(r, 1).Style.Font.SetFontSize(12);
+            r++;
+
+            ws.Cell(r, 1).Value = SheetName(data.GeneratedAt);
+            ws.Cell(r, 1).Style.Font.SetFontSize(12);
+            r += 2;
+
+            // Headline figures — the same four the dashboard shows, summed from
+            // the rows written, so the workbook states its own totals in words
+            // as well as in the totals row.
+            decimal qty = 0, excl = 0, tax = 0, incl = 0;
+            foreach (var i in data.Items)
+            {
+                qty += i.Summary.OnHand;
+                excl += i.Summary.ValueExcludingTax;
+                tax += i.Summary.SalesTax;
+                incl += i.Summary.ValueIncludingTax;
+            }
+
+            foreach (var (label, value, format) in new (string, decimal, string)[]
+            {
+                ("Quantity on hand", qty, "#,##0.####"),
+                ("Excluding tax", excl, "#,##0.00"),
+                ("Sales tax", tax, "#,##0.00"),
+                ("Including tax", incl, "#,##0.00"),
+            })
+            {
+                ws.Cell(r, 1).Value = label;
+                ws.Cell(r, 2).Value = value;
+                ws.Cell(r, 2).Style.NumberFormat.Format = format;
+                ws.Cell(r, 1).Style.Font.SetBold();
+                r++;
+            }
+            r++;
+
             var lines = new List<string>();
-            if (data.IncludeMovements)
-            {
-                lines.Add("Every item's movements are nested under it and start collapsed — "
-                        + "use the + in the left margin (or Data ▸ Group ▸ Show Detail) to open one.");
-                lines.Add("Balance and Running Value are the quantity and value AFTER that movement, "
-                        + "so a drill-down reads like a bank statement.");
-            }
-            else
-            {
-                lines.Add("Movement detail is not included — it needs the "
-                        + "\"View the stock-movement audit log\" permission.");
-            }
-            lines.Add("Stock is valued at WEIGHTED AVERAGE cost. Sales Tax = Excluding × Tax Rate ÷ 100, "
-                    + "and Including = Excluding + Sales Tax.");
+            lines.AddRange(data.FiltersApplied);
+            lines.Add($"{data.Items.Count:N0} item{(data.Items.Count == 1 ? "" : "s")}");
+            lines.Add($"Generated {data.GeneratedAt:dd-MM-yyyy HH:mm}");
+            if (truncated)
+                lines.Add($"TRUNCATED at {MaxRows:N0} rows — narrow the search for a complete export.");
 
             foreach (var line in lines)
             {
-                ws.Cell(r, CName).Value = Safe(line);
-                var range = ws.Range(r, CName, r, Cols).Merge();
-                range.Style.Font.SetItalic().Font.SetFontSize(9).Font.SetFontColor(Muted);
-                range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                ws.Cell(r, 1).Value = Safe(line);
+                ws.Cell(r, 1).Style.Font.SetItalic().Font.SetFontColor(Muted);
+                if (truncated && line.StartsWith("TRUNCATED", StringComparison.Ordinal))
+                    ws.Cell(r, 1).Style.Font.SetFontColor(XLColor.DarkRed).Font.SetBold();
                 r++;
             }
+            r++;
+
+            foreach (var note in new[]
+            {
+                "Opening is everything received — the opening balance plus purchases since.",
+                "Balance is the live position from the weighted-average valuation, not Opening minus Consumed.",
+                "Cost of Good Sold: key the Opening Exl column (X); S.Tax, Vat and the Consumed and Balance blocks follow by formula.",
+                "Claim Month and Sub cat are yours to fill — this system records neither.",
+                "GDs No and GD Date are shown only where every customs lot behind an item names the same declaration.",
+            })
+            {
+                ws.Cell(r, 1).Value = note;
+                ws.Cell(r, 1).Style.Font.SetItalic().Font.SetFontSize(9).Font.SetFontColor(Muted);
+                r++;
+            }
+
+            ws.Column(1).Width = 80;
+            ws.Column(2).Width = 20;
         }
 
         // ── Cell writers ──────────────────────────────────────────────────────
 
-        private static void Text(IXLWorksheet ws, int r, int c, string? value, double[] widths)
+        private static void Text(IXLWorksheet ws, int r, int c, string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return;
             ws.Cell(r, c).Value = Safe(value);
-            Measure(widths, c, value!);
         }
 
-        private static void Number(IXLWorksheet ws, int r, int c, decimal value,
-                                   string format, double[] widths)
+        private static void Number(IXLWorksheet ws, int r, int c, decimal value, string format)
         {
             var cell = ws.Cell(r, c);
             cell.Value = value;
             cell.Style.NumberFormat.Format = format;
-            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
-            // Measure the RENDERED text, not the raw decimal: 1234567.5 occupies
-            // "1,234,567.50" on screen, and measuring the shorter form is how a
-            // figure ends up shown as ####.
-            Measure(widths, c, value.ToString(format.Contains("0.0000") ? "N4" : "N2"));
         }
 
-        private static void Date(IXLWorksheet ws, int r, int c, DateTime value, double[] widths)
+        /// <summary>A cell that carries a format and a border but no value — the
+        /// Cost of Good Sold input column. Written explicitly so the accounting
+        /// format is already on it when the figure is typed.</summary>
+        private static void Blank(IXLWorksheet ws, int r, int c, string format)
+        {
+            ws.Cell(r, c).Style.NumberFormat.Format = format;
+        }
+
+        private static void Formula(IXLWorksheet ws, int r, int c, string formula, string format)
+        {
+            var cell = ws.Cell(r, c);
+            cell.FormulaA1 = formula;
+            cell.Style.NumberFormat.Format = format;
+        }
+
+        private static void Date(IXLWorksheet ws, int r, int c, DateTime value)
         {
             var cell = ws.Cell(r, c);
             cell.Value = value;
             cell.Style.NumberFormat.Format = DateFmt;
-            Measure(widths, c, "00-00-0000");
         }
 
-        // ── Widths ────────────────────────────────────────────────────────────
-
-        // Per-column ceiling in Excel width units. Only Notes and Item can run
-        // long; the rest are figures whose worst case is already narrow.
-        private static double CapFor(int col) => col switch
+        private static void Outline(IXLStyle style)
         {
-            CName => 44,
-            CNotes => 52,
-            CCode => 26,
-            _ => 20,
-        };
-
-        private static void Measure(double[] widths, int col, string text)
-        {
-            if (string.IsNullOrEmpty(text)) return;
-            // Longest single line: a note holding a newline should not claim the
-            // width of both halves joined.
-            var longest = 0;
-            foreach (var line in text.Split('\n'))
-                if (line.Length > longest) longest = line.TrimEnd('\r').Length;
-            if (longest > widths[col]) widths[col] = longest;
+            style.Border.OutsideBorder = XLBorderStyleValues.Medium;
         }
 
-        private static void ApplyWidths(IXLWorksheet ws, double[] widths)
-        {
-            for (var c = 1; c <= Cols; c++)
-            {
-                // +3 covers the indent on nested rows, the bold header face, and
-                // Excel's own padding — the difference between a column that
-                // fits and one that shows ####.
-                var w = widths[c] + 3;
-                var cap = CapFor(c);
-                ws.Column(c).Width = Math.Clamp(w, 9, cap);
-            }
-        }
+        private static void Outline(IXLRange range) => Outline(range.Style);
 
-        /// <summary>
-        /// <c>PurchaseBill</c> → <c>Purchase Bill</c>. The source type is a C#
-        /// enum name, and an operator's stock sheet should not be reading our
-        /// identifiers back at them.
-        /// </summary>
-        private static string Humanise(string? pascal)
+        private static void Outline(IXLCell cell) => Outline(cell.Style);
+
+        private static void ApplyWidths(IXLWorksheet ws)
         {
-            if (string.IsNullOrEmpty(pascal)) return "";
-            var sb = new System.Text.StringBuilder(pascal.Length + 4);
-            for (var i = 0; i < pascal.Length; i++)
-            {
-                if (i > 0 && char.IsUpper(pascal[i]) && !char.IsUpper(pascal[i - 1]))
-                    sb.Append(' ');
-                sb.Append(pascal[i]);
-            }
-            return sb.ToString();
+            foreach (var (col, width) in Widths) ws.Column(col).Width = width - WidthPadding;
         }
 
         private static string Safe(string? s) => ExcelTemplateEngine.CsvSafe(s);
