@@ -217,6 +217,7 @@ export default function DashboardLayout() {
     "purchasedebitnotes.list.view",
     "goodsreceipts.list.view",
     "fbrimport.purchase.preview",
+    "importcosting.sheet.run",
   ];
   const accountingKeys = [
     "accounting.receipts.view",
@@ -276,7 +277,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/audit-logs")
       || p.startsWith("/accounting/data-migration") || p.startsWith("/accounting/manager-import")) return "administration";
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
-    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase")) return "purchases";
+    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase") || p.startsWith("/imports/costing")) return "purchases";
     if (p.startsWith("/receipts") || p.startsWith("/help/accounting") || p.startsWith("/payments") || p.startsWith("/customer-ledger") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/clients") || p.startsWith("/suppliers") || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units")) return "masterdata";
     if (p.startsWith("/companies") || p.startsWith("/configuration/") || p.startsWith("/divisions") || p.startsWith("/po-formats")
@@ -506,6 +507,12 @@ export default function DashboardLayout() {
                 <NavLink to="/fbr-import/purchase" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFileUpload className="dl-subitem__icon" aria-hidden="true" />
                   <span>FBR Purchase Import</span>
+                </NavLink>
+              </Can>
+              <Can permission="importcosting.sheet.run">
+                <NavLink to="/imports/costing" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdInventory2 className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Import Costing</span>
                 </NavLink>
               </Can>
             </NavGroup>
@@ -904,6 +911,7 @@ function getBreadcrumb(pathname) {
     "/goods-receipts": "Purchases / Goods Receipts",
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
+    "/imports/costing": "Purchases / Import Costing",
     "/item-types": "Configuration / Item Types",
     "/non-inventory-items": "Configuration / Non-Inventory Items",
     "/challans": "Sales / Delivery Challans",

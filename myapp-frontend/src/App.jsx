@@ -29,6 +29,7 @@ import PurchaseDebitNotesPage from "./pages/PurchaseDebitNotesPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
+import GdCostingImportPage from "./pages/GdCostingImportPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import TaxSheetPage from "./pages/TaxSheetPage";
 import ClientLedgerReportPage from "./pages/ClientLedgerReportPage";
@@ -153,6 +154,12 @@ export default function App() {
           <Route path="/stock" element={<RequirePermission anyPrefix="stock."><StockDashboardPage /></RequirePermission>} />
           {/* FBR Annexure-A purchase ledger import — Phase 1 preview only */}
           <Route path="/fbr-import/purchase" element={<RequirePermission anyPrefix="fbrimport."><FbrPurchaseImportPage /></RequirePermission>} />
+          {/* GD costing workbook import — loads actual landed cost onto stock
+              already on the books. Exact permission (not anyPrefix): the
+              ImportCosting module also carries importcosting.consignments.view
+              for a future read-only screen, which must not itself open this
+              run/write page. */}
+          <Route path="/imports/costing" element={<RequirePermission permission="importcosting.sheet.run"><GdCostingImportPage /></RequirePermission>} />
           {/* Reports */}
           <Route path="/reports/sales" element={<RequirePermission anyPrefix="reports.sales"><SalesReportPage /></RequirePermission>} />
           <Route path="/reports/tax-sheet" element={<RequirePermission anyPrefix="reports.taxsheet"><TaxSheetPage /></RequirePermission>} />

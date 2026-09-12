@@ -51,6 +51,23 @@ export const previewCustomerLedger = ({
 export const commitCustomerLedger = (body) =>
   httpClient.post("/spreadsheet-import/customer-ledger/commit", body, { timeout: LONG });
 
+// ── GD costing (customs consignment cost) ───────────────────────────────────
+// One built-in layout reads every GD costing workbook seen so far (see
+// GdCostingImportService), so there is no per-workbook mapping step here —
+// the caller resolves the installation's default "GdCosting" profile via
+// getImportProfiles({ kind: "GdCosting", companyId }) and passes its id.
+//
+// Preview takes the FILE; commit takes the REVIEWED LINES (echoed straight
+// back from the preview response) and never re-reads the file — the server
+// re-verifies every match and recomputes every cost figure itself.
+
+export const previewGdCosting = ({ file, companyId, profileId }) =>
+  upload("/spreadsheet-import/gd-costing/preview", file,
+    { companyId, ...(profileId ? { profileId } : {}) });
+
+export const commitGdCosting = (body) =>
+  httpClient.post("/spreadsheet-import/gd-costing/commit", body, { timeout: LONG });
+
 // ── History ────────────────────────────────────────────────────────────────
 
 export const getImportRuns = ({ companyId, kind, page = 1, pageSize = 25 }) =>
