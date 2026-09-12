@@ -1166,6 +1166,33 @@ status_check(suite16, "alice POST /customer-ledger/commit (Beta body)", s, 403)
 s, _ = request("GET", f"/api/spreadsheet-import/runs?companyId={beta['id']}", token=tokens["alice"])
 status_check(suite16, "alice GET /spreadsheet-import/runs (Beta)", s, 403)
 
+# GD costing (2026-09-12): same shape as opening stock / customer ledger above
+# -- the workbook never carries a company id, so the guard on the query-string
+# companyId (preview) / body companyId (commit) is the only thing between a
+# user and another tenant's opening stock. A crafted line naming a REAL
+# opening balance from a company the caller cannot even reach must still be
+# blocked at this same tenant gate before match/cost logic ever sees it.
+gd_map = json.dumps({
+    "sheetSelect": {"mode": "byIndex", "index": 0},
+    "headerRow": 1, "firstDataRow": 2,
+    "columns": {"gdNumber": 1, "description": 2, "hsCode": 3, "quantity": 4,
+               "assessedValue": 5},
+})
+if xlsx_bytes is None:
+    check(suite16, "openpyxl available for the GD costing workbook fixture", False,
+          "pip install openpyxl")
+else:
+    s_, _ = upload_file(f"/api/spreadsheet-import/gd-costing/preview?companyId={beta['id']}",
+                        tokens["alice"], "gd.xlsx", xlsx_bytes, XLSX_MIME,
+                        fields={"mappingJson": gd_map})
+    status_check(suite16, "alice POST /gd-costing/preview (Beta)", s_, 403)
+
+s, _ = request("POST", "/api/spreadsheet-import/gd-costing/commit", token=tokens["alice"],
+               body={"companyId": beta["id"],
+                     "lines": [{"sourceRow": 1, "gdNumber": "GD-PROBE-1", "hsCode": "8481.1000",
+                                "quantity": 5, "assessedValue": 100, "disposition": "cost-only"}]})
+status_check(suite16, "alice POST /gd-costing/commit (Beta body)", s, 403)
+
 # A layout saved against Beta must be invisible to alice — 404 rather than 403,
 # so the status itself does not confirm the row exists.
 status, beta_profile = request("POST", "/api/import-profiles", token=admin, body={
