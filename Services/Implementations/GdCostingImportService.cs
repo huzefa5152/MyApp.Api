@@ -448,6 +448,12 @@ namespace MyApp.Api.Services.Implementations
 
                 var writtenLines = new List<ImportConsignmentLine>();
                 var costedBalanceIds = new HashSet<int>();
+                // Lines Task 15's opt-in flag resolved as genuinely new stock
+                // — grouped and turned into ItemType + OpeningStockBalance
+                // rows in the post-pass below (CreateMissingStockAsync), once
+                // every line's own entity (and therefore its recomputed
+                // Cost/SellingValue) has been built.
+                var newStockLines = new List<(ImportConsignmentLine Entity, NewStockGroupKey Key, GdCostingLineDto Line)>();
 
                 foreach (var line in lines)
                 {
@@ -455,13 +461,61 @@ namespace MyApp.Api.Services.Implementations
                     var disposition = GdCostingDispositionNames.Parse(line.Disposition);
                     string? dispositionNote = null;
                     int? balanceIdToWrite = null;
+                    NewStockGroupKey? newStockKey = null;
 
                     if (disposition == GdCostingDisposition.StockPosted)
                     {
-                        // Round 1 scope limit: no stock movement, no GL entry.
-                        // Told, not silently dropped.
-                        disposition = GdCostingDisposition.Skipped;
-                        dispositionNote = "Posting new stock arrives in a later release.";
+                        if (!dto.CreateMissingStock)
+                        {
+                            // Default (opted-out) behaviour: unchanged,
+                            // byte-for-byte, from before Task 15. Told, not
+                            // silently dropped.
+                            disposition = GdCostingDisposition.Skipped;
+                            dispositionNote = "Posting new stock arrives in a later release.";
+                        }
+                        else
+                        {
+                            // Opted in (Task 15). Never trust "this is new
+                            // stock" from the client either — re-run the same
+                            // server-truth Match() a CostOnly claim already
+                            // gets (Task 10 fix round 1). Only a line the
+                            // server's OWN index finds NOTHING for may create
+                            // anything; anything else is resolved exactly as
+                            // a forged CostOnly claim already is, whatever
+                            // the client's disposition said.
+                            var freshCandidates = Match(line.GdNumber, line.HsCode, index);
+                            if (freshCandidates.Count == 0)
+                            {
+                                // Genuinely new stock. Disposition stays
+                                // StockPosted; the item type and opening
+                                // balance are resolved in the post-pass below
+                                // — a group sharing one (HsCode, Name) target
+                                // needs every member's own recomputed figures
+                                // before it can total them.
+                                newStockKey = new NewStockGroupKey(
+                                    GdCostingMapping.CleanHsCode(line.HsCode),
+                                    NormalizeItemName(line.Description));
+                            }
+                            else if (freshCandidates.Count > 1)
+                            {
+                                disposition = GdCostingDisposition.Ambiguous;
+                                var names = freshCandidates
+                                    .Select(id => index.Balances.TryGetValue(id, out var b) ? (b.ItemType?.Name ?? $"item #{id}") : $"item #{id}")
+                                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                                    .ToList();
+                                dispositionNote = $"Matches more than one opening balance under HS code {line.HsCode}: {string.Join(", ", names)}. No cost was written — resolve manually.";
+                            }
+                            else
+                            {
+                                // The server's own match disagrees with the
+                                // client's "unmatched" claim — this is a
+                                // CostOnly line, not a new one, whatever the
+                                // client said.
+                                disposition = GdCostingDisposition.CostOnly;
+                                balanceIdToWrite = freshCandidates[0];
+                            }
+                        }
                     }
                     else if (disposition == GdCostingDisposition.CostOnly)
                     {
@@ -579,6 +633,9 @@ namespace MyApp.Api.Services.Implementations
 
                     if (disposition == GdCostingDisposition.CostOnly && balanceIdToWrite.HasValue)
                         costedBalanceIds.Add(balanceIdToWrite.Value);
+
+                    if (newStockKey.HasValue)
+                        newStockLines.Add((entity, newStockKey.Value, line));
                 }
 
                 // The unit cost is derived here from the WRITTEN entities' own
@@ -602,6 +659,14 @@ namespace MyApp.Api.Services.Implementations
                     balance.ActualCostExcludingTax = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
                 }
 
+                // Task 15, opt-in only: lines the server independently proved
+                // touch nothing on the books become new stock here — never
+                // inline in the loop above, because a group sharing one
+                // (HsCode, Name) target needs every member's own recomputed
+                // Cost/SellingValue collected first.
+                var (itemTypesCreated, itemTypesAdopted, openingBalancesCreated) =
+                    await CreateMissingStockAsync(dto.CompanyId, newStockLines);
+
                 var run = new ImportRun
                 {
                     CompanyId = dto.CompanyId,
@@ -616,6 +681,9 @@ namespace MyApp.Api.Services.Implementations
                         ["consignments"] = consignmentsByGd.Count,
                         ["lines"] = writtenLines.Count,
                         ["balancesCosted"] = costedBalanceIds.Count,
+                        ["itemTypesCreated"] = itemTypesCreated,
+                        ["itemTypesAdopted"] = itemTypesAdopted,
+                        ["openingBalancesCreated"] = openingBalancesCreated,
                     }),
                     ImportedByUserId = userId,
                     ImportedAt = DateTime.UtcNow,
@@ -638,8 +706,18 @@ namespace MyApp.Api.Services.Implementations
                 result.BalancesCosted = costedBalanceIds.Count;
                 result.LinesSkipped = writtenLines.Count(l => l.Disposition == GdCostingDisposition.Skipped);
                 result.LinesAmbiguous = writtenLines.Count(l => l.Disposition == GdCostingDisposition.Ambiguous);
+                // Includes StockPosted now too — that disposition only ever
+                // reaches a written line when Task 15's flag actually created
+                // stock from it, so its cost was just as much "written" as a
+                // CostOnly line's. Under the default (flag off) behaviour no
+                // line can carry StockPosted here, so this is unchanged then.
                 result.TotalCostExcludingTax = Money(
-                    writtenLines.Where(l => l.Disposition == GdCostingDisposition.CostOnly).Sum(l => l.CostExcludingTax));
+                    writtenLines.Where(l => l.Disposition == GdCostingDisposition.CostOnly
+                                          || l.Disposition == GdCostingDisposition.StockPosted)
+                        .Sum(l => l.CostExcludingTax));
+                result.ItemTypesCreated = itemTypesCreated;
+                result.ItemTypesAdopted = itemTypesAdopted;
+                result.OpeningBalancesCreated = openingBalancesCreated;
 
                 if (result.BalancesCosted > 0)
                     result.Messages.Add($"{result.BalancesCosted} opening balance(s) received an actual cost.");
@@ -648,12 +726,16 @@ namespace MyApp.Api.Services.Implementations
                     && l.DispositionNote == "Posting new stock arrives in a later release.");
                 if (deferred > 0)
                     result.Messages.Add($"{deferred} line(s) had no match on the books and were skipped — posting new stock arrives in a later release.");
+                if (openingBalancesCreated > 0 || itemTypesCreated > 0 || itemTypesAdopted > 0)
+                    result.Messages.Add(
+                        $"{openingBalancesCreated} opening balance(s) created for unmatched lines ({itemTypesCreated} new item type(s) created, {itemTypesAdopted} adopted from the HS code master).");
                 if (result.LinesAmbiguous > 0)
                     result.Messages.Add($"{result.LinesAmbiguous} line(s) matched more than one opening balance and were left unresolved.");
 
                 _logger.LogInformation(
-                    "GD costing import into company {CompanyId}: {Consignments} consignments, {Lines} lines, {Costed} balances costed",
-                    dto.CompanyId, result.ConsignmentsWritten, result.LinesWritten, result.BalancesCosted);
+                    "GD costing import into company {CompanyId}: {Consignments} consignments, {Lines} lines, {Costed} balances costed, {ItemTypesCreated} item types created, {BalancesCreated} balances created",
+                    dto.CompanyId, result.ConsignmentsWritten, result.LinesWritten, result.BalancesCosted,
+                    itemTypesCreated, openingBalancesCreated);
 
                 return result;
             }
@@ -665,6 +747,272 @@ namespace MyApp.Api.Services.Implementations
                 await tx.RollbackAsync();
                 throw;
             }
+        }
+
+        // ── New stock (Task 15, opt-in) ─────────────────────────────────────
+
+        /// <summary>
+        /// Case- and trim-insensitive key for grouping lines that would
+        /// create or reuse the SAME item type. Both fields are normalised
+        /// before construction (not compared with a custom comparer at use
+        /// time) so the record's own default equality — which is ordinal —
+        /// is already the right comparison, mirroring the CI+ANSI-PadSpace
+        /// collation the (Name, HSCode) unique index itself compares under.
+        /// An ordinal check against UN-normalised values here is exactly the
+        /// anti-pattern CLAUDE.md calls out elsewhere: a name the index would
+        /// treat as a duplicate ("X" vs "X " vs "x") read as three different
+        /// groups.
+        /// </summary>
+        private readonly record struct NewStockGroupKey(string HsCode, string NormalizedName);
+
+        private static string NormalizeItemName(string? name) => (name ?? "").Trim().ToUpperInvariant();
+
+        /// <summary>
+        /// Turns lines re-verified above as touching nothing on the books
+        /// into new stock: one ItemType (reused, adopted, or created — see
+        /// below) and one OpeningStockBalance per distinct (HS code, name)
+        /// target, grouping lines that share a target exactly as the
+        /// CostOnly aggregation in <see cref="CommitAsync"/> groups lines
+        /// that share a balance. Runs inside the caller's own transaction —
+        /// nothing here opens or commits one.
+        ///
+        /// No StockMovement, no GL entry, no Company.GlLockDate: this is an
+        /// OPENING position, not a live movement (brief part B) — the same
+        /// boundary <see cref="IGdCostingImportService"/>'s own doc comment
+        /// already draws around the CostOnly path.
+        /// </summary>
+        private async Task<(int Created, int Adopted, int BalancesCreated)> CreateMissingStockAsync(
+            int companyId,
+            List<(ImportConsignmentLine Entity, NewStockGroupKey Key, GdCostingLineDto Line)> newStockLines)
+        {
+            if (newStockLines.Count == 0) return (0, 0, 0);
+
+            var itemTypesCreated = 0;
+            var itemTypesAdopted = 0;
+            var openingBalancesCreated = 0;
+
+            var groups = newStockLines.GroupBy(t => t.Key).ToList();
+
+            // Resolved per group: the ItemType to use (existing, adopted, or
+            // brand new) and its members. ItemTypes are created and flushed
+            // FIRST, in their own SaveChanges round, because
+            // OpeningStockBalance.ItemTypeId needs a REAL id — like every FK
+            // on ImportConsignmentLine itself, there is no navigation
+            // property here for EF to fix up automatically (see that
+            // entity's own doc comment for why ItemTypeId/OpeningStockBalanceId
+            // stay plain columns).
+            var resolved = new List<(ItemType ItemType, List<(ImportConsignmentLine Entity, GdCostingLineDto Line)> Members)>();
+
+            // One DB round trip per distinct HS code in this batch, not per
+            // group — several groups can legitimately share an HS code under
+            // different product names (CLAUDE.md 5b-3: one tariff line can
+            // carry several products).
+            var candidatesByHs = new Dictionary<string, List<ItemType>>();
+
+            foreach (var g in groups)
+            {
+                var key = g.Key;
+                var members = g.Select(t => (t.Entity, t.Line)).ToList();
+
+                if (key.NormalizedName.Length == 0)
+                {
+                    // No description on the sheet to name a new item after —
+                    // never invent one. Skipped with a reason instead of a
+                    // silent, nameless ItemType (the same "resolves to
+                    // NOTHING rather than a guess" rule advance/further tax
+                    // already follow — CLAUDE.md 5b-5/5b-10).
+                    const string reason = "This line has no description, so a new item type could not be named. Nothing was created.";
+                    foreach (var (entity, _) in members)
+                    {
+                        entity.Disposition = GdCostingDisposition.Skipped;
+                        entity.ItemTypeId = null;
+                        entity.OpeningStockBalanceId = null;
+                        entity.DispositionNote = Trim(
+                            string.IsNullOrEmpty(entity.DispositionNote) ? reason : $"{entity.DispositionNote} {reason}", 500);
+                    }
+                    continue;
+                }
+
+                if (!candidatesByHs.TryGetValue(key.HsCode, out var hsCandidates))
+                {
+                    // NULL and "" are not the same key on the (Name, HSCode)
+                    // unique index (SQL Server treats NULL as equal-to-NULL
+                    // for uniqueness, so two un-coded items with the same
+                    // name WOULD collide) — an empty cleaned code must look
+                    // up NULL-coded rows, not skip the lookup.
+                    hsCandidates = key.HsCode.Length == 0
+                        ? await _db.ItemTypes.Where(it => !it.IsDeleted && it.HSCode == null).ToListAsync()
+                        : await _db.ItemTypes.Where(it => !it.IsDeleted && it.HSCode == key.HsCode).ToListAsync();
+                    candidatesByHs[key.HsCode] = hsCandidates;
+                }
+
+                // HS code AND name must both match to reuse a row — the same
+                // HS code legitimately carries several distinct products
+                // (CLAUDE.md 5b-3: "3923.2900" already named "PVC CARD COVER"
+                // is not "EMPTY PLASTIC DISTRIBUTION BOX" under the same
+                // code, just because the code matches).
+                var existing = hsCandidates.FirstOrDefault(it => NormalizeItemName(it.Name) == key.NormalizedName);
+
+                ItemType itemType;
+                if (existing != null)
+                {
+                    itemType = existing;
+                    // Adoption signal per CLAUDE.md 5b-2 is IsFavorite, never
+                    // IsAutoGenerated (which is never cleared). Never rename
+                    // a global placeholder — ItemType has no CompanyId, so a
+                    // rename would be visible to every tenant, not just this
+                    // company.
+                    if (existing.IsAutoGenerated && !existing.IsFavorite)
+                    {
+                        existing.IsFavorite = true;
+                        itemTypesAdopted++;
+                    }
+                }
+                else
+                {
+                    var name = Trim(members[0].Line.Description, 300);
+                    var unit = string.IsNullOrWhiteSpace(members[0].Line.Unit) ? null : Trim(members[0].Line.Unit, 50);
+                    itemType = new ItemType
+                    {
+                        Name = name,
+                        HSCode = key.HsCode.Length > 0 ? key.HsCode : null,
+                        UOM = unit,
+                        IsAutoGenerated = false,
+                        IsFavorite = true,
+                    };
+                    _db.ItemTypes.Add(itemType);
+                    itemTypesCreated++;
+
+                    // Keep the free-text lookups every other typed-name save
+                    // path feeds in sync (challan create/edit/import, bill
+                    // update, item-type save) — both helpers are idempotent
+                    // and race-safe, and route the collation-sensitive
+                    // matching through the one place CLAUDE.md's anti-
+                    // patterns list already calls out for this exact trap.
+                    await ItemDescriptionRegistry.EnsureNamesAsync(_db, new[] { name });
+                    if (unit != null) await UnitRegistry.EnsureNamesAsync(_db, new[] { unit });
+                }
+
+                resolved.Add((itemType, members));
+            }
+
+            if (resolved.Count == 0) return (itemTypesCreated, itemTypesAdopted, 0);
+
+            // Flush new ItemTypes (and the IsFavorite adoption flips) so
+            // every group below has a real ItemTypeId to point
+            // OpeningStockBalance/ImportConsignmentLine at.
+            await _db.SaveChangesAsync();
+
+            foreach (var (itemType, members) in resolved)
+            {
+                // Register this company against the catalog row, mirroring
+                // ItemTypeService's own EnsureRegisteredAsync (private there,
+                // so reproduced here rather than shared). Belt-and-braces:
+                // the OpeningStockBalance created just below already puts
+                // this item type in ItemTypeRepository.CompanyItemTypeIds's
+                // "openings" leg, so visibility does not actually depend on
+                // this row — but every other path that gives a company a new
+                // item type writes one regardless (CLAUDE.md 5b-2b), and a
+                // registration that outlives one opening balance (should it
+                // ever be edited away) is more robust than relying solely on
+                // derived membership.
+                await EnsureItemTypeRegisteredAsync(companyId, itemType.Id);
+
+                var totalQty = members.Sum(m => m.Entity.Quantity);
+                var totalCost = Money(members.Sum(m => m.Entity.CostExcludingTax));
+                var totalValue = Money(members.Sum(m => m.Entity.SellingValueExcludingTax));
+                // Quantity-weighted so one dominant line sets the rate when a
+                // target is fed by more than one line — the common case is
+                // exactly one line, which this reduces to that line's own
+                // rate untouched.
+                var rate = totalQty != 0m
+                    ? Math.Round(members.Sum(m => m.Entity.Quantity * m.Line.SalesTaxRate) / totalQty, 2, MidpointRounding.AwayFromZero)
+                    : Math.Round(members[0].Line.SalesTaxRate, 2, MidpointRounding.AwayFromZero);
+                var asOfDate = members
+                    .Select(m => m.Line.GdDate)
+                    .Where(d => d.HasValue)
+                    .Select(d => d!.Value)
+                    .DefaultIfEmpty(DateTime.UtcNow.Date)
+                    .Min();
+                var gdNumbers = members
+                    .Select(m => m.Line.GdNumber.Trim())
+                    .Where(n => n.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var originNote = Trim($"Opening stock created from GD costing import: GD {string.Join(", ", gdNumbers)}.", 500);
+
+                var balance = await _db.OpeningStockBalances
+                    .FirstOrDefaultAsync(b => b.CompanyId == companyId && b.ItemTypeId == itemType.Id);
+                if (balance == null)
+                {
+                    balance = new OpeningStockBalance
+                    {
+                        CompanyId = companyId,
+                        ItemTypeId = itemType.Id,
+                        Quantity = totalQty,
+                        ValueExcludingTax = totalValue,
+                        ActualCostExcludingTax = totalCost,
+                        SalesTaxRate = rate,
+                        AsOfDate = asOfDate,
+                        Notes = originNote,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    _db.OpeningStockBalances.Add(balance);
+                    openingBalancesCreated++;
+                }
+                else
+                {
+                    // Defensive only — brief part B/D's "if one somehow
+                    // exists". Match() already proved this company had no
+                    // balance under this HS code, so this should not be
+                    // reachable in practice. Additive, never overwritten: an
+                    // operator's existing figures are never silently
+                    // replaced by this import (the same "never remove a
+                    // balance it did not touch" caution CLAUDE.md 5b-3
+                    // applies to a spreadsheet re-import).
+                    balance.Quantity += totalQty;
+                    balance.ValueExcludingTax = Money(balance.ValueExcludingTax + totalValue);
+                    balance.ActualCostExcludingTax = Money(balance.ActualCostExcludingTax + totalCost);
+                    balance.Notes = Trim($"{balance.Notes} | {originNote}".Trim(' ', '|'), 500);
+                }
+
+                await _db.SaveChangesAsync();
+
+                var successNote = members.Count > 1
+                    ? $"New item type and opening stock balance created from this line, combined with {members.Count - 1} other line(s) under the same item."
+                    : "New item type and opening stock balance created from this line.";
+                foreach (var (entity, _) in members)
+                {
+                    entity.ItemTypeId = itemType.Id;
+                    entity.OpeningStockBalanceId = balance.Id;
+                    entity.DispositionNote = Trim(
+                        string.IsNullOrEmpty(entity.DispositionNote) ? successNote : $"{entity.DispositionNote} {successNote}", 500);
+                }
+            }
+
+            return (itemTypesCreated, itemTypesAdopted, openingBalancesCreated);
+        }
+
+        /// <summary>
+        /// Records that <paramref name="companyId"/> has this catalog row on
+        /// its books. Same idempotent shape as the private
+        /// <c>ItemTypeService.EnsureRegisteredAsync</c> — reproduced here
+        /// rather than shared, since that method is private to its own
+        /// service. Does not call SaveChanges itself; the caller's own next
+        /// round trip flushes it.
+        /// </summary>
+        private async Task EnsureItemTypeRegisteredAsync(int companyId, int itemTypeId)
+        {
+            var exists = await _db.CompanyItemTypeSettings
+                .AnyAsync(s => s.CompanyId == companyId && s.ItemTypeId == itemTypeId);
+            if (exists) return;
+            _db.CompanyItemTypeSettings.Add(new CompanyItemTypeSetting
+            {
+                CompanyId = companyId,
+                ItemTypeId = itemTypeId,
+                UpdatedAt = DateTime.UtcNow,
+            });
         }
 
         private static decimal Money(decimal value) =>

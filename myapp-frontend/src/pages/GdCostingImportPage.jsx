@@ -41,9 +41,14 @@ const DISPOSITION_TONE = {
 };
 // Fixed caption for an unmatched line. The server's own note differs by case
 // (no HS code vs. no opening balance under this HS code) — this is the one
-// thing the operator needs to know either way, and it is not committed in
-// this release.
+// thing the operator needs to know either way, and it is not committed
+// unless "bring in as new stock" is switched on (see WILL_CREATE_NOTE).
 const NOT_MATCHED_NOTE = "Not matched — no stock on the books for this GD and HS code";
+// Shown instead of NOT_MATCHED_NOTE once the operator opts in — the server
+// re-verifies this independently at commit (a real match, or more than one,
+// overrides whatever the preview showed), so this is a preview of INTENT,
+// not a guarantee.
+const WILL_CREATE_NOTE = "Will be created as new stock — a new item type and opening balance";
 
 const money = (n) =>
   (n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -157,6 +162,9 @@ export default function GdCostingImportPage() {
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState("");
   const [result, setResult] = useState(null);
+  // Opt-in, default off (unticked): a line matching nothing on the books is
+  // skipped unless the operator explicitly asks for it to become new stock.
+  const [createMissingStock, setCreateMissingStock] = useState(false);
 
   const canView = has("importcosting.sheet.run");
 
@@ -164,7 +172,7 @@ export default function GdCostingImportPage() {
     [selectedCompany, companyId]);
 
   const resetFlow = useCallback(() => {
-    setFile(null); setPreview(null); setResult(null);
+    setFile(null); setPreview(null); setResult(null); setCreateMissingStock(false);
   }, []);
 
   useEffect(() => { resetFlow(); }, [companyId, resetFlow]);
@@ -220,6 +228,7 @@ export default function GdCostingImportPage() {
         fileName: preview.fileName,
         fileSizeBytes: preview.fileSizeBytes,
         lines: (preview.lines || []).map(toCommitLine),
+        createMissingStock,
       });
       setResult(data);
       setPreview(null);
@@ -313,8 +322,30 @@ export default function GdCostingImportPage() {
           {preview.blockingErrors?.map((e, i) => <Banner key={i} tone="error" icon={MdError}>{e}</Banner>)}
 
           <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 0.7rem" }}>
-            {costOnlyCount} will have their cost set · {notMatchedCount} not matched · {ambiguousCount} ambiguous
+            {costOnlyCount} will have their cost set ·{" "}
+            {createMissingStock
+              ? `${notMatchedCount} will be created as new stock`
+              : `${notMatchedCount} not matched`}{" "}
+            · {ambiguousCount} ambiguous
           </p>
+
+          {notMatchedCount > 0 && (
+            <label style={{
+              display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13.5,
+              margin: "0 0 0.8rem", padding: "0.65rem 0.75rem", borderRadius: 9,
+              background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
+              minHeight: 44, boxSizing: "border-box", cursor: "pointer",
+            }}>
+              <input type="checkbox" checked={createMissingStock}
+                onChange={(e) => setCreateMissingStock(e.target.checked)}
+                style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
+              <span>
+                Also bring the {notMatchedCount} unmatched line(s) in as new stock
+                (creates item types and opening balances) instead of skipping them.
+                The server re-checks each one before creating anything.
+              </span>
+            </label>
+          )}
 
           {preview.warnings?.length > 0 && (
             <div style={{ marginBottom: "0.8rem" }}>
@@ -364,8 +395,9 @@ export default function GdCostingImportPage() {
                   <tbody>
                     {g.lines.map((l) => {
                       const notMatched = l.disposition === "stock-posted";
+                      const willCreate = notMatched && createMissingStock;
                       return (
-                        <tr key={l.sourceRow} style={{ opacity: notMatched ? 0.6 : 1 }}>
+                        <tr key={l.sourceRow} style={{ opacity: notMatched && !willCreate ? 0.6 : 1 }}>
                           <td style={td}>
                             <div>{l.gdNumber}</div>
                             <div style={{ fontSize: 11.5, color: colors.textSecondary }}>
@@ -381,15 +413,15 @@ export default function GdCostingImportPage() {
                           <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(l.sellingValue)}</td>
                           <td style={td}>
                             <span style={{
-                              color: DISPOSITION_TONE[l.disposition] || colors.textSecondary,
+                              color: willCreate ? colors.success : (DISPOSITION_TONE[l.disposition] || colors.textSecondary),
                               fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.02em",
                             }}>
-                              {DISPOSITION_LABEL[l.disposition] || l.disposition}
+                              {willCreate ? "Will create" : (DISPOSITION_LABEL[l.disposition] || l.disposition)}
                             </span>
                           </td>
                           <td style={td}>
                             <div style={wrap2}>
-                              {notMatched ? NOT_MATCHED_NOTE : (l.matchNote || "—")}
+                              {willCreate ? WILL_CREATE_NOTE : (notMatched ? NOT_MATCHED_NOTE : (l.matchNote || "—"))}
                             </div>
                           </td>
                         </tr>
@@ -403,7 +435,9 @@ export default function GdCostingImportPage() {
 
           <button onClick={onCommit} disabled={!preview.canCommit || !!busy}
             style={{ ...btn(colors.success, !preview.canCommit || !!busy), marginTop: "0.4rem" }}>
-            {busy === "commit" ? "Importing…" : `Commit ${costOnlyCount} line(s)`}
+            {busy === "commit"
+              ? "Importing…"
+              : `Commit ${costOnlyCount + (createMissingStock ? notMatchedCount : 0)} line(s)`}
           </button>
           {!preview.canCommit && (preview.blockingErrors?.length ?? 0) === 0 && (
             <p style={{ fontSize: 13, color: "#b26a00", margin: "0.5rem 0 0" }}>
@@ -424,6 +458,9 @@ export default function GdCostingImportPage() {
             <Stat label="Lines skipped" value={result.linesSkipped} />
             <Stat label="Lines ambiguous" value={result.linesAmbiguous} />
             <Stat label="Total cost" value={money(result.totalCostExcludingTax)} />
+            <Stat label="Item types created" value={result.itemTypesCreated} />
+            <Stat label="Item types adopted" value={result.itemTypesAdopted} />
+            <Stat label="Opening balances created" value={result.openingBalancesCreated} />
           </div>
           {(result.messages || []).map((m, i) =>
             <p key={i} style={{ fontSize: 13.5, margin: "0.6rem 0 0" }}>{m}</p>)}

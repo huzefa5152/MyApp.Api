@@ -333,6 +333,16 @@ Publish output optimized from 79 MB to 37 MB via:
 - **New in-app guide** at **Guides ▸ Import Guide**, written for whoever runs
   the import: what the workbook needs, the steps with real navigation paths, a
   glossary and the common questions.
+- **A line with no match can now be brought in as new stock, if you ask for
+  it.** Import Costing has an unticked "Also bring unmatched lines in as new
+  stock" switch. Off (the default), an unmatched line is skipped exactly as
+  before. On, each such line gets a catalog item — reusing one that already
+  carries the same HS code AND name, or creating a new one alongside it when
+  the name differs (the same HS code legitimately covers more than one
+  product) — plus an opening balance at its own quantity, cost and selling
+  value. Nothing is guessed: a line the server itself finds a real match for
+  is costed onto that match instead, whatever the sheet review claimed, and a
+  line matching more than one balance is still left alone.
 
 ### 2026-09-13 — Stock export scrolls properly
 
