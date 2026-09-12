@@ -566,6 +566,7 @@ namespace MyApp.Api.Controllers
                     Quantity = o.Quantity,
                     ValueExcludingTax = o.ValueExcludingTax,
                     SalesTaxRate = o.SalesTaxRate,
+                    ActualCostExcludingTax = o.ActualCostExcludingTax,
                     AsOfDate = o.AsOfDate,
                     Notes = o.Notes,
                 })
@@ -600,6 +601,7 @@ namespace MyApp.Api.Controllers
                     Quantity = dto.Quantity,
                     ValueExcludingTax = dto.ValueExcludingTax,
                     SalesTaxRate = dto.SalesTaxRate,
+                    ActualCostExcludingTax = dto.ActualCostExcludingTax ?? 0m,
                     AsOfDate = dto.AsOfDate.Date,
                     Notes = dto.Notes,
                     CreatedAt = DateTime.UtcNow,
@@ -611,6 +613,11 @@ namespace MyApp.Api.Controllers
                 existing.Quantity = dto.Quantity;
                 existing.ValueExcludingTax = dto.ValueExcludingTax;
                 existing.SalesTaxRate = dto.SalesTaxRate;
+                // Nullable: null means the caller did not mention cost, so the
+                // row keeps whatever it already had. Only a supplied value
+                // (including 0, which clears it) overwrites.
+                if (dto.ActualCostExcludingTax is decimal actual)
+                    existing.ActualCostExcludingTax = actual;
                 existing.AsOfDate = dto.AsOfDate.Date;
                 existing.Notes = dto.Notes;
             }
@@ -626,6 +633,7 @@ namespace MyApp.Api.Controllers
                 Quantity = existing.Quantity,
                 ValueExcludingTax = existing.ValueExcludingTax,
                 SalesTaxRate = existing.SalesTaxRate,
+                ActualCostExcludingTax = existing.ActualCostExcludingTax,
                 AsOfDate = existing.AsOfDate,
                 Notes = existing.Notes,
             });

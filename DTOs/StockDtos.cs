@@ -113,6 +113,19 @@
 
         /// <summary>Derived: value + tax.</summary>
         public decimal ValueIncludingTax => ValueExcludingTax + SalesTax;
+
+        /// <summary>What the opening quantity cost, excluding sales tax.
+        /// Zero means not known.</summary>
+        public decimal ActualCostExcludingTax { get; set; }
+
+        /// <summary>Selling value less actual cost. Negative is a real state —
+        /// stock whose selling value has fallen below what it cost — and must
+        /// render as such, never clamped.</summary>
+        public decimal Margin => ValueExcludingTax - ActualCostExcludingTax;
+
+        public decimal MarginPercent => ValueExcludingTax > 0m
+            ? Math.Round(Margin * 100m / ValueExcludingTax, 2, MidpointRounding.AwayFromZero)
+            : 0m;
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
     }
@@ -129,6 +142,22 @@
 
         /// <summary>Rate as a percentage (18, 25).</summary>
         public decimal SalesTaxRate { get; set; }
+
+        /// <summary>
+        /// What the quantity cost, excluding sales tax.
+        ///
+        /// NULLABLE, and null means "the caller did not mention it" — the row
+        /// keeps the cost it had. Only a supplied value sets it, and 0 clears
+        /// it. Same distinction UpdateInvoiceDto.AdvanceTaxSection draws, for
+        /// the same reason: the sheet importer, the UI and any API client all
+        /// post here, and a caller editing only the quantity must not silently
+        /// erase a cost that took an import to establish.
+        ///
+        /// ValueExcludingTax deliberately keeps its non-nullable overwrite
+        /// behaviour — changing that would alter how every current caller
+        /// behaves.
+        /// </summary>
+        public decimal? ActualCostExcludingTax { get; set; }
 
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
