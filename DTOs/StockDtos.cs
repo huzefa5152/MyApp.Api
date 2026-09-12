@@ -123,9 +123,20 @@
         /// render as such, never clamped.</summary>
         public decimal Margin => ValueExcludingTax - ActualCostExcludingTax;
 
-        public decimal MarginPercent => ValueExcludingTax > 0m
+        /// <summary>
+        /// Margin as a percentage of selling value, or NULL when there is no selling
+        /// value to measure against.
+        ///
+        /// Null rather than zero on purpose. A row can carry a real actual cost with
+        /// no selling value yet — a GD import sets the cost, and nobody has priced the
+        /// item. Margin reports the full negative in that case, and a MarginPercent of
+        /// 0 would contradict it, reading as breakeven on a row that is entirely
+        /// under water. Null lets the caller render "—" instead of a number that is
+        /// not true.
+        /// </summary>
+        public decimal? MarginPercent => ValueExcludingTax > 0m
             ? Math.Round(Margin * 100m / ValueExcludingTax, 2, MidpointRounding.AwayFromZero)
-            : 0m;
+            : null;
         public DateTime AsOfDate { get; set; }
         public string? Notes { get; set; }
     }
