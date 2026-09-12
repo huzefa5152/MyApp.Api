@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers.ExcelImport;
 using MyApp.Api.Models;
 
 namespace MyApp.Api.Helpers
@@ -30,6 +31,7 @@ namespace MyApp.Api.Helpers
     {
         public const string StockName = "Standard opening stock sheet (built-in)";
         public const string LedgerName = "Standard customer ledger (built-in)";
+        public const string GdCostingName = "Standard GD costing sheet (built-in)";
 
         /// <summary>
         /// Signature of each template as published.
@@ -73,6 +75,26 @@ namespace MyApp.Api.Helpers
         private const string LedgerSignature = "5c6c11edc28753e5378470c5917ed30ef5cc24e4f637e410b0fb3d1dd6b1977b";
         private const string LedgerTokens =
             "accounts|acount|alpha|balance|chart|closing|credit|date|debit|ledger|name|opening|particulars|period|receivable|traders";
+
+        /// <summary>
+        /// The GD costing layout ships with NO signature and NO tokens — a
+        /// deliberate gap, not an oversight. Unlike the stock sheet and the
+        /// ledger, there is no published GD-costing template to fingerprint yet
+        /// (see <see cref="ExcelImport.GdCostingLayout"/>): three real
+        /// client workbooks were read against this mapping, but none of them is
+        /// "the" template the way <c>opening-stock-template.xlsx</c> is. An
+        /// empty <see cref="ImportProfile.SignatureHash"/> /
+        /// <see cref="ImportProfile.TokenSignature"/> still offers the layout on
+        /// the mapping screen — <see cref="ImportProfile.IsDefault"/> is what
+        /// makes that happen — it simply never auto-selects on upload the way Stock/Ledger
+        /// do, because an empty hash cannot match a workbook's non-empty one and
+        /// an empty token set scores zero similarity against anything. Fill
+        /// these in, the same way <see cref="StockSignature"/>/
+        /// <see cref="StockTokens"/> were regenerated from the shipped
+        /// template, once a GD costing template is published.
+        /// </summary>
+        private const string GdCostingSignature = "";
+        private const string GdCostingTokens = "";
 
         /// <summary>
         /// THE standard opening-stock sheet. A title band, headings on row 3,
@@ -180,6 +202,16 @@ namespace MyApp.Api.Helpers
                  Name: LedgerName, Mapping: LedgerMapping,
                  Hash: LedgerSignature, Tokens: LedgerTokens,
                  Notes: "Ships with the product. Index sheet plus one sheet per customer. The period is set per import, not stored here."),
+
+                // Mapping lives in GdCostingLayout (Helpers/ExcelImport), not
+                // here — it is shared with scripts/gd_costing_harness, which
+                // links it directly and must not drag AppDbContext/EF Core
+                // into a console project. See GdCostingSignature/GdCostingTokens
+                // above for why this one seeds with no signature.
+                (Kind: ImportKinds.GdCosting, Layout: ImportLayouts.GdRows,
+                 Name: GdCostingName, Mapping: GdCostingLayout.MappingJson,
+                 Hash: GdCostingSignature, Tokens: GdCostingTokens,
+                 Notes: "Ships with the product. Customs GD costing sheet: one row per consignment line, duty/tax/other-charge columns feed the landed-cost calculation. No signature yet — there is no published template to fingerprint, so it is offered on the mapping screen but never auto-selected on upload. Edit and save your own copy if your accountant's template differs."),
             };
 
             var created = 0;

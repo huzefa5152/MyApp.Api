@@ -10,7 +10,11 @@ namespace MyApp.Api.Models
         public const string OpeningStock = "OpeningStock";
         public const string CustomerLedger = "CustomerLedger";
 
-        public static readonly string[] All = { OpeningStock, CustomerLedger };
+        /// <summary>Customs GD (Goods Declaration) costing sheet — see
+        /// <see cref="Helpers.ExcelImport.GdCostingMapping"/>.</summary>
+        public const string GdCosting = "GdCosting";
+
+        public static readonly string[] All = { OpeningStock, CustomerLedger, GdCosting };
 
         public static bool IsValid(string? kind) =>
             !string.IsNullOrWhiteSpace(kind)
@@ -39,11 +43,17 @@ namespace MyApp.Api.Models
         /// customer carrying that customer's transactions.</summary>
         public const string IndexPlusPerClientSheets = "IndexPlusPerClientSheets";
 
+        /// <summary>Customs GD costing rows — one row per consignment line,
+        /// the GD number repeated on every row of the same consignment. See
+        /// <see cref="Helpers.ExcelImport.GdCostingMapping"/>.</summary>
+        public const string GdRows = "GdRows";
+
         public static readonly IReadOnlyDictionary<string, string[]> ByKind =
             new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
             {
                 [ImportKinds.OpeningStock] = new[] { LotRows },
                 [ImportKinds.CustomerLedger] = new[] { IndexPlusPerClientSheets },
+                [ImportKinds.GdCosting] = new[] { GdRows },
             };
 
         public static bool IsValidFor(string kind, string? layout) =>
