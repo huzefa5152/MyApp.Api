@@ -755,6 +755,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // this field. Entering an amount now always yields a whole quantity --
     // typing a quantity directly is still governed by the unit (QuantityInput),
     // which is where that rule belongs.
+    // The WHOLE of the stock is a case of its own (2026-09-12). Stock on an
+    // integer unit can be fractional (an import or an adjustment left
+    // 331.9597 Pcs worth 317,028.00), and an operator typing that value wants
+    // the bin emptied. Rounding gave 332, which the oversell guard refused,
+    // while 331 stranded value in the bin. So an amount that IS the stock's
+    // value (to the paisa) takes the exact on-hand quantity, fraction and all;
+    // the server accepts that one fraction because it closes the bin to zero.
+    const fullValue = Math.round(Number(price.availableValueExcludingTax) * 100) / 100;
+    const onHand = Number(price.availableQuantity);
+    if (fullValue > 0 && onHand > 0 && Math.abs(total - fullValue) < 0.005) {
+      const rate = Math.round((fullValue / onHand) * 1e12) / 1e12;
+      return { qty: onHand, rate, exact: fullValue, closeOut: true };
+    }
+
     const rawQty = total / cost;
     const qty = Math.max(1, Math.round(rawQty));
 
@@ -823,6 +837,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       quantity: String(d.qty),
       unitPrice: String(d.rate),
     });
+  };
+
+  // "Bill everything on hand": the line takes the stock's whole value, which
+  // deriveFromTotal turns into the exact on-hand quantity.
+  const billAllOnHand = (localId) => {
+    const row = rows.find((r) => r.localId === localId);
+    const price = row && stockPricing[row.itemTypeId];
+    if (!price?.canPrice) return;
+    const fullValue = Math.round(Number(price.availableValueExcludingTax) * 100) / 100;
+    if (!(fullValue > 0)) return;
+    const d = deriveFromTotal(row, fullValue);
+    if (!d) return;
+    updateRow(localId, { lineTotal: String(d.exact), quantity: String(d.qty), unitPrice: String(d.rate) });
   };
 
   // On blur, settle the amount on what quantity x rate actually makes, so what
@@ -1523,9 +1550,22 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         then did nothing. */}
                                     {canDerive && (
                                       <div style={styles.stockChipOk}>
-                                        {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 2 })} {priced.uom || r.uom || ""} on hand
+                                        {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} {priced.uom || r.uom || ""} on hand
                                         {" · "}
                                         {Number(priced.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
+                                        {Number(priced.availableValueExcludingTax) > 0 && (
+                                          <>
+                                            {" · "}
+                                            <button
+                                              type="button"
+                                              style={styles.stockChipBtn}
+                                              title={`Bill everything on hand: ${Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${priced.uom || r.uom || ""} for ${Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                              onClick={() => billAllOnHand(r.localId)}
+                                            >
+                                              Bill all ({Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                                            </button>
+                                          </>
+                                        )}
                                       </div>
                                     )}
                                     {noStock && (
@@ -1552,8 +1592,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                           this line needs {sf.want.toLocaleString(undefined, { maximumFractionDigits: 2 })} {sf.uom}
                                           {" "}({sf.short.toLocaleString(undefined, { maximumFractionDigits: 2 })} short).
                                           {fits !== null && (
-                                            <> At {sf.unitCost.toLocaleString(undefined, { maximumFractionDigits: 4 })} each, {stockHardBlock ? "the most you can bill is" : "what you hold is worth"}{" "}
+                                            <> At {sf.unitCost.toLocaleString(undefined, { maximumFractionDigits: 4 })} each, {stockHardBlock ? "the most you can bill in whole units is" : "what you hold is worth"}{" "}
                                               {fits.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.</>
+                                          )}
+                                          {Number(priced?.availableValueExcludingTax) > 0 && (
+                                            <>
+                                              {" "}Or{" "}
+                                              <button type="button" style={styles.stockChipBtn} onClick={() => billAllOnHand(r.localId)}>
+                                                bill everything on hand
+                                              </button>
+                                              {" "}— {sf.have.toLocaleString(undefined, { maximumFractionDigits: 4 })} {sf.uom} for {Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, which empties the bin.
+                                            </>
                                           )}
                                         </div>
                                       );
@@ -1971,6 +2020,10 @@ const styles = {
   stockChipOver: {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: "#b3261e",
     fontWeight: 600, fontVariantNumeric: "tabular-nums",
+  },
+  stockChipBtn: {
+    background: "none", border: "none", padding: 0, margin: 0, font: "inherit", fontWeight: 700,
+    color: "#0d47a1", textDecoration: "underline", cursor: "pointer", minHeight: 24,
   },
 
   row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },

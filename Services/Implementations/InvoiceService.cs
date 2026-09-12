@@ -131,7 +131,24 @@ namespace MyApp.Api.Services.Implementations
         /// matching helper in DeliveryChallanService — the bill-edit form
         /// gates this client-side, this is the server-side guard.
         /// </summary>
-        private async Task ValidateUpdateItemDecimalQuantitiesAsync(List<UpdateInvoiceItemDto> items)
+        /// <summary>
+        /// The one fractional quantity an integer-only unit may carry: exactly
+        /// what is on hand (2026-09-12). Stock can be fractional on a "Pcs" item
+        /// -- an import or an adjustment left 331.9597 -- and the operator who
+        /// wants to bill the whole of it could not: 332 was refused as an
+        /// oversell and 331 left value stranded in the bin. Billing the exact
+        /// on-hand figure empties the bin to zero, quantity and value alike,
+        /// which is what "the last of it" means. Any other fraction is still
+        /// refused.
+        /// </summary>
+        private async Task<bool> IsCloseOutQuantityAsync(int companyId, int? itemTypeId, decimal quantity)
+        {
+            if (!itemTypeId.HasValue || quantity <= 0) return false;
+            var onHand = await _stock.GetOnHandAsync(companyId, itemTypeId.Value);
+            return onHand > 0 && Math.Abs(onHand - quantity) < 0.000001m;
+        }
+
+        private async Task ValidateUpdateItemDecimalQuantitiesAsync(int companyId, List<UpdateInvoiceItemDto> items)
         {
             var unitNames = items
                 .Select(i => i.UOM)
@@ -154,6 +171,7 @@ namespace MyApp.Api.Services.Implementations
                 var unit = item.UOM ?? "";
                 if (!allowsDecimal.TryGetValue(unit, out var allows) || !allows)
                 {
+                    if (await IsCloseOutQuantityAsync(companyId, item.ItemTypeId, item.Quantity)) continue;
                     throw new InvalidOperationException(
                         $"Quantity '{item.Quantity}' for unit '{unit}' must be a whole number. " +
                         $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
@@ -988,7 +1006,7 @@ namespace MyApp.Api.Services.Implementations
             // create path (which inherits UOM from the challan's DeliveryItem
             // and is already validated upstream).
             await UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
-            await ValidateStandaloneItemDecimalQuantitiesAsync(dto.Items);
+            await ValidateStandaloneItemDecimalQuantitiesAsync(dto.CompanyId, dto.Items);
             await ValidateNonInvLinesAsync(company, dto.Items.Select(i => i.NonInventoryItemId));
             // Each bill line must be classified — an Item Type OR a Non-Inventory item.
             if (dto.Items.Any(i => !i.ItemTypeId.HasValue && !i.NonInventoryItemId.HasValue))
@@ -1266,7 +1284,7 @@ namespace MyApp.Api.Services.Implementations
         /// Same fractional-qty contract as ValidateUpdateItemDecimalQuantitiesAsync
         /// but for the standalone-create DTO shape.
         /// </summary>
-        private async Task ValidateStandaloneItemDecimalQuantitiesAsync(List<CreateStandaloneInvoiceItemDto> items)
+        private async Task ValidateStandaloneItemDecimalQuantitiesAsync(int companyId, List<CreateStandaloneInvoiceItemDto> items)
         {
             var unitNames = items
                 .Select(i => i.UOM)
@@ -1286,9 +1304,14 @@ namespace MyApp.Api.Services.Implementations
                 if (string.IsNullOrWhiteSpace(it.UOM)) continue;
                 if (it.Quantity == Math.Truncate(it.Quantity)) continue;
                 if (!unitConfig.TryGetValue(it.UOM!, out var allows) || !allows)
+                {
+                    // Closing the bin out is the one fraction allowed (see
+                    // IsCloseOutQuantityAsync).
+                    if (await IsCloseOutQuantityAsync(companyId, it.ItemTypeId, it.Quantity)) continue;
                     throw new InvalidOperationException(
                         $"Quantity '{it.Quantity}' for unit '{it.UOM}' must be a whole number. " +
                         $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
+                }
             }
         }
 
@@ -1353,7 +1376,7 @@ namespace MyApp.Api.Services.Implementations
             // Units admin screen, then reject fractional quantities for
             // integer-only UOMs.
             await MyApp.Api.Helpers.UnitRegistry.EnsureNamesAsync(_context, dto.Items.Select(i => i.UOM));
-            await ValidateUpdateItemDecimalQuantitiesAsync(dto.Items);
+            await ValidateUpdateItemDecimalQuantitiesAsync(invoice.CompanyId, dto.Items);
 
             // Item add/remove policy (2026-08-08). Where a bill's items are OWNED
             // decides whether they can be added/removed directly on the bill:

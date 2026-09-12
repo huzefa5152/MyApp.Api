@@ -298,6 +298,19 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-12 — Billing the last of a fractional bin
+
+- **"Bill all" on a standalone bill line.** Stock on a whole-unit item can be
+  fractional (an import or an adjustment left 331.9597 Pcs worth 317,028.67),
+  and the operator who wanted to invoice the whole of it could not: the amount
+  rounded to 332, which the oversell guard refused, and 331 stranded value in
+  the bin. Typing the stock's full value, or pressing **Bill all** next to the
+  on-hand figure, now takes the exact quantity on hand and empties the bin to
+  zero. That one fraction is accepted by the server for an integer unit; any
+  other fraction is still refused.
+- The stock dashboard shows the on-hand figure as it is (up to 4 decimals)
+  instead of rounding 331.9597 to 332.
+
 ### 2026-09-11 — Stock hard-block is opt-in only; the bill modal stops hiding save errors
 
 - **Switching a company to Inventory V2 no longer silently turns on the hard

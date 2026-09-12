@@ -375,6 +375,37 @@ def main():
               f"sub={j.get('subtotal')} gt={j.get('grandTotal')} "
               f"wht={j.get('withholdingTaxAmount')} adv={j.get('advanceTaxAmount')}")
 
+        # ── E. Closing out fractional stock on an integer unit ──────────────
+        #
+        # An import or an adjustment can leave 10.5 Pcs in a bin whose unit
+        # allows no fractions. Billing 11 is an oversell and 10 strands value;
+        # billing EXACTLY what is on hand empties the bin, and that is the one
+        # fractional quantity the whole-number rule lets through (2026-09-12).
+        print("\n-- E. Close-out of fractional stock --")
+        co_item = make_item(f"Closeout {tag}")
+        set_stock(co_item, 10.5, 1050)
+        co_p = pricing([co_item]).get(co_item, {})
+        check("pricing reports the fractional on-hand and its full value",
+              near(co_p.get("availableQuantity"), 10.5, 0.0001) and near(co_p.get("availableValueExcludingTax"), 1050, 0.01),
+              f"{co_p}")
+        bad = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+            "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
+            "items": [{"description": "part of it", "itemTypeId": co_item,
+                       "quantity": 10.4, "uom": "Pcs", "unitPrice": 100}]})
+        check("a fraction that is NOT the whole bin is still refused for an integer unit",
+              bad.status_code == 400 and "whole number" in bad.text, f"{bad.status_code} {bad.text[:120]}")
+        good = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+            "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
+            "items": [{"description": "all of it", "itemTypeId": co_item,
+                       "quantity": 10.5, "uom": "Pcs", "unitPrice": 100}]})
+        check("billing exactly what is on hand is accepted", good.ok, f"{good.status_code} {good.text[:160]}")
+        if good.ok:
+            check("and the line totals the stock's whole value",
+                  near(good.json().get("subtotal"), 1050, 0.01), f"subtotal={good.json().get('subtotal')}")
+            after = pricing([co_item]).get(co_item, {})
+            check("and the bin is empty afterwards",
+                  near(after.get("availableQuantity") or 0, 0, 0.000001), f"{after}")
+
         # ── B. Advance tax ────────────────────────────────────────────────
         print("\n-- B. Advance income tax (236G / 236H) --")
         base = make_item(f"AdvTax {tag}")

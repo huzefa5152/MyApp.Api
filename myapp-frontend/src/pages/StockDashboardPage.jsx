@@ -35,6 +35,10 @@ const money = (v) =>
 
 const num = (v) => Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
+// On-hand as it is, up to 4 decimals: a bin holding 331.9597 Pcs used to read
+// "332" here while the bill form refused 332 as an oversell (2026-09-12).
+const fmtOnHand = (q) => Number(q || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
+
 export default function StockDashboardPage() {
   const { companies, selectedCompany, setSelectedCompany, refreshCompanies, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
@@ -685,7 +689,7 @@ export default function StockDashboardPage() {
                             </td>
                             <td style={styles.tdMoney}>
                               <div style={{ fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>
-                                {num(r.onHand)}
+                                {fmtOnHand(r.onHand)}
                               </div>
                               <div style={styles.flowMeta}>
                                 <span title="Opening balance">{num(r.openingBalance)}</span>
@@ -758,7 +762,7 @@ export default function StockDashboardPage() {
                               className="stock-card__onhand-value"
                               style={{ color: r.onHand < 0 ? "#c62828" : colors.blue }}
                             >
-                              {r.onHand.toLocaleString()}
+                              {fmtOnHand(r.onHand)}
                               {r.uom && <span className="stock-card__uom"> {r.uom}</span>}
                             </span>
                           </div>
@@ -888,7 +892,7 @@ export default function StockDashboardPage() {
                           </td>
                           {r.tracked ? (
                             <>
-                              <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{r.onHand.toLocaleString()}</td>
+                              <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{fmtOnHand(r.onHand)}</td>
                               <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</td>
                               <td style={{ ...styles.td, textAlign: "right" }}>{r.committed.toLocaleString()}</td>
                               <td style={{ ...styles.td, textAlign: "right" }}>{r.toDeliver.toLocaleString()}</td>
@@ -928,7 +932,7 @@ export default function StockDashboardPage() {
                           <div className="stock-card__onhand">
                             <span className="stock-card__onhand-label">In Stock</span>
                             <span className="stock-card__onhand-value" style={{ color: r.onHand < 0 ? "#c62828" : colors.blue }}>
-                              {r.onHand.toLocaleString()}
+                              {fmtOnHand(r.onHand)}
                             </span>
                           </div>
                         )}
@@ -1245,7 +1249,7 @@ export default function StockDashboardPage() {
             <div style={adjustNow}>
               <span style={adjustNowLabel}>On record now</span>
               <span>
-                <strong>{num(adjustCurrent.onHand)}</strong>{adjustUom ? ` ${adjustUom}` : ""}
+                <strong>{fmtOnHand(adjustCurrent.onHand)}</strong>{adjustUom ? ` ${adjustUom}` : ""}
                 {" · "}<strong>{money(adjustCurrent.valueExcludingTax)}</strong> excl
                 {adjustCurrent.salesTaxRate ? ` · ${num(adjustCurrent.salesTaxRate)}%` : ""}
               </span>

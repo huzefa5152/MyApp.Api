@@ -588,6 +588,13 @@ quantity):
   the bill summing exactly to the amounts on screen.
 - Nothing on hand, or stock with no value, reports `canPrice: false` with a
   reason instead of returning a zero the form would divide by.
+- **The whole of a bin is a case of its own (2026-09-12).** An amount equal to
+  `availableValueExcludingTax` (to the paisa), or the **Bill all** shortcut,
+  derives the EXACT on-hand quantity, fraction and all, and
+  `InvoiceService.IsCloseOutQuantityAsync` lets that one fraction through the
+  whole-number rule for an integer unit because it empties the bin to zero.
+  Rounding it gave 332 against 331.9597 on hand (an oversell) or 331 (value
+  stranded). Pinned by `scripts/test_bill_pricing_advance_tax.py` section E.
 - The endpoint is `GET /api/invoices/company/{id}/stock-pricing`, gated by
   `bills.manage.create` — the same reasoning as `last-rates`: if you cannot
   make a bill, you do not need its pricing.
