@@ -819,6 +819,14 @@ merges, row heights and all 32 column widths are identical.
   writes 12.280625 and every column comes out ~0.71 characters wide.
   `StockExcelBuilder.WidthPadding` subtracts it. The harness asserts against the
   SAVED XML rather than the ClosedXML property for exactly this reason.
+- **Freeze the header ROWS only — never the identity columns (2026-09-13).**
+  Freezing through Unit (column I) locked 197 characters, about 1,430 pixels: on
+  a 1366-wide laptop the frozen pane is WIDER than the window, so Excel leaves a
+  sliver to scroll 23 columns through and the sheet reads as broken. Items alone
+  is 65 characters, so no column freeze that includes it can ever be affordable,
+  and the client's own workbook freezes nothing at all. Rows cost no horizontal
+  space, so the header stays put while scrolling down. Pinned by the harness
+  (`SplitColumn == 0`).
 - **Items, GDs No and Unit WRAP.** Their widths are the client's and may not
   move, and these are the fields no width can size away — a `UOM` here is FBR's
   DESCRIPTION ("Numbers, pieces, units", 22 characters in a 10-wide column), not

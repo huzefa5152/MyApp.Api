@@ -334,6 +334,15 @@ Publish output optimized from 79 MB to 37 MB via:
   the import: what the workbook needs, the steps with real navigation paths, a
   glossary and the common questions.
 
+### 2026-09-13 — Stock export scrolls properly
+
+- **Fixed: the stock export locked nine columns, leaving almost nothing to
+  scroll.** The sheet froze everything through Unit — about 1,430 pixels, wider
+  than the window on a 1366-wide laptop — so the 23 columns to the right of it
+  had a sliver to scroll through and the workbook read as broken. Only the
+  header rows are frozen now, so they stay put while scrolling down and the
+  whole sheet scrolls across.
+
 ### 2026-09-12 — The stock export is now the customs-lot stock sheet
 
 - **Stock dashboard Excel export rebuilt to the client's own layout.** The

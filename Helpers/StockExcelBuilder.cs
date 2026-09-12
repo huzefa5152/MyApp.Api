@@ -208,9 +208,18 @@ namespace MyApp.Api.Helpers
 
             ApplyWidths(ws);
 
-            // Freeze the header AND the identity columns, so scrolling right
-            // never leaves a row of figures with nothing naming it.
-            ws.SheetView.Freeze(HeaderRow, CUnit);
+            // Freeze the header ROWS ONLY — never the identity columns.
+            //
+            // Freezing through Unit (column I) locked 197 characters, about
+            // 1,430 pixels: on a 1366-wide laptop the frozen pane is wider than
+            // the window, so Excel leaves a sliver to scroll 23 columns through
+            // and the sheet reads as broken. Items alone is 65 characters wide,
+            // so no column freeze that includes it can ever be affordable, and
+            // the client's own workbook freezes nothing at all.
+            //
+            // Rows cost no horizontal space, so the header stays put while
+            // scrolling down and the whole sheet still scrolls across.
+            ws.SheetView.FreezeRows(HeaderRow);
 
             ws.PageSetup.PageOrientation = XLPageOrientation.Landscape;
             ws.PageSetup.FitToPages(1, 0);

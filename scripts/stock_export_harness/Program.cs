@@ -195,9 +195,14 @@ Console.WriteLine("\n=== 1. Sheet skeleton: banner, band labels, header, data st
 
     Check("the first data row is row 4", !ws.Cell(FirstDataRow, ItemCol).IsEmpty(),
         ws.Cell(FirstDataRow, ItemCol).GetString());
-    Check("header row is frozen", ws.SheetView.SplitRow == HeaderRow, ws.SheetView.SplitRow.ToString());
-    Check("the identity columns are frozen", ws.SheetView.SplitColumn == UnitCol,
-        ws.SheetView.SplitColumn.ToString());
+    Check("header rows are frozen", ws.SheetView.SplitRow == HeaderRow, ws.SheetView.SplitRow.ToString());
+    // NO column freeze. Freezing through Unit locked 197 characters (~1,430px):
+    // on a 1366-wide laptop the frozen pane is wider than the window, leaving a
+    // sliver to scroll 23 columns through. Items alone is 65 wide, so no column
+    // freeze that includes it is affordable, and the client's own workbook
+    // freezes nothing. Reported against a real export 2026-09-13.
+    Check("NO columns are frozen, so the whole sheet scrolls across",
+        ws.SheetView.SplitColumn == 0, ws.SheetView.SplitColumn.ToString());
     Check("header repeats on every printed page",
         ws.PageSetup.FirstRowToRepeatAtTop == HeaderRow, ws.PageSetup.FirstRowToRepeatAtTop.ToString());
     Check("no outline groups — the movement drill-down is gone",
