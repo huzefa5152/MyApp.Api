@@ -298,6 +298,42 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-13 — GD import costing: what the stock actually cost
+
+- **New: import a customs GD costing workbook.** **Purchases ▸ Import Costing**
+  reads a Goods Declaration costing sheet and loads the ACTUAL LANDED COST of
+  stock that is already on the books. Until now the system knew only what stock
+  was worth to sell; it now knows what it cost, so margin is answerable.
+- **Cost is assessed customs value plus duties** (C.Duty + ACD + RD). Sales tax,
+  additional sales tax and income tax at import are computed and shown but
+  deliberately excluded — they are recoverable or adjustable, not cost.
+- **The selling value the sheet derives is not a markup.** It is the value at
+  which the output sales tax on the eventual sale exactly absorbs the input tax
+  paid at import, which at the usual 18% / 3% works out as a fixed one-sixth
+  uplift. A manually typed selling value on a line always wins over the
+  computed one.
+- **One built-in layout reads every workbook in use.** Columns are located from
+  the sheet's own heading row, so three different real layouts import with no
+  setup. A rate written `0.18`, `18%` or `18` is understood as the same rate. A
+  "Total" row at the end of a consignment is recognised and skipped, and every
+  skip, every relocated column and every manual override is reported as a
+  named warning on the preview.
+- **Matching is per line, and the system never guesses.** Each line is matched
+  to existing stock by GD number and HS code. Where a balance holds more than
+  the consignment covers, the consignment's UNIT cost is applied to the
+  balance's own quantity, and the preview says so in words. A code matching more
+  than one item is reported as ambiguous and left alone.
+- **Preview changes nothing; commit writes only the cost.** Selling values,
+  quantities, stock movements and anything filed with FBR are untouched.
+  Re-running the same file sets the same figures rather than adding them up.
+- **Opening balances gained Actual cost and Margin** on **Dashboards ▸ Inventory
+  ▸ Opening Balances**, editable by hand. Leaving the cost box empty keeps what
+  is stored; typing 0 clears it. Margin may be negative, and Margin % shows a
+  dash when an item has no selling value to measure against.
+- **New in-app guide** at **Guides ▸ Import Guide**, written for whoever runs
+  the import: what the workbook needs, the steps with real navigation paths, a
+  glossary and the common questions.
+
 ### 2026-09-12 — The stock export is now the customs-lot stock sheet
 
 - **Stock dashboard Excel export rebuilt to the client's own layout.** The
