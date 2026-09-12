@@ -110,6 +110,9 @@ export default function StockDashboardPage() {
     itemTypeId: "", mode: "set",
     delta: 0, valueDelta: "", unitCost: "",
     targetQuantity: "", targetValue: "",
+    // Actual-cost mirror of valueDelta / targetValue / unitCost above — same
+    // three roles, own pool (gated on stock.actualcost.view at the render site).
+    actualValueDelta: "", targetActualCost: "", actualUnitCost: "",
     salesTaxRate: "", movementDate: todayYmd(), notes: "",
   });
   // Set when the Adjustment modal is launched from a grid row — the item
@@ -351,7 +354,9 @@ export default function StockDashboardPage() {
     setAdjustLockedItem(null);
     setAdjustDraft({
       itemTypeId: "", mode: "set", delta: 0, valueDelta: "", unitCost: "",
-      targetQuantity: "", targetValue: "", salesTaxRate: "",
+      targetQuantity: "", targetValue: "",
+      actualValueDelta: "", targetActualCost: "", actualUnitCost: "",
+      salesTaxRate: "",
       movementDate: todayYmd(), notes: "",
     });
   };
@@ -368,6 +373,10 @@ export default function StockDashboardPage() {
       // that is wrong and leaves the rest alone.
       targetQuantity: String(r.onHand ?? ""),
       targetValue: r.valueExcludingTax != null ? String(r.valueExcludingTax) : "",
+      actualValueDelta: "",
+      // Same "prefilled with what is on record" rule as targetValue above.
+      targetActualCost: r.actualCostExcludingTax != null ? String(r.actualCostExcludingTax) : "",
+      actualUnitCost: "",
       salesTaxRate: r.salesTaxRate ? String(r.salesTaxRate) : "",
       movementDate: todayYmd(), notes: "",
     });
@@ -421,11 +430,13 @@ export default function StockDashboardPage() {
     e.preventDefault();
     if (!adjustDraft.itemTypeId) return notify("Pick an item.", "error");
     if (adjustDraft.mode === "set"
-        && adjustDraft.targetQuantity === "" && adjustDraft.targetValue === "")
-      return notify("Say what the quantity or the value should be.", "error");
+        && adjustDraft.targetQuantity === "" && adjustDraft.targetValue === ""
+        && adjustDraft.targetActualCost === "")
+      return notify("Say what the quantity, the value, or the actual cost should be.", "error");
     if (adjustDraft.mode === "delta"
-        && !parseFloat(adjustDraft.delta) && !parseFloat(adjustDraft.valueDelta))
-      return notify("Give a quantity change, a value change, or both.", "error");
+        && !parseFloat(adjustDraft.delta) && !parseFloat(adjustDraft.valueDelta)
+        && !parseFloat(adjustDraft.actualValueDelta))
+      return notify("Give a quantity change, a value change, an actual-cost change, or some combination.", "error");
     try {
       const setMode = adjustDraft.mode === "set";
       const { data } = await adjustStock({
@@ -439,6 +450,14 @@ export default function StockDashboardPage() {
         targetValueExcludingTax: setMode && adjustDraft.targetValue !== ""
           ? parseFloat(adjustDraft.targetValue) : null,
         unitCostExcludingTax: setMode ? null : parseFloat(adjustDraft.unitCost) || null,
+        // Actual-cost mirror of the three fields above — stays null (a no-op
+        // on the server) whenever the operator never touched it, which is
+        // also what happens when the input is hidden for someone without
+        // stock.actualcost.view.
+        targetActualCostExcludingTax: setMode && adjustDraft.targetActualCost !== ""
+          ? parseFloat(adjustDraft.targetActualCost) : null,
+        actualValueDelta: setMode ? null : parseFloat(adjustDraft.actualValueDelta) || null,
+        actualUnitCostExcludingTax: setMode ? null : parseFloat(adjustDraft.actualUnitCost) || null,
         salesTaxRate: parseFloat(adjustDraft.salesTaxRate) || null,
         movementDate: adjustDraft.movementDate,
         notes: adjustDraft.notes || null,
@@ -507,6 +526,28 @@ export default function StockDashboardPage() {
         : `${dVal > 0 ? "Adds" : "Removes"} ${money(Math.abs(dVal))}.`,
       result: `Result: ${num(tQty)} · ${money(tVal)} excl · tax ${money(tax)} · including ${money(tVal + tax)}`,
     };
+  })();
+
+  // Live margin preview while the operator types an actual-cost correction —
+  // selling value less actual cost, in either mode. Same shape the Opening
+  // Balances tab's preview already uses (a blank/zero cost reads as "not
+  // known", not "free", so no preview until there is a real one to show), so
+  // a mistyped cost is visible before saving rather than after.
+  const adjustMarginPreview = (() => {
+    if (!adjustCurrent) return null;
+    const curVal = Number(adjustCurrent.valueExcludingTax || 0);
+    const curActual = Number(adjustCurrent.actualCostExcludingTax || 0);
+    let sell, cost;
+    if (adjustDraft.mode === "set") {
+      sell = adjustDraft.targetValue === "" ? curVal : parseFloat(adjustDraft.targetValue);
+      cost = adjustDraft.targetActualCost === "" ? curActual : parseFloat(adjustDraft.targetActualCost);
+    } else {
+      sell = curVal + (parseFloat(adjustDraft.valueDelta) || 0);
+      cost = curActual + (parseFloat(adjustDraft.actualValueDelta) || 0);
+    }
+    if (!isFinite(sell) || !isFinite(cost) || cost <= 0) return null;
+    const margin = sell - cost;
+    return { margin, pct: sell > 0 ? (margin * 100) / sell : null };
   })();
 
   const adjustItem = itemTypes.find(it => String(it.id) === String(adjustDraft.itemTypeId)) || adjustLockedItem;
@@ -1400,14 +1441,32 @@ export default function StockDashboardPage() {
                   {adjustPlan?.qtyText}
                 </div>
               </Field>
-              <Field label="Value excluding sales tax it should be">
-                <input type="number" min={0} step="0.01" style={mInput}
-                       value={adjustDraft.targetValue}
-                       onChange={e => setAdjustDraft({ ...adjustDraft, targetValue: e.target.value })} />
-                <div style={qtyHint}>
-                  Total worth of that quantity, not per unit. {adjustPlan?.valueText}
-                </div>
-              </Field>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+                <Field label="Value excluding sales tax it should be">
+                  <input type="number" min={0} step="0.01" style={mInput}
+                         value={adjustDraft.targetValue}
+                         onChange={e => setAdjustDraft({ ...adjustDraft, targetValue: e.target.value })} />
+                  <div style={qtyHint}>
+                    Total worth of that quantity, not per unit. {adjustPlan?.valueText}
+                  </div>
+                </Field>
+                {canViewActualCost && (
+                  <Field label="Actual cost it should be">
+                    <input type="number" min={0} step="0.01" style={mInput}
+                           value={adjustDraft.targetActualCost}
+                           onChange={e => setAdjustDraft({ ...adjustDraft, targetActualCost: e.target.value })}
+                           placeholder="0.00" />
+                    <div style={qtyHint}>
+                      {adjustMarginPreview
+                        ? <span style={{ color: adjustMarginPreview.margin < 0 ? colors.negative : qtyHint.color, fontWeight: 600 }}>
+                            Margin {money(adjustMarginPreview.margin)}
+                            {adjustMarginPreview.pct != null ? ` (${adjustMarginPreview.pct.toFixed(2)}%)` : ""}
+                          </span>
+                        : "Total actual cost of that quantity. Leave blank to keep what is already on record."}
+                    </div>
+                  </Field>
+                )}
+              </div>
               <Field label="Sales tax rate %">
                 <input type="number" min={0} max={100} step="0.01" style={mInput}
                        value={adjustDraft.salesTaxRate}
@@ -1426,25 +1485,56 @@ export default function StockDashboardPage() {
                   <div style={qtyHint}>UOM: <strong>{adjustUom || "—"}</strong> · {adjustAllowsDecimal ? "decimals allowed" : "whole numbers only"}</div>
                 )}
               </Field>
-              <Field label="Value change excluding tax (optional)">
-                <input type="number" step="0.01" style={mInput}
-                       value={adjustDraft.valueDelta}
-                       onChange={e => setAdjustDraft({ ...adjustDraft, valueDelta: e.target.value })}
-                       placeholder="e.g. -5000 to write stock down" />
-                <div style={qtyHint}>
-                  Changes what the stock is worth without moving any of it. Leave blank when only the quantity changed.
-                </div>
-              </Field>
-              {parseFloat(adjustDraft.delta) > 0 && (
-                <Field label="Unit cost excluding tax">
-                  <input type="number" min={0} step="0.0001" style={mInput}
-                         value={adjustDraft.unitCost}
-                         onChange={e => setAdjustDraft({ ...adjustDraft, unitCost: e.target.value })}
-                         placeholder="leave blank to use the current average" />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+                <Field label="Value change excluding tax (optional)">
+                  <input type="number" step="0.01" style={mInput}
+                         value={adjustDraft.valueDelta}
+                         onChange={e => setAdjustDraft({ ...adjustDraft, valueDelta: e.target.value })}
+                         placeholder="e.g. -5000 to write stock down" />
                   <div style={qtyHint}>
-                    Blank values the stock coming in at the average already on hand — right for a count correction.
+                    Changes what the stock is worth without moving any of it. Leave blank when only the quantity changed.
                   </div>
                 </Field>
+                {canViewActualCost && (
+                  <Field label="Actual cost change excluding tax (optional)">
+                    <input type="number" step="0.01" style={mInput}
+                           value={adjustDraft.actualValueDelta}
+                           onChange={e => setAdjustDraft({ ...adjustDraft, actualValueDelta: e.target.value })}
+                           placeholder="e.g. -5000 to write the actual cost down" />
+                    <div style={qtyHint}>
+                      {adjustMarginPreview
+                        ? <span style={{ color: adjustMarginPreview.margin < 0 ? colors.negative : qtyHint.color, fontWeight: 600 }}>
+                            Margin {money(adjustMarginPreview.margin)}
+                            {adjustMarginPreview.pct != null ? ` (${adjustMarginPreview.pct.toFixed(2)}%)` : ""}
+                          </span>
+                        : "Changes what the stock actually cost without moving any of it."}
+                    </div>
+                  </Field>
+                )}
+              </div>
+              {parseFloat(adjustDraft.delta) > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
+                  <Field label="Unit cost excluding tax">
+                    <input type="number" min={0} step="0.0001" style={mInput}
+                           value={adjustDraft.unitCost}
+                           onChange={e => setAdjustDraft({ ...adjustDraft, unitCost: e.target.value })}
+                           placeholder="leave blank to use the current average" />
+                    <div style={qtyHint}>
+                      Blank values the stock coming in at the average already on hand — right for a count correction.
+                    </div>
+                  </Field>
+                  {canViewActualCost && (
+                    <Field label="Actual unit cost excluding tax">
+                      <input type="number" min={0} step="0.0001" style={mInput}
+                             value={adjustDraft.actualUnitCost}
+                             onChange={e => setAdjustDraft({ ...adjustDraft, actualUnitCost: e.target.value })}
+                             placeholder="leave blank to use the current actual average" />
+                      <div style={qtyHint}>
+                        Blank values the stock coming in at the actual-cost average already on hand.
+                      </div>
+                    </Field>
+                  )}
+                </div>
               )}
               <Field label="Sales tax rate %">
                 <input type="number" min={0} max={100} step="0.01" style={mInput}

@@ -665,27 +665,39 @@ namespace MyApp.Api.Controllers
 
             decimal qtyDelta;
             decimal valueDelta;
+            decimal actualValueDelta;
             decimal? unitCost = null;
+            decimal? actualUnitCost = null;
             decimal? rate = null;
 
             if (mode == StockAdjustmentModes.Set)
             {
-                if (dto.TargetQuantity is null && dto.TargetValueExcludingTax is null)
-                    return BadRequest(new { error = "Say what the quantity or the value should be." });
+                if (dto.TargetQuantity is null && dto.TargetValueExcludingTax is null
+                    && dto.TargetActualCostExcludingTax is null)
+                    return BadRequest(new { error = "Say what the quantity, the value, or the actual cost should be." });
 
                 var targetQty = dto.TargetQuantity ?? current.Quantity;
                 var targetValue = dto.TargetValueExcludingTax ?? current.ValueExcludingTax;
+                var targetActualCost = dto.TargetActualCostExcludingTax ?? current.ActualValueExcludingTax;
 
                 if (targetQty < 0) return BadRequest(new { error = "On-hand cannot be negative." });
                 if (targetValue < 0) return BadRequest(new { error = "Stock value cannot be negative." });
+                if (targetActualCost < 0) return BadRequest(new { error = "Actual cost cannot be negative." });
 
                 // Stock that has run out is worth exactly nothing, so a target
                 // pairing zero quantity with money left over is refused rather
-                // than silently discarded (CLAUDE.md 5b-4).
+                // than silently discarded (CLAUDE.md 5b-4). Both pools keep the
+                // same invariant, independently of each other.
                 if (targetQty == 0 && targetValue > 0)
                     return BadRequest(new
                     {
                         error = "An on-hand of zero must be worth zero. Set the value to 0 as well, "
+                              + "or give the quantity that is actually there."
+                    });
+                if (targetQty == 0 && targetActualCost > 0)
+                    return BadRequest(new
+                    {
+                        error = "An on-hand of zero must have zero actual cost. Set the actual cost to 0 as well, "
                               + "or give the quantity that is actually there."
                     });
 
@@ -731,7 +743,53 @@ namespace MyApp.Api.Controllers
 
                 valueDelta = Money(targetValue - Money(predictedValue));
 
-                if (qtyDelta == 0m && valueDelta == 0m
+                // MIRROR of the four branches above, against the ACTUAL pool's
+                // own average — never the selling pool's. The two pools carry
+                // different opening costs and different revaluation history, so
+                // one predicted value cannot stand in for both; sharing the
+                // selling pool's `average`/`predictedValue` here would silently
+                // reproduce the exact bug CLAUDE.md 5b-4 already records once
+                // (measuring against the CURRENT figure instead of the
+                // post-movement one takes the pool down twice).
+                var actualAverage = current.Quantity > 0m
+                    ? current.ActualValueExcludingTax / current.Quantity
+                    : 0m;
+                decimal predictedActualValue;
+
+                if (qtyDelta > 0m && targetActualCost > current.ActualValueExcludingTax)
+                {
+                    // Adding stock AND actual cost: the operator's own two
+                    // figures say what the addition actually cost, so carry it
+                    // on the movement and the actual average lands exactly
+                    // where they said it should.
+                    actualUnitCost = (targetActualCost - current.ActualValueExcludingTax) / qtyDelta;
+                    predictedActualValue = targetActualCost;
+                }
+                else if (qtyDelta > 0m)
+                {
+                    // Adding stock while the actual cost stays put or falls: the
+                    // movement states no actual cost, so the walk values it at
+                    // the running actual average and the revaluation corrects
+                    // the rest.
+                    predictedActualValue = current.ActualValueExcludingTax + (qtyDelta * actualAverage);
+                }
+                else if (qtyDelta < 0m)
+                {
+                    // Stock leaving is costed at the actual average, and an
+                    // emptied bin actually cost exactly zero — the same rule the
+                    // walk applies to this pool too.
+                    predictedActualValue = targetQty <= 0m
+                        ? 0m
+                        : current.ActualValueExcludingTax - (-qtyDelta * actualAverage);
+                }
+                else
+                {
+                    predictedActualValue = current.ActualValueExcludingTax;
+                }
+
+                actualValueDelta = Money(targetActualCost - Money(predictedActualValue));
+
+                if (qtyDelta == 0m && valueDelta == 0m && actualValueDelta == 0m
                     && !(dto.SalesTaxRate is >= 0m and <= 100m && dto.SalesTaxRate != current.SalesTaxRate))
                     return BadRequest(new { error = "Those are already the figures on record — nothing to correct." });
             }
@@ -739,12 +797,16 @@ namespace MyApp.Api.Controllers
             {
                 qtyDelta = dto.Delta;
                 valueDelta = Money(dto.ValueDelta ?? 0m);
+                actualValueDelta = Money(dto.ActualValueDelta ?? 0m);
 
-                if (qtyDelta == 0m && valueDelta == 0m)
-                    return BadRequest(new { error = "Give a quantity change, a value change, or both." });
+                if (qtyDelta == 0m && valueDelta == 0m && actualValueDelta == 0m)
+                    return BadRequest(new { error = "Give a quantity change, a value change, an actual-cost change, or some combination." });
 
                 if (qtyDelta > 0m && dto.UnitCostExcludingTax is > 0m)
                     unitCost = dto.UnitCostExcludingTax.Value;
+
+                if (qtyDelta > 0m && dto.ActualUnitCostExcludingTax is > 0m)
+                    actualUnitCost = dto.ActualUnitCostExcludingTax.Value;
             }
 
             var tracking = await _stock.IsTrackingEnabledAsync(dto.CompanyId);
@@ -768,6 +830,16 @@ namespace MyApp.Api.Controllers
                 {
                     error = $"That would take the stock value below zero (currently "
                           + $"{current.ValueExcludingTax:N2}). Reduce the decrease."
+                });
+            }
+
+            // Same floor on the actual-cost pool, independently.
+            if (actualValueDelta < 0m && current.ActualValueExcludingTax + actualValueDelta < -0.005m)
+            {
+                return BadRequest(new
+                {
+                    error = $"That would take the actual cost below zero (currently "
+                          + $"{current.ActualValueExcludingTax:N2}). Reduce the decrease."
                 });
             }
 
@@ -797,6 +869,14 @@ namespace MyApp.Api.Controllers
                         ? Math.Round(unitCost.Value, 4, MidpointRounding.AwayFromZero)
                         : null,
                     SalesTaxRate = qtyDelta > 0m && unitCost is > 0m ? rate : null,
+                    // Actual-cost mirror of UnitCostExcludingTax above, under the
+                    // identical contract: only an increase may state one, and
+                    // only when a positive figure was actually given — stock
+                    // leaving is always costed at the running ACTUAL average,
+                    // never a stated figure (same invariant, own pool).
+                    ActualUnitCostExcludingTax = qtyDelta > 0m && actualUnitCost is > 0m
+                        ? Math.Round(actualUnitCost.Value, 4, MidpointRounding.AwayFromZero)
+                        : null,
                     CreatedAt = DateTime.UtcNow,
                 });
                 written.Add(qtyDelta > 0m
@@ -804,29 +884,40 @@ namespace MyApp.Api.Controllers
                     : $"quantity down {Math.Abs(qtyDelta):0.####}");
             }
 
-            // A value-only correction: no goods moved, so it is a revaluation
-            // row with zero quantity carrying the signed money.
-            if (valueDelta != 0m || (qtyDelta == 0m && rate.HasValue && rate != current.SalesTaxRate))
+            // A value-only (or actual-cost-only) correction: no goods moved, so
+            // it is a revaluation row with zero quantity carrying the signed
+            // money. The two pools are corrected independently — this row may
+            // carry either delta, both, or neither (falling through to the rate
+            // -only case below).
+            if (valueDelta != 0m || actualValueDelta != 0m
+                || (qtyDelta == 0m && rate.HasValue && rate != current.SalesTaxRate))
             {
                 _context.StockMovements.Add(new StockMovement
                 {
                     CompanyId = dto.CompanyId,
                     ItemTypeId = dto.ItemTypeId,
                     // The enum has no "neither" and the row carries no quantity,
-                    // so the direction simply records which way the money went.
-                    Direction = valueDelta >= 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                    // so the direction simply records which way the money went —
+                    // the selling delta when it moved, else the actual delta, so
+                    // an actual-only correction is not mislabelled by a zero
+                    // selling delta that never changed.
+                    Direction = (valueDelta != 0m ? valueDelta : actualValueDelta) >= 0m
+                        ? StockMovementDirection.In : StockMovementDirection.Out,
                     Quantity = 0m,
                     SourceType = StockMovementSourceType.Revaluation,
                     SourceId = null,
                     MovementDate = dto.MovementDate.Date,
                     Notes = dto.Notes,
                     ValueAdjustmentExcludingTax = valueDelta,
+                    ActualValueAdjustmentExcludingTax = actualValueDelta,
                     SalesTaxRate = rate,
                     CreatedAt = DateTime.UtcNow,
                 });
                 if (valueDelta != 0m)
                     written.Add($"value {(valueDelta > 0m ? "up" : "down")} {Math.Abs(valueDelta):N2}");
-                else
+                if (actualValueDelta != 0m)
+                    written.Add($"actual cost {(actualValueDelta > 0m ? "up" : "down")} {Math.Abs(actualValueDelta):N2}");
+                if (valueDelta == 0m && actualValueDelta == 0m)
                     written.Add($"rate set to {rate:0.##}%");
             }
 
@@ -844,6 +935,12 @@ namespace MyApp.Api.Controllers
                 salesTaxRate = after.SalesTaxRate,
                 salesTax = after.SalesTax,
                 valueIncludingTax = after.ValueIncludingTax,
+                // Actual-cost pool, from the SAME position the response above
+                // already reads — so the dialog's post-save figures can show
+                // the resulting margin without a second round trip.
+                actualCostExcludingTax = after.ActualValueExcludingTax,
+                actualUnitCost = Math.Round(after.ActualUnitCost, 4, MidpointRounding.AwayFromZero),
+                margin = after.Margin,
             });
         }
 

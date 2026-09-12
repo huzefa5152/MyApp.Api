@@ -354,6 +354,14 @@ Publish output optimized from 79 MB to 37 MB via:
   never recomputed. Margin shows a dash rather than a false 0% when there is
   no selling value yet, the same rule the Opening Balances screen already
   follows.
+- **Stock Adjustment can now correct the actual cost too**, on **Dashboards ▸
+  Inventory ▸ On-Hand**. "Correct it to" gains an Actual cost box beside the
+  value box; "Adjust by" gains an actual-cost change and, on a quantity
+  increase, an actual unit cost — mirroring the value fields beside them
+  exactly. A live margin preview shows selling less actual cost as it is
+  typed. Before this, a wrong opening actual cost had no way to be fixed once
+  stock had moved — only the Opening Balances screen could touch it, and only
+  before anything sold.
 
 ### 2026-09-13 — Stock export scrolls properly
 

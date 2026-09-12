@@ -298,6 +298,14 @@
         /// <summary>In <c>set</c> mode: what that quantity is really worth,
         /// excluding sales tax.</summary>
         public decimal? TargetValueExcludingTax { get; set; }
+
+        /// <summary>
+        /// In <c>set</c> mode: what that quantity actually COST, excluding
+        /// sales tax — the actual-cost pool's own <see cref="TargetValueExcludingTax"/>.
+        /// Null means the caller did not mention actual cost, so it is left
+        /// exactly where it stands (mirrors that field's own null contract).
+        /// </summary>
+        public decimal? TargetActualCostExcludingTax { get; set; }
         public DateTime MovementDate { get; set; }
         public string? Notes { get; set; }
 
@@ -310,6 +318,25 @@
         /// the running average.
         /// </summary>
         public decimal? UnitCostExcludingTax { get; set; }
+
+        /// <summary>
+        /// What one unit actually COST on an adjustment UP, excluding sales
+        /// tax — the actual-cost pool's own <see cref="UnitCostExcludingTax"/>,
+        /// under the identical contract: null values the stock coming in at
+        /// the actual-cost average already on hand, and it is ignored on an
+        /// adjustment DOWN, since stock leaving is always costed at the
+        /// running ACTUAL average, never a stated figure.
+        /// </summary>
+        public decimal? ActualUnitCostExcludingTax { get; set; }
+
+        /// <summary>
+        /// Signed ACTUAL-cost correction, applied WITHOUT moving any
+        /// quantity, in <c>delta</c> mode — the actual-cost pool's own
+        /// <see cref="ValueDelta"/>. This is what makes a wrong landed cost
+        /// fixable on its own, the same way <see cref="ValueDelta"/> already
+        /// makes a wrong selling value fixable without moving goods.
+        /// </summary>
+        public decimal? ActualValueDelta { get; set; }
 
         /// <summary>Rate as a percentage (18, 25). Only read alongside a
         /// stated unit cost.</summary>
