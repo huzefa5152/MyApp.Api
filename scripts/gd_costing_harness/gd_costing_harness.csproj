@@ -11,6 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="NPOI" Version="2.7.1" />
   </ItemGroup>
   <ItemGroup>
     <!-- Link the REAL calculator and mapping so the harness exercises the code
@@ -23,5 +24,11 @@
     <Compile Include="..\..\Helpers\ExcelImport\IImportedWorkbook.cs" />
     <Compile Include="..\..\Helpers\ExcelImport\SheetSelector.cs" />
     <Compile Include="..\..\Helpers\ExcelImport\GdCostingMapping.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\ClosedXmlImportedWorkbook.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\NpoiImportedWorkbook.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\WorkbookReaderFactory.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\DateParser.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\GdCostingLayout.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\GdCostingSheetReader.cs" />
   </ItemGroup>
 </Project>

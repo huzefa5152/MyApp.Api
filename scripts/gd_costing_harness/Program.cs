@@ -252,6 +252,39 @@ CheckBool("totals.descOnly", GdCostingMapping.LooksLikeTotalsRow("Total", 0m), f
     Check("resolve.zeroHits.unchanged", resolved.HsCode, 6);
 }
 
+// Optional: run a REAL client workbook through the shipped layout.
+//   dotnet run -c Release -- --file "C:\path\Alpha Trader Costing.xlsx" --expect-lines 26 --expect-cost 18816870 --expect-selling 21940496.99
+// The workbooks are client data and are never committed. Without --file the
+// harness runs its synthetic cases only, which is what CI does.
+var fileArg = Array.IndexOf(args, "--file");
+if (fileArg >= 0 && fileArg + 1 < args.Length)
+{
+    var path = args[fileArg + 1];
+    decimal Expect(string flag)
+    {
+        var i = Array.IndexOf(args, flag);
+        return i >= 0 && i + 1 < args.Length ? decimal.Parse(args[i + 1]) : -1m;
+    }
+
+    using var stream = File.OpenRead(path);
+    using var wb = WorkbookReaderFactory.Open(stream, Path.GetExtension(path));
+    var mapping = GdCostingMapping.Parse(GdCostingLayout.MappingJson);
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+
+    Console.WriteLine($"  {Path.GetFileName(path)}: {result.Rows.Count} lines, {result.Warnings.Count} warnings");
+    foreach (var w in result.Warnings.Take(10)) Console.WriteLine("    " + w);
+
+    var expLines = Expect("--expect-lines");
+    if (expLines >= 0) Check("file.lines", result.Rows.Count, expLines);
+
+    var expCost = Expect("--expect-cost");
+    if (expCost >= 0) Check("file.cost", result.Rows.Sum(r => r.Computed.Cost), expCost, 1m);
+
+    var expSelling = Expect("--expect-selling");
+    if (expSelling >= 0)
+        Check("file.selling", result.Rows.Sum(r => r.SheetSellingValue ?? r.Computed.SellingValue), expSelling, 1m);
+}
+
 Console.WriteLine($"{checks} checks, {failures.Count} failed");
 foreach (var f in failures) Console.WriteLine("  FAIL " + f);
 if (failures.Count > 0) return 1;
