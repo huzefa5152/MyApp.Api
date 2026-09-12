@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  MdCloudUpload, MdCheckCircle, MdWarning, MdError, MdRestartAlt,
+  MdCloudUpload, MdCheckCircle, MdWarning, MdError, MdRestartAlt, MdMenuBook,
 } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
@@ -256,10 +257,16 @@ export default function GdCostingImportPage() {
   return (
     <div style={{ padding: "1.25rem", maxWidth: 1200, margin: "0 auto" }}>
       <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Import Costing</h1>
-      <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: 14, maxWidth: "62ch" }}>
+      <p style={{ margin: "0 0 0.4rem", color: colors.textSecondary, fontSize: 14, maxWidth: "62ch" }}>
         Load the actual landed cost of stock already on the books from a customs GD costing
         workbook, so margin becomes answerable. Nothing is written until you press Commit.
       </p>
+      <Link to="/guides/import" style={{
+        display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600,
+        color: colors.blue, textDecoration: "none", marginBottom: "1rem", minHeight: 44,
+      }}>
+        <MdMenuBook size={16} aria-hidden="true" /> How to use this
+      </Link>
 
       {/* ── Step 1: company + file ─────────────────────────────────── */}
       <div style={card}>

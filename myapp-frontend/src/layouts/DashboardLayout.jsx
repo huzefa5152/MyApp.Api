@@ -282,6 +282,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/clients") || p.startsWith("/suppliers") || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units")) return "masterdata";
     if (p.startsWith("/companies") || p.startsWith("/configuration/") || p.startsWith("/divisions") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "settings";
+    if (p.startsWith("/guides")) return "guides";
     return "dashboards";
   }, [location.pathname]);
 
@@ -793,6 +794,26 @@ export default function DashboardLayout() {
             </NavGroup>
           )}
 
+          {/* GUIDES — help content, no company data, so no permission gate:
+              always visible, unlike every other group above which is hidden
+              until the user holds a matching key. Its own section (rather
+              than nested under Accounting, where the Accounting Guide link
+              already lives) so an operator whose only access is Purchases
+              can still find it. */}
+          <NavGroup
+            id="guides"
+            icon={MdMenuBook}
+            title="Guides"
+            count={1}
+            defaultOpen={activeSection === "guides"}
+            isChildActive={activeSection === "guides"}
+          >
+            <NavLink to="/guides/import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+              <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
+              <span>Import Costing Guide</span>
+            </NavLink>
+          </NavGroup>
+
         </nav>
 
         {/* Account & Footer – pinned to bottom, never scrolls. */}
@@ -937,6 +958,7 @@ function getBreadcrumb(pathname) {
     "/fbr-monitor": "Configuration / FBR Monitor",
     "/tenant-access": "Administration / Tenant Access",
     "/audit-logs": "Administration / Audit Logs",
+    "/guides/import": "Guides / Import Costing Guide",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
 }

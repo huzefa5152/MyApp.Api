@@ -30,6 +30,7 @@ import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import GdCostingImportPage from "./pages/GdCostingImportPage";
+import ImportGuidePage from "./pages/ImportGuidePage";
 import SalesReportPage from "./pages/SalesReportPage";
 import TaxSheetPage from "./pages/TaxSheetPage";
 import ClientLedgerReportPage from "./pages/ClientLedgerReportPage";
@@ -181,6 +182,9 @@ export default function App() {
           <Route path="/fbr-monitor" element={<RequirePermission anyPrefix="fbrmonitor."><FbrMonitorPage /></RequirePermission>} />
           <Route path="/configuration/navigation-menu" element={<RequirePermission anyPrefix={["folders.", "attachments."]}><NavigationMenuPage /></RequirePermission>} />
           <Route path="/audit-logs" element={<RequirePermission anyPrefix="auditlogs."><AuditLogsPage /></RequirePermission>} />
+          {/* Import costing guide — explains the product, exposes no company
+              data, so it needs no permission. Same reasoning as /help/accounting. */}
+          <Route path="/guides/import" element={<ImportGuidePage />} />
         </Route>
       </Route>
 
