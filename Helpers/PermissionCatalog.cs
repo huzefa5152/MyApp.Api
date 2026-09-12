@@ -391,6 +391,18 @@ namespace MyApp.Api.Helpers
             new("stock.adjust.create",      "Inventory", "Adjustment",      "Create", "Record a stock adjustment (count correction, write-off)"),
             new("stock.policy.manage",      "Inventory", "Policy",          "Manage", "Switch a company's inventory tracking version (V1 legacy ⇄ V2) — reversible, audited"),
             new("stock.overcommit.allow",   "Inventory", "Over-commit",     "Allow",  "Override the availability hard-block and knowingly over-commit / oversell stock"),
+            // GD (Goods Declaration) costing import writes the actual landed
+            // cost onto stock; this gates seeing that cost and its margin
+            // wherever stock is displayed (e.g. the Opening Balances tab).
+            new("stock.actualcost.view",    "Inventory", "Actual Cost",     "View",   "See the actual landed cost of stock and its margin"),
+
+            // ── Import Costing (customs GD costing workbook) ────────────────
+            // A GD is a procurement document, so this module sits under the
+            // Purchases section in the sidebar/role editor (see
+            // permissionSections.js) even though it writes stock.actualcost
+            // data that Inventory screens then display.
+            new("importcosting.sheet.run",          "ImportCosting", "GD Costing Sheet", "Run",  "Import a GD costing workbook and load actual cost onto stock"),
+            new("importcosting.consignments.view",  "ImportCosting", "Consignments",     "View", "View imported consignments and their lines"),
 
             // ── Reports ─────────────────────────────────────────────────────
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),

@@ -62,6 +62,10 @@ export const PERMISSION_SECTIONS = [
       // PermissionCatalog.cs is "FBR Import"; show it under Purchases
       // since the resulting Suppliers / PurchaseBills land here.
       { key: "FBR Import" },
+      // Customs GD costing workbook import — a GD is a procurement
+      // document, so it sits here even though it feeds the Inventory
+      // "Actual Cost" figures above.
+      { key: "ImportCosting", label: "Import Costing" },
     ],
   },
   {
