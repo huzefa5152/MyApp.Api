@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
@@ -39,15 +42,6 @@ namespace MyApp.Api.Services.Implementations
         {
             var mapping = GdCostingMapping.Parse(mappingJson);
 
-            var preview = new GdCostingPreviewDto
-            {
-                FileName = fileName,
-                FileSha256 = fileSha256,
-                FileSizeBytes = bytes.LongLength,
-                ImportProfileId = profileId,
-                ProfileVersion = profileVersion,
-            };
-
             GdCostingSheetResult sheetResult;
             using (var stream = new MemoryStream(bytes, writable: false))
             using (var wb = WorkbookReaderFactory.Open(stream, extension))
@@ -68,17 +62,78 @@ namespace MyApp.Api.Services.Implementations
                 sheetResult = GdCostingSheetReader.Read(wb, sheet, mapping);
             }
 
-            preview.Warnings.AddRange(sheetResult.Warnings);
-            preview.SourceRowCount = sheetResult.Rows.Count;
+            return await BuildPreviewAsync(
+                sheetResult.Rows, sheetResult.Warnings, fileName, fileSha256, bytes.LongLength,
+                companyId, profileId, profileVersion);
+        }
 
-            if (sheetResult.Rows.Count == 0)
+        /// <inheritdoc cref="IGdCostingImportService.PreviewManualAsync"/>
+        ///
+        /// <remarks>
+        /// A manual line has no bytes to fingerprint, so <c>FileSha256</c> is a
+        /// SHA-256 of the line's own content (every field the operator typed,
+        /// plus the company id) rather than of uploaded bytes — see
+        /// <see cref="ManualEntryFingerprint"/>. That gives a manual commit the
+        /// same guarantee the file path gets for free: submitting the
+        /// identical line twice collides on <c>ImportRun</c>'s own
+        /// (CompanyId, Kind, FileSha256) unique index — the same "this exact
+        /// file was already imported" guard a re-uploaded workbook trips —
+        /// while two lines differing in any field never collide with each
+        /// other. <c>FileSizeBytes</c> is the byte length of that same
+        /// canonical content, so it is not an arbitrary placeholder either.
+        /// </remarks>
+        public async Task<GdCostingPreviewDto> PreviewManualAsync(GdCostingManualLineDto line, int companyId)
+        {
+            ValidateManualLine(line);
+
+            var warnings = new List<string>();
+            var row = BuildManualRow(line, warnings);
+            var (sha256, sizeBytes) = ManualEntryFingerprint(companyId, line);
+
+            return await BuildPreviewAsync(
+                new List<GdCostingSheetRow> { row }, warnings,
+                fileName: $"Manual entry — GD {row.GdNumber}",
+                fileSha256: sha256,
+                fileSizeBytes: sizeBytes,
+                companyId: companyId,
+                profileId: null,
+                profileVersion: null);
+        }
+
+        /// <summary>
+        /// Everything a file-sourced preview does AFTER the workbook has been
+        /// turned into rows: match against opening stock, cost, group into
+        /// consignments, and check both duplicate guards. The one seam
+        /// <see cref="PreviewAsync"/> and <see cref="PreviewManualAsync"/>
+        /// share — a hand-typed line is run through this SAME method, not a
+        /// reimplementation of it, so nothing about matching or costing can
+        /// drift between the two entry points.
+        /// </summary>
+        private async Task<GdCostingPreviewDto> BuildPreviewAsync(
+            List<GdCostingSheetRow> rows, List<string> warnings,
+            string fileName, string fileSha256, long fileSizeBytes,
+            int companyId, int? profileId, int? profileVersion)
+        {
+            var preview = new GdCostingPreviewDto
+            {
+                FileName = fileName,
+                FileSha256 = fileSha256,
+                FileSizeBytes = fileSizeBytes,
+                ImportProfileId = profileId,
+                ProfileVersion = profileVersion,
+            };
+
+            preview.Warnings.AddRange(warnings);
+            preview.SourceRowCount = rows.Count;
+
+            if (rows.Count == 0)
             {
                 preview.BlockingErrors.Add(
                     "No consignment lines were found. Check the mapping points at the right sheet and start row.");
                 return preview;
             }
 
-            if (sheetResult.Rows.Count > MaxSourceRows)
+            if (rows.Count > MaxSourceRows)
             {
                 preview.BlockingErrors.Add(
                     $"This sheet has more than {MaxSourceRows} lines, which is not a GD costing sheet. Check the mapping, or split the file.");
@@ -86,9 +141,9 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var index = await BuildMatchIndexAsync(companyId);
-            var outcomes = MatchAll(sheetResult.Rows, index);
+            var outcomes = MatchAll(rows, index);
 
-            preview.Lines = sheetResult.Rows
+            preview.Lines = rows
                 .Select((row, i) => ToLineDto(row, outcomes[i]))
                 .ToList();
             preview.Consignments = BuildConsignmentTotals(preview.Lines);
@@ -116,6 +171,115 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return preview;
+        }
+
+        /// <summary>
+        /// Turns a hand-typed manual line into the same
+        /// <see cref="GdCostingSheetRow"/> shape <see cref="GdCostingSheetReader.Read"/>
+        /// produces per sheet row — same HS-code cleaning
+        /// (<see cref="GdCostingMapping.CleanHsCode"/>), same costing
+        /// calculator, same "no HS code" / "stated selling value differs"
+        /// warnings, reworded only to say "you" rather than "the sheet" since
+        /// there is no sheet. <paramref name="warnings"/> is appended to, not
+        /// replaced, so the caller supplies (and keeps) the list.
+        /// </summary>
+        private static GdCostingSheetRow BuildManualRow(GdCostingManualLineDto line, List<string> warnings)
+        {
+            var gd = (line.GdNumber ?? "").Trim();
+            var description = (line.Description ?? "").Trim();
+            var hsCode = GdCostingMapping.CleanHsCode(line.HsCode);
+            var unit = string.IsNullOrWhiteSpace(line.Unit) ? null : line.Unit.Trim();
+
+            var input = new ImportCostingCalculator.ImportCostingInput(
+                AssessedValue: line.AssessedValue,
+                CustomsDuty: line.CustomsDuty,
+                Acd: line.Acd,
+                RegulatoryDuty: line.RegulatoryDuty,
+                Others: line.Others,
+                SalesTaxRate: line.SalesTaxRate,
+                AstRate: line.AstRate,
+                IncomeTaxRate: line.IncomeTaxRate,
+                AddOnProfit: line.AddOnProfit);
+
+            // The one place this chain is computed — same calculator, same
+            // formula, as the file path (ImportCostingCalculator's own doc
+            // comment carries the formula).
+            var computed = ImportCostingCalculator.Compute(input);
+
+            if (hsCode.Length == 0)
+                warnings.Add($"{gd} has no HS code. The line was imported without one.");
+
+            // Mirrors GdCostingSheetReader's own override rule: a stated
+            // selling value that disagrees with the computed one by more than
+            // a paisa wins, and the preview says so.
+            if (line.SellingValue.HasValue
+                && Math.Abs(line.SellingValue.Value - computed.SellingValue) > 0.01m)
+            {
+                warnings.Add(
+                    $"You stated a selling value of {line.SellingValue.Value:N2} " +
+                    $"where the costing gives {computed.SellingValue:N2}. Your figure was kept.");
+            }
+
+            return new GdCostingSheetRow(
+                1, gd, line.GdDate, description, hsCode, line.Quantity, unit, input, computed, line.SellingValue);
+        }
+
+        /// <summary>
+        /// Rejects with an operator-facing message before anything downstream
+        /// sees a half-filled line — mirrors <see cref="GdCostingMapping.Parse"/>
+        /// throwing for a mapping that cannot drive an import.
+        /// </summary>
+        private static void ValidateManualLine(GdCostingManualLineDto line)
+        {
+            if (line == null) throw new InvalidOperationException("Enter the consignment line's details.");
+            if (string.IsNullOrWhiteSpace(line.GdNumber))
+                throw new InvalidOperationException("Enter the GD number.");
+            if (string.IsNullOrWhiteSpace(line.Description))
+                throw new InvalidOperationException("Enter a description.");
+            if (line.Quantity <= 0)
+                throw new InvalidOperationException("Enter a quantity greater than zero.");
+            if (line.AssessedValue < 0 || line.CustomsDuty < 0 || line.Acd < 0
+                || line.RegulatoryDuty < 0 || line.Others < 0 || line.AddOnProfit < 0)
+                throw new InvalidOperationException("Cost figures cannot be negative.");
+            if (line.SalesTaxRate < 0 || line.AstRate < 0 || line.IncomeTaxRate < 0)
+                throw new InvalidOperationException("Tax rates cannot be negative.");
+            if (line.SellingValue is < 0)
+                throw new InvalidOperationException("The stated selling value cannot be negative.");
+        }
+
+        /// <summary>
+        /// Deterministic stand-in for a file hash: every field of the manual
+        /// line (plus the company id, belt-and-braces alongside the DB index's
+        /// own CompanyId scoping), joined and SHA-256'd, so <c>ImportRun</c>'s
+        /// own (CompanyId, Kind, FileSha256) unique index gives a manual
+        /// commit the same "already imported" protection a re-uploaded
+        /// workbook gets — an identical line submitted twice collides, a line
+        /// differing in any field never does.
+        /// </summary>
+        private static (string Sha256, long SizeBytes) ManualEntryFingerprint(int companyId, GdCostingManualLineDto line)
+        {
+            var canonical = string.Join("|",
+                companyId.ToString(CultureInfo.InvariantCulture),
+                (line.GdNumber ?? "").Trim().ToUpperInvariant(),
+                line.GdDate?.ToString("O") ?? "",
+                (line.Description ?? "").Trim(),
+                GdCostingMapping.CleanHsCode(line.HsCode),
+                line.Quantity.ToString(CultureInfo.InvariantCulture),
+                (line.Unit ?? "").Trim(),
+                line.AssessedValue.ToString(CultureInfo.InvariantCulture),
+                line.CustomsDuty.ToString(CultureInfo.InvariantCulture),
+                line.Acd.ToString(CultureInfo.InvariantCulture),
+                line.RegulatoryDuty.ToString(CultureInfo.InvariantCulture),
+                line.Others.ToString(CultureInfo.InvariantCulture),
+                line.SalesTaxRate.ToString(CultureInfo.InvariantCulture),
+                line.AstRate.ToString(CultureInfo.InvariantCulture),
+                line.IncomeTaxRate.ToString(CultureInfo.InvariantCulture),
+                line.AddOnProfit.ToString(CultureInfo.InvariantCulture),
+                line.SellingValue?.ToString(CultureInfo.InvariantCulture) ?? "");
+
+            var bytes = Encoding.UTF8.GetBytes(canonical);
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            return (hash, bytes.LongLength);
         }
 
         // ── Matching, in memory (CLAUDE.md: match per LINE, in C#, not SQL) ──

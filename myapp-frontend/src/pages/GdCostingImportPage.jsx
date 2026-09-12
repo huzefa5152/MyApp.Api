@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  MdCloudUpload, MdCheckCircle, MdWarning, MdError, MdRestartAlt, MdMenuBook,
+  MdCloudUpload, MdCheckCircle, MdWarning, MdError, MdRestartAlt, MdMenuBook, MdEdit,
 } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { notify } from "../utils/notify";
 import { colors } from "../theme";
-import { previewGdCosting, commitGdCosting, getImportProfiles } from "../api/spreadsheetImportApi";
+import {
+  previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles,
+} from "../api/spreadsheetImportApi";
+import HsCodeAutocomplete from "../Components/HsCodeAutocomplete";
 
 /**
  * Purchases → Import Costing.
@@ -55,6 +58,74 @@ const money = (n) =>
 const qty = (n) =>
   (n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
+// ── "Enter a line by hand" (Task 18) ────────────────────────────────────────
+// The form itself never decides anything: submitting it calls
+// previewGdCostingManual, which builds ONE consignment line SERVER-SIDE and
+// runs it through the exact same match/cost pipeline the file preview uses,
+// returning the same GdCostingPreviewDto shape — same table, same
+// disposition, same Commit button below. The 18/3/6 defaults are the rates
+// every real GD costing sheet seen so far actually uses (Helpers/
+// ImportCostingCalculator.cs), not a guess.
+const DEFAULT_MANUAL = {
+  gdNumber: "", gdDate: "", description: "", hsCode: "", quantity: "", unit: "",
+  assessedValue: "0", customsDuty: "0", acd: "0", regulatoryDuty: "0", others: "0",
+  salesTaxRate: "18", astRate: "3", incomeTaxRate: "6", addOnProfit: "0", sellingValue: "",
+};
+
+const round2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+/**
+ * Client-side mirror of Helpers/ImportCostingCalculator.cs's formula, for
+ * INSTANT feedback only as the operator types — so the arithmetic is visible
+ * before spending a round trip on it. NOT authoritative: previewGdCostingManual
+ * recomputes this exact same formula on the server (the ONE place it is
+ * computed for real — see that file's own doc comment), and the server's
+ * figures are what land in the preview table and what commit writes. This
+ * duplication is deliberately narrow (one pure function, no matching, no
+ * persistence) and never substitutes for the server round trip.
+ */
+function computeManualCosting(m) {
+  const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+  const cost = round2(n(m.assessedValue) + n(m.customsDuty) + n(m.acd) + n(m.regulatoryDuty));
+  const st = Math.max(0, n(m.salesTaxRate));
+  const ast = Math.max(0, n(m.astRate));
+  const it = Math.max(0, n(m.incomeTaxRate));
+  const salesTax = round2(cost * st / 100);
+  const astAmount = round2(cost * ast / 100);
+  const subtotal = round2(cost + salesTax + astAmount + n(m.others));
+  const incomeTax = round2(subtotal * it / 100);
+  const inputTax = round2(salesTax + astAmount);
+  const sellingValue = st > 0
+    ? round2((inputTax * 100 / st) + round2(n(m.addOnProfit)))
+    : round2(cost + round2(n(m.addOnProfit)));
+  return { cost, salesTax, ast: astAmount, subtotal, incomeTax, inputTax, sellingValue };
+}
+
+// companyId/quantity travel as text through controlled inputs; this turns
+// what's on screen into the numbers (and null-when-blank optional selling
+// value) the server DTO expects.
+const toManualPayload = (m) => {
+  const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+  return {
+    gdNumber: m.gdNumber.trim(),
+    gdDate: m.gdDate || null,
+    description: m.description.trim(),
+    hsCode: m.hsCode.trim(),
+    quantity: n(m.quantity),
+    unit: m.unit.trim() || null,
+    assessedValue: n(m.assessedValue),
+    customsDuty: n(m.customsDuty),
+    acd: n(m.acd),
+    regulatoryDuty: n(m.regulatoryDuty),
+    others: n(m.others),
+    salesTaxRate: n(m.salesTaxRate),
+    astRate: n(m.astRate),
+    incomeTaxRate: n(m.incomeTaxRate),
+    addOnProfit: n(m.addOnProfit),
+    sellingValue: m.sellingValue === "" || m.sellingValue == null ? null : n(m.sellingValue),
+  };
+};
+
 const card = {
   background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
   borderRadius: 12, padding: "1rem 1.1rem", marginBottom: "1rem",
@@ -88,6 +159,16 @@ const td = {
 // prefix. Clamp to two lines instead (CLAUDE.md §3).
 const wrap2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
 
+// Segmented "Upload a workbook" / "Enter a line by hand" toggle. >=44px tall
+// per the house tap-target rule.
+const modeBtn = (active) => ({
+  padding: "0.6rem 0.9rem", minHeight: 44, borderRadius: 8,
+  border: `1px solid ${active ? colors.blue : colors.cardBorder}`,
+  background: active ? colors.blue : "#fff",
+  color: active ? "#fff" : colors.textPrimary,
+  fontWeight: 600, fontSize: 13.5, cursor: "pointer",
+});
+
 function Banner({ tone, icon: Icon, children }) {
   const tint = { error: colors.dangerLight, warn: "#fff8e6", ok: "#eefaf1" }[tone];
   const line = { error: colors.danger, warn: "#b26a00", ok: colors.success }[tone];
@@ -108,6 +189,153 @@ function Stat({ label, value }) {
     <div>
       <div style={{ fontSize: 12, color: colors.textSecondary }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <h4 style={{
+      margin: "0.9rem 0 0.5rem", fontSize: 12, fontWeight: 700,
+      textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary,
+    }}>{children}</h4>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label style={{ fontSize: 13, color: colors.textSecondary, display: "block" }}>
+      {label}
+      <div style={{ marginTop: 4 }}>{children}</div>
+    </label>
+  );
+}
+
+/**
+ * The "enter a line by hand" form — Identity / Cost / Rates / Outcome,
+ * reading like the sheet's own columns (see GdCostingSheetReader /
+ * GdCostingMapping.GdCostingColumns) so a line typed here and a line read
+ * off a workbook are visibly the same shape. Submitting calls onPreview,
+ * which hands the typed fields to previewGdCostingManual — the server
+ * builds the actual line and runs it through the real pipeline; the live
+ * totals below are just this screen's own instant estimate (see
+ * computeManualCosting).
+ */
+function ManualEntryFields({ companyId, manual, onChange, onPreview, disabled, busy }) {
+  const computed = useMemo(() => computeManualCosting(manual), [manual]);
+  const canPreview = !disabled && !busy
+    && manual.gdNumber.trim().length > 0
+    && manual.description.trim().length > 0
+    && Number(manual.quantity) > 0;
+
+  const set = (key) => (e) => onChange({ [key]: e.target.value });
+
+  return (
+    <div>
+      <SectionLabel>Identity</SectionLabel>
+      <div style={grid}>
+        <Field label="GD number">
+          <input type="text" style={input} placeholder="e.g. KAPW-HC-8876"
+            value={manual.gdNumber} onChange={set("gdNumber")} disabled={disabled} />
+        </Field>
+        <Field label="GD date">
+          <input type="date" style={input}
+            value={manual.gdDate} onChange={set("gdDate")} disabled={disabled} />
+        </Field>
+        <Field label="Description">
+          <input type="text" style={input} placeholder="e.g. Screw Driver"
+            value={manual.description} onChange={set("description")} disabled={disabled} />
+        </Field>
+        <Field label="Quantity">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.quantity} onChange={set("quantity")} disabled={disabled} />
+        </Field>
+        <Field label="Unit">
+          <input type="text" style={input} placeholder="e.g. Pcs"
+            value={manual.unit} onChange={set("unit")} disabled={disabled} />
+        </Field>
+        <Field label="HS code">
+          <HsCodeAutocomplete companyId={companyId} value={manual.hsCode} style={input}
+            onChange={(v) => onChange({ hsCode: v })}
+            placeholder="Type a product keyword, or an HS code…" />
+        </Field>
+      </div>
+
+      <SectionLabel>Cost</SectionLabel>
+      <div style={grid}>
+        <Field label="Assessed value">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.assessedValue} onChange={set("assessedValue")} disabled={disabled} />
+        </Field>
+        <Field label="Customs duty">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.customsDuty} onChange={set("customsDuty")} disabled={disabled} />
+        </Field>
+        <Field label="ACD">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.acd} onChange={set("acd")} disabled={disabled} />
+        </Field>
+        <Field label="Regulatory duty">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.regulatoryDuty} onChange={set("regulatoryDuty")} disabled={disabled} />
+        </Field>
+        <Field label="Others">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.others} onChange={set("others")} disabled={disabled} />
+        </Field>
+      </div>
+
+      <SectionLabel>Rates (%)</SectionLabel>
+      <div style={grid}>
+        <Field label="Sales tax rate">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.salesTaxRate} onChange={set("salesTaxRate")} disabled={disabled} />
+        </Field>
+        <Field label="AST rate">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.astRate} onChange={set("astRate")} disabled={disabled} />
+        </Field>
+        <Field label="Income tax rate">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.incomeTaxRate} onChange={set("incomeTaxRate")} disabled={disabled} />
+        </Field>
+      </div>
+
+      <SectionLabel>Outcome</SectionLabel>
+      <div style={grid}>
+        <Field label="Add-on profit">
+          <input type="number" min="0" step="any" style={input}
+            value={manual.addOnProfit} onChange={set("addOnProfit")} disabled={disabled} />
+        </Field>
+        <Field label="Stated selling value (optional)">
+          <input type="number" min="0" step="any" style={input}
+            placeholder="Leave blank to use the computed figure"
+            value={manual.sellingValue} onChange={set("sellingValue")} disabled={disabled} />
+        </Field>
+      </div>
+
+      <div style={{
+        ...grid, marginTop: "0.9rem", padding: "0.7rem 0.8rem",
+        background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 9,
+      }}>
+        <Stat label="Cost" value={money(computed.cost)} />
+        <Stat label="Sales tax" value={money(computed.salesTax)} />
+        <Stat label="AST" value={money(computed.ast)} />
+        <Stat label="Subtotal" value={money(computed.subtotal)} />
+        <Stat label="Income tax" value={money(computed.incomeTax)} />
+        <Stat label="Input tax" value={money(computed.inputTax)} />
+        <Stat label="Selling value" value={money(computed.sellingValue)} />
+      </div>
+      <p style={{ margin: "0.4rem 0 0", fontSize: 12, color: colors.textSecondary }}>
+        Computed live from what you've typed. Preview re-verifies it on the server before anything can be committed.
+      </p>
+
+      <div style={{ marginTop: "0.9rem" }}>
+        <button onClick={onPreview} disabled={!canPreview} style={btn(colors.blue, !canPreview)}>
+          <MdCloudUpload size={18} />
+          {busy ? "Checking…" : "Preview"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -155,6 +383,12 @@ export default function GdCostingImportPage() {
   const [companyId, setCompanyId] = useState(selectedCompany?.id || "");
   const [file, setFile] = useState(null);
 
+  // "file" (upload a workbook) or "manual" ("enter a line by hand" — Task 18).
+  // Mutually exclusive input methods into the SAME preview/review/commit flow
+  // below; switching clears whichever preview was showing.
+  const [mode, setMode] = useState("file");
+  const [manual, setManual] = useState(DEFAULT_MANUAL);
+
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState("");
   const [profileLoading, setProfileLoading] = useState(false);
@@ -173,9 +407,20 @@ export default function GdCostingImportPage() {
 
   const resetFlow = useCallback(() => {
     setFile(null); setPreview(null); setResult(null); setCreateMissingStock(false);
+    setManual(DEFAULT_MANUAL);
   }, []);
 
   useEffect(() => { resetFlow(); }, [companyId, resetFlow]);
+
+  // Switching input method never mixes a stale preview from the other one
+  // into this screen — the mode itself (and any partly-typed manual fields)
+  // is left alone, only the preview/result.
+  const switchMode = useCallback((next) => {
+    setMode(next);
+    setPreview(null); setResult(null);
+  }, []);
+
+  const updateManual = useCallback((patch) => setManual((m) => ({ ...m, ...patch })), []);
 
   // The one built-in layout, resolved quietly — there is nothing for the
   // operator to choose (see file header comment).
@@ -212,6 +457,19 @@ export default function GdCostingImportPage() {
     setBusy("preview"); setPreview(null); setResult(null);
     try {
       const { data } = await previewGdCosting({ file, companyId, profileId: profile.id });
+      setPreview(data);
+    } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
+  };
+
+  // "Enter a line by hand": the server builds ONE consignment line and runs
+  // it through the exact same pipeline onPreview's workbook goes through —
+  // no profile/mapping involved, since there is nothing to map for a
+  // hand-typed line.
+  const onPreviewManual = async () => {
+    if (!companyId) return;
+    setBusy("preview"); setPreview(null); setResult(null);
+    try {
+      const { data } = await previewGdCostingManual({ companyId, line: toManualPayload(manual) });
       setPreview(data);
     } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
   };
@@ -277,9 +535,11 @@ export default function GdCostingImportPage() {
         <MdMenuBook size={16} aria-hidden="true" /> How to use this
       </Link>
 
-      {/* ── Step 1: company + file ─────────────────────────────────── */}
+      {/* ── Step 1: company + workbook, or a hand-typed line ─────────── */}
       <div style={card}>
-        <h2 style={{ fontSize: 15, margin: "0 0 0.6rem" }}>1 · Company and workbook</h2>
+        <h2 style={{ fontSize: 15, margin: "0 0 0.6rem" }}>
+          1 · Company and {mode === "file" ? "workbook" : "consignment line"}
+        </h2>
         <div style={grid}>
           <label style={{ fontSize: 13, color: colors.textSecondary }}>
             Company
@@ -288,30 +548,64 @@ export default function GdCostingImportPage() {
               {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
-          <label style={{ fontSize: 13, color: colors.textSecondary }}>
-            GD costing workbook
-            <input type="file" accept=".xls,.xlsx,.xlsm" onChange={onPickFile}
-              disabled={!companyId || !!busy} style={{ ...input, padding: "0.5rem" }} />
-          </label>
         </div>
-        <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
-          Excel only (.xls, .xlsx, .xlsm). Close the file in Excel first.
-        </p>
 
-        {profileError && <div style={{ marginTop: "0.6rem" }}><Banner tone="error" icon={MdError}>{profileError}</Banner></div>}
-        {profile && (
-          <p style={{ margin: "0.6rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
-            Layout: <strong>{profile.name}</strong> (v{profile.currentVersion})
-          </p>
-        )}
-
-        <div style={{ marginTop: "0.9rem" }}>
-          <button onClick={onPreview} disabled={!file || !companyId || !profile || profileLoading || !!busy}
-            style={btn(colors.blue, !file || !companyId || !profile || profileLoading || !!busy)}>
-            <MdCloudUpload size={18} />
-            {busy === "preview" ? "Reading…" : "Preview"}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "0.9rem 0" }}>
+          <button type="button" onClick={() => switchMode("file")}
+            style={modeBtn(mode === "file")} disabled={!!busy}>
+            <MdCloudUpload size={16} style={{ marginRight: 6, verticalAlign: "-3px" }} />
+            Upload a workbook
+          </button>
+          <button type="button" onClick={() => switchMode("manual")}
+            style={modeBtn(mode === "manual")} disabled={!!busy}>
+            <MdEdit size={16} style={{ marginRight: 6, verticalAlign: "-3px" }} />
+            Enter a line by hand
           </button>
         </div>
+
+        {mode === "file" ? (
+          <>
+            <div style={grid}>
+              <label style={{ fontSize: 13, color: colors.textSecondary }}>
+                GD costing workbook
+                <input type="file" accept=".xls,.xlsx,.xlsm" onChange={onPickFile}
+                  disabled={!companyId || !!busy} style={{ ...input, padding: "0.5rem" }} />
+              </label>
+            </div>
+            <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
+              Excel only (.xls, .xlsx, .xlsm). Close the file in Excel first.
+            </p>
+
+            {profileError && <div style={{ marginTop: "0.6rem" }}><Banner tone="error" icon={MdError}>{profileError}</Banner></div>}
+            {profile && (
+              <p style={{ margin: "0.6rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
+                Layout: <strong>{profile.name}</strong> (v{profile.currentVersion})
+              </p>
+            )}
+
+            <div style={{ marginTop: "0.9rem" }}>
+              <button onClick={onPreview} disabled={!file || !companyId || !profile || profileLoading || !!busy}
+                style={btn(colors.blue, !file || !companyId || !profile || profileLoading || !!busy)}>
+                <MdCloudUpload size={18} />
+                {busy === "preview" ? "Reading…" : "Preview"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {!companyId && (
+              <Banner tone="warn" icon={MdWarning}>Choose a company first.</Banner>
+            )}
+            <ManualEntryFields
+              companyId={companyId}
+              manual={manual}
+              onChange={updateManual}
+              onPreview={onPreviewManual}
+              disabled={!companyId || !!busy}
+              busy={busy === "preview"}
+            />
+          </>
+        )}
       </div>
 
       {/* ── Step 2: review ─────────────────────────────────────────── */}
@@ -465,7 +759,7 @@ export default function GdCostingImportPage() {
           {(result.messages || []).map((m, i) =>
             <p key={i} style={{ fontSize: 13.5, margin: "0.6rem 0 0" }}>{m}</p>)}
           <button onClick={resetFlow} style={{ ...btn(colors.teal), marginTop: "0.9rem" }}>
-            <MdRestartAlt size={18} /> Import another file
+            <MdRestartAlt size={18} /> {mode === "manual" ? "Enter another line" : "Import another file"}
           </button>
         </div>
       )}

@@ -121,6 +121,48 @@ namespace MyApp.Api.DTOs
         public string? MatchNote { get; set; }
     }
 
+    /// <summary>
+    /// One hand-typed consignment line — the "enter a line by hand" flow
+    /// (Task 18) for a consignment that is just one row and isn't worth
+    /// building a workbook for. Carries exactly the raw inputs a sheet row
+    /// carries (compare <see cref="Helpers.ExcelImport.GdCostingSheetRow"/>),
+    /// so <c>IGdCostingImportService.PreviewManualAsync</c> can build ONE such
+    /// row and run it through the exact same match/cost/consignment pipeline
+    /// a whole workbook goes through — same disposition, same match note,
+    /// same arithmetic.
+    ///
+    /// There is no manual commit DTO: the preview this produces returns an
+    /// ordinary <see cref="GdCostingPreviewDto"/>, and its
+    /// Lines/FileSha256/FileName/FileSizeBytes feed straight into the
+    /// existing <c>gd-costing/commit</c> endpoint, unchanged, exactly as a
+    /// file-sourced preview's do.
+    /// </summary>
+    public class GdCostingManualLineDto
+    {
+        public string GdNumber { get; set; } = "";
+        public DateTime? GdDate { get; set; }
+        public string Description { get; set; } = "";
+        public string HsCode { get; set; } = "";
+        public decimal Quantity { get; set; }
+        public string? Unit { get; set; }
+
+        public decimal AssessedValue { get; set; }
+        public decimal CustomsDuty { get; set; }
+        public decimal Acd { get; set; }
+        public decimal RegulatoryDuty { get; set; }
+        public decimal Others { get; set; }
+        public decimal SalesTaxRate { get; set; }
+        public decimal AstRate { get; set; }
+        public decimal IncomeTaxRate { get; set; }
+        public decimal AddOnProfit { get; set; }
+
+        /// <summary>Optional stated selling value, mirroring a sheet's own
+        /// Selling Value column
+        /// (<see cref="Helpers.ExcelImport.GdCostingMapping.GdCostingColumns.SellingValue"/>).
+        /// Null when the operator wants the computed figure used as-is.</summary>
+        public decimal? SellingValue { get; set; }
+    }
+
     /// <summary>Per-GD totals, shown above the line table so the operator can
     /// check a consignment's own arithmetic before trusting any one line.</summary>
     public class GdCostingConsignmentTotalsDto

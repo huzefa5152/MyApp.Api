@@ -65,6 +65,13 @@ export const previewGdCosting = ({ file, companyId, profileId }) =>
   upload("/spreadsheet-import/gd-costing/preview", file,
     { companyId, ...(profileId ? { profileId } : {}) });
 
+// "Enter a line by hand": builds ONE consignment line server-side and runs
+// it through the exact same match/cost pipeline the file preview uses —
+// same GdCostingPreviewDto shape back, no mapping/profile involved (there is
+// nothing to map for a hand-typed line).
+export const previewGdCostingManual = ({ companyId, line }) =>
+  httpClient.post("/spreadsheet-import/gd-costing/preview-manual", line, { params: { companyId } });
+
 export const commitGdCosting = (body) =>
   httpClient.post("/spreadsheet-import/gd-costing/commit", body, { timeout: LONG });
 

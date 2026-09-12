@@ -353,6 +353,44 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Builds ONE consignment line from a hand-typed form (Task 18:
+        /// "enter a line by hand") and runs it through the exact same
+        /// match/cost pipeline <see cref="PreviewGdCosting"/> runs a whole
+        /// workbook through — see
+        /// <see cref="IGdCostingImportService.PreviewManualAsync"/>. There is
+        /// no manual commit action: the returned <see cref="GdCostingPreviewDto"/>
+        /// feeds straight into the existing <see cref="CommitGdCosting"/>,
+        /// unchanged.
+        /// </summary>
+        [HttpPost("gd-costing/preview-manual")]
+        [HasPermission("importcosting.sheet.run")]
+        public async Task<ActionResult<GdCostingPreviewDto>> PreviewGdCostingManual(
+            [FromBody] GdCostingManualLineDto dto,
+            [FromQuery] int companyId)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            if (!await CompanyExistsAsync(companyId))
+                return NotFound(new { message = "That company no longer exists." });
+
+            if (dto == null)
+                return BadRequest(new { message = "Enter the consignment line's details." });
+
+            try
+            {
+                return Ok(await _gdCosting.PreviewManualAsync(dto, companyId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GD costing manual preview failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "The line could not be read. Please check it and try again." });
+            }
+        }
+
+        /// <summary>
         /// Writes the reviewed lines: one consignment per GD, one line per row,
         /// and the actual cost onto every matched opening balance. No stock
         /// movement and no GL entry — see <see cref="IGdCostingImportService"/>.
