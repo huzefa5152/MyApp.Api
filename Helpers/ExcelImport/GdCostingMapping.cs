@@ -133,18 +133,41 @@ namespace MyApp.Api.Helpers.ExcelImport
         }
 
         /// <summary>
+        /// Totals-row description words, normalised (see <see cref="Normalise"/>)
+        /// so "Grand Total", "grand total" and "GRAND TOTAL" are one entry.
+        /// Checked BY HAND against all three real client workbooks: every
+        /// totals row in every one of them (Alpha row 30; AY rows 33, 59; PAK
+        /// rows 8, 18, 46, 66, 86, 105 - nine rows) is labelled literally
+        /// "Total", never blank. An earlier version of
+        /// <see cref="LooksLikeTotalsRow"/> tested for a blank description only,
+        /// which is why it caught none of those nine against the live files.
+        /// </summary>
+        private static readonly string[] TotalsWords =
+        {
+            "total", "grandtotal", "totals", "subtotal",
+        };
+
+        /// <summary>
         /// True for a row that sums the consignment rather than describing a
         /// line of it.
         ///
         /// BOTH halves are required. Row 30 of the Alpha sheet carries the GD
         /// number and a cost of 18,816,870 - the sum of the 26 lines above it -
-        /// with no description and no selling value; imported as a line it
+        /// labelled "Total" and with no selling value; imported as a line it
         /// doubles the consignment. Testing the value alone would drop a
-        /// genuine zero-value line, and testing the description alone would
-        /// keep a totals row that happened to be labelled.
+        /// genuine zero-value line, and testing the description alone (blank
+        /// or not) would keep — or drop — a totals row on the strength of its
+        /// label alone: a real product can genuinely be named "Total" and must
+        /// still import the moment it carries its own selling value, which is
+        /// exactly what the AND with "no selling value" protects (see
+        /// totals.descWithSellingValue in the harness).
         /// </summary>
         public static bool LooksLikeTotalsRow(string? description, decimal? sellingValue)
-            => string.IsNullOrWhiteSpace(description) && !(sellingValue > 0m);
+        {
+            if (sellingValue > 0m) return false;
+            var t = Normalise(description);
+            return t.Length == 0 || TotalsWords.Contains(t);
+        }
 
         // -- Heading-driven column resolution ------------------------------
         //

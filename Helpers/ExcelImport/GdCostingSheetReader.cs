@@ -81,8 +81,7 @@ namespace MyApp.Api.Helpers.ExcelImport
                 // order) because rule 3 below needs it too.
                 var description = wb.GetString(sheet, r, cols.Description).Trim();
                 var sheetSellingValue = ReadAmountOrNull(wb, sheet, r, cols.SellingValue);
-                var hsCodeRaw = wb.GetString(sheet, r, cols.HsCode);
-                var hsCode = GdCostingMapping.CleanHsCode(hsCodeRaw);
+                var hsCode = GdCostingMapping.CleanHsCode(wb.GetString(sheet, r, cols.HsCode));
 
                 // 3. A totals row carries the GD number and a summed cost but
                 // no selling value — Alpha row 30 holds 18,816,870, the sum of
@@ -91,32 +90,33 @@ namespace MyApp.Api.Helpers.ExcelImport
                 // warning: a silently dropped row is how a wrong import
                 // becomes a confident one.
                 //
-                // GdCostingMapping.LooksLikeTotalsRow only catches a BLANK
-                // description — deliberately: its own totals.descOnly test
-                // (scripts/gd_costing_harness/Program.cs) protects a
-                // hypothetical real item literally named "Total" with a
-                // genuine zero selling value, so that contract must not
-                // change. But all three real workbooks print the word
-                // "Total" as the DESCRIPTION of their own totals row, not a
-                // blank one (checked by hand against the live files: Alpha
-                // row 30; AY rows 33, 59; PAK rows 8, 18, 46, 66, 86, 105 —
-                // nine rows, all labelled "Total", none blank). What every
-                // one of those nine lacks, and every genuine line has, is an
-                // HS code — GdCostingMapping.Parse already treats HsCode as
-                // mandatory for exactly that reason (a consignment line
-                // cannot be costed, still less classified against the HS
-                // master later, with no tariff code). So a labelled totals
-                // row is caught here by the same "no selling value" half
-                // LooksLikeTotalsRow already uses, paired with "no HS code"
-                // in place of "no description" — without touching
-                // LooksLikeTotalsRow's own (deliberately different) contract.
-                var noHsCode = string.IsNullOrWhiteSpace(hsCodeRaw);
-                if (GdCostingMapping.LooksLikeTotalsRow(description, sheetSellingValue)
-                    || (noHsCode && !(sheetSellingValue > 0m)))
+                // GdCostingMapping.LooksLikeTotalsRow carries the whole
+                // decision (blank description OR a totals label, AND no
+                // selling value — see its own doc comment for why both real
+                // shapes matter: every totals row in all three client files
+                // is labelled "Total", never blank). The warning names
+                // whichever half actually fired, because the two are not
+                // interchangeable facts about the row: a labelled row that
+                // read as "no description" would tell the operator something
+                // false about a row they can see for themselves.
+                if (GdCostingMapping.LooksLikeTotalsRow(description, sheetSellingValue))
                 {
-                    warnings.Add($"Row {r}: a totals row for {gd} was skipped (no description, no selling value).");
+                    var reason = description.Length == 0
+                        ? "no description, no selling value"
+                        : $"labelled \"{description}\", no selling value";
+                    warnings.Add($"Row {r}: a totals row for {gd} was skipped ({reason}).");
                     continue;
                 }
+
+                // A row that reaches here is being imported as a genuine
+                // line. A blank HS code no longer holds it back — "not yet
+                // classified" is a real, ordinary state elsewhere in this
+                // system (CLAUDE.md 5b-2: an HS-import placeholder, an
+                // opening-stock row with no code) — but it is worth a named
+                // warning, since nothing later in this pipeline can classify
+                // the line against the HS master without one.
+                if (hsCode.Length == 0)
+                    warnings.Add($"Row {r}: {gd} has no HS code. The line was imported without one.");
 
                 var gdDate = cols.GdDate is > 0 ? wb.GetDate(sheet, r, cols.GdDate.Value) : null;
                 var quantity = wb.GetDecimal(sheet, r, cols.Quantity) ?? 0m;

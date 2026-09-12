@@ -145,7 +145,20 @@ CheckBool("totals.nullBoth", GdCostingMapping.LooksLikeTotalsRow(null, null), tr
 // a genuine zero-value line must still import.
 CheckBool("totals.zeroValueLine", GdCostingMapping.LooksLikeTotalsRow("SCREW DRIVER", 0m), false);
 CheckBool("totals.realLine", GdCostingMapping.LooksLikeTotalsRow("SCREW DRIVER", 72905m), false);
-CheckBool("totals.descOnly", GdCostingMapping.LooksLikeTotalsRow("Total", 0m), false);
+
+// CHANGED in fix round 1 — this assertion used to be `false`. All three real
+// client workbooks label their own totals row with the literal word "Total",
+// never a blank description (Alpha row 30; AY rows 33, 59; PAK rows 8, 18,
+// 46, 66, 86, 105 — nine rows, checked by hand against the live files, none
+// blank). The original `false` here encoded that wrong assumption straight
+// from the design spec; this test was the defect, and the nine real rows are
+// the evidence.
+CheckBool("totals.descOnly", GdCostingMapping.LooksLikeTotalsRow("Total", 0m), true);
+
+// But a genuine product literally named "Total" WITH its own selling value
+// is still a real line and must still import — the selling-value half of the
+// AND is what protects it, and is why this one stays false.
+CheckBool("totals.descWithSellingValue", GdCostingMapping.LooksLikeTotalsRow("Total", 72905m), false);
 
 // A mapping with no GD number column cannot drive an import.
 {
@@ -250,6 +263,296 @@ CheckBool("totals.descOnly", GdCostingMapping.LooksLikeTotalsRow("Total", 0m), f
     var notes = new List<string>();
     var resolved = mapping.Resolve(wb, 0, notes);
     Check("resolve.zeroHits.unchanged", resolved.HsCode, 6);
+}
+
+// ── GdCostingSheetReader.Read: CI-exercised synthetic coverage ─────────────
+//
+// The three real-file runs below (behind --file) are what actually caught
+// the totals-row defect this fix round corrects, but they run against
+// workbooks that exist on one machine's Downloads folder, not in CI. These
+// nine cases pin the same behaviours with a FakeWorkbook so a future edit to
+// the blank-streak handling, the firstRow clamp or the override tolerance
+// fails an ordinary `dotnet run` rather than passing silently until someone
+// next has the real files to hand.
+//
+// All nine share one column layout: gdNumber=1, description=2, hsCode=3,
+// quantity=4, assessedValue=5, sellingValue=6 (plus rate columns 7/8/9 only
+// where a test's own arithmetic needs them). HeaderAliases is empty in every
+// mapping so Resolve returns the mapped columns unchanged — alias resolution
+// itself is already covered by the resolve.* cases above.
+
+// 1. A NORMAL LINE, reusing the Alpha row-3 reference numbers (the same ones
+// "alpha.sellingValue" above already proves correct), so the expected
+// selling value is a known constant rather than re-derived here.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5,
+            SalesTaxRate = 7, AstRate = 8, IncomeTaxRate = 9, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "KAPW-HC-8876");
+    wb.Set(0, 3, 2, "SCREW DRIVER");
+    wb.Set(0, 3, 3, "8205.4000:-");
+    wb.Set(0, 3, 4, "100");
+    wb.Set(0, 3, 5, "62490");
+    wb.Set(0, 3, 7, "0.18");
+    wb.Set(0, 3, 8, "3%");
+    wb.Set(0, 3, 9, "0.06");
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.normalLine.count", result.Rows.Count == 1, true);
+    var row0 = result.Rows.Count > 0 ? result.Rows[0] : null;
+    Check("read.normalLine.selling", row0?.Computed.SellingValue ?? -1m, 72905.00m);
+    CheckStr("read.normalLine.hsCode", row0?.HsCode ?? "<missing>", "8205.4000");
+    Check("read.normalLine.quantity", row0?.Quantity ?? -1m, 100m);
+    CheckBool("read.normalLine.noSheetSelling", row0 != null && row0.SheetSellingValue is null, true);
+    CheckBool("read.normalLine.noWarnings", result.Warnings.Count == 0, true);
+}
+
+// 2. A row labelled "Total" (GdCostingMapping's totals vocabulary) with no
+// selling value is skipped, and the warning names the LABEL rather than
+// falsely claiming the row had no description.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "GD-1");
+    wb.Set(0, 3, 2, "Total");
+    wb.Set(0, 3, 3, "1234.5678");
+    wb.Set(0, 3, 5, "50000");
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.totalsLabel.skipped", result.Rows.Count == 0, true);
+    CheckBool("read.totalsLabel.warned",
+        result.Warnings.Any(w => w.Contains("labelled \"Total\"")), true);
+}
+
+// 3. A genuinely blank-description row with no selling value is skipped too,
+// and keeps the original wording — that half of the check is what fired.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "GD-2");
+    // Description (column 2) deliberately left unset — blank.
+    wb.Set(0, 3, 3, "1234.5678");
+    wb.Set(0, 3, 5, "50000");
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.blankDescription.skipped", result.Rows.Count == 0, true);
+    CheckBool("read.blankDescription.warned",
+        result.Warnings.Any(w => w.Contains("no description, no selling value")), true);
+}
+
+// 4. A genuine product literally named "Total" WITH its own selling value is
+// still a real line and must still be imported.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "GD-3");
+    wb.Set(0, 3, 2, "Total");
+    wb.Set(0, 3, 3, "1234.5678");
+    wb.Set(0, 3, 4, "10");
+    wb.Set(0, 3, 5, "1000");
+    wb.Set(0, 3, 6, "1000"); // matches the computed value exactly — no override either
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.totalsLabelWithSelling.kept", result.Rows.Count == 1, true);
+    CheckBool("read.totalsLabelWithSelling.noWarnings", result.Warnings.Count == 0, true);
+}
+
+// 5. The sheet's stated selling value wins, with a warning, when it disagrees
+// with the computed one by more than a paisa.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "GD-4");
+    wb.Set(0, 3, 2, "WIDGET");
+    wb.Set(0, 3, 3, "1234.5678");
+    wb.Set(0, 3, 4, "10");
+    wb.Set(0, 3, 5, "1000");
+    wb.Set(0, 3, 6, "1000.05"); // 0.05 away from the computed 1000.00
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.overrideBeyondTolerance.kept", result.Rows.Count == 1, true);
+    var row0 = result.Rows.Count > 0 ? result.Rows[0] : null;
+    Check("read.overrideBeyondTolerance.sheetValue", row0?.SheetSellingValue ?? -1m, 1000.05m);
+    CheckBool("read.overrideBeyondTolerance.warned",
+        result.Warnings.Any(w => w.Contains("sheet states a selling value")), true);
+}
+
+// 6. A difference of half a paisa or less is a rounding artefact, not an
+// override — no warning.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "GD-5");
+    wb.Set(0, 3, 2, "WIDGET");
+    wb.Set(0, 3, 3, "1234.5678");
+    wb.Set(0, 3, 4, "10");
+    wb.Set(0, 3, 5, "1000");
+    wb.Set(0, 3, 6, "1000.005"); // within the 0.01 tolerance
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.overrideWithinTolerance.kept", result.Rows.Count == 1, true);
+    CheckBool("read.overrideWithinTolerance.noWarning", result.Warnings.Count == 0, true);
+}
+
+// 7. A kept row with a blank HS code is imported anyway, but named in a
+// warning — "not yet classified" is a real, ordinary state elsewhere in this
+// system (CLAUDE.md 5b-2), not a reason to drop the line.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "GD-6");
+    wb.Set(0, 3, 2, "WIDGET");
+    // HS code (column 3) deliberately left unset — blank.
+    wb.Set(0, 3, 4, "10");
+    wb.Set(0, 3, 5, "1000");
+    wb.Set(0, 3, 6, "1000");
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.blankHsCode.kept", result.Rows.Count == 1, true);
+    var row0 = result.Rows.Count > 0 ? result.Rows[0] : null;
+    CheckStr("read.blankHsCode.hsCode", row0?.HsCode ?? "<missing>", "");
+    CheckBool("read.blankHsCode.warned", result.Warnings.Any(w => w.Contains("no HS code")), true);
+}
+
+// 8. FirstDataRow at or before HeaderRow is clamped to HeaderRow + 1, so a
+// row sitting where the mapping's own header lives is never read as data.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 2,
+        FirstDataRow = 1, // at/before HeaderRow, deliberately wrong
+        BlankRowsEndData = 5,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    // Row 2 (the header row) looks exactly like a data row, so reading it
+    // would silently import the heading itself as a line.
+    wb.Set(0, 2, 1, "GD-HEADING");
+    wb.Set(0, 2, 2, "Description");
+    wb.Set(0, 2, 5, "1");
+    // The genuine line sits at row 3 — HeaderRow + 1.
+    wb.Set(0, 3, 1, "GD-7");
+    wb.Set(0, 3, 2, "WIDGET");
+    wb.Set(0, 3, 5, "1000");
+    wb.SetLastRow(0, 3);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.firstRowClamp.onlyOneLine", result.Rows.Count == 1, true);
+    var row0 = result.Rows.Count > 0 ? result.Rows[0] : null;
+    Check("read.firstRowClamp.sourceRow", row0?.SourceRow ?? -1, 3);
+}
+
+// 9. Enough consecutive blank-GD rows end the scan before the sheet's own
+// last row, even when more GD-numbered rows exist further down.
+{
+    var wb = new FakeWorkbook();
+    var mapping = new GdCostingMapping
+    {
+        HeaderRow = 1,
+        FirstDataRow = 3,
+        BlankRowsEndData = 2,
+        Columns = new GdCostingMapping.GdCostingColumns
+        {
+            GdNumber = 1, Description = 2, HsCode = 3, Quantity = 4, AssessedValue = 5, SellingValue = 6,
+        },
+        HeaderAliases = new Dictionary<string, List<string>>(),
+    };
+    wb.Set(0, 3, 1, "GD-8");
+    wb.Set(0, 3, 2, "WIDGET");
+    wb.Set(0, 3, 5, "1000");
+    // Rows 4 and 5 are entirely blank — two consecutive, meeting
+    // BlankRowsEndData — so the scan must stop there.
+    // Row 6 looks like a genuine line but must never be reached.
+    wb.Set(0, 6, 1, "GD-9");
+    wb.Set(0, 6, 2, "SHOULD NOT BE READ");
+    wb.Set(0, 6, 5, "2000");
+    wb.SetLastRow(0, 10);
+
+    var result = GdCostingSheetReader.Read(wb, 0, mapping);
+    CheckBool("read.blankStreak.stopsEarly", result.Rows.Count == 1, true);
+    var row0 = result.Rows.Count > 0 ? result.Rows[0] : null;
+    Check("read.blankStreak.sourceRow", row0?.SourceRow ?? -1, 3);
 }
 
 // Optional: run a REAL client workbook through the shipped layout.
