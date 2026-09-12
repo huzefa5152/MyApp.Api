@@ -590,11 +590,16 @@ quantity):
   reason instead of returning a zero the form would divide by.
 - **The whole of a bin is a case of its own (2026-09-12).** An amount equal to
   `availableValueExcludingTax` (to the paisa), or the **Bill all** shortcut,
-  derives the EXACT on-hand quantity, fraction and all, and
-  `InvoiceService.IsCloseOutQuantityAsync` lets that one fraction through the
-  whole-number rule for an integer unit because it empties the bin to zero.
-  Rounding it gave 332 against 331.9597 on hand (an oversell) or 331 (value
-  stranded). Pinned by `scripts/test_bill_pricing_advance_tax.py` section E.
+  derives WHOLE units rounded UP from a fractional on-hand (331.9597 -> 332)
+  at the rate that makes the line exactly the bin's value.
+  `InvoiceService.RoundUpCloseOutBinsAsync` then records the missing fraction
+  as a zero-cost `Adjustment` IN inside the create transaction, right before
+  the oversell guard, so the sale is an ordinary sale and the bin ends at zero
+  quantity and zero value. The fraction is a data artefact, so it is settled in
+  the stock ledger, never by letting an integer unit carry a fraction on the
+  invoice. Conditions: tracked item, less than one unit short, line total is
+  the bin's value to the paisa. Pinned by
+  `scripts/test_bill_pricing_advance_tax.py` section E.
 - The endpoint is `GET /api/invoices/company/{id}/stock-pricing`, gated by
   `bills.manage.create` — the same reasoning as `last-rates`: if you cannot
   make a bill, you do not need its pricing.

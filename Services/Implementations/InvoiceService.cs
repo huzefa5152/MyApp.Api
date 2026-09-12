@@ -132,20 +132,50 @@ namespace MyApp.Api.Services.Implementations
         /// gates this client-side, this is the server-side guard.
         /// </summary>
         /// <summary>
-        /// The one fractional quantity an integer-only unit may carry: exactly
-        /// what is on hand (2026-09-12). Stock can be fractional on a "Pcs" item
-        /// -- an import or an adjustment left 331.9597 -- and the operator who
-        /// wants to bill the whole of it could not: 332 was refused as an
-        /// oversell and 331 left value stranded in the bin. Billing the exact
-        /// on-hand figure empties the bin to zero, quantity and value alike,
-        /// which is what "the last of it" means. Any other fraction is still
-        /// refused.
+        /// Billing the WHOLE of a bin whose on-hand is fractional (2026-09-12).
+        ///
+        /// An import or an adjustment can leave 331.9597 Pcs in a bin whose unit
+        /// allows no fractions. The operator who wants to invoice the whole of
+        /// it types its value; the form derives 332 whole pieces at a rate that
+        /// makes the line total exactly that value. 332 is then an oversell of
+        /// 0.0403 and the hard block refused it, while 331 stranded value.
+        ///
+        /// The fraction is a data artefact, not goods, so it is settled where it
+        /// belongs -- in the stock ledger, as a zero-cost rounding adjustment of
+        /// the missing 0.0403 recorded right before the sale, inside the same
+        /// transaction. The sale of 332 is then an ordinary sale, the bin ends
+        /// at exactly zero quantity and zero value, and a later reversal puts
+        /// back the 332 it took. Conditions, all of them: the item is tracked,
+        /// the line asks for LESS than one unit more than is on hand, and the
+        /// line total IS the bin's value to the paisa. Anything else is left to
+        /// the oversell guard.
         /// </summary>
-        private async Task<bool> IsCloseOutQuantityAsync(int companyId, int? itemTypeId, decimal quantity)
+        private async Task RoundUpCloseOutBinsAsync(Company company, int companyId, IEnumerable<InvoiceItem> items, DateTime date)
         {
-            if (!itemTypeId.HasValue || quantity <= 0) return false;
-            var onHand = await _stock.GetOnHandAsync(companyId, itemTypeId.Value);
-            return onHand > 0 && Math.Abs(onHand - quantity) < 0.000001m;
+            if (!company.InventoryTrackingEnabled) return;
+            var lines = items.Where(i => i.ItemTypeId.HasValue && i.Quantity > 0).ToList();
+            if (lines.Count == 0) return;
+            var ids = lines.Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            var positions = await _stock.GetValuationsAsync(companyId, ids);
+            foreach (var line in lines)
+            {
+                if (!positions.TryGetValue(line.ItemTypeId!.Value, out var pos)) continue;
+                var onHand = pos.Quantity;
+                if (onHand <= 0 || onHand == Math.Truncate(onHand)) continue;
+                var excess = line.Quantity - onHand;
+                if (excess <= 0 || excess >= 1) continue;
+                var lineTotal = Math.Round(line.Quantity * line.UnitPrice, 2, MidpointRounding.AwayFromZero);
+                if (Math.Abs(lineTotal - Math.Round(pos.ValueExcludingTax, 2, MidpointRounding.AwayFromZero)) > 0.01m) continue;
+
+                await _stock.RecordMovementAsync(
+                    companyId, line.ItemTypeId.Value, StockMovementDirection.In, excess,
+                    StockMovementSourceType.Adjustment, null, date,
+                    notes: $"Close-out rounding: {onHand:0.####} -> {line.Quantity:0.####} {line.UOM} so the whole bin could be billed",
+                    unitCostExcludingTax: 0m);
+                _logger.LogInformation(
+                    "Company {CompanyId}: rounded item {ItemTypeId} up by {Excess} to bill the whole bin ({LineTotal}).",
+                    companyId, line.ItemTypeId, excess, lineTotal);
+            }
         }
 
         private async Task ValidateUpdateItemDecimalQuantitiesAsync(int companyId, List<UpdateInvoiceItemDto> items)
@@ -171,7 +201,6 @@ namespace MyApp.Api.Services.Implementations
                 var unit = item.UOM ?? "";
                 if (!allowsDecimal.TryGetValue(unit, out var allows) || !allows)
                 {
-                    if (await IsCloseOutQuantityAsync(companyId, item.ItemTypeId, item.Quantity)) continue;
                     throw new InvalidOperationException(
                         $"Quantity '{item.Quantity}' for unit '{unit}' must be a whole number. " +
                         $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");
@@ -1232,6 +1261,10 @@ namespace MyApp.Api.Services.Implementations
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    // A line that bills the whole of a fractional bin rounds the
+                    // bin up first (zero-cost adjustment), so the guard below sees
+                    // a whole quantity it can honour.
+                    await RoundUpCloseOutBinsAsync(company, dto.CompanyId, invoiceItems, invoice.Date);
                     // Oversell guard under the per-company stock lock (inside tx).
                     await AssertBillStockAvailabilityAsync(company, dto.CompanyId, invoiceItems);
 
@@ -1305,9 +1338,6 @@ namespace MyApp.Api.Services.Implementations
                 if (it.Quantity == Math.Truncate(it.Quantity)) continue;
                 if (!unitConfig.TryGetValue(it.UOM!, out var allows) || !allows)
                 {
-                    // Closing the bin out is the one fraction allowed (see
-                    // IsCloseOutQuantityAsync).
-                    if (await IsCloseOutQuantityAsync(companyId, it.ItemTypeId, it.Quantity)) continue;
                     throw new InvalidOperationException(
                         $"Quantity '{it.Quantity}' for unit '{it.UOM}' must be a whole number. " +
                         $"Enable decimal quantity for this unit on the Units admin page if fractions are allowed.");

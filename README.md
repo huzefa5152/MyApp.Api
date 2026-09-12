@@ -305,9 +305,11 @@ Publish output optimized from 79 MB to 37 MB via:
   and the operator who wanted to invoice the whole of it could not: the amount
   rounded to 332, which the oversell guard refused, and 331 stranded value in
   the bin. Typing the stock's full value, or pressing **Bill all** next to the
-  on-hand figure, now takes the exact quantity on hand and empties the bin to
-  zero. That one fraction is accepted by the server for an integer unit; any
-  other fraction is still refused.
+  on-hand figure, now bills the whole bin as whole units (332 Pcs) at the
+  rate that makes the line exactly the bin's value. The missing fraction is
+  settled in the stock ledger as a zero-cost rounding adjustment recorded
+  with the sale, so the bin ends at zero quantity and zero value; a fraction
+  on a whole-unit item is still refused.
 - The stock dashboard shows the on-hand figure as it is (up to 4 decimals)
   instead of rounding 331.9597 to 332.
 

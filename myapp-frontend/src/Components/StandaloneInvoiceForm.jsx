@@ -6,6 +6,8 @@ import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getAccountsFlat } from "../api/accountApi";
+import { getAllUnits } from "../api/unitsApi";
+import { isDecimalUnit } from "../utils/formatQuantity";
 import { getSalesOrdersForPicker, getSalesOrderInvoicePrefill } from "../api/salesOrderApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
@@ -175,6 +177,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // cost, read from the server's one valuation walk -- nothing is recomputed
   // here (see Helpers/StockValuation).
   const [stockPricing, setStockPricing] = useState({});
+  // The unit table decides whether a "bill the whole bin" line may carry the
+  // exact fractional on-hand (KG) or must round up to whole units (Pcs).
+  const [units, setUnits] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    getAllUnits().then(({ data }) => { if (alive) setUnits(Array.isArray(data) ? data : []); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
   // The row whose item type was just picked. The next field to fill depends on
   // whether that item can be priced from stock, and pricing arrives one fetch
   // later -- so the focus is placed by an effect once the answer is in, not at
@@ -757,16 +767,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // which is where that rule belongs.
     // The WHOLE of the stock is a case of its own (2026-09-12). Stock on an
     // integer unit can be fractional (an import or an adjustment left
-    // 331.9597 Pcs worth 317,028.00), and an operator typing that value wants
-    // the bin emptied. Rounding gave 332, which the oversell guard refused,
-    // while 331 stranded value in the bin. So an amount that IS the stock's
-    // value (to the paisa) takes the exact on-hand quantity, fraction and all;
-    // the server accepts that one fraction because it closes the bin to zero.
+    // 331.9597 Pcs worth 317,028.67), and an operator typing that value wants
+    // the bin emptied. The quantity stays WHOLE -- 332 Pcs, rounded up -- and
+    // the rate absorbs it so the line is exactly the bin's value. The server
+    // settles the 0.0403 the bin is short with a zero-cost rounding
+    // adjustment before the sale, so this is not an oversell and the bin ends
+    // at zero.
     const fullValue = Math.round(Number(price.availableValueExcludingTax) * 100) / 100;
     const onHand = Number(price.availableQuantity);
     if (fullValue > 0 && onHand > 0 && Math.abs(total - fullValue) < 0.005) {
-      const rate = Math.round((fullValue / onHand) * 1e12) / 1e12;
-      return { qty: onHand, rate, exact: fullValue, closeOut: true };
+      const qtyAll = closeOutQuantity(price, row);
+      const rate = Math.round((fullValue / qtyAll) * 1e12) / 1e12;
+      return { qty: qtyAll, rate, exact: fullValue, closeOut: true };
     }
 
     const rawQty = total / cost;
@@ -805,6 +817,29 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Traders reach -209,256.
   const stockHardBlock = !!company?.stockGuardHardBlock;
 
+  // The quantity that empties a bin, by the unit's own rule: a decimal-capable
+  // unit (KG) takes the exact on-hand, fraction and all; a whole-unit one (Pcs)
+  // rounds UP, and the server settles the missing fraction in the stock ledger.
+  const closeOutQuantity = (price, row) => {
+    const onHand = Number(price.availableQuantity);
+    if (isDecimalUnit(price.uom || row.uom, units)) return onHand;
+    return Math.max(1, Math.ceil(onHand - 1e-9));
+  };
+
+  // The line bills the whole bin at the bin's exact value, with the quantity
+  // closeOutQuantity gives. Not a shortfall -- for a whole-unit item the server
+  // rounds the bin up by the fraction before the sale (see deriveFromTotal).
+  const isCloseOut = (row) => {
+    const price = stockPricing[row.itemTypeId];
+    if (!price?.canPrice) return false;
+    const have = Number(price.availableQuantity);
+    const want = parseFloat(row.quantity);
+    const total = parseFloat(row.lineTotal);
+    const fullValue = Math.round(Number(price.availableValueExcludingTax) * 100) / 100;
+    return have > 0 && Math.abs(want - closeOutQuantity(price, row)) < 1e-9
+      && fullValue > 0 && Math.abs(total - fullValue) < 0.005;
+  };
+
   const stockShortfall = (row, extraAvailable = 0) => {
     const price = stockPricing[row.itemTypeId];
     if (!price?.canPrice) return null;
@@ -812,6 +847,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!(want > 0)) return null;
     const have = Number(price.availableQuantity) + Number(extraAvailable || 0);
     if (!(want > have)) return null;
+    if (!extraAvailable && isCloseOut(row)) return null;
     return {
       want,
       have,
@@ -1601,7 +1637,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                               <button type="button" style={styles.stockChipBtn} onClick={() => billAllOnHand(r.localId)}>
                                                 bill everything on hand
                                               </button>
-                                              {" "}— {sf.have.toLocaleString(undefined, { maximumFractionDigits: 4 })} {sf.uom} for {Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, which empties the bin.
+                                              {" "}— {closeOutQuantity(priced, r).toLocaleString(undefined, { maximumFractionDigits: 4 })} {sf.uom} for {Number(priced.availableValueExcludingTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, which empties the bin.
                                             </>
                                           )}
                                         </div>

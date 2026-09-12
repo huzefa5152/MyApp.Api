@@ -378,9 +378,11 @@ def main():
         # ── E. Closing out fractional stock on an integer unit ──────────────
         #
         # An import or an adjustment can leave 10.5 Pcs in a bin whose unit
-        # allows no fractions. Billing 11 is an oversell and 10 strands value;
-        # billing EXACTLY what is on hand empties the bin, and that is the one
-        # fractional quantity the whole-number rule lets through (2026-09-12).
+        # allows no fractions. The quantity billed stays WHOLE: 11 Pcs at
+        # 1,050 / 11 each, the bin's exact value. The server rounds the bin up
+        # by the missing 0.5 at zero cost before the sale, so this is not an
+        # oversell and the bin ends at zero (2026-09-12). A fraction is still
+        # refused, and 11 at any OTHER value is still an oversell.
         print("\n-- E. Close-out of fractional stock --")
         co_item = make_item(f"Closeout {tag}")
         set_stock(co_item, 10.5, 1050)
@@ -390,21 +392,45 @@ def main():
               f"{co_p}")
         bad = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
             "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
-            "items": [{"description": "part of it", "itemTypeId": co_item,
-                       "quantity": 10.4, "uom": "Pcs", "unitPrice": 100}]})
-        check("a fraction that is NOT the whole bin is still refused for an integer unit",
+            "items": [{"description": "a fraction", "itemTypeId": co_item,
+                       "quantity": 10.5, "uom": "Pcs", "unitPrice": 100}]})
+        check("a fractional quantity is still refused for an integer unit",
               bad.status_code == 400 and "whole number" in bad.text, f"{bad.status_code} {bad.text[:120]}")
+        co_company = requests.get(f"{api}/companies/{cid}", headers=h, timeout=60).json()
+        if co_company.get("stockGuardHardBlock"):
+            over = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+                "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
+                "items": [{"description": "11 at a made-up price", "itemTypeId": co_item,
+                           "quantity": 11, "uom": "Pcs", "unitPrice": 100}]})
+            check("11 at any other value is still an oversell",
+                  over.status_code == 409, f"{over.status_code} {over.text[:120]}")
         good = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
             "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
             "items": [{"description": "all of it", "itemTypeId": co_item,
-                       "quantity": 10.5, "uom": "Pcs", "unitPrice": 100}]})
-        check("billing exactly what is on hand is accepted", good.ok, f"{good.status_code} {good.text[:160]}")
+                       "quantity": 11, "uom": "Pcs", "unitPrice": round(1050 / 11, 12)}]})
+        check("11 whole pieces at the bin's exact value is accepted", good.ok, f"{good.status_code} {good.text[:160]}")
         if good.ok:
             check("and the line totals the stock's whole value",
                   near(good.json().get("subtotal"), 1050, 0.01), f"subtotal={good.json().get('subtotal')}")
             after = pricing([co_item]).get(co_item, {})
-            check("and the bin is empty afterwards",
-                  near(after.get("availableQuantity") or 0, 0, 0.000001), f"{after}")
+            check("and the bin is empty afterwards, quantity and value",
+                  near(after.get("availableQuantity") or 0, 0, 0.000001) and near(after.get("availableValueExcludingTax") or 0, 0, 0.01),
+                  f"{after}")
+
+        # A decimal-capable unit needs no rounding: the exact fraction is billed.
+        kg_unit = requests.get(f"{api}/units", headers=h, timeout=60).json()
+        kg_name = next((u["name"] for u in kg_unit if u.get("allowsDecimalQuantity")), None)
+        if kg_name:
+            kg_item = make_item(f"Closeout KG {tag}", uom=kg_name)
+            set_stock(kg_item, 7.25, 725)
+            kg_ok = requests.post(f"{api}/invoices/standalone", headers=h, timeout=120, json={
+                "date": today, "companyId": cid, "clientId": client["id"], "gstRate": 18,
+                "items": [{"description": "all of it", "itemTypeId": kg_item,
+                           "quantity": 7.25, "uom": kg_name, "unitPrice": 100}]})
+            check(f"a decimal unit ({kg_name}) bills its exact fractional on-hand", kg_ok.ok, f"{kg_ok.status_code} {kg_ok.text[:120]}")
+            kg_after = pricing([kg_item]).get(kg_item, {})
+            check("and that bin is empty afterwards too",
+                  near(kg_after.get("availableQuantity") or 0, 0, 0.000001), f"{kg_after}")
 
         # ── B. Advance tax ────────────────────────────────────────────────
         print("\n-- B. Advance income tax (236G / 236H) --")
