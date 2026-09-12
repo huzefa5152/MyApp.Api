@@ -117,6 +117,58 @@ CheckRate("rate.text", PercentRate.ToPercent(null, "n/a"), null);
 // and 100% is a rate that exists while 1% is not one any of them use.
 CheckRate("rate.one", PercentRate.ToPercent(1m, "1"), 100m);
 
+void CheckStr(string name, string actual, string expected)
+{
+    checks++;
+    if (actual != expected) failures.Add($"{name}: expected \"{expected}\", got \"{actual}\"");
+}
+void CheckBool(string name, bool actual, bool expected)
+{
+    checks++;
+    if (actual != expected) failures.Add($"{name}: expected {expected}, got {actual}");
+}
+
+// HS codes arrive decorated. Alpha writes "8205.4000:-".
+CheckStr("hs.suffix", GdCostingMapping.CleanHsCode("8205.4000:-"), "8205.4000");
+CheckStr("hs.plain", GdCostingMapping.CleanHsCode("7018.1000"), "7018.1000");
+CheckStr("hs.spaces", GdCostingMapping.CleanHsCode("  9405.1110 "), "9405.1110");
+CheckStr("hs.trailingDot", GdCostingMapping.CleanHsCode("8481.1000."), "8481.1000");
+CheckStr("hs.null", GdCostingMapping.CleanHsCode(null), "");
+
+// A TOTALS row carries a GD number and a summed cost but no description and no
+// selling value. Alpha row 30 holds 18,816,870 - the sum of the 26 lines above
+// it - and importing it would double the consignment.
+CheckBool("totals.alphaRow30", GdCostingMapping.LooksLikeTotalsRow("", 0m), true);
+CheckBool("totals.nullBoth", GdCostingMapping.LooksLikeTotalsRow(null, null), true);
+
+// A real line always has a description. Both halves of the test are required:
+// a genuine zero-value line must still import.
+CheckBool("totals.zeroValueLine", GdCostingMapping.LooksLikeTotalsRow("SCREW DRIVER", 0m), false);
+CheckBool("totals.realLine", GdCostingMapping.LooksLikeTotalsRow("SCREW DRIVER", 72905m), false);
+CheckBool("totals.descOnly", GdCostingMapping.LooksLikeTotalsRow("Total", 0m), false);
+
+// A mapping with no GD number column cannot drive an import.
+{
+    checks++;
+    try
+    {
+        GdCostingMapping.Parse("{\"columns\":{\"description\":3,\"quantity\":4}}");
+        failures.Add("parse.noGd: expected a rejection, got none");
+    }
+    catch (InvalidOperationException) { /* expected */ }
+}
+
+// Valid JSON round-trips.
+{
+    var m = GdCostingMapping.Parse(
+        "{\"headerRow\":1,\"firstDataRow\":3,\"columns\":{\"gdNumber\":1,\"gdDate\":2," +
+        "\"description\":3,\"quantity\":4,\"unit\":5,\"hsCode\":6,\"assessedValue\":7," +
+        "\"customsDuty\":8,\"acd\":9,\"regulatoryDuty\":10,\"salesTaxRate\":12," +
+        "\"astRate\":14,\"others\":16,\"incomeTaxRate\":19,\"addOnProfit\":22,\"sellingValue\":23}}");
+    Check("parse.firstDataRow", m.FirstDataRow, 3m);
+    Check("parse.sellingValue", m.Columns.SellingValue ?? 0, 23m);
+}
+
 Console.WriteLine($"{checks} checks, {failures.Count} failed");
 foreach (var f in failures) Console.WriteLine("  FAIL " + f);
 if (failures.Count > 0) return 1;

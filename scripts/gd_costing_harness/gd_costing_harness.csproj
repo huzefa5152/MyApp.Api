@@ -20,5 +20,8 @@
     <Compile Include="..\..\Helpers\ImportCostingCalculator.cs" />
     <Compile Include="..\..\Helpers\ExcelImport\CellNumber.cs" />
     <Compile Include="..\..\Helpers\ExcelImport\PercentRate.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\IImportedWorkbook.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\SheetSelector.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\GdCostingMapping.cs" />
   </ItemGroup>
 </Project>
