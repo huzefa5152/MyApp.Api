@@ -433,6 +433,7 @@ builder.Services.AddScoped<IImportProfileService, ImportProfileService>();
 builder.Services.AddScoped<ISpreadsheetImportService, SpreadsheetImportService>();
 builder.Services.AddScoped<IOpeningStockImportService, OpeningStockImportService>();
 builder.Services.AddScoped<ICustomerLedgerImportService, CustomerLedgerImportService>();
+builder.Services.AddScoped<IGdCostingImportService, GdCostingImportService>();
 builder.Services.AddScoped<INonInventoryItemService, NonInventoryItemService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IFbrService, FbrService>();

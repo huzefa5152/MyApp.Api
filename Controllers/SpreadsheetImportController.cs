@@ -33,6 +33,7 @@ namespace MyApp.Api.Controllers
         private readonly IImportProfileService _profiles;
         private readonly IOpeningStockImportService _openingStock;
         private readonly ICustomerLedgerImportService _customerLedger;
+        private readonly IGdCostingImportService _gdCosting;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IPermissionService _permissions;
@@ -44,6 +45,7 @@ namespace MyApp.Api.Controllers
             IImportProfileService profiles,
             IOpeningStockImportService openingStock,
             ICustomerLedgerImportService customerLedger,
+            IGdCostingImportService gdCosting,
             ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess,
             IPermissionService permissions,
@@ -54,6 +56,7 @@ namespace MyApp.Api.Controllers
             _profiles = profiles;
             _openingStock = openingStock;
             _customerLedger = customerLedger;
+            _gdCosting = gdCosting;
             _access = access;
             _divisionAccess = divisionAccess;
             _permissions = permissions;
@@ -79,6 +82,7 @@ namespace MyApp.Api.Controllers
         {
             ImportKinds.OpeningStock => "spreadsheetimport.stock.run",
             ImportKinds.CustomerLedger => "spreadsheetimport.ledger.run",
+            ImportKinds.GdCosting => "importcosting.sheet.run",
             _ => null,
         };
 
@@ -301,6 +305,86 @@ namespace MyApp.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Customer ledger commit failed for company {CompanyId}", dto.CompanyId);
+                return StatusCode(500, new { message = "The import could not be completed. Nothing was changed." });
+            }
+        }
+
+        // ── GD costing (customs consignment cost) ────────────────────────────
+
+        /// <summary>
+        /// Reads the GD costing sheet and matches every line against the
+        /// company's existing opening stock, in memory. Writes nothing.
+        /// </summary>
+        [HttpPost("gd-costing/preview")]
+        [HasPermission("importcosting.sheet.run")]
+        [RequestSizeLimit(ExcelUploadValidator.MaxBytes)]
+        public async Task<ActionResult<GdCostingPreviewDto>> PreviewGdCosting(
+            [FromForm] IFormFile file,
+            [FromQuery] int companyId,
+            [FromQuery] int? profileId,
+            [FromForm] string? mappingJson)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            if (!await CompanyExistsAsync(companyId))
+                return NotFound(new { message = "That company no longer exists." });
+
+            var validated = await ExcelUploadValidator.ValidateAsync(file, HttpContext.RequestAborted);
+            if (!validated.Ok) return BadRequest(new { message = validated.Error });
+
+            var resolved = await ResolveMappingAsync(
+                profileId, mappingJson, ImportKinds.GdCosting, companyId);
+            if (resolved.Error != null) return resolved.Error;
+
+            try
+            {
+                return Ok(await _gdCosting.PreviewAsync(
+                    validated.Bytes, validated.Extension, validated.FileName, validated.Sha256,
+                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GD costing preview failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "The file could not be read. Please check it and try again." });
+            }
+        }
+
+        /// <summary>
+        /// Writes the reviewed lines: one consignment per GD, one line per row,
+        /// and the actual cost onto every matched opening balance. No stock
+        /// movement and no GL entry — see <see cref="IGdCostingImportService"/>.
+        /// </summary>
+        [HttpPost("gd-costing/commit")]
+        [HasPermission("importcosting.sheet.run")]
+        public async Task<ActionResult<GdCostingCommitResultDto>> CommitGdCosting(
+            [FromBody] GdCostingCommitDto dto)
+        {
+            if (dto == null || dto.CompanyId <= 0)
+                return BadRequest(new { message = "Choose a company to import into." });
+
+            await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId);
+            if (!await CompanyExistsAsync(dto.CompanyId))
+                return NotFound(new { message = "That company no longer exists." });
+
+            if (dto.Lines == null || dto.Lines.Count == 0)
+                return BadRequest(new { message = "There is nothing to import." });
+            if (dto.Lines.Count > Services.Implementations.GdCostingImportService.MaxSourceRows)
+                return BadRequest(new { message = "Too many rows in one import. Split the file and try again." });
+
+            try
+            {
+                return Ok(await _gdCosting.CommitAsync(dto, CurrentUserId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GD costing commit failed for company {CompanyId}", dto.CompanyId);
                 return StatusCode(500, new { message = "The import could not be completed. Nothing was changed." });
             }
         }
