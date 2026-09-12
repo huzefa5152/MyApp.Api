@@ -51,6 +51,37 @@
         /// <summary>Value that came in, and went out, over the item's life.</summary>
         public decimal ValueIn { get; set; }
         public decimal ValueOut { get; set; }
+
+        // ── Actual (landed) cost, alongside the selling value ────────────────
+        // From the GD costing import's OpeningStockBalance.ActualCostExcludingTax,
+        // walked by the SAME StockValuation pass as everything else on this row
+        // — it DEPLETES as stock sells, exactly like ValueExcludingTax does,
+        // never a static opening figure. Zero means not known (nothing imported
+        // an actual cost for this item).
+
+        /// <summary>What the on-hand quantity actually cost, excluding tax.</summary>
+        public decimal ActualCostExcludingTax { get; set; }
+
+        /// <summary>Weighted-average ACTUAL cost of a single unit on hand —
+        /// the actual-cost pool's own <see cref="UnitCost"/>.</summary>
+        public decimal ActualUnitCost { get; set; }
+
+        /// <summary>Selling value less actual cost. Negative is a real state —
+        /// stock whose selling value has fallen below what it cost — and must
+        /// render as such, never clamped.</summary>
+        public decimal Margin => ValueExcludingTax - ActualCostExcludingTax;
+
+        /// <summary>
+        /// Margin as a percentage of selling value, or NULL when there is no
+        /// selling value to measure against — the same rule
+        /// <see cref="OpeningStockBalanceDto.MarginPercent"/> already applies,
+        /// for the same reason: a row can carry a real actual cost with no
+        /// selling value yet, and a MarginPercent of 0 would read as breakeven
+        /// on a row that is entirely under water.
+        /// </summary>
+        public decimal? MarginPercent => ValueExcludingTax > 0m
+            ? Math.Round(Margin * 100m / ValueExcludingTax, 2, MidpointRounding.AwayFromZero)
+            : null;
     }
 
     /// <summary>
@@ -92,6 +123,16 @@
 
         /// <summary>Value on hand immediately after, excluding sales tax.</summary>
         public decimal RunningValue { get; set; }
+
+        /// <summary>Actual (landed) cost of one unit, as this movement was
+        /// valued by the actual-cost pool —
+        /// <see cref="MyApp.Api.Helpers.StockValuation.Step"/>'s own figure,
+        /// never recomputed.</summary>
+        public decimal ActualUnitCost { get; set; }
+
+        /// <summary>Actual cost on hand immediately after this movement,
+        /// excluding tax — the actual-cost pool's own running total.</summary>
+        public decimal RunningActualValue { get; set; }
     }
 
     public class OpeningStockBalanceDto

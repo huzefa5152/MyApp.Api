@@ -343,6 +343,17 @@ Publish output optimized from 79 MB to 37 MB via:
   value. Nothing is guessed: a line the server itself finds a real match for
   is costed onto that match instead, whatever the sheet review claimed, and a
   line matching more than one balance is still left alone.
+- **Actual cost and margin now deplete as stock sells, and show on the
+  On-Hand tab too.** Until now the landed cost only lived on the Opening
+  Balances screen, as a static figure. The same weighted-average walk that
+  already prices stock on hand now carries actual cost alongside selling
+  value: 100 units landed at 800,000, sell 40, and the 60 left show 480,000 —
+  never a fixed number. **Dashboards ▸ Inventory ▸ On-Hand** gains Actual Cost
+  and Margin, on the desktop table and the mobile cards, and the movements
+  history shows the actual cost behind each line — all from the one walk,
+  never recomputed. Margin shows a dash rather than a false 0% when there is
+  no selling value yet, the same rule the Opening Balances screen already
+  follows.
 
 ### 2026-09-13 — Stock export scrolls properly
 

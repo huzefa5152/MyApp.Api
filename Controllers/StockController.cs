@@ -122,6 +122,7 @@ namespace MyApp.Api.Controllers
                     ItemTypeId = g.Key,
                     Qty = g.Sum(o => o.Quantity),
                     Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
                     Rate = g.Max(o => o.SalesTaxRate),
                 })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x);
@@ -165,6 +166,7 @@ namespace MyApp.Api.Controllers
                 var position = StockValuation.Compute(
                     opening,
                     open?.Value ?? 0m,
+                    open?.ActualCost ?? 0m,
                     open?.Rate ?? 0m,
                     itemMovements,
                     trace);
@@ -194,6 +196,11 @@ namespace MyApp.Api.Controllers
                     // standing when it happened. Never recomputed here.
                     ValueIn = position.ValueIn,
                     ValueOut = position.ValueOut,
+                    // Actual-cost pool, from the SAME walk -- depletes as stock
+                    // sells exactly like ValueExcludingTax does. Margin /
+                    // MarginPercent are derived on the DTO itself.
+                    ActualCostExcludingTax = position.ActualValueExcludingTax,
+                    ActualUnitCost = Math.Round(position.ActualUnitCost, 4),
                     LastMovementAt = lastDates.TryGetValue(id, out var d) ? d : null,
                 });
 
@@ -220,6 +227,9 @@ namespace MyApp.Api.Controllers
                         Value = steps.TryGetValue(m.Id, out var sv) ? sv.Amount : 0m,
                         RunningQuantity = steps.TryGetValue(m.Id, out var sq) ? sq.RunningQuantity : 0m,
                         RunningValue = steps.TryGetValue(m.Id, out var sr) ? sr.RunningValue : 0m,
+                        ActualUnitCost = steps.TryGetValue(m.Id, out var sa)
+                            ? Math.Round(sa.ActualUnitCost, 4, MidpointRounding.AwayFromZero) : 0m,
+                        RunningActualValue = steps.TryGetValue(m.Id, out var sra) ? sra.RunningActualValue : 0m,
                     })
                     .ToList();
             }
@@ -479,6 +489,7 @@ namespace MyApp.Api.Controllers
                         ItemTypeId = g.Key,
                         Qty = g.Sum(o => o.Quantity),
                         Value = g.Sum(o => o.ValueExcludingTax),
+                        ActualCost = g.Sum(o => o.ActualCostExcludingTax),
                         Rate = g.Max(o => o.SalesTaxRate),
                     })
                     .ToDictionaryAsync(x => x.ItemTypeId, x => x);
@@ -496,8 +507,8 @@ namespace MyApp.Api.Controllers
                 {
                     var open = histOpenings.GetValueOrDefault(grp.Key);
                     var trace = new List<StockValuation.Step>();
-                    StockValuation.Compute(open?.Qty ?? 0m, open?.Value ?? 0m, open?.Rate ?? 0m,
-                                           grp.ToList(), trace);
+                    StockValuation.Compute(open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m,
+                                           open?.Rate ?? 0m, grp.ToList(), trace);
                     foreach (var st in trace) steps[st.MovementId] = st;
                 }
 
@@ -508,6 +519,8 @@ namespace MyApp.Api.Controllers
                     r.Value = st.Amount;
                     r.RunningQuantity = st.RunningQuantity;
                     r.RunningValue = st.RunningValue;
+                    r.ActualUnitCost = Math.Round(st.ActualUnitCost, 4, MidpointRounding.AwayFromZero);
+                    r.RunningActualValue = st.RunningActualValue;
                 }
             }
 

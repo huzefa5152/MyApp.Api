@@ -687,6 +687,8 @@ export default function StockDashboardPage() {
                           <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
+                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
+                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
                           {canAdjust && <th style={styles.th} aria-label="Actions"></th>}
                         </tr>
                       </thead>
@@ -694,7 +696,7 @@ export default function StockDashboardPage() {
                         {onhandPageRows.map((r, idx) => {
                           const isOpen = expandedId === r.itemTypeId;
                           const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 5 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0);
+                          const colCount = 5 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0) + (canViewActualCost ? 2 : 0);
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
@@ -752,6 +754,19 @@ export default function StockDashboardPage() {
                               </div>
                             </td>
                             <td style={{ ...styles.tdMoney, fontWeight: 700 }}>{money(r.valueIncludingTax)}</td>
+                            {canViewActualCost && (
+                              <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
+                                {r.actualCostExcludingTax ? money(r.actualCostExcludingTax) : "—"}
+                              </td>
+                            )}
+                            {canViewActualCost && (
+                              <td style={{ ...styles.tdMoney, fontWeight: 600, color: r.margin < 0 ? colors.negative : colors.textPrimary }}>
+                                {money(r.margin)}
+                                <div style={styles.rateChip}>
+                                  {r.marginPercent != null ? `${num(r.marginPercent)}%` : "—"}
+                                </div>
+                              </td>
+                            )}
                             {canAdjust && (
                               <td style={styles.td} onClick={e => e.stopPropagation()}>
                                 <button type="button" style={rowAdjustBtn} onClick={() => openAdjustForRow(r)} title={`Record a stock adjustment for ${r.itemTypeName}`}>
@@ -767,6 +782,7 @@ export default function StockDashboardPage() {
                                   rows={drill[r.itemTypeId]}
                                   loading={drillLoading === r.itemTypeId}
                                   uom={r.uom}
+                                  canViewActualCost={canViewActualCost}
                                 />
                               </td>
                             </tr>
@@ -830,6 +846,22 @@ export default function StockDashboardPage() {
                             <span className="stock-card__stat-label">Including</span>
                             <span className="stock-card__stat-value" style={{ fontWeight: 700 }}>{money(r.valueIncludingTax)}</span>
                           </div>
+                          {canViewActualCost && (
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Actual Cost</span>
+                              <span className="stock-card__stat-value">
+                                {r.actualCostExcludingTax ? money(r.actualCostExcludingTax) : "—"}
+                              </span>
+                            </div>
+                          )}
+                          {canViewActualCost && (
+                            <div className="stock-card__stat">
+                              <span className="stock-card__stat-label">Margin</span>
+                              <span className="stock-card__stat-value" style={{ color: r.margin < 0 ? colors.negative : undefined }}>
+                                {money(r.margin)} {r.marginPercent != null ? `(${num(r.marginPercent)}%)` : "(—)"}
+                              </span>
+                            </div>
+                          )}
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Last Move</span>
                             <span className="stock-card__stat-value stock-card__stat-value--muted">
@@ -844,7 +876,7 @@ export default function StockDashboardPage() {
                           </button>
                         )}
                         {isOpen && canViewMovements && (
-                          <DrillPanel rows={drill[r.itemTypeId]} loading={drillLoading === r.itemTypeId} uom={r.uom} />
+                          <DrillPanel rows={drill[r.itemTypeId]} loading={drillLoading === r.itemTypeId} uom={r.uom} canViewActualCost={canViewActualCost} />
                         )}
                         {canAdjust && (
                           <button type="button" style={cardAdjustBtn} onClick={() => openAdjustForRow(r)}>
@@ -1436,7 +1468,7 @@ export default function StockDashboardPage() {
 // with 3 lines of this item shows one row, not three. Adjustments, opening
 // stock and document-less reversals stay individual. Newest-first with a
 // running on-hand computed after each whole document.
-function DrillPanel({ rows, loading, uom }) {
+function DrillPanel({ rows, loading, uom, canViewActualCost }) {
   if (loading) {
     return <div style={drillStyles.state}><div style={styles.spinner} /></div>;
   }
@@ -1470,6 +1502,9 @@ function DrillPanel({ rows, loading, uom }) {
       last.value = Number(last.value) + Number(m.value || 0);
       last.balance = runQty;
       last.runningValue = Number(m.runningValue || 0);
+      // Actual-cost pool's own running total -- a point-in-time state, like
+      // runningValue, so the LATEST line in the group wins rather than summing.
+      last.runningActualValue = Number(m.runningActualValue || 0);
       last.lineCount += 1;
       last.id = m.id;                     // newest id keeps the React key stable
       last.movementDate = m.movementDate; // same document date; keep newest
@@ -1480,6 +1515,7 @@ function DrillPanel({ rows, loading, uom }) {
         value: Number(m.value || 0),
         balance: runQty,
         runningValue: Number(m.runningValue || 0),
+        runningActualValue: Number(m.runningActualValue || 0),
         lineCount: 1,
       });
     }
@@ -1517,7 +1553,10 @@ function DrillPanel({ rows, loading, uom }) {
                   {isIn ? "+" : "−"}{money(m.value)}
                 </span>
                 <span style={drillStyles.date}>{new Date(m.movementDate).toLocaleDateString()}</span>
-                <span style={drillStyles.bal}>bal {fmtQty(m.balance)} · {money(m.runningValue)}</span>
+                <span style={drillStyles.bal}>
+                  bal {fmtQty(m.balance)} · {money(m.runningValue)}
+                  {canViewActualCost && ` (actual ${money(m.runningActualValue)})`}
+                </span>
               </div>
               {noteText && <div style={drillStyles.notes}>{noteText}</div>}
             </div>

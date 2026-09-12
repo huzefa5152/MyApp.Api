@@ -186,6 +186,7 @@ namespace MyApp.Api.Services.Implementations
                     ItemTypeId = g.Key,
                     Qty = g.Sum(o => o.Quantity),
                     Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
                     Rate = g.Max(o => o.SalesTaxRate),
                 })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x);
@@ -206,7 +207,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var open = openings.GetValueOrDefault(id);
                 result[id] = StockValuation.Compute(
-                    open?.Qty ?? 0m, open?.Value ?? 0m, open?.Rate ?? 0m,
+                    open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m, open?.Rate ?? 0m,
                     byItem.GetValueOrDefault(id) ?? new List<StockMovement>());
             }
             return result;

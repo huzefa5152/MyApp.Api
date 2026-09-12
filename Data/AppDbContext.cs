@@ -1454,6 +1454,12 @@ namespace MyApp.Api.Data
             // A signed money correction, so 2dp like every other stored amount.
             modelBuilder.Entity<StockMovement>()
                 .Property(m => m.ValueAdjustmentExcludingTax).HasColumnType("decimal(18,2)");
+            // Actual-cost pool: same two columns, same precisions, one field
+            // each mirroring UnitCostExcludingTax / ValueAdjustmentExcludingTax.
+            modelBuilder.Entity<StockMovement>()
+                .Property(m => m.ActualUnitCostExcludingTax).HasColumnType("decimal(18,4)");
+            modelBuilder.Entity<StockMovement>()
+                .Property(m => m.ActualValueAdjustmentExcludingTax).HasColumnType("decimal(18,2)");
 
             // ── Spreadsheet import ─────────────────────────────────────────
             // ImportProfile mirrors POFormat: the signature hash is the routing

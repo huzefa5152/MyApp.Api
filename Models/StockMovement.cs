@@ -105,6 +105,32 @@ namespace MyApp.Api.Models
         /// </summary>
         public decimal? ValueAdjustmentExcludingTax { get; set; }
 
+        /// <summary>
+        /// Cost per unit at ACTUAL (landed) cost, excluding tax, when the
+        /// SOURCE knows one — mirrors <see cref="UnitCostExcludingTax"/>
+        /// exactly, one field per valuation pool (Helpers/StockValuation runs
+        /// the two as parallel accumulators under identical rules).
+        ///
+        /// NULL means "value me at the running ACTUAL average", the same
+        /// contract the selling pool already uses. That is what lets every
+        /// write path that does not yet know an actual cost stay untouched,
+        /// and an outward movement must never carry one: stock leaving always
+        /// costs out at the running actual average, never at a stated figure
+        /// — an outward movement is never valued at anything but cost.
+        /// </summary>
+        public decimal? ActualUnitCostExcludingTax { get; set; }
+
+        /// <summary>
+        /// A SIGNED correction to the stock's ACTUAL cost, applied without
+        /// moving any quantity — mirrors <see cref="ValueAdjustmentExcludingTax"/>
+        /// exactly, one field per pool. Set only on a
+        /// <see cref="StockMovementSourceType.Revaluation"/> row (Quantity 0),
+        /// which may carry either signed correction, both, or neither: the
+        /// selling-value pool and the actual-cost pool are corrected
+        /// independently of each other.
+        /// </summary>
+        public decimal? ActualValueAdjustmentExcludingTax { get; set; }
+
         public StockMovementSourceType SourceType { get; set; }
 
         /// <summary>
