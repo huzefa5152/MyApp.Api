@@ -84,6 +84,29 @@ const st = {
     fontSize: "0.87rem", lineHeight: 1.6,
   },
 
+  modesGrid: {
+    display: "grid", gap: "0.75rem", margin: "0.2rem 0 0.9rem",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
+  },
+  modeCard: {
+    padding: "0.85rem 0.95rem", borderRadius: 10, background: colors.inputBg,
+    border: `1px solid ${colors.inputBorder}`, display: "flex", flexDirection: "column", gap: "0.35rem",
+  },
+  modeBadge: {
+    display: "inline-flex", alignSelf: "flex-start", padding: "0.2rem 0.6rem", borderRadius: 999,
+    background: colors.blue, color: "#fff", fontSize: "0.66rem", fontWeight: 800,
+    textTransform: "uppercase", letterSpacing: "0.05em",
+  },
+  modeTitle: { margin: 0, fontSize: "0.94rem", fontWeight: 800, color: colors.textPrimary },
+  modeText: { margin: 0, fontSize: "0.87rem", lineHeight: 1.6, color: colors.textPrimary },
+  modeUse: { margin: 0, fontSize: "0.8rem", lineHeight: 1.5, color: colors.textSecondary, fontStyle: "italic" },
+
+  plannedBadge: {
+    display: "inline-flex", padding: "0.2rem 0.6rem", borderRadius: 999,
+    background: "rgba(217,119,6,0.18)", color: "#b26a00", fontSize: "0.66rem", fontWeight: 800,
+    textTransform: "uppercase", letterSpacing: "0.05em",
+  },
+
   tableScroll: { overflowX: "auto", marginBottom: "0.4rem" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem", minWidth: 480 },
   th: {
@@ -110,11 +133,13 @@ function PathPill({ children }) {
 const SECTIONS = [
   { id: "what-it-does", short: "1. What this does" },
   { id: "before-you-start", short: "2. Before you start" },
-  { id: "step-by-step", short: "3. Step by step" },
-  { id: "the-result", short: "4. The result" },
-  { id: "fix-by-hand", short: "5. Fixing by hand" },
-  { id: "glossary", short: "6. What the words mean" },
-  { id: "faq", short: "7. Common questions" },
+  { id: "import-modes", short: "3. Choosing the mode" },
+  { id: "step-by-step", short: "4. Step by step" },
+  { id: "the-result", short: "5. The result" },
+  { id: "fix-by-hand", short: "6. Fixing by hand" },
+  { id: "the-books", short: "7. Where this hits the books" },
+  { id: "glossary", short: "8. What the words mean" },
+  { id: "faq", short: "9. Common questions" },
 ];
 
 export default function ImportGuidePage() {
@@ -168,8 +193,56 @@ export default function ImportGuidePage() {
         </p>
       </section>
 
+      <section id="import-modes" style={st.section}>
+        <h2 style={st.h2}><span style={st.sectionNum}>3</span> Choosing the import mode</h2>
+        <p style={st.p}>
+          Next to the file picker is a choice of two modes, and it is the single most
+          important setting on the screen — it decides what a matching line actually does.
+        </p>
+
+        <div style={st.modesGrid}>
+          <div style={st.modeCard}>
+            <span style={st.modeBadge}>Default</span>
+            <p style={st.modeTitle}>"These goods are already on the books"</p>
+            <p style={st.modeText}>
+              A matched line <strong>sets</strong> the actual cost to the GD's unit cost
+              multiplied by the quantity already on the books. Quantity is not changed.
+            </p>
+            <p style={st.modeUse}>Use for the one-off backfill of history.</p>
+          </div>
+          <div style={st.modeCard}>
+            <p style={st.modeTitle}>"These are new arrivals"</p>
+            <p style={st.modeText}>
+              A matched line <strong>adds</strong> its quantity, actual cost and selling value
+              to what is on the books, so the cost per unit becomes a weighted average across
+              consignments.
+            </p>
+            <p style={st.modeUse}>Use for every monthly GD.</p>
+          </div>
+        </div>
+
+        <div style={st.warn}>
+          <strong>Why you have to choose — the failure is silent.</strong> Say an item was
+          imported last month, so it already has a balance on the books, and this month's line
+          matches it again. In backfill mode, that match <strong>overwrites</strong> the cost
+          with this month's rate applied to last month's quantity — the units that actually
+          arrived this month never appear on the books, and nothing on screen says so. Picking
+          the mode that matches what the file really is — history being backfilled, or stock
+          that just landed — is what stops that from happening.
+        </div>
+
+        <p style={st.p}>
+          A line that matches nothing at all is a separate choice again: ticking{" "}
+          <strong>"bring the unmatched lines in as new stock"</strong> creates an item type
+          from the sheet's own name and HS code, then an opening balance for it. An item type
+          already on the books is reused only when its <strong>HS code and its name both
+          match</strong> — one HS code can genuinely cover several different products, so the
+          name is what tells them apart.
+        </p>
+      </section>
+
       <section id="step-by-step" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>3</span> Step by step</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>4</span> Step by step</h2>
         <PathPill>Purchases &#9656; Import Costing</PathPill>
         <ol style={st.ol}>
           <li style={st.li}>Pick the company at the top of the page.</li>
@@ -187,7 +260,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="the-result" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>4</span> What the result looks like</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>5</span> What the result looks like</h2>
         <PathPill>Dashboards &#9656; Inventory &#9656; Opening Balances</PathPill>
         <p style={st.p}>
           The <strong>Actual cost</strong> and <strong>Margin</strong> columns are now filled in
@@ -201,7 +274,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="fix-by-hand" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>5</span> Fixing a figure by hand</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>6</span> Fixing a figure by hand</h2>
         <PathPill>Dashboards &#9656; Inventory &#9656; Opening Balances</PathPill>
         <p style={st.p}>
           On the same screen, edit the row and type a new value into <strong>Actual cost</strong>.
@@ -212,8 +285,75 @@ export default function ImportGuidePage() {
         </div>
       </section>
 
+      <section id="the-books" style={st.section}>
+        <h2 style={st.h2}><span style={st.sectionNum}>7</span> Where this hits the books</h2>
+
+        <div style={st.warn}>
+          <strong>Today, this import posts nothing to the general ledger.</strong> The ledger
+          holds invoice entries only — actual cost is inventory information, and it changes
+          the stock dashboard and nothing else. In particular,{" "}
+          <strong>no accounts payable is created</strong>: what you owe the supplier and the
+          clearing agent for a consignment is not recorded by this import. Keep recording that
+          however your business does it today — it is not linked to the consignment.
+        </div>
+
+        <p style={st.p}>
+          The sheet's sales tax, additional sales tax (AST) and income tax figures are
+          calculated and shown on the preview so you can reconcile them against the GD — they
+          are <strong>shown, not posted</strong>. Nothing is written to any tax account either.
+        </p>
+
+        <div style={st.warn}>
+          <span style={st.plannedBadge}>Planned — not built yet</span>
+          <p style={{ ...st.p, margin: "0.5rem 0 0.7rem" }}>
+            The design for later is one balanced entry per GD, dated the GD's own date:
+          </p>
+          <div style={st.tableScroll}>
+            <table style={st.table}>
+              <thead>
+                <tr>
+                  <th style={st.th}>Account</th>
+                  <th style={st.th}>Debit</th>
+                  <th style={st.th}>Credit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={st.td}>Inventory</td>
+                  <td style={st.td}>Sum of Cost (new-stock lines only)</td>
+                  <td style={st.td}>—</td>
+                </tr>
+                <tr>
+                  <td style={st.td}>Input Tax</td>
+                  <td style={st.td}>Sum of Sales tax + AST</td>
+                  <td style={st.td}>—</td>
+                </tr>
+                <tr>
+                  <td style={st.td}>Advance Income Tax on Imports</td>
+                  <td style={st.td}>Sum of Income tax</td>
+                  <td style={st.td}>—</td>
+                </tr>
+                <tr>
+                  <td style={{ ...st.td, fontWeight: 700 }}>Import Clearing</td>
+                  <td style={st.td}>—</td>
+                  <td style={{ ...st.td, fontWeight: 700 }}>The balancing total</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style={{ ...st.p, margin: "0.7rem 0 0" }}>
+            <strong>Import Clearing</strong> is planned as the liability account where the
+            amount owed for the import will sit. The sheet names no supplier and no payment
+            reference, so there is nothing else it could credit — you would settle it yourself
+            once the real payment is recorded. A backfill line would still add nothing to the
+            Inventory debit even once this is built, because that stock was never posted to
+            the ledger in the first place.
+          </p>
+        </div>
+      </section>
+
       <section id="glossary" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>6</span> What the words mean</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>8</span> What the words mean</h2>
         <div style={st.tableScroll}>
           <table style={st.table}>
             <thead>
@@ -232,7 +372,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="faq" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>7</span> Common questions</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>9</span> Common questions</h2>
 
         <div style={st.qa}>
           <p style={st.q}>Why is a line "not matched"?</p>
