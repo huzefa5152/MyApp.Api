@@ -644,6 +644,7 @@ function GlResultBanner({ result, onDismiss }) {
     ["Accounts seeded", result.seededAccounts],
     ["Invoices posted", result.postedInvoices],
     ["Bills posted", result.postedBills],
+    ["Consignments posted", result.postedConsignments],
     ["Payments posted", result.postedPayments],
     ["Transfers posted", result.postedTransfers],
     ["Entries removed", result.removedEntries],

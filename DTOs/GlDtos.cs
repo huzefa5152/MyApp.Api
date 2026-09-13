@@ -23,6 +23,7 @@ namespace MyApp.Api.DTOs
         public int PostedInvoices { get; set; }
         public int PostedBills { get; set; }
         public int PostedDebitNotes { get; set; }
+        public int PostedConsignments { get; set; }
         public int PostedPayments { get; set; }
         public int PostedTransfers { get; set; }
         public int RemovedEntries { get; set; }

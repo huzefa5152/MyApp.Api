@@ -143,7 +143,7 @@ namespace MyApp.Api.Services.Implementations
                     ExceptionType = "GL_ENABLE_V1",
                     Message = $"GL posting enabled for company {companyId}: seeded {seeded} accounts, " +
                               $"posted {result.PostedInvoices} invoices / {result.PostedBills} bills / " +
-                              $"{result.PostedDebitNotes} debit notes / " +
+                              $"{result.PostedDebitNotes} debit notes / {result.PostedConsignments} consignments / " +
                               $"{result.PostedPayments} payments / {result.PostedTransfers} transfers.",
                 });
             }
@@ -216,6 +216,49 @@ namespace MyApp.Api.Services.Implementations
                 _context.ChangeTracker.Clear();
             }
 
+            // GD import consignments — New Arrivals mode only. A Backfill GD
+            // never posts (the caller-side gate documented on
+            // IPostingService.PostImportConsignmentAsync itself — its matched
+            // lines still carry real tax amounts, so this filter is load-bearing
+            // here too, not mere belt-and-braces) — mirrors exactly what
+            // GdCostingImportService.CommitAsync already does at commit time.
+            // ImportConsignment.Mode is written once, at commit, from
+            // GdCostingImportModeNames.Normalize(...) and never changed
+            // afterward (see the column's own doc comment and the migration
+            // that backfilled it), so every stored value is already exactly
+            // "backfill" or "new-arrivals" — a plain equality against the
+            // GdCostingImportModeNames constant is both correct (nothing needs
+            // re-normalizing) and SQL-translatable, unlike Normalize() itself
+            // (a switch expression EF cannot translate), so the id list below
+            // is selected straight from the database rather than materialized
+            // client-side first.
+            //
+            // Placed after debit notes and before payments: a payment can now
+            // carry an Import Clearing settlement allocation against a
+            // consignment (PaymentService.AssertNoConsignmentOversettleAsync),
+            // so the liability this pass (re)creates belongs in the ledger
+            // before anything that might settle it.
+            var consignmentIds = await _context.ImportConsignments.AsNoTracking()
+                .Where(c => c.CompanyId == companyId && c.Mode == GdCostingImportModeNames.NewArrivals
+                            && (lockDate == null || c.GdDate > lockDate))
+                .OrderBy(c => c.GdDate).ThenBy(c => c.Id)
+                .Select(c => c.Id).ToListAsync();
+            foreach (var chunk in Chunk(consignmentIds, 200))
+            {
+                // TRACKED, unlike every other pass above — PostImportConsignmentAsync
+                // writes consignment.ImportClearingCredited on the same instance it
+                // is given and persists it with its own internal SaveChangesAsync().
+                // An AsNoTracking() row has no change-tracker entry, so that write
+                // would be silently lost: the journal entry would post correctly
+                // (it doesn't depend on tracking) while the consignment row kept
+                // reading ImportClearingCredited=0 / settlementStatus=not-posted
+                // forever — caught by this task's own new suite (Section 20a).
+                var rows = await _context.ImportConsignments
+                    .Where(c => chunk.Contains(c.Id)).ToListAsync();
+                foreach (var consignment in rows) { await _posting.PostImportConsignmentAsync(consignment); result.PostedConsignments++; }
+                _context.ChangeTracker.Clear();
+            }
+
             var paymentIds = await _context.Payments.AsNoTracking()
                 .Where(p => p.CompanyId == companyId && !p.IsCancelled && p.Amount != 0 && (lockDate == null || p.Date > lockDate))
                 .OrderBy(p => p.Date).ThenBy(p => p.Id)
@@ -236,8 +279,8 @@ namespace MyApp.Api.Services.Implementations
             _context.ChangeTracker.Clear();
 
             _logger.LogInformation(
-                "GL rebuild for company {CompanyId}: {Invoices} invoices, {Bills} bills, {DebitNotes} debit notes, {Payments} payments, {Transfers} transfers ({Removed} old entries removed).",
-                companyId, result.PostedInvoices, result.PostedBills, result.PostedDebitNotes, result.PostedPayments, result.PostedTransfers, removed);
+                "GL rebuild for company {CompanyId}: {Invoices} invoices, {Bills} bills, {DebitNotes} debit notes, {Consignments} consignments, {Payments} payments, {Transfers} transfers ({Removed} old entries removed).",
+                companyId, result.PostedInvoices, result.PostedBills, result.PostedDebitNotes, result.PostedConsignments, result.PostedPayments, result.PostedTransfers, removed);
             return result;
         }
 

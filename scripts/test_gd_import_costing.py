@@ -2395,6 +2395,193 @@ def main():
             if not args.keep:
                 requests.delete(f"{api}/companies/{stl_co}", headers=h, timeout=300)
 
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 20 -- GL rebuild re-posts GD consignments (Task 24).
+        # GeneralLedgerService.RebuildAsync wipes every system-posted entry
+        # (SourceDocType != ManualJournal, which already included
+        # ImportConsignment) and re-derives it from live documents -- but
+        # before this task it never re-posted a consignment at all. Two
+        # symptoms: a New Arrivals GD committed while GL was off stayed
+        # permanently unposted (no rebuild ever picked it up), and a rebuild
+        # on an ALREADY-posted one silently destroyed its entry without
+        # recreating it (the sharper bug -- the wipe ran, the re-post did
+        # not). Both are exercised here.
+        # ══════════════════════════════════════════════════════════════════
+        print("\n-- 20. GL rebuild re-posts GD consignments (Task 24) --")
+
+        rb_co = make_company(api, h, f"GD Costing Rebuild {tag}")
+        try:
+            en = requests.post(f"{api}/accounting/gl/company/{rb_co}/enable", headers=h, timeout=180)
+            check("20: GL can be switched on", en.ok, f"http {en.status_code}: {en.text[:200]}")
+
+            # ---- (a) THE REPORTED BUG: New Arrivals committed while GL is
+            #      off, then GL is enabled (which rebuilds) -- the consignment
+            #      must come out posted, not stay stranded forever. A GL-off
+            #      company can only be made by hand (no "disable" endpoint),
+            #      same as Section 15's gl_off_co. ------------------------
+            r = requests.post(f"{api}/companies", headers=h, timeout=60, json={
+                "name": f"GD Costing Rebuild Off {tag}", "brandName": "GDCOST",
+                "fullAddress": "1 Test Street", "phone": "021-0000000", "ntn": "1234567-8",
+                "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+                "startingSalesQuoteNumber": 1, "startingSalesOrderNumber": 1,
+                "enableGl": False,
+            })
+            if r.status_code not in (200, 201):
+                raise RuntimeError(f"GL-off rebuild company create failed: http {r.status_code} {r.text[:200]}")
+            rb_off_co = r.json()["id"]
+            try:
+                rb_off_gd = f"GD-RB-OFF-{tag}"
+                rb_off_name = f"Rebuild Off Item {tag}"
+                off_row = row_cells(BASE_COLS, rb_off_gd, "8481.1000", desc=rb_off_name,
+                                    qty=10, assessed=60000, st=18, ast=3, it=6, gddate="12-02-2026")
+                r = gd_preview(api, h, rb_off_co, build_sheet(BASE_HEADINGS, [off_row]), GD_MAPPING,
+                               mode="new-arrivals")
+                rb_off_prev = r.json() if r.ok else {}
+                r = gd_commit(api, h, {
+                    "companyId": rb_off_co, "fileSha256": rb_off_prev.get("fileSha256"),
+                    "fileName": "gd-rb-off.xlsx", "fileSizeBytes": rb_off_prev.get("fileSizeBytes"),
+                    "lines": rb_off_prev.get("lines", []), "createMissingStock": True,
+                    "mode": "new-arrivals",
+                })
+                rb_off_res = r.json() if r.ok else {}
+                check("20a: a new-arrivals commit on a GL-off company still succeeds",
+                      r.ok, f"http {r.status_code}: {r.text[:200]}")
+                check("20a: ...and posts no journal entry yet, GL being off",
+                      r.ok and len(rb_off_res.get("journalEntries") or []) == 0,
+                      f"journalEntries={rb_off_res.get('journalEntries')}")
+
+                rb_off_opening = next((o for o in get_openings(api, h, rb_off_co)
+                                       if o.get("itemTypeName", "").startswith(rb_off_name)), None)
+                if rb_off_opening and rb_off_opening.get("itemTypeId"):
+                    CREATED_ITEM_TYPE_IDS.append(rb_off_opening["itemTypeId"])
+
+                rb_off_cid = find_consignment_id(api, h, rb_off_co, rb_off_gd)
+                check("20a: the consignment is findable", rb_off_cid is not None, f"cid={rb_off_cid}")
+                dj = get_consignment(api, h, rb_off_cid).json()
+                check("20a: before GL is enabled, ImportClearingCredited is 0 and status is not-posted",
+                      dj.get("importClearingCredited") == 0 and dj.get("settlementStatus") == "not-posted",
+                      f"detail={dj}")
+
+                c_off = compute_costing(assessed=60000, st=18, ast=3, it=6)
+                expected_off_credited = money(c_off["cost"] + c_off["salesTax"] + c_off["ast"] + c_off["incomeTax"])
+
+                en_off = requests.post(f"{api}/accounting/gl/company/{rb_off_co}/enable", headers=h, timeout=180)
+                check("20a: GL can be switched on for the formerly GL-off company",
+                      en_off.ok, f"http {en_off.status_code}: {en_off.text[:200]}")
+                check("20a: enabling reports exactly one posted consignment",
+                      en_off.ok and en_off.json().get("postedConsignments") == 1,
+                      f"result={en_off.json() if en_off.ok else en_off.text[:200]}")
+
+                dj = get_consignment(api, h, rb_off_cid).json()
+                check("20a: THE BUG -- ImportClearingCredited is now the real posted figure, not 0",
+                      close(dj.get("importClearingCredited"), float(expected_off_credited)),
+                      f"detail={dj} expected={expected_off_credited}")
+                check("20a: Outstanding now equals Credited (nothing settled yet) and status is unpaid",
+                      close(dj.get("outstanding"), float(expected_off_credited))
+                      and dj.get("amountSettled") == 0 and dj.get("settlementStatus") == "unpaid",
+                      f"detail={dj}")
+
+                je_list = requests.get(f"{api}/journal-entries/company/{rb_off_co}/paged", headers=h,
+                                       timeout=30, params={"search": rb_off_gd, "pageSize": 50})
+                check("20a: exactly one journal entry now exists for this GD",
+                      je_list.ok and je_list.json().get("totalCount") == 1,
+                      f"http {je_list.status_code}: {je_list.text[:300]}")
+            finally:
+                if not args.keep:
+                    requests.delete(f"{api}/companies/{rb_off_co}", headers=h, timeout=300)
+
+            # ---- (b)/(c) Idempotent rebuild: an already-posted, part-settled
+            #      consignment keeps exactly one entry and its settlement
+            #      after an explicit rebuild ------------------------------
+            rb_gd = f"GD-RB-{tag}"
+            rb_name = f"Rebuild Item {tag}"
+            rb_row = row_cells(BASE_COLS, rb_gd, "8481.1000", desc=rb_name,
+                               qty=12, assessed=90000, st=18, ast=3, it=6, gddate="14-02-2026")
+            r = gd_preview(api, h, rb_co, build_sheet(BASE_HEADINGS, [rb_row]), GD_MAPPING, mode="new-arrivals")
+            rb_prev = r.json() if r.ok else {}
+            r = gd_commit(api, h, {
+                "companyId": rb_co, "fileSha256": rb_prev.get("fileSha256"), "fileName": "gd-rb.xlsx",
+                "fileSizeBytes": rb_prev.get("fileSizeBytes"), "lines": rb_prev.get("lines", []),
+                "createMissingStock": True, "mode": "new-arrivals",
+            })
+            rb_res = r.json() if r.ok else {}
+            check("20b: the rebuild-target GD commits and posts one entry",
+                  r.ok and len(rb_res.get("journalEntries") or []) == 1,
+                  f"http {r.status_code}: {r.text[:200]}")
+
+            rb_opening = next((o for o in get_openings(api, h, rb_co)
+                               if o.get("itemTypeName", "").startswith(rb_name)), None)
+            if rb_opening and rb_opening.get("itemTypeId"):
+                CREATED_ITEM_TYPE_IDS.append(rb_opening["itemTypeId"])
+
+            rb_cid = find_consignment_id(api, h, rb_co, rb_gd)
+            c_rb = compute_costing(assessed=90000, st=18, ast=3, it=6)
+            expected_rb_credited = money(c_rb["cost"] + c_rb["salesTax"] + c_rb["ast"] + c_rb["incomeTax"])
+
+            r = create_payment(api, h, rb_co,
+                                settle_consignment_payload(rb_cid, 40000, date="2026-02-18", description="Partial"))
+            check("20c: a partial payment against the rebuild-target consignment is accepted",
+                  r.ok, f"http {r.status_code}: {r.text[:300]}")
+
+            dj_before = get_consignment(api, h, rb_cid).json()
+            expected_rb_outstanding_before = expected_rb_credited - d(40000)
+            check("20c: before rebuild, Settled=40000 and Outstanding reflects it",
+                  close(dj_before.get("amountSettled"), 40000)
+                  and close(dj_before.get("outstanding"), float(expected_rb_outstanding_before)),
+                  f"detail={dj_before}")
+
+            # ---- (d) A Backfill consignment in the SAME company, to prove
+            #      the rebuild's mode filter leaves it untouched -----------
+            rb_bf_gd = f"GD-RB-BF-{tag}"
+            rb_bf_row = row_cells(BASE_COLS, rb_bf_gd, "8481.1000", desc=rb_name,
+                                  qty=12, assessed=45000, st=18, ast=3, it=6, gddate="14-02-2026")
+            r = gd_preview(api, h, rb_co, build_sheet(BASE_HEADINGS, [rb_bf_row]), GD_MAPPING, mode="backfill")
+            rb_bf_prev = r.json() if r.ok else {}
+            r = gd_commit(api, h, {
+                "companyId": rb_co, "fileSha256": rb_bf_prev.get("fileSha256"), "fileName": "gd-rb-bf.xlsx",
+                "fileSizeBytes": rb_bf_prev.get("fileSizeBytes"), "lines": rb_bf_prev.get("lines", []),
+                "mode": "backfill",
+            })
+            check("20d: the backfill consignment (setup) commits", r.ok, f"http {r.status_code}: {r.text[:200]}")
+            rb_bf_cid = find_consignment_id(api, h, rb_co, rb_bf_gd)
+            check("20d: before rebuild, the backfill consignment posts nothing",
+                  get_consignment(api, h, rb_bf_cid).json().get("importClearingCredited") == 0,
+                  f"detail={get_consignment(api, h, rb_bf_cid).json()}")
+
+            # ---- Now rebuild, and check everything at once ----------------
+            rebuild_res = requests.post(f"{api}/accounting/gl/company/{rb_co}/rebuild", headers=h, timeout=180)
+            check("20: rebuild succeeds", rebuild_res.ok, f"http {rebuild_res.status_code}: {rebuild_res.text[:200]}")
+            rb_result = rebuild_res.json() if rebuild_res.ok else {}
+            check("20e: PostedConsignments counts the New Arrivals GD but not the Backfill one (== 1)",
+                  rb_result.get("postedConsignments") == 1, f"result={rb_result}")
+
+            je_list = requests.get(f"{api}/journal-entries/company/{rb_co}/paged", headers=h,
+                                   timeout=30, params={"search": rb_gd, "pageSize": 50})
+            check("20b: after rebuild, exactly ONE journal entry exists for the GD (not duplicated)",
+                  je_list.ok and je_list.json().get("totalCount") == 1,
+                  f"http {je_list.status_code}: {je_list.text[:300]}")
+
+            dj_after = get_consignment(api, h, rb_cid).json()
+            check("20b: ImportClearingCredited is unchanged by the rebuild",
+                  close(dj_after.get("importClearingCredited"), float(expected_rb_credited)),
+                  f"detail={dj_after} expected={expected_rb_credited}")
+            check("20c: AmountSettled is NOT reset by the rebuild -- still 40000",
+                  close(dj_after.get("amountSettled"), 40000), f"detail={dj_after}")
+            check("20c: Outstanding after rebuild is unchanged from before it",
+                  close(dj_after.get("outstanding"), float(expected_rb_outstanding_before)),
+                  f"detail={dj_after} before={expected_rb_outstanding_before}")
+            check("20c: settlementStatus is still part-paid, not reset to unpaid",
+                  dj_after.get("settlementStatus") == "part-paid", f"detail={dj_after}")
+
+            dj_bf_after = get_consignment(api, h, rb_bf_cid).json()
+            check("20d: the Backfill consignment is STILL not posted after the rebuild",
+                  dj_bf_after.get("importClearingCredited") == 0
+                  and dj_bf_after.get("settlementStatus") == "not-posted",
+                  f"detail={dj_bf_after}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{rb_co}", headers=h, timeout=300)
+
     finally:
         if not args.keep:
             if restricted_user_id:

@@ -437,6 +437,18 @@ Publish output optimized from 79 MB to 37 MB via:
   refused, as is settling a Backfill consignment (it never posted a
   liability to begin with) or deleting a consignment that anything has
   already been paid against.
+- **Fixed: a GL rebuild silently skipped GD consignments.** Rebuilding the
+  ledger (including the one every "Enable GL" runs) re-posts invoices, bills,
+  debit notes, payments and transfers, but never touched a consignment — so a
+  New Arrivals GD committed while GL posting was off stayed permanently
+  unposted, and rebuilding a company that already had one posted actually
+  destroyed its entry without recreating it (the wipe at the top of every
+  rebuild already removes a consignment's entry; only the re-post was
+  missing). Rebuild now re-derives every New Arrivals consignment's Import
+  Clearing entry exactly as it does the other document types. A Backfill
+  consignment is still never posted, by design; a part-settled consignment
+  keeps what has already been settled against it untouched; and running a
+  rebuild twice leaves exactly one entry per GD, not two.
 
 ### 2026-09-13 — Stock export scrolls properly, and Cost of Good Sold fills itself
 

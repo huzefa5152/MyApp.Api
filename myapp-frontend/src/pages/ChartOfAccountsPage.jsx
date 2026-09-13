@@ -88,6 +88,7 @@ export default function ChartOfAccountsPage() {
       if (data?.seededAccounts != null) parts.push(`${data.seededAccounts} accounts seeded`);
       if (data?.postedInvoices != null) parts.push(`${data.postedInvoices} invoices`);
       if (data?.postedBills != null) parts.push(`${data.postedBills} bills`);
+      if (data?.postedConsignments != null) parts.push(`${data.postedConsignments} consignments`);
       if (data?.postedPayments != null) parts.push(`${data.postedPayments} payments`);
       notify(parts.length ? `GL enabled — posted ${parts.join(", ")}.` : "GL enabled.", "success");
       await load(); // refresh tree balances + status chip
