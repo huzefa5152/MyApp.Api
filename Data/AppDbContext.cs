@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 
@@ -213,6 +213,7 @@ namespace MyApp.Api.Data
         public DbSet<OpeningStockLot> OpeningStockLots { get; set; }
         public DbSet<ImportConsignment> ImportConsignments { get; set; }
         public DbSet<ImportConsignmentLine> ImportConsignmentLines { get; set; }
+        public DbSet<StockCostChange> StockCostChanges { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -1459,6 +1460,30 @@ namespace MyApp.Api.Data
             // cannot share a column with ValueExcludingTax.
             modelBuilder.Entity<OpeningStockBalance>()
                 .Property(o => o.ActualCostExcludingTax).HasColumnType("decimal(18,2)");
+
+            // Cost audit trail (2026-09-13). Before/after pairs carry the SAME
+            // precision as the columns they record, or the record would round
+            // the very drift someone is reading it to find.
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.OldActualCostExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.NewActualCostExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.OldValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.NewValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.OldQuantity).HasPrecision(28, 12);
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.NewQuantity).HasPrecision(28, 12);
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.Source).HasMaxLength(40).IsRequired();
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.SourceRef).HasMaxLength(120);
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.ChangedByUserName).HasMaxLength(200);
+            modelBuilder.Entity<StockCostChange>()
+                .Property(c => c.Note).HasMaxLength(500);
             modelBuilder.Entity<StockMovement>()
                 .Property(m => m.UnitCostExcludingTax).HasColumnType("decimal(18,4)");
             modelBuilder.Entity<StockMovement>()
@@ -2167,6 +2192,24 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<OpeningStockBalance>()
                 .HasIndex(osb => new { osb.CompanyId, osb.ItemTypeId })
                 .IsUnique();
+
+            // Cost audit trail. Restrict on both, like the balance it records:
+            // CompanyService.DeleteAsync clears these rows explicitly (a second
+            // cascade path into one table is what SQL Server refuses outright,
+            // CLAUDE.md 5b-3c), and an ItemType is soft-deleted, never removed.
+            modelBuilder.Entity<StockCostChange>()
+                .HasOne(c => c.Company)
+                .WithMany()
+                .HasForeignKey(c => c.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<StockCostChange>()
+                .HasOne(c => c.ItemType)
+                .WithMany()
+                .HasForeignKey(c => c.ItemTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // The one query this table serves: an item's history, newest first.
+            modelBuilder.Entity<StockCostChange>()
+                .HasIndex(c => new { c.CompanyId, c.ItemTypeId, c.ChangedAt });
 
             // OpeningStockLot — the sheet rows behind one merged balance.
             // Cascade from the balance and NOT from Company: the balance already

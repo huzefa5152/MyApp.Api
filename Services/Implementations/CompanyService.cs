@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -468,6 +468,16 @@ namespace MyApp.Api.Services.Implementations
                 //     DeliveryItems.InvoiceItemId already caught elsewhere in
                 //     this method.
                 await _context.ImportConsignments.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
+
+                // 5e. Stock cost audit trail. StockCostChange.CompanyId is
+                //     Restrict for the same reason the balance it records is —
+                //     a second cascade path into one table is what SQL Server
+                //     refuses outright — so the rows have to go explicitly, and
+                //     BEFORE the OpeningStockBalances delete below only in the
+                //     sense that both must precede the company row. Its
+                //     OpeningStockBalanceId is a plain column, so it blocks
+                //     nothing else. Same trap as the line above.
+                await _context.StockCostChanges.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
 
                 // 6. Purchase module: stock movements / opening balances /
                 //    goods-receipt items + receipts / purchase-bill items +

@@ -40,3 +40,11 @@ export const deleteOpeningBalance = (id) =>
   http.delete(`/stock/opening/${id}`);
 export const adjustStock = (payload) =>
   http.post("/stock/adjust", payload);
+
+// The audit trail behind an item's actual cost (2026-09-13) -- every recorded
+// change to its cost, quantity and selling value, newest first. Omit
+// itemTypeId for the whole company's history, which is how a bad import is
+// found before anyone knows which item went wrong. Gated on
+// stock.actualcost.view, the same key that redacts the cost columns.
+export const getStockCostChanges = (companyId, params = {}) =>
+  http.get(`/stock/company/${companyId}/cost-changes`, { params });

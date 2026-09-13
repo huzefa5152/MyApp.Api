@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
+import CostHistoryDialog from "../Components/CostHistoryDialog";
 import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
@@ -119,6 +120,9 @@ export default function StockDashboardPage() {
   // is fixed (read-only display) so the operator just types the delta.
   // Null when opened from the header button (free pick).
   const [adjustLockedItem, setAdjustLockedItem] = useState(null);
+  // The cost audit drill-down (2026-09-13). Null = closed; an object with
+  // itemTypeId narrows to one item, and {} would be the whole company.
+  const [costHistoryItem, setCostHistoryItem] = useState(null);
 
   const fetchAll = useCallback(async () => {
     if (!selectedCompany) return;
@@ -634,6 +638,11 @@ export default function StockDashboardPage() {
               <MdSwapHoriz size={16} /> Adjustment
             </button>
           )}
+          {canViewActualCost && (
+            <button style={styles.altBtn} onClick={() => setCostHistoryItem({})}>
+              <MdHistory size={16} /> Cost History
+            </button>
+          )}
         </div>
       </div>
 
@@ -730,14 +739,15 @@ export default function StockDashboardPage() {
                           <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
                           {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
                           {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
-                          {canAdjust && <th style={styles.th} aria-label="Actions"></th>}
+                          {(canAdjust || canViewActualCost) && <th style={styles.th} aria-label="Actions"></th>}
                         </tr>
                       </thead>
                       <tbody>
                         {onhandPageRows.map((r, idx) => {
                           const isOpen = expandedId === r.itemTypeId;
                           const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 5 + (canViewMovements ? 1 : 0) + (canAdjust ? 1 : 0) + (canViewActualCost ? 2 : 0);
+                          const colCount = 5 + (canViewMovements ? 1 : 0)
+                            + ((canAdjust || canViewActualCost) ? 1 : 0) + (canViewActualCost ? 2 : 0);
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
@@ -808,11 +818,24 @@ export default function StockDashboardPage() {
                                 </div>
                               </td>
                             )}
-                            {canAdjust && (
+                            {(canAdjust || canViewActualCost) && (
                               <td style={styles.td} onClick={e => e.stopPropagation()}>
-                                <button type="button" style={rowAdjustBtn} onClick={() => openAdjustForRow(r)} title={`Record a stock adjustment for ${r.itemTypeName}`}>
-                                  <MdSwapHoriz size={13} /> Adjust
-                                </button>
+                                <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                                  {canAdjust && (
+                                    <button type="button" style={rowAdjustBtn} onClick={() => openAdjustForRow(r)} title={`Record a stock adjustment for ${r.itemTypeName}`}>
+                                      <MdSwapHoriz size={13} /> Adjust
+                                    </button>
+                                  )}
+                                  {canViewActualCost && (
+                                    <button
+                                      type="button" style={rowHistoryBtn}
+                                      onClick={() => setCostHistoryItem({ itemTypeId: r.itemTypeId, itemTypeName: r.itemTypeName })}
+                                      title={`What changed the actual cost of ${r.itemTypeName}`}
+                                    >
+                                      <MdHistory size={13} /> History
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             )}
                           </tr>
@@ -922,6 +945,14 @@ export default function StockDashboardPage() {
                         {canAdjust && (
                           <button type="button" style={cardAdjustBtn} onClick={() => openAdjustForRow(r)}>
                             <MdSwapHoriz size={15} /> Adjustment
+                          </button>
+                        )}
+                        {canViewActualCost && (
+                          <button
+                            type="button" style={cardHistoryBtn}
+                            onClick={() => setCostHistoryItem({ itemTypeId: r.itemTypeId, itemTypeName: r.itemTypeName })}
+                          >
+                            <MdHistory size={15} /> Cost history
                           </button>
                         )}
                       </div>
@@ -1367,6 +1398,14 @@ export default function StockDashboardPage() {
         </SmallModal>
       )}
 
+      {costHistoryItem && selectedCompany?.id && (
+        <CostHistoryDialog
+          companyId={selectedCompany.id}
+          item={costHistoryItem}
+          onClose={() => setCostHistoryItem(null)}
+        />
+      )}
+
       {showAdjust && (
         <SmallModal title="Stock Adjustment" onClose={closeAdjust} onSubmit={submitAdjust}>
           <Field label="Item">
@@ -1733,6 +1772,8 @@ const modeBtn = {
 };
 const rowAdjustBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" };
 const cardAdjustBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
+const rowHistoryBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" };
+const cardHistoryBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.4rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 const cardDrillBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", width: "100%", minHeight: 40, marginTop: "0.6rem", padding: "0.45rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 
 const drillStyles = {

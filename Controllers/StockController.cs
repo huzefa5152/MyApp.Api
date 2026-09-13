@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,12 +28,14 @@ namespace MyApp.Api.Controllers
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IPermissionService _permission;
+        private readonly IStockCostAuditService _costAudit;
         private readonly ILogger<StockController> _logger;
         private readonly int _defaultPageSize;
 
         public StockController(AppDbContext context, IStockService stock, IInventoryReadService inventory,
             IAuditLogService audit, ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess, IPermissionService permission,
+            IStockCostAuditService costAudit,
             ILogger<StockController> logger, IConfiguration configuration)
         {
             _context = context;
@@ -43,6 +45,7 @@ namespace MyApp.Api.Controllers
             _access = access;
             _divisionAccess = divisionAccess;
             _permission = permission;
+            _costAudit = costAudit;
             _logger = logger;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
@@ -584,6 +587,29 @@ namespace MyApp.Api.Controllers
             });
         }
 
+        /// <summary>
+        /// An item's cost history — every recorded change to its actual cost,
+        /// quantity and selling value, newest first. The drill-down behind the
+        /// On-Hand tab's Actual Cost column.
+        ///
+        /// Gated on <c>stock.actualcost.view</c>, not on seeing stock: the rows
+        /// ARE landed cost and margin, so anything softer would hand out through
+        /// the history exactly what the grid redacts (the defect fixed in
+        /// b1cb30d). Omitting <paramref name="itemTypeId"/> gives the whole
+        /// company's history — that is how a bad import is found when the
+        /// operator does not yet know which item went wrong.
+        /// </summary>
+        [HttpGet("company/{companyId}/cost-changes")]
+        [HasPermission("stock.actualcost.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<PagedResult<StockCostChangeDto>>> GetCostChanges(
+            int companyId, [FromQuery] int? itemTypeId = null,
+            [FromQuery] int page = 1, [FromQuery] int? pageSize = null)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            return Ok(await _costAudit.GetPagedAsync(companyId, itemTypeId, page, pageSize));
+        }
+
         /// <summary>List opening balances for a company.</summary>
         [HttpGet("company/{companyId}/opening")]
         [HasPermission("stock.opening.manage")]
@@ -629,6 +655,15 @@ namespace MyApp.Api.Controllers
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
             var existing = await _context.OpeningStockBalances
                 .FirstOrDefaultAsync(o => o.CompanyId == dto.CompanyId && o.ItemTypeId == dto.ItemTypeId);
+            // Snapshot BEFORE anything is assigned. A new row starts at zero on
+            // all three figures, which is exactly what "not known" has always
+            // meant here, so a first entry reads as 0 -> the figure entered
+            // rather than as a change out of nowhere.
+            var before = existing == null
+                ? new StockFigures(0m, 0m, 0m)
+                : new StockFigures(existing.Quantity, existing.ActualCostExcludingTax, existing.ValueExcludingTax);
+            var isNew = existing == null;
+
             if (existing == null)
             {
                 existing = new OpeningStockBalance
@@ -658,6 +693,19 @@ namespace MyApp.Api.Controllers
                 existing.AsOfDate = dto.AsOfDate.Date;
                 existing.Notes = dto.Notes;
             }
+
+            // Recorded in the SAME SaveChanges as the change itself, so a
+            // history entry can never survive a write that rolled back.
+            await _costAudit.RecordAsync(
+                dto.CompanyId, dto.ItemTypeId, existing.Id, CurrentUserId,
+                StockCostChangeSources.OpeningBalanceEdit,
+                isNew ? "Created" : "Edited",
+                before,
+                new StockFigures(existing.Quantity, existing.ActualCostExcludingTax, existing.ValueExcludingTax),
+                note: isNew
+                    ? "Opening balance entered on the Opening Balances tab."
+                    : "Opening balance edited on the Opening Balances tab.");
+
             await _context.SaveChangesAsync();
 
             var it = await _context.ItemTypes.FindAsync(existing.ItemTypeId);
@@ -684,6 +732,17 @@ namespace MyApp.Api.Controllers
             if (row == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, row.CompanyId);
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, row.CompanyId, null);
+
+            // Recorded BEFORE the row goes: once it is removed there is nothing
+            // left to read the figures off, and "where did this item's opening
+            // cost go" is precisely the question this table answers.
+            await _costAudit.RecordAsync(
+                row.CompanyId, row.ItemTypeId, row.Id, CurrentUserId,
+                StockCostChangeSources.OpeningBalanceDelete, "Deleted",
+                new StockFigures(row.Quantity, row.ActualCostExcludingTax, row.ValueExcludingTax),
+                new StockFigures(0m, 0m, 0m),
+                note: "Opening balance row deleted.");
+
             _context.OpeningStockBalances.Remove(row);
             await _context.SaveChangesAsync();
             return NoContent();
@@ -975,9 +1034,28 @@ namespace MyApp.Api.Controllers
             if (written.Count == 0)
                 return BadRequest(new { error = "Nothing to record." });
 
+            // One transaction around the movements AND their audit record. The
+            // record has to state the position the walk actually reached, and
+            // that can only be read back after the movements are persisted --
+            // so this is two SaveChanges, which is exactly the multi-step write
+            // CLAUDE.md 4 says to wrap. Predicting the after-position instead
+            // would put a figure in the history that no query can reproduce.
+            await using var costTx = await _context.Database.BeginTransactionAsync();
             await _context.SaveChangesAsync();
 
             var after = await CurrentPositionAsync(dto.CompanyId, dto.ItemTypeId);
+
+            await _costAudit.RecordAsync(
+                dto.CompanyId, dto.ItemTypeId, null, CurrentUserId,
+                StockCostChangeSources.StockAdjustment, mode,
+                new StockFigures(current.Quantity, current.ActualValueExcludingTax, current.ValueExcludingTax),
+                new StockFigures(after.Quantity, after.ActualValueExcludingTax, after.ValueExcludingTax),
+                note: string.IsNullOrWhiteSpace(dto.Notes)
+                    ? "Stock adjustment: " + string.Join(", ", written) + "."
+                    : "Stock adjustment: " + string.Join(", ", written) + $". {dto.Notes}");
+            await _context.SaveChangesAsync();
+            await costTx.CommitAsync();
+
             return Ok(new
             {
                 message = "Adjustment recorded: " + string.Join(", ", written) + ".",
