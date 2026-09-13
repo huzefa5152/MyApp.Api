@@ -389,6 +389,61 @@ def settle_consignment_payload(consignment_id, amount, date="2026-02-20", descri
     }
 
 
+# ── Cost audit trail (2026-09-13) + line correction ─────────────────────────
+
+def cost_changes(api, h, company_id, item_type_id=None, page_size=100):
+    params = {"page": 1, "pageSize": page_size}
+    if item_type_id is not None:
+        params["itemTypeId"] = item_type_id
+    return requests.get(f"{api}/stock/company/{company_id}/cost-changes",
+                        headers=h, timeout=30, params=params)
+
+
+def cost_rows(api, h, company_id, item_type_id=None):
+    r = cost_changes(api, h, company_id, item_type_id)
+    return (r.json() or {}).get("items", []) if r.ok else []
+
+
+def correct_line(api, h, consignment_id, line_id, body):
+    return requests.put(f"{api}/import-consignments/{consignment_id}/lines/{line_id}",
+                        headers=h, timeout=60, json=body)
+
+
+def line_body(qty, assessed, duty=0, acd=0, regduty=0, others=0, st=18, ast=3, it=6,
+              addon=0, selling=None, reason=None):
+    """The costing INPUTS a correction sends. The server recomputes cost and
+    selling value from these itself -- see UpdateImportConsignmentLineDto."""
+    return {
+        "quantity": qty, "assessedValue": assessed, "customsDuty": duty, "acd": acd,
+        "regulatoryDuty": regduty, "others": others, "salesTaxRate": st, "astRate": ast,
+        "incomeTaxRate": it, "addOnProfit": addon,
+        "sellingValueExcludingTax": selling, "reason": reason,
+    }
+
+
+def settle_with_writeoff(consignment_id, cash, adjustment, adjustment_account_id,
+                         date="2026-02-20"):
+    """A money-out settlement that clears cash + a written-back remainder --
+    the shape SettleConsignmentDialog sends once "Write back the rest" is used."""
+    return {
+        "direction": "Payment", "date": date, "contactType": "Other",
+        "method": "Bank Transfer", "description": "GD settlement with write-off",
+        "allocations": [{
+            "kind": "ImportConsignment", "importConsignmentId": consignment_id,
+            "amount": cash, "adjustmentAmount": adjustment,
+            "adjustmentAccountId": adjustment_account_id,
+        }],
+    }
+
+
+def account_by_control(api, h, company_id, control_type):
+    r = requests.get(f"{api}/accounts/company/{company_id}/flat", headers=h, timeout=30)
+    if not r.ok:
+        return None
+    rows = [a for a in (r.json() or []) if a.get("controlType") == control_type]
+    return next((a for a in rows if a.get("isActive")), rows[0] if rows else None)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:5134")
@@ -408,6 +463,11 @@ def main():
     del_co = make_company(api, h, f"GD Costing DelTrap {tag}")
     twomonth_co = make_company(api, h, f"GD Costing TwoMonth {tag}")
     restricted_user_id = None
+    # Sections 21-25 make their own companies/users/roles; collected here so
+    # the one teardown at the bottom clears them whatever fails in between.
+    created_companies = []
+    created_user_ids = []
+    created_role_ids = []
 
     try:
         # ══════════════════════════════════════════════════════════════════
@@ -2582,11 +2642,505 @@ def main():
             if not args.keep:
                 requests.delete(f"{api}/companies/{rb_co}", headers=h, timeout=300)
 
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 21 -- The cost audit trail
+        # ══════════════════════════════════════════════════════════════════
+        # The actual-cost pool is SET, not accumulated: Backfill overwrites it,
+        # New Arrivals adds to it, a hand edit replaces it. Until this table
+        # there was no record of what a figure had been, so "the margin looks
+        # wrong" could only be answered by re-deriving it from the sheets --
+        # which is what the person asking no longer trusts.
+        print("\n-- 21. Cost audit trail --")
+
+        audit_co = make_company(api, h, f"GD Costing Audit {tag}")
+        created_companies.append(audit_co)
+        requests.post(f"{api}/accounts/company/{audit_co}/seed-wholesale", headers=h, timeout=120)
+
+        aud_item = make_item(api, h, audit_co, f"GD Audit Item {tag}", hs="8481.1000")
+
+        r = cost_changes(api, h, audit_co)
+        check("21: a company with no history reads an empty cost log",
+              r.ok and (r.json() or {}).get("totalCount") == 0,
+              f"http {r.status_code}: {r.text[:200]}")
+
+        set_opening(api, h, audit_co, aud_item, qty=100, value=250000)
+        rows = cost_rows(api, h, audit_co, aud_item)
+        check("21: creating an opening balance is recorded", len(rows) == 1, f"rows={len(rows)}")
+        first = rows[0] if rows else {}
+        check("21: it records the source screen",
+              first.get("source") == "OpeningBalanceEdit" and first.get("sourceRef") == "Created",
+              f"source={first.get('source')} ref={first.get('sourceRef')}")
+        check("21: a first entry reads as 0 -> the figures entered, not a jump from nowhere",
+              close(first.get("oldQuantity"), 0) and close(first.get("oldValueExcludingTax"), 0)
+              and close(first.get("newQuantity"), 100) and close(first.get("newValueExcludingTax"), 250000),
+              f"row={first}")
+        check("21: it names who made the change",
+              bool(first.get("changedByUserName")), f"user={first.get('changedByUserName')!r}")
+
+        set_opening(api, h, audit_co, aud_item, qty=100, value=250000, cost=180000)
+        rows = cost_rows(api, h, audit_co, aud_item)
+        check("21: editing the actual cost is recorded", len(rows) == 2, f"rows={len(rows)}")
+        check("21: newest first",
+              rows and close(rows[0].get("newActualCostExcludingTax"), 180000)
+              and close(rows[0].get("oldActualCostExcludingTax"), 0),
+              f"row={rows[0] if rows else None}")
+        check("21: the delta is derived, never stored twice",
+              rows and close(rows[0].get("actualCostDelta"), 180000)
+              and close(rows[0].get("quantityDelta"), 0),
+              f"row={rows[0] if rows else None}")
+
+        # The one check that proves the no-op guard does anything.
+        set_opening(api, h, audit_co, aud_item, qty=100, value=250000, cost=180000)
+        check("21: re-saving the identical figures records NOTHING",
+              len(cost_rows(api, h, audit_co, aud_item)) == 2,
+              f"rows={len(cost_rows(api, h, audit_co, aud_item))}")
+
+        # A Backfill import overwrites the cost -- the case with no other record.
+        aud_gd = f"GD-AUD-{tag}"
+        aud_cells = row_cells(BASE_COLS, aud_gd, "8481.1000", desc=f"GD Audit Item {tag}",
+                              qty=100, assessed=90000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, audit_co, build_sheet(BASE_HEADINGS, [aud_cells]), GD_MAPPING,
+                       mode="backfill")
+        aud_prev = r.json() if r.ok else {}
+        r = gd_commit(api, h, {
+            "companyId": audit_co, "fileSha256": aud_prev.get("fileSha256"),
+            "fileName": "gd-audit.xlsx", "fileSizeBytes": aud_prev.get("fileSizeBytes"),
+            "lines": aud_prev.get("lines", []), "mode": "backfill",
+        })
+        check("21: the backfill import commits", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        aud_cost = compute_costing(assessed=90000, st=18, ast=3, it=6)["cost"]
+
+        rows = cost_rows(api, h, audit_co, aud_item)
+        check("21: the import that overwrote the cost is recorded", len(rows) == 3, f"rows={len(rows)}")
+        imp = rows[0] if rows else {}
+        check("21: it is attributed to the GD, not to a screen",
+              imp.get("source") == "GdCostingImport" and imp.get("sourceRef") == aud_gd,
+              f"source={imp.get('source')} ref={imp.get('sourceRef')}")
+        check("21: it keeps the cost the import overwrote",
+              close(imp.get("oldActualCostExcludingTax"), 180000)
+              and close(imp.get("newActualCostExcludingTax"), float(aud_cost)),
+              f"row={imp} expected new={aud_cost}")
+        check("21: it points back at the consignment",
+              imp.get("importConsignmentId") == find_consignment_id(api, h, audit_co, aud_gd),
+              f"row={imp}")
+        check("21: the note says which mode and what it did",
+              "Backfill" in (imp.get("note") or ""), f"note={imp.get('note')!r}")
+
+        # A hand adjustment is a cost change too.
+        r = requests.post(f"{api}/stock/adjust", headers=h, timeout=60, json={
+            "companyId": audit_co, "itemTypeId": aud_item, "mode": "set",
+            "targetActualCostExcludingTax": 111111, "movementDate": "2026-08-01",
+            "notes": "counted the landed cost again",
+        })
+        check("21: the adjustment is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        rows = cost_rows(api, h, audit_co, aud_item)
+        check("21: a stock adjustment is recorded too", len(rows) == 4, f"rows={len(rows)}")
+        adj = rows[0] if rows else {}
+        check("21: it records the position the walk actually reached, not a prediction",
+              adj.get("source") == "StockAdjustment"
+              and close(adj.get("newActualCostExcludingTax"), 111111),
+              f"row={adj}")
+        check("21: the operator's own note is carried into the history",
+              "counted the landed cost again" in (adj.get("note") or ""), f"note={adj.get('note')!r}")
+
+        # A second item, to prove the filter narrows rather than decorates.
+        aud_item2 = make_item(api, h, audit_co, f"GD Audit Item Two {tag}", hs="8484.1029")
+        set_opening(api, h, audit_co, aud_item2, qty=5, value=500)
+        check("21: the company-wide log holds both items",
+              len(cost_rows(api, h, audit_co)) == 5, f"rows={len(cost_rows(api, h, audit_co))}")
+        check("21: filtering by item narrows to that item",
+              len(cost_rows(api, h, audit_co, aud_item2)) == 1,
+              f"rows={len(cost_rows(api, h, audit_co, aud_item2))}")
+
+        # Gate: these rows ARE landed cost and margin, so they sit behind the
+        # same key that redacts the grid's cost columns (b1cb30d).
+        ptag = uuid.uuid4().hex[:6]
+        r = requests.post(f"{api}/roles", headers=h, timeout=30, json={
+            "name": f"GDCost NoActual {ptag}", "description": "no stock.actualcost.view"})
+        nocost_role = r.json() if r.ok else {}
+        nocost_role_id = nocost_role.get("id")
+        if nocost_role_id:
+            requests.put(f"{api}/roles/{nocost_role_id}/permissions", headers=h, timeout=30,
+                        json={"permissionKeys": ["stock.dashboard.view", "stock.opening.manage"]})
+            r = requests.post(f"{api}/users", headers=h, timeout=30, json={
+                "username": f"gdnocost_{ptag}", "password": "test1234",
+                "fullName": "No Actual Cost", "role": "User"})
+            nocost_user_id = (r.json() or {}).get("id") if r.ok else None
+            if nocost_user_id:
+                created_user_ids.append(nocost_user_id)
+                requests.put(f"{api}/users/{nocost_user_id}/roles", headers=h, timeout=30,
+                            json={"roleIds": [nocost_role_id]})
+                requests.put(f"{api}/usercompanies/user/{nocost_user_id}", headers=h, timeout=30,
+                            json={"companyIds": [audit_co]})
+                hn = {"Authorization": f"Bearer {login(base, f'gdnocost_{ptag}', 'test1234')}"}
+                r = cost_changes(api, hn, audit_co)
+                check("21: a user without stock.actualcost.view is refused the cost log",
+                      r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
+            created_role_ids.append(nocost_role_id)
+
+        # Cross-tenant: the restricted user can reach `company`, never mixed_co.
+        r = cost_changes(api, hr, mixed_co)
+        check("21: the cost log refuses a company the caller cannot reach",
+              r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 22 -- Correcting ONE line of a recorded GD
+        # ══════════════════════════════════════════════════════════════════
+        # The alternative was deleting the whole consignment and re-importing,
+        # which a SETTLED consignment cannot do at all.
+        print("\n-- 22. Correcting one GD line --")
+
+        corr_co = make_company(api, h, f"GD Costing Correct {tag}")
+        created_companies.append(corr_co)
+        requests.post(f"{api}/accounts/company/{corr_co}/seed-wholesale", headers=h, timeout=120)
+
+        corr_item = make_item(api, h, corr_co, f"GD Correct Item {tag}", hs="8481.1000")
+        set_opening(api, h, corr_co, corr_item, qty=200, value=500000)
+
+        corr_gd = f"GD-COR-{tag}"
+        corr_cells = row_cells(BASE_COLS, corr_gd, "8481.1000", desc=f"GD Correct Item {tag}",
+                               qty=100, assessed=60000, regduty=34000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, corr_co, build_sheet(BASE_HEADINGS, [corr_cells]), GD_MAPPING,
+                       mode="backfill")
+        corr_prev = r.json() if r.ok else {}
+        r = gd_commit(api, h, {
+            "companyId": corr_co, "fileSha256": corr_prev.get("fileSha256"),
+            "fileName": "gd-correct.xlsx", "fileSizeBytes": corr_prev.get("fileSizeBytes"),
+            "lines": corr_prev.get("lines", []), "mode": "backfill",
+        })
+        check("22: the consignment to correct commits", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        corr_cid = find_consignment_id(api, h, corr_co, corr_gd)
+        corr_detail = get_consignment(api, h, corr_cid).json()
+        corr_line_id = (corr_detail.get("lines") or [{}])[0].get("id")
+
+        wrong_cost = compute_costing(assessed=60000, regduty=34000, st=18, ast=3, it=6)["cost"]
+        bal = opening_of(get_openings(api, h, corr_co), corr_item)
+        check("22: the mistyped duty is on the books",
+              close(bal.get("actualCostExcludingTax"),
+                    float(money(d(wrong_cost) / d(100) * d(200)))),
+              f"cost={bal.get('actualCostExcludingTax')} expected={wrong_cost}/100*200")
+
+        # ---- Validation refuses nonsense before anything moves --------------
+        r = correct_line(api, h, corr_cid, corr_line_id, line_body(qty=0, assessed=60000))
+        check("22: a costed line cannot be corrected to zero quantity",
+              r.status_code == 400, f"http {r.status_code}: {r.text[:160]}")
+        r = correct_line(api, h, corr_cid, corr_line_id, line_body(qty=100, assessed=-1))
+        check("22: a negative assessed value is refused",
+              r.status_code == 400, f"http {r.status_code}: {r.text[:160]}")
+        r = correct_line(api, h, corr_cid, corr_line_id, line_body(qty=100, assessed=60000, st=180))
+        check("22: a rate outside 0-100 is refused",
+              r.status_code == 400, f"http {r.status_code}: {r.text[:160]}")
+        r = correct_line(api, h, corr_cid, 999999, line_body(qty=100, assessed=60000))
+        check("22: a line id from another consignment is refused",
+              r.status_code == 400, f"http {r.status_code}: {r.text[:160]}")
+        bal = opening_of(get_openings(api, h, corr_co), corr_item)
+        check("22: none of those refusals moved the balance",
+              close(bal.get("actualCostExcludingTax"),
+                    float(money(d(wrong_cost) / d(100) * d(200)))),
+              f"cost={bal.get('actualCostExcludingTax')}")
+
+        # ---- The correction itself ------------------------------------------
+        r = correct_line(api, h, corr_cid, corr_line_id, line_body(
+            qty=100, assessed=60000, regduty=3400, st=18, ast=3, it=6,
+            reason="regulatory duty was typed as 34,000 instead of 3,400"))
+        check("22: the correction is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        corr_res = r.json() if r.ok else {}
+        right_cost = compute_costing(assessed=60000, regduty=3400, st=18, ast=3, it=6)["cost"]
+        check("22: the cost is recomputed SERVER-side from the inputs",
+              close(corr_res.get("newCostExcludingTax"), float(right_cost))
+              and close(corr_res.get("oldCostExcludingTax"), float(wrong_cost)),
+              f"result={corr_res} expected={right_cost}")
+        check("22: one balance was re-derived",
+              corr_res.get("balancesUpdated") == 1, f"result={corr_res}")
+
+        bal = opening_of(get_openings(api, h, corr_co), corr_item)
+        check("22: Backfill re-derives the cost from the corrected unit cost x the WHOLE balance",
+              close(bal.get("actualCostExcludingTax"),
+                    float(money(d(right_cost) / d(100) * d(200)))),
+              f"cost={bal.get('actualCostExcludingTax')} expected={right_cost}/100*200")
+        check("22: Backfill still leaves quantity and selling value alone",
+              close(bal.get("quantity"), 200) and close(bal.get("valueExcludingTax"), 500000),
+              f"balance={bal}")
+
+        rows = cost_rows(api, h, corr_co, corr_item)
+        corr_audit = rows[0] if rows else {}
+        check("22: the correction is in the cost history",
+              corr_audit.get("source") == "GdLineCorrection"
+              and corr_audit.get("sourceRef") == corr_gd,
+              f"row={corr_audit}")
+        check("22: the operator's reason is kept with it",
+              "34,000 instead of 3,400" in (corr_audit.get("note") or ""),
+              f"note={corr_audit.get('note')!r}")
+
+        cd = get_consignment(api, h, corr_cid).json()
+        check("22: the consignment header total moves with its lines",
+              close(cd.get("totalCostExcludingTax"), float(right_cost)),
+              f"total={cd.get('totalCostExcludingTax')} expected={right_cost}")
+
+        r = correct_line(api, hr, corr_cid, corr_line_id, line_body(qty=100, assessed=60000))
+        check("22: a caller who cannot reach the company is refused the correction",
+              r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
+
+        # ---- New Arrivals: the delta path, the GL re-post, and the settled cap
+        na_co = make_company(api, h, f"GD Costing CorrectNA {tag}")
+        created_companies.append(na_co)
+        requests.post(f"{api}/accounts/company/{na_co}/seed-wholesale", headers=h, timeout=120)
+        r = requests.post(f"{api}/accounting/gl/company/{na_co}/enable", headers=h, timeout=120)
+        na_gl_on = r.ok
+        check("22: the ledger is enabled for the New Arrivals correction case", na_gl_on,
+              f"http {r.status_code}: {r.text[:200]}")
+
+        na_item = make_item(api, h, na_co, f"GD NA Correct Item {tag}", hs="8481.1000")
+        set_opening(api, h, na_co, na_item, qty=50, value=100000, cost=60000)
+
+        na_gd = f"GD-NAC-{tag}"
+        na_cells = row_cells(BASE_COLS, na_gd, "8481.1000", desc=f"GD NA Correct Item {tag}",
+                             qty=20, assessed=40000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, na_co, build_sheet(BASE_HEADINGS, [na_cells]), GD_MAPPING,
+                       mode="new-arrivals")
+        na_prev = r.json() if r.ok else {}
+        r = gd_commit(api, h, {
+            "companyId": na_co, "fileSha256": na_prev.get("fileSha256"),
+            "fileName": "gd-na-correct.xlsx", "fileSizeBytes": na_prev.get("fileSizeBytes"),
+            "lines": na_prev.get("lines", []), "mode": "new-arrivals",
+        })
+        check("22: the New Arrivals consignment commits", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        na_cid = find_consignment_id(api, h, na_co, na_gd)
+        na_line_id = (get_consignment(api, h, na_cid).json().get("lines") or [{}])[0].get("id")
+        na_credited_before = get_consignment(api, h, na_cid).json().get("importClearingCredited")
+        check("22: it posted a liability to Import Clearing",
+              (na_credited_before or 0) > 0, f"credited={na_credited_before}")
+
+        r = correct_line(api, h, na_cid, na_line_id, line_body(qty=20, assessed=50000,
+                                                               st=18, ast=3, it=6))
+        check("22: the New Arrivals correction is accepted", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        na_res = r.json() if r.ok else {}
+        na_old = compute_costing(assessed=40000, st=18, ast=3, it=6)
+        na_new = compute_costing(assessed=50000, st=18, ast=3, it=6)
+        bal = opening_of(get_openings(api, h, na_co), na_item)
+        check("22: New Arrivals applies the DIFFERENCE to the balance, not a re-derivation",
+              close(bal.get("actualCostExcludingTax"),
+                    float(money(d(60000) + d(na_new["cost"])))),
+              f"cost={bal.get('actualCostExcludingTax')} expected=60000+{na_new['cost']}")
+        check("22: the quantity it added is unchanged when only the money moved",
+              close(bal.get("quantity"), 70), f"qty={bal.get('quantity')}")
+        check("22: the selling pool moves in step",
+              close(bal.get("valueExcludingTax"),
+                    float(money(d(100000) + d(na_new["sellingValue"])))),
+              f"value={bal.get('valueExcludingTax')}")
+
+        check("22: the journal entry was re-posted", na_res.get("journalEntryReposted") is True,
+              f"result={na_res}")
+        na_credited_after = get_consignment(api, h, na_cid).json().get("importClearingCredited")
+        check("22: Import Clearing carries the corrected liability, not the old one",
+              (na_credited_after or 0) > (na_credited_before or 0)
+              and close(na_res.get("importClearingCredited"), float(na_credited_after)),
+              f"before={na_credited_before} after={na_credited_after}")
+        je = requests.get(f"{api}/journal-entries/company/{na_co}/paged", headers=h, timeout=30,
+                          params={"search": na_gd, "pageSize": 50})
+        check("22: re-posting leaves exactly ONE entry for the GD, not two",
+              je.ok and je.json().get("totalCount") == 1,
+              f"http {je.status_code}: {je.text[:200]}")
+
+        # Settle it, then try to correct the liability down below what was paid.
+        r = create_payment(api, h, na_co,
+                           settle_consignment_payload(na_cid, float(na_credited_after)))
+        check("22: the corrected GD can be settled in full", r.ok,
+              f"http {r.status_code}: {r.text[:200]}")
+        na_payment_id = (r.json() or {}).get("id") if r.ok else None
+
+        r = correct_line(api, h, na_cid, na_line_id, line_body(qty=20, assessed=1000,
+                                                               st=18, ast=3, it=6))
+        check("22: a correction that drops the liability below what is settled is refused",
+              r.status_code == 400 and "already been settled" in (r.text or ""),
+              f"http {r.status_code}: {r.text[:220]}")
+        after = get_consignment(api, h, na_cid).json()
+        check("22: the refusal rolled the WHOLE thing back -- liability unchanged",
+              close(after.get("importClearingCredited"), float(na_credited_after)),
+              f"detail={after}")
+        bal = opening_of(get_openings(api, h, na_co), na_item)
+        check("22: and the balance is unchanged too",
+              close(bal.get("actualCostExcludingTax"),
+                    float(money(d(60000) + d(na_new["cost"])))),
+              f"cost={bal.get('actualCostExcludingTax')}")
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 23 -- Settling a GD short: cash + write-off
+        # ══════════════════════════════════════════════════════════════════
+        # A GD's Import Clearing liability is an estimate until the clearing
+        # agent's final bill arrives. Before this, the only way to close one
+        # that came in under was to overstate the cash actually paid.
+        print("\n-- 23. Settling a GD short (cash + write-off) --")
+
+        wo_co = make_company(api, h, f"GD Costing WriteOff {tag}")
+        created_companies.append(wo_co)
+        requests.post(f"{api}/accounts/company/{wo_co}/seed-wholesale", headers=h, timeout=120)
+        r = requests.post(f"{api}/accounting/gl/company/{wo_co}/enable", headers=h, timeout=120)
+        check("23: the ledger is enabled", r.ok, f"http {r.status_code}: {r.text[:200]}")
+
+        wo_item = make_item(api, h, wo_co, f"GD WriteOff Item {tag}", hs="8481.1000")
+        set_opening(api, h, wo_co, wo_item, qty=10, value=20000, cost=12000)
+
+        wo_gd = f"GD-WO-{tag}"
+        wo_cells = row_cells(BASE_COLS, wo_gd, "8481.1000", desc=f"GD WriteOff Item {tag}",
+                             qty=10, assessed=100000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, wo_co, build_sheet(BASE_HEADINGS, [wo_cells]), GD_MAPPING,
+                       mode="new-arrivals")
+        wo_prev = r.json() if r.ok else {}
+        r = gd_commit(api, h, {
+            "companyId": wo_co, "fileSha256": wo_prev.get("fileSha256"),
+            "fileName": "gd-writeoff.xlsx", "fileSizeBytes": wo_prev.get("fileSizeBytes"),
+            "lines": wo_prev.get("lines", []), "mode": "new-arrivals",
+        })
+        check("23: the consignment commits and posts", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        wo_cid = find_consignment_id(api, h, wo_co, wo_gd)
+        wo_credited = get_consignment(api, h, wo_cid).json().get("importClearingCredited")
+        check("23: it credited Import Clearing", (wo_credited or 0) > 0, f"credited={wo_credited}")
+
+        writeback = account_by_control(api, h, wo_co, "WriteBackIncome")
+        check("23: the chart carries a write-back income account to route the gap to",
+              writeback is not None, "no WriteBackIncome account on the seeded chart")
+        wb_id = (writeback or {}).get("id")
+
+        # The adjustment account must belong to THIS company -- never trust a
+        # body id (CLAUDE.md 1).
+        foreign = account_by_control(api, h, audit_co, "WriteBackIncome")
+        if foreign:
+            r = create_payment(api, h, wo_co,
+                               settle_with_writeoff(wo_cid, 100, 100, foreign["id"]))
+            check("23: an adjustment account from another company is refused",
+                  r.status_code == 400, f"http {r.status_code}: {r.text[:200]}")
+
+        cash = float(money(d(wo_credited) - d(500)))
+        r = create_payment(api, h, wo_co, settle_with_writeoff(wo_cid, cash, 500, wb_id))
+        check("23: cash plus a written-back remainder is accepted", r.ok,
+              f"http {r.status_code}: {r.text[:220]}")
+        wo_payment = r.json() if r.ok else {}
+        wo_payment_id = wo_payment.get("id")
+
+        wo_after = get_consignment(api, h, wo_cid).json()
+        check("23: AmountSettled counts cash AND the adjustment -- the GD is settled",
+              close(wo_after.get("amountSettled"), float(wo_credited))
+              and close(wo_after.get("outstanding"), 0),
+              f"detail={wo_after}")
+        check("23: and the badge says settled, not part-paid",
+              wo_after.get("settlementStatus") == "settled", f"detail={wo_after}")
+        check("23: the payment document itself carries only the CASH",
+              close(wo_payment.get("amount"), cash), f"payment amount={wo_payment.get('amount')}")
+
+        # The over-settle guard has to read the same sum, or a GD could be
+        # settled twice -- once in cash and once as a write-off.
+        r = create_payment(api, h, wo_co, settle_with_writeoff(wo_cid, 1, 1, wb_id))
+        check("23: a further settlement on a fully-settled GD is refused",
+              r.status_code == 400 and "over-settle" in (r.text or "").lower(),
+              f"http {r.status_code}: {r.text[:220]}")
+
+        # GL: the gap lands on the chosen account, and the bank leg is cash only.
+        if wo_payment_id:
+            je = requests.get(f"{api}/journal-entries/company/{wo_co}/paged", headers=h, timeout=30,
+                              params={"search": "GD settlement with write-off", "pageSize": 20})
+            entries = (je.json() or {}).get("items", []) if je.ok else []
+            check("23: the settlement posted a journal entry", len(entries) >= 1,
+                  f"http {je.status_code}: {je.text[:200]}")
+            if entries:
+                d1 = requests.get(f"{api}/journal-entries/{entries[0]['id']}", headers=h, timeout=30)
+                lines = (d1.json() or {}).get("lines", []) if d1.ok else []
+                clearing = next((l for l in lines
+                                 if (l.get("accountName") or "").lower().startswith("import clearing")), None)
+                wbline = next((l for l in lines if l.get("accountId") == wb_id), None)
+                check("23: Import Clearing is DEBITED the full settled amount",
+                      clearing is not None and close(clearing.get("debit"), float(wo_credited)),
+                      f"clearing={clearing}")
+                check("23: the written-back remainder is credited to the chosen account",
+                      wbline is not None and close(wbline.get("credit"), 500),
+                      f"writeback={wbline}")
+                check("23: the entry balances",
+                      close(sum(float(l.get("debit") or 0) for l in lines),
+                            sum(float(l.get("credit") or 0) for l in lines)),
+                      f"lines={[(l.get('accountName'), l.get('debit'), l.get('credit')) for l in lines]}")
+
+        # ---- Editing a GD settlement through the same shared path -----------
+        # PaymentsPage now routes Edit on a GD settlement to
+        # SettleConsignmentDialog rather than hiding the action; the SERVER
+        # path it uses is the ordinary payment update, and the over-settle
+        # guard has to exclude this payment's own prior lines or an unchanged
+        # re-save would read as an over-settle of its own amount.
+        if wo_payment_id:
+            r = requests.put(f"{api}/payments/payments/{wo_payment_id}", headers=h, timeout=30,
+                             json=settle_with_writeoff(wo_cid, cash, 500, wb_id))
+            check("23: re-saving a GD settlement unchanged is accepted", r.ok,
+                  f"http {r.status_code}: {r.text[:220]}")
+            new_cash = float(money(d(cash) - d(1000)))
+            r = requests.put(f"{api}/payments/payments/{wo_payment_id}", headers=h, timeout=30,
+                             json=settle_with_writeoff(wo_cid, new_cash, 500, wb_id))
+            check("23: editing it down to less cash is accepted", r.ok,
+                  f"http {r.status_code}: {r.text[:220]}")
+            wo_after = get_consignment(api, h, wo_cid).json()
+            check("23: the GD reads part-paid again, by exactly the amount removed",
+                  close(wo_after.get("outstanding"), 1000)
+                  and wo_after.get("settlementStatus") == "part-paid",
+                  f"detail={wo_after}")
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 24 -- ControlType 19 is FurtherTaxPayable alone
+        # ══════════════════════════════════════════════════════════════════
+        # FurtherTaxPayable and the superseded CustomerAdvances were declared
+        # as the SAME enum value, so on a chart carrying the legacy account
+        # PostingService could credit further tax (owed to FBR) to a customer
+        # advances liability -- balanced books, wrong balance sheet -- and
+        # FurtherTaxAccountSeeder read that row as proof the company already
+        # had a further-tax account and skipped it.
+        print("\n-- 24. Control accounts for import and further tax --")
+
+        flat = requests.get(f"{api}/accounts/company/{wo_co}/flat", headers=h, timeout=30)
+        accts = flat.json() if flat.ok else []
+        by_ct = {}
+        for a in accts:
+            by_ct.setdefault(a.get("controlType"), []).append(a)
+
+        check("24: a seeded chart has exactly one Further Tax Payable account",
+              len(by_ct.get("FurtherTaxPayable", [])) == 1,
+              f"rows={[a.get('name') for a in by_ct.get('FurtherTaxPayable', [])]}")
+        check("24: no account is stamped with the superseded CustomerAdvances role",
+              len(by_ct.get("CustomerAdvances", [])) == 0,
+              f"rows={[a.get('name') for a in by_ct.get('CustomerAdvances', [])]}")
+        check("24: Further Tax Payable is not the advances account wearing its number",
+              all("advance" not in (a.get("name") or "").lower()
+                  for a in by_ct.get("FurtherTaxPayable", [])),
+              f"rows={[a.get('name') for a in by_ct.get('FurtherTaxPayable', [])]}")
+        for role, label in (("ImportClearing", "Import Clearing"),
+                            ("AdvanceIncomeTaxOnImports", "Advance Income Tax on Imports")):
+            check(f"24: the chart carries a {label} control account",
+                  len(by_ct.get(role, [])) == 1,
+                  f"rows={[a.get('name') for a in by_ct.get(role, [])]}")
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 25 -- Deleting a company takes its cost history with it
+        # ══════════════════════════════════════════════════════════════════
+        # StockCostChange.CompanyId is Restrict, like the balance it records,
+        # so CompanyService.DeleteAsync has to clear the rows explicitly. The
+        # same trap CompanyItemTypeSettings and DeliveryItems.InvoiceItemId
+        # have each sprung once -- a 500 on the delete, found by a customer.
+        print("\n-- 25. Company delete clears the cost history --")
+
+        hist_co = make_company(api, h, f"GD Costing HistTrap {tag}")
+        hist_item = make_item(api, h, hist_co, f"GD Hist Item {tag}", hs="8481.1000")
+        set_opening(api, h, hist_co, hist_item, qty=10, value=1000, cost=800)
+        check("25: the throwaway company has cost history to block the delete",
+              len(cost_rows(api, h, hist_co)) >= 1, f"rows={len(cost_rows(api, h, hist_co))}")
+        r = requests.delete(f"{api}/companies/{hist_co}", headers=h, timeout=300)
+        check("25: deleting a company with cost history succeeds",
+              r.status_code in (200, 204), f"http {r.status_code}: {r.text[:200]}")
+
     finally:
         if not args.keep:
             if restricted_user_id:
                 requests.delete(f"{api}/users/{restricted_user_id}", headers=h, timeout=30)
-            for cid in (company, mixed_co, other_co, del_co, twomonth_co):
+            for uid in created_user_ids:
+                requests.delete(f"{api}/users/{uid}", headers=h, timeout=30)
+            for rid in created_role_ids:
+                requests.delete(f"{api}/roles/{rid}", headers=h, timeout=30)
+            for cid in [company, mixed_co, other_co, del_co, twomonth_co] + created_companies:
                 if cid:
                     requests.delete(f"{api}/companies/{cid}", headers=h, timeout=300)
             # Companies first -- they hold the documents that reference an item

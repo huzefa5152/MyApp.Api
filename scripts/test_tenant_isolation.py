@@ -320,6 +320,7 @@ endpoints_to_test = [
     ("GET",  "/api/stock/company/{cid}/onhand/excel"),
     ("GET",  "/api/stock/company/{cid}/movements"),
     ("GET",  "/api/stock/company/{cid}/opening"),
+    ("GET",  "/api/stock/company/{cid}/cost-changes"),
     ("GET",  "/api/fbr/sandbox/{cid}"),
     ("GET",  "/api/fbr/scenarios/applicable/{cid}"),
     ("GET",  "/api/fbr/uom/{cid}"),
@@ -1385,10 +1386,23 @@ else:
               s == 200 and isinstance(body19, dict) and body19.get("id") == beta_cid,
               f"status {s}, body {body19}")
 
+        # Correcting ONE line (2026-09-13) is the third bare-id route on this
+        # controller and resolves its company the same way. The body carries a
+        # line id too, but the tenant decision is made before it is read.
+        line_body19 = {"quantity": 1, "assessedValue": 1, "customsDuty": 0, "acd": 0,
+                       "regulatoryDuty": 0, "others": 0, "salesTaxRate": 18,
+                       "astRate": 3, "incomeTaxRate": 6, "addOnProfit": 0}
+        s, _ = request("PUT", f"/api/import-consignments/{beta_cid}/lines/1",
+                       token=tokens["alice"], body=line_body19)
+        status_check(suite19, "alice PUT a line of another tenant's consignment", s, 403)
+
         # An unknown id 404s rather than 403/500 -- same "don't confirm what
         # exists" shape every other id-based route in this file follows.
         s, _ = request("GET", "/api/import-consignments/999999999", token=admin)
         status_check(suite19, "admin GET an unknown consignment id", s, 404)
+        s, _ = request("PUT", "/api/import-consignments/999999999/lines/1",
+                       token=admin, body=line_body19)
+        status_check(suite19, "admin PUT a line of an unknown consignment id", s, 404)
 
         request("DELETE", f"/api/import-consignments/{beta_cid}", token=admin)
 
