@@ -254,6 +254,8 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 |---|---|---|---|---|
 | 2026-09-13 | Alpha Traders | "EMPTY PLASTIC DISTRIBUTION BOX, 3923.2900 — Not matched" | Correct at the time: unmatched lines were reported, not imported. | Built the create-missing-stock opt-in (§4). |
 | 2026-09-13 | — | "sheet for every month will be imported ... some will use existing item type and some will have new" | Month 2 would have overwritten cost and added no stock. | Built the two import modes (§3). |
+| 2026-09-13 | — | Test suites leaving item types behind | `ItemType` is a GLOBAL catalog with no `CompanyId`, so deleting a throwaway company does NOT remove the item types a suite created. They pile up under real HS codes. | The GD suite now deletes what it creates. 139 leftover rows removed; two tariff placeholders it had renamed were restored to their published descriptions and un-adopted. |
+| 2026-09-13 | — | `test_spreadsheet_import` 133/2 | Its "every item is new on a first upload" assertion fails against HS-tariff placeholders that **its own earlier runs** adopted and renamed (`WASHING PARTS`, `LED ONE`). Self-polluting, and unrelated to GD costing — clearing the GD suite's residue changed nothing. | Not fixed. That suite needs its own teardown, or fixture HS codes nothing else adopts. |
 | | | | | |
 
 ---
