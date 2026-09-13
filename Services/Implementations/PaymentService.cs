@@ -1068,8 +1068,13 @@ namespace MyApp.Api.Services.Implementations
                         // reasoning as a Document line settling an invoice/bill.
                         if ((a.TaxAmount ?? 0m) != 0m || (a.TaxRate ?? 0m) != 0m)
                             throw new InvalidOperationException("Tax belongs on the consignment's own posting, not the payment that settles it.");
-                        if (a.AdjustmentAmount > 0)
-                            throw new InvalidOperationException("Writing off a difference only applies to a line that settles an invoice or bill.");
+                        // A write-off IS allowed here (2026-09-13), unlike on an
+                        // Account or OnAccount line. Import Clearing is a payable
+                        // like any other and settles short for the same ordinary
+                        // reasons a purchase bill does -- the agent's final
+                        // invoice comes in a few hundred rupees under the
+                        // estimate, or a duty refund lands. Without it the only
+                        // way to close such a GD was to overstate the cash paid.
                         break;
 
                     case AllocationKind.OnAccount:
@@ -1094,8 +1099,13 @@ namespace MyApp.Api.Services.Implementations
                 if (a.Amount + a.AdjustmentAmount <= 0)
                     throw new InvalidOperationException("Each line must apply a positive amount.");
 
-                if (kind != AllocationKind.Document && a.AdjustmentAccountId.HasValue)
-                    a.AdjustmentAccountId = null;   // only a settled document can carry the write-off
+                // Only a line that settles something can carry the write-off's
+                // destination account. A GD consignment settles Import Clearing,
+                // so it counts; an Account or OnAccount line has nothing to
+                // settle short of and its AdjustmentAmount is refused above.
+                if (kind != AllocationKind.Document && kind != AllocationKind.ImportConsignment
+                    && a.AdjustmentAccountId.HasValue)
+                    a.AdjustmentAccountId = null;
             }
 
             // Direction guards — unchanged rules, kept here so every caller gets them.
@@ -1343,12 +1353,13 @@ namespace MyApp.Api.Services.Implementations
             if (bill != null) bill.AmountPaid = paid;
         }
 
-        /// <summary>AmountSettled = Σ allocation amounts from NON-cancelled
-        /// payments — the exact mirror of RecomputePurchaseBillAsync. This kind
-        /// carries no AdjustmentAmount (NormalizeAllocations refuses one), but
-        /// the formula still includes it for the same reason every sibling
-        /// recompute does: harmless while it stays 0, and correct if that ever
-        /// changes without this line needing to.</summary>
+        /// <summary>AmountSettled = cash + settle-remainder adjustment from
+        /// NON-cancelled payments — the exact mirror of
+        /// RecomputePurchaseBillAsync, including the write-off slice, which a
+        /// consignment settlement has been able to carry since 2026-09-13. Both
+        /// halves clear the liability, so both count here; the over-settle guard
+        /// reads the same sum, or a GD could be settled twice — once in cash and
+        /// once as a write-off.</summary>
         private async Task RecomputeImportConsignmentAsync(int consignmentId)
         {
             var settled = await _context.PaymentAllocations

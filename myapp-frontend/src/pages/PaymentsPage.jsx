@@ -12,6 +12,7 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
 import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";
+import SettleConsignmentDialog from "../Components/SettleConsignmentDialog";
 import AttachmentManager from "../Components/AttachmentManager";
 import { getPagedPayments, deletePayment, getPaymentPrintData } from "../api/paymentApi";
 import { mergeTemplate } from "../utils/templateEngine";
@@ -27,6 +28,9 @@ import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/account
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// A payment whose lines settle a GD consignment. Its editor is
+// SettleConsignmentDialog, never PaymentForm — see the canEdit comment below.
+const isGdSettlement = (p) => (p?.allocations || []).some((a) => a.kind === "ImportConsignment");
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—");
 
 /**
@@ -230,10 +234,13 @@ export default function PaymentsPage({ mode = "receipts" }) {
                   // keys a saved allocation back to a row by invoiceId/
                   // purchaseBillId, and an ImportConsignmentId line has
                   // neither, so it would silently vanish from `alloc` on
-                  // load and be DROPPED on the next Save. View/print/delete
-                  // stay available; editing goes through the Consignments
-                  // screen's own Settle action instead.
-                  canEdit={canCreate && !(p.allocations || []).some((a) => a.kind === "ImportConsignment")}
+                  // load and be DROPPED on the next Save. So it is editable
+                  // (2026-09-13), just not THROUGH that form: Edit hands it to
+                  // SettleConsignmentDialog, the same dialog that created it,
+                  // which speaks importConsignmentId natively. Routing by the
+                  // allocation kind rather than hiding the action is what
+                  // stopped a mis-keyed settlement being uncorrectable.
+                  canEdit={canCreate}
                   canPrint={canPrint}
                   tplPicker={tplPicker}
                   exportingId={exportingId}
@@ -263,13 +270,22 @@ export default function PaymentsPage({ mode = "receipts" }) {
       )}
 
       {editing && companyId && (
-        <PaymentForm
-          mode={mode}
-          companyId={companyId}
-          editPayment={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); fetchRows(page); notify(`${isReceipt ? "Receipt" : "Payment"} updated.`, "success"); }}
-        />
+        isGdSettlement(editing) ? (
+          <SettleConsignmentDialog
+            companyId={companyId}
+            payment={editing}
+            onClose={() => setEditing(null)}
+            onSaved={() => { setEditing(null); fetchRows(page); notify("Settlement updated.", "success"); }}
+          />
+        ) : (
+          <PaymentForm
+            mode={mode}
+            companyId={companyId}
+            editPayment={editing}
+            onClose={() => setEditing(null)}
+            onSaved={() => { setEditing(null); fetchRows(page); notify(`${isReceipt ? "Receipt" : "Payment"} updated.`, "success"); }}
+          />
+        )
       )}
 
       {viewing && (
