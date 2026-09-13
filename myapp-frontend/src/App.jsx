@@ -30,6 +30,7 @@ import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import GdCostingImportPage from "./pages/GdCostingImportPage";
+import ImportConsignmentsPage from "./pages/ImportConsignmentsPage";
 import ImportGuidePage from "./pages/ImportGuidePage";
 import SalesReportPage from "./pages/SalesReportPage";
 import TaxSheetPage from "./pages/TaxSheetPage";
@@ -158,9 +159,13 @@ export default function App() {
           {/* GD costing workbook import — loads actual landed cost onto stock
               already on the books. Exact permission (not anyPrefix): the
               ImportCosting module also carries importcosting.consignments.view
-              for a future read-only screen, which must not itself open this
-              run/write page. */}
+              for the read-only Consignments screen below, which must not
+              itself open this run/write page. */}
           <Route path="/imports/costing" element={<RequirePermission permission="importcosting.sheet.run"><GdCostingImportPage /></RequirePermission>} />
+          {/* Task 21: view what a GD costing import wrote, and delete a
+              consignment (the correction path) — separate permission from the
+              run/write page above. */}
+          <Route path="/imports/consignments" element={<RequirePermission permission="importcosting.consignments.view"><ImportConsignmentsPage /></RequirePermission>} />
           {/* Reports */}
           <Route path="/reports/sales" element={<RequirePermission anyPrefix="reports.sales"><SalesReportPage /></RequirePermission>} />
           <Route path="/reports/tax-sheet" element={<RequirePermission anyPrefix="reports.taxsheet"><TaxSheetPage /></RequirePermission>} />

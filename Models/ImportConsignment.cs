@@ -72,6 +72,26 @@ namespace MyApp.Api.Models
         /// </summary>
         public int? ImportRunId { get; set; }
 
+        /// <summary>
+        /// One of <c>DTOs.GdCostingImportModeNames</c> ("backfill" /
+        /// "new-arrivals"), resolved at commit time and stored here — the same
+        /// "resolve once, keep it" reasoning as every rate on
+        /// <see cref="ImportConsignmentLine"/>. Task 21 needs this to know HOW
+        /// to undo a <see cref="GdCostingDisposition.CostOnly"/> line's effect
+        /// on the balance it costed: Backfill SET the cost (no prior value is
+        /// stored anywhere, so reversal is to 0), New Arrivals ADDED quantity,
+        /// cost and selling value (so reversal subtracts exactly that). Without
+        /// this column a delete could not tell the two apart after the fact.
+        ///
+        /// Defaults to "backfill" for every row written before this column
+        /// existed — correct for all of them, not a guess: New Arrivals never
+        /// existed as an option before Task 19, and the migration that added
+        /// this column flips to "new-arrivals" any pre-existing row that
+        /// provably posted an ImportConsignment journal entry (Task 20), which
+        /// only New Arrivals mode ever does.
+        /// </summary>
+        public string Mode { get; set; } = "backfill";
+
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

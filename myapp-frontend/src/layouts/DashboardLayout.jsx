@@ -218,6 +218,7 @@ export default function DashboardLayout() {
     "goodsreceipts.list.view",
     "fbrimport.purchase.preview",
     "importcosting.sheet.run",
+    "importcosting.consignments.view",
   ];
   const accountingKeys = [
     "accounting.receipts.view",
@@ -514,6 +515,12 @@ export default function DashboardLayout() {
                 <NavLink to="/imports/costing" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdInventory2 className="dl-subitem__icon" aria-hidden="true" />
                   <span>Import Costing</span>
+                </NavLink>
+              </Can>
+              <Can permission="importcosting.consignments.view">
+                <NavLink to="/imports/consignments" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdHistory className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Consignments</span>
                 </NavLink>
               </Can>
             </NavGroup>
@@ -933,6 +940,7 @@ function getBreadcrumb(pathname) {
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/imports/costing": "Purchases / Import Costing",
+    "/imports/consignments": "Purchases / Consignments",
     "/item-types": "Configuration / Item Types",
     "/non-inventory-items": "Configuration / Non-Inventory Items",
     "/challans": "Sales / Delivery Challans",

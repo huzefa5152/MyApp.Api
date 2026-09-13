@@ -2209,6 +2209,10 @@ namespace MyApp.Api.Data
                 e.Property(c => c.TotalIncomeTax).HasPrecision(18, 2);
                 e.Property(c => c.TotalSellingValue).HasPrecision(18, 2);
                 e.HasIndex(c => c.ImportRunId);
+                // Task 21: "backfill" | "new-arrivals" — see the property's own
+                // doc comment for why a delete needs this stored rather than
+                // re-derived.
+                e.Property(c => c.Mode).HasMaxLength(20).HasDefaultValue("backfill");
 
                 // Restrict: CompanyService.DeleteAsync must delete a company's
                 // consignments (their lines cascade with them, below) before

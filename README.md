@@ -385,6 +385,20 @@ Publish output optimized from 79 MB to 37 MB via:
   stays a genuine weighted average). The preview states the consequence per
   line before Commit, and both duplicate guards (the same file, the same GD
   number) still apply under either choice.
+- **An imported consignment can now be viewed, and undone.** **Purchases ▸
+  Consignments** lists every GD costing consignment imported into a company —
+  cost, selling value, mode, whether it posted to the ledger — and expands to
+  its lines: HS code, quantity, the item or balance it resolved to, and the
+  disposition note explaining what happened and why. Deleting one reverses
+  exactly what the commit did: a **backfill** match has its cost reset to 0.00
+  (it SET the cost, so there is nothing else to restore it to); a **new
+  arrivals** match has the quantity, cost and value it added subtracted back
+  out; an opening balance the import created is removed, unless the item has
+  since been sold, adjusted, or otherwise moved, or another consignment now
+  relies on the same balance — either refuses the whole delete rather than
+  leaving it half undone. Any journal entry the consignment posted is
+  withdrawn. Once deleted, the same GD number can be imported again — until
+  then, the "already recorded" message now says where to go to remove it.
 
 ### 2026-09-13 — Stock export scrolls properly, and Cost of Good Sold fills itself
 

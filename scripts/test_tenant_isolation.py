@@ -361,6 +361,8 @@ endpoints_to_test = [
     # The export path is a separate action with its own permission — it must be
     # tenant-guarded too, or the data walks out as a spreadsheet.
     ("GET",  "/api/accounting/reports/company/{cid}/export/expenses"),
+    # Import consignments (Task 21) — the read side of the GD costing import.
+    ("GET",  "/api/import-consignments?companyId={cid}"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:
@@ -1339,6 +1341,56 @@ else:
         seen.append(st_t == 200 and any(r["id"] == placeholder["id"] for r in rows_t))
     check(suite, "an un-adopted tariff code stays visible to BOTH tenants",
           all(seen), f"alpha={seen[0]} beta={seen[1]} for {placeholder['hsCode']}")
+
+
+# ── Suite 19: import consignments -- id-based view + delete guard (Task 21) ──
+# GET/DELETE /api/import-consignments/{id} are bare-id routes -- the company
+# is resolved from the STORED consignment and asserted, never trusted from a
+# caller-supplied companyId. The companyId-bearing list route is already
+# covered generically above (Suite 2's endpoints_to_test).
+print("\n  Suite 19 — import consignments (id-based view + delete)")
+suite19 = "import consignments id-based guard"
+
+if xlsx_bytes is None:
+    check(suite19, "openpyxl available for the consignment fixture", False, "pip install openpyxl")
+else:
+    # admin commits a real (if minimally-costed) GD costing consignment into
+    # Beta, reusing the same workbook/mapping fixture Suite 16 already proved
+    # previews correctly -- disposition doesn't matter here, only that a real
+    # row with a real id exists to test the id-based routes against.
+    s_, prev19 = upload_file(f"/api/spreadsheet-import/gd-costing/preview?companyId={beta['id']}",
+                             admin, "iso19.xlsx", xlsx_bytes, XLSX_MIME, fields={"mappingJson": gd_map})
+    assert s_ == 200, f"seed beta GD costing preview: {s_} {prev19}"
+    commit19 = dict(prev19)
+    commit19["companyId"] = beta["id"]
+    s_, res19 = request("POST", "/api/spreadsheet-import/gd-costing/commit", token=admin, body=commit19)
+    assert s_ == 200, f"seed beta GD costing commit: {s_} {res19}"
+
+    s_, list19 = request("GET", f"/api/import-consignments?companyId={beta['id']}", token=admin)
+    assert s_ == 200, f"list beta consignments: {s_} {list19}"
+    beta_cid = next((x["id"] for x in (list19 or {}).get("items", []) if x.get("gdNumber") == "LOT-1"), None)
+    check(suite19, "seed: the committed consignment is findable via the list endpoint",
+          beta_cid is not None, f"items={(list19 or {}).get('items')}")
+
+    if beta_cid is not None:
+        s, _ = request("GET", f"/api/import-consignments/{beta_cid}", token=tokens["alice"])
+        status_check(suite19, "alice GET another tenant's consignment by id", s, 403)
+        s, _ = request("DELETE", f"/api/import-consignments/{beta_cid}", token=tokens["alice"])
+        status_check(suite19, "alice DELETE another tenant's consignment by id", s, 403)
+
+        # Sanity: bob (has Beta access) reads the same row fine, proving the
+        # 403s above are the tenant guard, not a broken route.
+        s, body19 = request("GET", f"/api/import-consignments/{beta_cid}", token=tokens["bob"])
+        check(suite19, "bob (Beta access) GET the same consignment fine",
+              s == 200 and isinstance(body19, dict) and body19.get("id") == beta_cid,
+              f"status {s}, body {body19}")
+
+        # An unknown id 404s rather than 403/500 -- same "don't confirm what
+        # exists" shape every other id-based route in this file follows.
+        s, _ = request("GET", "/api/import-consignments/999999999", token=admin)
+        status_check(suite19, "admin GET an unknown consignment id", s, 404)
+
+        request("DELETE", f"/api/import-consignments/{beta_cid}", token=admin)
 
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")

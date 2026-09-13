@@ -341,6 +341,28 @@ def gd_commit(api, h, body):
                          json=body)
 
 
+# ── Consignments (Task 21: view + delete what a GD costing import wrote) ────
+
+def list_consignments(api, h, company_id, page=1, page_size=50):
+    return requests.get(f"{api}/import-consignments", headers=h, timeout=30,
+                        params={"companyId": company_id, "page": page, "pageSize": page_size})
+
+
+def get_consignment(api, h, cid):
+    return requests.get(f"{api}/import-consignments/{cid}", headers=h, timeout=30)
+
+
+def delete_consignment(api, h, cid):
+    return requests.delete(f"{api}/import-consignments/{cid}", headers=h, timeout=30)
+
+
+def find_consignment_id(api, h, company_id, gd_number):
+    r = list_consignments(api, h, company_id, page_size=200)
+    r.raise_for_status()
+    row = next((x for x in r.json().get("items", []) if x.get("gdNumber") == gd_number), None)
+    return row["id"] if row else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:5134")
@@ -1578,6 +1600,322 @@ def main():
         finally:
             if not args.keep:
                 requests.delete(f"{api}/companies/{gl_off_co}", headers=h, timeout=300)
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 16 -- Consignments: view + delete (Task 21)
+        # ══════════════════════════════════════════════════════════════════
+        print("\n-- 16. Consignments: list/detail, and the delete/undo path --")
+
+        # 16a: list/detail/delete 403 for a user with no access to the company
+        # at all -- hr (Section 11) was granted ONLY `company`, so twomonth_co
+        # (which Section 14 committed real backfill/new-arrivals GDs into) is
+        # completely out of reach for them.
+        r = list_consignments(api, h, twomonth_co, page_size=200)
+        r.raise_for_status()
+        some_twomonth_cid = (r.json().get("items") or [{}])[0].get("id")
+        check("16a: setup -- twomonth_co has a real consignment to test against",
+              some_twomonth_cid is not None, f"items={r.json().get('items')}")
+
+        r = list_consignments(api, hr, twomonth_co)
+        check("16a: a user with no access to the company is refused the list",
+              r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
+        if some_twomonth_cid is not None:
+            r = get_consignment(api, hr, some_twomonth_cid)
+            check("16a: a user with no access to the company is refused the detail",
+                  r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
+            r = delete_consignment(api, hr, some_twomonth_cid)
+            check("16a: a user with no access to the company is refused the delete",
+                  r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
+
+            r = get_consignment(api, h, some_twomonth_cid)
+            check("16a: admin (has access) reads the very same consignment fine",
+                  r.ok and r.json().get("id") == some_twomonth_cid, f"http {r.status_code}: {r.text[:200]}")
+
+        # 16a2: an unknown consignment id 404s on every route -- never a 403
+        # or a 500, the same "don't confirm what exists" shape every other
+        # id-based route in this codebase follows.
+        r = get_consignment(api, h, 999999999)
+        check("16a2: an unknown consignment id 404s on GET", r.status_code == 404, f"http {r.status_code}")
+        r = delete_consignment(api, h, 999999999)
+        check("16a2: an unknown consignment id 404s on DELETE", r.status_code == 404, f"http {r.status_code}")
+
+        # 16b: Backfill delete zeroes the cost it set (there is no prior value
+        # anywhere to restore), leaves quantity/value untouched, and the SAME
+        # GD number can be imported again afterwards -- while a duplicate GD
+        # that was NOT deleted is still refused, with an updated message.
+        bf_co = make_company(api, h, f"GD Costing Del Backfill {tag}")
+        try:
+            bf_item = make_item(api, h, bf_co, f"Del Backfill Item {tag}", hs="8481.1000")
+            set_opening(api, h, bf_co, bf_item, qty=100, value=250000)
+            bf_gd = f"GD-DEL-BF-{tag}"
+            bf_row = row_cells(BASE_COLS, bf_gd, "8481.1000", desc=f"Del Backfill Item {tag}",
+                               qty=100, assessed=62490, st=18, ast=3, it=6)
+            r = gd_preview(api, h, bf_co, build_sheet(BASE_HEADINGS, [bf_row]), GD_MAPPING)
+            bf_prev = r.json() if r.ok else {}
+            check("16b: the backfill delete-target sheet previews", r.ok, f"http {r.status_code}: {r.text[:200]}")
+            r = gd_commit(api, h, {
+                "companyId": bf_co, "fileSha256": bf_prev.get("fileSha256"), "fileName": "bf-del.xlsx",
+                "fileSizeBytes": bf_prev.get("fileSizeBytes"), "lines": bf_prev.get("lines", []),
+                "mode": "backfill",
+            })
+            check("16b: it commits (backfill)", r.ok, f"http {r.status_code}: {r.text[:200]}")
+
+            bf_before = opening_of(get_openings(api, h, bf_co), bf_item)
+            check("16b: cost was set by the commit",
+                  bf_before is not None and close(bf_before.get("actualCostExcludingTax"), 62490.0),
+                  f"balance={bf_before}")
+
+            bf_cid = find_consignment_id(api, h, bf_co, bf_gd)
+            check("16b: the consignment is findable via the new list endpoint",
+                  bf_cid is not None, f"cid={bf_cid}")
+
+            r = delete_consignment(api, h, bf_cid)
+            bf_del_res = r.json() if r.ok else {}
+            check("16b: delete succeeds", r.ok, f"http {r.status_code}: {r.text[:300]}")
+            check("16b: delete reports one balance cost-reversed, none deleted, no journal entry",
+                  bf_del_res.get("balancesCostReversed") == 1
+                  and bf_del_res.get("balancesDeleted") == 0
+                  and bf_del_res.get("journalEntryWithdrawn") is False,
+                  f"result={bf_del_res}")
+
+            bf_after = opening_of(get_openings(api, h, bf_co), bf_item)
+            check("16b: cost is reset to EXACTLY 0.00 (Backfill SET it -- no prior value to restore)",
+                  bf_after is not None and close(bf_after.get("actualCostExcludingTax"), 0.0),
+                  f"balance={bf_after}")
+            check("16b: quantity is UNTOUCHED by the reversal",
+                  bf_after is not None and close(bf_after.get("quantity"), 100.0), f"balance={bf_after}")
+            check("16b: value is UNTOUCHED by the reversal",
+                  bf_after is not None and close(bf_after.get("valueExcludingTax"), 250000.0),
+                  f"balance={bf_after}")
+
+            r = get_consignment(api, h, bf_cid)
+            check("16b: the deleted consignment's detail now 404s",
+                  r.status_code == 404, f"http {r.status_code}")
+
+            # Gap D: re-importing the SAME GD number (genuinely different
+            # bytes) now succeeds once the old consignment is gone.
+            bf_row2 = row_cells(BASE_COLS, bf_gd, "8481.1000", desc=f"Del Backfill Item {tag}",
+                                qty=100, assessed=62490, others=1, st=18, ast=3, it=6)
+            r = gd_preview(api, h, bf_co, build_sheet(BASE_HEADINGS, [bf_row2]), GD_MAPPING)
+            bf_prev2 = r.json() if r.ok else {}
+            check("16b: the re-import sheet has a genuinely different hash from the original",
+                  bf_prev2.get("fileSha256") != bf_prev.get("fileSha256"),
+                  f"{bf_prev2.get('fileSha256')} vs {bf_prev.get('fileSha256')}")
+            r = gd_commit(api, h, {
+                "companyId": bf_co, "fileSha256": bf_prev2.get("fileSha256"), "fileName": "bf-del2.xlsx",
+                "fileSizeBytes": bf_prev2.get("fileSizeBytes"), "lines": bf_prev2.get("lines", []),
+                "mode": "backfill",
+            })
+            check("16b: the SAME GD number imports again once the old consignment is deleted",
+                  r.ok, f"http {r.status_code}: {r.text[:300]}")
+
+            # WITHOUT deleting, a duplicate GD number is still refused -- the
+            # guard is not weakened -- but the message now says what to do.
+            dup_row = row_cells(BASE_COLS, bf_gd, "8481.1000", desc=f"Del Backfill Item {tag}",
+                                qty=100, assessed=62490, others=2, st=18, ast=3, it=6)
+            r = gd_preview(api, h, bf_co, build_sheet(BASE_HEADINGS, [dup_row]), GD_MAPPING)
+            dup_prev = r.json() if r.ok else {}
+            check("16b: the duplicate-GD guard still fires in PREVIEW (guard not weakened)",
+                  any("already" in e.lower() for e in dup_prev.get("blockingErrors", [])),
+                  f"blockingErrors={dup_prev.get('blockingErrors')}")
+            r = gd_commit(api, h, {
+                "companyId": bf_co, "fileSha256": dup_prev.get("fileSha256"), "fileName": "bf-dup.xlsx",
+                "fileSizeBytes": dup_prev.get("fileSizeBytes"), "lines": dup_prev.get("lines", []),
+                "mode": "backfill",
+            })
+            dup_msg = (r.json().get("message") or "") if r.text else ""
+            check("16b: the duplicate-GD guard still refuses the COMMIT too",
+                  r.status_code == 400 and "already" in dup_msg.lower(), f"http {r.status_code}: {dup_msg}")
+            check("16b: the guard's message now tells the operator to delete the existing one first",
+                  "consignments" in dup_msg.lower() and "delete" in dup_msg.lower(), f"message={dup_msg}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{bf_co}", headers=h, timeout=300)
+
+        # 16c: New Arrivals delete subtracts EXACTLY what it added -- quantity,
+        # cost and value all land back on the pre-commit figures -- and its
+        # posted journal entry is withdrawn.
+        na_co = make_company(api, h, f"GD Costing Del NewArr {tag}")
+        try:
+            en = requests.post(f"{api}/accounting/gl/company/{na_co}/enable", headers=h, timeout=180)
+            check("16c: GL can be switched on", en.ok, f"http {en.status_code}: {en.text[:200]}")
+
+            na_item = make_item(api, h, na_co, f"Del NewArr Item {tag}", hs="8481.1000")
+            set_opening(api, h, na_co, na_item, qty=200, value=500000, cost=100000)
+            na_before = opening_of(get_openings(api, h, na_co), na_item)
+
+            na_gd = f"GD-DEL-NA-{tag}"
+            na_row = row_cells(BASE_COLS, na_gd, "8481.1000", desc=f"Del NewArr Item {tag}",
+                               qty=50, assessed=31245, st=18, ast=3, it=6, gddate="12-03-2026")
+            r = gd_preview(api, h, na_co, build_sheet(BASE_HEADINGS, [na_row]), GD_MAPPING,
+                          mode="new-arrivals")
+            na_prev = r.json() if r.ok else {}
+            check("16c: the new-arrivals delete-target sheet previews",
+                  r.ok, f"http {r.status_code}: {r.text[:200]}")
+            r = gd_commit(api, h, {
+                "companyId": na_co, "fileSha256": na_prev.get("fileSha256"), "fileName": "na-del.xlsx",
+                "fileSizeBytes": na_prev.get("fileSizeBytes"), "lines": na_prev.get("lines", []),
+                "mode": "new-arrivals",
+            })
+            na_commit_res = r.json() if r.ok else {}
+            check("16c: it commits (new arrivals) and posts one journal entry",
+                  r.ok and len(na_commit_res.get("journalEntries") or []) == 1,
+                  f"http {r.status_code}: {r.text[:300]}")
+            na_je_id = (na_commit_res.get("journalEntries") or [{}])[0].get("journalEntryId")
+
+            na_cid = find_consignment_id(api, h, na_co, na_gd)
+            check("16c: the consignment is findable via the list endpoint",
+                  na_cid is not None, f"cid={na_cid}")
+            row16c = next((x for x in list_consignments(api, h, na_co, page_size=50).json().get("items", [])
+                          if x["id"] == na_cid), {})
+            check("16c: the list row reports hasJournalEntry",
+                  row16c.get("hasJournalEntry") is True, f"row={row16c}")
+
+            r = delete_consignment(api, h, na_cid)
+            na_del_res = r.json() if r.ok else {}
+            check("16c: delete succeeds", r.ok, f"http {r.status_code}: {r.text[:300]}")
+            check("16c: delete reports the journal entry withdrawn",
+                  na_del_res.get("journalEntryWithdrawn") is True, f"result={na_del_res}")
+
+            na_after = opening_of(get_openings(api, h, na_co), na_item)
+            check("16c: quantity is back to EXACTLY the pre-commit figure",
+                  na_after is not None and close(na_after.get("quantity"), na_before.get("quantity")),
+                  f"before={na_before} after={na_after}")
+            check("16c: actual cost is back to EXACTLY the pre-commit figure",
+                  na_after is not None and close(na_after.get("actualCostExcludingTax"),
+                                                 na_before.get("actualCostExcludingTax")),
+                  f"before={na_before} after={na_after}")
+            check("16c: value is back to EXACTLY the pre-commit figure",
+                  na_after is not None and close(na_after.get("valueExcludingTax"),
+                                                 na_before.get("valueExcludingTax")),
+                  f"before={na_before} after={na_after}")
+
+            je_after = requests.get(f"{api}/journal-entries/{na_je_id}", headers=h, timeout=30) if na_je_id else None
+            check("16c: the withdrawn journal entry now 404s",
+                  je_after is not None and je_after.status_code == 404,
+                  f"http {je_after.status_code if je_after is not None else 'n/a'}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{na_co}", headers=h, timeout=300)
+
+        # 16d: a StockPosted-created balance is refused once anything has
+        # moved against it -- and NOTHING is undone by a refused delete.
+        blk_co = make_company(api, h, f"GD Costing Del Blocked {tag}")
+        try:
+            blk_gd = f"GD-DEL-BLK-{tag}"
+            blk_desc = f"Del Blocked Item {tag}"
+            # A wholly new HS code -- no existing balance for it anywhere.
+            blk_row = row_cells(BASE_COLS, blk_gd, "9991.0000", desc=blk_desc,
+                                qty=10, assessed=8000, st=18, ast=3, it=6)
+            r = gd_preview(api, h, blk_co, build_sheet(BASE_HEADINGS, [blk_row]), GD_MAPPING)
+            blk_prev = r.json() if r.ok else {}
+            check("16d: the unmatched-line sheet previews as stock-posted",
+                  r.ok and blk_prev.get("lines", [{}])[0].get("disposition") == "stock-posted",
+                  f"http {r.status_code}: {r.text[:200]}")
+            r = gd_commit(api, h, {
+                "companyId": blk_co, "fileSha256": blk_prev.get("fileSha256"), "fileName": "blk-del.xlsx",
+                "fileSizeBytes": blk_prev.get("fileSizeBytes"), "lines": blk_prev.get("lines", []),
+                "createMissingStock": True, "mode": "backfill",
+            })
+            blk_commit_res = r.json() if r.ok else {}
+            check("16d: it commits and creates one opening balance",
+                  r.ok and blk_commit_res.get("openingBalancesCreated") == 1,
+                  f"http {r.status_code}: {r.text[:300]}")
+
+            blk_openings = get_openings(api, h, blk_co)
+            blk_balance = next((o for o in blk_openings
+                               if o.get("itemTypeName", "").startswith(blk_desc)), None)
+            check("16d: the new balance exists", blk_balance is not None, f"openings={blk_openings}")
+            blk_item_id = blk_balance["itemTypeId"] if blk_balance else None
+            if blk_item_id:
+                CREATED_ITEM_TYPE_IDS.append(blk_item_id)
+
+            blk_cid = find_consignment_id(api, h, blk_co, blk_gd)
+            check("16d: the consignment is findable", blk_cid is not None, f"cid={blk_cid}")
+
+            # Simulate "moved since" with a stock adjustment (Revaluation --
+            # CLAUDE.md 5b-4) rather than a sale, so no client/tracking setup
+            # is needed: quantity/value untouched, actual cost nudged by 1.
+            adj = requests.post(f"{api}/stock/adjust", headers=h, timeout=30, json={
+                "companyId": blk_co, "itemTypeId": blk_item_id, "mode": "set",
+                "targetActualCostExcludingTax": (blk_balance.get("actualCostExcludingTax") or 0) + 1,
+            })
+            check("16d: the stock adjustment itself succeeds", adj.ok, f"http {adj.status_code}: {adj.text[:200]}")
+
+            r = delete_consignment(api, h, blk_cid)
+            check("16d: the delete is REFUSED once the item has moved",
+                  r.status_code == 400, f"http {r.status_code}: {r.text[:300]}")
+            blk_msg = (r.json().get("message") or "") if r.text else ""
+            check("16d: the refusal names the item and says it has moved",
+                  "moved" in blk_msg.lower() or "movement" in blk_msg.lower(), f"message={blk_msg}")
+
+            # Nothing was undone: the consignment and the balance both survive.
+            r = get_consignment(api, h, blk_cid)
+            check("16d: the consignment still exists after the refusal", r.ok, f"http {r.status_code}")
+            blk_after = opening_of(get_openings(api, h, blk_co), blk_item_id)
+            check("16d: the balance still exists after the refusal", blk_after is not None,
+                  f"openings={get_openings(api, h, blk_co)}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{blk_co}", headers=h, timeout=300)
+
+        # 16e: a balance one consignment created is later relied on
+        # (CostOnly) by a SECOND consignment -- the first cannot be deleted
+        # until the second is gone, or is itself gone.
+        shr_co = make_company(api, h, f"GD Costing Del Shared {tag}")
+        try:
+            shr_desc = f"Del Shared Item {tag}"
+            shr_gd1 = f"GD-DEL-SHR1-{tag}"
+            shr_row1 = row_cells(BASE_COLS, shr_gd1, "9992.0000", desc=shr_desc,
+                                 qty=20, assessed=10000, st=18, ast=3, it=6)
+            r = gd_preview(api, h, shr_co, build_sheet(BASE_HEADINGS, [shr_row1]), GD_MAPPING)
+            shr_prev1 = r.json() if r.ok else {}
+            r = gd_commit(api, h, {
+                "companyId": shr_co, "fileSha256": shr_prev1.get("fileSha256"), "fileName": "shr1.xlsx",
+                "fileSizeBytes": shr_prev1.get("fileSizeBytes"), "lines": shr_prev1.get("lines", []),
+                "createMissingStock": True, "mode": "backfill",
+            })
+            check("16e: the first (creating) consignment commits", r.ok, f"http {r.status_code}: {r.text[:200]}")
+            shr_cid1 = find_consignment_id(api, h, shr_co, shr_gd1)
+
+            shr_openings = get_openings(api, h, shr_co)
+            shr_balance = next((o for o in shr_openings if o.get("itemTypeName", "").startswith(shr_desc)), None)
+            if shr_balance:
+                CREATED_ITEM_TYPE_IDS.append(shr_balance["itemTypeId"])
+
+            shr_gd2 = f"GD-DEL-SHR2-{tag}"
+            shr_row2 = row_cells(BASE_COLS, shr_gd2, "9992.0000", desc=shr_desc,
+                                 qty=5, assessed=3000, st=18, ast=3, it=6)
+            r = gd_preview(api, h, shr_co, build_sheet(BASE_HEADINGS, [shr_row2]), GD_MAPPING)
+            shr_prev2 = r.json() if r.ok else {}
+            check("16e: the second sheet matches the balance the first one created (cost-only)",
+                  r.ok and shr_prev2.get("lines", [{}])[0].get("disposition") == "cost-only",
+                  f"http {r.status_code}: {r.text[:200]}")
+            r = gd_commit(api, h, {
+                "companyId": shr_co, "fileSha256": shr_prev2.get("fileSha256"), "fileName": "shr2.xlsx",
+                "fileSizeBytes": shr_prev2.get("fileSizeBytes"), "lines": shr_prev2.get("lines", []),
+                "mode": "backfill",
+            })
+            check("16e: the second (dependent) consignment commits", r.ok, f"http {r.status_code}: {r.text[:200]}")
+            shr_cid2 = find_consignment_id(api, h, shr_co, shr_gd2)
+
+            r = delete_consignment(api, h, shr_cid1)
+            check("16e: deleting the CREATOR is refused while the dependent consignment exists",
+                  r.status_code == 400, f"http {r.status_code}: {r.text[:300]}")
+            shr_msg = (r.json().get("message") or "") if r.text else ""
+            check("16e: the refusal names another consignment as the reason",
+                  "another consignment" in shr_msg.lower(), f"message={shr_msg}")
+
+            r = delete_consignment(api, h, shr_cid2)
+            check("16e: deleting the DEPENDENT (cost-only) consignment succeeds",
+                  r.ok, f"http {r.status_code}: {r.text[:200]}")
+
+            r = delete_consignment(api, h, shr_cid1)
+            check("16e: the creator is now deletable once nothing depends on it",
+                  r.ok, f"http {r.status_code}: {r.text[:200]}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{shr_co}", headers=h, timeout=300)
 
     finally:
         if not args.keep:

@@ -163,7 +163,7 @@ namespace MyApp.Api.Services.Implementations
             var existingGds = await FindExistingGdNumbersAsync(companyId, gdNumbers);
             if (existingGds.Count > 0)
                 preview.BlockingErrors.Add(
-                    $"GD {string.Join(", ", existingGds)} already {(existingGds.Count == 1 ? "has" : "have")} a consignment recorded for this company. Re-importing a GD costing sheet is not supported yet.");
+                    $"GD {string.Join(", ", existingGds)} already {(existingGds.Count == 1 ? "has" : "have")} a consignment recorded for this company. Open the Consignments screen and delete the existing one first if you need to re-import it.");
 
             var blocking = await _imports.FindBlockingRunAsync(companyId, ImportKinds.GdCosting, fileSha256);
             if (blocking != null)
@@ -597,7 +597,7 @@ namespace MyApp.Api.Services.Implementations
             var existingGds = await FindExistingGdNumbersAsync(dto.CompanyId, gdNumbers);
             if (existingGds.Count > 0)
                 throw new InvalidOperationException(
-                    $"GD {string.Join(", ", existingGds)} already {(existingGds.Count == 1 ? "has" : "have")} a consignment recorded for this company. Nothing was changed.");
+                    $"GD {string.Join(", ", existingGds)} already {(existingGds.Count == 1 ? "has" : "have")} a consignment recorded for this company. Nothing was changed. Open the Consignments screen and delete the existing one first if you need to re-import it.");
 
             // Task 19: never trusted beyond deciding SET vs ADD below — this
             // has no bearing on matching, verification or either duplicate
@@ -638,6 +638,10 @@ namespace MyApp.Api.Services.Implementations
                         TotalInputTax = Money(group.Sum(l => l.InputTax)),
                         TotalIncomeTax = Money(group.Sum(l => l.IncomeTax)),
                         TotalSellingValue = Money(group.Sum(l => l.SellingValue)),
+                        // Stored so a later delete (Task 21) knows whether a
+                        // matched line's cost was SET (Backfill) or ADDED
+                        // (New Arrivals) without having to guess after the fact.
+                        Mode = mode,
                         Notes = gdDate.HasValue
                             ? null
                             : "Declaration date was not on the sheet for this GD; the import date was used instead.",
