@@ -52,8 +52,10 @@ const st = {
     borderRadius: "50%", background: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 800, flexShrink: 0,
   },
 
+  h3: { margin: "1.1rem 0 0.6rem", fontSize: "0.95rem", fontWeight: 800, color: colors.textPrimary },
   p: { margin: "0 0 0.85rem", color: colors.textPrimary, fontSize: "0.92rem", lineHeight: 1.65 },
   ol: { margin: "0 0 0.9rem", paddingLeft: "1.3rem", color: colors.textPrimary, fontSize: "0.92rem", lineHeight: 1.75 },
+  ul: { margin: "0 0 0.9rem", paddingLeft: "1.3rem", color: colors.textPrimary, fontSize: "0.92rem", lineHeight: 1.75 },
   li: { marginBottom: "0.4rem" },
 
   path: {
@@ -101,12 +103,6 @@ const st = {
   modeText: { margin: 0, fontSize: "0.87rem", lineHeight: 1.6, color: colors.textPrimary },
   modeUse: { margin: 0, fontSize: "0.8rem", lineHeight: 1.5, color: colors.textSecondary, fontStyle: "italic" },
 
-  plannedBadge: {
-    display: "inline-flex", padding: "0.2rem 0.6rem", borderRadius: 999,
-    background: "rgba(217,119,6,0.18)", color: "#b26a00", fontSize: "0.66rem", fontWeight: 800,
-    textTransform: "uppercase", letterSpacing: "0.05em",
-  },
-
   tableScroll: { overflowX: "auto", marginBottom: "0.4rem" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem", minWidth: 480 },
   th: {
@@ -136,10 +132,12 @@ const SECTIONS = [
   { id: "import-modes", short: "3. Choosing the mode" },
   { id: "step-by-step", short: "4. Step by step" },
   { id: "the-result", short: "5. The result" },
-  { id: "fix-by-hand", short: "6. Fixing by hand" },
+  { id: "fix-by-hand", short: "6. Fixing a figure" },
   { id: "the-books", short: "7. Where this hits the books" },
-  { id: "glossary", short: "8. What the words mean" },
-  { id: "faq", short: "9. Common questions" },
+  { id: "paying-a-gd", short: "8. Paying a GD" },
+  { id: "cost-history", short: "9. Cost history" },
+  { id: "glossary", short: "10. What the words mean" },
+  { id: "faq", short: "11. Common questions" },
 ];
 
 export default function ImportGuidePage() {
@@ -274,14 +272,43 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="fix-by-hand" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>6</span> Fixing a figure by hand</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>6</span> Fixing a figure</h2>
+
+        <h3 style={st.h3}>Type a cost straight onto an item</h3>
         <PathPill>Dashboards &#9656; Inventory &#9656; Opening Balances</PathPill>
         <p style={st.p}>
-          On the same screen, edit the row and type a new value into <strong>Actual cost</strong>.
+          Edit the row and type a new value into <strong>Actual cost</strong>.
         </p>
         <div style={st.warn}>
           <strong>Careful — </strong>leaving the box <strong>empty</strong> keeps whatever cost
           is already stored. Typing <strong>0</strong> clears it.
+        </div>
+
+        <h3 style={st.h3}>Correct one line of a GD you already imported</h3>
+        <PathPill>Purchases &#9656; Consignments &#9656; expand the GD &#9656; the pencil on the line</PathPill>
+        <p style={st.p}>
+          Use this when one row of an otherwise-correct sheet had a duty or a rate typed
+          wrong. You edit the <strong>costing figures</strong> — quantity, assessed value,
+          the duties, the three rates, add-on profit — and the system does the rest: it
+          recalculates the cost and selling value itself, moves the item's stored figures,
+          and re-posts the GD's journal entry so the amount owed matches the correction.
+        </p>
+        <p style={st.p}>
+          Say why in the <strong>Why</strong> box. It is kept in the cost history (section 9),
+          which is what makes the change answerable in three months' time.
+        </p>
+        <div style={st.warn}>
+          <strong>What it will not change: which item the line belongs to.</strong> Moving a
+          line onto a different item means taking stock off one item and putting it on
+          another, which is a bigger operation than a correction — delete the consignment and
+          re-import the sheet for that. The dialog says so too.
+          <p style={{ ...st.p, margin: "0.6rem 0 0" }}>
+            Two corrections are refused outright, and nothing is changed when they are:
+            one that would take an item's quantity, cost or value <strong>below zero</strong>
+            (something else has already used up what this line brought in), and one that would
+            drop the amount owed on the GD <strong>below what you have already paid</strong>
+            against it. For the second, reduce or cancel the payment first.
+          </p>
         </div>
       </section>
 
@@ -289,71 +316,177 @@ export default function ImportGuidePage() {
         <h2 style={st.h2}><span style={st.sectionNum}>7</span> Where this hits the books</h2>
 
         <div style={st.warn}>
-          <strong>Today, this import posts nothing to the general ledger.</strong> The ledger
-          holds invoice entries only — actual cost is inventory information, and it changes
-          the stock dashboard and nothing else. In particular,{" "}
-          <strong>no accounts payable is created</strong>: what you owe the supplier and the
-          clearing agent for a consignment is not recorded by this import. Keep recording that
-          however your business does it today — it is not linked to the consignment.
+          <strong>A New Arrivals import DOES post to the general ledger. A Backfill import
+          does not.</strong> That difference is the whole of this section, and getting it
+          backwards is how a liability gets recorded twice.
         </div>
 
+        <h3 style={st.h3}>New Arrivals — one entry per GD</h3>
         <p style={st.p}>
-          The sheet's sales tax, additional sales tax (AST) and income tax figures are
-          calculated and shown on the preview so you can reconcile them against the GD — they
-          are <strong>shown, not posted</strong>. Nothing is written to any tax account either.
+          Committing a New Arrivals import writes <strong>one balanced journal entry per GD,
+          dated the GD's own date</strong>. You do not have to do anything for this to
+          happen, and you must <strong>not</strong> record the same liability again by hand.
+        </p>
+        <div style={st.tableScroll}>
+          <table style={st.table}>
+            <thead>
+              <tr>
+                <th style={st.th}>Account</th>
+                <th style={st.th}>Debit</th>
+                <th style={st.th}>Credit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={st.td}>Inventory</td>
+                <td style={st.td}>Total landed cost of every costed line</td>
+                <td style={st.td}>&mdash;</td>
+              </tr>
+              <tr>
+                <td style={st.td}>Input Tax</td>
+                <td style={st.td}>Total sales tax + AST + other charges</td>
+                <td style={st.td}>&mdash;</td>
+              </tr>
+              <tr>
+                <td style={st.td}>Advance Income Tax on Imports</td>
+                <td style={st.td}>Total income tax paid at the port</td>
+                <td style={st.td}>&mdash;</td>
+              </tr>
+              <tr>
+                <td style={{ ...st.td, fontWeight: 700 }}>Import Clearing</td>
+                <td style={st.td}>&mdash;</td>
+                <td style={{ ...st.td, fontWeight: 700 }}>The balancing total &mdash; what you owe</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style={st.h3}>Import Clearing IS the accounts payable for an import</h3>
+        <p style={st.p}>
+          <strong>Import Clearing</strong> is a liability account. It holds what the
+          consignment owes between clearing customs and being paid for — the supplier's
+          invoice and the clearing agent's charges together, because a costing sheet names
+          neither a supplier nor a payment reference, so there is nothing more specific to
+          credit. It behaves like any other payable: it sits on the balance sheet until a
+          payment clears it (section 8).
+        </p>
+        <p style={st.p}>
+          The three accounts are created for you. A brand-new company gets them with the rest
+          of its chart; a company that already had a chart is given the missing ones
+          automatically. You can see them under{" "}
+          <strong>Accounting &#9656; Chart of Accounts</strong>.
         </p>
 
+        <h3 style={st.h3}>Backfill posts nothing, and that is deliberate</h3>
+        <p style={st.p}>
+          A Backfill import is <em>re-pricing stock already on your books</em> — goods that
+          arrived and were accounted for at some earlier date. Posting its tax and its
+          liability today would claim input tax in the wrong period and invent a payable that
+          was settled long ago. So a Backfill commit changes the actual cost on the stock
+          dashboard and writes no journal entry at all.
+        </p>
+        <p style={st.p}>
+          A New Arrivals import also posts nothing if the general ledger is switched off for
+          that company. Turn it on and rebuild (<strong>Accounting &#9656; rebuild the
+          ledger</strong>) and the consignments will post then.
+        </p>
+        <p style={st.p}>
+          You can always tell which happened: the <strong>Consignments</strong> screen shows a
+          status of <strong>Not posted</strong> for a GD that owes nothing through this route,
+          against <strong>Unpaid</strong>, <strong>Part paid</strong> or{" "}
+          <strong>Settled</strong> for one that does.
+        </p>
+      </section>
+
+      <section id="paying-a-gd" style={st.section}>
+        <h2 style={st.h2}><span style={st.sectionNum}>8</span> Paying a GD</h2>
+        <PathPill>Purchases &#9656; Consignments &#9656; Settle</PathPill>
+
+        <p style={st.p}>
+          The Consignments screen lists every GD with what it{" "}
+          <strong>credited</strong>, what has been <strong>settled</strong> and what is still{" "}
+          <strong>outstanding</strong>. Unpaid GDs sort to the top, there is an
+          only-outstanding filter, and the company-wide total is shown above the list — so
+          "which GD is still unpaid" is one screen, not a reconciliation.
+        </p>
+        <p style={st.p}>
+          <strong>Settle</strong> records an ordinary money-out payment against the GD. Choose
+          the date, the amount, who it went to (a supplier, or just type the clearing agent's
+          name) and which bank or cash account it left. It debits Import Clearing and credits
+          the bank, exactly as paying a purchase bill does.
+        </p>
+
+        <h3 style={st.h3}>When the final bill comes in under the estimate</h3>
+        <p style={st.p}>
+          A GD's liability is an <strong>estimate</strong> until the clearing agent's final
+          bill arrives. If you pay less than the outstanding figure, the dialog offers{" "}
+          <strong>Discount received</strong>, <strong>Write back the rest</strong> or{" "}
+          <strong>Other account</strong>. Pick one and the remainder clears the liability
+          without pretending money moved:
+        </p>
+        <ul style={st.ul}>
+          <li style={st.li}>Import Clearing is cleared by the <strong>full</strong> amount — cash plus the adjustment.</li>
+          <li style={st.li}>The bank is credited with the <strong>cash only</strong>.</li>
+          <li style={st.li}>The difference lands in the account you chose.</li>
+          <li style={st.li}>The GD then reads <strong>Settled</strong>, not part paid — because it is.</li>
+        </ul>
         <div style={st.warn}>
-          <span style={st.plannedBadge}>Planned — not built yet</span>
-          <p style={{ ...st.p, margin: "0.5rem 0 0.7rem" }}>
-            The design for later is one balanced entry per GD, dated the GD's own date:
-          </p>
-          <div style={st.tableScroll}>
-            <table style={st.table}>
-              <thead>
-                <tr>
-                  <th style={st.th}>Account</th>
-                  <th style={st.th}>Debit</th>
-                  <th style={st.th}>Credit</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style={st.td}>Inventory</td>
-                  <td style={st.td}>Sum of Cost (new-stock lines only)</td>
-                  <td style={st.td}>—</td>
-                </tr>
-                <tr>
-                  <td style={st.td}>Input Tax</td>
-                  <td style={st.td}>Sum of Sales tax + AST</td>
-                  <td style={st.td}>—</td>
-                </tr>
-                <tr>
-                  <td style={st.td}>Advance Income Tax on Imports</td>
-                  <td style={st.td}>Sum of Income tax</td>
-                  <td style={st.td}>—</td>
-                </tr>
-                <tr>
-                  <td style={{ ...st.td, fontWeight: 700 }}>Import Clearing</td>
-                  <td style={st.td}>—</td>
-                  <td style={{ ...st.td, fontWeight: 700 }}>The balancing total</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p style={{ ...st.p, margin: "0.7rem 0 0" }}>
-            <strong>Import Clearing</strong> is planned as the liability account where the
-            amount owed for the import will sit. The sheet names no supplier and no payment
-            reference, so there is nothing else it could credit — you would settle it yourself
-            once the real payment is recorded. A backfill line would still add nothing to the
-            Inventory debit even once this is built, because that stock was never posted to
-            the ledger in the first place.
+          <strong>Do not overstate the cash to close a GD.</strong> That is what this exists to
+          replace: the bank balance would then disagree with the statement, and the gap would
+          be invisible.
+        </div>
+
+        <h3 style={st.h3}>Changing a settlement afterwards</h3>
+        <PathPill>Accounting &#9656; Payments &#9656; Edit</PathPill>
+        <p style={st.p}>
+          Editing a GD settlement opens this same dialog, already filled in. The amount you
+          may enter is what the GD has room for <em>with this payment's own contribution added
+          back</em>, so re-saving an unchanged settlement is never treated as paying twice.
+        </p>
+      </section>
+
+      <section id="cost-history" style={st.section}>
+        <h2 style={st.h2}><span style={st.sectionNum}>9</span> Cost history &mdash; what changed a figure, and when</h2>
+        <PathPill>Dashboards &#9656; Inventory &#9656; On-Hand &#9656; History (on a row)</PathPill>
+        <PathPill>Dashboards &#9656; Inventory &#9656; Cost History (whole company)</PathPill>
+
+        <p style={st.p}>
+          An item's actual cost is <strong>replaced</strong>, not added up: a Backfill import
+          overwrites it, a New Arrivals import adds to it, a hand edit replaces it, deleting a
+          consignment reverses it. So when a margin looks wrong, the first question is always{" "}
+          <em>what changed this, and when?</em> That is what this screen answers.
+        </p>
+        <p style={st.p}>
+          Every entry shows the date and time, the person, what did it, and the quantity,
+          actual cost and selling value <strong>before and after</strong> — with the figures
+          that did not move shown quietly, so the one that did stands out.
+        </p>
+        <ul style={st.ul}>
+          <li style={st.li}><strong>GD costing import</strong> — a sheet commit, naming the GD.</li>
+          <li style={st.li}><strong>GD line corrected</strong> — a single-line fix, carrying the reason typed at the time.</li>
+          <li style={st.li}><strong>Consignment deleted</strong> — the undo, including any item removed with it.</li>
+          <li style={st.li}><strong>Opening balance</strong> / <strong>Opening balance removed</strong> — the Opening Balances tab.</li>
+          <li style={st.li}><strong>Stock adjustment</strong> — the Adjust dialog, carrying your own note.</li>
+        </ul>
+        <p style={st.p}>
+          Use the <strong>Cost History</strong> button in the page header when you know
+          something went wrong but not yet which item — it lists the whole company, newest
+          first, so a bad import shows up as a run of entries at one timestamp.
+        </p>
+        <div style={st.warn}>
+          <strong>This starts on 13 September 2026.</strong> Changes made before then were not
+          recorded and cannot be reconstructed, so an item with no entries has simply not been
+          touched since the trail began. Entries are never edited or deleted.
+          <p style={{ ...st.p, margin: "0.6rem 0 0" }}>
+            Seeing cost and margin anywhere &mdash; including here &mdash; needs the{" "}
+            <strong>Actual Cost</strong> permission. It is separate from seeing stock on
+            purpose: somebody who prices and sells does not automatically see the margin.
           </p>
         </div>
       </section>
 
       <section id="glossary" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>8</span> What the words mean</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>10</span> What the words mean</h2>
         <div style={st.tableScroll}>
           <table style={st.table}>
             <thead>
@@ -372,7 +505,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="faq" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>9</span> Common questions</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>11</span> Common questions</h2>
 
         <div style={st.qa}>
           <p style={st.q}>Why is a line "not matched"?</p>
@@ -392,6 +525,26 @@ export default function ImportGuidePage() {
         <div style={st.qa}>
           <p style={st.q}>Does this change my selling prices, or anything I file with FBR?</p>
           <p style={st.a}>No. Actual cost is internal only — it does not touch selling prices, invoices, or anything submitted to FBR.</p>
+        </div>
+
+        <div style={st.qa}>
+          <p style={st.q}>Do I still need to record what I owe for an import separately?</p>
+          <p style={st.a}>No — not for a New Arrivals import. It credits Import Clearing for you, and that IS the payable (section 7). Recording it again by hand would double the liability. A Backfill import posts nothing, so anything you owe for that stock was recorded when it originally arrived.</p>
+        </div>
+
+        <div style={st.qa}>
+          <p style={st.q}>One duty on one row was typed wrong. Do I have to delete the whole GD?</p>
+          <p style={st.a}>No. Purchases ▸ Consignments ▸ expand the GD ▸ the pencil on the line (section 6). Deleting is only needed when a line matched the wrong item — and a GD you have already paid against cannot be deleted at all, which is why correcting one line exists.</p>
+        </div>
+
+        <div style={st.qa}>
+          <p style={st.q}>The agent's final bill was 500 less than the GD. How do I close it?</p>
+          <p style={st.a}>Settle it for what you actually paid and use "Write back the rest" for the difference (section 8). Do not type the higher figure as cash — the bank balance would then disagree with your statement.</p>
+        </div>
+
+        <div style={st.qa}>
+          <p style={st.q}>An item's margin looks wrong. Where do I start?</p>
+          <p style={st.a}>The cost history (section 9) — the History button on that item's row. It names every change to its cost, who made it and what the figure was before.</p>
         </div>
       </section>
     </div>

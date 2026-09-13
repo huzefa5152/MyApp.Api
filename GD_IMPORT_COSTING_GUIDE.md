@@ -40,6 +40,9 @@ selling value typed on the sheet always overrides the computed one.
 | See the result | **Dashboards ▸ Inventory ▸ On-Hand** — Actual Cost, Margin |
 | Opening figures | **Dashboards ▸ Inventory ▸ Opening Balances** |
 | Correct a figure | Same screen, or the **Adjust** dialog on On-Hand |
+| Correct ONE line of a recorded GD | **Purchases ▸ Consignments** — expand the GD, then the pencil on the line |
+| See what changed a cost, and when | **Dashboards ▸ Inventory ▸ On-Hand** — the **History** button on a row, or **Cost History** in the header for the whole company |
+| Settle a GD (in full, or short) | **Purchases ▸ Consignments** — **Settle**; edit it later from **Accounting ▸ Payments** |
 
 Permissions: `importcosting.sheet.run` to import, `stock.actualcost.view` to see
 actual cost and margin anywhere. Actual cost is internal management information
@@ -211,7 +214,115 @@ Dr  Advance Income Tax on Imports    Σ IncomeTax
 
 ---
 
-## 8. Known limits and stated expected behaviours
+## 8. Correcting a recorded GD — one line, not the whole sheet
+
+Before 2026-09-13 the only correction was deleting the consignment and
+re-importing the sheet. A **settled** consignment cannot be deleted at all (a
+payment against its Import Clearing liability blocks it), so one mistyped duty
+on one row of an 83-line sheet had nowhere to go.
+
+**Purchases ▸ Consignments ▸** expand the GD **▸** the pencil on the line.
+
+What it edits: the costing INPUTS only — quantity, assessed value, customs duty,
+ACD, regulatory duty, others, the three rates, add-on profit, the selling-value
+override and the row's description.
+
+What it will NOT edit, on purpose: **which item the line feeds**. Moving a line
+to another item unwinds one item's stock and loads another's; that is a
+delete-and-reimport, and the dialog says so.
+
+What happens when you save:
+
+| | |
+|---|---|
+| The cost and selling value | Recomputed **server-side** from the inputs you typed, through the same calculator the sheet path uses. The preview in the dialog is a courtesy; the server's answer is what lands. |
+| A **Backfill** line's balance | The actual cost is **re-derived** — this GD's corrected unit cost applied to the balance's whole quantity, byte-for-byte the formula the import used. Quantity and selling value are untouched. |
+| A **New Arrivals** line's balance | The **difference** is applied to quantity, cost and selling value, so anything that has happened to the balance since is left alone. |
+| The journal entry | Withdrawn and re-posted, so Import Clearing carries the corrected liability. Exactly one entry per GD, never two. |
+| The cost history | A `GD line corrected` entry, carrying the reason you typed. |
+
+**Two refusals worth knowing.** A correction that would take a balance's
+quantity, cost or value negative is refused whole — something else has already
+reduced it below what this line brought in. And a correction that drops the GD's
+liability **below what has already been settled** against it is refused whole
+too, with the two figures named: reduce or cancel the settlement first.
+
+Both roll everything back. There is no half-correction.
+
+---
+
+## 9. Settling a GD short — cash plus a write-off
+
+A GD's Import Clearing liability is an **estimate** until the clearing agent's
+final bill arrives. When the final bill comes in under, the old options were to
+overstate the cash paid or leave the GD showing an outstanding balance forever.
+
+On **Settle**, enter the cash actually paid; if it is less than outstanding, the
+dialog offers **Discount received**, **Write back the rest** or **Other
+account**. The remainder clears the liability without moving money:
+
+```
+Dr  Import Clearing              cash + adjustment      (the liability, cleared in full)
+    Cr  Bank / Cash              cash                   (what actually left)
+    Cr  Sundry balances written back (or your choice)    the adjustment
+```
+
+- **The payment document itself carries only the CASH.** The write-off is not
+  money; it settles the GD, not the payment.
+- **`Settled` counts both**, and so does the over-settle guard — or a GD could
+  be settled twice, once in cash and once as a write-off.
+- With the ledger **off** the adjustment still clears the GD and posts nowhere.
+- The chosen account must belong to the company. A body id from another
+  company's chart is refused, not silently dropped.
+
+**Editing a settlement.** Accounting ▸ Payments ▸ Edit on a GD settlement opens
+the same Settle dialog, not the general payment form — the general form keys a
+saved allocation back to a row by invoice or bill id, and a GD line has neither,
+so it would vanish on load and be dropped on the next save. (Until 2026-09-13
+the Edit action was simply hidden for these payments, which made a mis-keyed
+settlement uncorrectable.)
+
+---
+
+## 10. The cost history — what changed a figure, and when
+
+The actual-cost pool is **SET, not accumulated**: a Backfill import overwrites
+it, a New Arrivals import adds to it, a hand edit replaces it, a consignment
+delete reverses it. Until 2026-09-13 there was no record anywhere of what a
+figure had been, so *"the margin looks wrong"* could only be answered by
+re-deriving it from the sheets — which is exactly what the person asking no
+longer trusts.
+
+**Dashboards ▸ Inventory ▸ On-Hand ▸ History** on a row, or **Cost History** in
+the header for the whole company (use that one when you know an import went
+wrong but not yet which item).
+
+Each entry states the time, the person, what did it, and all three figures
+before and after:
+
+| Source | Written by |
+|---|---|
+| `GD costing import` | A sheet commit, in either mode. Names the GD. |
+| `GD line corrected` | §8. Carries the reason typed into the dialog. |
+| `Consignment deleted` | The undo, including balances removed with it. |
+| `Opening balance` | The Opening Balances tab, created or edited. |
+| `Opening balance removed` | Recorded before the row goes — otherwise the one item that vanished would be the one with no explanation. |
+| `Stock adjustment` | The Adjust dialog, carrying the operator's own note. |
+
+Notes:
+
+- **Gated on `stock.actualcost.view`**, the same key that redacts the cost
+  columns on the grid — the rows ARE landed cost and margin, so anything softer
+  would hand out through the history what the grid hides.
+- **Saving without changing anything writes nothing.** A no-op leaves no entry.
+- **Nothing before 2026-09-13 is in it.** The table starts empty; earlier
+  changes were not recorded and cannot be reconstructed.
+- **Append-only.** Nothing edits or deletes an entry; deleting the company takes
+  its whole history with it.
+
+---
+
+## 11. Known limits and stated expected behaviours
 
 Check a reported "problem" against this list first. Several of these are
 deliberate and are the correct behaviour.
@@ -222,44 +333,61 @@ deliberate and are the correct behaviour.
 | An ambiguous line (HS code matches 2+ items) is left alone | Yes | The system will not guess which item you meant |
 | A "Total" row is skipped | Yes | Importing one would double the consignment |
 | Re-running the same file is refused | Yes | Duplicate `FileSha256` |
-| Re-importing a GD number already recorded is refused | Yes | No upsert path for a GD in this release |
+| Re-importing a GD number already recorded is refused | Yes | Correct ONE line instead (§8); there is still no whole-GD upsert |
 | A rate written `0.18`, `18%` or `18` all mean 18% | Yes | Three real sheets each write it differently |
 | A typed selling value overrides the computed one | Yes | 9 real PAK lines rely on this |
 | Margin can be negative | Yes | A real state; never clamped |
 | Margin % shows a dash | Yes | When there is no selling value to measure against |
 | Actual cost of 0 | Yes | Means "not known" |
 | Backfill posts nothing to the GL; New Arrivals posts one entry per GD | Yes | §7 |
-| A purchase bill at 25% GST does not move the item onto 25% | **NO — pre-existing bug** | See §9 |
+| A line correction cannot move a line to another item | Yes | §8 — that is a delete-and-reimport |
+| A correction that drops the liability below what is settled is refused | Yes | §8 |
+| A GD settled short with a write-off reads as `Settled`, not `Part paid` | Yes | §9 — both halves clear the liability |
+| The cost history is empty for anything before 2026-09-13 | Yes | §10 — the table starts empty and cannot be back-filled |
+| Saving an opening balance unchanged leaves no history entry | Yes | §10 |
+| A purchase bill at 25% GST does not move the item onto 25% | Resolved | Was §12; the failure was environmental, not a code defect — see §15 |
 
 ---
 
-## 9. Open defects
+## 12. Open defects
 
-**A purchase at a different GST rate does not re-rate the item.**
-`scripts/test_stock_valuation_flow.py` reports 82/84, failing "the item moves
-onto the new rate" and "sales tax is recomputed at the new rate". Proved
-**pre-existing** by A/B: the same suite against commit `90fe432` (before the
-actual-cost pool was added) fails identically. Not caused by this feature. Not
-yet diagnosed.
+**None outstanding for this feature.**
+
+*Closed 2026-09-13* — "a purchase at a different GST rate does not re-rate the
+item". `scripts/test_stock_valuation_flow.py` reported 82/84 for several days.
+It was proved pre-existing by A/B (the same failure at commit `90fe432`, before
+the actual-cost pool existed) and then went green on its own once the global
+`ItemType` catalog was cleaned of test residue: the failing rows were matching
+another suite's leftover item under the same HS code. **Environmental, not a
+code defect.** It now reports 84/84. If it ever reads 82/84 again, look at the
+catalog before looking at the valuation walk.
 
 ---
 
-## 10. Test suites
+## 13. Test suites
 
 | Suite | Command | Expect |
 |---|---|---|
 | Costing chain, layout, reader (offline) | `cd scripts/gd_costing_harness && dotnet run -c Release` | `75 checks, 0 failed` |
 | Same, against a real workbook | add `-- --file "<path>" --expect-lines N` | see §6 |
-| Full live suite | `python scripts/test_gd_import_costing.py` | `285 passed, 0 failed` |
-| Stock valuation (adjustments) | `python scripts/test_stock_valuation_flow.py` | 82/84 — see §9 |
-| Stock export layout | `cd scripts/stock_export_harness && dotnet run -c Release` | `255/255` |
+| Full live suite | `python scripts/test_gd_import_costing.py` | `385 passed, 0 failed` |
+| Stock valuation (adjustments) | `python scripts/test_stock_valuation_flow.py` | `84/84` |
+| Stock export layout | `cd scripts/stock_export_harness && dotnet run -c Release` | `256 checks` |
+| Tenant isolation (both new routes) | `python scripts/test_tenant_isolation.py` | all PASS |
+| Spreadsheet import (its own teardown) | `python scripts/test_spreadsheet_import.py` | `135 passed, 0 failed`, twice in a row |
 
 ---
 
-## 11. Diagnosing next month's import
+## 14. Diagnosing next month's import
 
 Work down this list before reporting a defect.
 
+0. **Open the cost history first** (§10). Dashboards ▸ Inventory ▸ On-Hand ▸
+   **Cost History**. It names every change to every item's cost since
+   2026-09-13, newest first, with the figures before and after and who made
+   them. Most reports of "the numbers are wrong" are answered here in one
+   screen — and if the change you are looking for is NOT in it, the figure was
+   not changed by this system since the trail started, which is just as useful.
 1. **Did the line counts match the sheet?** The preview reports
    `sourceRowCount` and the number of lines kept. A count one higher than
    expected usually means a totals row was not recognised — check its
@@ -281,7 +409,7 @@ Work down this list before reporting a defect.
 
 ---
 
-## 12. Issue log
+## 15. Issue log
 
 Record every problem a real user reports, and its resolution. A problem that
 turns out to be intended behaviour gets written into §8 instead of fixed.
@@ -291,14 +419,18 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 | 2026-09-13 | Alpha Traders | "EMPTY PLASTIC DISTRIBUTION BOX, 3923.2900 — Not matched" | Correct at the time: unmatched lines were reported, not imported. | Built the create-missing-stock opt-in (§4). |
 | 2026-09-13 | — | "sheet for every month will be imported ... some will use existing item type and some will have new" | Month 2 would have overwritten cost and added no stock. | Built the two import modes (§3). |
 | 2026-09-13 | — | Test suites leaving item types behind | `ItemType` is a GLOBAL catalog with no `CompanyId`, so deleting a throwaway company does NOT remove the item types a suite created. They pile up under real HS codes. | The GD suite now deletes what it creates. 139 leftover rows removed; two tariff placeholders it had renamed were restored to their published descriptions and un-adopted. |
-| 2026-09-13 | — | `test_spreadsheet_import` 133/2 | Its "every item is new on a first upload" assertion fails against HS-tariff placeholders that **its own earlier runs** adopted and renamed (`WASHING PARTS`, `LED ONE`). Self-polluting, and unrelated to GD costing — clearing the GD suite's residue changed nothing. | Not fixed. That suite needs its own teardown, or fixture HS codes nothing else adopts. |
+| 2026-09-13 | — | `test_spreadsheet_import` 133/2 | Its "every item is new on a first upload" assertion fails against HS-tariff placeholders that **its own earlier runs** adopted and renamed (`WASHING PARTS`, `LED ONE`). Self-polluting, and unrelated to GD costing — clearing the GD suite's residue changed nothing. | **Fixed** 2026-09-13. Two parts. (a) The suite now snapshots every item type under its four fixture HS codes before it runs and restores them afterwards — deleting what it created, renaming back and un-adopting the placeholders it took over. (b) The assertion itself was wrong for a tariff-loaded installation: adopting the placeholder for a code IS the designed first-upload behaviour, so it now pins the property that actually matters — four distinct items, none of them an item an operator already owns — rather than the state of the HS master. 135/0 on two consecutive runs, with no residue left behind. |
 | 2026-09-13 | — | Architecture review, Finding 1 (CRITICAL): New Arrivals understates Inventory while overstating the liability | `PostImportConsignmentAsync` debited Inventory for `StockPosted` lines only. Under New Arrivals a matched (`CostOnly`) line ADDS quantity, cost and selling value onto an existing balance (§3) — genuinely new goods — so its tax and full cost were posted (debited/credited) while its cost never reached Inventory. Balanced arithmetically (the credit is defined as the debit sum) but wrong: Inventory understated, Import Clearing overstated by the same amount, on the ordinary matched-line path from month 2 onward. | Fixed: the Inventory debit now reads the consignment's own `Mode` (persisted since `7d2871c`) rather than disposition alone — every costed line (`CostOnly` and `StockPosted`) debits Inventory under New Arrivals; Backfill still posts nothing (§7). |
 | 2026-09-13 | — | Architecture review, Finding 2 (CRITICAL): `stock.actualcost.view` is decorative | The permission is defined and the frontend gates rendering on it, but no controller action checked it — `StockController.BuildOnHandAsync` populated actual cost and margin on every row of the on-hand grid, the Excel export and the movements drill-down regardless, so anyone who could see stock at all received the company's landed cost and margin in the raw JSON or a downloadable spreadsheet. | Fixed: `StockController` now checks the permission imperatively (`IPermissionService`) and nulls `ActualCostExcludingTax` / `OpeningActualCostExcludingTax` / `ActualUnitCost` / `RunningActualValue` on all three surfaces when the caller lacks it — nulled rather than zeroed, so a redacted row cannot be misread as "actual cost is zero" (zero already means that) or make Margin read as the full selling value. `StockExcelBuilder`'s Cost-of-Good-Sold block falls back to its existing client-formula branch automatically. |
 | 2026-09-13 | — | Architecture review, Finding 3 (IMPORTANT): nothing stops the overwrite recurring | A Backfill commit SETs `ActualCostExcludingTax` with no check that the balance already carried a cost from an earlier GD — already corrupted 26 real opening balances (9 on company 5, 17 on company 6), each holding only the last consignment's rate applied to the whole accumulated quantity. | Fixed at PREVIEW time (not blocked — a deliberate re-backfill after a correction is legitimate): a Backfill line matching a balance whose `ActualCostExcludingTax` is already non-zero carries a new `OverwriteWarning` naming the figure that would be replaced, counted in the preview's `OverwriteWarningCount`, and rendered next to the line beside its match note. The 26 already-corrupted balances are NOT touched by this fix — a separate, maintainer-approved data operation. |
 
+| 2026-09-13 | — | Teardown deleted nothing on its first cut | An item type created by a company that has since been DELETED is invisible to every API: visibility is derived from the caller's accessible companies (CLAUDE.md 5b-2b), and an orphan is neither owned by a live company nor an un-adopted tariff placeholder. `GET /itemtypes/paged?search=8481.1000` answered 2 rows for a code holding 9. So the teardown found nothing to clean and left one orphan per run — silently, because the same invisibility hides them from every screen. | Fixed: the teardown now works out what to undo **while the run's companies still exist**, and deletes by id afterwards. Worth knowing generally: orphaned item types accumulate where nobody can see them. |
+| 2026-09-13 | all | `ControlType` 19 was two roles at once | `FurtherTaxPayable` and the superseded `CustomerAdvances` were declared as the same C# enum value. On a chart carrying the legacy "Advance from Customers" account, `PostingService.ResolveAsync(FurtherTaxPayable)` could credit further tax — a liability owed to FBR — to a customer-advances liability instead: the entry balances and the balance sheet is wrong, the worst shape a bug takes here. Worse, `FurtherTaxAccountSeeder` read that same row as proof the company already had a further-tax account, so such a chart was never given the real one. | Fixed: `CustomerAdvances` renumbered to 22, with migration `SplitCustomerAdvancesControlType` restamping the legacy rows (keyed on their `seed:customer_advances` external ref — no operator could ever have created one, the Chart of Accounts picker only offered 0-13). The seeder then creates the missing account on next startup. **A company that filed further tax while this was wrong must rebuild its ledger** (Accounting ▸ rebuild) to move the amounts onto the correct account — a journal line references an account by id, so the migration cannot move them. No such row exists on the local importer database; production was checked read-only after deploy. |
+| 2026-09-13 | Alpha / AY / PAK | Three live item types carry a test suite's name | `WASHING PARTS 7511AF` (8450.9000), `LED ONE 7511AF` (8513.1090) and `CHILDREN BICYCLE 7511AF` (8712.0000) are HS-tariff placeholders that `test_spreadsheet_import` adopted and renamed — *after* real imports had already filed stock against them. All three companies hold real quantities under them (AY 4,089 units of the first; PAK 2,970 of the second). The `7511AF` suffix is a suite run tag. | **Not renamed — the operator's call.** The lot audit trail (`OpeningStockLots.ItemNameOnSheet`) recovers what the real sheets called them: 8450.9000 is "Washing Machine Parts"; 8513.1090 covers five different rechargeable-light products merged under one code (§5b-3 groups on the HS code by design). Rename them on the Item Catalog screen. The suite can no longer do this again (row above). |
+
 ---
 
-## 13. Build record
+## 16. Build record
 
 | Date | Change |
 |---|---|
@@ -316,5 +448,8 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 | 2026-09-13 | Architecture-review fixes (Findings 1-3, §12): Inventory debit made mode-aware so a matched New Arrivals line is no longer excluded; `stock.actualcost.view` enforced server-side across the on-hand grid, the Excel export and the movements drill-down; a Backfill preview against an already-costed balance now warns before overwriting it |
 | 2026-09-13 | Task 23 — Import Clearing subledger: `PaymentAllocation.Kind.ImportConsignment` (a Payment debiting Import Clearing, the AP mirror of a purchase-bill allocation); `ImportConsignment.ImportClearingCredited` / `AmountSettled`, the latter recomputed alongside `PurchaseBill.AmountPaid` on every create/update/delete; over-settle and never-posted (Backfill/GL-off) guards; the Consignments screen gained Credited/Settled/Outstanding/Status columns, unpaid-first default order, an only-outstanding filter, a company-wide total, a per-row settlement list, and a Settle action (`SettleConsignmentDialog`, a focused dialog rather than a fourth PaymentForm purpose — see the guide's §7 and the dialog's own doc comment for why); a migration backfills `ImportClearingCredited` for consignments that posted before the column existed |
 
-Deferred: a screen listing consignments now exists (Consignments, above) but an
-upsert path for re-importing a GD already recorded is still not built.
+| 2026-09-13 | Polish round (all six remaining items): a **cost audit trail** (`StockCostChange` + `GET /api/stock/company/{id}/cost-changes`, gated on `stock.actualcost.view`, written by all six paths that move the pool, §10); **per-line GD correction** (`PUT /api/import-consignments/{id}/lines/{lineId}`, mode-aware balance re-derivation, GL re-post, settled-liability floor, §8); **write-off on a GD settlement** (`AllocationKind.ImportConsignment` may now carry an `AdjustmentAmount`, §9); **editing a GD settlement** (PaymentsPage routes Edit to `SettleConsignmentDialog` instead of hiding it); **`ControlType` 19 un-aliased** (`CustomerAdvances` 19 → 22 + migration, §15) and the Chart of Accounts picker widened to the settle-remainder, further-tax and import roles; **`test_spreadsheet_import` given its own teardown** (§15) |
+
+Deferred: a screen listing consignments now exists (Consignments, above), and a
+single line of a recorded GD can be corrected in place (§8), but an upsert path
+for re-importing a whole GD already recorded is still not built.

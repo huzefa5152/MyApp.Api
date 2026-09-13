@@ -449,6 +449,96 @@ Publish output optimized from 79 MB to 37 MB via:
   consignment is still never posted, by design; a part-settled consignment
   keeps what has already been settled against it untouched; and running a
   rebuild twice leaves exactly one entry per GD, not two.
+- **New: a cost history behind every item.** An item's actual cost is
+  *replaced*, not accumulated — a backfill import overwrites it, a new-arrivals
+  import adds to it, a hand edit replaces it, deleting a consignment reverses
+  it — and until now nothing anywhere recorded what a figure had been. "The
+  margin looks wrong" could only be answered by re-deriving it from the
+  sheets, which is exactly what the person asking no longer trusts.
+  **Dashboards ▸ Inventory ▸ On-Hand** gains a **History** button on each row
+  and a **Cost History** button in the header for the whole company (use that
+  one when an import went wrong but you don't yet know which item). Every
+  entry states the time, the person, what did it — a GD import naming its GD,
+  a line correction carrying the reason typed at the time, a consignment
+  delete, an opening-balance edit or removal, a stock adjustment carrying the
+  operator's own note — and all three figures before and after, with the ones
+  that didn't move shown quietly so the one that did stands out. Saving
+  without changing anything records nothing. Seeing it needs the same **Actual
+  Cost** permission that redacts the cost columns on the grid. It starts empty
+  on 13 September 2026: earlier changes were never recorded and cannot be
+  reconstructed.
+- **One line of a recorded GD can now be corrected in place.** Before this the
+  only fix was deleting the consignment and re-importing the sheet — and a GD
+  you have already paid against cannot be deleted at all, so one mistyped duty
+  on one row of an 83-line sheet had nowhere to go. **Purchases ▸ Consignments
+  ▸** expand the GD **▸** the pencil on a line edits its costing figures; the
+  server recalculates cost and selling value itself, moves the item's stored
+  figures the way that line's own mode implies (a backfill line's cost is
+  re-derived from the corrected unit cost applied to the whole balance; a
+  new-arrivals line's difference is applied, leaving anything that happened
+  since alone), and withdraws and re-posts the GD's journal entry so Import
+  Clearing carries the corrected liability — exactly one entry per GD, never
+  two. Which item a line belongs to is deliberately not editable here; that is
+  still a delete-and-reimport. A correction that would take an item negative,
+  or drop the GD's liability below what has already been settled against it,
+  is refused whole with both figures named.
+- **A GD can be settled short.** Its Import Clearing liability is an estimate
+  until the clearing agent's final bill arrives, and the only way to close one
+  that came in under was to overstate the cash paid — which then made the bank
+  balance disagree with the statement. The Settle dialog now offers **Discount
+  received**, **Write back the rest** or **Other account** for the remainder:
+  Import Clearing clears by the full amount, the bank is credited with the
+  cash only, and the difference lands in the chosen account. The GD then reads
+  Settled rather than part paid, because it is, and the over-settle guard
+  counts both halves so a GD cannot be settled twice — once in cash and once
+  as a write-off.
+- **A GD settlement can be edited again.** It used to be view/delete-only on
+  the Payments screen: the general payment form keys a saved allocation back
+  to a row by invoice or bill id, and a GD line has neither, so it would have
+  vanished on load and been dropped on the next save. Edit now opens the same
+  Settle dialog that created it, pre-filled, with the amount capped at what
+  the GD has room for *with this payment's own contribution added back* — so
+  re-saving an unchanged settlement is never read as paying twice.
+- **Fixed: further tax could be credited to the wrong liability.** Two control
+  accounts, **Further Tax Payable** and the superseded **Advance from
+  Customers**, were declared as the same internal value. On a chart carrying
+  the legacy advances account, further tax collected under s.3(1A) — money
+  owed to FBR — could be posted to it instead: the entry balances and the
+  balance sheet is wrong, the worst shape this class of bug takes. The same
+  collision also made the automatic seeder read that row as proof the company
+  already had a Further Tax Payable account, so such a chart was never given
+  the real one. The two are now separate, with a migration restamping any
+  legacy row. **A company that filed further tax while this was wrong should
+  rebuild its ledger** (Accounting ▸ rebuild) to move those amounts onto the
+  correct account.
+- **The Chart of Accounts can now designate the newer control accounts.** The
+  Control type picker stopped at Rounding, so Discount allowed, Discount
+  received, Bad debts written off, Sundry balances written back, Further Tax
+  Payable, Import Clearing and Advance Income Tax on Imports could only ever
+  be created by the seeder — and a chart missing one silently sent its
+  postings to Suspense. All seven are now selectable when creating an account.
+- **The in-app Import Guide caught up with what actually ships.** Its
+  accounting section still described general-ledger posting as "planned — not
+  built yet" and said no accounts payable is created for an import. Both had
+  been false for days, and an operator following it would have recorded the
+  liability a second time by hand. It now states plainly that a new-arrivals
+  import posts and a backfill does not, that **Import Clearing IS the payable
+  for an import**, and adds sections on paying a GD (including settling short)
+  and on the cost history.
+- **Fixed: the spreadsheet-import suite was eroding the shared item catalog.**
+  Item types are installation-wide with no company of their own, so deleting a
+  test company leaves them behind. The suite adopted the published HS-tariff
+  placeholder for each of its four codes, renamed it to a fixture name, and
+  left it that way — which then made its own "every item is new on a first
+  upload" check fail on the next run, and renamed three item types that real
+  companies hold stock against. It now snapshots those codes before it runs
+  and restores them afterwards, and the check itself was corrected: adopting
+  the tariff placeholder for a code IS the designed first-upload behaviour, so
+  it now pins the property that matters — four distinct items, none of them an
+  item somebody already owns. A related discovery worth knowing: an item type
+  whose only company has been deleted is invisible to every screen and every
+  API, because visibility is derived from the companies you can reach. Such
+  orphans accumulate where nobody can see them.
 
 ### 2026-09-13 — Stock export scrolls properly, and Cost of Good Sold fills itself
 
