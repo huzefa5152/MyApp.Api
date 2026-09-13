@@ -73,6 +73,42 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Correct ONE line of a recorded GD in place — the surgical
+        /// alternative to deleting and re-importing the whole consignment,
+        /// which a SETTLED consignment cannot do at all.
+        ///
+        /// Gated the same as running an import, and as deleting one: if you can
+        /// create a consignment you can correct one. The company comes from the
+        /// STORED row, never the caller.
+        /// </summary>
+        [HttpPut("{id:int}/lines/{lineId:int}")]
+        [HasPermission("importcosting.sheet.run")]
+        public async Task<IActionResult> UpdateLine(
+            int id, int lineId, [FromBody] DTOs.UpdateImportConsignmentLineDto dto)
+        {
+            var existing = await _consignments.GetDetailAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            // A correction moves company-level inventory and the ledger, the
+            // same write scope the commit and the delete assert (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, existing.CompanyId, null);
+
+            try
+            {
+                return Ok(await _consignments.UpdateLineAsync(id, lineId, dto, CurrentUserId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Correcting line {LineId} of import consignment {Id} failed", lineId, id);
+                return StatusCode(500, new { message = "The line could not be corrected. Nothing was changed." });
+            }
+        }
+
+        /// <summary>
         /// The correction path: undoes exactly what the commit did (the cost
         /// it wrote, the balances it created, the journal entry it posted), or
         /// refuses the whole thing if any part cannot be safely undone.

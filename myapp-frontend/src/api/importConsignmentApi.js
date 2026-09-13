@@ -16,3 +16,10 @@ export const getImportConsignment = (id) => httpClient.get(`/import-consignments
 // Undoes exactly what the commit did (cost written, balances created, journal
 // entry posted) or refuses the whole thing -- see the service for the rules.
 export const deleteImportConsignment = (id) => httpClient.delete(`/import-consignments/${id}`);
+
+// Correct ONE line of a recorded GD in place -- the surgical alternative to
+// deleting and re-importing, which a settled consignment cannot do at all.
+// Sends the costing INPUTS; the server recomputes the cost and the selling
+// value itself and re-derives the balance and the journal entry from them.
+export const updateImportConsignmentLine = (id, lineId, body) =>
+  httpClient.put(`/import-consignments/${id}/lines/${lineId}`, body);

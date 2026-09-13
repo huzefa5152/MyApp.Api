@@ -13,12 +13,15 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _db;
         private readonly IPostingService _posting;
+        private readonly IStockCostAuditService _costAudit;
         private readonly ILogger<ImportConsignmentService> _logger;
 
-        public ImportConsignmentService(AppDbContext db, IPostingService posting, ILogger<ImportConsignmentService> logger)
+        public ImportConsignmentService(AppDbContext db, IPostingService posting,
+            IStockCostAuditService costAudit, ILogger<ImportConsignmentService> logger)
         {
             _db = db;
             _posting = posting;
+            _costAudit = costAudit;
             _logger = logger;
         }
 
@@ -388,6 +391,20 @@ namespace MyApp.Api.Services.Implementations
 
                 foreach (var (balance, qty, cost, value) in costReversals)
                 {
+                    // Recorded from the row's CURRENT figures, before they are
+                    // overwritten -- an undo is a cost change like any other,
+                    // and Backfill's reversal to 0 is the one an operator is
+                    // most likely to come back asking about.
+                    await _costAudit.RecordAsync(
+                        companyId, balance.ItemTypeId, balance.Id, userId,
+                        StockCostChangeSources.ConsignmentDelete, consignment.GdNumber,
+                        new StockFigures(balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax),
+                        new StockFigures(qty, cost, value),
+                        note: mode == GdCostingImportModeNames.NewArrivals
+                            ? $"Consignment deleted: this GD's New Arrivals quantity, cost and value were subtracted back out."
+                            : "Consignment deleted: Backfill SET the cost, so there was no prior figure to restore and it reset to 0.00.",
+                        importConsignmentId: consignment.Id);
+
                     balance.Quantity = qty;
                     balance.ActualCostExcludingTax = cost;
                     balance.ValueExcludingTax = value;
@@ -398,7 +415,20 @@ namespace MyApp.Api.Services.Implementations
                 _db.ImportConsignments.Remove(consignment);
 
                 foreach (var balance in balancesToDelete)
+                {
+                    // The audit row keeps OpeningStockBalanceId as a PLAIN
+                    // column precisely so it can outlive the balance it names
+                    // (see the model) -- otherwise the item that vanished would
+                    // be the one item with no history explaining why.
+                    await _costAudit.RecordAsync(
+                        companyId, balance.ItemTypeId, balance.Id, userId,
+                        StockCostChangeSources.ConsignmentDelete, consignment.GdNumber,
+                        new StockFigures(balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax),
+                        new StockFigures(0m, 0m, 0m),
+                        note: "Consignment deleted: the opening balance this import created was removed with it.",
+                        importConsignmentId: consignment.Id);
                     _db.OpeningStockBalances.Remove(balance);
+                }
                 result.BalancesDeleted = balancesToDelete.Count;
 
                 await _db.SaveChangesAsync();
@@ -416,6 +446,235 @@ namespace MyApp.Api.Services.Implementations
                 _logger.LogInformation(
                     "Deleted GD costing consignment {Id} (GD {GdNumber}) from company {CompanyId}: {CostReversed} balance(s) cost-reversed, {Deleted} balance(s) deleted, journal entry withdrawn: {JeWithdrawn}",
                     id, consignment.GdNumber, companyId, result.BalancesCostReversed, result.BalancesDeleted, result.JournalEntryWithdrawn);
+
+                return result;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        }
+
+
+        // -- Correct one line (the surgical alternative to delete-and-reimport) --
+
+        /// <summary>
+        /// See the interface for the contract. Same two-pass shape as
+        /// <see cref="DeleteAsync"/>: pass 1 recomputes and validates every
+        /// consequence, pass 2 applies them. A refusal in pass 1 leaves the
+        /// consignment exactly as it was.
+        /// </summary>
+        public async Task<ImportConsignmentLineUpdateResultDto> UpdateLineAsync(
+            int consignmentId, int lineId, UpdateImportConsignmentLineDto dto, int userId)
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var consignment = await _db.ImportConsignments
+                    .Include(c => c.Lines)
+                    .FirstOrDefaultAsync(c => c.Id == consignmentId);
+                if (consignment == null)
+                    throw new InvalidOperationException("That consignment no longer exists.");
+
+                var line = consignment.Lines.FirstOrDefault(l => l.Id == lineId)
+                    ?? throw new InvalidOperationException("That line does not belong to this consignment.");
+
+                var companyId = consignment.CompanyId;
+                var mode = GdCostingImportModeNames.Normalize(consignment.Mode);
+                var result = new ImportConsignmentLineUpdateResultDto
+                {
+                    GdNumber = consignment.GdNumber,
+                    LineId = line.Id,
+                    OldCostExcludingTax = line.CostExcludingTax,
+                    OldSellingValueExcludingTax = line.SellingValueExcludingTax,
+                };
+
+                // -- Pass 1a: the submitted figures have to be figures. --
+                if (dto.Quantity <= 0m)
+                    throw new InvalidOperationException("Give the quantity this line covers - a costed line cannot be for nothing.");
+                if (dto.AssessedValue < 0m || dto.CustomsDuty < 0m || dto.Acd < 0m
+                    || dto.RegulatoryDuty < 0m || dto.Others < 0m || dto.AddOnProfit < 0m)
+                    throw new InvalidOperationException("Assessed value, duties, other charges and add-on profit cannot be negative.");
+                if (dto.SalesTaxRate is < 0m or > 100m || dto.AstRate is < 0m or > 100m
+                    || dto.IncomeTaxRate is < 0m or > 100m)
+                    throw new InvalidOperationException("Every rate is a percentage between 0 and 100.");
+                if (dto.SellingValueExcludingTax is < 0m)
+                    throw new InvalidOperationException("A selling value cannot be negative.");
+
+                // -- Pass 1b: SERVER-side costing, never the caller's arithmetic
+                // (the same rule a1b4406 established for the commit path). --
+                var computed = ImportCostingCalculator.Compute(new ImportCostingCalculator.ImportCostingInput(
+                    AssessedValue: dto.AssessedValue,
+                    CustomsDuty: dto.CustomsDuty,
+                    Acd: dto.Acd,
+                    RegulatoryDuty: dto.RegulatoryDuty,
+                    Others: dto.Others,
+                    SalesTaxRate: dto.SalesTaxRate,
+                    AstRate: dto.AstRate,
+                    IncomeTaxRate: dto.IncomeTaxRate,
+                    AddOnProfit: dto.AddOnProfit));
+
+                var newCost = Money(computed.Cost);
+                var newSelling = dto.SellingValueExcludingTax.HasValue
+                    ? Money(dto.SellingValueExcludingTax.Value)
+                    : Money(computed.SellingValue);
+
+                var deltaQty = dto.Quantity - line.Quantity;
+                var deltaCost = Money(newCost - line.CostExcludingTax);
+                var deltaSelling = Money(newSelling - line.SellingValueExcludingTax);
+
+                // -- Pass 1c: what this does to the balance the line feeds. --
+                OpeningStockBalance? balance = null;
+                decimal newBalQty = 0m, newBalCost = 0m, newBalValue = 0m;
+
+                var balanceId = line.OpeningStockBalanceId ?? 0;
+                if (balanceId > 0)
+                {
+                    balance = await _db.OpeningStockBalances.Include(b => b.ItemType)
+                        .FirstOrDefaultAsync(b => b.Id == balanceId);
+                }
+
+                if (balance != null)
+                {
+                    var itemName = balance.ItemType?.Name ?? $"item #{balance.ItemTypeId}";
+
+                    if (mode == GdCostingImportModeNames.Backfill
+                        && line.Disposition == GdCostingDisposition.CostOnly)
+                    {
+                        // Backfill SET the cost as (this consignment's pooled
+                        // unit cost for this balance) x (the balance's whole
+                        // quantity). Re-derive the pool from ALL of this
+                        // consignment's cost-only lines against this balance,
+                        // with the corrected figures standing in for this one --
+                        // byte-for-byte the commit's own formula, so a
+                        // correction and a re-import land on the same number.
+                        // Applying a delta instead would be wrong: the stored
+                        // cost is not a sum of the lines, it is a rate applied
+                        // to a different quantity.
+                        var siblings = consignment.Lines.Where(l =>
+                            l.Disposition == GdCostingDisposition.CostOnly
+                            && l.OpeningStockBalanceId == balanceId).ToList();
+                        var totalCost = siblings.Sum(l => l.Id == line.Id ? newCost : l.CostExcludingTax);
+                        var totalQty = siblings.Sum(l => l.Id == line.Id ? dto.Quantity : l.Quantity);
+                        var unitCost = totalQty != 0m ? totalCost / totalQty : 0m;
+
+                        newBalQty = balance.Quantity;                       // Backfill never moved it
+                        newBalValue = balance.ValueExcludingTax;            // nor this
+                        newBalCost = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
+                    }
+                    else
+                    {
+                        // New Arrivals (added qty/cost/value) and StockPosted
+                        // (created the balance FROM the lines) both accumulate,
+                        // so the honest correction is the delta -- which also
+                        // leaves anything that has happened to the balance
+                        // since untouched.
+                        newBalQty = balance.Quantity + deltaQty;
+                        newBalCost = Money(balance.ActualCostExcludingTax + deltaCost);
+                        newBalValue = Money(balance.ValueExcludingTax + deltaSelling);
+                    }
+
+                    if (newBalQty < 0m || newBalCost < 0m || newBalValue < 0m)
+                        throw new InvalidOperationException(
+                            $"That correction would take \"{itemName}\" to a negative quantity, cost or value. "
+                            + "Something else has already reduced it below what this line brought in - "
+                            + "adjust the stock first, or delete and re-import the consignment.");
+                }
+
+                // -- Everything above is proven safe. Now actually do it. --
+
+                line.Quantity = dto.Quantity;
+                line.AssessedValue = Money(dto.AssessedValue);
+                line.CustomsDuty = Money(dto.CustomsDuty);
+                line.Acd = Money(dto.Acd);
+                line.RegulatoryDuty = Money(dto.RegulatoryDuty);
+                line.Others = Money(dto.Others);
+                line.SalesTaxRate = dto.SalesTaxRate;
+                line.AstRate = dto.AstRate;
+                line.IncomeTaxRate = dto.IncomeTaxRate;
+                line.AddOnProfit = Money(dto.AddOnProfit);
+                line.CostExcludingTax = newCost;
+                line.SellingValueExcludingTax = newSelling;
+                var relabel = (dto.DescriptionOnSheet ?? "").Trim();
+                if (relabel.Length > 0)
+                    line.DescriptionOnSheet = relabel.Length <= 300 ? relabel : relabel[..300];
+
+                result.NewCostExcludingTax = newCost;
+                result.NewSellingValueExcludingTax = newSelling;
+
+                if (balance != null)
+                {
+                    await _costAudit.RecordAsync(
+                        companyId, balance.ItemTypeId, balance.Id, userId,
+                        StockCostChangeSources.GdLineCorrection, consignment.GdNumber,
+                        new StockFigures(balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax),
+                        new StockFigures(newBalQty, newBalCost, newBalValue),
+                        note: $"GD line corrected: landed cost {newCost:N2} "
+                            + $"(was {result.OldCostExcludingTax:N2}), selling value {newSelling:N2} "
+                            + $"(was {result.OldSellingValueExcludingTax:N2})."
+                            + (string.IsNullOrWhiteSpace(dto.Reason) ? "" : $" {dto.Reason.Trim()}"),
+                        importConsignmentId: consignment.Id);
+
+                    balance.Quantity = newBalQty;
+                    balance.ActualCostExcludingTax = newBalCost;
+                    balance.ValueExcludingTax = newBalValue;
+                    result.BalancesUpdated = 1;
+                }
+
+                // The header totals are the sheet's own, so they move with the
+                // lines they summarise -- otherwise the Consignments screen would
+                // keep showing the figure that was corrected away.
+                consignment.TotalCostExcludingTax = Money(consignment.Lines.Sum(l => l.CostExcludingTax));
+                consignment.TotalSellingValue = Money(consignment.Lines.Sum(l => l.SellingValueExcludingTax));
+
+                // Persist BEFORE re-posting: PostImportConsignmentAsync reads the
+                // lines back with AsNoTracking(), so an unsaved correction would
+                // post the OLD figures and leave the ledger disagreeing with the
+                // consignment it was posted from.
+                await _db.SaveChangesAsync();
+
+                var hadJournalEntry = await _db.JournalEntries.AnyAsync(e =>
+                    e.CompanyId == companyId && e.SourceDocType == SourceDocType.ImportConsignment
+                    && e.SourceDocId == consignment.Id);
+                if (hadJournalEntry)
+                {
+                    // Withdraw and re-post rather than patch: the entry is
+                    // idempotent on (CompanyId, SourceDocType, SourceDocId), and
+                    // re-posting is the one code path that knows how a
+                    // consignment decomposes into legs.
+                    await _posting.RemoveForSourceAsync(companyId, SourceDocType.ImportConsignment, consignment.Id);
+                    await _posting.PostImportConsignmentAsync(consignment);
+                    result.JournalEntryReposted = true;
+
+                    // A correction that lowers the liability below what has
+                    // already been paid against it would leave the GD settled
+                    // for more than it ever owed. Refused HERE, after the
+                    // re-post has told us the new figure, and rolled back whole.
+                    if (consignment.AmountSettled > consignment.ImportClearingCredited + OutstandingEpsilon)
+                        throw new InvalidOperationException(
+                            $"That correction drops GD {consignment.GdNumber}'s liability to "
+                            + $"{consignment.ImportClearingCredited:N2}, but {consignment.AmountSettled:N2} has already been "
+                            + "settled against it. Reduce or cancel the settlement first.");
+                }
+                result.ImportClearingCredited = consignment.ImportClearingCredited;
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                if (result.BalancesUpdated > 0)
+                    result.Messages.Add(mode == GdCostingImportModeNames.Backfill
+                        ? "The opening balance's actual cost was re-derived from this GD's corrected unit cost."
+                        : "The opening balance had the difference applied to its quantity, cost and selling value.");
+                if (result.JournalEntryReposted)
+                    result.Messages.Add($"The journal entry was re-posted; Import Clearing now carries {result.ImportClearingCredited:N2}.");
+                if (result.Messages.Count == 0)
+                    result.Messages.Add("The line was corrected. It matched no stock, so nothing else moved.");
+
+                _logger.LogInformation(
+                    "Corrected line {LineId} of consignment {Id} (GD {GdNumber}) in company {CompanyId}: cost {OldCost} -> {NewCost}, reposted: {Reposted}",
+                    lineId, consignmentId, consignment.GdNumber, companyId,
+                    result.OldCostExcludingTax, result.NewCostExcludingTax, result.JournalEntryReposted);
 
                 return result;
             }

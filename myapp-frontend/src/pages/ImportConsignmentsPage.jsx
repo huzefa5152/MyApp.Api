@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdExpandMore, MdChevronRight, MdDelete, MdWarning, MdPayments } from "react-icons/md";
+import { MdExpandMore, MdChevronRight, MdDelete, MdWarning, MdPayments, MdEdit } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -7,6 +7,7 @@ import { notify } from "../utils/notify";
 import { colors } from "../theme";
 import Pagination from "../Components/Pagination";
 import SettleConsignmentDialog from "../Components/SettleConsignmentDialog";
+import CorrectConsignmentLineDialog from "../Components/CorrectConsignmentLineDialog";
 import { getImportConsignments, getImportConsignment, deleteImportConsignment } from "../api/importConsignmentApi";
 
 /**
@@ -126,7 +127,7 @@ function describeUndo(detail) {
   return `This will ${parts.join("; ")}.`;
 }
 
-function ConsignmentLines({ detail, loading }) {
+function ConsignmentLines({ detail, loading, canCorrect, onCorrect }) {
   if (loading) return <p style={{ fontSize: 13, color: colors.textSecondary, margin: "0.6rem 0" }}>Loading lines…</p>;
   if (!detail) return null;
   return (
@@ -142,6 +143,7 @@ function ConsignmentLines({ detail, loading }) {
             <th style={th}>Item / balance</th>
             <th style={th}>Disposition</th>
             <th style={th}>Note</th>
+            {canCorrect && <th style={{ ...th, width: 52 }} aria-label="Correct" />}
           </tr>
         </thead>
         <tbody>
@@ -164,6 +166,18 @@ function ConsignmentLines({ detail, loading }) {
                 </span>
               </td>
               <td style={td}><div style={wrap2}>{l.dispositionNote || "—"}</div></td>
+              {canCorrect && (
+                <td style={td}>
+                  <button
+                    onClick={() => onCorrect(l)}
+                    title="Correct this line's costing figures"
+                    aria-label="Correct this line"
+                    style={iconBtn(colors.blue, false)}
+                  >
+                    <MdEdit size={17} />
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -233,10 +247,13 @@ export default function ImportConsignmentsPage() {
   // already puts it first; this is for when the operator wants ONLY that.
   const [onlyOutstanding, setOnlyOutstanding] = useState(false);
   const [settlingRow, setSettlingRow] = useState(null);
+  const [correcting, setCorrecting] = useState(null);
 
   const canView = has("importcosting.consignments.view");
   const canDelete = has("importcosting.sheet.run");
   const canSettle = has("accounting.payments.create");
+  // Correcting a line is the same act as running the import that wrote it.
+  const canCorrect = has("importcosting.sheet.run");
 
   useEffect(() => { if (selectedCompany?.id && !companyId) setCompanyId(selectedCompany.id); },
     [selectedCompany, companyId]);
@@ -280,6 +297,20 @@ export default function ImportConsignmentsPage() {
     notify(`Payment recorded against GD ${row.gdNumber}.`, "success");
     load();
     if (expandedId === row.id) await loadDetail(row.id);
+  };
+
+  // A correction moves the line, the balance it feeds and (New Arrivals) the
+  // journal entry -- so the list row's totals and the open detail both have to
+  // be re-read, exactly as a settlement does. The server's own messages are
+  // what gets reported: it knows what it actually did, this screen does not.
+  const onCorrected = async (result) => {
+    const consignmentId = correcting?.consignment?.id;
+    setCorrecting(null);
+    notify(
+      [`Line corrected on GD ${result.gdNumber}.`, ...(result.messages || [])].join(" "),
+      "success");
+    load();
+    if (consignmentId && expandedId === consignmentId) await loadDetail(consignmentId);
   };
 
   const onDelete = async (row) => {
@@ -454,7 +485,12 @@ export default function ImportConsignmentsPage() {
                       {expanded && (
                         <tr>
                           <td colSpan={12} style={{ ...td, background: colors.cardBg }}>
-                            <ConsignmentLines detail={detail} loading={detailLoading} />
+                            <ConsignmentLines
+                              detail={detail}
+                              loading={detailLoading}
+                              canCorrect={canCorrect}
+                              onCorrect={(l) => setCorrecting({ consignment: detail, line: l })}
+                            />
                             <ConsignmentSettlements detail={detail} />
                           </td>
                         </tr>
@@ -484,6 +520,15 @@ export default function ImportConsignmentsPage() {
           consignment={settlingRow}
           onClose={() => setSettlingRow(null)}
           onSaved={() => onSettled(settlingRow)}
+        />
+      )}
+
+      {correcting && (
+        <CorrectConsignmentLineDialog
+          consignment={correcting.consignment}
+          line={correcting.line}
+          onClose={() => setCorrecting(null)}
+          onSaved={onCorrected}
         />
       )}
     </div>

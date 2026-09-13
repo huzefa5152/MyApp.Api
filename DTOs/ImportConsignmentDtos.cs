@@ -192,6 +192,66 @@ namespace MyApp.Api.DTOs
     }
 
     /// <summary>
+    /// Correct ONE line of an already-recorded GD in place —
+    /// <c>PUT /api/import-consignments/{id}/lines/{lineId}</c>.
+    ///
+    /// The costing INPUTS only. What the line matched (its item type, its
+    /// opening balance, its disposition) is deliberately not editable here: a
+    /// line pointing at the wrong item is a different item's stock to unwind,
+    /// which is what deleting and re-importing the consignment is for. This
+    /// covers the case that actually happens — a duty or a rate typed wrong on
+    /// one row of an otherwise correct sheet.
+    /// </summary>
+    public class UpdateImportConsignmentLineDto
+    {
+        public decimal Quantity { get; set; }
+        public decimal AssessedValue { get; set; }
+        public decimal CustomsDuty { get; set; }
+        public decimal Acd { get; set; }
+        public decimal RegulatoryDuty { get; set; }
+        public decimal Others { get; set; }
+
+        /// <summary>PERCENTAGES (18.00, 3.00), matching the stored columns —
+        /// never fractions. The sheet reader already converted.</summary>
+        public decimal SalesTaxRate { get; set; }
+        public decimal AstRate { get; set; }
+        public decimal IncomeTaxRate { get; set; }
+        public decimal AddOnProfit { get; set; }
+
+        /// <summary>An operator-stated selling value, exactly as the sheet's
+        /// own override column works: null derives it from the costing chain,
+        /// a value wins over the derivation.</summary>
+        public decimal? SellingValueExcludingTax { get; set; }
+
+        /// <summary>Optional relabel of the row. Changes nothing financial.</summary>
+        public string? DescriptionOnSheet { get; set; }
+
+        /// <summary>Why the correction was made — carried into the cost audit
+        /// trail so the history says more than "someone changed it".</summary>
+        public string? Reason { get; set; }
+    }
+
+    /// <summary>What correcting one line actually moved.</summary>
+    public class ImportConsignmentLineUpdateResultDto
+    {
+        public string GdNumber { get; set; } = "";
+        public int LineId { get; set; }
+        public decimal OldCostExcludingTax { get; set; }
+        public decimal NewCostExcludingTax { get; set; }
+        public decimal OldSellingValueExcludingTax { get; set; }
+        public decimal NewSellingValueExcludingTax { get; set; }
+
+        /// <summary>Opening balances re-derived as a result (0 or 1 today — a
+        /// line points at one balance — but stated as a count so a future
+        /// multi-balance line does not silently under-report).</summary>
+        public int BalancesUpdated { get; set; }
+
+        public bool JournalEntryReposted { get; set; }
+        public decimal ImportClearingCredited { get; set; }
+        public List<string> Messages { get; set; } = new();
+    }
+
+    /// <summary>
     /// What a delete actually undid — echoed back so the operator sees exactly
     /// what happened, not just a bare 204. See
     /// <see cref="Services.Interfaces.IImportConsignmentService.DeleteAsync"/>.

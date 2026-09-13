@@ -19,6 +19,7 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _db;
         private readonly ISpreadsheetImportService _imports;
         private readonly IPostingService _posting;
+        private readonly IStockCostAuditService _costAudit;
         private readonly ILogger<GdCostingImportService> _logger;
 
         /// <summary>A costing sheet with more lines than this is not a costing
@@ -30,11 +31,13 @@ namespace MyApp.Api.Services.Implementations
             AppDbContext db,
             ISpreadsheetImportService imports,
             IPostingService posting,
+            IStockCostAuditService costAudit,
             ILogger<GdCostingImportService> logger)
         {
             _db = db;
             _imports = imports;
             _posting = posting;
+            _costAudit = costAudit;
             _logger = logger;
         }
 
@@ -882,6 +885,18 @@ namespace MyApp.Api.Services.Implementations
                     var totalCost = matching.Sum(e => e.CostExcludingTax);
                     var totalQty = matching.Sum(e => e.Quantity);
 
+                    // Snapshot before either branch writes. Backfill OVERWRITES
+                    // the cost outright, so without this there is no record
+                    // anywhere of what the figure had been -- the single
+                    // question this audit trail exists to answer.
+                    var costedBefore = new StockFigures(
+                        balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax);
+                    var costedGdNumbers = string.Join(", ", matching
+                        .Select(e => consignmentsByGd.Values.FirstOrDefault(c => c.Id == e.ImportConsignmentId)?.GdNumber)
+                        .Where(g => !string.IsNullOrWhiteSpace(g))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(g => g, StringComparer.OrdinalIgnoreCase));
+
                     if (mode == GdCostingImportModeNames.NewArrivals)
                     {
                         // New arrivals: this GD brings MORE of what is
@@ -911,6 +926,17 @@ namespace MyApp.Api.Services.Implementations
                         var unitCost = totalQty != 0m ? totalCost / totalQty : 0m;
                         balance.ActualCostExcludingTax = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
                     }
+
+                    await _costAudit.RecordAsync(
+                        dto.CompanyId, balance.ItemTypeId, balance.Id, userId,
+                        StockCostChangeSources.GdCostingImport, costedGdNumbers,
+                        costedBefore,
+                        new StockFigures(balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax),
+                        note: mode == GdCostingImportModeNames.NewArrivals
+                            ? $"New Arrivals: {matching.Count} GD line(s) added {totalQty:0.####} unit(s) at a landed cost of {totalCost:N2}."
+                            : $"Backfill: {matching.Count} GD line(s) priced {totalQty:0.####} unit(s) at {totalCost:N2}; "
+                              + $"that unit cost was applied to the balance's own {balance.Quantity:0.####} unit(s).",
+                        importConsignmentId: matching[0].ImportConsignmentId);
                 }
 
                 // Task 15, opt-in only: lines the server independently proved
@@ -919,7 +945,7 @@ namespace MyApp.Api.Services.Implementations
                 // (HsCode, Name) target needs every member's own recomputed
                 // Cost/SellingValue collected first.
                 var (itemTypesCreated, itemTypesAdopted, openingBalancesCreated) =
-                    await CreateMissingStockAsync(dto.CompanyId, newStockLines);
+                    await CreateMissingStockAsync(dto.CompanyId, newStockLines, userId);
 
                 var run = new ImportRun
                 {
@@ -1081,7 +1107,8 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task<(int Created, int Adopted, int BalancesCreated)> CreateMissingStockAsync(
             int companyId,
-            List<(ImportConsignmentLine Entity, NewStockGroupKey Key, GdCostingLineDto Line)> newStockLines)
+            List<(ImportConsignmentLine Entity, NewStockGroupKey Key, GdCostingLineDto Line)> newStockLines,
+            int userId)
         {
             if (newStockLines.Count == 0) return (0, 0, 0);
 
@@ -1242,6 +1269,12 @@ namespace MyApp.Api.Services.Implementations
 
                 var balance = await _db.OpeningStockBalances
                     .FirstOrDefaultAsync(b => b.CompanyId == companyId && b.ItemTypeId == itemType.Id);
+                // Zero on the create path, which is what "this item had no
+                // position" has always meant here -- so the history reads as
+                // 0 -> the imported figures rather than as an unexplained jump.
+                var newStockBefore = balance == null
+                    ? new StockFigures(0m, 0m, 0m)
+                    : new StockFigures(balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax);
                 if (balance == null)
                 {
                     balance = new OpeningStockBalance
@@ -1274,6 +1307,16 @@ namespace MyApp.Api.Services.Implementations
                     balance.ActualCostExcludingTax = Money(balance.ActualCostExcludingTax + totalCost);
                     balance.Notes = Trim($"{balance.Notes} | {originNote}".Trim(' ', '|'), 500);
                 }
+
+                await _costAudit.RecordAsync(
+                    companyId, itemType.Id, balance.Id, userId,
+                    StockCostChangeSources.GdCostingImport,
+                    gdNumbers.Count > 0 ? string.Join(", ", gdNumbers) : null,
+                    newStockBefore,
+                    new StockFigures(balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax),
+                    note: $"New stock created from {members.Count} unmatched GD line(s): "
+                        + $"{totalQty:0.####} unit(s), landed cost {totalCost:N2}, selling value {totalValue:N2}.",
+                    importConsignmentId: members[0].Entity.ImportConsignmentId);
 
                 await _db.SaveChangesAsync();
 

@@ -30,5 +30,29 @@ namespace MyApp.Api.Services.Interfaces
         /// undone (nothing is changed in that case).
         /// </summary>
         Task<ImportConsignmentDeleteResultDto> DeleteAsync(int id, int userId);
+
+        /// <summary>
+        /// Correct ONE line of a recorded consignment in place, so a single
+        /// mistyped duty does not need the whole GD deleted and re-imported
+        /// (which a settled GD cannot be at all).
+        ///
+        /// Same two-pass contract as <see cref="DeleteAsync"/>: everything is
+        /// validated and the new balance figures computed before anything is
+        /// written, so a refusal leaves the consignment untouched. The cost is
+        /// recomputed SERVER-SIDE from the submitted inputs through
+        /// <c>ImportCostingCalculator</c> — a caller's own arithmetic is never
+        /// trusted, the same rule the commit path keeps.
+        ///
+        /// What it will not do: move a line to another item, change its
+        /// disposition, or change which balance it feeds. Those unwind one
+        /// item's stock and load another's, which is a delete-and-reimport.
+        ///
+        /// Throws <see cref="InvalidOperationException"/> with an
+        /// operator-facing message when the correction cannot be applied —
+        /// notably when it would take a balance negative, or drop the GD's
+        /// posted liability below what has already been settled against it.
+        /// </summary>
+        Task<ImportConsignmentLineUpdateResultDto> UpdateLineAsync(
+            int consignmentId, int lineId, UpdateImportConsignmentLineDto dto, int userId);
     }
 }
