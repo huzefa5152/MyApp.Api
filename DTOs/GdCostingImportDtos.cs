@@ -42,6 +42,55 @@ namespace MyApp.Api.DTOs
     }
 
     /// <summary>
+    /// Wire vocabulary for the operator's choice, at the top of an import, of
+    /// what a MATCHED (cost-only) line does to the opening balance it
+    /// matches (Task 19). A string on the DTO for the same reason
+    /// <see cref="GdCostingDispositionNames"/> is: it is what the frontend
+    /// posts, and it travels unchanged from preview to commit.
+    ///
+    /// The gap this closes: the sheet was specified as a one-time backfill
+    /// (SET a balance's cost), but it is actually run every month, and each
+    /// month's GD can bring NEW goods. Overwriting the cost of an existing
+    /// balance when a GD brings 200 more units silently drops those 200
+    /// units — the operator must say, per import, which case this is.
+    /// </summary>
+    public static class GdCostingImportModeNames
+    {
+        /// <summary>
+        /// Stock already on the books, never costed before — a one-time
+        /// historical backfill. A matched line SETS the balance's
+        /// ActualCostExcludingTax from this GD's own unit cost applied to
+        /// the WHOLE balance quantity. Quantity and ValueExcludingTax are
+        /// untouched. The default, and byte-identical to this feature's
+        /// behaviour before Task 19 existed.
+        /// </summary>
+        public const string Backfill = "backfill";
+
+        /// <summary>
+        /// A monthly GD bringing NEW goods in addition to what a matched
+        /// balance already holds. A matched line ADDS its own quantity,
+        /// cost and selling value onto the balance, so the stored cost
+        /// stays the total cost of the total quantity — a genuine weighted
+        /// average per unit — rather than being replaced by this GD's own
+        /// rate alone.
+        /// </summary>
+        public const string NewArrivals = "new-arrivals";
+
+        /// <summary>
+        /// Unrecognised, missing or null input resolves to
+        /// <see cref="Backfill"/> — never to the more consequential
+        /// <see cref="NewArrivals"/> — so a caller that omits this field
+        /// entirely gets exactly today's behaviour rather than a mode that
+        /// adds quantity nobody asked for.
+        /// </summary>
+        public static string Normalize(string? s) => (s ?? "").Trim().ToLowerInvariant() switch
+        {
+            NewArrivals => NewArrivals,
+            _ => Backfill,
+        };
+    }
+
+    /// <summary>
     /// One consignment line, as read and matched. Carries BOTH the raw cost
     /// inputs and the resolved costing chain (mirrors what
     /// <c>Models.ImportConsignmentLine</c> stores — CLAUDE.md's own reasoning
@@ -110,8 +159,13 @@ namespace MyApp.Api.DTOs
 
         /// <summary>
         /// The actual cost that would be (or was) written onto the matched
-        /// balance — the WHOLE balance's derived cost, repeated on every line
-        /// that fed it, not a per-line share of it.
+        /// balance, repeated on every line that fed it — not a per-line
+        /// share of it. Meaning depends on the chosen
+        /// <see cref="GdCostingImportModeNames"/>: under Backfill, the
+        /// WHOLE balance's derived SET cost (this GD's unit cost applied to
+        /// the balance's existing quantity); under New Arrivals, the
+        /// balance's resulting TOTAL cost after this GD's own cost is ADDED
+        /// to what is already there.
         /// </summary>
         public decimal DerivedActualCost { get; set; }
 
@@ -242,6 +296,27 @@ namespace MyApp.Api.DTOs
         /// never created.
         /// </summary>
         public bool CreateMissingStock { get; set; }
+
+        /// <summary>
+        /// One of <see cref="GdCostingImportModeNames"/>. Defaults to
+        /// <see cref="GdCostingImportModeNames.Backfill"/>, so a caller that
+        /// does not send this gets exactly the behaviour this feature had
+        /// before Task 19: a matched (cost-only) line SETS the balance's
+        /// cost. <see cref="GdCostingImportModeNames.NewArrivals"/> instead
+        /// ADDS the matched line's quantity, cost and selling value onto
+        /// the balance.
+        ///
+        /// Applies only to a matched (cost-only) line.
+        /// <see cref="CreateMissingStock"/>'s unmatched-line path is
+        /// unaffected by this field either way — new stock is created the
+        /// same way regardless of which mode costed the rest of the sheet.
+        ///
+        /// Never trusted blindly: <c>GdCostingImportService.CommitAsync</c>
+        /// still re-derives every match from server truth exactly as
+        /// before; this field only changes what is DONE with a match once
+        /// verified, never whether it is verified.
+        /// </summary>
+        public string Mode { get; set; } = GdCostingImportModeNames.Backfill;
     }
 
     public class GdCostingCommitResultDto

@@ -61,16 +61,21 @@ export const commitCustomerLedger = (body) =>
 // back from the preview response) and never re-reads the file — the server
 // re-verifies every match and recomputes every cost figure itself.
 
-export const previewGdCosting = ({ file, companyId, profileId }) =>
+// `mode` is one of GdCostingImportModeNames ("backfill" | "new-arrivals",
+// Task 19) — it changes nothing about which lines match (preview writes
+// nothing either way), only how a matched line's consequence is worded, so
+// the table and its notes stay truthful to whichever mode is selected.
+export const previewGdCosting = ({ file, companyId, profileId, mode }) =>
   upload("/spreadsheet-import/gd-costing/preview", file,
-    { companyId, ...(profileId ? { profileId } : {}) });
+    { companyId, ...(profileId ? { profileId } : {}), ...(mode ? { mode } : {}) });
 
 // "Enter a line by hand": builds ONE consignment line server-side and runs
 // it through the exact same match/cost pipeline the file preview uses —
 // same GdCostingPreviewDto shape back, no mapping/profile involved (there is
 // nothing to map for a hand-typed line).
-export const previewGdCostingManual = ({ companyId, line }) =>
-  httpClient.post("/spreadsheet-import/gd-costing/preview-manual", line, { params: { companyId } });
+export const previewGdCostingManual = ({ companyId, line, mode }) =>
+  httpClient.post("/spreadsheet-import/gd-costing/preview-manual", line,
+    { params: { companyId, ...(mode ? { mode } : {}) } });
 
 export const commitGdCosting = (body) =>
   httpClient.post("/spreadsheet-import/gd-costing/commit", body, { timeout: LONG });

@@ -322,7 +322,8 @@ namespace MyApp.Api.Controllers
             [FromForm] IFormFile file,
             [FromQuery] int companyId,
             [FromQuery] int? profileId,
-            [FromForm] string? mappingJson)
+            [FromForm] string? mappingJson,
+            [FromQuery] string? mode)
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
             if (!await CompanyExistsAsync(companyId))
@@ -339,7 +340,7 @@ namespace MyApp.Api.Controllers
             {
                 return Ok(await _gdCosting.PreviewAsync(
                     validated.Bytes, validated.Extension, validated.FileName, validated.Sha256,
-                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion));
+                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion, mode));
             }
             catch (InvalidOperationException ex)
             {
@@ -366,7 +367,8 @@ namespace MyApp.Api.Controllers
         [HasPermission("importcosting.sheet.run")]
         public async Task<ActionResult<GdCostingPreviewDto>> PreviewGdCostingManual(
             [FromBody] GdCostingManualLineDto dto,
-            [FromQuery] int companyId)
+            [FromQuery] int companyId,
+            [FromQuery] string? mode)
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
             if (!await CompanyExistsAsync(companyId))
@@ -377,7 +379,7 @@ namespace MyApp.Api.Controllers
 
             try
             {
-                return Ok(await _gdCosting.PreviewManualAsync(dto, companyId));
+                return Ok(await _gdCosting.PreviewManualAsync(dto, companyId, mode));
             }
             catch (InvalidOperationException ex)
             {

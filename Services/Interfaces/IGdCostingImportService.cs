@@ -24,6 +24,14 @@ namespace MyApp.Api.Services.Interfaces
         /// opening stock balances and lots, in memory. Throws
         /// <see cref="InvalidOperationException"/> when the mapping cannot
         /// drive an import at all.
+        ///
+        /// <paramref name="mode"/> is one of <see cref="GdCostingImportModeNames"/>
+        /// (null/unrecognised normalises to Backfill) and decides only how a
+        /// MATCHED line's consequence is worded and previewed
+        /// (<see cref="GdCostingLineDto.MatchNote"/>,
+        /// <see cref="GdCostingLineDto.DerivedActualCost"/>) — it changes
+        /// nothing about which lines match, since preview never writes
+        /// anything either way.
         /// </summary>
         Task<GdCostingPreviewDto> PreviewAsync(
             byte[] bytes,
@@ -33,7 +41,8 @@ namespace MyApp.Api.Services.Interfaces
             string mappingJson,
             int companyId,
             int? profileId,
-            int? profileVersion);
+            int? profileVersion,
+            string? mode);
 
         /// <summary>
         /// Builds ONE consignment line from a hand-typed form (Task 18:
@@ -41,21 +50,24 @@ namespace MyApp.Api.Services.Interfaces
         /// through the exact same match/cost/consignment pipeline
         /// <see cref="PreviewAsync"/> gives a whole workbook — same matching,
         /// same disposition rules, same costing arithmetic, same duplicate
-        /// guards. There is no separate manual commit: the returned
-        /// <see cref="GdCostingPreviewDto"/> feeds straight into the existing
-        /// <see cref="CommitAsync"/>, unchanged.
+        /// guards, same <paramref name="mode"/>-aware wording. There is no
+        /// separate manual commit: the returned <see cref="GdCostingPreviewDto"/>
+        /// feeds straight into the existing <see cref="CommitAsync"/>,
+        /// unchanged.
         ///
         /// Throws <see cref="InvalidOperationException"/> with an
         /// operator-facing message when the line is missing something it
         /// cannot be previewed without (mirrors <c>GdCostingMapping.Parse</c>
         /// rejecting a mapping that cannot drive an import).
         /// </summary>
-        Task<GdCostingPreviewDto> PreviewManualAsync(GdCostingManualLineDto line, int companyId);
+        Task<GdCostingPreviewDto> PreviewManualAsync(GdCostingManualLineDto line, int companyId, string? mode);
 
         /// <summary>
         /// Writes the reviewed lines in one transaction: the import run, one
-        /// consignment per GD, one line per row, and the actual cost onto every
-        /// matched (cost-only) balance.
+        /// consignment per GD, one line per row, and — per
+        /// <see cref="GdCostingCommitDto.Mode"/> — either SETS or ADDS the
+        /// actual cost (and, under New Arrivals, the quantity and selling
+        /// value too) onto every matched (cost-only) balance.
         /// </summary>
         Task<GdCostingCommitResultDto> CommitAsync(GdCostingCommitDto dto, int userId);
     }

@@ -314,9 +314,16 @@ def movement_count(api, h, company_id):
     return (r.json() or {}).get("totalCount", -1) if r.ok else -1
 
 
-def gd_preview(api, h, company_id, content, mapping):
+def gd_preview(api, h, company_id, content, mapping, mode=None):
+    """mode is one of GdCostingImportModeNames ("backfill" / "new-arrivals",
+    Task 19). Omitted by every pre-Task-19 call site, which is deliberate:
+    it must default server-side to "backfill" so none of those calls change
+    behaviour."""
+    params = {"companyId": company_id}
+    if mode:
+        params["mode"] = mode
     return upload(f"{api}/spreadsheet-import/gd-costing/preview", h, content, "gd.xlsx",
-                 {"mappingJson": json.dumps(mapping)}, {"companyId": company_id})
+                 {"mappingJson": json.dumps(mapping)}, params)
 
 
 def gd_commit(api, h, body):
@@ -341,6 +348,7 @@ def main():
     mixed_co = make_company(api, h, f"GD Costing Mixed {tag}")
     other_co = make_company(api, h, f"GD Costing Other {tag}")
     del_co = make_company(api, h, f"GD Costing DelTrap {tag}")
+    twomonth_co = make_company(api, h, f"GD Costing TwoMonth {tag}")
     restricted_user_id = None
 
     try:
@@ -1142,11 +1150,218 @@ def main():
               r.status_code in (200, 204), f"http {r.status_code}: {r.text[:200]}")
         del_co = None  # already deleted -- skip it in the cleanup finally block
 
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 14 -- Task 19: Backfill (SET) vs New Arrivals (ADD)
+        # ══════════════════════════════════════════════════════════════════
+        print("\n-- 14. Two-month scenario: Backfill vs New Arrivals --")
+
+        # ---- 14a: NEW ARRIVALS ---------------------------------------------
+        # Month 1 (GD-NA-A) creates a brand-new item via createMissingStock
+        # (no balance exists yet, so the line is unmatched at preview time).
+        # Month 2 (GD-NA-B), the SAME item under the SAME HS code, resolves
+        # to that balance and, committed in new-arrivals mode, must ADD to
+        # quantity/cost/selling value rather than overwrite them.
+        na_hs = "8517.6990"
+        na_desc = f"Two-Month Item NA {tag}"
+        gd_na_a = row_cells(BASE_COLS, "GD-NA-A", na_hs, desc=na_desc, qty=310,
+                            assessed=100000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, twomonth_co, build_sheet(BASE_HEADINGS, [gd_na_a]), GD_MAPPING)
+        naA_prev = r.json() if r.ok else {}
+        check("14a: month-1 GD-NA-A previews", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        naA_line = (naA_prev.get("lines") or [{}])[0]
+        check("14a: month-1 line is unmatched (stock-posted) -- no balance exists yet",
+              naA_line.get("disposition") == "stock-posted", f"disposition={naA_line.get('disposition')}")
+
+        r = gd_commit(api, h, {
+            "companyId": twomonth_co, "fileSha256": naA_prev.get("fileSha256"),
+            "fileName": "gd-na-a.xlsx", "fileSizeBytes": naA_prev.get("fileSizeBytes"),
+            "lines": naA_prev.get("lines", []), "createMissingStock": True,
+        })
+        naA_res = r.json() if r.ok else {}
+        if not check("14a: month-1 GD-NA-A commits, creating the item and its opening balance",
+                     r.ok and naA_res.get("openingBalancesCreated") == 1,
+                     f"http {r.status_code}: {r.text[:200]}"):
+            raise RuntimeError("Section 14a setup failed -- month-1 balance was not created. "
+                              "Aborting rather than cascading into unrelated failures.")
+
+        na_item = next((o for o in get_openings(api, h, twomonth_co)
+                       if o.get("itemTypeName", "").startswith(na_desc)), None)
+        if not check("14a: the newly-created item has an opening balance", na_item is not None,
+                     "no balance found under the new item's name"):
+            raise RuntimeError("Section 14a setup failed -- could not find the month-1 balance.")
+
+        na_item_id = na_item.get("itemTypeId")
+        na_cost_a = compute_costing(assessed=100000, st=18, ast=3, it=6)
+        check("14a: month-1 balance holds exactly what GD-NA-A brought (qty 310, cost 100000.00)",
+              close(na_item.get("quantity"), 310) and close(na_item.get("actualCostExcludingTax"), 100000.00),
+              f"na_item={na_item}")
+        check("14a: month-1 balance's selling value is GD-NA-A's own computed selling value",
+              close(na_item.get("valueExcludingTax"), float(na_cost_a["sellingValue"])),
+              f"valueExcludingTax={na_item.get('valueExcludingTax')} expected={na_cost_a['sellingValue']}")
+
+        # Month 2: GD-NA-B brings 200 MORE of the same item. Same HS code, no
+        # lots anywhere for this company, so it resolves via rule (b) to the
+        # balance GD-NA-A just created.
+        gd_na_b = row_cells(BASE_COLS, "GD-NA-B", na_hs, desc=na_desc, qty=200,
+                            assessed=80000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, twomonth_co, build_sheet(BASE_HEADINGS, [gd_na_b]), GD_MAPPING,
+                       mode="new-arrivals")
+        naB_prev = r.json() if r.ok else {}
+        check("14a: month-2 GD-NA-B previews (new-arrivals mode)", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        naB_line = (naB_prev.get("lines") or [{}])[0]
+        check("14a: month-2 line now matches the balance GD-NA-A created (cost-only)",
+              naB_line.get("disposition") == "cost-only", f"disposition={naB_line.get('disposition')}")
+        check("14a: month-2 preview's match note (new-arrivals) describes an ADD, naming both quantities",
+              bool(naB_line.get("matchNote")) and "310" in naB_line["matchNote"]
+              and "200" in naB_line["matchNote"] and "add" in naB_line["matchNote"].lower(),
+              f"matchNote={naB_line.get('matchNote')!r}")
+
+        na_cost_b = compute_costing(assessed=80000, st=18, ast=3, it=6)
+
+        r = gd_commit(api, h, {
+            "companyId": twomonth_co, "fileSha256": naB_prev.get("fileSha256"),
+            "fileName": "gd-na-b.xlsx", "fileSizeBytes": naB_prev.get("fileSizeBytes"),
+            "lines": naB_prev.get("lines", []), "mode": "new-arrivals",
+        })
+        naB_res = r.json() if r.ok else {}
+        check("14a: month-2 GD-NA-B commits in new-arrivals mode",
+              r.ok and naB_res.get("balancesCosted") == 1, f"http {r.status_code}: {r.text[:200]}")
+
+        na_item_after = opening_of(get_openings(api, h, twomonth_co), na_item_id)
+        expected_na_qty = d(310) + d(200)
+        expected_na_cost = money(d(100000) + na_cost_b["cost"])
+        expected_na_value = money(na_cost_a["sellingValue"] + na_cost_b["sellingValue"])
+        check("14a: quantity is the SUM of both months (310 + 200 = 510)",
+              na_item_after is not None and close(na_item_after.get("quantity"), float(expected_na_qty)),
+              f"quantity={na_item_after.get('quantity') if na_item_after else None} expected={expected_na_qty}")
+        check("14a: ActualCostExcludingTax is the SUM of both months' cost",
+              na_item_after is not None and close(na_item_after.get("actualCostExcludingTax"), float(expected_na_cost)),
+              f"actualCostExcludingTax={na_item_after.get('actualCostExcludingTax') if na_item_after else None} expected={expected_na_cost}")
+        check("14a: ValueExcludingTax (selling value) is the SUM of both months",
+              na_item_after is not None and close(na_item_after.get("valueExcludingTax"), float(expected_na_value)),
+              f"valueExcludingTax={na_item_after.get('valueExcludingTax') if na_item_after else None} expected={expected_na_value}")
+
+        if na_item_after is not None:
+            actual_unit_cost = d(str(na_item_after.get("actualCostExcludingTax"))) / d(str(na_item_after.get("quantity")))
+            expected_unit_cost = expected_na_cost / expected_na_qty
+            check("14a: the per-unit cost is a genuine weighted average across both consignments",
+                  abs(actual_unit_cost - expected_unit_cost) < d("0.01"),
+                  f"actual_unit_cost={actual_unit_cost} expected={expected_unit_cost}")
+        else:
+            check("14a: the per-unit cost is a genuine weighted average across both consignments",
+                  False, "no balance found to compute a unit cost from")
+
+        # Idempotence still holds in new-arrivals mode -- neither duplicate
+        # guard is mode-specific (brief, Task 19).
+        r = gd_commit(api, h, {
+            "companyId": twomonth_co, "fileSha256": naB_prev.get("fileSha256"),
+            "fileName": "gd-na-b.xlsx", "fileSizeBytes": naB_prev.get("fileSizeBytes"),
+            "lines": naB_prev.get("lines", []), "mode": "new-arrivals",
+        })
+        check("14a: re-submitting GD-NA-B's exact file (new-arrivals) is refused as already imported",
+              r.status_code == 400 and "already imported" in (r.json() or {}).get("message", ""),
+              f"http {r.status_code}: {r.text[:200]}")
+        na_item_dup1 = opening_of(get_openings(api, h, twomonth_co), na_item_id)
+        check("14a: the refused duplicate-file resubmit left the balance unchanged",
+              na_item_dup1 is not None and close(na_item_dup1.get("quantity"), float(expected_na_qty))
+              and close(na_item_dup1.get("actualCostExcludingTax"), float(expected_na_cost)),
+              f"na_item_dup1={na_item_dup1}")
+
+        r = gd_commit(api, h, {
+            "companyId": twomonth_co, "fileSha256": fresh_hash(), "fileName": "gd-na-b-again.xlsx",
+            "fileSizeBytes": 111,
+            "lines": [make_line(1, "GD-NA-B", na_hs, assessed=1, st=18, ast=3, it=6)],
+            "mode": "new-arrivals",
+        })
+        try:
+            na_dup_msg = (r.json() or {}).get("message", "")
+        except ValueError:
+            na_dup_msg = ""  # a non-JSON body would itself disprove the "not a 500" claim
+        check("14a: a duplicate GD number (fresh file hash, new-arrivals) is refused as a friendly 400, not a 500",
+              r.status_code == 400 and "already" in na_dup_msg and "consignment" in na_dup_msg,
+              f"http {r.status_code}: {r.text[:200]}")
+        na_item_dup2 = opening_of(get_openings(api, h, twomonth_co), na_item_id)
+        check("14a: the refused duplicate-GD resubmit left the balance unchanged (not added again)",
+              na_item_dup2 is not None and close(na_item_dup2.get("quantity"), float(expected_na_qty))
+              and close(na_item_dup2.get("actualCostExcludingTax"), float(expected_na_cost)),
+              f"na_item_dup2={na_item_dup2}")
+
+        # ---- 14b: BACKFILL (default) -- same shape, must NOT add -----------
+        # A fresh item under its OWN HS code, with its own month-1/month-2
+        # pair, this time committed in (default) backfill mode: quantity must
+        # stay exactly what month 1 alone brought in.
+        bf_hs = "8517.6991"
+        bf_desc = f"Two-Month Item BF {tag}"
+        gd_bf_a = row_cells(BASE_COLS, "GD-BF-A", bf_hs, desc=bf_desc, qty=310,
+                            assessed=100000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, twomonth_co, build_sheet(BASE_HEADINGS, [gd_bf_a]), GD_MAPPING)
+        bfA_prev = r.json() if r.ok else {}
+        r = gd_commit(api, h, {
+            "companyId": twomonth_co, "fileSha256": bfA_prev.get("fileSha256"),
+            "fileName": "gd-bf-a.xlsx", "fileSizeBytes": bfA_prev.get("fileSizeBytes"),
+            "lines": bfA_prev.get("lines", []), "createMissingStock": True,
+        })
+        bfA_res = r.json() if r.ok else {}
+        if not check("14b: month-1 GD-BF-A commits, creating a fresh item and balance",
+                     r.ok and bfA_res.get("openingBalancesCreated") == 1,
+                     f"http {r.status_code}: {r.text[:200]}"):
+            raise RuntimeError("Section 14b setup failed -- month-1 balance was not created. "
+                              "Aborting rather than cascading into unrelated failures.")
+
+        bf_item = next((o for o in get_openings(api, h, twomonth_co)
+                       if o.get("itemTypeName", "").startswith(bf_desc)), None)
+        if not check("14b: the newly-created item has an opening balance", bf_item is not None,
+                     "no balance found under the new item's name"):
+            raise RuntimeError("Section 14b setup failed -- could not find the month-1 balance.")
+
+        bf_item_id = bf_item.get("itemTypeId")
+        bf_value_a = bf_item.get("valueExcludingTax")
+
+        gd_bf_b = row_cells(BASE_COLS, "GD-BF-B", bf_hs, desc=bf_desc, qty=200,
+                            assessed=80000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, twomonth_co, build_sheet(BASE_HEADINGS, [gd_bf_b]), GD_MAPPING)
+        bfB_prev = r.json() if r.ok else {}
+        check("14b: month-2 GD-BF-B previews (mode omitted -- defaults to backfill)",
+              r.ok, f"http {r.status_code}: {r.text[:200]}")
+        bfB_line = (bfB_prev.get("lines") or [{}])[0]
+        check("14b: month-2 line matches the existing balance (cost-only)",
+              bfB_line.get("disposition") == "cost-only", f"disposition={bfB_line.get('disposition')}")
+        check("14b: preview's match note (default/backfill mode) keeps the SET wording, not an ADD",
+              bool(bfB_line.get("matchNote")) and "applied to the whole balance" in bfB_line["matchNote"]
+              and "adds" not in bfB_line["matchNote"].lower(),
+              f"matchNote={bfB_line.get('matchNote')!r}")
+
+        bf_cost_b = compute_costing(assessed=80000, st=18, ast=3, it=6)
+
+        # mode omitted entirely from the commit body too -- must default to
+        # Backfill, exactly as it did before Task 19 existed.
+        r = gd_commit(api, h, {
+            "companyId": twomonth_co, "fileSha256": bfB_prev.get("fileSha256"),
+            "fileName": "gd-bf-b.xlsx", "fileSizeBytes": bfB_prev.get("fileSizeBytes"),
+            "lines": bfB_prev.get("lines", []),
+        })
+        bfB_res = r.json() if r.ok else {}
+        check("14b: month-2 GD-BF-B commits with mode omitted (defaults to backfill)",
+              r.ok and bfB_res.get("balancesCosted") == 1, f"http {r.status_code}: {r.text[:200]}")
+
+        bf_item_after = opening_of(get_openings(api, h, twomonth_co), bf_item_id)
+        expected_bf_unit_cost = bf_cost_b["cost"] / d(200)
+        expected_bf_cost = money(expected_bf_unit_cost * d(310))
+        check("14b: quantity is UNCHANGED by backfill (still 310, NOT 510)",
+              bf_item_after is not None and close(bf_item_after.get("quantity"), 310.0),
+              f"quantity={bf_item_after.get('quantity') if bf_item_after else None}")
+        check("14b: ActualCostExcludingTax is SET (month-2's own unit cost x the existing 310 qty), not summed",
+              bf_item_after is not None and close(bf_item_after.get("actualCostExcludingTax"), float(expected_bf_cost)),
+              f"actualCostExcludingTax={bf_item_after.get('actualCostExcludingTax') if bf_item_after else None} expected={expected_bf_cost}")
+        check("14b: ValueExcludingTax is UNTOUCHED by backfill mode",
+              bf_item_after is not None and close(bf_item_after.get("valueExcludingTax"), bf_value_a),
+              f"valueExcludingTax={bf_item_after.get('valueExcludingTax') if bf_item_after else None} expected(unchanged)={bf_value_a}")
+
     finally:
         if not args.keep:
             if restricted_user_id:
                 requests.delete(f"{api}/users/{restricted_user_id}", headers=h, timeout=30)
-            for cid in (company, mixed_co, other_co, del_co):
+            for cid in (company, mixed_co, other_co, del_co, twomonth_co):
                 if cid:
                     requests.delete(f"{api}/companies/{cid}", headers=h, timeout=300)
 

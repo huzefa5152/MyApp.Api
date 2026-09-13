@@ -362,6 +362,17 @@ Publish output optimized from 79 MB to 37 MB via:
   typed. Before this, a wrong opening actual cost had no way to be fixed once
   stock had moved — only the Opening Balances screen could touch it, and only
   before anything sold.
+- **A monthly costing sheet no longer overwrites new stock with old.** The
+  sheet is run every month, and each month can bring NEW goods — but a matched
+  line always SET the cost, so a second month's GD silently dropped whatever
+  quantity it brought. Import Costing now asks, next to the file, which this
+  import is: **these goods are already on the books** (a one-time backfill —
+  sets the cost, quantity untouched — the default, unchanged from before) or
+  **these are new arrivals** (a monthly GD — adds the quantity, cost and
+  selling value to what a matched balance already holds, so the stored cost
+  stays a genuine weighted average). The preview states the consequence per
+  line before Commit, and both duplicate guards (the same file, the same GD
+  number) still apply under either choice.
 
 ### 2026-09-13 — Stock export scrolls properly
 

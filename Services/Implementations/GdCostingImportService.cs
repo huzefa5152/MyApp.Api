@@ -38,7 +38,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<GdCostingPreviewDto> PreviewAsync(
             byte[] bytes, string extension, string fileName, string fileSha256,
-            string mappingJson, int companyId, int? profileId, int? profileVersion)
+            string mappingJson, int companyId, int? profileId, int? profileVersion, string? mode)
         {
             var mapping = GdCostingMapping.Parse(mappingJson);
 
@@ -64,7 +64,7 @@ namespace MyApp.Api.Services.Implementations
 
             return await BuildPreviewAsync(
                 sheetResult.Rows, sheetResult.Warnings, fileName, fileSha256, bytes.LongLength,
-                companyId, profileId, profileVersion);
+                companyId, profileId, profileVersion, GdCostingImportModeNames.Normalize(mode));
         }
 
         /// <inheritdoc cref="IGdCostingImportService.PreviewManualAsync"/>
@@ -82,7 +82,7 @@ namespace MyApp.Api.Services.Implementations
         /// other. <c>FileSizeBytes</c> is the byte length of that same
         /// canonical content, so it is not an arbitrary placeholder either.
         /// </remarks>
-        public async Task<GdCostingPreviewDto> PreviewManualAsync(GdCostingManualLineDto line, int companyId)
+        public async Task<GdCostingPreviewDto> PreviewManualAsync(GdCostingManualLineDto line, int companyId, string? mode)
         {
             ValidateManualLine(line);
 
@@ -97,7 +97,8 @@ namespace MyApp.Api.Services.Implementations
                 fileSizeBytes: sizeBytes,
                 companyId: companyId,
                 profileId: null,
-                profileVersion: null);
+                profileVersion: null,
+                mode: GdCostingImportModeNames.Normalize(mode));
         }
 
         /// <summary>
@@ -112,7 +113,7 @@ namespace MyApp.Api.Services.Implementations
         private async Task<GdCostingPreviewDto> BuildPreviewAsync(
             List<GdCostingSheetRow> rows, List<string> warnings,
             string fileName, string fileSha256, long fileSizeBytes,
-            int companyId, int? profileId, int? profileVersion)
+            int companyId, int? profileId, int? profileVersion, string mode)
         {
             var preview = new GdCostingPreviewDto
             {
@@ -141,7 +142,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var index = await BuildMatchIndexAsync(companyId);
-            var outcomes = MatchAll(rows, index);
+            var outcomes = MatchAll(rows, index, mode);
 
             preview.Lines = rows
                 .Select((row, i) => ToLineDto(row, outcomes[i]))
@@ -385,8 +386,15 @@ namespace MyApp.Api.Services.Implementations
         /// cost the brief specifies —
         /// <c>unitCost = SUM(line.Cost) / SUM(line.Quantity)</c> — is meant to
         /// be trustworthy across the whole sheet, not one GD at a time.
+        ///
+        /// <paramref name="mode"/> (one of <see cref="GdCostingImportModeNames"/>)
+        /// decides only how a matched (cost-only) group's
+        /// <c>DerivedActualCost</c>/<c>MatchNote</c> are worded — it never
+        /// changes WHICH lines match, since preview writes nothing either
+        /// way. <see cref="GdCostingImportService.CommitAsync"/> mirrors this
+        /// same branch when it actually writes the balance.
         /// </summary>
-        private static LineOutcome[] MatchAll(List<GdCostingSheetRow> rows, MatchIndex index)
+        private static LineOutcome[] MatchAll(List<GdCostingSheetRow> rows, MatchIndex index, string mode)
         {
             var matches = rows.Select(r => Match(r.GdNumber, r.HsCode, index)).ToList();
             var outcomes = new LineOutcome?[rows.Count];
@@ -400,21 +408,44 @@ namespace MyApp.Api.Services.Implementations
                 list.Add(i);
             }
 
+            var newArrivals = mode == GdCostingImportModeNames.NewArrivals;
+
             foreach (var (balanceId, rowIdxs) in byBalance)
             {
                 var balance = index.Balances[balanceId];
                 var totalCost = rowIdxs.Sum(i => rows[i].Computed.Cost);
                 var totalQty = rowIdxs.Sum(i => rows[i].Quantity);
-                // The unit cost is the trustworthy figure from the GD; the
-                // quantity is the trustworthy figure from the books (brief,
-                // Task 10 step 2). A balance quantity of zero derives zero
-                // through the multiplication below without any special case.
-                var unitCost = totalQty != 0m ? totalCost / totalQty : 0m;
-                var derivedCost = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
 
-                string? note = null;
-                if (Math.Abs(totalQty - balance.Quantity) > 0.0001m)
-                    note = $"This GD covers {FormatQty(totalQty)} of the {FormatQty(balance.Quantity)} on the books; its unit cost was applied to the whole balance.";
+                decimal derivedCost;
+                string? note;
+
+                if (newArrivals)
+                {
+                    // New Arrivals ADDS rather than SETS, so the "unit cost
+                    // applied to the whole balance" framing below no longer
+                    // describes what will happen — quantity is moving too.
+                    // DerivedActualCost instead previews the balance's own
+                    // resulting TOTAL cost, and the note always states the
+                    // add (never conditional on a quantity mismatch, unlike
+                    // Backfill's note) because under this mode EVERY match
+                    // changes the balance — this is the operator's one
+                    // warning before commit (brief, Task 19).
+                    derivedCost = Math.Round(balance.ActualCostExcludingTax + totalCost, 2, MidpointRounding.AwayFromZero);
+                    note = $"Adds {FormatQty(totalQty)} to the {FormatQty(balance.Quantity)} already on the books (new total {FormatQty(balance.Quantity + totalQty)}).";
+                }
+                else
+                {
+                    // The unit cost is the trustworthy figure from the GD; the
+                    // quantity is the trustworthy figure from the books (brief,
+                    // Task 10 step 2). A balance quantity of zero derives zero
+                    // through the multiplication below without any special case.
+                    var unitCost = totalQty != 0m ? totalCost / totalQty : 0m;
+                    derivedCost = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
+
+                    note = Math.Abs(totalQty - balance.Quantity) > 0.0001m
+                        ? $"This GD covers {FormatQty(totalQty)} of the {FormatQty(balance.Quantity)} on the books; its unit cost was applied to the whole balance."
+                        : null;
+                }
 
                 var outcome = new LineOutcome(
                     GdCostingDispositionNames.CostOnly, balance.Id, balance.ItemTypeId, balance.ItemType?.Name,
@@ -563,6 +594,12 @@ namespace MyApp.Api.Services.Implementations
             if (existingGds.Count > 0)
                 throw new InvalidOperationException(
                     $"GD {string.Join(", ", existingGds)} already {(existingGds.Count == 1 ? "has" : "have")} a consignment recorded for this company. Nothing was changed.");
+
+            // Task 19: never trusted beyond deciding SET vs ADD below — this
+            // has no bearing on matching, verification or either duplicate
+            // guard just above/below, all of which run identically in both
+            // modes.
+            var mode = GdCostingImportModeNames.Normalize(dto.Mode);
 
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
@@ -802,15 +839,15 @@ namespace MyApp.Api.Services.Implementations
                         newStockLines.Add((entity, newStockKey.Value, line));
                 }
 
-                // The unit cost is derived here from the WRITTEN entities' own
-                // (server-recomputed, verified) Cost/Quantity — never from the
-                // client's claimed DerivedActualCost, and never from the
-                // client's raw Cost either, now that each line's CostExcludingTax
-                // above is itself the recomputed figure. It is an AGGREGATE over
-                // however many lines matched one balance; trusting a per-line
-                // copy of a shared figure invites a "last line wins" bug the
-                // moment two lines disagree. Same formula as preview, applied to
-                // exactly the lines that verified as cost-only for this balance.
+                // Figures are derived here from the WRITTEN entities' own
+                // (server-recomputed, verified) Cost/Quantity/SellingValue —
+                // never from the client's claimed DerivedActualCost, and
+                // never from the client's raw Cost either, now that each
+                // line's CostExcludingTax above is itself the recomputed
+                // figure. Each is an AGGREGATE over however many lines
+                // matched one balance; trusting a per-line copy of a shared
+                // figure invites a "last line wins" bug the moment two lines
+                // disagree.
                 foreach (var balanceId in costedBalanceIds)
                 {
                     var balance = index.Balances[balanceId];
@@ -819,8 +856,36 @@ namespace MyApp.Api.Services.Implementations
 
                     var totalCost = matching.Sum(e => e.CostExcludingTax);
                     var totalQty = matching.Sum(e => e.Quantity);
-                    var unitCost = totalQty != 0m ? totalCost / totalQty : 0m;
-                    balance.ActualCostExcludingTax = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
+
+                    if (mode == GdCostingImportModeNames.NewArrivals)
+                    {
+                        // New arrivals: this GD brings MORE of what is
+                        // already on the books. ADD rather than SET, on all
+                        // three figures together — quantity and cost move in
+                        // step so the stored cost stays the total cost of the
+                        // total quantity (a genuine weighted average per
+                        // unit), and the selling value is added in step too,
+                        // or a month-2 arrival would inflate cost and
+                        // quantity while margin silently collapsed (brief,
+                        // Task 19).
+                        var totalSellingValue = matching.Sum(e => e.SellingValueExcludingTax);
+                        balance.Quantity += totalQty;
+                        balance.ActualCostExcludingTax = Money(balance.ActualCostExcludingTax + totalCost);
+                        balance.ValueExcludingTax = Money(balance.ValueExcludingTax + totalSellingValue);
+                    }
+                    else
+                    {
+                        // Backfill (default, and byte-identical to every
+                        // release before this one): this GD is pricing stock
+                        // ALREADY on the books. SET the cost from this GD's
+                        // own unit cost applied to the WHOLE balance
+                        // quantity; Quantity and ValueExcludingTax are never
+                        // touched. Same formula as preview's Backfill branch,
+                        // applied to exactly the lines that verified as
+                        // cost-only for this balance.
+                        var unitCost = totalQty != 0m ? totalCost / totalQty : 0m;
+                        balance.ActualCostExcludingTax = Math.Round(unitCost * balance.Quantity, 2, MidpointRounding.AwayFromZero);
+                    }
                 }
 
                 // Task 15, opt-in only: lines the server independently proved

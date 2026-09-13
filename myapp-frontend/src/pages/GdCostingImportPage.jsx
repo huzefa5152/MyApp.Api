@@ -42,6 +42,33 @@ const DISPOSITION_TONE = {
   "stock-posted": colors.textSecondary,
   "ambiguous": "#b26a00",
 };
+
+// Task 19: what a MATCHED (cost-only) line does to the balance it matches.
+// "backfill" (default) is this feature's original, one-time-history
+// behaviour: SET the cost, leave quantity alone. "new-arrivals" is for the
+// sheet's actual monthly use: ADD quantity, cost and selling value, so a
+// month's new goods are never silently dropped by overwriting last month's
+// cost onto an unchanged quantity. Neither can happen by accident — the
+// operator always chooses, and the screen states the consequence (server-
+// derived, in MatchNote) before Commit is ever pressed.
+const MODE_BACKFILL = "backfill";
+const MODE_NEW_ARRIVALS = "new-arrivals";
+const MODE_CHOICES = [
+  {
+    value: MODE_BACKFILL,
+    title: "These goods are already on the books — set their actual cost",
+    body: "Use this for a one-off backfill of history. A matched line's cost is SET; quantity is left untouched.",
+  },
+  {
+    value: MODE_NEW_ARRIVALS,
+    title: "These are new arrivals — add their quantity and cost to what is on the books",
+    body: "Use this for a monthly GD. A matched line's quantity, cost and selling value are ADDED to what the balance already holds.",
+  },
+];
+// "cost-only" reads differently depending on the chosen mode; every other
+// disposition's label is unaffected by it.
+const dispositionLabel = (disposition, newArrivals) =>
+  disposition === "cost-only" && newArrivals ? "Stock added" : (DISPOSITION_LABEL[disposition] || disposition);
 // Fixed caption for an unmatched line. The server's own note differs by case
 // (no HS code vs. no opening balance under this HS code) — this is the one
 // thing the operator needs to know either way, and it is not committed
@@ -168,6 +195,42 @@ const modeBtn = (active) => ({
   color: active ? "#fff" : colors.textPrimary,
   fontWeight: 600, fontSize: 13.5, cursor: "pointer",
 });
+
+/**
+ * Task 19: the two-way choice of what a MATCHED line does to the balance it
+ * matches — spelled out in full rather than a bare toggle labelled "mode",
+ * because the whole point is that the operator always knows which one they
+ * are doing. Radio cards, not a checkbox: exactly one of the two is always
+ * true, unlike "bring in as new stock" below it (which is a genuine opt-in
+ * on top of whichever mode is chosen here). >=44px tall per the house
+ * tap-target rule; grid so it collapses to one column on a phone.
+ */
+function ModeChoice({ mode, onChange, disabled }) {
+  return (
+    <div style={{ ...grid, margin: "0.5rem 0 0.9rem" }}>
+      {MODE_CHOICES.map((opt) => {
+        const active = mode === opt.value;
+        return (
+          <label key={opt.value} style={{
+            display: "flex", gap: 10, alignItems: "flex-start",
+            padding: "0.65rem 0.75rem", borderRadius: 9, minHeight: 44, boxSizing: "border-box",
+            border: `1px solid ${active ? colors.blue : colors.cardBorder}`,
+            background: active ? "#eef4ff" : colors.cardBg,
+            cursor: disabled ? "not-allowed" : "pointer",
+          }}>
+            <input type="radio" name="gdCostingImportMode" checked={active} disabled={disabled}
+              onChange={() => onChange(opt.value)}
+              style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
+            <span>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{opt.title}</div>
+              <div style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>{opt.body}</div>
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
 
 function Banner({ tone, icon: Icon, children }) {
   const tint = { error: colors.dangerLight, warn: "#fff8e6", ok: "#eefaf1" }[tone];
@@ -399,6 +462,10 @@ export default function GdCostingImportPage() {
   // Opt-in, default off (unticked): a line matching nothing on the books is
   // skipped unless the operator explicitly asks for it to become new stock.
   const [createMissingStock, setCreateMissingStock] = useState(false);
+  // Task 19: what a MATCHED line does — defaults to the SAFER choice
+  // (Backfill: SET, touches only cost) rather than New Arrivals (ADD,
+  // touches quantity and selling value too).
+  const [costingMode, setCostingMode] = useState(MODE_BACKFILL);
 
   const canView = has("importcosting.sheet.run");
 
@@ -407,7 +474,7 @@ export default function GdCostingImportPage() {
 
   const resetFlow = useCallback(() => {
     setFile(null); setPreview(null); setResult(null); setCreateMissingStock(false);
-    setManual(DEFAULT_MANUAL);
+    setManual(DEFAULT_MANUAL); setCostingMode(MODE_BACKFILL);
   }, []);
 
   useEffect(() => { resetFlow(); }, [companyId, resetFlow]);
@@ -456,7 +523,7 @@ export default function GdCostingImportPage() {
     if (!file || !companyId || !profile) return;
     setBusy("preview"); setPreview(null); setResult(null);
     try {
-      const { data } = await previewGdCosting({ file, companyId, profileId: profile.id });
+      const { data } = await previewGdCosting({ file, companyId, profileId: profile.id, mode: costingMode });
       setPreview(data);
     } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
   };
@@ -469,10 +536,20 @@ export default function GdCostingImportPage() {
     if (!companyId) return;
     setBusy("preview"); setPreview(null); setResult(null);
     try {
-      const { data } = await previewGdCostingManual({ companyId, line: toManualPayload(manual) });
+      const { data } = await previewGdCostingManual({ companyId, line: toManualPayload(manual), mode: costingMode });
       setPreview(data);
     } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
   };
+
+  // Task 19: changing Backfill/New Arrivals after a preview is already on
+  // screen re-runs it, so the table and its per-line notes never describe a
+  // different mode than the one Commit is about to use.
+  useEffect(() => {
+    if (!preview || busy) return;
+    if (mode === "file") { if (file) onPreview(); }
+    else if (companyId) { onPreviewManual(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [costingMode]);
 
   const onCommit = async () => {
     if (!preview?.canCommit) return;
@@ -487,6 +564,7 @@ export default function GdCostingImportPage() {
         fileSizeBytes: preview.fileSizeBytes,
         lines: (preview.lines || []).map(toCommitLine),
         createMissingStock,
+        mode: costingMode,
       });
       setResult(data);
       setPreview(null);
@@ -549,6 +627,9 @@ export default function GdCostingImportPage() {
             </select>
           </label>
         </div>
+
+        <SectionLabel>What kind of import is this?</SectionLabel>
+        <ModeChoice mode={costingMode} onChange={setCostingMode} disabled={!!busy} />
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "0.9rem 0" }}>
           <button type="button" onClick={() => switchMode("file")}
@@ -616,7 +697,9 @@ export default function GdCostingImportPage() {
           {preview.blockingErrors?.map((e, i) => <Banner key={i} tone="error" icon={MdError}>{e}</Banner>)}
 
           <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 0.7rem" }}>
-            {costOnlyCount} will have their cost set ·{" "}
+            {costOnlyCount} {costingMode === MODE_NEW_ARRIVALS
+              ? "will have stock added"
+              : "will have their cost set"} ·{" "}
             {createMissingStock
               ? `${notMatchedCount} will be created as new stock`
               : `${notMatchedCount} not matched`}{" "}
@@ -710,7 +793,7 @@ export default function GdCostingImportPage() {
                               color: willCreate ? colors.success : (DISPOSITION_TONE[l.disposition] || colors.textSecondary),
                               fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.02em",
                             }}>
-                              {willCreate ? "Will create" : (DISPOSITION_LABEL[l.disposition] || l.disposition)}
+                              {willCreate ? "Will create" : dispositionLabel(l.disposition, costingMode === MODE_NEW_ARRIVALS)}
                             </span>
                           </td>
                           <td style={td}>
