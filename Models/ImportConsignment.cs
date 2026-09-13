@@ -95,6 +95,37 @@ namespace MyApp.Api.Models
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        // ── Import Clearing subledger (Task 23) ─────────────────────────────
+
+        /// <summary>
+        /// What THIS consignment actually credited to Import Clearing when it
+        /// posted — written once, by <see cref="Services.Implementations.PostingService.PostImportConsignmentAsync"/>,
+        /// at commit time. 0 for a Backfill consignment (never posts) and for
+        /// any consignment committed while the company's GL was off — both
+        /// genuinely owe nothing through this route, so 0 is the correct
+        /// answer, not a placeholder.
+        ///
+        /// Deliberately NOT re-derived from <see cref="TotalCostExcludingTax"/> /
+        /// <see cref="TotalInputTax"/> / <see cref="TotalIncomeTax"/>: those are
+        /// CLIENT-submitted headline totals (see their own doc comments), while
+        /// the posted figure is server truth recomputed per line and — under
+        /// New Arrivals — includes a CostOnly line's contribution that a naive
+        /// re-derivation could easily double-count or drop. Only the posting
+        /// itself knows the true credited amount.
+        /// </summary>
+        public decimal ImportClearingCredited { get; set; }
+
+        /// <summary>
+        /// Σ of every NON-cancelled <see cref="Accounting.PaymentAllocation.Amount"/>
+        /// whose <see cref="Accounting.PaymentAllocation.ImportConsignmentId"/>
+        /// points here — recomputed by <see cref="Services.Implementations.PaymentService"/>
+        /// inside the same transaction that writes a settling payment, exactly as
+        /// <c>PurchaseBill.AmountPaid</c> is maintained. Outstanding is always
+        /// <see cref="ImportClearingCredited"/> minus this — never separately
+        /// stored, so it can never drift from the two figures it is made of.
+        /// </summary>
+        public decimal AmountSettled { get; set; }
+
         // Navigation
         public Company Company { get; set; } = null!;
 

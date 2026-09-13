@@ -5,8 +5,11 @@ import httpClient from "./httpClient";
 // (spreadsheetImportApi.js) WRITE a consignment; these three calls are what
 // let an operator see what was written, and undo it if it was wrong.
 
-export const getImportConsignments = ({ companyId, page = 1, pageSize = 25 }) =>
-  httpClient.get("/import-consignments", { params: { companyId, page, pageSize } });
+// onlyOutstanding narrows the page to consignments that still owe something;
+// either way the response's totalOutstanding is the company-wide figure,
+// unaffected by the page or the filter (Task 23).
+export const getImportConsignments = ({ companyId, page = 1, pageSize = 25, onlyOutstanding = false }) =>
+  httpClient.get("/import-consignments", { params: { companyId, page, pageSize, onlyOutstanding } });
 
 export const getImportConsignment = (id) => httpClient.get(`/import-consignments/${id}`);
 

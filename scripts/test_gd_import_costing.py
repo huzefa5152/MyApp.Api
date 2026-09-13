@@ -343,9 +343,11 @@ def gd_commit(api, h, body):
 
 # ── Consignments (Task 21: view + delete what a GD costing import wrote) ────
 
-def list_consignments(api, h, company_id, page=1, page_size=50):
-    return requests.get(f"{api}/import-consignments", headers=h, timeout=30,
-                        params={"companyId": company_id, "page": page, "pageSize": page_size})
+def list_consignments(api, h, company_id, page=1, page_size=50, only_outstanding=None):
+    params = {"companyId": company_id, "page": page, "pageSize": page_size}
+    if only_outstanding is not None:
+        params["onlyOutstanding"] = "true" if only_outstanding else "false"
+    return requests.get(f"{api}/import-consignments", headers=h, timeout=30, params=params)
 
 
 def get_consignment(api, h, cid):
@@ -361,6 +363,30 @@ def find_consignment_id(api, h, company_id, gd_number):
     r.raise_for_status()
     row = next((x for x in r.json().get("items", []) if x.get("gdNumber") == gd_number), None)
     return row["id"] if row else None
+
+
+# ── Payments (Task 23: settling a consignment's Import Clearing liability) ──
+# Money-out only -- an ImportConsignment allocation is refused on a receipt.
+
+def create_payment(api, h, company_id, body):
+    return requests.post(f"{api}/payments/payments/company/{company_id}", headers=h,
+                         timeout=30, json=body)
+
+
+def delete_payment(api, h, payment_id):
+    return requests.delete(f"{api}/payments/payments/{payment_id}", headers=h, timeout=30)
+
+
+def settle_consignment_payload(consignment_id, amount, date="2026-02-20", description=None):
+    """A minimal money-out payment settling one consignment -- the shape
+    SettleConsignmentDialog.jsx sends."""
+    return {
+        "direction": "Payment", "date": date, "contactType": "Other",
+        "method": "Bank Transfer", "description": description,
+        "allocations": [{
+            "kind": "ImportConsignment", "importConsignmentId": consignment_id, "amount": amount,
+        }],
+    }
 
 
 def main():
@@ -2164,6 +2190,210 @@ def main():
         finally:
             if not args.keep:
                 requests.delete(f"{api}/companies/{ow_co}", headers=h, timeout=300)
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 19 -- Import Clearing subledger: settling a GD consignment
+        # (Task 23). PaymentAllocation.Kind "ImportConsignment" is a fourth
+        # allocation shape reusing the SAME Payment/PostingService machinery
+        # every purchase-bill payment already goes through -- these checks
+        # mirror the shape of Section 15/16 rather than inventing new ones.
+        # ══════════════════════════════════════════════════════════════════
+        print("\n-- 19. Import Clearing subledger: settling a consignment --")
+
+        stl_co = make_company(api, h, f"GD Costing Settlement {tag}")
+        try:
+            en = requests.post(f"{api}/accounting/gl/company/{stl_co}/enable", headers=h, timeout=180)
+            check("19: GL can be switched on", en.ok, f"http {en.status_code}: {en.text[:200]}")
+
+            # ---- A New Arrivals consignment that posts a real liability ----
+            stl_gd = f"GD-STL-{tag}"
+            stl_name = f"Settlement Item {tag}"
+            stl_row = row_cells(BASE_COLS, stl_gd, "8481.1000", desc=stl_name,
+                                 qty=10, assessed=100000, st=18, ast=3, it=6, gddate="20-02-2026")
+            r = gd_preview(api, h, stl_co, build_sheet(BASE_HEADINGS, [stl_row]), GD_MAPPING, mode="new-arrivals")
+            stl_prev = r.json() if r.ok else {}
+            check("19: the settlement-target sheet previews", r.ok, f"http {r.status_code}: {r.text[:200]}")
+            r = gd_commit(api, h, {
+                "companyId": stl_co, "fileSha256": stl_prev.get("fileSha256"), "fileName": "stl.xlsx",
+                "fileSizeBytes": stl_prev.get("fileSizeBytes"), "lines": stl_prev.get("lines", []),
+                "createMissingStock": True, "mode": "new-arrivals",
+            })
+            stl_commit_res = r.json() if r.ok else {}
+            check("19: it commits (new arrivals) and posts a journal entry",
+                  r.ok and len(stl_commit_res.get("journalEntries") or []) == 1,
+                  f"http {r.status_code}: {r.text[:300]}")
+
+            stl_opening = next((o for o in get_openings(api, h, stl_co)
+                                if o.get("itemTypeName", "").startswith(stl_name)), None)
+            if stl_opening and stl_opening.get("itemTypeId"):
+                CREATED_ITEM_TYPE_IDS.append(stl_opening["itemTypeId"])
+
+            stl_cid = find_consignment_id(api, h, stl_co, stl_gd)
+            check("19: the consignment is findable", stl_cid is not None, f"cid={stl_cid}")
+
+            c = compute_costing(assessed=100000, st=18, ast=3, it=6)
+            expected_credited = money(c["cost"] + c["salesTax"] + c["ast"] + c["incomeTax"])  # 128260.00
+
+            detail = get_consignment(api, h, stl_cid)
+            dj = detail.json() if detail.ok else {}
+            check("19: Credited equals what this New Arrivals GD actually posted to Import Clearing",
+                  detail.ok and close(dj.get("importClearingCredited"), float(expected_credited)),
+                  f"http {detail.status_code}: importClearingCredited={dj.get('importClearingCredited')} expected={expected_credited}")
+            check("19: before any settlement, Outstanding equals Credited and status is unpaid",
+                  detail.ok and close(dj.get("outstanding"), float(expected_credited))
+                  and dj.get("amountSettled") == 0 and dj.get("settlementStatus") == "unpaid",
+                  f"detail={dj}")
+            check("19: no settlements are listed yet",
+                  detail.ok and dj.get("settlements") == [], f"settlements={dj.get('settlements')}")
+
+            row19 = next((it for it in list_consignments(api, h, stl_co, page_size=50).json().get("items", [])
+                          if it["id"] == stl_cid), {})
+            check("19: the LIST row agrees with the detail (credited/outstanding/status)",
+                  close(row19.get("importClearingCredited"), float(expected_credited))
+                  and close(row19.get("outstanding"), float(expected_credited))
+                  and row19.get("settlementStatus") == "unpaid",
+                  f"row={row19}")
+
+            # ---- Partial payment ----
+            r = create_payment(api, h, stl_co,
+                                settle_consignment_payload(stl_cid, 50000, date="2026-02-25", description="Partial settlement"))
+            pay_a = r.json() if r.ok else {}
+            check("19: a partial payment against the consignment is accepted", r.ok, f"http {r.status_code}: {r.text[:300]}")
+            pay_a_id = pay_a.get("id")
+            check("19: the saved allocation echoes the GD number as its document label",
+                  r.ok and (pay_a.get("allocations") or [{}])[0].get("importConsignmentGdNumber") == stl_gd,
+                  f"allocations={pay_a.get('allocations')}")
+
+            dj = get_consignment(api, h, stl_cid).json()
+            remaining = expected_credited - d(50000)  # 78260.00
+            check("19: after a 50,000 partial payment, Settled=50000, Outstanding=remaining, status part-paid",
+                  close(dj.get("amountSettled"), 50000) and close(dj.get("outstanding"), float(remaining))
+                  and dj.get("settlementStatus") == "part-paid",
+                  f"detail={dj}")
+            check("19: the settlement is listed against the payment just made",
+                  len(dj.get("settlements") or []) == 1 and dj["settlements"][0].get("paymentId") == pay_a_id
+                  and close(dj["settlements"][0].get("amount"), 50000),
+                  f"settlements={dj.get('settlements')}")
+
+            # ---- Over-settlement is refused, and changes nothing ----
+            r = create_payment(api, h, stl_co,
+                                settle_consignment_payload(stl_cid, float(remaining) + 1000, date="2026-02-26"))
+            over_msg = (r.json().get("error") or r.json().get("message") or "") if r.text else ""
+            check("19: a payment exceeding the remaining Outstanding is refused",
+                  r.status_code == 400 and "over-settle" in over_msg.lower(),
+                  f"http {r.status_code}: {r.text[:300]}")
+            check("19: the refusal names the GD number", stl_gd in over_msg, f"message={over_msg}")
+            dj = get_consignment(api, h, stl_cid).json()
+            check("19: the refused over-settlement changed nothing",
+                  close(dj.get("amountSettled"), 50000), f"detail={dj}")
+
+            # ---- Settle the exact remainder -> Settled ----
+            r = create_payment(api, h, stl_co,
+                                settle_consignment_payload(stl_cid, float(remaining), date="2026-02-27", description="Final settlement"))
+            pay_c = r.json() if r.ok else {}
+            check("19: settling the exact remainder is accepted", r.ok, f"http {r.status_code}: {r.text[:300]}")
+            pay_c_id = pay_c.get("id")
+
+            dj = get_consignment(api, h, stl_cid).json()
+            check("19: fully settled -- Outstanding is 0 and status is settled",
+                  close(dj.get("outstanding"), 0) and dj.get("settlementStatus") == "settled",
+                  f"detail={dj}")
+            check("19: two settlements are now listed", len(dj.get("settlements") or []) == 2,
+                  f"settlements={dj.get('settlements')}")
+
+            # ---- A settled consignment cannot be deleted ----
+            r = delete_consignment(api, h, stl_cid)
+            del_msg = (r.json().get("message") or "") if r.text else ""
+            check("19: deleting a consignment settled against is refused",
+                  r.status_code == 400, f"http {r.status_code}: {r.text[:300]}")
+            check("19: the refusal names the settling payment(s)", "PMT-" in del_msg, f"message={del_msg}")
+
+            # ---- Deleting the settling payment restores Outstanding ----
+            r = delete_payment(api, h, pay_c_id)
+            check("19: the final settlement payment can be deleted",
+                  r.status_code in (200, 204), f"http {r.status_code}: {r.text[:200]}")
+            dj = get_consignment(api, h, stl_cid).json()
+            check("19: deleting that payment restores Outstanding to what it was right before it",
+                  close(dj.get("amountSettled"), 50000) and close(dj.get("outstanding"), float(remaining))
+                  and dj.get("settlementStatus") == "part-paid",
+                  f"detail={dj}")
+
+            r = delete_consignment(api, h, stl_cid)
+            check("19: still refused while payment A remains settled against it",
+                  r.status_code == 400, f"http {r.status_code}: {r.text[:200]}")
+
+            r = delete_payment(api, h, pay_a_id)
+            check("19: deleting the remaining settling payment succeeds",
+                  r.status_code in (200, 204), f"http {r.status_code}")
+            dj = get_consignment(api, h, stl_cid).json()
+            check("19: with every settlement gone, it reads unpaid again at the full credited amount",
+                  close(dj.get("amountSettled"), 0) and close(dj.get("outstanding"), float(expected_credited))
+                  and dj.get("settlementStatus") == "unpaid",
+                  f"detail={dj}")
+
+            # ---- A Backfill consignment (no liability) cannot be settled ----
+            # Reuses the SAME HS code as the New Arrivals item above -- a
+            # cost-only match against the balance it already created in this
+            # company -- so no new item type needs creating (a fresh
+            # make_item() call would hit HS master-first validation, CLAUDE.md
+            # 5b-2 -- "8481.1000" is already proven valid, right here).
+            stl_bf_gd = f"GD-STL-BF-{tag}"
+            stl_bf_row = row_cells(BASE_COLS, stl_bf_gd, "8481.1000", desc=stl_name,
+                                    qty=10, assessed=50000, st=18, ast=3, it=6, gddate="20-02-2026")
+            r = gd_preview(api, h, stl_co, build_sheet(BASE_HEADINGS, [stl_bf_row]), GD_MAPPING, mode="backfill")
+            stl_bf_prev = r.json() if r.ok else {}
+            check("19: the backfill sheet previews as a cost-only match against the same item",
+                  r.ok and stl_bf_prev.get("lines", [{}])[0].get("disposition") == "cost-only",
+                  f"http {r.status_code}: {r.text[:200]}")
+            r = gd_commit(api, h, {
+                "companyId": stl_co, "fileSha256": stl_bf_prev.get("fileSha256"), "fileName": "stl-bf.xlsx",
+                "fileSizeBytes": stl_bf_prev.get("fileSizeBytes"), "lines": stl_bf_prev.get("lines", []),
+                "mode": "backfill",
+            })
+            check("19: the backfill consignment (setup) commits", r.ok, f"http {r.status_code}: {r.text[:200]}")
+            stl_bf_cid = find_consignment_id(api, h, stl_co, stl_bf_gd)
+            bf_detail = get_consignment(api, h, stl_bf_cid).json()
+            check("19: a Backfill consignment credits nothing to Import Clearing",
+                  bf_detail.get("importClearingCredited") == 0, f"detail={bf_detail}")
+            check("19: its settlement status is 'not-posted', not 'unpaid'",
+                  bf_detail.get("settlementStatus") == "not-posted", f"detail={bf_detail}")
+
+            r = create_payment(api, h, stl_co, settle_consignment_payload(stl_bf_cid, 100, date="2026-02-28"))
+            bf_msg = (r.json().get("error") or r.json().get("message") or "") if r.text else ""
+            check("19: settling a Backfill consignment is refused", r.status_code == 400,
+                  f"http {r.status_code}: {r.text[:300]}")
+            check("19: the refusal names the mode (backfill)", "backfill" in bf_msg.lower(), f"message={bf_msg}")
+
+            # ---- Cross-tenant: another company cannot settle THIS company's consignment ----
+            r = create_payment(api, h, company, settle_consignment_payload(stl_cid, 100, date="2026-03-01"))
+            check("19: a payment from a DIFFERENT company cannot target this consignment",
+                  r.status_code == 400, f"http {r.status_code}: {r.text[:300]}")
+
+            # ---- A receipt cannot settle a consignment -- money-out only ----
+            receipt_body = dict(settle_consignment_payload(stl_cid, 100, date="2026-03-01"))
+            receipt_body["direction"] = "Receipt"
+            r = requests.post(f"{api}/payments/receipts/company/{stl_co}", headers=h, timeout=30, json=receipt_body)
+            check("19: a receipt cannot settle a GD consignment (money-out only)",
+                  r.status_code == 400, f"http {r.status_code}: {r.text[:300]}")
+
+            # ---- List: default sort surfaces what is owed; the filter narrows to it; the total ties ----
+            lst = list_consignments(api, h, stl_co, page_size=50).json()
+            ids_in_order = [it["id"] for it in lst.get("items", [])]
+            check("19: default order puts the unpaid consignment ahead of the not-posted one",
+                  stl_cid in ids_in_order and stl_bf_cid in ids_in_order
+                  and ids_in_order.index(stl_cid) < ids_in_order.index(stl_bf_cid),
+                  f"order={ids_in_order} stl_cid={stl_cid} stl_bf_cid={stl_bf_cid}")
+            check("19: the list's totalOutstanding ties to Sum(Credited-Settled) across the company",
+                  close(lst.get("totalOutstanding"), float(expected_credited)),
+                  f"totalOutstanding={lst.get('totalOutstanding')} expected={expected_credited}")
+
+            only = list_consignments(api, h, stl_co, page_size=50, only_outstanding=True).json()
+            only_ids = [it["id"] for it in only.get("items", [])]
+            check("19: onlyOutstanding narrows the page to the one consignment that still owes",
+                  only_ids == [stl_cid], f"items={only_ids}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{stl_co}", headers=h, timeout=300)
 
     finally:
         if not args.keep:

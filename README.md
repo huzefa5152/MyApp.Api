@@ -423,6 +423,20 @@ Publish output optimized from 79 MB to 37 MB via:
   `GD_IMPORT_COSTING_GUIDE.md`'s own §7 is rewritten to match — it still
   claimed the import posts nothing to the GL at all, which commit
   `077f3db` had already made false.
+- **You can now see which GD is still unpaid, and settle it.** A New
+  Arrivals import credits Import Clearing, but until now there was no way to
+  tell which consignment's share of that balance had been paid and which
+  hadn't. **Purchases ▸ Consignments** gains Credited, Settled and
+  Outstanding columns and a status (Not posted / Unpaid / Part paid /
+  Settled) on every row, sorts what is still owed to the top by default, can
+  filter to only that, and shows a company-wide total that ties to the
+  Import Clearing account balance. A "Settle" action on any row that still
+  owes something records an ordinary money-out payment against it — the
+  same Payments engine a purchase-bill payment already uses — and a row's
+  detail lists every payment that has settled against it. Over-settling is
+  refused, as is settling a Backfill consignment (it never posted a
+  liability to begin with) or deleting a consignment that anything has
+  already been paid against.
 
 ### 2026-09-13 — Stock export scrolls properly, and Cost of Good Sold fills itself
 

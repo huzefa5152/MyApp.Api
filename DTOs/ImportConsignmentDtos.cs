@@ -1,6 +1,43 @@
 namespace MyApp.Api.DTOs
 {
     /// <summary>
+    /// Wire vocabulary for a consignment's Import Clearing settlement state
+    /// (Task 23) — computed server-side from
+    /// <see cref="Models.ImportConsignment.ImportClearingCredited"/> and
+    /// <see cref="Models.ImportConsignment.AmountSettled"/>, never stored.
+    /// </summary>
+    public static class ImportConsignmentSettlementStatusNames
+    {
+        /// <summary>Nothing was ever credited to Import Clearing for this
+        /// consignment — a Backfill import (never posts), or a New Arrivals
+        /// import committed while the ledger was off. There is no liability to
+        /// settle, so this is not "Unpaid".</summary>
+        public const string NotPosted = "not-posted";
+
+        /// <summary>Credited, and nothing has been settled against it yet.</summary>
+        public const string Unpaid = "unpaid";
+
+        /// <summary>Some, but not all, of the credited amount has been settled.</summary>
+        public const string PartPaid = "part-paid";
+
+        /// <summary>Settled in full — Outstanding is (within rounding) zero.</summary>
+        public const string Settled = "settled";
+
+        /// <summary>Same tolerance the codebase uses throughout for "this money
+        /// figure is effectively zero" (paisa-level rounding noise).</summary>
+        private const decimal Epsilon = 0.005m;
+
+        public static string Resolve(decimal credited, decimal settled)
+        {
+            if (credited <= 0m) return NotPosted;
+            var outstanding = credited - settled;
+            if (outstanding <= Epsilon) return Settled;
+            if (settled > Epsilon) return PartPaid;
+            return Unpaid;
+        }
+    }
+
+    /// <summary>
     /// One row of the paged consignment list — <c>GET /api/import-consignments</c>
     /// (Task 21). The counterpart read side of <see cref="GdCostingCommitResultDto"/>:
     /// a consignment is written once by a commit and, until this DTO existed, was
@@ -35,6 +72,53 @@ namespace MyApp.Api.DTOs
         /// a badge on the list — the main reason an operator would want to know
         /// before deleting one.</summary>
         public bool HasJournalEntry { get; set; }
+
+        // ── Import Clearing subledger (Task 23) ─────────────────────────────
+
+        /// <summary>What this consignment credited to Import Clearing when it
+        /// posted. 0 for Backfill, or for New Arrivals committed with the
+        /// ledger off — see <see cref="Models.ImportConsignment.ImportClearingCredited"/>.</summary>
+        public decimal ImportClearingCredited { get; set; }
+
+        /// <summary>Σ non-cancelled payments settled against this consignment.</summary>
+        public decimal AmountSettled { get; set; }
+
+        /// <summary>Credited − Settled. Never negative in practice — the
+        /// over-settle guard refuses anything that would make it so.</summary>
+        public decimal Outstanding => ImportClearingCredited - AmountSettled;
+
+        /// <summary>One of <see cref="ImportConsignmentSettlementStatusNames"/>.</summary>
+        public string SettlementStatus { get; set; } = ImportConsignmentSettlementStatusNames.NotPosted;
+    }
+
+    /// <summary>Paged consignment list PLUS the company-wide settlement
+    /// headline (Task 23) — a plain hand-rolled shape rather than
+    /// <c>PagedResult&lt;T&gt;</c> because <see cref="TotalOutstanding"/> must
+    /// reflect EVERY consignment for the company, never just the current page
+    /// or filter, so the screen's total always ties to the same figure the
+    /// Import Clearing control account itself would report.</summary>
+    public class ImportConsignmentListResultDto
+    {
+        public List<ImportConsignmentListItemDto> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalPages => PageSize <= 0 ? 0 : (int)Math.Ceiling((double)TotalCount / PageSize);
+
+        /// <summary>Σ Outstanding across every consignment this company has —
+        /// unaffected by paging or the <c>onlyOutstanding</c> filter.</summary>
+        public decimal TotalOutstanding { get; set; }
+    }
+
+    /// <summary>One payment settled against a consignment — the detail view's
+    /// "which GD unpaid" drill-down (Task 23).</summary>
+    public class ImportConsignmentSettlementDto
+    {
+        public int PaymentId { get; set; }
+        public DateTime Date { get; set; }
+        /// <summary>"PMT-####".</summary>
+        public string Reference { get; set; } = "";
+        public decimal Amount { get; set; }
     }
 
     /// <summary>One line of a consignment's detail view. Mirrors
@@ -94,6 +178,17 @@ namespace MyApp.Api.DTOs
         public bool HasJournalEntry { get; set; }
         public int? JournalEntryId { get; set; }
         public List<ImportConsignmentLineDetailDto> Lines { get; set; } = new();
+
+        // ── Import Clearing subledger (Task 23) — see ImportConsignmentListItemDto ──
+        public decimal ImportClearingCredited { get; set; }
+        public decimal AmountSettled { get; set; }
+        public decimal Outstanding => ImportClearingCredited - AmountSettled;
+        public string SettlementStatus { get; set; } = ImportConsignmentSettlementStatusNames.NotPosted;
+
+        /// <summary>Every non-cancelled payment settled against this
+        /// consignment, newest first — "which GD unpaid" answered at the
+        /// document level, not just the total.</summary>
+        public List<ImportConsignmentSettlementDto> Settlements { get; set; } = new();
     }
 
     /// <summary>

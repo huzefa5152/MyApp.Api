@@ -177,6 +177,16 @@ namespace MyApp.Api.Services.Implementations
                     target = await ResolveAsync(payment.CompanyId, accounts, ControlType.AccountsPayable, "accounts payable");
                     if (partyType != "Supplier") { partyType = null; partyId = null; }
                 }
+                else if (a.ImportConsignmentId.HasValue)
+                {
+                    // Settles a GD's Import Clearing liability (Task 23) — the
+                    // payable counterpart to the PurchaseBillId branch above,
+                    // except Import Clearing is not a per-party subledger (a GD
+                    // names no supplier), so the header's party — if any — is
+                    // simply carried onto the line as a tag, same as a direct
+                    // Account line does, rather than gated to one contact type.
+                    target = await ResolveAsync(payment.CompanyId, accounts, ControlType.ImportClearing, "import clearing");
+                }
                 else if (a.Kind == AllocationKind.OnAccount)
                 {
                     // Advance / on account: the party's own control account, no
@@ -639,6 +649,16 @@ namespace MyApp.Api.Services.Implementations
             inputTaxTotal = Money(inputTaxTotal);
             incomeTaxTotal = Money(incomeTaxTotal);
             var clearingTotal = inventoryTotal + inputTaxTotal + incomeTaxTotal;
+
+            // Task 23: stamp what this posting actually credits onto the
+            // consignment itself — the ONE place that knows the true figure
+            // (it depends on mode and per-line disposition, see the loop
+            // above). PaymentService reads this back as the settlement cap;
+            // never re-derive it from the header totals elsewhere. Written
+            // (and saved) even when nothing posts, so a consignment that
+            // nets to zero here reads as "nothing owed", not "not yet known".
+            consignment.ImportClearingCredited = clearingTotal;
+            await _context.SaveChangesAsync();
 
             if (clearingTotal == 0m)
             {

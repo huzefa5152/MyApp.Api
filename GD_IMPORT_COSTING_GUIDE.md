@@ -153,13 +153,45 @@ Dr  Advance Income Tax on Imports    Σ IncomeTax
 - **`ImportClearing` is where the import payable sits** between clearance and
   settlement — the accounts-payable answer for an import. The costing sheet
   names no supplier and no payment reference, so there is nothing else to
-  credit; the operator settles it (moves it off Import Clearing) when the real
-  payment to the supplier and the clearing agent is recorded, by the ordinary
-  means (a purchase bill or a manual journal against Import Clearing) — **do
-  NOT also book a purchase bill or manual journal for the landed cost itself
-  on a New Arrivals GD**, or the liability is booked twice: once by this
-  import, once by the manual entry. (Recording it manually was the right
-  advice before GL posting shipped; it is wrong now for a New Arrivals GD.)
+  credit. **Do NOT also book a purchase bill or a manual journal for the
+  landed cost itself on a New Arrivals GD** — the liability would be booked
+  twice: once by this import, once by the manual entry.
+- **Settling it is now a per-GD subledger (Task 23, commit range starting
+  2026-09-13), not just an account balance.** Every consignment carries:
+  - `ImportClearingCredited` — what THIS GD actually credited to Import
+    Clearing when it posted (written once, at commit time; 0 for Backfill or
+    for a New Arrivals commit made while the ledger was off — both genuinely
+    owe nothing through this route).
+  - `AmountSettled` — Σ of every non-cancelled payment recorded against it.
+  - `Outstanding = Credited − Settled`, always derived, never stored.
+
+  **To settle one**: Purchases → Consignments → the green "Settle" action on
+  a row that still owes something, or an ordinary money-out Payment whose
+  allocation is `{ kind: "ImportConsignment", importConsignmentId, amount }`
+  (`PaymentAllocation.Kind.ImportConsignment`) — both go through the exact
+  same `PaymentService`/`PostingService` machinery a purchase-bill payment
+  does: Dr Import Clearing, Cr Bank/Cash. Guards mirror the purchase-bill
+  ones exactly: a settlement can't exceed what is still outstanding, and a
+  consignment with `ImportClearingCredited == 0` (Backfill, or GL-off at
+  commit time) cannot be settled at all — there is nothing there to clear,
+  and the refusal names the mode so the operator isn't left guessing why.
+  Deleting/undoing a consignment (§ delete path) is refused while any
+  settlement stands against it.
+
+  **To see which GD is unpaid**: the Consignments screen has Credited /
+  Settled / Outstanding columns and a status (Not posted / Unpaid / Part
+  paid / Settled) on every row, defaults to unpaid-first, can filter to only
+  what's owed, and shows a company-wide total that ties to the Import
+  Clearing account's own balance. A row's detail lists every settling
+  payment (date, reference, amount).
+
+  **A manual journal or an ordinary purchase bill against Import Clearing
+  still works to move money off the ACCOUNT**, but it settles nothing at the
+  per-GD level — `AmountSettled` only ever moves via a
+  `PaymentAllocation` row pointed at that specific consignment. Doing it the
+  manual way leaves that GD's own Outstanding at its full credited amount
+  forever, even though the account total looks clear — use the Payment /
+  Settle route so the two stay in step.
 - Both control accounts **exist and are seeded**, on new and existing charts
   alike: `ImportCostingAccountSeeder` runs at startup and adds
   `ImportClearing` (a LIABILITY, beside Accounts Payable) and
@@ -218,7 +250,7 @@ yet diagnosed.
 |---|---|---|
 | Costing chain, layout, reader (offline) | `cd scripts/gd_costing_harness && dotnet run -c Release` | `75 checks, 0 failed` |
 | Same, against a real workbook | add `-- --file "<path>" --expect-lines N` | see §6 |
-| Full live suite | `python scripts/test_gd_import_costing.py` | `151 passed, 0 failed` |
+| Full live suite | `python scripts/test_gd_import_costing.py` | `285 passed, 0 failed` |
 | Stock valuation (adjustments) | `python scripts/test_stock_valuation_flow.py` | 82/84 — see §9 |
 | Stock export layout | `cd scripts/stock_export_harness && dotnet run -c Release` | `255/255` |
 
@@ -282,6 +314,7 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 | 2026-09-13 | Backfill vs new-arrivals mode |
 | 2026-09-13 | GL posting for New Arrivals (`077f3db`): `ImportClearing` / `AdvanceIncomeTaxOnImports` control accounts, seeded on new and existing charts; `PostImportConsignmentAsync`; a Consignments screen to view and delete a recorded import, mode-aware reversal |
 | 2026-09-13 | Architecture-review fixes (Findings 1-3, §12): Inventory debit made mode-aware so a matched New Arrivals line is no longer excluded; `stock.actualcost.view` enforced server-side across the on-hand grid, the Excel export and the movements drill-down; a Backfill preview against an already-costed balance now warns before overwriting it |
+| 2026-09-13 | Task 23 — Import Clearing subledger: `PaymentAllocation.Kind.ImportConsignment` (a Payment debiting Import Clearing, the AP mirror of a purchase-bill allocation); `ImportConsignment.ImportClearingCredited` / `AmountSettled`, the latter recomputed alongside `PurchaseBill.AmountPaid` on every create/update/delete; over-settle and never-posted (Backfill/GL-off) guards; the Consignments screen gained Credited/Settled/Outstanding/Status columns, unpaid-first default order, an only-outstanding filter, a company-wide total, a per-row settlement list, and a Settle action (`SettleConsignmentDialog`, a focused dialog rather than a fourth PaymentForm purpose — see the guide's §7 and the dialog's own doc comment for why); a migration backfills `ImportClearingCredited` for consignments that posted before the column existed |
 
 Deferred: a screen listing consignments now exists (Consignments, above) but an
 upsert path for re-importing a GD already recorded is still not built.

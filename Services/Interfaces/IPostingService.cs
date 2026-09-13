@@ -27,8 +27,10 @@ namespace MyApp.Api.Services.Interfaces
         Task AssertPeriodOpenAsync(int companyId, DateTime docDate);
 
         /// <summary>Receipt: Dr bank/cash, Cr AR (per invoice allocation) / Cr
-        /// direct account lines. Payment: mirror image. Cancelled payments get
-        /// their entry removed instead.</summary>
+        /// direct account lines. Payment: mirror image — including Dr Import
+        /// Clearing for an allocation settling a GD consignment (Task 23), the
+        /// same shape as a PurchaseBillId allocation debiting AP. Cancelled
+        /// payments get their entry removed instead.</summary>
         Task PostPaymentAsync(Payment payment);
 
         /// <summary>Sales invoice: Dr AR, Cr Sales, Cr Output tax. Credit note
@@ -68,7 +70,12 @@ namespace MyApp.Api.Services.Interfaces
         /// Backfill commit posts no journal entry at all, rather than this
         /// method excluding CostOnly lines from the debit itself. Skipped/
         /// Ambiguous lines contribute nothing to any leg — no cost was ever
-        /// attributed to them.</summary>
+        /// attributed to them.
+        ///
+        /// Task 23: also stamps <see cref="ImportConsignment.ImportClearingCredited"/>
+        /// with the balancing total (0 when nothing posts) and saves it — the
+        /// subledger's settlement cap, so it must be right whether or not an
+        /// entry follows.</summary>
         Task PostImportConsignmentAsync(ImportConsignment consignment);
 
         /// <summary>Deletes the journal entry (and lines) for a source document.

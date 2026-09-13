@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { MdExpandMore, MdChevronRight, MdDelete, MdWarning } from "react-icons/md";
+import { MdExpandMore, MdChevronRight, MdDelete, MdWarning, MdPayments } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors } from "../theme";
 import Pagination from "../Components/Pagination";
+import SettleConsignmentDialog from "../Components/SettleConsignmentDialog";
 import { getImportConsignments, getImportConsignment, deleteImportConsignment } from "../api/importConsignmentApi";
 
 /**
@@ -26,6 +27,19 @@ const DISPOSITION_LABEL = {
 const DISPOSITION_TONE = {
   "cost-only": colors.success, "stock-posted": colors.success,
   "skipped": colors.textSecondary, "ambiguous": "#b26a00",
+};
+
+// Import Clearing settlement status (Task 23) — see
+// DTOs.ImportConsignmentSettlementStatusNames. "Not posted" is deliberately
+// distinct from "Unpaid": a Backfill (or GL-off) consignment owes nothing
+// through this route at all, so reading it as an unpaid bill would be wrong.
+const SETTLEMENT_LABEL = {
+  "not-posted": "Not posted", "unpaid": "Unpaid",
+  "part-paid": "Part paid", "settled": "Settled",
+};
+const SETTLEMENT_TONE = {
+  "not-posted": colors.textSecondary, "unpaid": colors.danger,
+  "part-paid": "#b26a00", "settled": colors.success,
 };
 
 const money = (n) => (n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -158,6 +172,48 @@ function ConsignmentLines({ detail, loading }) {
   );
 }
 
+/** "Which GD unpaid" at the document level (Task 23) — every non-cancelled
+ * payment settled against this consignment, newest first. */
+function ConsignmentSettlements({ detail }) {
+  if (!detail || detail.importClearingCredited <= 0) return null;
+  const settlements = detail.settlements || [];
+  return (
+    <div style={{ marginTop: "0.9rem" }}>
+      <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", fontSize: 13, marginBottom: "0.5rem" }}>
+        <span>Credited <strong style={{ fontVariantNumeric: "tabular-nums" }}>{money(detail.importClearingCredited)}</strong></span>
+        <span>Settled <strong style={{ fontVariantNumeric: "tabular-nums" }}>{money(detail.amountSettled)}</strong></span>
+        <span>Outstanding <strong style={{ fontVariantNumeric: "tabular-nums", color: detail.outstanding > 0.005 ? colors.danger : colors.success }}>
+          {money(detail.outstanding)}
+        </strong></span>
+      </div>
+      {settlements.length === 0 ? (
+        <p style={{ fontSize: 13, color: colors.textSecondary, margin: 0 }}>No payments have settled against this GD yet.</p>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 360 }}>
+            <thead>
+              <tr>
+                <th style={th}>Date</th>
+                <th style={th}>Payment</th>
+                <th style={{ ...th, textAlign: "right" }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {settlements.map((s) => (
+                <tr key={s.paymentId}>
+                  <td style={{ ...td, whiteSpace: "nowrap" }}>{dt(s.date)}</td>
+                  <td style={td}>{s.reference}</td>
+                  <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(s.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ImportConsignmentsPage() {
   const { has } = usePermissions();
   const { companies, selectedCompany } = useCompany();
@@ -173,22 +229,28 @@ export default function ImportConsignmentsPage() {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  // Task 23: narrow the page to what is still owed. The default order
+  // already puts it first; this is for when the operator wants ONLY that.
+  const [onlyOutstanding, setOnlyOutstanding] = useState(false);
+  const [settlingRow, setSettlingRow] = useState(null);
 
   const canView = has("importcosting.consignments.view");
   const canDelete = has("importcosting.sheet.run");
+  const canSettle = has("accounting.payments.create");
 
   useEffect(() => { if (selectedCompany?.id && !companyId) setCompanyId(selectedCompany.id); },
     [selectedCompany, companyId]);
   useEffect(() => { setPage(1); setExpandedId(null); setDetail(null); }, [companyId]);
+  useEffect(() => { setPage(1); }, [onlyOutstanding]);
 
   const load = useCallback(async () => {
     if (!companyId || !canView) { setResult(null); return; }
     setLoading(true);
     try {
-      const { data } = await getImportConsignments({ companyId, page, pageSize });
+      const { data } = await getImportConsignments({ companyId, page, pageSize, onlyOutstanding });
       setResult(data);
     } catch { /* httpClient surfaces it */ } finally { setLoading(false); }
-  }, [companyId, page, pageSize, canView]);
+  }, [companyId, page, pageSize, onlyOutstanding, canView]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -209,6 +271,15 @@ export default function ImportConsignmentsPage() {
     if (expandedId === id) { setExpandedId(null); setDetail(null); return; }
     setExpandedId(id); setDetail(null);
     await loadDetail(id);
+  };
+
+  // A settlement changes Credited/Settled/Outstanding on both the list row
+  // and (if open) this row's own expanded detail -- refresh whichever is showing.
+  const onSettled = async (row) => {
+    setSettlingRow(null);
+    notify(`Payment recorded against GD ${row.gdNumber}.`, "success");
+    load();
+    if (expandedId === row.id) await loadDetail(row.id);
   };
 
   const onDelete = async (row) => {
@@ -264,8 +335,33 @@ export default function ImportConsignmentsPage() {
               {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
+          <label style={{
+            fontSize: 13, color: colors.textSecondary, display: "flex",
+            alignItems: "center", gap: 8, marginTop: "auto", minHeight: 44,
+          }}>
+            <input
+              type="checkbox" checked={onlyOutstanding}
+              onChange={(e) => setOnlyOutstanding(e.target.checked)}
+              style={{ width: 18, height: 18 }}
+            />
+            Only show what's still owed
+          </label>
         </div>
       </div>
+
+      {companyId && result && (
+        <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <span style={{ fontSize: 14, color: colors.textSecondary }}>
+            Total outstanding on Import Clearing for this company
+          </span>
+          <strong style={{
+            fontSize: 20, fontVariantNumeric: "tabular-nums",
+            color: (result.totalOutstanding || 0) > 0.005 ? colors.danger : colors.success,
+          }}>
+            {money(result.totalOutstanding)}
+          </strong>
+        </div>
+      )}
 
       {!companyId ? (
         <div style={card}><p style={{ margin: 0, color: colors.textSecondary }}>Choose a company to see its consignments.</p></div>
@@ -286,9 +382,11 @@ export default function ImportConsignmentsPage() {
                   <th style={th}>Date</th>
                   <th style={{ ...th, textAlign: "right" }}>Lines</th>
                   <th style={{ ...th, textAlign: "right" }}>Total cost</th>
-                  <th style={{ ...th, textAlign: "right" }}>Selling value</th>
                   <th style={th}>Mode</th>
-                  <th style={th}>Ledger</th>
+                  <th style={{ ...th, textAlign: "right" }}>Credited</th>
+                  <th style={{ ...th, textAlign: "right" }}>Settled</th>
+                  <th style={{ ...th, textAlign: "right" }}>Outstanding</th>
+                  <th style={th}>Status</th>
                   <th style={th}>Imported</th>
                   <th style={th} />
                 </tr>
@@ -306,35 +404,58 @@ export default function ImportConsignmentsPage() {
                         <td style={{ ...td, whiteSpace: "nowrap" }}>{dt(row.gdDate)}</td>
                         <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{row.lineCount}</td>
                         <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(row.totalCostExcludingTax)}</td>
-                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(row.totalSellingValue)}</td>
-                        <td style={td}>{MODE_LABEL[row.mode] || row.mode}</td>
                         <td style={td}>
-                          {row.hasJournalEntry
-                            ? <Badge tone={colors.success}>Posted</Badge>
-                            : <span style={{ fontSize: 12, color: colors.textSecondary }}>—</span>}
+                          {MODE_LABEL[row.mode] || row.mode}
+                          {row.hasJournalEntry && <div><Badge tone={colors.success}>Posted</Badge></div>}
+                        </td>
+                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(row.importClearingCredited)}</td>
+                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(row.amountSettled)}</td>
+                        <td style={{
+                          ...td, textAlign: "right", fontVariantNumeric: "tabular-nums",
+                          fontWeight: row.outstanding > 0.005 ? 700 : 400,
+                        }}>
+                          {money(row.outstanding)}
+                        </td>
+                        <td style={td}>
+                          <Badge tone={SETTLEMENT_TONE[row.settlementStatus] || colors.textSecondary}>
+                            {SETTLEMENT_LABEL[row.settlementStatus] || row.settlementStatus}
+                          </Badge>
                         </td>
                         <td style={td}>
                           <div style={{ fontSize: 12.5 }}>{dt(row.importedAt)}</div>
                           <div style={{ fontSize: 11.5, color: colors.textSecondary }}>{row.importedByUserName || "—"}</div>
                         </td>
                         <td style={td} onClick={(e) => e.stopPropagation()}>
-                          {canDelete && (
-                            <button
-                              onClick={() => onDelete(row)}
-                              disabled={deletingId === row.id}
-                              title={`Delete GD ${row.gdNumber}`}
-                              aria-label={`Delete GD ${row.gdNumber}`}
-                              style={iconBtn(colors.danger, deletingId === row.id)}
-                            >
-                              <MdDelete size={18} />
-                            </button>
-                          )}
+                          <div style={{ display: "flex", gap: 6 }}>
+                            {canSettle && row.outstanding > 0.005 && (
+                              <button
+                                onClick={() => setSettlingRow(row)}
+                                title={`Settle GD ${row.gdNumber}`}
+                                aria-label={`Settle GD ${row.gdNumber}`}
+                                style={iconBtn(colors.success, false)}
+                              >
+                                <MdPayments size={18} />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => onDelete(row)}
+                                disabled={deletingId === row.id}
+                                title={`Delete GD ${row.gdNumber}`}
+                                aria-label={`Delete GD ${row.gdNumber}`}
+                                style={iconBtn(colors.danger, deletingId === row.id)}
+                              >
+                                <MdDelete size={18} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                       {expanded && (
                         <tr>
-                          <td colSpan={10} style={{ ...td, background: colors.cardBg }}>
+                          <td colSpan={12} style={{ ...td, background: colors.cardBg }}>
                             <ConsignmentLines detail={detail} loading={detailLoading} />
+                            <ConsignmentSettlements detail={detail} />
                           </td>
                         </tr>
                       )}
@@ -355,6 +476,15 @@ export default function ImportConsignmentsPage() {
             unit="consignments"
           />
         </div>
+      )}
+
+      {settlingRow && (
+        <SettleConsignmentDialog
+          companyId={companyId}
+          consignment={settlingRow}
+          onClose={() => setSettlingRow(null)}
+          onSaved={() => onSettled(settlingRow)}
+        />
       )}
     </div>
   );

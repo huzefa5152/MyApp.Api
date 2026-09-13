@@ -1090,6 +1090,16 @@ namespace MyApp.Api.Data
                 .HasForeignKey(a => a.PurchaseBillId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
+            // → ImportConsignment (Task 23), same shape as PurchaseBill above:
+            // Restrict so a settled consignment can't be hard-deleted out from
+            // under its allocations (ImportConsignmentService.DeleteAsync also
+            // refuses in application code, with a friendlier message — this FK
+            // is the last-resort backstop).
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasOne(a => a.ImportConsignment).WithMany()
+                .HasForeignKey(a => a.ImportConsignmentId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
                 .Property(a => a.Amount).HasPrecision(18, 2);
             // AccountId (direct income/expense line) → Accounts, Restrict: an
@@ -1128,6 +1138,8 @@ namespace MyApp.Api.Data
                 .HasIndex(a => a.InvoiceId);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
                 .HasIndex(a => a.PurchaseBillId);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.PaymentAllocation>()
+                .HasIndex(a => a.ImportConsignmentId);
             // Expense reporting: every "expenses by account" grouping and the
             // per-(payment, account) tax lookup filter on Kind then AccountId.
             // Without this the reports table-scan PaymentAllocations.
@@ -2208,6 +2220,11 @@ namespace MyApp.Api.Data
                 e.Property(c => c.TotalInputTax).HasPrecision(18, 2);
                 e.Property(c => c.TotalIncomeTax).HasPrecision(18, 2);
                 e.Property(c => c.TotalSellingValue).HasPrecision(18, 2);
+                // Import Clearing subledger (Task 23) — both default 0: a
+                // pre-existing consignment never credited anything through this
+                // column until the migration's data backfill runs.
+                e.Property(c => c.ImportClearingCredited).HasPrecision(18, 2).HasDefaultValue(0m);
+                e.Property(c => c.AmountSettled).HasPrecision(18, 2).HasDefaultValue(0m);
                 e.HasIndex(c => c.ImportRunId);
                 // Task 21: "backfill" | "new-arrivals" — see the property's own
                 // doc comment for why a delete needs this stored rather than

@@ -45,14 +45,18 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
-        /// <summary>Paged list, newest first.</summary>
+        /// <summary>Paged list. Default order puts what is still owed in front
+        /// of the operator; <paramref name="onlyOutstanding"/> narrows it to
+        /// just that (Task 23).</summary>
         [HttpGet]
         [HasPermission("importcosting.consignments.view")]
-        public async Task<IActionResult> GetPaged([FromQuery] int companyId, [FromQuery] int page = 1, [FromQuery] int? pageSize = null)
+        public async Task<IActionResult> GetPaged(
+            [FromQuery] int companyId, [FromQuery] int page = 1, [FromQuery] int? pageSize = null,
+            [FromQuery] bool onlyOutstanding = false)
         {
             if (companyId <= 0) return BadRequest(new { message = "Choose a company." });
             await _access.AssertAccessAsync(CurrentUserId, companyId);
-            return Ok(await _consignments.GetPagedAsync(companyId, page, pageSize));
+            return Ok(await _consignments.GetPagedAsync(companyId, page, pageSize, onlyOutstanding));
         }
 
         /// <summary>One consignment with its lines. The company is read from

@@ -49,7 +49,7 @@ namespace MyApp.Api.DTOs
     public class PaymentAllocationDto
     {
         public int Id { get; set; }
-        /// <summary>"Document" | "Account" | "OnAccount" — what this line is for.</summary>
+        /// <summary>"Document" | "Account" | "OnAccount" | "ImportConsignment" — what this line is for.</summary>
         public string Kind { get; set; } = "Document";
         public int? InvoiceId { get; set; }
         public int? InvoiceNumber { get; set; }
@@ -58,6 +58,10 @@ namespace MyApp.Api.DTOs
         public int? AccountId { get; set; }
         /// <summary>Resolved name of the income/expense account on an Account line.</summary>
         public string? AccountName { get; set; }
+        /// <summary>Payment (money out) settling a GD consignment's Import
+        /// Clearing liability (Task 23).</summary>
+        public int? ImportConsignmentId { get; set; }
+        public string? ImportConsignmentGdNumber { get; set; }
         /// <summary>Human label of what this line settled, e.g. "Invoice #123",
         /// "Electricity" or "Advance".</summary>
         public string? DocumentLabel { get; set; }
@@ -114,13 +118,17 @@ namespace MyApp.Api.DTOs
     public class CreatePaymentAllocationDto
     {
         /// <summary>"Document" (settle an invoice/bill) | "Account" (income/expense)
-        /// | "OnAccount" (advance against the contact's balance). Optional — when
-        /// omitted it is inferred from which id is set, so existing callers and the
-        /// ETL importer keep working unchanged.</summary>
+        /// | "OnAccount" (advance against the contact's balance) | "ImportConsignment"
+        /// (settle a GD's Import Clearing liability — payment/money-out only).
+        /// Optional — when omitted it is inferred from which id is set, so existing
+        /// callers and the ETL importer keep working unchanged.</summary>
         public string? Kind { get; set; }
         public int? InvoiceId { get; set; }
         public int? PurchaseBillId { get; set; }
         public int? AccountId { get; set; }
+        /// <summary>GD consignment this line settles (Task 23) — a Payment
+        /// debiting Import Clearing, the mirror of <see cref="PurchaseBillId"/>.</summary>
+        public int? ImportConsignmentId { get; set; }
         /// <summary>Cash applied to this document/account — GROSS, i.e. including
         /// any <see cref="TaxAmount"/>. This is what moves through the bank.</summary>
         public decimal Amount { get; set; }

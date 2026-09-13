@@ -10,7 +10,12 @@ namespace MyApp.Api.Services.Interfaces
     /// </summary>
     public interface IImportConsignmentService
     {
-        Task<PagedResult<ImportConsignmentListItemDto>> GetPagedAsync(int companyId, int page, int? pageSize);
+        /// <summary><paramref name="onlyOutstanding"/> narrows the page to
+        /// consignments with Outstanding &gt; 0; either way the result's
+        /// default order and <c>TotalOutstanding</c> put what is owed in front
+        /// of the operator (Task 23).</summary>
+        Task<ImportConsignmentListResultDto> GetPagedAsync(
+            int companyId, int page, int? pageSize, bool onlyOutstanding = false);
 
         /// <summary>Null when no consignment with this id exists. Carries its
         /// own <see cref="ImportConsignmentDetailDto.CompanyId"/> so the

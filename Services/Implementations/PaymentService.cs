@@ -89,6 +89,7 @@ namespace MyApp.Api.Services.Implementations
 
             var invoiceIds = new List<int>();
             var billIds = new List<int>();
+            var consignmentIds = new List<int>();
             var glEnabled = await _posting.IsEnabledAsync(companyId);
             var adjAccountIds = new HashSet<int>();
             foreach (var a in dto.Allocations)
@@ -102,6 +103,7 @@ namespace MyApp.Api.Services.Implementations
 
                 if (a.InvoiceId.HasValue) invoiceIds.Add(a.InvoiceId.Value);
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
+                if (a.ImportConsignmentId.HasValue) consignmentIds.Add(a.ImportConsignmentId.Value);
             }
             // Every chosen adjustment account must belong to this company's CoA.
             if (adjAccountIds.Count > 0)
@@ -125,6 +127,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(b => billIds.Contains(b.Id)).ToListAsync();
             if (bills.Any(b => b.CompanyId != companyId) || bills.Count != billIds.Distinct().Count())
                 throw new InvalidOperationException("One or more purchase bills do not belong to this company.");
+            var consignments = await AssertConsignmentsBelongToCompanyAsync(companyId, consignmentIds);
 
             // Direct-line accounts must belong to this company too (the column
             // now carries a real FK; never trust body ids).
@@ -188,6 +191,7 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException(
                         $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (balance due is {collectible - bill.AmountPaid:0.00}).");
             }
+            await AssertNoConsignmentOversettleAsync(dto.Allocations, consignments);
 
             // Division tag: when the caller didn't pick one, default from the
             // settled documents — a receipt against a single division's invoices
@@ -231,6 +235,7 @@ namespace MyApp.Api.Services.Implementations
                     InvoiceId = a.InvoiceId,
                     PurchaseBillId = a.PurchaseBillId,
                     AccountId = a.AccountId,
+                    ImportConsignmentId = a.ImportConsignmentId,
                     Amount = a.Amount,
                     TaxRate = a.TaxRate,
                     TaxAmount = a.TaxAmount ?? 0m,
@@ -264,6 +269,7 @@ namespace MyApp.Api.Services.Implementations
                 // Reflow paid totals on the touched documents.
                 foreach (var id in invoiceIds.Distinct()) await RecomputeInvoiceAsync(id);
                 foreach (var id in billIds.Distinct()) await RecomputePurchaseBillAsync(id);
+                foreach (var id in consignmentIds.Distinct()) await RecomputeImportConsignmentAsync(id);
                 await _context.SaveChangesAsync();
 
                 // GL posting (no-op unless the company enabled it) — same tx,
@@ -308,10 +314,12 @@ namespace MyApp.Api.Services.Implementations
 
             var invoiceIds = new List<int>();
             var billIds = new List<int>();
+            var consignmentIds = new List<int>();
             foreach (var a in dto.Allocations)
             {
                 if (a.InvoiceId.HasValue) invoiceIds.Add(a.InvoiceId.Value);
                 if (a.PurchaseBillId.HasValue) billIds.Add(a.PurchaseBillId.Value);
+                if (a.ImportConsignmentId.HasValue) consignmentIds.Add(a.ImportConsignmentId.Value);
             }
             AssertAllocationsFitAmount(dto, direction);
             await AssertAllocationAccountsAsync(companyId, dto);
@@ -320,6 +328,7 @@ namespace MyApp.Api.Services.Implementations
             var bills = await _context.PurchaseBills.Where(b => billIds.Contains(b.Id)).ToListAsync();
             if (bills.Any(b => b.CompanyId != companyId) || bills.Count != billIds.Distinct().Count())
                 throw new InvalidOperationException("One or more purchase bills do not belong to this company.");
+            var consignments = await AssertConsignmentsBelongToCompanyAsync(companyId, consignmentIds);
 
             if (dto.DivisionId.HasValue &&
                 !await _context.Divisions.AnyAsync(d => d.Id == dto.DivisionId.Value && d.CompanyId == companyId))
@@ -366,11 +375,13 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException(
                         $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (available is {collectible - paidByOthers:0.00}).");
             }
+            await AssertNoConsignmentOversettleAsync(dto.Allocations, consignments, excludePaymentId: id);
 
             // Documents this payment used to touch — reflow them too even if the
             // edit dropped them.
             var oldInvoiceIds = payment.Allocations.Where(a => a.InvoiceId.HasValue).Select(a => a.InvoiceId!.Value).Distinct().ToList();
             var oldBillIds = payment.Allocations.Where(a => a.PurchaseBillId.HasValue).Select(a => a.PurchaseBillId!.Value).Distinct().ToList();
+            var oldConsignmentIds = payment.Allocations.Where(a => a.ImportConsignmentId.HasValue).Select(a => a.ImportConsignmentId!.Value).Distinct().ToList();
 
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
@@ -399,6 +410,7 @@ namespace MyApp.Api.Services.Implementations
                     InvoiceId = a.InvoiceId,
                     PurchaseBillId = a.PurchaseBillId,
                     AccountId = a.AccountId,
+                    ImportConsignmentId = a.ImportConsignmentId,
                     Amount = a.Amount,
                     TaxRate = a.TaxRate,
                     TaxAmount = a.TaxAmount ?? 0m,
@@ -409,6 +421,7 @@ namespace MyApp.Api.Services.Implementations
 
                 foreach (var iid in oldInvoiceIds.Union(invoiceIds).Distinct()) await RecomputeInvoiceAsync(iid);
                 foreach (var bid in oldBillIds.Union(billIds).Distinct()) await RecomputePurchaseBillAsync(bid);
+                foreach (var cid in oldConsignmentIds.Union(consignmentIds).Distinct()) await RecomputeImportConsignmentAsync(cid);
                 await _context.SaveChangesAsync();
 
                 // Re-post: the engine replaces this payment's journal entry so
@@ -789,6 +802,8 @@ namespace MyApp.Api.Services.Implementations
                 .Select(a => a.InvoiceId!.Value).Distinct().ToList();
             var billIds = payment.Allocations.Where(a => a.PurchaseBillId.HasValue)
                 .Select(a => a.PurchaseBillId!.Value).Distinct().ToList();
+            var consignmentIds = payment.Allocations.Where(a => a.ImportConsignmentId.HasValue)
+                .Select(a => a.ImportConsignmentId!.Value).Distinct().ToList();
 
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
@@ -802,6 +817,7 @@ namespace MyApp.Api.Services.Implementations
 
                 foreach (var iid in invoiceIds) await RecomputeInvoiceAsync(iid);
                 foreach (var bid in billIds) await RecomputePurchaseBillAsync(bid);
+                foreach (var cid in consignmentIds) await RecomputeImportConsignmentAsync(cid);
                 await _context.SaveChangesAsync();
 
                 await tx.CommitAsync();
@@ -1008,6 +1024,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var kind = ParseAllocationKind(a.Kind)
                     ?? (a.InvoiceId.HasValue || a.PurchaseBillId.HasValue ? AllocationKind.Document
+                        : a.ImportConsignmentId.HasValue ? AllocationKind.ImportConsignment
                         : a.AccountId.HasValue ? AllocationKind.Account
                         : AllocationKind.OnAccount);
                 a.Kind = kind.ToString();
@@ -1037,6 +1054,22 @@ namespace MyApp.Api.Services.Implementations
                         if (a.AdjustmentAmount > 0)
                             throw new InvalidOperationException("Writing off a difference only applies to a line that settles an invoice or bill.");
                         NormalizeLineTax(a);
+                        break;
+
+                    case AllocationKind.ImportConsignment:
+                        // Money-out only — enforced below with the other
+                        // direction guards, alongside PurchaseBillId/InvoiceId.
+                        if (!a.ImportConsignmentId.HasValue)
+                            throw new InvalidOperationException("Choose the GD consignment this line settles.");
+                        if (a.InvoiceId.HasValue || a.PurchaseBillId.HasValue || a.AccountId.HasValue)
+                            throw new InvalidOperationException("A line that settles a GD consignment can't also pick an invoice, bill or account.");
+                        // The consignment's own tax was posted at import time
+                        // (PostingService.PostImportConsignmentAsync) — same
+                        // reasoning as a Document line settling an invoice/bill.
+                        if ((a.TaxAmount ?? 0m) != 0m || (a.TaxRate ?? 0m) != 0m)
+                            throw new InvalidOperationException("Tax belongs on the consignment's own posting, not the payment that settles it.");
+                        if (a.AdjustmentAmount > 0)
+                            throw new InvalidOperationException("Writing off a difference only applies to a line that settles an invoice or bill.");
                         break;
 
                     case AllocationKind.OnAccount:
@@ -1072,6 +1105,8 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException("A receipt cannot settle a purchase bill.");
                 if (!isReceipt && a.InvoiceId.HasValue)
                     throw new InvalidOperationException("A payment cannot settle a sales invoice.");
+                if (isReceipt && a.ImportConsignmentId.HasValue)
+                    throw new InvalidOperationException("A receipt cannot settle a GD consignment — only a payment (money out) can.");
             }
         }
 
@@ -1188,6 +1223,64 @@ namespace MyApp.Api.Services.Implementations
             return invoices;
         }
 
+        /// <summary>Cross-tenant guard: every GD consignment an allocation line
+        /// targets must belong to this company (never trust ids in the body —
+        /// CLAUDE.md §1/§4). Mirrors <see cref="AssertInvoicesBelongToCompanyAsync"/>
+        /// exactly, one id type over. Returns the loaded consignments so the
+        /// over-settle guard below doesn't reload them.</summary>
+        private async Task<List<ImportConsignment>> AssertConsignmentsBelongToCompanyAsync(
+            int companyId, IEnumerable<int> consignmentIds)
+        {
+            var ids = consignmentIds.Distinct().ToList();
+            if (ids.Count == 0) return new List<ImportConsignment>();
+            var consignments = await _context.ImportConsignments.Where(c => ids.Contains(c.Id)).ToListAsync();
+            if (consignments.Any(c => c.CompanyId != companyId) || consignments.Count != ids.Count)
+                throw new InvalidOperationException("One or more GD consignments do not belong to this company.");
+            return consignments;
+        }
+
+        /// <summary>Per-consignment settlement guard, the Import Clearing mirror
+        /// of <see cref="AssertNoInvoiceOverpayAsync"/>: a consignment's
+        /// settled total may never exceed what it actually credited to Import
+        /// Clearing (<see cref="ImportConsignment.ImportClearingCredited"/>) —
+        /// never <c>GrandTotal</c>-style figure, because a consignment carries
+        /// no such total of its own; the posted credit IS the cap.
+        ///
+        /// A consignment that credited NOTHING (Backfill mode, or New Arrivals
+        /// committed while the ledger was off) has no liability at all, so ANY
+        /// positive settlement against it is refused here too — named by mode,
+        /// so the operator sees why rather than reading a generic over-settle
+        /// message for a cap of zero.</summary>
+        private async Task AssertNoConsignmentOversettleAsync(
+            IEnumerable<CreatePaymentAllocationDto> lines, IReadOnlyCollection<ImportConsignment> consignments,
+            int? excludePaymentId = null)
+        {
+            foreach (var grp in lines.Where(a => a.ImportConsignmentId.HasValue).GroupBy(a => a.ImportConsignmentId!.Value))
+            {
+                var c = consignments.First(x => x.Id == grp.Key);
+                if (c.ImportClearingCredited <= 0m)
+                    throw new InvalidOperationException(
+                        $"Cannot settle GD {c.GdNumber}: this consignment posted no liability to Import Clearing " +
+                        $"(mode: {GdCostingImportModeNames.Normalize(c.Mode)}). A Backfill import re-prices stock " +
+                        "already on the books and posts nothing; a New Arrivals import posts only when the ledger " +
+                        "was enabled and at least one line was costed.");
+
+                var alreadySettled = c.AmountSettled;
+                if (excludePaymentId.HasValue)
+                {
+                    alreadySettled = await _context.PaymentAllocations
+                        .Where(pa => pa.ImportConsignmentId == grp.Key && pa.PaymentId != excludePaymentId.Value && !pa.Payment.IsCancelled)
+                        .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;
+                }
+                if (alreadySettled + grp.Sum(a => a.Amount + a.AdjustmentAmount) > c.ImportClearingCredited)
+                {
+                    var label = excludePaymentId.HasValue ? "available" : "outstanding";
+                    throw new InvalidOperationException(
+                        $"Payment would over-settle GD {c.GdNumber} ({label} is {c.ImportClearingCredited - alreadySettled:0.00}).");
+                }
+            }
+        }
+
         /// <summary>Per-invoice over-pay guard: an invoice's cash+adjustment
         /// settled total may never exceed its COLLECTIBLE cap (GrandTotal −
         /// withheld — the withheld slice is settled by the customer at invoice
@@ -1248,6 +1341,21 @@ namespace MyApp.Api.Services.Implementations
                 .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
             var bill = await _context.PurchaseBills.FirstOrDefaultAsync(b => b.Id == billId);
             if (bill != null) bill.AmountPaid = paid;
+        }
+
+        /// <summary>AmountSettled = Σ allocation amounts from NON-cancelled
+        /// payments — the exact mirror of RecomputePurchaseBillAsync. This kind
+        /// carries no AdjustmentAmount (NormalizeAllocations refuses one), but
+        /// the formula still includes it for the same reason every sibling
+        /// recompute does: harmless while it stays 0, and correct if that ever
+        /// changes without this line needing to.</summary>
+        private async Task RecomputeImportConsignmentAsync(int consignmentId)
+        {
+            var settled = await _context.PaymentAllocations
+                .Where(a => a.ImportConsignmentId == consignmentId && !a.Payment.IsCancelled)
+                .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
+            var consignment = await _context.ImportConsignments.FirstOrDefaultAsync(c => c.Id == consignmentId);
+            if (consignment != null) consignment.AmountSettled = settled;
         }
 
         // ── Mapping ───────────────────────────────────────────────────────────
@@ -1311,8 +1419,11 @@ namespace MyApp.Api.Services.Implementations
                     PurchaseBillNumber = a.PurchaseBill?.PurchaseBillNumber,
                     AccountId = a.AccountId,
                     AccountName = a.Account?.Name,
+                    ImportConsignmentId = a.ImportConsignmentId,
+                    ImportConsignmentGdNumber = a.ImportConsignment?.GdNumber,
                     DocumentLabel = a.Invoice != null ? $"Invoice #{a.Invoice.InvoiceNumber}"
                                   : a.PurchaseBill != null ? $"Bill #{a.PurchaseBill.PurchaseBillNumber}"
+                                  : a.ImportConsignment != null ? $"GD {a.ImportConsignment.GdNumber}"
                                   : a.Account != null ? a.Account.Name
                                   : a.Kind == AllocationKind.OnAccount ? "Advance / on account"
                                   : a.AccountId.HasValue ? "Direct"
@@ -1448,19 +1559,23 @@ namespace MyApp.Api.Services.Implementations
                 contactName = s?.Name ?? ""; contactAddress = s?.Address; contactPhone = s?.Phone;
             }
 
-            // Allocation document labels (invoice / bill numbers).
+            // Allocation document labels (invoice / bill / GD consignment numbers).
             var invIds = p.Allocations.Where(a => a.InvoiceId != null).Select(a => a.InvoiceId!.Value).ToList();
             var billIds = p.Allocations.Where(a => a.PurchaseBillId != null).Select(a => a.PurchaseBillId!.Value).ToList();
+            var consignmentIds = p.Allocations.Where(a => a.ImportConsignmentId != null).Select(a => a.ImportConsignmentId!.Value).ToList();
             var invMap = invIds.Count == 0 ? new() : await _context.Invoices.AsNoTracking()
                 .Where(i => invIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.InvoiceNumber);
             var billMap = billIds.Count == 0 ? new() : await _context.PurchaseBills.AsNoTracking()
                 .Where(b => billIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PurchaseBillNumber);
+            var consignmentMap = consignmentIds.Count == 0 ? new() : await _context.ImportConsignments.AsNoTracking()
+                .Where(c => consignmentIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.GdNumber);
             var sNo = 0;
             var allocs = p.Allocations.Select(a => new PrintPaymentAllocationDto
             {
                 SNo = ++sNo,
                 DocumentLabel = a.InvoiceId != null ? $"Invoice #{invMap.GetValueOrDefault(a.InvoiceId.Value)}"
                               : a.PurchaseBillId != null ? $"Bill #{billMap.GetValueOrDefault(a.PurchaseBillId.Value)}"
+                              : a.ImportConsignmentId != null ? $"GD {consignmentMap.GetValueOrDefault(a.ImportConsignmentId.Value)}"
                               : "Direct",
                 Amount = a.Amount,
             }).ToList();

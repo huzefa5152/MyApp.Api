@@ -24,16 +24,38 @@ namespace MyApp.Api.Services.Implementations
 
         // ── List ─────────────────────────────────────────────────────────────
 
-        public async Task<PagedResult<ImportConsignmentListItemDto>> GetPagedAsync(int companyId, int page, int? pageSize)
+        /// <summary>Rounding noise floor for "is this Outstanding actually
+        /// zero/positive" — the same 0.005 half-paisa tolerance
+        /// <see cref="DTOs.ImportConsignmentSettlementStatusNames"/> uses, kept
+        /// in step so the filter and the badge can never disagree about one
+        /// row.</summary>
+        private const decimal OutstandingEpsilon = 0.005m;
+
+        public async Task<ImportConsignmentListResultDto> GetPagedAsync(
+            int companyId, int page, int? pageSize, bool onlyOutstanding = false)
         {
             var size = PaginationHelper.Clamp(pageSize);
             var pageNo = PaginationHelper.ClampPage(page);
 
+            // The company-wide headline: EVERY consignment, ignoring the page
+            // and the onlyOutstanding filter, so it always ties to the same
+            // figure the Import Clearing control account itself would report
+            // (barring a manual journal posted straight to that account).
+            var totalOutstanding = await _db.ImportConsignments.AsNoTracking()
+                .Where(c => c.CompanyId == companyId)
+                .SumAsync(c => (decimal?)(c.ImportClearingCredited - c.AmountSettled)) ?? 0m;
+
             var q = _db.ImportConsignments.AsNoTracking().Where(c => c.CompanyId == companyId);
+            if (onlyOutstanding)
+                q = q.Where(c => c.ImportClearingCredited - c.AmountSettled > OutstandingEpsilon);
             var total = await q.CountAsync();
 
+            // Default sort puts what is owed in front of the operator — an
+            // importer opens this screen to answer "what do I still owe", not
+            // to hunt for it across pages of already-settled rows.
             var rows = await q
-                .OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id)
+                .OrderByDescending(c => c.ImportClearingCredited - c.AmountSettled > OutstandingEpsilon)
+                .ThenByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id)
                 .Skip((pageNo - 1) * size).Take(size)
                 .Select(c => new
                 {
@@ -47,6 +69,8 @@ namespace MyApp.Api.Services.Implementations
                     c.Mode,
                     c.ImportRunId,
                     c.CreatedAt,
+                    c.ImportClearingCredited,
+                    c.AmountSettled,
                     LineCount = c.Lines.Count(),
                 })
                 .ToListAsync();
@@ -90,15 +114,19 @@ namespace MyApp.Api.Services.Implementations
                     ImportedAt = run?.ImportedAt ?? r.CreatedAt,
                     ImportedByUserName = run != null && userNames.TryGetValue(run.ImportedByUserId, out var name) ? name : null,
                     HasJournalEntry = withJournal.Contains(r.Id),
+                    ImportClearingCredited = r.ImportClearingCredited,
+                    AmountSettled = r.AmountSettled,
+                    SettlementStatus = ImportConsignmentSettlementStatusNames.Resolve(r.ImportClearingCredited, r.AmountSettled),
                 };
             }).ToList();
 
-            return new PagedResult<ImportConsignmentListItemDto>
+            return new ImportConsignmentListResultDto
             {
                 Items = items,
                 TotalCount = total,
                 Page = pageNo,
                 PageSize = size,
+                TotalOutstanding = totalOutstanding,
             };
         }
 
@@ -134,6 +162,25 @@ namespace MyApp.Api.Services.Implementations
             var je = await _db.JournalEntries.AsNoTracking().FirstOrDefaultAsync(e =>
                 e.CompanyId == c.CompanyId && e.SourceDocType == SourceDocType.ImportConsignment && e.SourceDocId == c.Id);
 
+            // Every non-cancelled payment settled against this consignment —
+            // the "which GD unpaid" drill-down. Mirrors how AmountSettled
+            // itself is recomputed (PaymentService.RecomputeImportConsignmentAsync):
+            // same non-cancelled filter, so the total above and this list can
+            // never disagree about what counts. Reference is formatted after
+            // materialising — a ":D4" format string cannot translate to SQL.
+            var settlementRows = await _db.PaymentAllocations.AsNoTracking()
+                .Where(a => a.ImportConsignmentId == c.Id && !a.Payment.IsCancelled)
+                .OrderByDescending(a => a.Payment.Date).ThenByDescending(a => a.PaymentId)
+                .Select(a => new { a.PaymentId, a.Payment.Date, a.Payment.Number, a.Amount, a.AdjustmentAmount })
+                .ToListAsync();
+            var settlements = settlementRows.Select(r => new ImportConsignmentSettlementDto
+            {
+                PaymentId = r.PaymentId,
+                Date = r.Date,
+                Reference = $"PMT-{r.Number:D4}",
+                Amount = r.Amount + r.AdjustmentAmount,
+            }).ToList();
+
             return new ImportConsignmentDetailDto
             {
                 Id = c.Id,
@@ -150,6 +197,10 @@ namespace MyApp.Api.Services.Implementations
                 ImportedByUserName = importedByUserName,
                 HasJournalEntry = je != null,
                 JournalEntryId = je?.Id,
+                ImportClearingCredited = c.ImportClearingCredited,
+                AmountSettled = c.AmountSettled,
+                SettlementStatus = ImportConsignmentSettlementStatusNames.Resolve(c.ImportClearingCredited, c.AmountSettled),
+                Settlements = settlements,
                 Lines = c.Lines
                     .OrderBy(l => l.SourceRow)
                     .Select(l => new ImportConsignmentLineDetailDto
@@ -203,6 +254,27 @@ namespace MyApp.Api.Services.Implementations
                 var companyId = consignment.CompanyId;
                 var mode = GdCostingImportModeNames.Normalize(consignment.Mode);
                 var result = new ImportConsignmentDeleteResultDto { GdNumber = consignment.GdNumber };
+
+                // ── Pass 1 (Task 23): a consignment with any settlement against
+                // it cannot be undone — unwinding it would strand the payment
+                // that part- or fully-paid its liability, with nothing left for
+                // that payment to point at. Cancelled payments don't count
+                // (same filter AmountSettled itself uses), so a payment that was
+                // cancelled first no longer blocks the delete.
+                var settlingPayments = await _db.PaymentAllocations.AsNoTracking()
+                    .Where(a => a.ImportConsignmentId == consignment.Id && !a.Payment.IsCancelled)
+                    .Select(a => new { a.Payment.Number })
+                    .Distinct()
+                    .ToListAsync();
+                if (settlingPayments.Count > 0)
+                {
+                    var refs = string.Join(", ", settlingPayments
+                        .Select(p => $"PMT-{p.Number:D4}")
+                        .OrderBy(r => r, StringComparer.Ordinal));
+                    throw new InvalidOperationException(
+                        $"Cannot delete: GD {consignment.GdNumber} has been settled against by {settlingPayments.Count} payment(s) ({refs}). " +
+                        "Delete or cancel those payments first, or leave this consignment in place.");
+                }
 
                 // ── Pass 1a: StockPosted lines — balances THIS consignment
                 // created. Deletable only if nothing else now depends on them.

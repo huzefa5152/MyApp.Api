@@ -20,6 +20,18 @@ namespace MyApp.Api.Models.Accounting
         /// arrives to absorb it. Requires a Client/Supplier contact on the header;
         /// before this existed the amount silently plugged to Suspense.</summary>
         OnAccount = 2,
+
+        /// <summary>Settles a GD import consignment's Import Clearing liability
+        /// (<see cref="PaymentAllocation.ImportConsignmentId"/>) — the payable
+        /// counterpart to <see cref="Document"/>'s PurchaseBillId, for a
+        /// consignment posted in New Arrivals mode
+        /// (<see cref="Models.ImportConsignment.ImportClearingCredited"/> &gt; 0).
+        /// A Payment (money out) only — a consignment's liability is never
+        /// settled by a Receipt. Carries no tax and no settle-remainder
+        /// adjustment (Task 23): the consignment's own tax was already posted at
+        /// import (see PostingService.PostImportConsignmentAsync), so there is
+        /// nothing left to derive here beyond the cash that clears it.</summary>
+        ImportConsignment = 3,
     }
 
     /// <summary>
@@ -33,9 +45,12 @@ namespace MyApp.Api.Models.Accounting
     ///     May carry recoverable tax; see <see cref="TaxAmount"/>.
     ///   • <see cref="AllocationKind.OnAccount"/>  — no target; an advance against the
     ///     contact's AR/AP balance.
+    ///   • <see cref="AllocationKind.ImportConsignment"/> — <see cref="ImportConsignmentId"/>,
+    ///     a Payment settling a GD's Import Clearing liability.
     ///
     /// BalanceDue/AmountPaid on the target invoice/bill is recomputed from the sum
-    /// of these allocations inside the same transaction that writes them.
+    /// of these allocations inside the same transaction that writes them; a
+    /// consignment's AmountSettled follows the identical rule (Task 23).
     /// </summary>
     public class PaymentAllocation
     {
@@ -51,6 +66,11 @@ namespace MyApp.Api.Models.Accounting
         public int? InvoiceId { get; set; }        // Receipt → sales invoice
         public int? PurchaseBillId { get; set; }   // Payment → purchase bill
         public int? AccountId { get; set; }        // OR a direct income/expense account
+
+        /// <summary>Payment → GD import consignment (Task 23). The Import
+        /// Clearing counterpart to <see cref="PurchaseBillId"/> — settles what
+        /// a New Arrivals GD credited to Import Clearing at import time.</summary>
+        public int? ImportConsignmentId { get; set; }
 
         // ── Recoverable tax on a direct income/expense line ──
         // Follows the document convention (Invoice/PurchaseBill GSTRate+GSTAmount):
@@ -91,6 +111,7 @@ namespace MyApp.Api.Models.Accounting
         public Payment Payment { get; set; } = null!;
         public Invoice? Invoice { get; set; }
         public PurchaseBill? PurchaseBill { get; set; }
+        public ImportConsignment? ImportConsignment { get; set; }
         /// <summary>The income/expense account on an <see cref="AllocationKind.Account"/>
         /// line — so a saved expense can be read back and displayed by name.</summary>
         public Account? Account { get; set; }

@@ -20,7 +20,8 @@ namespace MyApp.Api.Repositories.Implementations
                 .Include(p => p.Allocations).ThenInclude(a => a.Invoice)
                 .Include(p => p.Allocations).ThenInclude(a => a.PurchaseBill)
                 .Include(p => p.Allocations).ThenInclude(a => a.Account)
-                .Include(p => p.Allocations).ThenInclude(a => a.AdjustmentAccount);
+                .Include(p => p.Allocations).ThenInclude(a => a.AdjustmentAccount)
+                .Include(p => p.Allocations).ThenInclude(a => a.ImportConsignment);
 
         public async Task<(List<Payment> Items, int TotalCount)> GetPagedByCompanyAsync(
             int companyId, PaymentDirection direction, int page, int pageSize,

@@ -225,7 +225,15 @@ export default function PaymentsPage({ mode = "receipts" }) {
                   accent={accent}
                   docNoun={docNoun}
                   canDelete={canDelete}
-                  canEdit={canCreate}
+                  // A GD-settlement payment (Task 23) has no representation
+                  // in this generic form -- PaymentForm's "settle" screen
+                  // keys a saved allocation back to a row by invoiceId/
+                  // purchaseBillId, and an ImportConsignmentId line has
+                  // neither, so it would silently vanish from `alloc` on
+                  // load and be DROPPED on the next Save. View/print/delete
+                  // stay available; editing goes through the Consignments
+                  // screen's own Settle action instead.
+                  canEdit={canCreate && !(p.allocations || []).some((a) => a.kind === "ImportConsignment")}
                   canPrint={canPrint}
                   tplPicker={tplPicker}
                   exportingId={exportingId}
