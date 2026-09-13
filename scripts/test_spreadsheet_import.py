@@ -29,7 +29,8 @@ What it proves:
     inherits the date above it
   * imported balances read back through the app's own Customer Ledger, and the
     receivable total lands on Accounts receivable with the ledger frozen
-  * a built-in layout ships for each kind, cannot be deleted, and is offered as
+  * a built-in layout ships for each kind (opening stock, customer ledger, GD
+    costing), cannot be deleted, and is offered as
     a starting point when a workbook is not recognised
   * a layout keeps recognising its own template after every value in the file
     has changed — the property that stops a monthly re-upload being re-mapped
@@ -874,7 +875,7 @@ def main():
         allp = r.json() if r.ok else []
         builtins = [p_ for p_ in allp if p_.get("isDefault")]
         check("a built-in layout ships for each kind",
-              {p_["kind"] for p_ in builtins} == {"OpeningStock", "CustomerLedger"},
+              {p_["kind"] for p_ in builtins} == {"OpeningStock", "CustomerLedger", "GdCosting"},
               f"found {[(p_['kind'], p_['name']) for p_ in builtins]}")
         check("built-in layouts are installation-wide",
               all(p_["isShared"] for p_ in builtins),

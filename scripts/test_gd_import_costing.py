@@ -277,6 +277,9 @@ def make_company(api, h, name):
     return r.json()["id"]
 
 
+CREATED_ITEM_TYPE_IDS = []
+
+
 def make_item(api, h, company_id, name, hs=None, uom="Pcs"):
     body = {"name": name, "uom": uom, "companyId": company_id, "isFavorite": True}
     if hs:
@@ -285,7 +288,14 @@ def make_item(api, h, company_id, name, hs=None, uom="Pcs"):
                       params={"companyId": company_id}, json=body)
     if r.status_code not in (200, 201):
         raise RuntimeError(f"item type create failed for {name!r}: http {r.status_code} {r.text[:200]}")
-    return r.json()["id"]
+    new_id = r.json()["id"]
+    # ItemType is a GLOBAL catalog with no CompanyId (CLAUDE.md 5b-2b), so
+    # deleting the throwaway company does NOT remove the item types this suite
+    # made. Left behind they accumulate under real HS codes and erode other
+    # suites -- test_spreadsheet_import's "every item is new on a first upload"
+    # starts reporting matched-renamed instead. Track them and delete in teardown.
+    CREATED_ITEM_TYPE_IDS.append(new_id)
+    return new_id
 
 
 def set_opening(api, h, company_id, item_id, qty, value, cost=None, rate=18, notes=None):
@@ -1364,6 +1374,15 @@ def main():
             for cid in (company, mixed_co, other_co, del_co, twomonth_co):
                 if cid:
                     requests.delete(f"{api}/companies/{cid}", headers=h, timeout=300)
+            # Companies first -- they hold the documents that reference an item
+            # type. Only then can the global catalog rows go. A delete that is
+            # refused (something else adopted the row) is ignored on purpose:
+            # teardown must never fail the run.
+            for iid in CREATED_ITEM_TYPE_IDS:
+                try:
+                    requests.delete(f"{api}/itemtypes/{iid}", headers=h, timeout=60)
+                except Exception:
+                    pass
 
     return report()
 
