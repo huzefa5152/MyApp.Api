@@ -14,9 +14,19 @@ import AccountLedgerDialog from "../Components/AccountLedgerDialog";
 import useScrollToError from "../hooks/useScrollToError";
 
 const ACCOUNT_TYPES = ["Asset", "Liability", "Equity", "Income", "Expense"];
+// Models/Accounting/ControlType, minus the ones an operator must not pick:
+// Suspense (the posting engine's own fallback -- a second one would split the
+// pool that exists to make imbalances visible) and CustomerAdvances
+// (superseded 2026-08-31; an advance posts to the party's own control account).
+// The settle-remainder and tax/import roles ARE listed: the preset seeds them,
+// but a chart created before they existed, or one an operator has pruned, has
+// no other way to designate the account -- and a missing control account sends
+// its postings to Suspense.
 const CONTROL_TYPES = ["None", "AccountsReceivable", "AccountsPayable", "Inventory", "BankCash",
   "Capital", "RetainedEarnings", "OutputTax", "InputTax", "WithholdingReceivable", "WithholdingPayable",
-  "ProductionWip", "EmployeeClearing", "Rounding"];
+  "ProductionWip", "EmployeeClearing", "Rounding",
+  "DiscountAllowed", "DiscountReceived", "BadDebtWriteOff", "WriteBackIncome",
+  "FurtherTaxPayable", "ImportClearing", "AdvanceIncomeTaxOnImports"];
 
 const money = (n) => (n < 0 ? `(${Math.abs(n).toLocaleString()})` : n.toLocaleString());
 

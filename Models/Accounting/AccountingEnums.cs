@@ -63,8 +63,7 @@ namespace MyApp.Api.Models.Accounting
         /// </summary>
         FurtherTaxPayable = 19,
 
-        /// <summary>SUPERSEDED (2026-08-31) — reserved, never assign 19 to
-        /// anything else.
+        /// <summary>SUPERSEDED (2026-08-31), and RENUMBERED 19 → 22 (2026-09-13).
         ///
         /// Briefly (2026-08-29) an unapplied customer receipt posted to a
         /// dedicated "Advance from Customers" liability. That was replaced by
@@ -75,19 +74,30 @@ namespace MyApp.Api.Models.Accounting
         /// party's balance where the ledger, the A/R column and the aged reports
         /// can all see it. See PostingService.PostPaymentAsync.
         ///
-        /// The member stays because <c>Accounts.ControlType</c> rows stamped with
-        /// 19 already exist wherever the seeder or the one-time back-fill ran;
+        /// The member stays because <c>Accounts.ControlType</c> rows stamped for
+        /// it already exist wherever the seeder or the one-time back-fill ran;
         /// dropping it would leave those rows mapping to an undefined enum value.
         /// Nothing posts here any more and the preset no longer creates the
         /// account, so on an existing chart it is an inert, zero-movement row the
         /// operator can deactivate or delete once its historical balance has been
-        /// re-posted (Accounting → rebuild the ledger).</summary>
-        CustomerAdvances = 19,
+        /// re-posted (Accounting → rebuild the ledger).
+        ///
+        /// WHY IT MOVED OFF 19: it was declared as an ALIAS of
+        /// <see cref="FurtherTaxPayable"/>, so on a chart carrying this legacy
+        /// account <c>PostingService.ResolveAsync(FurtherTaxPayable)</c> could
+        /// resolve further tax onto "Advance from Customers" — a real liability
+        /// credited to the wrong one, with the books still balancing — and
+        /// <c>FurtherTaxAccountSeeder</c> read the same row as proof the company
+        /// already had a further-tax account and skipped it. Migration
+        /// <c>SplitCustomerAdvancesControlType</c> restamps the legacy rows
+        /// (keyed on their <c>seed:customer_advances</c> external ref) to 22, so
+        /// the seeder then creates the account those charts were missing.</summary>
+        CustomerAdvances = 22,
 
-        // NOTE: 19 is already double-booked (FurtherTaxPayable / CustomerAdvances
-        // above) — a pre-existing alias, not something to "fix" here. Never reuse
-        // 19 and never renumber either of those two; rows in Accounts are already
-        // stamped with it. The next two members take the first UNUSED numbers.
+        // NOTE: 19 belongs to FurtherTaxPayable ALONE. CustomerAdvances used to
+        // alias it and was moved to 22 on 2026-09-13 (see its doc comment for the
+        // misposting that caused). Never reuse a number: an Accounts row stamped
+        // with one is how a chart remembers which role an account plays.
 
         /// <summary>
         /// Where a customs GD's landed-cost liability sits between clearance and
