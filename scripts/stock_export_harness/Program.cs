@@ -95,7 +95,8 @@ static StockExportItemDto Item(
     decimal totalIn, decimal valueIn,
     decimal totalOut, decimal valueOut,
     decimal onHand, decimal excl, decimal rate,
-    string? lotRef = null, DateTime? lotDate = null)
+    string? lotRef = null, DateTime? lotDate = null,
+    decimal openingActualCost = 0m, decimal actualCost = 0m)
 {
     var tax = Math.Round(excl * rate / 100m, 2, MidpointRounding.AwayFromZero);
     return new StockExportItemDto
@@ -118,6 +119,11 @@ static StockExportItemDto Item(
             SalesTax = tax,
             ValueIncludingTax = excl + tax,
             UnitCost = onHand > 0 ? Math.Round(excl / onHand, 4, MidpointRounding.AwayFromZero) : 0m,
+            // Zero on both means the GD costing import has never priced this
+            // item, which is the case for every company that does not import.
+            OpeningActualCostExcludingTax = openingActualCost,
+            ActualCostExcludingTax = actualCost,
+            ActualUnitCost = onHand > 0 ? Math.Round(actualCost / onHand, 4, MidpointRounding.AwayFromZero) : 0m,
             LastMovementAt = new DateTime(2026, 2, 19),
         },
         LotRef = lotRef,
@@ -130,7 +136,11 @@ var gdDate = new DateTime(2024, 10, 9);
 var items = new List<StockExportItemDto>
 {
     //                                              opening  openVal      in    valueIn    out   valueOut   onHand      excl  rate
-    Item(1, LongName,            "9506.9100", "Pcs",   200m, 3_355_844m,   0m,        0m,  50m, 838_961m,   150m, 2_516_883m, 18m, "KAPE-HC-32050", gdDate),
+    // GD-COSTED: opening landed 2,900,000 and 2,175,000 still on hand. Neither
+    // equals the ratio derivation (3,355,844 x 6/7 = 2,876,438), so a row that
+    // silently fell back to the formula would show up here.
+    Item(1, LongName,            "9506.9100", "Pcs",   200m, 3_355_844m,   0m,        0m,  50m, 838_961m,   150m, 2_516_883m, 18m, "KAPE-HC-32050", gdDate,
+         openingActualCost: 2_900_000m, actualCost: 2_175_000m),
     Item(2, EvilName,            "7318.1510", "KG",    100m,   500_000m,  40m,  200_000m,  90m, 450_000m,    50m,   250_000m, 25m, LongGdRef, gdDate),
     Item(3, "Bearing 6204 ZZ",   "8482.1000", "Pcs",     0m,         0m, 520m, 1_432_098m, 345m, 950_000m,  175m,   482_098m, 18m),
     Item(4, "Zero Stock Widget", "8513.1090", "Pcs",   540m, 1_080_000m,   0m,        0m, 540m, 1_080_000m,   0m,         0m, 18m, "KAPE-HC-6944", null),
@@ -311,12 +321,12 @@ Console.WriteLine("\n=== 3. Values vs formulas ===");
             (OpenTaxCol,    $"L{r}*K{r}"),
             (ConsRateCol,   $"L{r}"),
             (ConsTaxCol,    $"O{r}*P{r}"),
+            // The tax cells are derived from the cost beside them at the row's
+            // own rate, whichever shape the block took.
             (CogsOpenTaxCol, $"X{r}*L{r}"),
             (CogsOpenVatCol, $"X{r}*3%"),
-            (CogsConsExlCol, $"Q{r}/(L{r}+3%)"),
             (CogsConsTaxCol, $"AA{r}*L{r}"),
             (CogsConsVatCol, $"AA{r}*3%"),
-            (CogsBalExlCol,  $"X{r}-AA{r}"),
             (CogsBalTaxCol,  $"Y{r}-AB{r}"),
             (CogsBalVatCol,  $"Z{r}-AC{r}"),
         })
@@ -324,10 +334,49 @@ Console.WriteLine("\n=== 3. Values vs formulas ===");
                 ws.Cell(r, col).HasFormula && ws.Cell(r, col).FormulaA1 == formula,
                 ws.Cell(r, col).HasFormula ? ws.Cell(r, col).FormulaA1 : "(not a formula)");
 
-        // The one column the accountant keys. Empty, but already carrying the
-        // accounting format so the figure lands formatted.
-        Check($"\"{label}\": Cost of Good Sold Opening Exl is left to be keyed",
-            ws.Cell(r, CogsOpenExlCol).IsEmpty() && !ws.Cell(r, CogsOpenExlCol).HasFormula);
+        // ── Cost of Good Sold takes one of two shapes ────────────────────────
+        // MEASURED when the GD costing import has priced the item: the opening
+        // and on-hand landed costs are stated and Consumed falls out as X - AD,
+        // which is what the goods that left actually cost. DERIVED otherwise,
+        // from the client's own tax-uplift arithmetic. Either way AD = X - AA
+        // still holds — only which cell carries the formula moves.
+        if (s.OpeningActualCostExcludingTax > 0m)
+        {
+            Check($"\"{label}\": costed — X is the imported opening landed cost",
+                !ws.Cell(r, CogsOpenExlCol).HasFormula
+                && ws.Cell(r, CogsOpenExlCol).GetValue<decimal>() == s.OpeningActualCostExcludingTax,
+                ws.Cell(r, CogsOpenExlCol).HasFormula
+                    ? ws.Cell(r, CogsOpenExlCol).FormulaA1
+                    : ws.Cell(r, CogsOpenExlCol).GetValue<decimal>().ToString());
+            Check($"\"{label}\": costed — AD is the on-hand landed cost, which DEPLETES",
+                !ws.Cell(r, CogsBalExlCol).HasFormula
+                && ws.Cell(r, CogsBalExlCol).GetValue<decimal>() == s.ActualCostExcludingTax);
+            Check($"\"{label}\": costed — AA is the cost of goods SOLD (=X-AD)",
+                ws.Cell(r, CogsConsExlCol).FormulaA1 == $"X{r}-AD{r}",
+                ws.Cell(r, CogsConsExlCol).FormulaA1);
+            // The measured figure must WIN. The ratio would say 2,876,438 here.
+            var derived = s.OpeningValueExcludingTax + s.ValueIn;
+            derived = s.SalesTaxRate == 0m
+                ? derived
+                : derived * s.SalesTaxRate / (s.SalesTaxRate + 3m);
+            Check($"\"{label}\": the measured cost WINS over the ratio derivation",
+                Math.Abs(ws.Cell(r, CogsOpenExlCol).GetValue<decimal>() - derived) > 1m,
+                $"stated {ws.Cell(r, CogsOpenExlCol).GetValue<decimal>()} vs ratio {derived:F2}");
+        }
+        else
+        {
+            Check($"\"{label}\": uncosted — X unwinds the tax uplift",
+                ws.Cell(r, CogsOpenExlCol).FormulaA1
+                    == $"IF(L{r}=0,K{r},K{r}*L{r}/(L{r}+3%))",
+                ws.Cell(r, CogsOpenExlCol).HasFormula
+                    ? ws.Cell(r, CogsOpenExlCol).FormulaA1 : "(not a formula)");
+            Check($"\"{label}\": uncosted — AA comes off the consumed sales tax",
+                ws.Cell(r, CogsConsExlCol).FormulaA1 == $"Q{r}/(L{r}+3%)",
+                ws.Cell(r, CogsConsExlCol).FormulaA1);
+            Check($"\"{label}\": uncosted — AD = X - AA",
+                ws.Cell(r, CogsBalExlCol).FormulaA1 == $"X{r}-AA{r}",
+                ws.Cell(r, CogsBalExlCol).FormulaA1);
+        }
 
         // Nothing in the system records either of these.
         Check($"\"{label}\": Claim Month is left blank", ws.Cell(r, ClaimCol).IsEmpty());
@@ -547,8 +596,9 @@ Console.WriteLine("\n=== 8. Summary sheet ===");
         text.Contains("Opening is everything received"));
     Check("explains that Balance is the live position",
         text.Contains("not Opening minus Consumed"));
-    Check("explains the Cost of Good Sold input column",
-        text.Contains("key the Opening Exl column"));
+    Check("explains where the Cost of Good Sold figures come from",
+        text.Contains("imported GD landed cost")
+        && text.Contains("unwinds the tax uplift"), Trim(text, 200));
     Check("says Claim Month and Sub cat are the operator's",
         text.Contains("Claim Month and Sub cat are yours to fill"));
 

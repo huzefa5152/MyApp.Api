@@ -62,6 +62,19 @@
         /// <summary>What the on-hand quantity actually cost, excluding tax.</summary>
         public decimal ActualCostExcludingTax { get; set; }
 
+        /// <summary>
+        /// What the OPENING quantity actually cost — the stored figure the GD
+        /// costing import wrote, not a re-derivation, exactly as
+        /// <see cref="OpeningValueExcludingTax"/> is for the selling pool.
+        ///
+        /// Reported so the cost of goods SOLD is answerable: nothing but the GD
+        /// costing import puts an actual cost on an opening, and nothing but a
+        /// hand adjustment puts one on a movement, so for an importer
+        /// <c>opening − on-hand</c> IS what the goods that left actually cost.
+        /// Zero means no costing has been imported for this item.
+        /// </summary>
+        public decimal OpeningActualCostExcludingTax { get; set; }
+
         /// <summary>Weighted-average ACTUAL cost of a single unit on hand —
         /// the actual-cost pool's own <see cref="UnitCost"/>.</summary>
         public decimal ActualUnitCost { get; set; }

@@ -368,17 +368,54 @@ def main() -> int:
                 (C_OPEN_TAX, f"=L{row}*K{row}"),
                 (C_CONS_RATE, f"=L{row}"),
                 (C_CONS_TAX, f"=O{row}*P{row}"),
+                # The Cost of Good Sold TAX cells are derived from the cost
+                # beside them at the row's own rate, in either shape.
                 (C_COGS_OPEN_TAX, f"=X{row}*L{row}"),
-                (C_COGS_CONS_EXL, f"=Q{row}/(L{row}+3%)"),
-                (C_COGS_BAL_EXL, f"=X{row}-AA{row}"),
+                (C_COGS_CONS_TAX, f"=AA{row}*L{row}"),
             ]:
                 got = ws.cell(row, col).value
                 if got != want:
                     bad_formulas.append(f"r{row} col {col}: {got!r} != {want!r}")
         check("s2", "the derived columns carry the client's formulas", not bad_formulas,
               " | ".join(bad_formulas[:3]))
-        check("s2", "Cost of Good Sold Opening Exl is left for the accountant",
-              all(ws.cell(r, C_COGS_OPEN_EXL).value is None for r in items))
+
+        # ── Cost of Good Sold takes one of two shapes ───────────────────────
+        # MEASURED where the GD costing import has priced the item: the opening
+        # and on-hand landed costs are stated and Consumed falls out as X - AD,
+        # which is what the goods that left actually cost. DERIVED otherwise,
+        # from the client's own tax-uplift arithmetic. The identity AD = X - AA
+        # holds either way — only which cell carries the formula moves.
+        costed = [r for r in items
+                  if dec(by_name[ws.cell(r, C_ITEM).value]["openingActualCostExcludingTax"]) > 0]
+        plain = [r for r in items if r not in costed]
+        print(f"    {len(costed)} item(s) carry an imported landed cost; {len(plain)} fall back to the ratio")
+
+        wrong = []
+        for r in costed:
+            s_row = by_name[ws.cell(r, C_ITEM).value]
+            if not same(dec(ws.cell(r, C_COGS_OPEN_EXL).value),
+                        dec(s_row["openingActualCostExcludingTax"])):
+                wrong.append(f"r{r} X: {ws.cell(r, C_COGS_OPEN_EXL).value} "
+                             f"!= {s_row['openingActualCostExcludingTax']}")
+            if not same(dec(ws.cell(r, C_COGS_BAL_EXL).value),
+                        dec(s_row["actualCostExcludingTax"])):
+                wrong.append(f"r{r} AD: {ws.cell(r, C_COGS_BAL_EXL).value} "
+                             f"!= {s_row['actualCostExcludingTax']}")
+            if ws.cell(r, C_COGS_CONS_EXL).value != f"=X{r}-AD{r}":
+                wrong.append(f"r{r} AA: {ws.cell(r, C_COGS_CONS_EXL).value!r}")
+        check("s2", "a GD-costed item states its real landed cost, opening and on-hand",
+              not wrong, " | ".join(wrong[:3]))
+
+        wrong = []
+        for r in plain:
+            if ws.cell(r, C_COGS_OPEN_EXL).value != f"=IF(L{r}=0,K{r},K{r}*L{r}/(L{r}+3%))":
+                wrong.append(f"r{r} X: {ws.cell(r, C_COGS_OPEN_EXL).value!r}")
+            if ws.cell(r, C_COGS_CONS_EXL).value != f"=Q{r}/(L{r}+3%)":
+                wrong.append(f"r{r} AA: {ws.cell(r, C_COGS_CONS_EXL).value!r}")
+            if ws.cell(r, C_COGS_BAL_EXL).value != f"=X{r}-AA{r}":
+                wrong.append(f"r{r} AD: {ws.cell(r, C_COGS_BAL_EXL).value!r}")
+        check("s2", "an item with no costing unwinds the tax uplift instead",
+              not wrong, " | ".join(wrong[:3]))
         check("s2", "Claim Month and Sub cat are left blank",
               all(ws.cell(r, C_CLAIM).value is None and ws.cell(r, C_SUBCAT).value is None
                   for r in items))

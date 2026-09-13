@@ -343,6 +343,18 @@ Publish output optimized from 79 MB to 37 MB via:
   value. Nothing is guessed: a line the server itself finds a real match for
   is costed onto that match instead, whatever the sheet review claimed, and a
   line matching more than one balance is still left alone.
+- **A New Arrivals import now posts to the general ledger.** Two control
+  accounts, **Import Clearing** (liability) and **Advance Income Tax on
+  Imports** (asset), are seeded onto every chart of accounts. Committing a
+  costing sheet in **new arrivals** mode writes one balanced entry per GD,
+  dated the GD's own declaration date: Inventory is debited for genuinely new
+  stock only, Input Tax for the sales tax + additional sales tax + Others,
+  Advance Income Tax on Imports for the income tax collected at import, and
+  Import Clearing carries the balancing liability. A line that only re-prices
+  stock already on the books gets no inventory debit — that stock was never in
+  the ledger to begin with. A **backfill** import — re-costing stock cleared
+  months ago — posts nothing at all, and neither does a company with GL
+  posting switched off.
 - **Actual cost and margin now deplete as stock sells, and show on the
   On-Hand tab too.** Until now the landed cost only lived on the Opening
   Balances screen, as a static figure. The same weighted-average walk that
@@ -374,7 +386,23 @@ Publish output optimized from 79 MB to 37 MB via:
   line before Commit, and both duplicate guards (the same file, the same GD
   number) still apply under either choice.
 
-### 2026-09-13 — Stock export scrolls properly
+### 2026-09-13 — Stock export scrolls properly, and Cost of Good Sold fills itself
+
+- **Cost of Good Sold now carries real figures instead of an empty column.**
+  Where the GD costing import has priced an item, the block states the imported
+  landed cost of the opening and of what is still on hand, so the Consumed
+  column is what the goods that actually sold cost. Where no costing exists it
+  falls back to the arithmetic the client's own sheet uses — cost = value x rate
+  / (rate + 3%) — which reproduces 110 of the 117 rows of their workbook
+  exactly. Every cell stays a formula or a plain number, so an accountant can
+  still type over any of them. On a live company 47 of 60 items now price
+  themselves from the imported costing.
+- **Fixed: the stock export locked nine columns, leaving almost nothing to
+  scroll.** The sheet froze everything through Unit — about 1,430 pixels, wider
+  than the window on a 1366-wide laptop — so the 23 columns to the right of it
+  had a sliver to scroll through and the workbook read as broken. Only the
+  header rows are frozen now, so they stay put while scrolling down and the
+  whole sheet scrolls across.
 
 - **Fixed: the stock export locked nine columns, leaving almost nothing to
   scroll.** The sheet froze everything through Unit — about 1,430 pixels, wider

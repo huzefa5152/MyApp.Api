@@ -785,12 +785,37 @@ merges, row heights and all 32 column widths are identical.
   is what keeps that true on a company that buys as well as imports. On an
   importer whose stock all arrives on GDs, `TotalIn` is zero and the column is
   the opening balance exactly.
-- **Cost of Good Sold is an INPUT block.** Its opening Exl (X) sits on a basis
-  nothing here derives — on the client's own sheet it runs below the stock value
-  by a ratio that varies with the tax rate — so X is left EMPTY and everything
-  around it is formula. The client's literal `/21%` and `*18%` are generalised to
-  the row's own rate (`(L+3%)`, `*L`), so a 25% line does not silently use an 18%
-  basis. Vat is a flat 3%, as on the source sheet.
+- **Cost of Good Sold is MEASURED where it can be, DERIVED where it cannot**
+  (2026-09-13). Two shapes, and the measured one wins:
+  - **Costed** (`OpeningActualCostExcludingTax > 0`, i.e. the GD costing import
+    has priced the item): X is the opening landed cost and AD the on-hand landed
+    cost, both stored figures walked by the same `StockValuation` pass, so AD
+    DEPLETES as stock sells. Consumed is then `=X-AD` — what the goods that
+    actually left cost. This is only sound because nothing else writes into that
+    pool: the costing import writes an opening, a hand stock adjustment writes a
+    movement, and a purchase bill writes neither. Add a third writer and the
+    subtraction silently stops meaning cost-of-goods-sold.
+  - **Uncosted**: the client's own arithmetic,
+    `cost = selling x rate / (rate + 3%)` — which is exactly what their `=Q/21%`
+    does to the consumed block. Verified against their workbook: **110 of 117
+    rows to better than 1e-9**; the other 7 are hand overrides (one has X = K,
+    no uplift at all). It was NOT obvious — the ratios read as 7/6 and 25/28
+    until you see they are `rate/(rate+3)` — and this column shipped empty for a
+    day because that was missed.
+  - The identity `AD = X - AA` holds in BOTH shapes; only which cell carries the
+    formula moves, and every cell stays typed-over-able.
+  - **The zero-rate guard is load-bearing.** `selling = cost x (rate+3%)/rate`
+    has no meaning at 0% — there is no uplift to unwind — and unguarded it
+    reports an exempt item's cost of goods as NIL rather than as its value. The
+    client's sheet carries only 18% and 25%, so nothing in it would have caught
+    that.
+  - Tax and Vat are always DERIVED from the cost beside them at the ROW's own
+    rate (§5b-4: never stored twice), so a 25% line is never costed at 18%.
+    Vat is a flat 3%, as on the source sheet.
+  - This is the one place `OpeningStockBalance.ActualCostExcludingTax` leaves the
+    system. Its model comment calls it internal — that still holds for pricing,
+    filing and posting; reporting it in a stock sheet is what "so margin is
+    answerable" was for.
 - **`Claim Month` and `Sub cat` are left blank on purpose.** Nothing in this
   system records either. Do not fill them with a plausible-looking substitute —
   the Summary sheet says they are the operator's.
@@ -834,10 +859,10 @@ merges, row heights and all 32 column widths are identical.
   after the offline fixtures missed it.
 - **Two suites, because they answer different questions.** The LAYOUT is pinned
   offline against synthetic rows by `scripts/stock_export_harness`
-  (`dotnet run -c Release`, 255 checks — it links the real builder rather than a
+  (`dotnet run -c Release`, 256 checks — it links the real builder rather than a
   copy, so no database and no running server). That the workbook cannot DISAGREE
   with the screen is pinned live by `scripts/test_stock_export_excel.py`
-  (39 checks): it compares the sheet row-for-row against `GET .../onhand`, ties
+  (40 checks): it compares the sheet row-for-row against `GET .../onhand`, ties
   the summed rows to the API's own totals, checks the SUM ranges, and exercises
   the permission gate with throwaway roles it deletes afterwards. A new column
   belongs in the harness; a new figure belongs in both.
@@ -1477,8 +1502,8 @@ them can be resolved from FBR.
 | Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
 | Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
-| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (255 checks) |
-| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (39 checks) |
+| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (256 checks) |
+| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (40 checks) |
 | FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |

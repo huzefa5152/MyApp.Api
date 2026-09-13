@@ -201,6 +201,11 @@ namespace MyApp.Api.Controllers
                     // MarginPercent are derived on the DTO itself.
                     ActualCostExcludingTax = position.ActualValueExcludingTax,
                     ActualUnitCost = Math.Round(position.ActualUnitCost, 4),
+                    // The opening's own landed cost, straight from the stored
+                    // balance -- the same figure fed into the walk above, so the
+                    // two cannot disagree. With it, opening minus on-hand is the
+                    // cost of what has gone out.
+                    OpeningActualCostExcludingTax = open?.ActualCost ?? 0m,
                     LastMovementAt = lastDates.TryGetValue(id, out var d) ? d : null,
                 });
 

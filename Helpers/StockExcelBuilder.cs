@@ -39,12 +39,17 @@ namespace MyApp.Api.Helpers
     ///    importer whose stock all arrives on GDs, <c>TotalIn</c> is zero and
     ///    the column is the opening balance exactly.
     ///
-    ///  • <b>Cost of Good Sold is an INPUT block.</b> Its opening Exl (X) sits
-    ///    on a basis nothing in this system derives — on the client's own sheet
-    ///    it runs below the stock value by a ratio that varies with the tax rate
-    ///    — so X is left empty for the accountant, and S.Tax / Vat / Consumed /
-    ///    Balance around it are the client's formulas, which fill the moment X
-    ///    is keyed. Vat is 3% throughout, as on the source sheet.
+    ///  • <b>Cost of Good Sold is MEASURED where it can be, derived where it
+    ///    cannot.</b> Where the GD costing import has priced an item, the
+    ///    opening and on-hand landed costs are real stored figures and the
+    ///    consumed cell — what the goods that left actually cost — is
+    ///    <c>X - AD</c>. Where it has not, the client's own arithmetic fills the
+    ///    block: <c>cost = selling x rate / (rate + 3%)</c>, which is exactly
+    ///    what their <c>=Q/21%</c> does to the consumed block, reproducing 110
+    ///    of the 117 rows of their workbook exactly (the other 7 are hand
+    ///    overrides). The identity <c>AD = X - AA</c> holds either way; only
+    ///    which cell carries the formula moves, and every cell stays typed over
+    ///    -able. Vat is 3% throughout, as on the source sheet.
     ///
     ///  • <b>Provenance lives on the Summary sheet, not the data sheet.</b> The
     ///    data sheet has to BE the client's layout, which has no banner; but an
@@ -73,8 +78,8 @@ namespace MyApp.Api.Helpers
         private const string Face = "Calibri Light";
 
         // Accounting formats, as the source sheet uses them: a zero renders as
-        // "-" rather than 0, which is what makes an unkeyed Cost of Good Sold
-        // column read as empty instead of as a claim that it is nil.
+        // "-" rather than 0, so a genuinely nil figure reads as nothing to
+        // report rather than as a hard zero.
         private const string Acct0 = "_(* #,##0_);_(* \\(#,##0\\);_(* \"-\"??_);_(@_)";
         private const string Acct2 = "_(* #,##0.00_);_(* \\(#,##0.00\\);_(* \"-\"??_);_(@_)";
 
@@ -441,19 +446,58 @@ namespace MyApp.Api.Helpers
 
             ws.Cell(r, CStripe).Style.Fill.BackgroundColor = SeparatorFill;
 
-            // ── Cost of Good Sold: X is keyed, the rest follows ──────────────
-            // X (opening Exl) is deliberately empty — see the class comment. The
-            // consumed Exl is backed out of the consumed sales tax at the
-            // combined rate the way the client's own sheet does it (their
-            // literal /21% generalised to the row's rate + VAT, so a 25% line
-            // does not silently use an 18% basis).
-            Blank(ws, r, CCogsOpenExl, Acct0);
+            // ── Cost of Good Sold ────────────────────────────────────────────
+            // Two sources, and the MEASURED one wins.
+            //
+            // When the GD costing import has priced this item, the opening's
+            // landed cost and the on-hand landed cost are both real stored
+            // figures walked by the same StockValuation pass as everything else
+            // on the row, so the block states them and the CONSUMED cell — the
+            // cost of goods that actually left — falls out as X - AD. Nothing
+            // else writes an actual cost (only the costing import, on an
+            // opening, and a hand stock adjustment, on a movement), so a
+            // purchase cannot quietly enter this pool and break that
+            // subtraction.
+            //
+            // Otherwise the client's own arithmetic fills it. Their sheet backs
+            // the consumed cost out of the consumed sales tax with =Q/21%, which
+            // is just "selling x rate / (rate + VAT)", and the opening column is
+            // that same transform applied to K. It reproduces 110 of the 117
+            // rows of their workbook to better than 1e-9; the other 7 are hand
+            // overrides (one has X = K, i.e. no uplift at all).
+            //
+            // Either way every cell is a FORMULA or a plain number the operator
+            // can type over, and the block's visible identity AD = X - AA holds
+            // in both shapes — only which cell carries the formula moves.
+            //
+            // The literal /21% and *18% are generalised to the row's own rate,
+            // so a 25% line is not silently costed at 18%. The zero-rate guard
+            // matters too: selling = cost x (rate + 3%) / rate has no meaning at
+            // 0%, there being no uplift to unwind, and ungarded it would report
+            // an exempt item's cost of goods as NIL rather than as its value.
+            // The client's sheet carries only 18% and 25%, so nothing in it
+            // would ever have caught that.
+            var costed = s.OpeningActualCostExcludingTax > 0m;
+            if (costed)
+            {
+                Number(ws, r, CCogsOpenExl, s.OpeningActualCostExcludingTax, Acct0);
+                Number(ws, r, CCogsBalExl, s.ActualCostExcludingTax, Acct2);
+                Formula(ws, r, CCogsConsExl, $"X{r}-AD{r}", Acct0);
+            }
+            else
+            {
+                Formula(ws, r, CCogsOpenExl, $"IF(L{r}=0,K{r},K{r}*L{r}/(L{r}+{VatRate}))", Acct0);
+                Formula(ws, r, CCogsConsExl, $"Q{r}/(L{r}+{VatRate})", Acct0);
+                Formula(ws, r, CCogsBalExl, $"X{r}-AA{r}", Acct2);
+            }
+
+            // The tax columns are DERIVED from the cost beside them at the row's
+            // own rate, in both shapes — never stored twice (§5b-4), and never
+            // at a rate borrowed from another row.
             Formula(ws, r, CCogsOpenTax, $"X{r}*L{r}", Acct2);
             Formula(ws, r, CCogsOpenVat, $"X{r}*{VatRate}", Acct0);
-            Formula(ws, r, CCogsConsExl, $"Q{r}/(L{r}+{VatRate})", Acct0);
             Formula(ws, r, CCogsConsTax, $"AA{r}*L{r}", Acct0);
             Formula(ws, r, CCogsConsVat, $"AA{r}*{VatRate}", Acct0);
-            Formula(ws, r, CCogsBalExl, $"X{r}-AA{r}", Acct2);
             Formula(ws, r, CCogsBalTax, $"Y{r}-AB{r}", Acct2);
             Formula(ws, r, CCogsBalVat, $"Z{r}-AC{r}", Acct2);
 
@@ -592,7 +636,7 @@ namespace MyApp.Api.Helpers
             {
                 "Opening is everything received — the opening balance plus purchases since.",
                 "Balance is the live position from the weighted-average valuation, not Opening minus Consumed.",
-                "Cost of Good Sold: key the Opening Exl column (X); S.Tax, Vat and the Consumed and Balance blocks follow by formula.",
+                "Cost of Good Sold uses the imported GD landed cost where one exists, so Consumed is what the goods sold actually cost; where none exists it unwinds the tax uplift (cost = value x rate / (rate + 3%)). Type over any cell to record a different figure.",
                 "Claim Month and Sub cat are yours to fill — this system records neither.",
                 "GDs No and GD Date are shown only where every customs lot behind an item names the same declaration.",
             })
@@ -619,14 +663,6 @@ namespace MyApp.Api.Helpers
             var cell = ws.Cell(r, c);
             cell.Value = value;
             cell.Style.NumberFormat.Format = format;
-        }
-
-        /// <summary>A cell that carries a format and a border but no value — the
-        /// Cost of Good Sold input column. Written explicitly so the accounting
-        /// format is already on it when the figure is typed.</summary>
-        private static void Blank(IXLWorksheet ws, int r, int c, string format)
-        {
-            ws.Cell(r, c).Style.NumberFormat.Format = format;
         }
 
         private static void Formula(IXLWorksheet ws, int r, int c, string formula, string format)
