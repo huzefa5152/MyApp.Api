@@ -1367,6 +1367,218 @@ def main():
               bf_item_after is not None and close(bf_item_after.get("valueExcludingTax"), bf_value_a),
               f"valueExcludingTax={bf_item_after.get('valueExcludingTax') if bf_item_after else None} expected(unchanged)={bf_value_a}")
 
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 15 -- GL posting (Task 20): New Arrivals posts a balanced
+        # entry dated the GD's own date; Backfill and a GL-disabled company
+        # post nothing; a cost-only line contributes no inventory debit;
+        # re-posting the same GD does not duplicate the entry.
+        # ══════════════════════════════════════════════════════════════════
+        print("\n-- 15. GL posting (Task 20) --")
+
+        gl_co = make_company(api, h, f"GD Costing GL {tag}")
+        try:
+            en = requests.post(f"{api}/accounting/gl/company/{gl_co}/enable", headers=h, timeout=180)
+            if not check("15: GL can be switched on for a fresh company", en.ok,
+                         f"http {en.status_code}: {en.text[:200]}"):
+                raise RuntimeError("Section 15 setup failed -- could not enable GL posting.")
+
+            # An item the sheet's FIRST line will cost-only-match, so this one
+            # GD carries both a cost-only line and a brand-new-stock line in
+            # a single consignment.
+            gl_existing_item = make_item(api, h, gl_co, f"GL Existing Item {tag}", hs="8481.1000")
+            set_opening(api, h, gl_co, gl_existing_item, qty=20, value=50000)
+
+            gl_a_gd = f"GD-GL-A-{tag}"
+            gl_new_name = f"GL New Item {tag}"
+            gl_a_row1 = row_cells(BASE_COLS, gl_a_gd, "8481.1000", desc=f"GL Existing Item {tag}",
+                                  qty=30, assessed=100000, others=1000, st=18, ast=3, it=6,
+                                  gddate="15-02-2026")
+            gl_a_row2 = row_cells(BASE_COLS, gl_a_gd, "8484.1029", desc=gl_new_name,
+                                  qty=20, assessed=50000, duty=2000, st=18, ast=3, it=6,
+                                  gddate="15-02-2026")
+            r = gd_preview(api, h, gl_co, build_sheet(BASE_HEADINGS, [gl_a_row1, gl_a_row2]),
+                           GD_MAPPING, mode="new-arrivals")
+            glA_prev = r.json() if r.ok else {}
+            if not check("15: the mixed cost-only + new-stock sheet previews", r.ok,
+                         f"http {r.status_code}: {r.text[:200]}"):
+                raise RuntimeError("Section 15 setup failed -- the mixed sheet did not preview.")
+
+            glA_lines = glA_prev.get("lines", [])
+            check("15: line 1 (existing HS code) previews as cost-only",
+                  len(glA_lines) == 2 and glA_lines[0].get("disposition") == "cost-only",
+                  f"dispositions={[l.get('disposition') for l in glA_lines]}")
+            check("15: line 2 (brand-new HS code) previews as stock-posted",
+                  len(glA_lines) == 2 and glA_lines[1].get("disposition") == "stock-posted",
+                  f"dispositions={[l.get('disposition') for l in glA_lines]}")
+
+            r = gd_commit(api, h, {
+                "companyId": gl_co, "fileSha256": glA_prev.get("fileSha256"),
+                "fileName": "gd-gl-a.xlsx", "fileSizeBytes": glA_prev.get("fileSizeBytes"),
+                "lines": glA_lines, "createMissingStock": True, "mode": "new-arrivals",
+            })
+            glA_res = r.json() if r.ok else {}
+            if not check("15: the mixed GD (new arrivals) commits", r.ok,
+                         f"http {r.status_code}: {r.text[:200]}"):
+                raise RuntimeError("Section 15 setup failed -- the mixed GD did not commit. "
+                                  "Aborting rather than cascading into unrelated failures.")
+
+            # Track the server-created item type for cleanup -- it is a GLOBAL
+            # catalog row (CLAUDE.md 5b-2) that make_item() never touched.
+            glA_new_opening = next((o for o in get_openings(api, h, gl_co)
+                                    if o.get("itemTypeName", "").startswith(gl_new_name)), None)
+            if glA_new_opening and glA_new_opening.get("itemTypeId"):
+                CREATED_ITEM_TYPE_IDS.append(glA_new_opening["itemTypeId"])
+
+            # Expected figures, computed the same way ImportCostingCalculator
+            # does (mirrored by compute_costing) -- Input Tax and Advance
+            # Income Tax sum BOTH lines; Inventory sums the stock-posted line
+            # ONLY.
+            c1 = compute_costing(assessed=100000, others=1000, st=18, ast=3, it=6)
+            c2 = compute_costing(assessed=50000, duty=2000, st=18, ast=3, it=6)
+            expected_inventory = money(c2["cost"])
+            expected_input_tax = money(c1["salesTax"] + c1["ast"] + d(1000)
+                                       + c2["salesTax"] + c2["ast"] + d(0))
+            expected_income_tax = money(c1["incomeTax"] + c2["incomeTax"])
+            expected_clearing = money(expected_inventory + expected_input_tax + expected_income_tax)
+
+            check("15: exactly one journal entry is reported, for the one GD",
+                  len(glA_res.get("journalEntries") or []) == 1,
+                  f"journalEntries={glA_res.get('journalEntries')}")
+            check("15: the commit response's totalPosted matches the balancing (Import Clearing) figure",
+                  close(glA_res.get("totalPosted"), float(expected_clearing)),
+                  f"totalPosted={glA_res.get('totalPosted')} expected={expected_clearing}")
+
+            je_id = (glA_res.get("journalEntries") or [{}])[0].get("journalEntryId")
+            je_r = requests.get(f"{api}/journal-entries/{je_id}", headers=h, timeout=60) if je_id else None
+            je = je_r.json() if je_r is not None and je_r.ok else {}
+            check("15: the entry is dated the GD's own date (15 Feb 2026), not today",
+                  (je.get("date") or "")[:10] == "2026-02-15", f"date={je.get('date')}")
+            check("15: the entry balances",
+                  je and close(je.get("totalDebit"), je.get("totalCredit")),
+                  f"totalDebit={je.get('totalDebit')} totalCredit={je.get('totalCredit')}")
+            check("15: the entry's source document type is ImportConsignment",
+                  je.get("sourceDocType") == "ImportConsignment",
+                  f"sourceDocType={je.get('sourceDocType')}")
+
+            by = {}
+            for l in je.get("lines", []):
+                nm = (l.get("accountName") or "").lower()
+                by[nm] = by.get(nm, 0) + (l.get("debit") or 0) - (l.get("credit") or 0)
+
+            inv = next((v for k, v in by.items() if "inventory on hand" in k), None)
+            check("15: Inventory is debited for the NEW-STOCK line's cost ONLY, not the cost-only line's",
+                  inv is not None and close(inv, float(expected_inventory)),
+                  f"inventory net-debit={inv} expected={expected_inventory} "
+                  f"(would be {c1['cost'] + c2['cost']} if the cost-only line were wrongly included)")
+            inp = next((v for k, v in by.items() if "input sales tax" in k), None)
+            check("15: Input Tax is SalesTax + AST + Others, summed across BOTH lines",
+                  inp is not None and close(inp, float(expected_input_tax)),
+                  f"input tax net-debit={inp} expected={expected_input_tax}")
+            ait = next((v for k, v in by.items() if "advance income tax" in k), None)
+            check("15: Advance Income Tax on Imports is IncomeTax, summed across both lines",
+                  ait is not None and close(ait, float(expected_income_tax)),
+                  f"advance income tax net-debit={ait} expected={expected_income_tax}")
+            clr = next((v for k, v in by.items() if "import clearing" in k), None)
+            check("15: Import Clearing carries the balancing credit",
+                  clr is not None and close(-clr, float(expected_clearing)),
+                  f"import clearing net-debit={clr} expected credit={expected_clearing}")
+
+            # ---- Backfill posts NO journal entry at all -------------------
+            gl_bf_gd = f"GD-GL-BF-{tag}"
+            gl_bf_name = f"GL Backfill Item {tag}"
+            gl_bf_row = row_cells(BASE_COLS, gl_bf_gd, "8517.6991", desc=gl_bf_name,
+                                  qty=10, assessed=40000, st=18, ast=3, it=6, gddate="20-02-2026")
+            r = gd_preview(api, h, gl_co, build_sheet(BASE_HEADINGS, [gl_bf_row]), GD_MAPPING,
+                           mode="backfill")
+            glBf_prev = r.json() if r.ok else {}
+            r = gd_commit(api, h, {
+                "companyId": gl_co, "fileSha256": glBf_prev.get("fileSha256"),
+                "fileName": "gd-gl-bf.xlsx", "fileSizeBytes": glBf_prev.get("fileSizeBytes"),
+                "lines": glBf_prev.get("lines", []), "createMissingStock": True,
+                "mode": "backfill",
+            })
+            glBf_res = r.json() if r.ok else {}
+            check("15: a backfill commit (new stock, GL-enabled company) still succeeds",
+                  r.ok, f"http {r.status_code}: {r.text[:200]}")
+            check("15: ...but backfill posts NO journal entry at all",
+                  r.ok and len(glBf_res.get("journalEntries") or []) == 0
+                  and (glBf_res.get("totalPosted") or 0) == 0,
+                  f"journalEntries={glBf_res.get('journalEntries')} totalPosted={glBf_res.get('totalPosted')}")
+
+            glBf_opening = next((o for o in get_openings(api, h, gl_co)
+                                 if o.get("itemTypeName", "").startswith(gl_bf_name)), None)
+            if glBf_opening and glBf_opening.get("itemTypeId"):
+                CREATED_ITEM_TYPE_IDS.append(glBf_opening["itemTypeId"])
+
+            # ---- Re-submitting the identical GD is refused, and the entry
+            #      already posted is neither duplicated nor changed ----------
+            r = gd_commit(api, h, {
+                "companyId": gl_co, "fileSha256": glA_prev.get("fileSha256"),
+                "fileName": "gd-gl-a.xlsx", "fileSizeBytes": glA_prev.get("fileSizeBytes"),
+                "lines": glA_lines, "createMissingStock": True, "mode": "new-arrivals",
+            })
+            dup_msg = (r.json().get("message") or "").lower() if r.text else ""
+            check("15: re-submitting the exact same file is refused (already imported)",
+                  r.status_code == 400 and "already" in dup_msg, f"http {r.status_code}: {r.text[:200]}")
+
+            je_again = requests.get(f"{api}/journal-entries/{je_id}", headers=h, timeout=60) if je_id else None
+            check("15: re-posting is idempotent -- the SAME entry still carries the SAME total, not doubled",
+                  je_again is not None and je_again.ok
+                  and close(je_again.json().get("totalCredit"), float(expected_clearing)),
+                  f"http {je_again.status_code if je_again is not None else 'n/a'}: "
+                  f"totalCredit={je_again.json().get('totalCredit') if je_again is not None and je_again.ok else None}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{gl_co}", headers=h, timeout=300)
+
+        # ---- A GL-DISABLED company posts nothing either --------------------
+        # make_company() doesn't expose enableGl, and CreateCompanyDto.EnableGl
+        # defaults to true (a new company gets GL from day one) -- so this one
+        # company in the whole suite must be created by hand, with it OFF.
+        r = requests.post(f"{api}/companies", headers=h, timeout=60, json={
+            "name": f"GD Costing GL Off {tag}", "brandName": "GDCOST",
+            "fullAddress": "1 Test Street", "phone": "021-0000000", "ntn": "1234567-8",
+            "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+            "startingSalesQuoteNumber": 1, "startingSalesOrderNumber": 1,
+            "enableGl": False,
+        })
+        if r.status_code not in (200, 201):
+            raise RuntimeError(f"GL-off company create failed: http {r.status_code} {r.text[:200]}")
+        gl_off_co = r.json()["id"]
+        gl_status = requests.get(f"{api}/accounting/gl/company/{gl_off_co}/status", headers=h, timeout=30)
+        check("15: the GL-off company genuinely has GL posting off",
+              gl_status.ok and gl_status.json().get("enabled") is False,
+              f"http {gl_status.status_code}: {gl_status.text[:200]}")
+        try:
+            gl_off_gd = f"GD-GL-OFF-{tag}"
+            gl_off_name = f"GL Off Item {tag}"
+            off_row = row_cells(BASE_COLS, gl_off_gd, "8481.1000", desc=gl_off_name,
+                                qty=15, assessed=30000, st=18, ast=3, it=6, gddate="10-02-2026")
+            r = gd_preview(api, h, gl_off_co, build_sheet(BASE_HEADINGS, [off_row]), GD_MAPPING,
+                           mode="new-arrivals")
+            off_prev = r.json() if r.ok else {}
+            r = gd_commit(api, h, {
+                "companyId": gl_off_co, "fileSha256": off_prev.get("fileSha256"),
+                "fileName": "gd-gl-off.xlsx", "fileSizeBytes": off_prev.get("fileSizeBytes"),
+                "lines": off_prev.get("lines", []), "createMissingStock": True,
+                "mode": "new-arrivals",
+            })
+            off_res = r.json() if r.ok else {}
+            check("15: a new-arrivals commit on a GL-DISABLED company still succeeds",
+                  r.ok, f"http {r.status_code}: {r.text[:200]}")
+            check("15: ...but posts no journal entry at all, GL being off for this company",
+                  r.ok and len(off_res.get("journalEntries") or []) == 0
+                  and (off_res.get("totalPosted") or 0) == 0,
+                  f"journalEntries={off_res.get('journalEntries')} totalPosted={off_res.get('totalPosted')}")
+
+            off_opening = next((o for o in get_openings(api, h, gl_off_co)
+                               if o.get("itemTypeName", "").startswith(gl_off_name)), None)
+            if off_opening and off_opening.get("itemTypeId"):
+                CREATED_ITEM_TYPE_IDS.append(off_opening["itemTypeId"])
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{gl_off_co}", headers=h, timeout=300)
+
     finally:
         if not args.keep:
             if restricted_user_id:

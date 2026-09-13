@@ -8,6 +8,7 @@ using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Helpers.ExcelImport;
 using MyApp.Api.Models;
+using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -17,6 +18,7 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _db;
         private readonly ISpreadsheetImportService _imports;
+        private readonly IPostingService _posting;
         private readonly ILogger<GdCostingImportService> _logger;
 
         /// <summary>A costing sheet with more lines than this is not a costing
@@ -27,10 +29,12 @@ namespace MyApp.Api.Services.Implementations
         public GdCostingImportService(
             AppDbContext db,
             ISpreadsheetImportService imports,
+            IPostingService posting,
             ILogger<GdCostingImportService> logger)
         {
             _db = db;
             _imports = imports;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -927,6 +931,45 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var consignment in consignmentsByGd.Values) consignment.ImportRunId = run.Id;
                 await _db.SaveChangesAsync();
 
+                // GL posting (Task 20). New Arrivals only — a Backfill GD is
+                // re-pricing stock already accounted for, so posting its tax
+                // and liability now would claim tax in the wrong period and
+                // invent a payable settled long ago (full reasoning on
+                // IPostingService.PostImportConsignmentAsync itself). Inside
+                // the SAME transaction as everything above: a posting failure
+                // must roll the whole commit back — a consignment recorded
+                // with no entry, or an entry with no consignment, is worse
+                // than a refused import.
+                var postedEntries = new List<GdCostingJournalEntryDto>();
+                if (mode == GdCostingImportModeNames.NewArrivals)
+                {
+                    foreach (var consignment in consignmentsByGd.Values)
+                        await _posting.PostImportConsignmentAsync(consignment);
+
+                    // Read back what actually posted rather than assuming every
+                    // consignment did — PostImportConsignmentAsync is a no-op
+                    // when GL posting is off for this company, or when every
+                    // line in a given GD is Skipped/Ambiguous, so this can
+                    // legitimately come back shorter than consignmentsByGd.
+                    var consignmentIds = consignmentsByGd.Values.Select(c => c.Id).ToList();
+                    var gdNumberByConsignmentId = consignmentsByGd.Values
+                        .ToDictionary(c => c.Id, c => c.GdNumber);
+                    var posted = await _db.JournalEntries.AsNoTracking()
+                        .Where(e => e.CompanyId == dto.CompanyId
+                                 && e.SourceDocType == SourceDocType.ImportConsignment
+                                 && e.SourceDocId.HasValue
+                                 && consignmentIds.Contains(e.SourceDocId.Value))
+                        .Select(e => new { e.Id, e.SourceDocId, Total = e.Lines.Sum(l => l.Debit) })
+                        .ToListAsync();
+                    foreach (var p in posted)
+                        postedEntries.Add(new GdCostingJournalEntryDto
+                        {
+                            JournalEntryId = p.Id,
+                            GdNumber = gdNumberByConsignmentId.GetValueOrDefault(p.SourceDocId!.Value, ""),
+                            Amount = p.Total,
+                        });
+                }
+
                 await tx.CommitAsync();
 
                 result.ImportRunId = run.Id;
@@ -947,6 +990,8 @@ namespace MyApp.Api.Services.Implementations
                 result.ItemTypesCreated = itemTypesCreated;
                 result.ItemTypesAdopted = itemTypesAdopted;
                 result.OpeningBalancesCreated = openingBalancesCreated;
+                result.JournalEntries = postedEntries;
+                result.TotalPosted = Money(postedEntries.Sum(e => e.Amount));
 
                 if (result.BalancesCosted > 0)
                     result.Messages.Add($"{result.BalancesCosted} opening balance(s) received an actual cost.");
@@ -960,6 +1005,9 @@ namespace MyApp.Api.Services.Implementations
                         $"{openingBalancesCreated} opening balance(s) created for unmatched lines ({itemTypesCreated} new item type(s) created, {itemTypesAdopted} adopted from the HS code master).");
                 if (result.LinesAmbiguous > 0)
                     result.Messages.Add($"{result.LinesAmbiguous} line(s) matched more than one opening balance and were left unresolved.");
+                if (result.JournalEntries.Count > 0)
+                    result.Messages.Add(
+                        $"{result.JournalEntries.Count} journal entr{(result.JournalEntries.Count == 1 ? "y" : "ies")} posted to the general ledger, totalling {result.TotalPosted:N2}.");
 
                 _logger.LogInformation(
                     "GD costing import into company {CompanyId}: {Consignments} consignments, {Lines} lines, {Costed} balances costed, {ItemTypesCreated} item types created, {BalancesCreated} balances created",

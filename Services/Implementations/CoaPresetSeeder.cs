@@ -80,11 +80,13 @@ namespace MyApp.Api.Services.Implementations
             await Account("inventory", "Inventory on hand", "assets", AccountType.Asset, ControlType.Inventory);
             await Account("input_tax", "Input Sales Tax", "assets", AccountType.Asset, ControlType.InputTax);
             await Account("wht_receivable", "WHT receivable", "assets", AccountType.Asset, ControlType.WithholdingReceivable);
+            await Account("advance_income_tax_imports", "Advance Income Tax on Imports", "assets", AccountType.Asset, ControlType.AdvanceIncomeTaxOnImports);
             await Account("prepaid", "Prepaid expenses", "assets", AccountType.Asset);
             await Group("fixed_assets", "Fixed assets", FinancialStatement.BalanceSheet, "assets", false);
 
             await Group("liabilities", "Liabilities", FinancialStatement.BalanceSheet, null, true);
             await Account("ap", "Accounts payable", "liabilities", AccountType.Liability, ControlType.AccountsPayable);
+            await Account("import_clearing", "Import Clearing", "liabilities", AccountType.Liability, ControlType.ImportClearing);
             await Account("output_tax", "Output Sales Tax", "liabilities", AccountType.Liability, ControlType.OutputTax);
             await Account("further_tax_payable", "Further Tax Payable", "liabilities", AccountType.Liability, ControlType.FurtherTaxPayable);
             await Account("wht_payable", "WHT payable", "liabilities", AccountType.Liability, ControlType.WithholdingPayable);

@@ -83,5 +83,37 @@ namespace MyApp.Api.Models.Accounting
         /// operator can deactivate or delete once its historical balance has been
         /// re-posted (Accounting → rebuild the ledger).</summary>
         CustomerAdvances = 19,
+
+        // NOTE: 19 is already double-booked (FurtherTaxPayable / CustomerAdvances
+        // above) — a pre-existing alias, not something to "fix" here. Never reuse
+        // 19 and never renumber either of those two; rows in Accounts are already
+        // stamped with it. The next two members take the first UNUSED numbers.
+
+        /// <summary>
+        /// Where a customs GD's landed-cost liability sits between clearance and
+        /// settlement, in New Arrivals mode (<c>GdCostingImportModeNames</c>) —
+        /// the accounts-payable answer for an import. The costing sheet names no
+        /// supplier and no payment reference, so there is nothing else to credit;
+        /// the real payment to the supplier and the clearing agent, once made, is
+        /// recorded against this account like any other payable settlement.
+        /// Deliberately NOT <see cref="Suspense"/>, which exists to make an
+        /// imbalance VISIBLE and would be useless as a destination if every
+        /// import were parked there instead of a role account of its own.
+        /// </summary>
+        ImportClearing = 20,
+
+        /// <summary>
+        /// Income tax collected by customs at the time of import, adjustable
+        /// against the year's liability — the same "collected now, set off
+        /// later" shape as <see cref="WithholdingReceivable"/>, but deliberately
+        /// a SEPARATE account rather than a reuse of it:
+        /// <c>AccountingReportService.TaxControl.cs</c> labels that one "income
+        /// tax withheld BY CUSTOMERS" specifically, and import income tax is
+        /// withheld by nobody — it is paid to customs on the declaration. Mixing
+        /// a second, unrelated tax into one control account is exactly what kept
+        /// <see cref="FurtherTaxPayable"/> out of <see cref="OutputTax"/>; the
+        /// same reasoning applies here, the other side of the ledger.
+        /// </summary>
+        AdvanceIncomeTaxOnImports = 21,
     }
 }

@@ -540,6 +540,122 @@ namespace MyApp.Api.Services.Implementations
                 transfer.Date, Narration(label, transfer.Description), transfer.DivisionId, lines);
         }
 
+        // ── GD import consignments (New Arrivals mode only) ────────────────────
+
+        /// <summary>See <see cref="IPostingService.PostImportConsignmentAsync"/>.
+        /// The CALLER decides whether this is even invoked — Backfill mode never
+        /// calls it, because a Backfill GD is re-pricing stock already accounted
+        /// for, and posting its tax and liability now would claim tax in the
+        /// wrong period and invent a payable settled long ago. This method does
+        /// not re-derive that decision itself: the mode lives on the commit
+        /// request, not on <see cref="ImportConsignment"/> itself.</summary>
+        public async Task PostImportConsignmentAsync(ImportConsignment consignment)
+        {
+            if (!await IsEnabledAsync(consignment.CompanyId)) return;
+            await AssertPeriodOpenAsync(consignment.CompanyId, consignment.GdDate);
+
+            // Fresh query, exactly as PostInvoiceAsync/PostPurchaseBillAsync read
+            // their own line items — never relies on consignment.Lines having
+            // been populated by navigation-fixup, and reads back whatever
+            // CreateMissingStockAsync's Disposition flips (e.g. a no-description
+            // line downgraded to Skipped) actually saved, not an in-memory copy
+            // that might predate them.
+            //
+            // Only a line a cost was actually attributed to counts for anything
+            // here — the same CostOnly-or-StockPosted predicate
+            // GdCostingCommitResultDto.TotalCostExcludingTax already sums.
+            // Skipped/Ambiguous lines touched nothing on the books (no balance,
+            // no cost), so posting their tax alone would leave a claim with no
+            // counterpart anywhere else in this entry or in stock.
+            var costedLines = await _context.ImportConsignmentLines.AsNoTracking()
+                .Where(l => l.ImportConsignmentId == consignment.Id
+                         && (l.Disposition == GdCostingDisposition.CostOnly
+                          || l.Disposition == GdCostingDisposition.StockPosted))
+                .ToListAsync();
+
+            decimal inventoryTotal = 0m, inputTaxTotal = 0m, incomeTaxTotal = 0m;
+            foreach (var line in costedLines)
+            {
+                // Server truth, recomputed from the line's OWN stored raw inputs
+                // — never trusts a header total. ImportConsignment's own
+                // TotalInputTax/TotalIncomeTax are summed from the CLIENT's
+                // submitted figures at commit time, before the per-line
+                // recompute against server truth (a documented, deferred gap —
+                // see CommitAsync's own remarks); this posting must not inherit
+                // that imprecision. Same calculator, same formula, as every
+                // other step of this feature.
+                var computed = ImportCostingCalculator.Compute(new ImportCostingCalculator.ImportCostingInput(
+                    AssessedValue: line.AssessedValue,
+                    CustomsDuty: line.CustomsDuty,
+                    Acd: line.Acd,
+                    RegulatoryDuty: line.RegulatoryDuty,
+                    Others: line.Others,
+                    SalesTaxRate: line.SalesTaxRate,
+                    AstRate: line.AstRate,
+                    IncomeTaxRate: line.IncomeTaxRate,
+                    AddOnProfit: line.AddOnProfit));
+
+                // A cost-only line's matched stock was never posted to the
+                // ledger in the first place (these companies' journals hold
+                // invoices only) — debiting Inventory for it now would create an
+                // asset with no counterpart. Only a genuinely NEW-STOCK line
+                // (StockPosted — a brand-new item type + opening balance this
+                // very commit created) gets one.
+                if (line.Disposition == GdCostingDisposition.StockPosted)
+                    inventoryTotal += line.CostExcludingTax;
+
+                // Others is folded into Input Tax here on purpose: the sheet's
+                // own row-2 label for that column is "GST /FED", so it is tax
+                // paid at import, and it already enters Subtotal — and
+                // therefore IncomeTax — while staying out of Cost.
+                // ImportCostingCalculator.InputTax is SalesTax + AST only (its
+                // OWN contract, used elsewhere in this feature), so Others is
+                // added on top here rather than by changing the calculator.
+                inputTaxTotal += computed.SalesTax + computed.Ast + line.Others;
+                incomeTaxTotal += computed.IncomeTax;
+            }
+
+            inventoryTotal = Money(inventoryTotal);
+            inputTaxTotal = Money(inputTaxTotal);
+            incomeTaxTotal = Money(incomeTaxTotal);
+            var clearingTotal = inventoryTotal + inputTaxTotal + incomeTaxTotal;
+
+            if (clearingTotal == 0m)
+            {
+                await RemoveForSourceAsync(consignment.CompanyId, SourceDocType.ImportConsignment, consignment.Id);
+                return;
+            }
+
+            var accounts = await LoadAccountsAsync(consignment.CompanyId);
+            var label = $"GD {consignment.GdNumber}";
+            var lines = new List<JournalLine>();
+
+            if (inventoryTotal != 0m)
+            {
+                var inventory = await ResolveAsync(consignment.CompanyId, accounts, ControlType.Inventory, "inventory");
+                AddLine(lines, inventory.Id, debit: inventoryTotal, credit: 0m, null, label);
+            }
+            if (inputTaxTotal != 0m)
+            {
+                var inputTax = await ResolveAsync(consignment.CompanyId, accounts, ControlType.InputTax, "input tax");
+                AddLine(lines, inputTax.Id, debit: inputTaxTotal, credit: 0m, null, label);
+            }
+            if (incomeTaxTotal != 0m)
+            {
+                var advanceIncomeTax = await ResolveAsync(consignment.CompanyId, accounts,
+                    ControlType.AdvanceIncomeTaxOnImports, "advance income tax on imports");
+                AddLine(lines, advanceIncomeTax.Id, debit: incomeTaxTotal, credit: 0m, null, label);
+            }
+
+            // The balancing leg — everything this GD's clearance and duties are
+            // owed against, whoever ultimately gets paid.
+            var importClearing = await ResolveAsync(consignment.CompanyId, accounts, ControlType.ImportClearing, "import clearing");
+            AddLine(lines, importClearing.Id, debit: 0m, credit: clearingTotal, null, label);
+
+            await WriteEntryAsync(consignment.CompanyId, SourceDocType.ImportConsignment, consignment.Id,
+                consignment.GdDate, label, null, lines);
+        }
+
         // ── Removal ────────────────────────────────────────────────────────────
 
         public async Task RemoveForSourceAsync(int companyId, SourceDocType type, int sourceDocId)
@@ -614,6 +730,9 @@ namespace MyApp.Api.Services.Implementations
 
         private static string? Narration(string reference, string? description) =>
             string.IsNullOrWhiteSpace(description) ? reference : $"{reference} — {description.Trim()}";
+
+        private static decimal Money(decimal value) =>
+            Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
         // ── Account resolution ─────────────────────────────────────────────────
 

@@ -345,6 +345,35 @@ namespace MyApp.Api.DTOs
         /// <summary>New OpeningStockBalance rows created for unmatched lines.</summary>
         public int OpeningBalancesCreated { get; set; }
 
+        /// <summary>
+        /// Journal entries this commit wrote to the general ledger — one per
+        /// GD, New Arrivals mode only (see
+        /// <c>Services.Interfaces.IPostingService.PostImportConsignmentAsync</c>).
+        /// Empty when GL posting is off for this company, this commit was
+        /// Backfill mode (which posts nothing at all), or every line of every
+        /// consignment was Skipped/Ambiguous.
+        /// </summary>
+        public List<GdCostingJournalEntryDto> JournalEntries { get; set; } = new();
+
+        /// <summary>Sum of every posted entry's total (Dr == Cr, since each
+        /// entry is balanced) — the new Import Clearing liability this commit
+        /// created. Zero when <see cref="JournalEntries"/> is empty.</summary>
+        public decimal TotalPosted { get; set; }
+
         public List<string> Messages { get; set; } = new();
+    }
+
+    /// <summary>One journal entry <see cref="GdCostingCommitResultDto"/> reports
+    /// back — just enough to find it in the ledger (Journal Register / the
+    /// account's own ledger drill-down) without a follow-up round trip.</summary>
+    public class GdCostingJournalEntryDto
+    {
+        public int JournalEntryId { get; set; }
+        public string GdNumber { get; set; } = "";
+
+        /// <summary>The entry's total — Dr Inventory (new-stock lines only) +
+        /// Dr Input tax + Dr Advance income tax on imports, which equals the Cr
+        /// Import Clearing balancing leg.</summary>
+        public decimal Amount { get; set; }
     }
 }

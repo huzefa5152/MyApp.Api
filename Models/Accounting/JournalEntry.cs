@@ -13,6 +13,7 @@ namespace MyApp.Api.Models.Accounting
         Payment = 3,          // receipt (money in) or payment (money out)
         AccountTransfer = 4,
         PurchaseDebitNote = 5, // supplier debit note (Dr AP / Cr inventory-or-account / Cr input tax)
+        ImportConsignment = 6, // GD costing consignment, New Arrivals mode only (Dr Inventory-new-stock-lines / Dr Input tax / Dr Advance income tax on imports / Cr Import Clearing)
     }
 
     /// <summary>

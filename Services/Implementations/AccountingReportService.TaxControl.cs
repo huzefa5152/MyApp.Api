@@ -67,8 +67,12 @@ namespace MyApp.Api.Services.Implementations
             // withholding is income tax deducted at source. Netting all four into one
             // figure produces a number that is not the sales-tax position and not the
             // withholding position either, and an operator filing a sales-tax return
-            // would read it as the former.
-            decimal output = 0, input = 0, whtPayable = 0, whtReceivable = 0;
+            // would read it as the former. Import Clearing and Advance Income Tax on
+            // Imports are a further, different pair again — a customs liability and
+            // an adjustable import income tax, not sales tax — kept apart for the
+            // same reason.
+            decimal output = 0, input = 0, whtPayable = 0, whtReceivable = 0,
+                importClearing = 0, advanceIncomeTaxOnImports = 0;
 
             foreach (var (control, kind) in new[]
             {
@@ -76,9 +80,12 @@ namespace MyApp.Api.Services.Implementations
                 (ControlType.InputTax, "Sales tax paid to suppliers"),
                 (ControlType.WithholdingPayable, "Income tax withheld from suppliers"),
                 (ControlType.WithholdingReceivable, "Income tax withheld by customers"),
+                (ControlType.ImportClearing, "Owed for goods cleared through customs"),
+                (ControlType.AdvanceIncomeTaxOnImports, "Income tax paid at import (adjustable)"),
             })
             {
-                var isPayable = control is ControlType.OutputTax or ControlType.WithholdingPayable;
+                var isPayable = control is ControlType.OutputTax or ControlType.WithholdingPayable
+                                         or ControlType.ImportClearing;
                 var accounts = await TaxAccountsAsync(companyId, control);
                 foreach (var a in accounts)
                 {
@@ -102,7 +109,9 @@ namespace MyApp.Api.Services.Implementations
                         case ControlType.OutputTax: output += amount; break;
                         case ControlType.InputTax: input += amount; break;
                         case ControlType.WithholdingPayable: whtPayable += amount; break;
-                        default: whtReceivable += amount; break;
+                        case ControlType.WithholdingReceivable: whtReceivable += amount; break;
+                        case ControlType.ImportClearing: importClearing += amount; break;
+                        default: advanceIncomeTaxOnImports += amount; break;
                     }
                 }
             }
@@ -141,6 +150,23 @@ namespace MyApp.Api.Services.Implementations
                               + "different taxes: the sales-tax position is what a sales-tax return "
                               + "reports, while withholding is income tax deducted at source. They are "
                               + "deliberately not netted into a single figure.";
+            }
+
+            // Import figures only appear when there is any, for the same reason
+            // withholding does above — a company that has never run a GD
+            // costing import is not shown two zeroes to interpret.
+            if (importClearing != 0m || advanceIncomeTaxOnImports != 0m)
+            {
+                report.Totals["importClearing"] = importClearing;
+                report.Totals["advanceIncomeTaxOnImports"] = advanceIncomeTaxOnImports;
+                report.TotalLabels["importClearing"] = "Import Clearing (owed)";
+                report.TotalLabels["advanceIncomeTaxOnImports"] = "Advance Income Tax on Imports";
+                if (string.IsNullOrEmpty(report.Notice))
+                    report.Notice = "Import Clearing and Advance Income Tax on Imports are shown "
+                                  + "separately from sales tax and withholding tax because they are a "
+                                  + "different charge again — a customs liability and an adjustable "
+                                  + "income tax paid at import, not a sales-tax position. They are "
+                                  + "deliberately not netted into a single figure.";
             }
 
             report.GroupSummaries.Add(new ReportGroupSummaryDto
@@ -577,6 +603,7 @@ namespace MyApp.Api.Services.Implementations
             SourceDocType.Payment => "Receipt / payment",
             SourceDocType.AccountTransfer => "Transfer",
             SourceDocType.PurchaseDebitNote => "Supplier debit note",
+            SourceDocType.ImportConsignment => "GD import consignment",
             _ => t.ToString(),
         };
 

@@ -50,6 +50,18 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Inter-account transfer: Dr receiving, Cr paying account.</summary>
         Task PostTransferAsync(AccountTransfer transfer);
 
+        /// <summary>GD costing consignment: Dr Inventory (new-stock lines only —
+        /// a cost-only line's matched stock was never on the ledger to begin
+        /// with, so it gets no inventory debit), Dr Input tax (sales tax + AST +
+        /// Others), Dr Advance income tax on imports, Cr Import Clearing for the
+        /// balancing total. Dated the GD's own date, not today. The CALLER
+        /// decides whether to invoke this at all — only a New Arrivals commit
+        /// should; a Backfill commit must post nothing, so the GD costing
+        /// import service never calls this for one. Skipped/Ambiguous lines
+        /// contribute nothing to any leg — no cost was ever attributed to
+        /// them.</summary>
+        Task PostImportConsignmentAsync(ImportConsignment consignment);
+
         /// <summary>Deletes the journal entry (and lines) for a source document.
         /// Called from document delete paths. Safe when none exists.</summary>
         Task RemoveForSourceAsync(int companyId, SourceDocType type, int sourceDocId);

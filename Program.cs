@@ -835,6 +835,10 @@ using (var scope = app.Services.CreateScope())
     await MyApp.Api.Data.WithholdingTaxMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.FurtherTaxAccountSeeder.SeedAsync(db);
     await MyApp.Api.Data.FurtherTaxMergeFieldSeeder.SeedAsync(db);
+    // Import Clearing + Advance Income Tax on Imports control accounts (GD
+    // costing GL posting) — same backfill contract as the further-tax account
+    // above.
+    await MyApp.Api.Data.ImportCostingAccountSeeder.SeedAsync(db);
 
     // Credit/Debit Note + Purchase Bill + Goods Receipt template merge
     // fields — same idempotent runtime-seed contract.
