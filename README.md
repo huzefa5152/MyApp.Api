@@ -399,6 +399,30 @@ Publish output optimized from 79 MB to 37 MB via:
   leaving it half undone. Any journal entry the consignment posted is
   withdrawn. Once deleted, the same GD number can be imported again — until
   then, the "already recorded" message now says where to go to remove it.
+- **An architecture review of this feature found and fixed three real
+  defects, and brought the runbook back in line with what actually ships.**
+  New Arrivals' Inventory debit was undercounting: a matched (cost-only) line
+  is exactly where a New Arrivals GD ADDS new quantity, cost and selling
+  value onto an existing balance, so its landed cost belongs in Inventory the
+  same as a brand-new line's does — excluding it silently understated
+  Inventory while Import Clearing still carried the full liability, wrong on
+  the ordinary matched-line path from month 2 onward. Fixed to read the
+  consignment's own Mode rather than disposition alone.
+  **`stock.actualcost.view` existed as a permission and the frontend already
+  gated on it, but no controller enforced it** — the on-hand grid, the Excel
+  export and the movements drill-down all handed back actual cost and margin
+  regardless of whether the caller held it; now redacted server-side (nulled,
+  never zeroed, so a hidden figure is never misread as "no cost imported",
+  and Margin never reads as a false 100%) across all three. And nothing
+  stopped a
+  second Backfill from silently overwriting a balance an earlier GD had
+  already costed — already corrupted 26 real opening balances across two
+  companies. The preview now warns, naming the figure that would be
+  replaced, before a Backfill line would overwrite an existing actual cost,
+  without blocking a deliberate re-backfill after a correction.
+  `GD_IMPORT_COSTING_GUIDE.md`'s own §7 is rewritten to match — it still
+  claimed the import posts nothing to the GL at all, which commit
+  `077f3db` had already made false.
 
 ### 2026-09-13 — Stock export scrolls properly, and Cost of Good Sold fills itself
 

@@ -592,6 +592,7 @@ export default function GdCostingImportPage() {
   const costOnlyCount = counts["cost-only"] || 0;
   const notMatchedCount = counts["stock-posted"] || 0;
   const ambiguousCount = counts["ambiguous"] || 0;
+  const overwriteWarningCount = preview?.overwriteWarningCount || 0;
 
   if (!canView) {
     return <div style={{ padding: "1.5rem" }}>
@@ -706,6 +707,14 @@ export default function GdCostingImportPage() {
             · {ambiguousCount} ambiguous
           </p>
 
+          {overwriteWarningCount > 0 && (
+            <Banner tone="error" icon={MdWarning}>
+              {overwriteWarningCount} line{overwriteWarningCount === 1 ? "" : "s"} will REPLACE an actual
+              cost already recorded from an earlier import — see the highlighted row(s) below. Switch to
+              "These are new arrivals" instead if these are additional goods, not a correction.
+            </Banner>
+          )}
+
           {notMatchedCount > 0 && (
             <label style={{
               display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13.5,
@@ -774,7 +783,10 @@ export default function GdCostingImportPage() {
                       const notMatched = l.disposition === "stock-posted";
                       const willCreate = notMatched && createMissingStock;
                       return (
-                        <tr key={l.sourceRow} style={{ opacity: notMatched && !willCreate ? 0.6 : 1 }}>
+                        <tr key={l.sourceRow} style={{
+                          opacity: notMatched && !willCreate ? 0.6 : 1,
+                          background: l.overwriteWarning ? colors.dangerLight : undefined,
+                        }}>
                           <td style={td}>
                             <div>{l.gdNumber}</div>
                             <div style={{ fontSize: 11.5, color: colors.textSecondary }}>
@@ -798,7 +810,16 @@ export default function GdCostingImportPage() {
                           </td>
                           <td style={td}>
                             <div style={wrap2}>
-                              {willCreate ? WILL_CREATE_NOTE : (notMatched ? NOT_MATCHED_NOTE : (l.matchNote || "—"))}
+                              {l.overwriteWarning && (
+                                <div style={{ color: colors.danger, fontWeight: 700, marginBottom: l.matchNote ? 4 : 0 }}>
+                                  {l.overwriteWarning}
+                                </div>
+                              )}
+                              {willCreate
+                                ? WILL_CREATE_NOTE
+                                : notMatched
+                                  ? NOT_MATCHED_NOTE
+                                  : l.matchNote || (l.overwriteWarning ? null : "—")}
                             </div>
                           </td>
                         </tr>

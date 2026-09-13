@@ -57,10 +57,17 @@
         // walked by the SAME StockValuation pass as everything else on this row
         // — it DEPLETES as stock sells, exactly like ValueExcludingTax does,
         // never a static opening figure. Zero means not known (nothing imported
-        // an actual cost for this item).
+        // an actual cost for this item). NULL is a DIFFERENT thing: the caller
+        // lacks stock.actualcost.view and StockController redacted these three
+        // fields (plus StockMovementRowDto's own pair) before returning the row
+        // — never confuse the two, which is exactly why zero was not reused for
+        // "not permitted" (a redacted Margin would otherwise render as the
+        // FULL selling value, reading like a 100% margin rather than a hidden
+        // one).
 
-        /// <summary>What the on-hand quantity actually cost, excluding tax.</summary>
-        public decimal ActualCostExcludingTax { get; set; }
+        /// <summary>What the on-hand quantity actually cost, excluding tax.
+        /// Null when the caller lacks <c>stock.actualcost.view</c>.</summary>
+        public decimal? ActualCostExcludingTax { get; set; }
 
         /// <summary>
         /// What the OPENING quantity actually cost — the stored figure the GD
@@ -71,29 +78,34 @@
         /// costing import puts an actual cost on an opening, and nothing but a
         /// hand adjustment puts one on a movement, so for an importer
         /// <c>opening − on-hand</c> IS what the goods that left actually cost.
-        /// Zero means no costing has been imported for this item.
+        /// Zero means no costing has been imported for this item. Null means
+        /// the caller lacks <c>stock.actualcost.view</c> — see above.
         /// </summary>
-        public decimal OpeningActualCostExcludingTax { get; set; }
+        public decimal? OpeningActualCostExcludingTax { get; set; }
 
         /// <summary>Weighted-average ACTUAL cost of a single unit on hand —
-        /// the actual-cost pool's own <see cref="UnitCost"/>.</summary>
-        public decimal ActualUnitCost { get; set; }
+        /// the actual-cost pool's own <see cref="UnitCost"/>. Null when the
+        /// caller lacks <c>stock.actualcost.view</c>.</summary>
+        public decimal? ActualUnitCost { get; set; }
 
         /// <summary>Selling value less actual cost. Negative is a real state —
         /// stock whose selling value has fallen below what it cost — and must
-        /// render as such, never clamped.</summary>
-        public decimal Margin => ValueExcludingTax - ActualCostExcludingTax;
+        /// render as such, never clamped. Null (not a number) when
+        /// <see cref="ActualCostExcludingTax"/> is null — a redacted cost must
+        /// not produce a Margin that reads as "cost is zero".</summary>
+        public decimal? Margin => ValueExcludingTax - ActualCostExcludingTax;
 
         /// <summary>
         /// Margin as a percentage of selling value, or NULL when there is no
-        /// selling value to measure against — the same rule
+        /// selling value to measure against, or when <see cref="Margin"/>
+        /// itself is null (redacted) — the same rule
         /// <see cref="OpeningStockBalanceDto.MarginPercent"/> already applies,
         /// for the same reason: a row can carry a real actual cost with no
         /// selling value yet, and a MarginPercent of 0 would read as breakeven
         /// on a row that is entirely under water.
         /// </summary>
-        public decimal? MarginPercent => ValueExcludingTax > 0m
-            ? Math.Round(Margin * 100m / ValueExcludingTax, 2, MidpointRounding.AwayFromZero)
+        public decimal? MarginPercent => Margin.HasValue && ValueExcludingTax > 0m
+            ? Math.Round(Margin.Value * 100m / ValueExcludingTax, 2, MidpointRounding.AwayFromZero)
             : null;
     }
 
@@ -140,12 +152,15 @@
         /// <summary>Actual (landed) cost of one unit, as this movement was
         /// valued by the actual-cost pool —
         /// <see cref="MyApp.Api.Helpers.StockValuation.Step"/>'s own figure,
-        /// never recomputed.</summary>
-        public decimal ActualUnitCost { get; set; }
+        /// never recomputed. Null when the caller lacks
+        /// <c>stock.actualcost.view</c> — see the note on
+        /// <see cref="StockOnHandRowDto.ActualCostExcludingTax"/>.</summary>
+        public decimal? ActualUnitCost { get; set; }
 
         /// <summary>Actual cost on hand immediately after this movement,
-        /// excluding tax — the actual-cost pool's own running total.</summary>
-        public decimal RunningActualValue { get; set; }
+        /// excluding tax — the actual-cost pool's own running total. Null when
+        /// the caller lacks <c>stock.actualcost.view</c>.</summary>
+        public decimal? RunningActualValue { get; set; }
     }
 
     public class OpeningStockBalanceDto

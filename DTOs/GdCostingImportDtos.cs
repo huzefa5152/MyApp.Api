@@ -173,6 +173,21 @@ namespace MyApp.Api.DTOs
         /// something worth saying (quantities differ, no match, ambiguous);
         /// null on an unremarkable exact match.</summary>
         public string? MatchNote { get; set; }
+
+        /// <summary>
+        /// Non-null only under Backfill mode, when the matched balance already
+        /// carries a non-zero <c>ActualCostExcludingTax</c> from an earlier
+        /// import — Backfill SETS the cost, so committing this line REPLACES
+        /// that figure with no way to recover it afterwards (unlike New
+        /// Arrivals, which adds and so never destroys a prior number). Kept
+        /// separate from <see cref="MatchNote"/> so the two can render
+        /// together — a line can both mismatch quantity AND overwrite an
+        /// existing cost — and so a caller can count/filter on this
+        /// specifically rather than parsing free text. Never blocks commit; a
+        /// deliberate re-backfill after a correction is legitimate, this is a
+        /// warning only.
+        /// </summary>
+        public string? OverwriteWarning { get; set; }
     }
 
     /// <summary>
@@ -246,6 +261,13 @@ namespace MyApp.Api.DTOs
         /// <summary>Counts per <see cref="GdCostingDispositionNames"/> value —
         /// the "71 matched, 12 unmatched, 0 ambiguous" summary line.</summary>
         public Dictionary<string, int> DispositionCounts { get; set; } = new();
+
+        /// <summary>How many lines carry a non-null
+        /// <see cref="GdCostingLineDto.OverwriteWarning"/> — always 0 outside
+        /// Backfill mode. Surfaced alongside <see cref="DispositionCounts"/>
+        /// so the operator sees the total before scanning every line for the
+        /// highlighted ones.</summary>
+        public int OverwriteWarningCount { get; set; }
 
         /// <summary>Lines read, before anything was blocked. Equal to
         /// <c>Lines.Count</c> here — GD costing rows are never grouped the way

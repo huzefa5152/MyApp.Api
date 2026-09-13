@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Models.Accounting;
@@ -546,13 +547,16 @@ namespace MyApp.Api.Services.Implementations
         /// The CALLER decides whether this is even invoked — Backfill mode never
         /// calls it, because a Backfill GD is re-pricing stock already accounted
         /// for, and posting its tax and liability now would claim tax in the
-        /// wrong period and invent a payable settled long ago. This method does
-        /// not re-derive that decision itself: the mode lives on the commit
-        /// request, not on <see cref="ImportConsignment"/> itself.</summary>
+        /// wrong period and invent a payable settled long ago. <see cref="ImportConsignment.Mode"/>
+        /// is read below to decide what a CostOnly line does to the Inventory
+        /// debit (see the loop), but whether to post AT ALL is still the
+        /// caller's call, not re-derived here.</summary>
         public async Task PostImportConsignmentAsync(ImportConsignment consignment)
         {
             if (!await IsEnabledAsync(consignment.CompanyId)) return;
             await AssertPeriodOpenAsync(consignment.CompanyId, consignment.GdDate);
+
+            var mode = GdCostingImportModeNames.Normalize(consignment.Mode);
 
             // Fresh query, exactly as PostInvoiceAsync/PostPurchaseBillAsync read
             // their own line items — never relies on consignment.Lines having
@@ -595,13 +599,29 @@ namespace MyApp.Api.Services.Implementations
                     IncomeTaxRate: line.IncomeTaxRate,
                     AddOnProfit: line.AddOnProfit));
 
-                // A cost-only line's matched stock was never posted to the
-                // ledger in the first place (these companies' journals hold
-                // invoices only) — debiting Inventory for it now would create an
-                // asset with no counterpart. Only a genuinely NEW-STOCK line
-                // (StockPosted — a brand-new item type + opening balance this
-                // very commit created) gets one.
-                if (line.Disposition == GdCostingDisposition.StockPosted)
+                // Whether a CostOnly line debits Inventory depends on the
+                // consignment's MODE, not on the disposition alone.
+                //
+                // Under Backfill, a CostOnly line is RE-PRICING stock already on
+                // the books — its quantity and value were posted (or opened)
+                // long before this GD, so debiting Inventory again now would
+                // create an asset with no counterpart. That reasoning is why
+                // Backfill posts no journal entry at all, and this method is
+                // never even called for one (see the caller in
+                // GdCostingImportService.CommitAsync).
+                //
+                // Under New Arrivals, a CostOnly line is exactly where NEW
+                // quantity, cost and selling value are ADDED onto an existing
+                // balance (GdCostingImportService.CommitAsync's New Arrivals
+                // branch) — genuinely new goods landing against an
+                // already-known product, so its landed cost belongs in
+                // Inventory exactly as a brand-new StockPosted line's does.
+                // Skipping it here (as an earlier version of this method did)
+                // understated Inventory while the full cost still credited
+                // Import Clearing, overstating the liability by the same
+                // amount — wrong on the common path, since a matched line is
+                // the ordinary case from month 2 onward.
+                if (mode == GdCostingImportModeNames.NewArrivals)
                     inventoryTotal += line.CostExcludingTax;
 
                 // Others is folded into Input Tax here on purpose: the sheet's

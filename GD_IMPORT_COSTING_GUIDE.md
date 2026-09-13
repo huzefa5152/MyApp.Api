@@ -89,7 +89,8 @@ unmatched line will:
 
 ## 5. What the import does NOT touch
 
-- **Nothing is posted to the general ledger.** See §7.
+- **Nothing is posted to the general ledger in Backfill mode.** A New Arrivals
+  commit DOES post one journal entry per GD — see §7.
 - No stock movements are written. The opening balance is the vehicle.
 - Selling prices, quantities on existing documents, and anything filed with FBR
   are untouched.
@@ -120,58 +121,61 @@ Depletion proof, ASSORTED CONVEYOR BELT: opening actual cost 1,734,740.78 over
 
 ---
 
-## 7. Accounting impact — WHAT POSTS TODAY: NOTHING
+## 7. Accounting impact — NEW ARRIVALS POSTS; BACKFILL DOES NOT
 
-**As of 2026-09-13 the GD costing import writes no journal entry at all.**
-Verified: `JournalEntries` on this installation contains only `SourceDocType = 1`
-(invoices). The control accounts named below **do not exist yet** — there is no
-`ImportClearing` and no `AdvanceIncomeTaxOnImports` in `ControlType`.
-
-So today:
-
-- Actual cost is **inventory management information only**. It changes the stock
-  dashboard and nothing else.
-- **No accounts payable is created.** The money you owe the supplier and the
-  clearing agent is not recorded by this import. Record it the way you do now —
-  a purchase bill or a manual journal — and be aware it is NOT linked to the
-  consignment.
-- Input sales tax and AST paid at import are computed and shown on the preview so
-  you can reconcile against the GD, but they are **not** posted to a recoverable
-  tax account.
-- Income tax at import is likewise computed and shown but not posted.
-
-### What is DESIGNED to post, when phase 2 is built
-
-Recorded here so the intent is not lost, and so nobody mistakes it for current
-behaviour. Per GD, dated the GD date, one balanced entry:
+**As of commit `077f3db` (2026-09-13) a New Arrivals commit writes one balanced
+journal entry per GD, dated the GD's own date:**
 
 ```
-Dr  Inventory                        Σ Cost              (new-stock lines only)
-Dr  Input Tax                        Σ (SalesTax + AST)
+Dr  Inventory                        Σ Cost              (every costed line)
+Dr  Input Tax                        Σ (SalesTax + AST + Others)
 Dr  Advance Income Tax on Imports    Σ IncomeTax
     Cr  Import Clearing              the balancing total
 ```
 
-Two new control accounts are required and neither is built:
-
-- **`ImportClearing`** — a LIABILITY. This is the accounts-payable answer to the
-  question "where does the import liability sit". The costing sheet names no
-  supplier and no payment reference, so there is nothing else to credit; the
-  operator settles it when the real payment to the supplier and the clearing
-  agent is recorded. It is deliberately NOT `Suspense`, which exists to make
-  imbalances visible and would be useless if every import were parked there.
-- **`AdvanceIncomeTaxOnImports`** — an ASSET. Deliberately NOT the existing
-  `WithholdingReceivable`, which the tax-control report labels "Income tax
-  withheld by customers" — import income tax is withheld by nobody, and mixing a
-  second tax into a control account stops it reconciling.
-
-A **cost-only** line will contribute no inventory debit even then: those goods
-were never posted to the ledger in the first place (these companies' journals
-hold invoices only), so debiting inventory for stock the ledger has never carried
-would create an asset with no counterpart. Its input tax and income tax still
-post — those were really paid.
-
-Nothing will post on a company with `GlPostingEnabled` false.
+- **Inventory is debited for EVERY costed line — CostOnly and StockPosted
+  alike, not new-stock lines only.** Under New Arrivals a CostOnly (matched)
+  line is exactly where new quantity, cost and selling value are ADDED onto an
+  existing balance (§3) — genuinely new goods landing against an
+  already-known product — so its landed cost belongs in Inventory the same as
+  a brand-new StockPosted line's does. An earlier build excluded it, which
+  understated Inventory while the full cost still credited Import Clearing —
+  wrong on the ordinary, common-case path (a matched line is the usual
+  outcome from month 2 onward). Fixed 2026-09-13; see §12.
+- **Backfill posts NOTHING, and that is deliberate, not a gap.** A Backfill
+  commit is RE-PRICING stock already on the books — its quantity and value
+  were posted (or opened) long before this GD — so there is no new asset, no
+  new tax paid THIS period, and no new liability to record. Posting one now
+  would claim tax in the wrong period and invent a payable that was in fact
+  settled long ago. `PostImportConsignmentAsync` is never even called for a
+  Backfill commit — the caller (`GdCostingImportService.CommitAsync`) only
+  invokes it under New Arrivals.
+- **`ImportClearing` is where the import payable sits** between clearance and
+  settlement — the accounts-payable answer for an import. The costing sheet
+  names no supplier and no payment reference, so there is nothing else to
+  credit; the operator settles it (moves it off Import Clearing) when the real
+  payment to the supplier and the clearing agent is recorded, by the ordinary
+  means (a purchase bill or a manual journal against Import Clearing) — **do
+  NOT also book a purchase bill or manual journal for the landed cost itself
+  on a New Arrivals GD**, or the liability is booked twice: once by this
+  import, once by the manual entry. (Recording it manually was the right
+  advice before GL posting shipped; it is wrong now for a New Arrivals GD.)
+- Both control accounts **exist and are seeded**, on new and existing charts
+  alike: `ImportCostingAccountSeeder` runs at startup and adds
+  `ImportClearing` (a LIABILITY, beside Accounts Payable) and
+  `AdvanceIncomeTaxOnImports` (an ASSET, beside Withholding Receivable — kept
+  separate because import income tax is withheld by nobody, and mixing a
+  second tax into that control account would stop it reconciling) to any
+  company whose chart already exists and lacks them; `CoaPresetSeeder` gives
+  both to any company set up from now on. Neither is `Suspense`, which exists
+  to make imbalances visible and would be useless if every import were parked
+  there.
+- Nothing posts on a company with `GlPostingEnabled` false, New Arrivals or
+  Backfill alike.
+- Actual cost remains inventory management information for the stock
+  dashboard regardless of mode — see §2's permission note — but under New
+  Arrivals it is now ALSO a real, ledger-posted asset movement, not merely a
+  dashboard figure.
 
 ---
 
@@ -192,7 +196,7 @@ deliberate and are the correct behaviour.
 | Margin can be negative | Yes | A real state; never clamped |
 | Margin % shows a dash | Yes | When there is no selling value to measure against |
 | Actual cost of 0 | Yes | Means "not known" |
-| Nothing posts to the GL | Yes, for now | §7 |
+| Backfill posts nothing to the GL; New Arrivals posts one entry per GD | Yes | §7 |
 | A purchase bill at 25% GST does not move the item onto 25% | **NO — pre-existing bug** | See §9 |
 
 ---
@@ -256,7 +260,9 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 | 2026-09-13 | — | "sheet for every month will be imported ... some will use existing item type and some will have new" | Month 2 would have overwritten cost and added no stock. | Built the two import modes (§3). |
 | 2026-09-13 | — | Test suites leaving item types behind | `ItemType` is a GLOBAL catalog with no `CompanyId`, so deleting a throwaway company does NOT remove the item types a suite created. They pile up under real HS codes. | The GD suite now deletes what it creates. 139 leftover rows removed; two tariff placeholders it had renamed were restored to their published descriptions and un-adopted. |
 | 2026-09-13 | — | `test_spreadsheet_import` 133/2 | Its "every item is new on a first upload" assertion fails against HS-tariff placeholders that **its own earlier runs** adopted and renamed (`WASHING PARTS`, `LED ONE`). Self-polluting, and unrelated to GD costing — clearing the GD suite's residue changed nothing. | Not fixed. That suite needs its own teardown, or fixture HS codes nothing else adopts. |
-| | | | | |
+| 2026-09-13 | — | Architecture review, Finding 1 (CRITICAL): New Arrivals understates Inventory while overstating the liability | `PostImportConsignmentAsync` debited Inventory for `StockPosted` lines only. Under New Arrivals a matched (`CostOnly`) line ADDS quantity, cost and selling value onto an existing balance (§3) — genuinely new goods — so its tax and full cost were posted (debited/credited) while its cost never reached Inventory. Balanced arithmetically (the credit is defined as the debit sum) but wrong: Inventory understated, Import Clearing overstated by the same amount, on the ordinary matched-line path from month 2 onward. | Fixed: the Inventory debit now reads the consignment's own `Mode` (persisted since `7d2871c`) rather than disposition alone — every costed line (`CostOnly` and `StockPosted`) debits Inventory under New Arrivals; Backfill still posts nothing (§7). |
+| 2026-09-13 | — | Architecture review, Finding 2 (CRITICAL): `stock.actualcost.view` is decorative | The permission is defined and the frontend gates rendering on it, but no controller action checked it — `StockController.BuildOnHandAsync` populated actual cost and margin on every row of the on-hand grid, the Excel export and the movements drill-down regardless, so anyone who could see stock at all received the company's landed cost and margin in the raw JSON or a downloadable spreadsheet. | Fixed: `StockController` now checks the permission imperatively (`IPermissionService`) and nulls `ActualCostExcludingTax` / `OpeningActualCostExcludingTax` / `ActualUnitCost` / `RunningActualValue` on all three surfaces when the caller lacks it — nulled rather than zeroed, so a redacted row cannot be misread as "actual cost is zero" (zero already means that) or make Margin read as the full selling value. `StockExcelBuilder`'s Cost-of-Good-Sold block falls back to its existing client-formula branch automatically. |
+| 2026-09-13 | — | Architecture review, Finding 3 (IMPORTANT): nothing stops the overwrite recurring | A Backfill commit SETs `ActualCostExcludingTax` with no check that the balance already carried a cost from an earlier GD — already corrupted 26 real opening balances (9 on company 5, 17 on company 6), each holding only the last consignment's rate applied to the whole accumulated quantity. | Fixed at PREVIEW time (not blocked — a deliberate re-backfill after a correction is legitimate): a Backfill line matching a balance whose `ActualCostExcludingTax` is already non-zero carries a new `OverwriteWarning` naming the figure that would be replaced, counted in the preview's `OverwriteWarningCount`, and rendered next to the line beside its match note. The 26 already-corrupted balances are NOT touched by this fix — a separate, maintainer-approved data operation. |
 
 ---
 
@@ -274,7 +280,8 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 | 2026-09-13 | Actual cost in the stock Adjust dialog, both modes |
 | 2026-09-13 | Hand-typed single-line entry, through the same preview and commit as the sheet |
 | 2026-09-13 | Backfill vs new-arrivals mode |
+| 2026-09-13 | GL posting for New Arrivals (`077f3db`): `ImportClearing` / `AdvanceIncomeTaxOnImports` control accounts, seeded on new and existing charts; `PostImportConsignmentAsync`; a Consignments screen to view and delete a recorded import, mode-aware reversal |
+| 2026-09-13 | Architecture-review fixes (Findings 1-3, §12): Inventory debit made mode-aware so a matched New Arrivals line is no longer excluded; `stock.actualcost.view` enforced server-side across the on-hand grid, the Excel export and the movements drill-down; a Backfill preview against an already-costed balance now warns before overwriting it |
 
-Deferred: GL posting (§7); a screen to browse recorded consignments
-(`importcosting.consignments.view` exists but nothing consumes it); an upsert
-path for re-importing a GD already recorded.
+Deferred: a screen listing consignments now exists (Consignments, above) but an
+upsert path for re-importing a GD already recorded is still not built.

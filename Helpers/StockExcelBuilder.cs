@@ -477,11 +477,17 @@ namespace MyApp.Api.Helpers
             // an exempt item's cost of goods as NIL rather than as its value.
             // The client's sheet carries only 18% and 25%, so nothing in it
             // would ever have caught that.
-            var costed = s.OpeningActualCostExcludingTax > 0m;
+            // Both fields are null (never just one) when the caller lacks
+            // stock.actualcost.view -- StockController redacts them together.
+            // GetValueOrDefault() then reads as an ordinary "not costed" row,
+            // which is exactly the right fallback: it lands in the same
+            // client's-own-formula branch below as a genuinely un-costed item,
+            // never a real landed cost with a hole punched in it.
+            var costed = s.OpeningActualCostExcludingTax.GetValueOrDefault() > 0m;
             if (costed)
             {
-                Number(ws, r, CCogsOpenExl, s.OpeningActualCostExcludingTax, Acct0);
-                Number(ws, r, CCogsBalExl, s.ActualCostExcludingTax, Acct2);
+                Number(ws, r, CCogsOpenExl, s.OpeningActualCostExcludingTax.GetValueOrDefault(), Acct0);
+                Number(ws, r, CCogsBalExl, s.ActualCostExcludingTax.GetValueOrDefault(), Acct2);
                 Formula(ws, r, CCogsConsExl, $"X{r}-AD{r}", Acct0);
             }
             else

@@ -1453,11 +1453,17 @@ def main():
 
             # Expected figures, computed the same way ImportCostingCalculator
             # does (mirrored by compute_costing) -- Input Tax and Advance
-            # Income Tax sum BOTH lines; Inventory sums the stock-posted line
-            # ONLY.
+            # Income Tax sum BOTH lines; Inventory ALSO sums both (Finding 1,
+            # 2026-09-13 architecture review): under New Arrivals, line 1's
+            # cost-only match is exactly where new quantity/cost/selling value
+            # are ADDED onto gl_existing_item's balance -- genuinely new goods
+            # against an already-known product -- so its landed cost belongs
+            # in Inventory the same as line 2's brand-new stock does. An
+            # earlier build excluded the cost-only line here, which understated
+            # Inventory while crediting Import Clearing for the full amount.
             c1 = compute_costing(assessed=100000, others=1000, st=18, ast=3, it=6)
             c2 = compute_costing(assessed=50000, duty=2000, st=18, ast=3, it=6)
-            expected_inventory = money(c2["cost"])
+            expected_inventory = money(c1["cost"] + c2["cost"])
             expected_input_tax = money(c1["salesTax"] + c1["ast"] + d(1000)
                                        + c2["salesTax"] + c2["ast"] + d(0))
             expected_income_tax = money(c1["incomeTax"] + c2["incomeTax"])
@@ -1488,10 +1494,15 @@ def main():
                 by[nm] = by.get(nm, 0) + (l.get("debit") or 0) - (l.get("credit") or 0)
 
             inv = next((v for k, v in by.items() if "inventory on hand" in k), None)
-            check("15: Inventory is debited for the NEW-STOCK line's cost ONLY, not the cost-only line's",
+            check("15: Inventory is debited for BOTH lines' cost under New Arrivals -- the "
+                  "cost-only line's cost counts too, not the new-stock line's alone",
                   inv is not None and close(inv, float(expected_inventory)),
                   f"inventory net-debit={inv} expected={expected_inventory} "
-                  f"(would be {c1['cost'] + c2['cost']} if the cost-only line were wrongly included)")
+                  f"(would be only {c2['cost']} if the cost-only line were wrongly excluded, "
+                  f"Finding 1 -- understating Inventory while Import Clearing still carried the full cost)")
+            check("15: the entry still balances once the cost-only line's cost is included",
+                  je and close(je.get("totalDebit"), je.get("totalCredit")),
+                  f"totalDebit={je.get('totalDebit')} totalCredit={je.get('totalCredit')}")
             inp = next((v for k, v in by.items() if "input sales tax" in k), None)
             check("15: Input Tax is SalesTax + AST + Others, summed across BOTH lines",
                   inp is not None and close(inp, float(expected_input_tax)),
@@ -1916,6 +1927,243 @@ def main():
         finally:
             if not args.keep:
                 requests.delete(f"{api}/companies/{shr_co}", headers=h, timeout=300)
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 17 -- stock.actualcost.view gates actual cost / margin
+        # across the on-hand grid, the Excel export and the movements
+        # drill-down (Finding 2, 2026-09-13 architecture review). Nothing
+        # here touches the GD costing endpoints -- it proves the STOCK side
+        # of the fix, which is what actually leaked (the permission existed
+        # and the frontend gated on it, but no controller action checked it).
+        # ══════════════════════════════════════════════════════════════════
+        print("\n-- 17. stock.actualcost.view: redaction across three surfaces --")
+
+        ac_co = make_company(api, h, f"GD Costing ActualCost {tag}")
+        ac_made_users, ac_made_roles = [], []
+        try:
+            ac_item = make_item(api, h, ac_co, f"ActualCost Item {tag}", hs="8481.2000")
+            r = set_opening(api, h, ac_co, ac_item, qty=40, value=200000, cost=80000)
+            check("17: opening balance with a real actual cost is created",
+                  r.ok and close(r.json().get("actualCostExcludingTax"), 80000),
+                  f"http {r.status_code}: {r.text[:200]}")
+
+            def provision(username, role_name, keys):
+                """A throwaway user holding exactly `keys`, scoped to ac_co --
+                mirrors scripts/test_stock_export_excel.py's own helper."""
+                users = requests.get(f"{api}/users", headers=h, timeout=30).json()
+                for u in users if isinstance(users, list) else []:
+                    if u["username"] == username:
+                        requests.delete(f"{api}/users/{u['id']}", headers=h, timeout=30)
+                roles = requests.get(f"{api}/roles", headers=h, timeout=30).json()
+                for ro in roles if isinstance(roles, list) else []:
+                    if ro["name"] == role_name:
+                        requests.delete(f"{api}/roles/{ro['id']}", headers=h, timeout=30)
+
+                rr = requests.post(f"{api}/roles", headers=h, timeout=30, json={
+                    "name": role_name, "description": "actual-cost permission probe (test)",
+                    "permissionKeys": keys,
+                })
+                assert rr.status_code in (200, 201), f"create role {role_name}: {rr.status_code} {rr.text[:200]}"
+                role_id = rr.json()["id"]
+                ac_made_roles.append(role_id)
+
+                ur = requests.post(f"{api}/users", headers=h, timeout=30, json={
+                    "username": username, "password": "test1234", "fullName": username,
+                    "role": role_name, "roleIds": [role_id], "companyIds": [ac_co],
+                })
+                assert ur.status_code in (200, 201), f"create user {username}: {ur.status_code} {ur.text[:200]}"
+                ac_made_users.append(ur.json()["id"])
+                return login(base, username, "test1234")
+
+            full_token = provision(f"gdcost_ac_full_{tag}", f"GDCost ActualCost Full {tag}",
+                ["stock.dashboard.view", "stock.dashboard.export", "stock.movements.view",
+                 "stock.actualcost.view"])
+            none_token = provision(f"gdcost_ac_none_{tag}", f"GDCost ActualCost None {tag}",
+                ["stock.dashboard.view", "stock.dashboard.export", "stock.movements.view"])
+            hf = {"Authorization": f"Bearer {full_token}"}
+            hn = {"Authorization": f"Bearer {none_token}"}
+
+            # ---- on-hand grid + Excel export (checked BEFORE any movement,
+            # so the actual-cost pool has not yet depleted and the opening
+            # cost is exactly what was just set) -----------------------------
+            grid_full = requests.get(f"{api}/stock/company/{ac_co}/onhand", headers=hf, timeout=30).json()
+            row_full = next((x for x in grid_full if x.get("itemTypeId") == ac_item), None)
+            check("17: WITH the permission, the grid shows the real actual cost",
+                  row_full is not None and close(row_full.get("actualCostExcludingTax"), 80000),
+                  f"row={row_full}")
+            check("17: WITH the permission, opening actual cost and margin are real numbers",
+                  row_full is not None and row_full.get("openingActualCostExcludingTax") is not None
+                  and row_full.get("margin") is not None,
+                  f"row={row_full}")
+
+            grid_none = requests.get(f"{api}/stock/company/{ac_co}/onhand", headers=hn, timeout=30).json()
+            row_none = next((x for x in grid_none if x.get("itemTypeId") == ac_item), None)
+            check("17: WITHOUT the permission, actualCostExcludingTax is null (not zero -- "
+                  "zero already means 'no cost imported', so redaction must not overload it)",
+                  row_none is not None and row_none.get("actualCostExcludingTax") is None,
+                  f"row={row_none}")
+            check("17: WITHOUT the permission, openingActualCostExcludingTax is null",
+                  row_none is not None and row_none.get("openingActualCostExcludingTax") is None,
+                  f"row={row_none}")
+            check("17: WITHOUT the permission, actualUnitCost is null",
+                  row_none is not None and row_none.get("actualUnitCost") is None,
+                  f"row={row_none}")
+            check("17: WITHOUT the permission, margin and marginPercent are null -- never a "
+                  "misleading 100% margin from a redacted-to-zero cost",
+                  row_none is not None and row_none.get("margin") is None
+                  and row_none.get("marginPercent") is None,
+                  f"row={row_none}")
+            check("17: the grid itself still works without the permission (on-hand qty intact)",
+                  row_none is not None and row_full is not None
+                  and close(row_none.get("onHand"), row_full.get("onHand")),
+                  f"none={row_none} full={row_full}")
+
+            # Column layout mirrors scripts/test_stock_export_excel.py (must
+            # match Helpers/StockExcelBuilder.cs).
+            EXP_C_ITEM, EXP_FIRST_DATA_ROW = 4, 4
+            EXP_C_COGS_OPEN_EXL, EXP_C_COGS_BAL_EXL = 24, 30
+
+            def find_export_row(ws, item_name):
+                for rowi in range(EXP_FIRST_DATA_ROW, ws.max_row + 1):
+                    if ws.cell(rowi, EXP_C_ITEM).value == item_name:
+                        return rowi
+                return None
+
+            item_name = row_full.get("itemTypeName") if row_full else None
+
+            xf = requests.get(f"{api}/stock/company/{ac_co}/onhand/excel", headers=hf, timeout=60)
+            check("17: export 200 WITH the permission", xf.status_code == 200, f"http {xf.status_code}")
+            xn = requests.get(f"{api}/stock/company/{ac_co}/onhand/excel", headers=hn, timeout=60)
+            check("17: export 200 WITHOUT the permission (still exports -- redacted, not refused)",
+                  xn.status_code == 200, f"http {xn.status_code}")
+
+            if xf.status_code == 200 and xn.status_code == 200 and item_name:
+                wsf = openpyxl.load_workbook(io.BytesIO(xf.content)).worksheets[0]
+                wsn = openpyxl.load_workbook(io.BytesIO(xn.content)).worksheets[0]
+                erf, ern = find_export_row(wsf, item_name), find_export_row(wsn, item_name)
+                check("17: the item's row is found in both workbooks",
+                      erf is not None and ern is not None, f"erf={erf} ern={ern}")
+                if erf and ern:
+                    check("17: WITH the permission, the CoGS Balance-Exl cell is a REAL NUMBER "
+                          "matching the actual cost",
+                          isinstance(wsf.cell(erf, EXP_C_COGS_BAL_EXL).value, (int, float))
+                          and close(wsf.cell(erf, EXP_C_COGS_BAL_EXL).value, 80000),
+                          f"value={wsf.cell(erf, EXP_C_COGS_BAL_EXL).value!r}")
+                    check("17: WITHOUT the permission, the SAME cell falls back to the client's own "
+                          "FORMULA -- redacted reads as merely un-costed, never as a real landed "
+                          "cost with a hole punched in it",
+                          isinstance(wsn.cell(ern, EXP_C_COGS_BAL_EXL).value, str)
+                          and wsn.cell(ern, EXP_C_COGS_BAL_EXL).value.startswith("="),
+                          f"value={wsn.cell(ern, EXP_C_COGS_BAL_EXL).value!r}")
+                    check("17: WITHOUT the permission, the CoGS Opening-Exl cell is also a formula",
+                          isinstance(wsn.cell(ern, EXP_C_COGS_OPEN_EXL).value, str)
+                          and wsn.cell(ern, EXP_C_COGS_OPEN_EXL).value.startswith("="),
+                          f"value={wsn.cell(ern, EXP_C_COGS_OPEN_EXL).value!r}")
+
+            # ---- Movements drill-down (a movement is recorded now, AFTER the
+            # grid/export checks above, so those checks stay exact) ----------
+            adj = requests.post(f"{api}/stock/adjust", headers=h, timeout=30, json={
+                "companyId": ac_co, "itemTypeId": ac_item, "mode": "delta", "delta": -5,
+            })
+            check("17: a stock movement is recorded for the drill-down to redact",
+                  adj.ok, f"http {adj.status_code}: {adj.text[:200]}")
+
+            mv_full = requests.get(f"{api}/stock/company/{ac_co}/movements",
+                                    headers=hf, params={"itemTypeId": ac_item}, timeout=30)
+            mvf_items = (mv_full.json() or {}).get("items", []) if mv_full.ok else []
+            check("17: WITH the permission, movement rows carry a real actualUnitCost",
+                  len(mvf_items) > 0 and all(m.get("actualUnitCost") is not None for m in mvf_items),
+                  f"items={mvf_items}")
+
+            mv_none = requests.get(f"{api}/stock/company/{ac_co}/movements",
+                                    headers=hn, params={"itemTypeId": ac_item}, timeout=30)
+            mvn_items = (mv_none.json() or {}).get("items", []) if mv_none.ok else []
+            check("17: WITHOUT the permission, movement actualUnitCost is null",
+                  len(mvn_items) > 0 and all(m.get("actualUnitCost") is None for m in mvn_items),
+                  f"items={mvn_items}")
+            check("17: WITHOUT the permission, movement runningActualValue is null",
+                  len(mvn_items) > 0 and all(m.get("runningActualValue") is None for m in mvn_items),
+                  f"items={mvn_items}")
+            check("17: the movements list itself still works without the permission (same row count)",
+                  len(mvn_items) == len(mvf_items) and len(mvf_items) > 0,
+                  f"none={len(mvn_items)} full={len(mvf_items)}")
+        finally:
+            if not args.keep:
+                for uid in ac_made_users:
+                    requests.delete(f"{api}/users/{uid}", headers=h, timeout=30)
+                for rid in ac_made_roles:
+                    requests.delete(f"{api}/roles/{rid}", headers=h, timeout=30)
+                requests.delete(f"{api}/companies/{ac_co}", headers=h, timeout=300)
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 18 -- Backfill preview warns before overwriting an
+        # already-costed balance (Finding 3, 2026-09-13 architecture review).
+        # Never blocks -- a deliberate re-backfill after a correction is
+        # legitimate -- only warns, and counts the warning in the summary.
+        # ══════════════════════════════════════════════════════════════════
+        print("\n-- 18. Backfill overwrite warning --")
+
+        ow_co = make_company(api, h, f"GD Costing Overwrite {tag}")
+        try:
+            ow_hs = "8544.4990"
+            ow_item = make_item(api, h, ow_co, f"Overwrite Item {tag}", hs=ow_hs)
+            r = set_opening(api, h, ow_co, ow_item, qty=50, value=100000, cost=70000)
+            check("18: an opening balance already costed by an earlier import is created",
+                  r.ok and close(r.json().get("actualCostExcludingTax"), 70000),
+                  f"http {r.status_code}: {r.text[:200]}")
+
+            ow_row = row_cells(BASE_COLS, f"GD-OW-{tag}", ow_hs, desc=f"Overwrite Item {tag}",
+                               qty=50, assessed=42000, st=18, ast=3, it=6)
+
+            r = gd_preview(api, h, ow_co, build_sheet(BASE_HEADINGS, [ow_row]), GD_MAPPING,
+                           mode="backfill")
+            bf_ow_prev = r.json() if r.ok else {}
+            check("18: the backfill preview succeeds", r.ok, f"http {r.status_code}: {r.text[:200]}")
+            bf_ow_lines = bf_ow_prev.get("lines", [])
+            bf_ow_warning = bf_ow_lines[0].get("overwriteWarning") if bf_ow_lines else None
+            check("18: Backfill emits a per-line overwrite warning naming the existing figure",
+                  bf_ow_warning is not None and "70,000.00" in bf_ow_warning and "REPLACE" in bf_ow_warning,
+                  f"overwriteWarning={bf_ow_warning!r}")
+            check("18: the preview counts exactly one overwrite warning",
+                  bf_ow_prev.get("overwriteWarningCount") == 1,
+                  f"overwriteWarningCount={bf_ow_prev.get('overwriteWarningCount')}")
+            check("18: the warning does NOT block commit -- a deliberate re-backfill is legitimate",
+                  bf_ow_prev.get("canCommit") is True, f"canCommit={bf_ow_prev.get('canCommit')}")
+
+            # The SAME balance under New Arrivals carries no such warning -- an
+            # ADD is never mistaken for an overwrite.
+            r = gd_preview(api, h, ow_co, build_sheet(BASE_HEADINGS, [ow_row]), GD_MAPPING,
+                           mode="new-arrivals")
+            na_ow_prev = r.json() if r.ok else {}
+            na_ow_lines = na_ow_prev.get("lines", [])
+            check("18: New Arrivals carries NO overwrite warning for the same balance",
+                  r.ok and bool(na_ow_lines) and na_ow_lines[0].get("overwriteWarning") is None,
+                  f"lines={na_ow_lines}")
+            check("18: New Arrivals' preview counts zero overwrite warnings",
+                  na_ow_prev.get("overwriteWarningCount") == 0,
+                  f"overwriteWarningCount={na_ow_prev.get('overwriteWarningCount')}")
+
+            # A balance with NO prior cost (a genuinely first-time backfill)
+            # gets no warning either -- this is about REPLACING a real figure,
+            # not about matching at all. Reuses "8481.9000" (already proven a
+            # real tariff code earlier in this suite, Section 13's del_item) --
+            # HS validation is master-first (CLAUDE.md 5b-2) and a made-up code
+            # is refused, so fixtures here must be real codes, not invented ones.
+            fresh_item = make_item(api, h, ow_co, f"Overwrite Fresh Item {tag}", hs="8481.9000")
+            set_opening(api, h, ow_co, fresh_item, qty=10, value=20000)  # no cost
+            fresh_row = row_cells(BASE_COLS, f"GD-OW-FRESH-{tag}", "8481.9000",
+                                   desc=f"Overwrite Fresh Item {tag}", qty=10, assessed=8000,
+                                   st=18, ast=3, it=6)
+            r = gd_preview(api, h, ow_co, build_sheet(BASE_HEADINGS, [fresh_row]), GD_MAPPING,
+                           mode="backfill")
+            fresh_prev = r.json() if r.ok else {}
+            fresh_lines = fresh_prev.get("lines", [])
+            check("18: a balance with NO prior actual cost gets no overwrite warning",
+                  r.ok and bool(fresh_lines) and fresh_lines[0].get("overwriteWarning") is None,
+                  f"lines={fresh_lines}")
+        finally:
+            if not args.keep:
+                requests.delete(f"{api}/companies/{ow_co}", headers=h, timeout=300)
 
     finally:
         if not args.keep:

@@ -155,6 +155,7 @@ namespace MyApp.Api.Services.Implementations
             preview.DispositionCounts = preview.Lines
                 .GroupBy(l => l.Disposition)
                 .ToDictionary(g => g.Key, g => g.Count());
+            preview.OverwriteWarningCount = preview.Lines.Count(l => l.OverwriteWarning != null);
 
             // A GD this company already has a consignment for has no upsert
             // path in this release (CLAUDE.md-style: create, not update) — say
@@ -381,7 +382,8 @@ namespace MyApp.Api.Services.Implementations
 
         private sealed record LineOutcome(
             string Disposition, int? OpeningStockBalanceId, int? ItemTypeId, string? ItemTypeName,
-            decimal MatchedBalanceQuantity, decimal DerivedActualCost, string? MatchNote);
+            decimal MatchedBalanceQuantity, decimal DerivedActualCost, string? MatchNote,
+            string? OverwriteWarning = null);
 
         /// <summary>
         /// Resolves every line's disposition. A balance matched by exactly one
@@ -422,6 +424,7 @@ namespace MyApp.Api.Services.Implementations
 
                 decimal derivedCost;
                 string? note;
+                string? overwriteWarning = null;
 
                 if (newArrivals)
                 {
@@ -449,11 +452,24 @@ namespace MyApp.Api.Services.Implementations
                     note = Math.Abs(totalQty - balance.Quantity) > 0.0001m
                         ? $"This GD covers {FormatQty(totalQty)} of the {FormatQty(balance.Quantity)} on the books; its unit cost was applied to the whole balance."
                         : null;
+
+                    // Finding 3 (2026-09-13 architecture review): nothing
+                    // previously stopped a second Backfill from silently
+                    // replacing a cost an earlier GD already wrote — 26 real
+                    // opening balances across two companies ended up costed by
+                    // only their LAST consignment's rate applied to the whole
+                    // accumulated quantity. Warn, but do not block: a
+                    // deliberate re-backfill after a correction is legitimate.
+                    if (balance.ActualCostExcludingTax != 0m)
+                        overwriteWarning =
+                            $"This balance already carries an actual cost of {balance.ActualCostExcludingTax:N2} " +
+                            "from an earlier import. Backfill will REPLACE it. Choose \"These are new arrivals\" " +
+                            "if these are additional goods.";
                 }
 
                 var outcome = new LineOutcome(
                     GdCostingDispositionNames.CostOnly, balance.Id, balance.ItemTypeId, balance.ItemType?.Name,
-                    balance.Quantity, derivedCost, note);
+                    balance.Quantity, derivedCost, note, overwriteWarning);
 
                 foreach (var i in rowIdxs) outcomes[i] = outcome;
             }
@@ -536,6 +552,7 @@ namespace MyApp.Api.Services.Implementations
             MatchedBalanceQuantity = outcome.MatchedBalanceQuantity,
             DerivedActualCost = outcome.DerivedActualCost,
             MatchNote = outcome.MatchNote,
+            OverwriteWarning = outcome.OverwriteWarning,
         };
 
         private static List<GdCostingConsignmentTotalsDto> BuildConsignmentTotals(List<GdCostingLineDto> lines) =>

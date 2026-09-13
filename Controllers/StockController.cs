@@ -27,12 +27,13 @@ namespace MyApp.Api.Controllers
         private readonly IAuditLogService _audit;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly IPermissionService _permission;
         private readonly ILogger<StockController> _logger;
         private readonly int _defaultPageSize;
 
         public StockController(AppDbContext context, IStockService stock, IInventoryReadService inventory,
             IAuditLogService audit, ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess,
+            IDivisionAccessGuard divisionAccess, IPermissionService permission,
             ILogger<StockController> logger, IConfiguration configuration)
         {
             _context = context;
@@ -41,6 +42,7 @@ namespace MyApp.Api.Controllers
             _audit = audit;
             _access = access;
             _divisionAccess = divisionAccess;
+            _permission = permission;
             _logger = logger;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
@@ -241,6 +243,36 @@ namespace MyApp.Api.Controllers
 
             if (withMovements)
                 await AttachSourceNumbersAsync(traced.Values.SelectMany(v => v).ToList());
+
+            // Actual (landed) cost and margin are gated SEPARATELY from seeing
+            // stock at all (stock.actualcost.view — CLAUDE.md 5b-2/PermissionCatalog:
+            // "somebody who prices and sells does not automatically see the
+            // margin"). The grid, the Excel export and the movements
+            // drill-down (GetMovements, below) all ultimately read from here or
+            // share the same walk, so redacting once, on the DTOs themselves,
+            // reaches every surface rather than trusting each caller to ask.
+            // Nulled, not zeroed: zero already means "no actual cost imported"
+            // (see the DTO's own doc comment), and zeroing here would make
+            // Margin read as the full selling value -- a redacted row must not
+            // look like a 100% margin.
+            if (!await _permission.HasPermissionAsync(CurrentUserId, "stock.actualcost.view"))
+            {
+                foreach (var row in rows)
+                {
+                    row.ActualCostExcludingTax = null;
+                    row.OpeningActualCostExcludingTax = null;
+                    row.ActualUnitCost = null;
+                }
+                if (withMovements)
+                {
+                    foreach (var list in traced.Values)
+                        foreach (var m in list)
+                        {
+                            m.ActualUnitCost = null;
+                            m.RunningActualValue = null;
+                        }
+                }
+            }
 
             return (rows.OrderBy(r => r.ItemTypeName).ToList(), traced);
         }
@@ -526,6 +558,20 @@ namespace MyApp.Api.Controllers
                     r.RunningValue = st.RunningValue;
                     r.ActualUnitCost = Math.Round(st.ActualUnitCost, 4, MidpointRounding.AwayFromZero);
                     r.RunningActualValue = st.RunningActualValue;
+                }
+            }
+
+            // Same stock.actualcost.view gate BuildOnHandAsync applies to the
+            // grid and the export — this is the movements drill-down's own,
+            // separate code path (it does not call BuildOnHandAsync), so it
+            // needs its own redaction. Nulled, never zeroed — see the note in
+            // BuildOnHandAsync.
+            if (!await _permission.HasPermissionAsync(CurrentUserId, "stock.actualcost.view"))
+            {
+                foreach (var r in rows)
+                {
+                    r.ActualUnitCost = null;
+                    r.RunningActualValue = null;
                 }
             }
 

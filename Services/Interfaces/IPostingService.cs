@@ -50,16 +50,25 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>Inter-account transfer: Dr receiving, Cr paying account.</summary>
         Task PostTransferAsync(AccountTransfer transfer);
 
-        /// <summary>GD costing consignment: Dr Inventory (new-stock lines only —
-        /// a cost-only line's matched stock was never on the ledger to begin
-        /// with, so it gets no inventory debit), Dr Input tax (sales tax + AST +
-        /// Others), Dr Advance income tax on imports, Cr Import Clearing for the
-        /// balancing total. Dated the GD's own date, not today. The CALLER
-        /// decides whether to invoke this at all — only a New Arrivals commit
-        /// should; a Backfill commit must post nothing, so the GD costing
-        /// import service never calls this for one. Skipped/Ambiguous lines
-        /// contribute nothing to any leg — no cost was ever attributed to
-        /// them.</summary>
+        /// <summary>GD costing consignment: Dr Inventory, Dr Input tax (sales
+        /// tax + AST + Others), Dr Advance income tax on imports, Cr Import
+        /// Clearing for the balancing total. Dated the GD's own date, not
+        /// today. The CALLER decides whether to invoke this at all — only a
+        /// New Arrivals commit should; a Backfill commit must post nothing, so
+        /// the GD costing import service never calls this for one.
+        ///
+        /// The Inventory leg sums EVERY costed line (CostOnly and StockPosted
+        /// alike) — never disposition alone. Under New Arrivals (the only mode
+        /// that ever reaches this method) a CostOnly line is exactly where new
+        /// quantity, cost and selling value are ADDED onto an existing balance,
+        /// so its landed cost belongs in Inventory the same as a brand-new
+        /// StockPosted line's does. Backfill would have been different: there,
+        /// a CostOnly line only RE-PRICES stock already on the books, with no
+        /// new quantity or value to account for — which is exactly why a
+        /// Backfill commit posts no journal entry at all, rather than this
+        /// method excluding CostOnly lines from the debit itself. Skipped/
+        /// Ambiguous lines contribute nothing to any leg — no cost was ever
+        /// attributed to them.</summary>
         Task PostImportConsignmentAsync(ImportConsignment consignment);
 
         /// <summary>Deletes the journal entry (and lines) for a source document.
