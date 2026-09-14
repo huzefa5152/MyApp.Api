@@ -67,3 +67,29 @@ export async function commitFbrPurchaseImport(file, companyId) {
   });
   return data;
 }
+
+/**
+ * Download a fully-fictional sample .xlsx in the chosen FBR layout
+ * (format = "annexa" — claimed-only Annexure-A, or "ledger" — the
+ * all-purchases Sales Ledger). The file is a static made-up template with
+ * no real data; it re-uploads cleanly through preview, so it doubles as a
+ * demo fixture. Triggers a browser download; throws on error.
+ */
+export async function downloadFbrPurchaseSample(format = "annexa") {
+  const res = await httpClient.get("/fbr-purchase-import/sample", {
+    params: { format },
+    responseType: "blob",
+    timeout: 60000,
+  });
+  const fileName = format === "ledger"
+    ? "FBR-Sales-Ledger-SAMPLE.xlsx"
+    : "FBR-AnnexureA-SAMPLE.xlsx";
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

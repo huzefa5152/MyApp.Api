@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
+using MyApp.Api.Services.Implementations;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Controllers
@@ -127,6 +128,25 @@ namespace MyApp.Api.Controllers
                 _logger.LogError(ex, "FBR purchase commit failed for company {CompanyId}", companyId);
                 return StatusCode(500, new { error = "Failed to commit the FBR import. The transaction was rolled back. Please retry; if the failure persists, contact an administrator." });
             }
+        }
+
+        /// <summary>
+        /// Download a FULLY FICTIONAL sample .xlsx in either FBR layout so the
+        /// operator has a column reference / demo file. No real data, no
+        /// company scope — it's a static made-up template. format = "annexa"
+        /// (claimed-only Annexure-A export) or "ledger" (all-purchases Sales
+        /// Ledger export); defaults to annexa. The file re-uploads cleanly
+        /// through /preview, so a demo can download → upload → import.
+        /// </summary>
+        [HttpGet("sample")]
+        [HasPermission("fbrimport.purchase.preview")]
+        public IActionResult Sample([FromQuery] string? format)
+        {
+            var (bytes, fileName) = FbrPurchaseSampleWorkbook.Build(format);
+            return File(
+                bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName);
         }
 
         private int? CurrentUserId()

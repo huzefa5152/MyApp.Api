@@ -290,6 +290,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-15 — FBR purchase import: both sheet layouts + fictional sample download
+
+The FBR purchase importer now surfaces both FBR export layouts — **Annexure-A** (claimed only) and the **Sales Ledger** (all purchases, claimed + unclaimed). The parser already matched both by column name (alias table); the import page adds a *Sheet format* selector and a **Download sample** button that returns a fully-fictional `.xlsx` for the chosen layout (`GET /api/fbr-purchase-import/sample?format=annexa|ledger`). The sample is invented data — no real seller/client — so it is safe for demos and re-uploads cleanly through preview. No schema change; reuses `fbrimport.purchase.preview`.
+
 ### 2026-09-14 — Dedicated "Seller NTN / CNIC for FBR" field; company form split into tabs
 
 The identity filed to FBR (`SellerNTNCNIC`) is now its own required `Company.FbrSellerRegistrationNo` — a 7-digit NTN or 13-digit CNIC entered exactly as filed — instead of being derived from the display CNIC/NTN. The display NTN/CNIC/STRN are now print/display-only and optional. `FbrService` (pre-validate, payload, self-invoice check) and `DeliveryChallanService.IsFbrReady` all key off the new field. Migration `AddFbrSellerRegistrationNo` backfills existing rows `COALESCE(CNIC, NTN)`.

@@ -15,7 +15,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { MdCloudUpload, MdInfo, MdCheckCircle, MdWarning, MdError, MdBlock, MdRefresh, MdFileDownload, MdInventory } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { previewFbrPurchaseImport, commitFbrPurchaseImport } from "../api/fbrPurchaseImportApi";
+import { previewFbrPurchaseImport, commitFbrPurchaseImport, downloadFbrPurchaseSample } from "../api/fbrPurchaseImportApi";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import "./FbrPurchaseImportPage.css";
@@ -87,6 +87,13 @@ export default function FbrPurchaseImportPage() {
   const [result, setResult] = useState(null);
   const [commitResult, setCommitResult] = useState(null);
   const [expandedInvoices, setExpandedInvoices] = useState(new Set());
+  // Which FBR sheet layout the operator is working with. Both parse
+  // automatically on upload (the parser matches columns by name across
+  // layouts) — this selector drives the sample download + the on-screen
+  // hint. "annexa" = claimed-only Annexure-A; "ledger" = all-purchases
+  // Sales Ledger.
+  const [sheetFormat, setSheetFormat] = useState("annexa");
+  const [downloadingSample, setDownloadingSample] = useState(false);
   const fileInputRef = useRef(null);
 
   const canCommit = has?.("fbrimport.purchase.commit") ?? false;
@@ -123,8 +130,20 @@ export default function FbrPurchaseImportPage() {
     setResult(null); // any new file invalidates the previous preview
   };
 
+  const onDownloadSample = async () => {
+    setDownloadingSample(true);
+    try {
+      await downloadFbrPurchaseSample(sheetFormat);
+      notify("Sample downloaded — fictional data, safe to use in demos.", "success");
+    } catch {
+      notify("Could not download the sample file.", "error");
+    } finally {
+      setDownloadingSample(false);
+    }
+  };
+
   const onRun = async () => {
-    if (!file) { notify("Pick an FBR Annexure-A xls file first.", "error"); return; }
+    if (!file) { notify("Pick an FBR purchase sheet (.xls / .xlsx) first.", "error"); return; }
     if (!selectedCompany) { notify("Pick a company first.", "error"); return; }
     setRunning(true);
     try {
@@ -253,8 +272,9 @@ export default function FbrPurchaseImportPage() {
         <div style={{ minWidth: 0 }}>
           <h2 className="fbr-imp-header__title" style={styles.pageTitle}>FBR Purchase Import</h2>
           <p className="fbr-imp-header__subtitle" style={styles.pageSubtitle}>
-            Phase 1 preview — upload your Annexure-A xls and see exactly which rows
-            would land as new purchases (no DB writes yet).
+            Upload your FBR purchase sheet — Annexure-A (claimed only) or the Sales
+            Ledger (all purchases) — and preview exactly which rows would land as new
+            purchases before you commit.
           </p>
         </div>
       </header>
@@ -277,8 +297,20 @@ export default function FbrPurchaseImportPage() {
             </select>
           </div>
 
+          <div className="fbr-imp-upload-row__field" style={{ minWidth: 200 }}>
+            <label style={styles.label}>Sheet format</label>
+            <select
+              style={styles.input}
+              value={sheetFormat}
+              onChange={(e) => setSheetFormat(e.target.value)}
+            >
+              <option value="annexa">Annexure-A — claimed only</option>
+              <option value="ledger">Sales Ledger — all purchases</option>
+            </select>
+          </div>
+
           <div className="fbr-imp-upload-row__field" style={{ flex: 1, minWidth: 280 }}>
-            <label style={styles.label}>Annexure-A file (.xls / .xlsx)</label>
+            <label style={styles.label}>FBR purchase sheet (.xls / .xlsx)</label>
             <input
               ref={fileInputRef}
               type="file"
@@ -309,6 +341,25 @@ export default function FbrPurchaseImportPage() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Sample download + format hint — both layouts parse automatically;
+            the selector above chooses which fictional sample to download. */}
+        <div className="fbr-imp-sample-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.6rem", marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: `1px solid ${colors.cardBorder}` }}>
+          <button
+            type="button"
+            style={{ ...styles.secondaryBtn, opacity: downloadingSample ? 0.6 : 1 }}
+            disabled={downloadingSample}
+            onClick={onDownloadSample}
+          >
+            <MdFileDownload size={16} /> {downloadingSample ? "Preparing..." : "Download sample"}
+          </button>
+          <span style={{ fontSize: "0.8rem", color: colors.textSecondary, lineHeight: 1.4, flex: 1, minWidth: 240 }}>
+            {sheetFormat === "ledger"
+              ? "Sales Ledger — the IRIS export with ALL purchases (claimed + unclaimed)."
+              : "Annexure-A — the claimed-only export (the input tax you filed)."}
+            {" "}Both layouts upload here; the sample is fictional (safe for demos) and re-uploadable.
+          </span>
         </div>
       </section>
 
