@@ -89,17 +89,42 @@ namespace MyApp.Api.Services.Implementations
         /// other. <c>FileSizeBytes</c> is the byte length of that same
         /// canonical content, so it is not an arbitrary placeholder either.
         /// </remarks>
-        public async Task<GdCostingPreviewDto> PreviewManualAsync(GdCostingManualLineDto line, int companyId, string? mode)
+        public async Task<GdCostingPreviewDto> PreviewManualAsync(
+            IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode)
         {
-            ValidateManualLine(line);
+            if (lines == null || lines.Count == 0)
+                throw new InvalidOperationException("Add at least one line before previewing.");
+            if (lines.Count > MaxSourceRows)
+                throw new InvalidOperationException(
+                    $"A hand-entered consignment cannot carry more than {MaxSourceRows} lines.");
 
             var warnings = new List<string>();
-            var row = BuildManualRow(line, warnings);
-            var (sha256, sizeBytes) = ManualEntryFingerprint(companyId, line);
+            var rows = new List<GdCostingSheetRow>(lines.Count);
+            foreach (var line in lines)
+            {
+                ValidateManualLine(line);
+                rows.Add(BuildManualRow(line, warnings));
+            }
+
+            // EVERY line goes through BuildPreviewAsync in ONE call, never one
+            // call per line. Matching, per-balance pooling and the plausibility
+            // check all reason over the SET: two lines hitting the same balance
+            // must pool into a single unit cost, and previewing them separately
+            // would report each as if it were alone — the very extrapolation
+            // error the cost-plausibility warning exists to catch.
+            var (sha256, sizeBytes) = ManualEntryFingerprint(companyId, lines);
+            var gdNumbers = rows
+                .Select(r => r.GdNumber.Trim())
+                .Where(g => g.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             return await BuildPreviewAsync(
-                new List<GdCostingSheetRow> { row }, warnings,
-                fileName: $"Manual entry — GD {row.GdNumber}",
+                rows, warnings,
+                fileName: gdNumbers.Count == 1
+                    ? $"Manual entry — GD {gdNumbers[0]}"
+                    : $"Manual entry — {rows.Count} lines across GD {string.Join(", ", gdNumbers)}",
                 fileSha256: sha256,
                 fileSizeBytes: sizeBytes,
                 companyId: companyId,
@@ -159,6 +184,8 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(l => l.Disposition)
                 .ToDictionary(g => g.Key, g => g.Count());
             preview.OverwriteWarningCount = preview.Lines.Count(l => l.OverwriteWarning != null);
+            preview.CostPlausibilityWarningCount = preview.Lines.Count(l => l.CostPlausibilityWarning != null);
+            preview.RateWarningCount = preview.Lines.Count(l => l.RateWarning != null);
 
             // A GD this company already has a consignment for has no upsert
             // path in this release (CLAUDE.md-style: create, not update) — say
@@ -265,9 +292,23 @@ namespace MyApp.Api.Services.Implementations
         /// workbook gets — an identical line submitted twice collides, a line
         /// differing in any field never does.
         /// </summary>
-        private static (string Sha256, long SizeBytes) ManualEntryFingerprint(int companyId, GdCostingManualLineDto line)
+        private static (string Sha256, long SizeBytes) ManualEntryFingerprint(
+            int companyId, IReadOnlyList<GdCostingManualLineDto> lines)
         {
-            var canonical = string.Join("|",
+            // Over the WHOLE set, in the order typed: submitting the same lines
+            // twice must collide on ImportRun's (CompanyId, Kind, FileSha256)
+            // index exactly as re-uploading a workbook does, while adding or
+            // editing any one line makes a different consignment. Hashing only
+            // the first line would let a second, different set through.
+            var canonical = string.Join("~~", lines.Select(l => CanonicalManualLine(companyId, l)));
+            var bytes = Encoding.UTF8.GetBytes(canonical);
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            return (hash, bytes.LongLength);
+        }
+
+        private static string CanonicalManualLine(int companyId, GdCostingManualLineDto line)
+        {
+            return string.Join("|",
                 companyId.ToString(CultureInfo.InvariantCulture),
                 (line.GdNumber ?? "").Trim().ToUpperInvariant(),
                 line.GdDate?.ToString("O") ?? "",
@@ -285,10 +326,6 @@ namespace MyApp.Api.Services.Implementations
                 line.IncomeTaxRate.ToString(CultureInfo.InvariantCulture),
                 line.AddOnProfit.ToString(CultureInfo.InvariantCulture),
                 line.SellingValue?.ToString(CultureInfo.InvariantCulture) ?? "");
-
-            var bytes = Encoding.UTF8.GetBytes(canonical);
-            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            return (hash, bytes.LongLength);
         }
 
         // ── Matching, in memory (CLAUDE.md: match per LINE, in C#, not SQL) ──
@@ -296,7 +333,79 @@ namespace MyApp.Api.Services.Implementations
         private sealed record MatchIndex(
             Dictionary<(string Gd, string Hs), List<int>> ByLot,
             Dictionary<string, List<int>> ByHsCode,
-            Dictionary<int, OpeningStockBalance> Balances);
+            Dictionary<int, OpeningStockBalance> Balances,
+            /// <summary>Balance id -> how many DISTINCT product names the stock
+            /// sheet folded into it. Opening stock groups on the HS code
+            /// (CLAUDE.md 5b-3), which is right for stock and lossy for costing:
+            /// a balance holding four products of different unit value cannot be
+            /// described by one unit cost. Read only to explain a warning, never
+            /// to decide a match. Costs nothing extra — the lots are already
+            /// loaded for ByLot.</summary>
+            Dictionary<int, int> MergedProductCounts);
+
+        /// <summary>
+        /// The Backfill sanity check: is <paramref name="derivedCost"/> — this
+        /// GD's unit cost stretched across the balance's whole quantity — a
+        /// figure that could plausibly belong to this stock?
+        ///
+        /// Compares it against what the balance's own selling value implies via
+        /// <see cref="ImportCostingCalculator.ExpectedCostFromSelling"/>. Two
+        /// ways to fail, and both are reported with every figure named so the
+        /// operator can judge rather than take the system's word:
+        ///
+        ///   • the projection exceeds the selling value outright — the item
+        ///     would be selling below what it cost to land, which is worth
+        ///     naming even when it turns out to be true;
+        ///   • it sits more than <see cref="CostPlausibilityTolerance"/> away
+        ///     from the expected figure.
+        ///
+        /// The message carries the COVERAGE and, where the stock sheet merged
+        /// several products under one HS code, how many — because that is the
+        /// actual cause, and it tells the operator the answer is to split the
+        /// item rather than to retype a cost.
+        ///
+        /// Null when there is nothing trustworthy to compare against (no
+        /// selling value, or a zero-rated item with no uplift to unwind).
+        /// </summary>
+        private static string? DescribeImplausibleCost(
+            OpeningStockBalance balance, List<int> rowIdxs, List<GdCostingSheetRow> rows,
+            decimal totalQty, decimal derivedCost, MatchIndex index)
+        {
+            if (derivedCost <= 0m || balance.ValueExcludingTax <= 0m) return null;
+
+            // The AST rate lives on the costing side only, so it comes from the
+            // lines; weighted by quantity so one dominant line sets it, which
+            // reduces to that line's own rate in the ordinary one-line case.
+            decimal weighted = 0m;
+            foreach (var i in rowIdxs) weighted += rows[i].Quantity * rows[i].Input.AstRate;
+            var astRate = totalQty != 0m ? weighted / totalQty : rows[rowIdxs[0]].Input.AstRate;
+
+            var expected = ImportCostingCalculator.ExpectedCostFromSelling(
+                balance.ValueExcludingTax, balance.SalesTaxRate, astRate);
+            if (expected is not decimal expectedCost || expectedCost <= 0m) return null;
+
+            var overSelling = derivedCost > balance.ValueExcludingTax;
+            var deviation = Math.Abs(derivedCost - expectedCost) / expectedCost;
+            if (!overSelling && deviation <= CostPlausibilityTolerance) return null;
+
+            var itemName = balance.ItemType?.Name ?? "this item";
+            var direction = derivedCost > expectedCost ? "higher" : "lower";
+            var lead = overSelling
+                ? $"This would cost \"{itemName}\" at {derivedCost:N2}, MORE than the {balance.ValueExcludingTax:N2} it is on the books to sell for."
+                : $"This would cost \"{itemName}\" at {derivedCost:N2}, {deviation:P0} {direction} than the {expectedCost:N2} its selling value implies.";
+
+            var why = new List<string>();
+            if (Math.Abs(totalQty - balance.Quantity) > 0.0001m)
+                why.Add($"this GD prices {FormatQty(totalQty)} of the {FormatQty(balance.Quantity)} on the books, and Backfill applies that unit cost to all of them");
+
+            var mergedProducts = index.MergedProductCounts.TryGetValue(balance.Id, out var n) ? n : 0;
+            if (mergedProducts > 1)
+                why.Add($"the stock sheet merged {mergedProducts} different products under this one HS code, so one unit cost cannot describe them all — consider splitting the item");
+
+            return why.Count > 0
+                ? lead + " Why: " + string.Join("; ", why) + "."
+                : lead + " Check the GD covers the same goods as the stock on the books.";
+        }
 
         /// <summary>
         /// Loads the company's opening stock balances (with their item type)
@@ -324,6 +433,7 @@ namespace MyApp.Api.Services.Implementations
             var byLot = new Dictionary<(string, string), List<int>>();
             var byHsCode = new Dictionary<string, List<int>>();
             var byId = new Dictionary<int, OpeningStockBalance>();
+            var mergedProductCounts = new Dictionary<int, int>();
 
             foreach (var b in balances)
             {
@@ -346,9 +456,23 @@ namespace MyApp.Api.Services.Implementations
                     if (!byHsCode.TryGetValue(itemHs, out var list2)) byHsCode[itemHs] = list2 = new List<int>();
                     if (!list2.Contains(b.Id)) list2.Add(b.Id);
                 }
+
+                // Free: the lots are already loaded above for ByLot. Counts the
+                // DISTINCT product names the stock sheet folded under this one
+                // HS code -- the reason a single unit cost can be wrong for a
+                // balance, and the sentence that tells an operator to split the
+                // item rather than retype a figure. Zero for a balance typed by
+                // hand or imported before lots were kept, which reads correctly
+                // as "nothing known about how this was composed".
+                var distinctNames = b.Lots
+                    .Select(l => (l.ItemNameOnSheet ?? "").Trim())
+                    .Where(n => n.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count();
+                if (distinctNames > 0) mergedProductCounts[b.Id] = distinctNames;
             }
 
-            return new MatchIndex(byLot, byHsCode, byId);
+            return new MatchIndex(byLot, byHsCode, byId, mergedProductCounts);
         }
 
         /// <summary>
@@ -386,7 +510,26 @@ namespace MyApp.Api.Services.Implementations
         private sealed record LineOutcome(
             string Disposition, int? OpeningStockBalanceId, int? ItemTypeId, string? ItemTypeName,
             decimal MatchedBalanceQuantity, decimal DerivedActualCost, string? MatchNote,
-            string? OverwriteWarning = null);
+            string? OverwriteWarning = null, string? CostPlausibilityWarning = null);
+
+        /// <summary>
+        /// How far a Backfill projection may sit from what the balance's own
+        /// selling value implies before it is worth an operator's eye. 20% is
+        /// wide enough to absorb an add-on profit and a mixed 18%/25% book, and
+        /// narrow enough to have flagged 3 of 110 on the first real production
+        /// import — the two genuinely mispriced balances and one worth checking.
+        /// A threshold that fires on a tenth of the sheet gets ignored, which is
+        /// the only way this check can fail.
+        /// </summary>
+        private const decimal CostPlausibilityTolerance = 0.20m;
+
+        /// <summary>
+        /// Rates above this are not rates. A cell holding <c>1</c> cannot be
+        /// told apart from a fraction, so <c>PercentRate</c> reads it as 100% —
+        /// which is exactly what happened to two lines of a real sheet whose
+        /// income tax should have been 1%. No GD carries a 50% rate of anything.
+        /// </summary>
+        private const decimal ImplausibleRateThreshold = 50m;
 
         /// <summary>
         /// Resolves every line's disposition. A balance matched by exactly one
@@ -428,6 +571,7 @@ namespace MyApp.Api.Services.Implementations
                 decimal derivedCost;
                 string? note;
                 string? overwriteWarning = null;
+                string? plausibilityWarning = null;
 
                 if (newArrivals)
                 {
@@ -468,11 +612,19 @@ namespace MyApp.Api.Services.Implementations
                             $"This balance already carries an actual cost of {balance.ActualCostExcludingTax:N2} " +
                             "from an earlier import. Backfill will REPLACE it. Choose \"These are new arrivals\" " +
                             "if these are additional goods.";
+
+                    // Does the projected figure actually FIT the stock it is
+                    // about to be written onto? Backfill extrapolates one unit
+                    // cost across a whole balance, which is only sound while the
+                    // goods the GD priced are representative of the goods on the
+                    // books. See the DTO for the production case that was not.
+                    plausibilityWarning = DescribeImplausibleCost(
+                        balance, rowIdxs, rows, totalQty, derivedCost, index);
                 }
 
                 var outcome = new LineOutcome(
                     GdCostingDispositionNames.CostOnly, balance.Id, balance.ItemTypeId, balance.ItemType?.Name,
-                    balance.Quantity, derivedCost, note, overwriteWarning);
+                    balance.Quantity, derivedCost, note, overwriteWarning, plausibilityWarning);
 
                 foreach (var i in rowIdxs) outcomes[i] = outcome;
             }
@@ -519,6 +671,30 @@ namespace MyApp.Api.Services.Implementations
         private static string FormatQty(decimal q) =>
             q == Math.Truncate(q) ? q.ToString("N0") : q.ToString("N2");
 
+        /// <summary>
+        /// Names any rate on this row that is too large to be a rate. See
+        /// <see cref="ImplausibleRateThreshold"/> for why 50%, and the DTO's
+        /// <c>RateWarning</c> for the real sheet that needed this.
+        ///
+        /// Runs on EVERY line, matched or not, and independently of mode: a
+        /// misread rate is a property of the row, not of what it matched.
+        /// </summary>
+        private static string? DescribeImplausibleRates(GdCostingSheetRow row)
+        {
+            var bad = new List<string>();
+            if (row.Input.SalesTaxRate >= ImplausibleRateThreshold)
+                bad.Add($"sales tax {row.Input.SalesTaxRate:0.##}%");
+            if (row.Input.AstRate >= ImplausibleRateThreshold)
+                bad.Add($"AST {row.Input.AstRate:0.##}%");
+            if (row.Input.IncomeTaxRate >= ImplausibleRateThreshold)
+                bad.Add($"income tax {row.Input.IncomeTaxRate:0.##}%");
+            if (bad.Count == 0) return null;
+
+            return $"Rate looks misread: {string.Join(", ", bad)}. A cell holding \"1\" cannot be told "
+                 + "apart from a fraction and reads as 100% — write 1% as 0.01 or as the text \"1%\". "
+                 + "Cost and selling value are unaffected; income tax is not.";
+        }
+
         private static GdCostingLineDto ToLineDto(GdCostingSheetRow row, LineOutcome outcome) => new()
         {
             SourceRow = row.SourceRow,
@@ -556,6 +732,8 @@ namespace MyApp.Api.Services.Implementations
             DerivedActualCost = outcome.DerivedActualCost,
             MatchNote = outcome.MatchNote,
             OverwriteWarning = outcome.OverwriteWarning,
+            CostPlausibilityWarning = outcome.CostPlausibilityWarning,
+            RateWarning = DescribeImplausibleRates(row),
         };
 
         private static List<GdCostingConsignmentTotalsDto> BuildConsignmentTotals(List<GdCostingLineDto> lines) =>

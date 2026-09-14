@@ -188,6 +188,42 @@ namespace MyApp.Api.DTOs
         /// warning only.
         /// </summary>
         public string? OverwriteWarning { get; set; }
+
+        /// <summary>
+        /// Non-null under Backfill when the cost this line is about to write
+        /// does not fit the stock it is writing it onto.
+        ///
+        /// Backfill applies the GD's UNIT cost to the balance's WHOLE quantity
+        /// — right when the goods the GD priced are representative of the goods
+        /// on the books, wrong when they are not. On the first real production
+        /// import that produced a −85% margin: one balance merged four products
+        /// under a single HS code (torch lights at 172/unit beside vanity
+        /// mirrors at 746/unit), the GDs priced only two of them, and the
+        /// higher rate was extrapolated across all 2,970 units.
+        ///
+        /// The test compares the projected figure against
+        /// <c>ImportCostingCalculator.ExpectedCostFromSelling</c> — what the
+        /// balance's own selling value implies the cost should be. Deliberately
+        /// a WARNING, never a block: the check assumes the selling value on the
+        /// books came from this same costing convention (it does on an importer
+        /// book, verified to the paisa across 46 groups), and a company pricing
+        /// at a genuine markup would trip it legitimately.
+        /// </summary>
+        public string? CostPlausibilityWarning { get; set; }
+
+        /// <summary>
+        /// Non-null when one of this line's rates resolved to something no real
+        /// GD carries. A cell holding <c>1</c> is indistinguishable from a
+        /// fraction, so <c>PercentRate</c> reads it as 100% — which is what
+        /// happened to two lines of a real AY sheet whose income tax should
+        /// have been 1%, overstating that GD's income tax by ~1.9M.
+        ///
+        /// Income tax sits outside both the cost and the selling chain, so this
+        /// changes no figure the import writes today; it matters because the
+        /// same rate DOES drive the Advance Income Tax on Imports debit if the
+        /// consignment is ever posted under New Arrivals.
+        /// </summary>
+        public string? RateWarning { get; set; }
     }
 
     /// <summary>
@@ -206,6 +242,26 @@ namespace MyApp.Api.DTOs
     /// existing <c>gd-costing/commit</c> endpoint, unchanged, exactly as a
     /// file-sourced preview's do.
     /// </summary>
+    /// <summary>
+    /// The hand-entry request: one or MORE lines, previewed together.
+    ///
+    /// A real GD carries several HS codes — Alpha's single declaration has 26
+    /// lines, PAK's KAPE-HC-2965 has 24 — so a one-line-at-a-time form could
+    /// only ever record the rare single-line consignment. Committing line one
+    /// and then line two under the same GD number is refused outright, because
+    /// GdNumber is unique per company and there is no upsert path.
+    ///
+    /// The lines carry their own GD number rather than hoisting it here, which
+    /// keeps them the exact shape a sheet row has — so
+    /// <c>PreviewManualAsync</c> loops <c>BuildManualRow</c> and everything
+    /// downstream is the file path, unchanged, including grouping several GDs
+    /// out of one entry session if the operator types them.
+    /// </summary>
+    public class GdCostingManualEntryDto
+    {
+        public List<GdCostingManualLineDto> Lines { get; set; } = new();
+    }
+
     public class GdCostingManualLineDto
     {
         public string GdNumber { get; set; } = "";
@@ -268,6 +324,16 @@ namespace MyApp.Api.DTOs
         /// so the operator sees the total before scanning every line for the
         /// highlighted ones.</summary>
         public int OverwriteWarningCount { get; set; }
+
+        /// <summary>How many lines carry a non-null
+        /// <see cref="GdCostingLineDto.CostPlausibilityWarning"/>. Shown beside
+        /// the disposition counts so an operator sees "3 of 83 need a look"
+        /// without scanning every row.</summary>
+        public int CostPlausibilityWarningCount { get; set; }
+
+        /// <summary>How many lines carry a non-null
+        /// <see cref="GdCostingLineDto.RateWarning"/>.</summary>
+        public int RateWarningCount { get; set; }
 
         /// <summary>Lines read, before anything was blocked. Equal to
         /// <c>Lines.Count</c> here — GD costing rows are never grouped the way

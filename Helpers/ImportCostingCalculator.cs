@@ -80,5 +80,39 @@ namespace MyApp.Api.Helpers
             return new ImportCosting(
                 cost, salesTax, astAmount, subtotal, incomeTax, inputTax, sellingValue);
         }
+
+        /// <summary>
+        /// The chain RUN BACKWARDS: what a landed cost must have been for stock
+        /// carrying this selling value. Selling is cost x (st + ast) / st, so
+        /// cost is selling x st / (st + ast).
+        ///
+        /// Used to sanity-check a Backfill projection, never to write a figure:
+        /// a GD's unit cost applied to a balance's whole quantity should land
+        /// near this, and when it does not, the goods the GD priced are not
+        /// representative of the goods on the books (see
+        /// <c>GdCostingImportService.MatchAll</c>).
+        ///
+        /// Returns null when the answer would be meaningless rather than
+        /// returning a misleading zero: a zero or negative selling value has
+        /// nothing to invert, and a zero sales-tax rate has no uplift to unwind
+        /// — the same guard <c>StockExcelBuilder</c>'s cost-of-goods-sold
+        /// fallback keeps, and for the same reason (CLAUDE.md 5b-9: unguarded,
+        /// it reports an exempt item's cost as NIL rather than as its value).
+        ///
+        /// An add-on profit is deliberately NOT subtracted. It is stated per
+        /// GD line, while this is asked of a BALANCE that several lines and
+        /// several months may have fed, so there is no one figure to remove;
+        /// leaving it in makes the expectation slightly high, which only ever
+        /// makes the check more forgiving.
+        /// </summary>
+        public static decimal? ExpectedCostFromSelling(
+            decimal sellingValue, decimal salesTaxRate, decimal astRate)
+        {
+            if (sellingValue <= 0m) return null;
+            var st = Math.Max(0m, salesTaxRate);
+            var ast = Math.Max(0m, astRate);
+            if (st <= 0m) return null;
+            return Money(sellingValue * st / (st + ast));
+        }
     }
 }

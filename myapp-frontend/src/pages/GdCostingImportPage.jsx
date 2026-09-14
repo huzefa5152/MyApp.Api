@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  MdCloudUpload, MdCheckCircle, MdWarning, MdError, MdRestartAlt, MdMenuBook, MdEdit,
+  MdCloudUpload, MdCheckCircle, MdWarning, MdError, MdRestartAlt, MdMenuBook, MdEdit, MdAdd,
 } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
@@ -284,12 +284,20 @@ function Field({ label, children }) {
  * totals below are just this screen's own instant estimate (see
  * computeManualCosting).
  */
-function ManualEntryFields({ companyId, manual, onChange, onPreview, disabled, busy }) {
+function ManualEntryFields({
+  companyId, manual, onChange, onPreview, disabled, busy,
+  staged, onAddLine, onRemoveLine, onEditLine,
+}) {
   const computed = useMemo(() => computeManualCosting(manual), [manual]);
-  const canPreview = !disabled && !busy
+  // A line is complete enough to stage on the same three fields the server
+  // validates; everything else legitimately defaults to zero.
+  const lineReady = !disabled
     && manual.gdNumber.trim().length > 0
     && manual.description.trim().length > 0
     && Number(manual.quantity) > 0;
+  // Preview needs at least one line — staged, or complete in the form (the
+  // one-line case must not require pressing Add first).
+  const canPreview = !disabled && !busy && (staged.length > 0 || lineReady);
 
   const set = (key) => (e) => onChange({ [key]: e.target.value });
 
@@ -393,15 +401,79 @@ function ManualEntryFields({ companyId, manual, onChange, onPreview, disabled, b
         Computed live from what you've typed. Preview re-verifies it on the server before anything can be committed.
       </p>
 
-      <div style={{ marginTop: "0.9rem" }}>
+      <div style={{ marginTop: "0.9rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+        <button onClick={onAddLine} disabled={!lineReady} style={btn("#5f6d7e", !lineReady)}>
+          <MdAdd size={18} />
+          Add line
+        </button>
         <button onClick={onPreview} disabled={!canPreview} style={btn(colors.blue, !canPreview)}>
           <MdCloudUpload size={18} />
-          {busy ? "Checking…" : "Preview"}
+          {busy ? "Checking…" : staged.length > 0
+            ? `Preview ${staged.length + (lineReady ? 1 : 0)} line(s)`
+            : "Preview"}
         </button>
       </div>
+
+      {staged.length > 0 && (
+        <div style={{ marginTop: "0.9rem" }}>
+          <SectionLabel>Lines on this entry ({staged.length})</SectionLabel>
+          <p style={{ margin: "0 0 0.5rem", fontSize: 12.5, color: colors.textSecondary }}>
+            One GD normally carries several HS codes. Add each line, then preview them
+            together — they have to be checked as a set, because two lines landing on the
+            same item pool into one unit cost.
+          </p>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr>
+                  <th style={th}>GD</th>
+                  <th style={th}>HS code</th>
+                  <th style={th}>Description</th>
+                  <th style={{ ...th, textAlign: "right" }}>Quantity</th>
+                  <th style={{ ...th, textAlign: "right" }}>Cost</th>
+                  <th style={{ ...th, width: 96 }} aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {staged.map((m, i) => {
+                  const c = computeManualCosting(m);
+                  return (
+                    <tr key={i}>
+                      <td style={td}>{m.gdNumber}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{m.hsCode || "—"}</td>
+                      <td style={td}><div style={wrap2}>{m.description}</div></td>
+                      <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                        {qty(Number(m.quantity) || 0)}{m.unit ? ` ${m.unit}` : ""}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                        {money(c.cost)}
+                      </td>
+                      <td style={td}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button type="button" onClick={() => onEditLine(i)} disabled={disabled}
+                            title="Put this line back in the form to change it"
+                            style={miniBtn(colors.blue)}>Edit</button>
+                          <button type="button" onClick={() => onRemoveLine(i)} disabled={disabled}
+                            title="Remove this line" style={miniBtn(colors.danger)}>Remove</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const miniBtn = (tone) => ({
+  padding: "0.25rem 0.55rem", borderRadius: 6, border: `1px solid ${tone}40`,
+  background: "#fff", color: tone, fontSize: 12, fontWeight: 700,
+  cursor: "pointer", boxShadow: "none", minHeight: 30,
+});
 
 // Commit takes the reviewed lines back, never re-reads the file — echo every
 // field the server's GdCostingLineDto carries, exactly as preview sent it.
@@ -451,6 +523,10 @@ export default function GdCostingImportPage() {
   // below; switching clears whichever preview was showing.
   const [mode, setMode] = useState("file");
   const [manual, setManual] = useState(DEFAULT_MANUAL);
+  // Lines already added to this hand-entry session. A real GD carries several
+  // HS codes (Alpha's one declaration has 26 lines), and they must be previewed
+  // TOGETHER -- see PreviewManualAsync for why a line at a time is wrong.
+  const [stagedManual, setStagedManual] = useState([]);
 
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState("");
@@ -485,6 +561,9 @@ export default function GdCostingImportPage() {
   const switchMode = useCallback((next) => {
     setMode(next);
     setPreview(null); setResult(null);
+    // Half-built hand entry does not survive a switch to the file path: it
+    // would silently ride along into the next preview.
+    if (next === "file") setStagedManual([]);
   }, []);
 
   const updateManual = useCallback((patch) => setManual((m) => ({ ...m, ...patch })), []);
@@ -532,11 +611,50 @@ export default function GdCostingImportPage() {
   // it through the exact same pipeline onPreview's workbook goes through —
   // no profile/mapping involved, since there is nothing to map for a
   // hand-typed line.
+  // Every staged line PLUS the one still in the form if it is complete, so a
+  // single-line consignment never needs "Add line" pressed first.
+  const manualLinesToSend = () => {
+    const formReady = manual.gdNumber.trim() && manual.description.trim() && Number(manual.quantity) > 0;
+    return [...stagedManual, ...(formReady ? [manual] : [])].map(toManualPayload);
+  };
+
+  const onAddManualLine = () => {
+    setStagedManual((prev) => [...prev, manual]);
+    // Keep the GD header and the rates — a real GD's next line shares both, and
+    // retyping them for 26 lines is how a sheet gets typed wrong.
+    setManual((m) => ({
+      ...DEFAULT_MANUAL,
+      gdNumber: m.gdNumber, gdDate: m.gdDate, unit: m.unit,
+      salesTaxRate: m.salesTaxRate, astRate: m.astRate, incomeTaxRate: m.incomeTaxRate,
+    }));
+    setPreview(null);
+  };
+
+  const onRemoveManualLine = (i) => {
+    setStagedManual((prev) => prev.filter((_, x) => x !== i));
+    setPreview(null);
+  };
+
+  // Editing pulls the row back into the form. Anything half-typed there is
+  // staged first rather than silently discarded.
+  const onEditManualLine = (i) => {
+    setStagedManual((prev) => {
+      const row = prev[i];
+      const rest = prev.filter((_, x) => x !== i);
+      const formReady = manual.gdNumber.trim() && manual.description.trim() && Number(manual.quantity) > 0;
+      setManual(row);
+      return formReady ? [...rest, manual] : rest;
+    });
+    setPreview(null);
+  };
+
   const onPreviewManual = async () => {
     if (!companyId) return;
+    const lines = manualLinesToSend();
+    if (lines.length === 0) return;
     setBusy("preview"); setPreview(null); setResult(null);
     try {
-      const { data } = await previewGdCostingManual({ companyId, line: toManualPayload(manual), mode: costingMode });
+      const { data } = await previewGdCostingManual({ companyId, lines, mode: costingMode });
       setPreview(data);
     } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
   };
@@ -593,6 +711,8 @@ export default function GdCostingImportPage() {
   const notMatchedCount = counts["stock-posted"] || 0;
   const ambiguousCount = counts["ambiguous"] || 0;
   const overwriteWarningCount = preview?.overwriteWarningCount || 0;
+  const costWarningCount = preview?.costPlausibilityWarningCount || 0;
+  const rateWarningCount = preview?.rateWarningCount || 0;
 
   if (!canView) {
     return <div style={{ padding: "1.5rem" }}>
@@ -685,6 +805,10 @@ export default function GdCostingImportPage() {
               onPreview={onPreviewManual}
               disabled={!companyId || !!busy}
               busy={busy === "preview"}
+              staged={stagedManual}
+              onAddLine={onAddManualLine}
+              onRemoveLine={onRemoveManualLine}
+              onEditLine={onEditManualLine}
             />
           </>
         )}
@@ -712,6 +836,24 @@ export default function GdCostingImportPage() {
               {overwriteWarningCount} line{overwriteWarningCount === 1 ? "" : "s"} will REPLACE an actual
               cost already recorded from an earlier import — see the highlighted row(s) below. Switch to
               "These are new arrivals" instead if these are additional goods, not a correction.
+            </Banner>
+          )}
+
+          {costWarningCount > 0 && (
+            <Banner tone="error" icon={MdWarning}>
+              {costWarningCount} line{costWarningCount === 1 ? "" : "s"} would write a cost that does not
+              fit the stock it lands on — see the highlighted row(s) below for the figures and why.
+              Backfill spreads one GD's unit cost across an item's whole quantity, which goes wrong when
+              the item merges several products or the GD covers only part of it. Import anyway if you
+              know the figure is right.
+            </Banner>
+          )}
+
+          {rateWarningCount > 0 && (
+            <Banner tone="warn" icon={MdWarning}>
+              {rateWarningCount} line{rateWarningCount === 1 ? "" : "s"} carry a rate above 50%, which is
+              almost always a cell holding "1" meant as 1% — a bare 1 cannot be told apart from a
+              fraction. Cost and selling value are unaffected; income tax is not.
             </Banner>
           )}
 
@@ -785,7 +927,8 @@ export default function GdCostingImportPage() {
                       return (
                         <tr key={l.sourceRow} style={{
                           opacity: notMatched && !willCreate ? 0.6 : 1,
-                          background: l.overwriteWarning ? colors.dangerLight : undefined,
+                          background: (l.overwriteWarning || l.costPlausibilityWarning)
+                            ? colors.dangerLight : undefined,
                         }}>
                           <td style={td}>
                             <div>{l.gdNumber}</div>
@@ -811,15 +954,27 @@ export default function GdCostingImportPage() {
                           <td style={td}>
                             <div style={wrap2}>
                               {l.overwriteWarning && (
-                                <div style={{ color: colors.danger, fontWeight: 700, marginBottom: l.matchNote ? 4 : 0 }}>
+                                <div style={{ color: colors.danger, fontWeight: 700, marginBottom: 4 }}>
                                   {l.overwriteWarning}
+                                </div>
+                              )}
+                              {l.costPlausibilityWarning && (
+                                <div style={{ color: colors.danger, fontWeight: 700, marginBottom: 4 }}>
+                                  {l.costPlausibilityWarning}
+                                </div>
+                              )}
+                              {l.rateWarning && (
+                                <div style={{ color: "#b26a00", fontWeight: 700, marginBottom: 4 }}>
+                                  {l.rateWarning}
                                 </div>
                               )}
                               {willCreate
                                 ? WILL_CREATE_NOTE
                                 : notMatched
                                   ? NOT_MATCHED_NOTE
-                                  : l.matchNote || (l.overwriteWarning ? null : "—")}
+                                  : l.matchNote
+                                    || ((l.overwriteWarning || l.costPlausibilityWarning || l.rateWarning)
+                                        ? null : "—")}
                             </div>
                           </td>
                         </tr>
