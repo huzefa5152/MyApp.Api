@@ -60,7 +60,8 @@ namespace MyApp.Api.Services.Interfaces
         /// cannot be previewed without (mirrors <c>GdCostingMapping.Parse</c>
         /// rejecting a mapping that cannot drive an import).
         /// </summary>
-        Task<GdCostingPreviewDto> PreviewManualAsync(GdCostingManualLineDto line, int companyId, string? mode);
+        Task<GdCostingPreviewDto> PreviewManualAsync(
+            IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode);
 
         /// <summary>
         /// Writes the reviewed lines in one transaction: the import run, one

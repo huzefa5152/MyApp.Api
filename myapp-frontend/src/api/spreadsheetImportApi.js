@@ -69,12 +69,16 @@ export const previewGdCosting = ({ file, companyId, profileId, mode }) =>
   upload("/spreadsheet-import/gd-costing/preview", file,
     { companyId, ...(profileId ? { profileId } : {}), ...(mode ? { mode } : {}) });
 
-// "Enter a line by hand": builds ONE consignment line server-side and runs
-// it through the exact same match/cost pipeline the file preview uses —
+// "Enter lines by hand": builds the consignment lines server-side and runs
+// them through the exact same match/cost pipeline the file preview uses —
 // same GdCostingPreviewDto shape back, no mapping/profile involved (there is
 // nothing to map for a hand-typed line).
-export const previewGdCostingManual = ({ companyId, line, mode }) =>
-  httpClient.post("/spreadsheet-import/gd-costing/preview-manual", line,
+//
+// ALL the lines go in ONE call, never one call per line: matching, per-balance
+// pooling and the cost-plausibility check reason over the whole set, and two
+// lines landing on the same item have to pool into a single unit cost.
+export const previewGdCostingManual = ({ companyId, lines, mode }) =>
+  httpClient.post("/spreadsheet-import/gd-costing/preview-manual", { lines },
     { params: { companyId, ...(mode ? { mode } : {}) } });
 
 export const commitGdCosting = (body) =>

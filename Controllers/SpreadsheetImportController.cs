@@ -366,7 +366,7 @@ namespace MyApp.Api.Controllers
         [HttpPost("gd-costing/preview-manual")]
         [HasPermission("importcosting.sheet.run")]
         public async Task<ActionResult<GdCostingPreviewDto>> PreviewGdCostingManual(
-            [FromBody] GdCostingManualLineDto dto,
+            [FromBody] GdCostingManualEntryDto dto,
             [FromQuery] int companyId,
             [FromQuery] string? mode)
         {
@@ -374,12 +374,12 @@ namespace MyApp.Api.Controllers
             if (!await CompanyExistsAsync(companyId))
                 return NotFound(new { message = "That company no longer exists." });
 
-            if (dto == null)
-                return BadRequest(new { message = "Enter the consignment line's details." });
+            if (dto?.Lines == null || dto.Lines.Count == 0)
+                return BadRequest(new { message = "Add at least one line before previewing." });
 
             try
             {
-                return Ok(await _gdCosting.PreviewManualAsync(dto, companyId, mode));
+                return Ok(await _gdCosting.PreviewManualAsync(dto.Lines, companyId, mode));
             }
             catch (InvalidOperationException ex)
             {
