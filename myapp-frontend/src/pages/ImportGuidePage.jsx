@@ -132,12 +132,13 @@ const SECTIONS = [
   { id: "import-modes", short: "3. Choosing the mode" },
   { id: "step-by-step", short: "4. Step by step" },
   { id: "the-result", short: "5. The result" },
-  { id: "fix-by-hand", short: "6. Fixing a figure" },
-  { id: "the-books", short: "7. Where this hits the books" },
-  { id: "paying-a-gd", short: "8. Paying a GD" },
-  { id: "cost-history", short: "9. Cost history" },
-  { id: "glossary", short: "10. What the words mean" },
-  { id: "faq", short: "11. Common questions" },
+  { id: "warnings", short: "6. What the warnings mean" },
+  { id: "fix-by-hand", short: "7. Fixing a figure" },
+  { id: "the-books", short: "8. Where this hits the books" },
+  { id: "paying-a-gd", short: "9. Paying a GD" },
+  { id: "cost-history", short: "10. Cost history" },
+  { id: "glossary", short: "11. What the words mean" },
+  { id: "faq", short: "12. Common questions" },
 ];
 
 export default function ImportGuidePage() {
@@ -271,8 +272,63 @@ export default function ImportGuidePage() {
         </p>
       </section>
 
+      <section id="warnings" style={st.section}>
+        <h2 style={st.h2}><span style={st.sectionNum}>6</span> What the warnings mean</h2>
+
+        <p style={st.p}>
+          The preview can flag three things. <strong>None of them stops you importing</strong> —
+          each one shows its figures so you can decide. Read them before pressing Commit.
+        </p>
+
+        <h3 style={st.h3}>"This balance already carries an actual cost"</h3>
+        <p style={st.p}>
+          An earlier GD already priced this item, and a backfill would <strong>replace</strong>{" "}
+          that figure. If these are additional goods rather than a correction, switch to{" "}
+          <strong>"These are new arrivals"</strong>.
+        </p>
+
+        <h3 style={st.h3}>"This would cost X more than its selling value implies"</h3>
+        <p style={st.p}>
+          The most important one. A backfill takes the GD's cost <em>per unit</em> and applies it
+          to <em>everything</em> you hold of that item. That is right when the goods on the
+          declaration are the same goods on the books — and wrong when they are not.
+        </p>
+        <p style={st.p}>
+          It went wrong once, on a real import: one HS code held four different rechargeable
+          lights, torch lights at 172 a unit next to vanity mirrors at 746. The declarations
+          priced only two of them, so 2,080 torch lights were costed at three times their
+          worth and the item showed a margin of −85%.
+        </p>
+        <p style={st.p}>
+          The warning tells you <strong>how much of the item that GD actually covers</strong>{" "}
+          and, if the stock sheet merged several products under one code,{" "}
+          <strong>how many</strong>. That second number is the useful one: it means the real
+          answer is to split the item into separate items, not to retype a cost.
+        </p>
+        <div style={st.warn}>
+          It compares the cost against what your <strong>selling value</strong> says it should
+          be. That works because on these books the selling value comes from the costing sheet
+          itself. If you ever price at a genuine markup instead, expect this to fire and be
+          wrong — which is exactly why it warns rather than blocks. It never appears on a{" "}
+          <strong>new arrivals</strong> import, because that mode adds cost only for the
+          quantity actually arriving, so there is nothing to stretch.
+        </div>
+
+        <h3 style={st.h3}>"Rate looks misread: income tax 100%"</h3>
+        <p style={st.p}>
+          A cell holding just <strong>1</strong> cannot be told apart from a fraction, so it
+          reads as 100%. Two lines of a real sheet meant 1% and got 100%. Write 1% as{" "}
+          <strong>0.01</strong>, or type it as the text <strong>1%</strong>.
+        </p>
+        <p style={st.p}>
+          Cost and selling value are not affected by an income-tax rate, so nothing you sell
+          changes. It matters if that GD is ever imported as new arrivals, because the same
+          rate decides what gets posted to Advance Income Tax on Imports.
+        </p>
+      </section>
+
       <section id="fix-by-hand" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>6</span> Fixing a figure</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>7</span> Fixing a figure</h2>
 
         <h3 style={st.h3}>Type a cost straight onto an item</h3>
         <PathPill>Dashboards &#9656; Inventory &#9656; Opening Balances</PathPill>
@@ -282,6 +338,29 @@ export default function ImportGuidePage() {
         <div style={st.warn}>
           <strong>Careful — </strong>leaving the box <strong>empty</strong> keeps whatever cost
           is already stored. Typing <strong>0</strong> clears it.
+        </div>
+
+        <h3 style={st.h3}>Enter a GD by hand, with all its lines</h3>
+        <PathPill>Purchases &#9656; Import Costing &#9656; Enter a line by hand</PathPill>
+        <p style={st.p}>
+          For a declaration you have no workbook for. A real GD carries several HS codes, so
+          this takes as many lines as you need:
+        </p>
+        <ol style={st.ol}>
+          <li style={st.li}>Type the <strong>GD number and date once</strong> — they belong to the whole consignment.</li>
+          <li style={st.li}>Fill in a line and press <strong>Add line</strong>. The GD header, the unit and the three rates carry over to the next one; the product fields clear.</li>
+          <li style={st.li}>Repeat for each line. Edit or remove any of them before previewing.</li>
+          <li style={st.li}>Press <strong>Preview</strong>. It checks them all together.</li>
+        </ol>
+        <p style={st.p}>
+          Together is the point: two lines landing on the same item have to be combined into
+          one cost per unit, and checking them one at a time would treat each as if it were
+          the only one. For a single-line GD you can skip Add and just press Preview.
+        </p>
+        <div style={st.warn}>
+          <strong>You cannot add a line to a GD you have already committed.</strong> A GD number
+          can only be recorded once. Either correct an existing line (below), or delete the
+          consignment from <strong>Purchases &#9656; Consignments</strong> and enter it again.
         </div>
 
         <h3 style={st.h3}>Correct one line of a GD you already imported</h3>
@@ -294,7 +373,7 @@ export default function ImportGuidePage() {
           and re-posts the GD's journal entry so the amount owed matches the correction.
         </p>
         <p style={st.p}>
-          Say why in the <strong>Why</strong> box. It is kept in the cost history (section 9),
+          Say why in the <strong>Why</strong> box. It is kept in the cost history (section 10),
           which is what makes the change answerable in three months' time.
         </p>
         <div style={st.warn}>
@@ -313,7 +392,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="the-books" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>7</span> Where this hits the books</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>8</span> Where this hits the books</h2>
 
         <div style={st.warn}>
           <strong>A New Arrivals import DOES post to the general ledger. A Backfill import
@@ -368,7 +447,7 @@ export default function ImportGuidePage() {
           invoice and the clearing agent's charges together, because a costing sheet names
           neither a supplier nor a payment reference, so there is nothing more specific to
           credit. It behaves like any other payable: it sits on the balance sheet until a
-          payment clears it (section 8).
+          payment clears it (section 9).
         </p>
         <p style={st.p}>
           The three accounts are created for you. A brand-new company gets them with the rest
@@ -399,7 +478,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="paying-a-gd" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>8</span> Paying a GD</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>9</span> Paying a GD</h2>
         <PathPill>Purchases &#9656; Consignments &#9656; Settle</PathPill>
 
         <p style={st.p}>
@@ -446,7 +525,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="cost-history" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>9</span> Cost history &mdash; what changed a figure, and when</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>10</span> Cost history &mdash; what changed a figure, and when</h2>
         <PathPill>Dashboards &#9656; Inventory &#9656; On-Hand &#9656; History (on a row)</PathPill>
         <PathPill>Dashboards &#9656; Inventory &#9656; Cost History (whole company)</PathPill>
 
@@ -486,7 +565,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="glossary" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>10</span> What the words mean</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>11</span> What the words mean</h2>
         <div style={st.tableScroll}>
           <table style={st.table}>
             <thead>
@@ -505,7 +584,7 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="faq" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>11</span> Common questions</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>12</span> Common questions</h2>
 
         <div style={st.qa}>
           <p style={st.q}>Why is a line "not matched"?</p>
@@ -529,7 +608,7 @@ export default function ImportGuidePage() {
 
         <div style={st.qa}>
           <p style={st.q}>Do I still need to record what I owe for an import separately?</p>
-          <p style={st.a}>No — not for a New Arrivals import. It credits Import Clearing for you, and that IS the payable (section 7). Recording it again by hand would double the liability. A Backfill import posts nothing, so anything you owe for that stock was recorded when it originally arrived.</p>
+          <p style={st.a}>No — not for a New Arrivals import. It credits Import Clearing for you, and that IS the payable (section 8). Recording it again by hand would double the liability. A Backfill import posts nothing, so anything you owe for that stock was recorded when it originally arrived.</p>
         </div>
 
         <div style={st.qa}>
@@ -539,7 +618,7 @@ export default function ImportGuidePage() {
 
         <div style={st.qa}>
           <p style={st.q}>The agent's final bill was 500 less than the GD. How do I close it?</p>
-          <p style={st.a}>Settle it for what you actually paid and use "Write back the rest" for the difference (section 8). Do not type the higher figure as cash — the bank balance would then disagree with your statement.</p>
+          <p style={st.a}>Settle it for what you actually paid and use "Write back the rest" for the difference (section 9). Do not type the higher figure as cash — the bank balance would then disagree with your statement.</p>
         </div>
 
         <div style={st.qa}>

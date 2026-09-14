@@ -144,7 +144,7 @@ Dr  Advance Income Tax on Imports    Σ IncomeTax
   a brand-new StockPosted line's does. An earlier build excluded it, which
   understated Inventory while the full cost still credited Import Clearing —
   wrong on the ordinary, common-case path (a matched line is the usual
-  outcome from month 2 onward). Fixed 2026-09-13; see §12.
+  outcome from month 2 onward). Fixed 2026-09-13; see §17.
 - **Backfill posts NOTHING, and that is deliberate, not a gap.** A Backfill
   commit is RE-PRICING stock already on the books — its quantity and value
   were posted (or opened) long before this GD — so there is no new asset, no
@@ -322,7 +322,72 @@ Notes:
 
 ---
 
-## 11. Known limits and stated expected behaviours
+## 11. The preview's three warnings
+
+None of them blocks a commit. Each names its own figures so the operator can
+judge rather than take the system's word.
+
+**"This balance already carries an actual cost."** A second Backfill would
+REPLACE a cost an earlier GD wrote. Switch to New Arrivals if the goods are
+additional rather than a correction.
+
+**"This would cost X at N, more than / N% away from what its selling value
+implies."** (2026-09-14.) Backfill applies one GD's UNIT cost to a balance's
+WHOLE quantity — sound while the goods the GD priced represent the goods on the
+books, wrong when they do not. The check compares the projected figure against
+`ImportCostingCalculator.ExpectedCostFromSelling` (the chain run backwards:
+cost = selling x ST / (ST + AST)) and fires when the projection exceeds the
+selling value outright, or sits more than 20% away from expected.
+
+The message carries the *why*: how much of the balance this GD actually covers,
+and — where the stock sheet merged several products under one HS code — how
+many. That second sentence is the useful one: it means the answer is to split
+the item, not to retype a cost.
+
+It assumes the selling value on the books came from this same costing
+convention. On an importer's books it does (verified to the paisa across 46
+groups, §6). A company pricing at a genuine markup would trip it legitimately,
+which is the other reason it warns rather than blocks. New Arrivals never raises
+it — that mode adds cost for the quantity it actually brings, so there is no
+extrapolation to be wrong about.
+
+**"Rate looks misread: income tax 100%."** A cell holding `1` is
+indistinguishable from a fraction, so `PercentRate` reads it as 100%. Write 1%
+as `0.01`, or as the text `1%`. Cost and selling value are unaffected — income
+tax sits outside both chains — but the same rate drives the Advance Income Tax
+on Imports debit if the consignment is ever posted under New Arrivals.
+
+---
+
+## 12. Entering a GD by hand — several lines, one consignment
+
+**Purchases ▸ Import Costing ▸ Enter a line by hand.**
+
+A real GD carries several HS codes: Alpha's single declaration has 26 lines,
+PAK's `KAPE-HC-2965` has 24. So hand entry takes a LIST.
+
+1. Type the GD number and date once — they are per consignment.
+2. Fill a line and press **Add line**. The GD header, the unit and the three
+   rates carry over to the next line; the product fields clear.
+3. Repeat. Edit or remove any staged row before previewing.
+7. **Preview** sends every line in ONE call.
+
+That last point is not a detail. Matching, per-balance pooling and the
+plausibility check all reason over the whole SET: two lines landing on the same
+item must pool into a single unit cost, and previewing them one at a time would
+report each as though it were alone — the exact arithmetic error that produced
+the production mispricing in §17.
+
+You do not have to press Add for a single-line GD; a completed form is included
+in the preview by itself.
+
+**There is still no way to add a line to a GD already committed.** `GdNumber` is
+unique per company and there is no upsert. Correct a line in place (§8), or
+delete the consignment and enter it again.
+
+---
+
+## 13. Known limits and stated expected behaviours
 
 Check a reported "problem" against this list first. Several of these are
 deliberate and are the correct behaviour.
@@ -345,11 +410,14 @@ deliberate and are the correct behaviour.
 | A GD settled short with a write-off reads as `Settled`, not `Part paid` | Yes | §9 — both halves clear the liability |
 | The cost history is empty for anything before 2026-09-13 | Yes | §10 — the table starts empty and cannot be back-filled |
 | Saving an opening balance unchanged leaves no history entry | Yes | §10 |
-| A purchase bill at 25% GST does not move the item onto 25% | Resolved | Was §12; the failure was environmental, not a code defect — see §15 |
+| A Backfill line can warn that its cost does not fit the stock | Yes | §11 — warns, never blocks |
+| A rate at or above 50% is warned about | Yes | §11 — a bare `1` cannot be told from a fraction |
+| Hand entry takes MANY lines under one GD | Yes | §12 — one GD normally carries several HS codes |
+| A purchase bill at 25% GST does not move the item onto 25% | Resolved | Was §14; the failure was environmental, not a code defect — see §17 |
 
 ---
 
-## 12. Open defects
+## 14. Open defects
 
 **None outstanding for this feature.**
 
@@ -364,13 +432,13 @@ catalog before looking at the valuation walk.
 
 ---
 
-## 13. Test suites
+## 15. Test suites
 
 | Suite | Command | Expect |
 |---|---|---|
 | Costing chain, layout, reader (offline) | `cd scripts/gd_costing_harness && dotnet run -c Release` | `75 checks, 0 failed` |
 | Same, against a real workbook | add `-- --file "<path>" --expect-lines N` | see §6 |
-| Full live suite | `python scripts/test_gd_import_costing.py` | `385 passed, 0 failed` |
+| Full live suite | `python scripts/test_gd_import_costing.py` | `410 passed, 0 failed` |
 | Stock valuation (adjustments) | `python scripts/test_stock_valuation_flow.py` | `84/84` |
 | Stock export layout | `cd scripts/stock_export_harness && dotnet run -c Release` | `256 checks` |
 | Tenant isolation (both new routes) | `python scripts/test_tenant_isolation.py` | all PASS |
@@ -378,7 +446,7 @@ catalog before looking at the valuation walk.
 
 ---
 
-## 14. Diagnosing next month's import
+## 16. Diagnosing next month's import
 
 Work down this list before reporting a defect.
 
@@ -388,7 +456,10 @@ Work down this list before reporting a defect.
    them. Most reports of "the numbers are wrong" are answered here in one
    screen — and if the change you are looking for is NOT in it, the figure was
    not changed by this system since the trail started, which is just as useful.
-1. **Did the line counts match the sheet?** The preview reports
+1. **Read the three warnings on the preview** (§11) before anything else. The
+   cost-plausibility one exists precisely because a figure can be arithmetically
+   correct and still wrong for the stock it lands on.
+4. **Did the line counts match the sheet?** The preview reports
    `sourceRowCount` and the number of lines kept. A count one higher than
    expected usually means a totals row was not recognised — check its
    Description cell and whether it carries a Selling Value.
@@ -409,10 +480,10 @@ Work down this list before reporting a defect.
 
 ---
 
-## 15. Issue log
+## 17. Issue log
 
 Record every problem a real user reports, and its resolution. A problem that
-turns out to be intended behaviour gets written into §8 instead of fixed.
+turns out to be intended behaviour gets written into §13 instead of fixed.
 
 | Date | Sheet / company | What the user saw | Diagnosis | Outcome |
 |---|---|---|---|---|
@@ -428,9 +499,15 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 | 2026-09-13 | all | `ControlType` 19 was two roles at once | `FurtherTaxPayable` and the superseded `CustomerAdvances` were declared as the same C# enum value. On a chart carrying the legacy "Advance from Customers" account, `PostingService.ResolveAsync(FurtherTaxPayable)` could credit further tax — a liability owed to FBR — to a customer-advances liability instead: the entry balances and the balance sheet is wrong, the worst shape a bug takes here. Worse, `FurtherTaxAccountSeeder` read that same row as proof the company already had a further-tax account, so such a chart was never given the real one. | Fixed: `CustomerAdvances` renumbered to 22, with migration `SplitCustomerAdvancesControlType` restamping the legacy rows (keyed on their `seed:customer_advances` external ref — no operator could ever have created one, the Chart of Accounts picker only offered 0-13). The seeder then creates the missing account on next startup. **A company that filed further tax while this was wrong must rebuild its ledger** (Accounting ▸ rebuild) to move the amounts onto the correct account — a journal line references an account by id, so the migration cannot move them. No such row exists on the local importer database; production was checked read-only after deploy. |
 | 2026-09-13 | Alpha / AY / PAK | Three live item types carry a test suite's name | `WASHING PARTS 7511AF` (8450.9000), `LED ONE 7511AF` (8513.1090) and `CHILDREN BICYCLE 7511AF` (8712.0000) are HS-tariff placeholders that `test_spreadsheet_import` adopted and renamed — *after* real imports had already filed stock against them. All three companies hold real quantities under them (AY 4,089 units of the first; PAK 2,970 of the second). The `7511AF` suffix is a suite run tag. | **Not renamed — the operator's call.** The lot audit trail (`OpeningStockLots.ItemNameOnSheet`) recovers what the real sheets called them: 8450.9000 is "Washing Machine Parts"; 8513.1090 covers five different rechargeable-light products merged under one code (§5b-3 groups on the HS code by design). Rename them on the Item Catalog screen. The suite can no longer do this again (row above). |
 
+| 2026-09-14 | Alpha / AY / PAK | First real production import of all three sheets | Landed exactly as the local baseline predicted: 26/51/83 lines, 0 skipped, 0 ambiguous, 10 sheet overrides, the worked reference line reproducing 72,905.00 to the paisa. The 173 pre-existing balances' selling value was byte-identical before and after (159,578,674.68), proving Backfill moved no selling figure; the +3,028,198.61 was entirely the 12 balances the import created. All 9 consignments were Backfill, so nothing posted — correct, and deliberate, with the ledger switched ON for all three companies. | No action. Recorded as the production baseline. |
+| 2026-09-14 | PAK TRADE CO | RECHARGEABLE PROJECTOR LIGHTS costed at 1,850,278.46 against a 999,924.33 selling value — a −85% margin | The stock sheet merged FOUR products under HS 8513.1090 (torch lights 2,080 @ 172.34, starry projector 325 @ 710.18, warm light 342 @ 714.13, vanity mirror 223 @ 746.28). The costing sheets priced only two of them — 565 units at a pooled 622.99 — and Backfill applied that rate to all 2,970 units, including the 2,080 torch lights worth a third of it. The arithmetic was exactly as designed; the extrapolation was not sound. | **Data corrected 2026-09-14** to 857,078.00 — the 351,989.00 the GDs actually prove for 565 units, plus the remaining 2,405 at 6/7 of their selling value (505,089.00), the same relationship the stock export uses for uncosted stock. Margin now 14.29%. Recorded in the cost history as an `OpeningBalanceEdit` beside the import that caused it. **Prevented going forward** by the cost-plausibility warning (§11). |
+| 2026-09-14 | Alpha Traders | SS BALL VALVE costed slightly ABOVE its selling value (ratio 1.011) | Investigated and **left alone**. Of the five catalog items under 8481.1000 only SS BALL VALVE is Alpha's — the rest have no openings, movements or invoice lines there. The balance's own notes name lot `KAPW-HC-8876`, the same GD the costing line came from, so the sheet and the costing sheet are describing one consignment under two labels. A real landed unit cost (2,487.91) on real stock selling at 2,460.20; −1.1% is plausible for a valve line. | None. Changing it would have invented a number over a figure that traces correctly. The new warning does flag it, which is the right outcome: an operator looks, decides, imports. |
+| 2026-09-14 | AY TRADERS | GD `KAPE-HC-6575` shows income tax at 20.4% of cost against 5-7% elsewhere | Two lines (rows 41 and 44) hold an income-tax rate of 100%. Their sheet cells hold a bare `1` meaning 1%; `PercentRate` cannot tell a bare 1 from a fraction and reads it as 100%. Eight other lines on the same sheets write 1% correctly as `0.01`. No effect on cost or selling value (income tax is outside both chains) and none on the ledger (Backfill posts nothing) — it would matter only if that GD were re-imported as New Arrivals. | Data left as imported. **Prevented going forward** by the rate warning (§11). |
+| 2026-09-14 | — | Hand entry could not record a real GD | The form took exactly ONE line, and committing a second under the same GD number is refused (unique per company, no upsert) — so it only served the rare single-line consignment. | Fixed: hand entry now stages many lines and previews them in one call (§12). |
+
 ---
 
-## 16. Build record
+## 18. Build record
 
 | Date | Change |
 |---|---|
@@ -445,10 +522,12 @@ turns out to be intended behaviour gets written into §8 instead of fixed.
 | 2026-09-13 | Hand-typed single-line entry, through the same preview and commit as the sheet |
 | 2026-09-13 | Backfill vs new-arrivals mode |
 | 2026-09-13 | GL posting for New Arrivals (`077f3db`): `ImportClearing` / `AdvanceIncomeTaxOnImports` control accounts, seeded on new and existing charts; `PostImportConsignmentAsync`; a Consignments screen to view and delete a recorded import, mode-aware reversal |
-| 2026-09-13 | Architecture-review fixes (Findings 1-3, §12): Inventory debit made mode-aware so a matched New Arrivals line is no longer excluded; `stock.actualcost.view` enforced server-side across the on-hand grid, the Excel export and the movements drill-down; a Backfill preview against an already-costed balance now warns before overwriting it |
+| 2026-09-13 | Architecture-review fixes (Findings 1-3, §17): Inventory debit made mode-aware so a matched New Arrivals line is no longer excluded; `stock.actualcost.view` enforced server-side across the on-hand grid, the Excel export and the movements drill-down; a Backfill preview against an already-costed balance now warns before overwriting it |
 | 2026-09-13 | Task 23 — Import Clearing subledger: `PaymentAllocation.Kind.ImportConsignment` (a Payment debiting Import Clearing, the AP mirror of a purchase-bill allocation); `ImportConsignment.ImportClearingCredited` / `AmountSettled`, the latter recomputed alongside `PurchaseBill.AmountPaid` on every create/update/delete; over-settle and never-posted (Backfill/GL-off) guards; the Consignments screen gained Credited/Settled/Outstanding/Status columns, unpaid-first default order, an only-outstanding filter, a company-wide total, a per-row settlement list, and a Settle action (`SettleConsignmentDialog`, a focused dialog rather than a fourth PaymentForm purpose — see the guide's §7 and the dialog's own doc comment for why); a migration backfills `ImportClearingCredited` for consignments that posted before the column existed |
 
-| 2026-09-13 | Polish round (all six remaining items): a **cost audit trail** (`StockCostChange` + `GET /api/stock/company/{id}/cost-changes`, gated on `stock.actualcost.view`, written by all six paths that move the pool, §10); **per-line GD correction** (`PUT /api/import-consignments/{id}/lines/{lineId}`, mode-aware balance re-derivation, GL re-post, settled-liability floor, §8); **write-off on a GD settlement** (`AllocationKind.ImportConsignment` may now carry an `AdjustmentAmount`, §9); **editing a GD settlement** (PaymentsPage routes Edit to `SettleConsignmentDialog` instead of hiding it); **`ControlType` 19 un-aliased** (`CustomerAdvances` 19 → 22 + migration, §15) and the Chart of Accounts picker widened to the settle-remainder, further-tax and import roles; **`test_spreadsheet_import` given its own teardown** (§15) |
+| 2026-09-13 | Polish round (all six remaining items): a **cost audit trail** (`StockCostChange` + `GET /api/stock/company/{id}/cost-changes`, gated on `stock.actualcost.view`, written by all six paths that move the pool, §10); **per-line GD correction** (`PUT /api/import-consignments/{id}/lines/{lineId}`, mode-aware balance re-derivation, GL re-post, settled-liability floor, §8); **write-off on a GD settlement** (`AllocationKind.ImportConsignment` may now carry an `AdjustmentAmount`, §9); **editing a GD settlement** (PaymentsPage routes Edit to `SettleConsignmentDialog` instead of hiding it); **`ControlType` 19 un-aliased** (`CustomerAdvances` 19 → 22 + migration, §17) and the Chart of Accounts picker widened to the settle-remainder, further-tax and import roles; **`test_spreadsheet_import` given its own teardown** (§17) |
+
+| 2026-09-14 | First production import of all three sheets, then the guards it taught us: a **cost-plausibility warning** comparing a Backfill projection against what the balance's own selling value implies, carrying the coverage and the merged-product count as its explanation (§11); an **implausible-rate warning** at 50% (§11); and **multi-line hand entry** — a staged list previewed in one call, because pooling and matching reason over the set (§12). `ImportCostingCalculator.ExpectedCostFromSelling` runs the chain backwards and is the one place that inversion lives |
 
 Deferred: a screen listing consignments now exists (Consignments, above), and a
 single line of a recorded GD can be corrected in place (§8), but an upsert path

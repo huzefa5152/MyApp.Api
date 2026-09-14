@@ -298,6 +298,48 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-14 — The first real import, and the guards it taught us
+
+- **All three client costing sheets imported on production**, and the figures
+  landed exactly as the local baseline predicted: 26 / 51 / 83 lines, nothing
+  skipped, nothing ambiguous, and the worked reference line reproducing to the
+  paisa. The invariant that mattered most held — the 173 balances that already
+  existed carried a selling value of 159,578,674.68 before and after, so the
+  backfill moved no selling figure anywhere; the increase was entirely the 12
+  new items the import created.
+- **Fixed on production: one item was costed at nearly twice what it sells
+  for.** A stock sheet legitimately groups products by HS code, and one code
+  held four different rechargeable lights — torch lights at 172/unit beside
+  vanity mirrors at 746/unit. The costing sheets priced only two of them, and a
+  backfill spreads one unit cost across the whole item, so 2,080 torch lights
+  were costed at three times their worth. Corrected to what the declarations
+  actually prove plus the standard relationship for the rest; the item now
+  shows a 14.3% margin instead of −85%, and both the original import and the
+  correction are visible side by side in its cost history.
+- **New: the preview warns when a cost would not fit the stock it lands on.**
+  The system now checks each backfill line against what the item's own selling
+  value implies it should have cost, and says so when the two disagree — naming
+  the figures, how much of the item the declaration actually covers, and how
+  many products the stock sheet merged under that code, because that last one
+  tells you the answer is to split the item rather than retype a number. Run
+  against the import that caused the problem it flags 3 rows out of 110. It
+  never blocks: a genuine outlier must still be importable, and the check
+  assumes your selling value came from the costing convention, which is true on
+  an importer's books and might not be on someone else's.
+- **New: a rate above 50% is called out.** A spreadsheet cell holding `1` cannot
+  be told apart from a fraction, so it reads as 100%. Two lines of a real sheet
+  meant 1% income tax and got 100%, overstating that declaration's income tax by
+  about 1.9M. Cost and selling value were unaffected — income tax sits outside
+  both — but the same rate drives the ledger posting if that consignment is ever
+  imported as new arrivals.
+- **Entering a GD by hand now takes the whole GD.** It used to take exactly one
+  line, and a second line under the same GD number is refused outright, so it
+  could only ever record the rare single-line declaration — while a real one
+  carries 24 or 26. Type the GD number once, add each line, then preview them
+  together. Together matters: two lines landing on the same item have to pool
+  into a single unit cost, and checking them one at a time would report each as
+  though it were alone — the same arithmetic that produced the mispricing above.
+
 ### 2026-09-13 — GD import costing: what the stock actually cost
 
 - **New: import a customs GD costing workbook.** **Purchases ▸ Import Costing**
