@@ -298,6 +298,24 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-15 — Two FBR fixes found on the live installation
+
+- **Every challan on the installation read "Setup Required".**
+  `DeliveryChallanService.IsFbrReady` gated on `Company.STRN` — a field that is
+  **not on the FBR seller block at all** and is optional on the company form, so
+  it was empty on every company of the production installation and parked every
+  challan for ever. It also demanded `Company.NTN` specifically, when the seller
+  number may legitimately be a CNIC or the value re-entered on the FBR tab. Both
+  replaced by the single resolver, `Helpers/FbrSellerIdentity` — "can this
+  company produce a sellerNTNCNIC at all". The matching "Company STRN missing"
+  warning is gone for the same reason.
+- **A failed Validate left FBR Monitor empty.** A pre-flight rejection never
+  reaches FBR, and it was not written to the communication log either — so the
+  operator saw an error on screen and an empty trail, which reads as "the system
+  did nothing". Pre-flight rejections are now logged with HTTP status 0 (what
+  "we never called them" looks like) and the reason, so the Monitor explains
+  every failure.
+
 ### 2026-09-15 — Hierarchical admin scope, ported from the Trader line
 
 - **An Administrator now sees only its own tree.** `Users` and `Companies` carry

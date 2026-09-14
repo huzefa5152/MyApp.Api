@@ -1004,7 +1004,30 @@ namespace MyApp.Api.Services.Implementations
             if (!dryRun)
             {
                 var preResult = await PreValidate(invoice, company, buyer, scenarioId);
-                if (preResult != null) return preResult;
+                if (preResult != null)
+                {
+                    // A pre-flight rejection never reaches FBR, and until now it
+                    // was not written to the communication log either -- so a
+                    // failed Validate showed the operator an error on screen and
+                    // left FBR Monitor completely empty, which reads as "the
+                    // system did nothing" (reported 2026-09-15).
+                    //
+                    // Logged with httpStatus 0 and no response body, which is
+                    // exactly what "we never called them" looks like; the
+                    // endpoint is the one the call WOULD have used.
+                    var preErrors = preResult.ErrorMessage;
+                    if (string.IsNullOrWhiteSpace(preErrors) && preResult.ItemErrors?.Count > 0)
+                        preErrors = string.Join(" | ", preResult.ItemErrors
+                            .Select(e => e.Error ?? e.StatusCode ?? "")
+                            .Where(x => x.Length > 0));
+                    await AuditFbr("Error", isSubmit ? "Submit" : "Validate", invoice.Id,
+                        isSubmit ? GetSubmitUrl(company) : GetValidateUrl(company),
+                        null, null, 0,
+                        string.IsNullOrWhiteSpace(preErrors)
+                            ? "Pre-flight validation failed before the request was sent."
+                            : "Not sent to FBR - " + preErrors);
+                    return preResult;
+                }
             }
 
             // Stock availability is NOT a gate on FBR submission. Sales /

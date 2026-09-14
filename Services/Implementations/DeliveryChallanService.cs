@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -88,9 +88,20 @@ namespace MyApp.Api.Services.Implementations
             // master switch — see Company.FbrEnabled.)
             if (!company.FbrEnabled) return true;
 
-            // Company fields
-            if (string.IsNullOrWhiteSpace(company.NTN)) return false;
-            if (string.IsNullOrWhiteSpace(company.STRN)) return false;
+            // Company fields -- exactly what the FBR SELLER block carries
+            // (V1.12: sellerNTNCNIC, sellerBusinessName, sellerProvince,
+            // sellerAddress). There is NO seller STRN on FbrInvoiceRequest, so
+            // gating on one demanded a field FBR never receives: with STRN
+            // empty on every company of an installation -- which is the normal
+            // state, it is optional on the company form -- every challan sat in
+            // "Setup Required" for ever (found on production 2026-09-15).
+            //
+            // The seller number is likewise not always an NTN: it may be a
+            // 13-digit CNIC, or the exact value re-entered on the FBR tab.
+            // Helpers/FbrSellerIdentity is the single resolver for that, and
+            // asking it "can this company produce a sellerNTNCNIC at all" is
+            // the honest form of this check.
+            if (FbrSellerIdentity.Resolve(company).Error != null) return false;
             if (company.FbrProvinceCode == null) return false;
             if (string.IsNullOrWhiteSpace(company.FbrBusinessActivity)) return false;
             if (string.IsNullOrWhiteSpace(company.FbrSector)) return false;
@@ -163,8 +174,12 @@ namespace MyApp.Api.Services.Implementations
             var client = dc.Client;
             if (company != null && company.FbrEnabled)
             {
-                if (string.IsNullOrWhiteSpace(company.NTN)) dto.Warnings.Add("Company NTN missing");
-                if (string.IsNullOrWhiteSpace(company.STRN)) dto.Warnings.Add("Company STRN missing");
+                // Same rule as IsFbrReady: the seller number may be an NTN, a
+                // CNIC or the value re-entered on the FBR tab, and STRN is not
+                // an FBR field at all -- warning about it told operators to
+                // fill in something that changes nothing.
+                var (_, sellerError) = FbrSellerIdentity.Resolve(company);
+                if (sellerError != null) dto.Warnings.Add(sellerError);
                 if (company.FbrProvinceCode == null) dto.Warnings.Add("Company FBR Province missing");
                 if (string.IsNullOrWhiteSpace(company.FbrBusinessActivity)) dto.Warnings.Add("Company Business Activity missing");
                 if (string.IsNullOrWhiteSpace(company.FbrSector)) dto.Warnings.Add("Company Sector missing");
