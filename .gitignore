@@ -414,8 +414,13 @@ Data/keys/
 # never committed. Regenerate the rendered files with marketing/brochures/render.sh.
 marketing/
 
-# Claude Code user-local state
-.claude/
+# Claude Code user-local state (but DO version shared skills committed to a
+# branch — `.claude/*` ignores the contents so the exceptions below can re-add
+# the skills subtree; a bare `.claude/` would exclude the directory outright and
+# git cannot re-include a path under an excluded directory).
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 
 # Temporary debug snapshots
 roshan_dc_current.html
