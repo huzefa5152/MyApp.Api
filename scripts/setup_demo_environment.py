@@ -381,11 +381,26 @@ def stage_master_data(api, companies):
         for name, reg, ntn, addr in CLIENTS[key]:
             if name in have:
                 continue
+            # A buyer is "Registered" only if FBR's STATL list says so. Our demo
+            # NTNs are deliberately impossible (0000xxx), so STATL reports them
+            # In-Active and FBR refuses the bill [0205] -- claiming Registered
+            # here would make every demo invoice unfileable. They are therefore
+            # created as UNREGISTERED walk-in buyers carrying a CNIC, which is a
+            # completely ordinary Pakistani sale (SN002, 4% further tax) and
+            # files cleanly. Pass --client-ntn with a genuinely Active number to
+            # get a registered buyer instead.
+            fictional = (ntn or "").startswith("0000")
             body = {"companyId": cid, "name": name, "address": addr,
                     "phone": "+92-300-{0:07d}".format(random.randint(1000000, 9999999)),
-                    "registrationType": reg, "fbrProvinceCode": 8}
-            if ntn:
+                    "fbrProvinceCode": 8}
+            if reg == "Registered" and ntn and not fictional:
+                body["registrationType"] = "Registered"
                 body["ntn"] = ntn
+            else:
+                body["registrationType"] = "Unregistered"
+                # An unregistered buyer still needs an identifier FBR accepts;
+                # with neither NTN nor CNIC the buyer cannot be placed at all.
+                body["cnic"] = "4220199999991"
             st, out = api.post("/clients", body)
             if st in (200, 201):
                 made_clients.append(out)

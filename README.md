@@ -298,6 +298,26 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-15 — Sandbox scenario now follows the buyer
+
+- **The default sandbox scenario was hardcoded `SN001`** — "goods at standard
+  rate to REGISTERED buyers" — so any ordinary sandbox bill raised for a
+  walk-in customer contradicted its own buyer block and FBR answered
+  `[0205] Provided scenario not valid for unregistered user`. The default now
+  follows the buyer (SN001 registered / SN002 not), and a STORED `[SN00x]`
+  marker that contradicts the buyer loses: those two scenarios differ in exactly
+  one thing, and the buyer is a fact while the marker is a hint. Every other
+  scenario is passed through untouched — they encode a sale type, not a buyer.
+  Sandbox only; production sends no scenario at all.
+- **Demo clients are created Unregistered with a CNIC.** A buyer is "Registered"
+  only if FBR's STATL list says so, and the demo NTNs are deliberately
+  impossible, so claiming Registered made every demo invoice unfileable. An
+  unregistered buyer still needs an identifier — with neither NTN nor CNIC FBR
+  cannot place the buyer at all.
+- Two more account dropdowns now use the shared type-grouped picker: the
+  consignment settlement's "Post it to" and the bank-statement import's
+  per-line category account.
+
 ### 2026-09-15 — Journal Entries uses the grouped account picker
 
 - The account dropdown on a journal line listed all 39 postable accounts as one
