@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class CompanyDto
     {
@@ -35,6 +35,9 @@
         public string? FbrBusinessActivity { get; set; }
         public string? FbrSector { get; set; }
         public string? FbrEnvironment { get; set; }
+        /// <summary>Exact value filed as sellerNTNCNIC; blank = derive from
+        /// CNIC then NTN (Helpers/FbrSellerIdentity).</summary>
+        public string? FbrSellerNtnCnic { get; set; }
         public bool HasFbrToken { get; set; }
         public bool HasChallans { get; set; }
         public bool HasInvoices { get; set; }

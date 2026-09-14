@@ -54,6 +54,7 @@ namespace MyApp.Api.Services.Implementations
             Phone = c.Phone,
             NTN = c.NTN,
             CNIC = c.CNIC,
+            FbrSellerNtnCnic = c.FbrSellerNtnCnic,
             STRN = c.STRN,
             StartingChallanNumber = c.StartingChallanNumber,
             CurrentChallanNumber = c.CurrentChallanNumber,
@@ -153,6 +154,9 @@ namespace MyApp.Api.Services.Implementations
             if (await _repository.ExistsByNameAsync(dto.Name))
                 throw new InvalidOperationException($"A company with the name '{dto.Name}' already exists.");
 
+            AssertFbrSellerIdentity(dto.FbrEnabled, dto.NTN, dto.CNIC, dto.FbrSellerNtnCnic);
+
+
             var company = new Company
             {
                 Name = dto.Name,
@@ -161,6 +165,7 @@ namespace MyApp.Api.Services.Implementations
                 Phone = dto.Phone,
                 NTN = dto.NTN,
                 CNIC = dto.CNIC,
+                FbrSellerNtnCnic = dto.FbrSellerNtnCnic,
                 STRN = dto.STRN,
                 StartingChallanNumber = dto.StartingChallanNumber,
                 CurrentChallanNumber = 0,
@@ -255,7 +260,9 @@ namespace MyApp.Api.Services.Implementations
             company.FullAddress = dto.FullAddress;
             company.Phone = dto.Phone;
             company.NTN = dto.NTN;
+            AssertFbrSellerIdentity(dto.FbrEnabled, dto.NTN, dto.CNIC, dto.FbrSellerNtnCnic);
             company.CNIC = dto.CNIC;
+            company.FbrSellerNtnCnic = dto.FbrSellerNtnCnic;
             company.STRN = dto.STRN;
             if (dto.LogoPath != null) company.LogoPath = dto.LogoPath;
 
@@ -597,5 +604,29 @@ namespace MyApp.Api.Services.Implementations
                 throw;
             }
         }
+
+        /// <summary>
+        /// With FBR on, the value filed as sellerNTNCNIC must be STATED, not
+        /// derived: which of NTN/CNIC a business uses is decided by its IRIS
+        /// registration, and guessing means filing under a number nobody chose.
+        /// Enforced here as well as in the form so an API caller cannot bypass
+        /// it. A company with FBR off is untouched.
+        /// </summary>
+        private static void AssertFbrSellerIdentity(
+            bool fbrEnabled, string? ntn, string? cnic, string? sellerNtnCnic)
+        {
+            if (!fbrEnabled) return;
+
+            // The INVARIANT, not the UI's policy: a company filing with FBR must
+            // be able to produce a sellerNTNCNIC from something. The company form
+            // is stricter -- it makes the operator state it outright, because
+            // which of NTN/CNIC a business uses is an IRIS fact the system cannot
+            // infer. Enforcing that stricter rule here too would reject every API
+            // caller that supplies only an NTN or CNIC, which is how every
+            // company created before this field existed is still created.
+            var (_, error) = FbrSellerIdentity.Resolve(ntn, cnic, sellerNtnCnic);
+            if (error != null) throw new InvalidOperationException(error);
+        }
+
     }
 }

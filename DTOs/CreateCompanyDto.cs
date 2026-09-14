@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class CreateCompanyDto
     {
@@ -30,6 +30,9 @@
         public string? FbrSector { get; set; }
         public string? FbrToken { get; set; }
         public string? FbrEnvironment { get; set; }
+        /// <summary>Exact value filed as sellerNTNCNIC; blank = derive from
+        /// CNIC then NTN (Helpers/FbrSellerIdentity).</summary>
+        public string? FbrSellerNtnCnic { get; set; }
 
         // Per-company FBR defaults — used by InvoiceService when a new bill
         // is created without an explicit SaleType / UOM / PaymentMode on the

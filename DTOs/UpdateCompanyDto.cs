@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class UpdateCompanyDto
     {
@@ -26,6 +26,9 @@
         public string? FbrSector { get; set; }
         public string? FbrToken { get; set; }
         public string? FbrEnvironment { get; set; }
+        /// <summary>Exact value filed as sellerNTNCNIC; blank = derive from
+        /// CNIC then NTN (Helpers/FbrSellerIdentity).</summary>
+        public string? FbrSellerNtnCnic { get; set; }
         public string? FbrDefaultSaleType { get; set; }
         public string? FbrDefaultUOM { get; set; }
         public string? FbrDefaultPaymentModeRegistered { get; set; }

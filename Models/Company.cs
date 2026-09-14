@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.Models
+namespace MyApp.Api.Models
 {
     public class Company
     {
@@ -84,6 +84,25 @@
         public string? FbrSector { get; set; }
         public string? FbrToken { get; set; }
         public string? FbrEnvironment { get; set; }
+
+        /// <summary>
+        /// The EXACT value filed as <c>sellerNTNCNIC</c>, typed by the operator
+        /// on the FBR Integration tab.
+        ///
+        /// Separate from <see cref="NTN"/> on purpose. The General tab holds the
+        /// full legal number as IRIS issues it — <c>5326972-8</c>, or
+        /// <c>A113680-1</c> with its letter — while FBR files the seven
+        /// characters without the check digit, or a 13-digit CNIC instead. Which
+        /// of the two a business uses is decided by how it is registered in
+        /// IRIS, and the two are not derivable from each other: a company can
+        /// hold both an NTN and a CNIC and log in with either.
+        ///
+        /// NULL or empty means "work it out" — <see cref="Helpers.FbrSellerIdentity"/>
+        /// then falls back to the CNIC, then the NTN, which is exactly what every
+        /// company configured before this field existed already files under. So
+        /// adding this changes nothing for them.
+        /// </summary>
+        public string? FbrSellerNtnCnic { get; set; }
 
         // ── Per-company FBR defaults for new bills ──
         //

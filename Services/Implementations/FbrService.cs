@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -495,16 +495,15 @@ namespace MyApp.Api.Services.Implementations
             static string StripNtn(string? v)    => SanitizeNtn(v);
 
             // ─ Seller ─
-            // Seller identity: prefer CNIC (13 digits) if set, otherwise NTN
-            // (7 digits). FBR accepts either, but Hakimi Traders submissions
-            // must use CNIC per the tax consultant's instruction.
-            var sellerNtn = !string.IsNullOrWhiteSpace(company.CNIC)
-                ? StripDigits(company.CNIC)
-                : StripNtn(company.NTN);
-            if (string.IsNullOrWhiteSpace(sellerNtn))
-                errors.Add("Seller NTN/CNIC is required. Configure it in Company settings. [FBR 0001]");
-            else if (sellerNtn.Length != 7 && sellerNtn.Length != 13)
-                errors.Add($"Seller NTN must be 7 digits or CNIC must be 13 digits (current: {sellerNtn.Length}). [FBR 0108]");
+            // ONE rule for sellerNTNCNIC, shared with the payload builder below:
+            // Helpers/FbrSellerIdentity. FBR takes a 13-digit CNIC or a
+            // 7-character NTN and does not care which -- proven on the sandbox
+            // 2026-09-14 with an NTN-only seller (see that helper). Writing the
+            // rule out here as well is how the two drifted before, and how a
+            // letter-prefixed NTN lost its letter on this path.
+            var (sellerNtn, sellerIdError) = FbrSellerIdentity.Resolve(company);
+            if (sellerIdError != null)
+                errors.Add(sellerIdError + " [FBR 0001]");
 
             if (company.FbrProvinceCode == null)
                 errors.Add("Seller Province is required. Configure FBR Province in Company settings. [FBR 0073]");
@@ -968,13 +967,11 @@ namespace MyApp.Api.Services.Implementations
             // ── Sanitize NTN/CNIC ──
             // Uses the shared class-level helpers (FbrService.SanitizeNtn /
             // StripAllDigits) so pre-validate and payload build can't drift.
-            // Seller: prefer CNIC (13 digits) when configured; fall back to
-            // NTN (7 digits). CNIC is required for Hakimi Traders per the
-            // tax consultant; NTN-only submissions are supported as a legacy
-            // path for other companies.
-            var sellerNtnCnic = !string.IsNullOrWhiteSpace(company.CNIC)
-                ? StripAllDigits(company.CNIC)
-                : SanitizeNtn(company.NTN);
+            // Seller: Helpers/FbrSellerIdentity, the same call the pre-flight
+            // makes, so what passes validation is exactly what is sent. CNIC
+            // wins when present (every currently configured company files that
+            // way); an NTN-only seller files under its NTN, which FBR accepts.
+            var sellerNtnCnic = FbrSellerIdentity.Resolve(company).Value;
             // Buyer: the same FbrBuyerIdentity rule pre-flight applied -- the
             // 7-character NTN (letter kept, check digit dropped) or the 13-digit CNIC.
             buyerNtnCnic = FbrBuyerIdentity.Resolve(buyer.NTN, buyer.CNIC, buyerRegType == "Registered").Value;
