@@ -1020,7 +1020,12 @@ namespace MyApp.Api.Services.Implementations
                         preErrors = string.Join(" | ", preResult.ItemErrors
                             .Select(e => e.Error ?? e.StatusCode ?? "")
                             .Where(x => x.Length > 0));
-                    await AuditFbr("Error", isSubmit ? "Submit" : "Validate", invoice.Id,
+                    // "Warning", not "Error": ResolveFbrStatus maps an Error with
+                    // httpStatus 0 to "uncertain", which means "the bytes may have
+                    // reached FBR and the answer was lost" and is deliberately NOT
+                    // re-submittable (CLAUDE.md 10). Nothing was sent here, so the
+                    // honest status is "rejected" -- fix the data and try again.
+                    await AuditFbr("Warning", isSubmit ? "Submit" : "Validate", invoice.Id,
                         isSubmit ? GetSubmitUrl(company) : GetValidateUrl(company),
                         null, null, 0,
                         string.IsNullOrWhiteSpace(preErrors)
