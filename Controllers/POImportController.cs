@@ -36,6 +36,7 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<POImportController> _logger;
+        private readonly ICompanyAccessGuard _access;
 
         public POImportController(
             IPOParserService parser,
@@ -43,7 +44,8 @@ namespace MyApp.Api.Controllers
             IRuleBasedPOParser ruleParser,
             AppDbContext context,
             IWebHostEnvironment env,
-            ILogger<POImportController> logger)
+            ILogger<POImportController> logger,
+            ICompanyAccessGuard access)
         {
             _parser = parser;
             _formatRegistry = formatRegistry;
@@ -51,6 +53,21 @@ namespace MyApp.Api.Controllers
             _context = context;
             _env = env;
             _logger = logger;
+            _access = access;
+        }
+
+        /// <summary>
+        /// Every route here that names a company asserts against it, and the
+        /// archive is scoped to the caller's accessible set. The archive holds
+        /// customers' own purchase-order PDFs, so an unscoped read is the
+        /// leak CLAUDE.md 5d was written about — it was unscoped until
+        /// 2026-09-14: the list ignored access entirely and the file download
+        /// took an id and no company at all.
+        /// </summary>
+        private async Task<bool> CanReachAsync(int companyId)
+        {
+            var uid = CurrentUserId();
+            return uid.HasValue && await _access.HasAccessAsync(uid.Value, companyId);
         }
 
         // Resolve current user id from JWT claims (matches the pattern
@@ -87,6 +104,10 @@ namespace MyApp.Api.Controllers
             if (!file.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase) &&
                 !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { error = "Only PDF files are supported." });
+
+            // The company decides which saved formats are tried AND owns the
+            // archive row this write leaves behind.
+            if (companyId.HasValue && !await CanReachAsync(companyId.Value)) return Forbid();
 
             // Pull the upload into memory once so we can both save the
             // bytes to disk AND re-read them for the parser without paying
@@ -153,6 +174,8 @@ namespace MyApp.Api.Controllers
         {
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
+
+            if (companyId.HasValue && !await CanReachAsync(companyId.Value)) return Forbid();
 
             // No PDF to archive in the text-only path — operator pasted
             // raw text, nothing to retain. Keep this lean and skip the
@@ -390,7 +413,17 @@ namespace MyApp.Api.Controllers
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 200) pageSize = 50;
 
+            var uid = CurrentUserId();
+            if (uid == null) return Forbid();
+            var allowed = await _access.GetAccessibleCompanyIdsAsync(uid.Value);
+
             var q = _context.PoImportArchives.AsNoTracking().AsQueryable();
+            // Scope FIRST, then apply the caller's own filter. A companyId the
+            // caller cannot reach narrows an already-narrowed set to nothing,
+            // which is the honest answer -- there is nothing there for them.
+            // Rows with no company (an operator parsing a PDF before choosing
+            // one) belong to whoever can see the archive at all.
+            q = q.Where(a => a.CompanyId == null || allowed.Contains(a.CompanyId.Value));
             if (companyId.HasValue) q = q.Where(a => a.CompanyId == companyId.Value);
             if (!string.IsNullOrWhiteSpace(outcome)) q = q.Where(a => a.ParseOutcome == outcome);
             if (from.HasValue) q = q.Where(a => a.UploadedAt >= from.Value);
@@ -429,6 +462,11 @@ namespace MyApp.Api.Controllers
         {
             var row = await _context.PoImportArchives.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
             if (row == null) return NotFound();
+
+            // 404, not 403: a distinct answer for "exists but not yours" is an
+            // enumeration oracle over other tenants' uploads.
+            if (row.CompanyId.HasValue && !await CanReachAsync(row.CompanyId.Value))
+                return NotFound();
 
             var abs = Path.Combine(GetArchiveRoot(), row.StoredPath.Replace('/', Path.DirectorySeparatorChar));
             if (!System.IO.File.Exists(abs))

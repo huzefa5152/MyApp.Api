@@ -31,10 +31,18 @@ namespace MyApp.Api.Controllers
         ///
         /// Period accepts: this-week, last-week, this-month (default),
         /// last-month, this-year, last-year, all-time. Anything else
-        /// falls back to all-time. Tenant scope: caller must already be
-        /// authorised against the company; we trust the upstream guard.
+        /// falls back to all-time.
+        ///
+        /// TENANT SCOPE IS ENFORCED HERE. It used to say "the caller must
+        /// already be authorised against the company; we trust the upstream
+        /// guard" -- and there is no upstream guard. Anyone who could sign in
+        /// and held dashboard.view could read any company's headline sales,
+        /// its top clients BY NAME, its recent invoices and its stock, just by
+        /// changing companyId in the query string. Found 2026-09-14 by asking
+        /// for another tenant's dashboard as a freshly-created user.
         /// </summary>
         [HttpGet("kpis")]
+        [AuthorizeCompany]
         public async Task<IActionResult> GetKpis(
             [FromQuery] int companyId,
             [FromQuery] string period = "this-month")

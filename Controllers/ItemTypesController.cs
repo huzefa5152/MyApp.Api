@@ -50,7 +50,12 @@ namespace MyApp.Api.Controllers
         /// that HS code — eliminates 0052 "invalid combination" errors at
         /// the source.
         /// </summary>
+        // Guarded even though the ANSWER is reference data: resolving it can
+        // fall back to that company's own FBR token (TaxMappingEngine), and
+        // spending one tenant's credential for a caller who cannot reach that
+        // tenant is exactly what audit H-9 was about.
         [HttpGet("uoms-for-hs")]
+        [AuthorizeCompany]
         public async Task<ActionResult<List<FbrUOMDto>>> GetUomsForHs(
             [FromQuery] int companyId, [FromQuery] string hsCode)
         {
@@ -70,6 +75,7 @@ namespace MyApp.Api.Controllers
         /// operator never wonders "is 18 % right for this HS code?".
         /// </summary>
         [HttpGet("fbr-hints")]
+        [AuthorizeCompany]   // same reasoning as uoms-for-hs above
         public async Task<IActionResult> GetFbrHints(
             [FromQuery] int companyId, [FromQuery] string hsCode)
         {

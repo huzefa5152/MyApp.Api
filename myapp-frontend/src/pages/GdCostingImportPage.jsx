@@ -872,6 +872,20 @@ export default function GdCostingImportPage() {
             <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
               Excel only (.xls, .xlsx, .xlsm). Close the file in Excel first.
             </p>
+            {/* The published sample, the same affordance the opening-stock
+                import offers. A new client sent this shape imports against the
+                built-in layout with no mapping. BASE_URL, not a bare path: this
+                app is served under /admin/ in the customer build. */}
+            <p style={{ margin: "0.35rem 0 0", fontSize: 12.5 }}>
+              <a href={`${(import.meta.env.BASE_URL || "/")}templates/gd-costing-template.xlsx`}
+                 download
+                 style={{ color: colors.blue, fontWeight: 600 }}>
+                Download the sample GD costing sheet
+              </a>
+              <span style={{ color: colors.textSecondary }}>
+                {" "}— filled-in example rows, and a sheet explaining every column.
+              </span>
+            </p>
 
             {profileError && <div style={{ marginTop: "0.6rem" }}><Banner tone="error" icon={MdError}>{profileError}</Banner></div>}
             {profile && (
