@@ -230,6 +230,31 @@ namespace MyApp.Api.Services.Implementations
         private static string SquashSpaces(string? v)
             => string.Join(" ", (v ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries)).Trim();
 
+        /// <summary>
+        /// The sandbox scenario to file under.
+        ///
+        /// SN001 and SN002 are the SAME sale type -- goods at standard rate --
+        /// and differ in exactly one thing: whether the buyer is registered. So
+        /// a stored SN001/SN002 that contradicts the buyer on the very same
+        /// payload is not a choice worth honouring; the buyer is a fact and the
+        /// marker is a hint. Correcting it here stops FBR answering [0205]
+        /// "Provided scenario not valid for unregistered user" on a bill whose
+        /// own buyer block says Unregistered (found on production 2026-09-15:
+        /// demo bills carried a "[SN001]" tag in PaymentTerms written before
+        /// their client was corrected to Unregistered).
+        ///
+        /// Every OTHER scenario is passed through untouched -- they encode a
+        /// sale type, not a buyer, and second-guessing them would be wrong.
+        /// </summary>
+        private static string ResolveStandardRateScenario(string? scenarioId, string buyerRegType)
+        {
+            var registered = buyerRegType == "Registered";
+            if (string.IsNullOrWhiteSpace(scenarioId)) return registered ? "SN001" : "SN002";
+            if (scenarioId == "SN001" && !registered) return "SN002";
+            if (scenarioId == "SN002" && registered) return "SN001";
+            return scenarioId;
+        }
+
         internal static bool IsExemptSaleType(string? saleType) =>
             !string.IsNullOrWhiteSpace(saleType)
             && saleType.Trim().StartsWith("Exempt", StringComparison.OrdinalIgnoreCase);
@@ -1112,9 +1137,7 @@ namespace MyApp.Api.Services.Implementations
                 // scenario contradicted the buyer the same payload carried
                 // (found on production 2026-09-15). Sandbox only; production
                 // sends no scenario at all.
-                ScenarioId = isSandbox
-                    ? (scenarioId ?? (buyerRegType == "Registered" ? "SN001" : "SN002"))
-                    : null,
+                ScenarioId = isSandbox ? ResolveStandardRateScenario(scenarioId, buyerRegType) : null,
                 Items = new List<FbrInvoiceItemRequest>()
             };
 
