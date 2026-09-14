@@ -414,8 +414,14 @@ Data/keys/
 # never committed. Regenerate the rendered files with marketing/brochures/render.sh.
 marketing/
 
-# Claude Code user-local state
-.claude/
+# Claude Code user-local state. Ignored per-ENTRY rather than as a whole
+# directory, because git cannot re-include anything beneath an excluded
+# directory -- and project-local skills below DO belong to the repo.
+.claude/*
+# Project-local skills are part of the repo: they encode how THIS project is
+# worked on (onboarding an FBR importer, etc) and are meant to be reused by
+# anyone who clones it. Everything else under .claude/ is one machine's state.
+!.claude/skills/
 
 # Temporary debug snapshots
 roshan_dc_current.html
