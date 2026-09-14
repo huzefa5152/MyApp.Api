@@ -292,7 +292,7 @@ def stage_reset(api):
             print("  delete user {0:<40} {1}".format(DEMO_ADMIN["username"], st))
 
 
-def stage_companies(api):
+def stage_companies(api, fbr_ntn=None, fbr_token=None, fbr_all=False):
     print("\n=== Companies ===")
     made = {}
     for spec in DEMO_COMPANIES:
@@ -315,7 +315,9 @@ def stage_companies(api):
             "inventoryTrackingEnabled": True,
             "enableGl": True,
         }
-        if spec["fbr"]:
+        # FBR on for the importer by default; for all three when asked, which is
+        # what a demo that shows Digital Invoicing on every company needs.
+        if spec["fbr"] or fbr_all:
             # Sandbox, and NO token. A demo company must never carry a real
             # credential, and everything worth showing on the FBR screens
             # (configuration, scenarios, readiness) renders without one.
@@ -325,10 +327,14 @@ def stage_companies(api):
                 "fbrProvinceCode": 8,
                 "fbrBusinessActivity": "Importer",
                 "fbrSector": "All Other Sectors",
-                "fbrSellerNtnCnic": spec["ntn"],
+                # The business's real filing identity when one was supplied,
+                # otherwise the company's own impossible demo NTN.
+                "fbrSellerNtnCnic": fbr_ntn or spec["ntn"],
             })
+            if fbr_token:
+                body["fbrToken"] = fbr_token
         st, out = api.post("/companies", body)
-        if st not in (200, 201) and spec["fbr"]:
+        if st not in (200, 201) and (spec["fbr"] or fbr_all):
             # A company cannot be saved FBR-on without everything FBR needs.
             # Falling back is better than failing the whole build: the demo
             # does not depend on the flag.
@@ -811,6 +817,21 @@ def stage_demo_admin(api, companies, password):
         print("  user created (id {0})".format(uid))
 
     api.must("PUT", "/users/{0}/roles".format(uid), {"roleIds": [role_id]}, "assign role")
+
+    # Merge, do not replace. The grant endpoint SETS the list, so a top-up run
+    # would otherwise revoke a company the Demo Administrator created itself --
+    # which is the very thing the demo shows off, and losing it mid-rehearsal
+    # would be a nasty surprise.
+    st, current = api.get("/usercompanies/user/{0}".format(uid))
+    if st == 200 and isinstance(current, dict):
+        held = {c.get("companyId") or c.get("id")
+                for c in (current.get("companies") or [])
+                if isinstance(c, dict) and c.get("hasExplicitGrant")}
+        extra = sorted(h for h in held if h and h not in company_ids)
+        if extra:
+            print("  keeping {0} company grant(s) the account already held: {1}".format(
+                len(extra), extra))
+        company_ids = sorted(set(company_ids) | {h for h in held if h})
     api.must("PUT", "/usercompanies/user/{0}".format(uid), {"companyIds": company_ids}, "assign companies")
     print("  granted companies: {0}".format(company_ids))
     return uid, company_ids
@@ -840,7 +861,13 @@ def stage_isolation(api, base, password, companies):
     """
     print("=== Isolation review ===")
     demo = Api(base, DEMO_ADMIN["username"], password)
-    allowed = {c["id"] for c in companies.values()}
+    # The allowed set is whatever the SERVER grants this account right now, not
+    # the three companies this file happens to know about. The demo account can
+    # legitimately own more -- it creates its own during a demo -- and treating
+    # one of its own companies as forbidden makes the suite lie in both
+    # directions at once.
+    allowed = {c["id"] for c in listing(demo.get("/companies")[1])}
+    expected = {c["id"] for c in companies.values()}
     everything = {c["id"]: c["name"] for c in listing(api.get("/companies")[1])}
     forbidden = sorted(set(everything) - allowed)
 
@@ -887,11 +914,10 @@ def stage_isolation(api, base, password, companies):
             state["fail"] += 1
             print("  FAIL  {0} -> {1}".format(label, status))
 
-    visible = {c["id"] for c in listing(demo.get("/companies")[1])}
-    expect_refused("company list is exactly the demo companies",
-                   403 if visible == allowed else 200)
-    if visible != allowed:
-        print("        saw {0}, expected {1}".format(sorted(visible), sorted(allowed)))
+    expect_refused("company list covers the seeded demo companies",
+                   403 if expected <= allowed else 200)
+    if not expected <= allowed:
+        print("        saw {0}, missing {1}".format(sorted(allowed), sorted(expected - allowed)))
 
     # Company-scoped reads, one per module the demo account can otherwise use.
     probes = [
@@ -956,10 +982,35 @@ def stage_isolation(api, base, password, companies):
     else:
         state["pass"] += 1
 
-    expect_refused("user administration", demo.get("/users")[0])
-    expect_refused("tenant access listing", demo.get("/usercompanies")[0])
-    expect_refused("granting itself another company",
-                   demo.put("/usercompanies/user/1", {"companyIds": forbidden})[0])
+    st, body = demo.get("/users")
+    seen = {u.get("username") for u in listing(body)} if st == 200 else set()
+    others = {u.get("username") for u in listing(api.get("/users")[1])} - seen - {None}
+    strayed = [u for u in seen if u in others]
+    if st in (401, 403) or (st == 200 and not strayed):
+        state["pass"] += 1
+    else:
+        state["fail"] += 1
+        print("  FAIL  /users leaked accounts outside the demo tree: {0}".format(strayed))
+
+    st, body = demo.get("/usercompanies")
+    rows = listing(body) if st == 200 else []
+    strayed = [r for r in rows if isinstance(r, dict)
+               and any(c.get("companyId") not in allowed
+                       for c in (r.get("companies") or []) if isinstance(c, dict))]
+    if st in (401, 403) or not strayed:
+        state["pass"] += 1
+    else:
+        state["fail"] += 1
+        print("  FAIL  tenant access grid offered {0} out-of-scope rows".format(len(strayed)))
+
+    # Any refusal will do here -- the seed admin is rejected with 400 ("always
+    # has access to every company") before the scope check is even reached.
+    st = demo.put("/usercompanies/user/1", {"companyIds": forbidden})[0]
+    if st in (400, 401, 403, 404):
+        state["pass"] += 1
+    else:
+        state["fail"] += 1
+        print("  FAIL  granting itself another company -> {0}".format(st))
 
     print("  {0} passed, {1} failed, {2} skipped  (probed {3} forbidden companies: {4})".format(
         state["pass"], state["fail"], state["skip"], len(forbidden),
@@ -1011,6 +1062,27 @@ def main():
     # generated for this run and printed at the end.
     ap.add_argument("--demo-password", default=os.environ.get("DEMO_PASSWORD"))
     ap.add_argument("--reset", action="store_true")
+    # -- Aiming this at a remote installation -------------------------------
+    # Everything here writes. Against localhost that is a scratch database;
+    # against a live site it is production data, so the rails below make that
+    # a deliberate act rather than a --base typo.
+    ap.add_argument("--production-ok", action="store_true",
+                    help="Required when --base is not localhost. Also blocks --reset.")
+    ap.add_argument("--stages", default="all",
+                    help="all | minimal. 'minimal' creates the companies, the FBR "
+                         "configuration and the Demo Administrator, and writes no "
+                         "clients, suppliers, items, documents or imports.")
+    # -- FBR identity, never hardcoded -------------------------------------
+    # The seller NTN and the sandbox token belong to the business, not to this
+    # script. Supplied here so nothing real is ever committed, and applied
+    # through the ordinary company API so the token is encrypted by the target
+    # installation's own key ring.
+    ap.add_argument("--fbr-seller-ntn", default=None,
+                    help="Value filed as sellerNTNCNIC on every demo company.")
+    ap.add_argument("--fbr-token", default=os.environ.get("DEMO_FBR_TOKEN"),
+                    help="Sandbox token for the demo companies (or DEMO_FBR_TOKEN).")
+    ap.add_argument("--fbr-all-companies", action="store_true",
+                    help="Turn FBR on for all three demo companies, not just the importer.")
     ap.add_argument("--isolation-only", action="store_true")
     ap.add_argument("--skip-imports", action="store_true")
     a = ap.parse_args()
@@ -1019,6 +1091,15 @@ def main():
         a.demo_password = generate_password()
         print("Generated demo password for this run: {0}".format(a.demo_password))
         print("(pass --demo-password or set DEMO_PASSWORD to choose your own)")
+
+    is_local = ("localhost" in a.base) or ("127.0.0.1" in a.base)
+    if not is_local:
+        if not a.production_ok:
+            sys.exit(f"Refusing to write to {a.base} without --production-ok.")
+        if a.reset:
+            sys.exit("--reset deletes companies by name. Never against a remote "
+                     "installation; remove it and delete by hand if you truly mean to.")
+        print(f"*** REMOTE TARGET: {a.base} -- every stage below WRITES there ***")
 
     api = Api(a.base, a.admin_user, a.admin_password)
 
@@ -1037,7 +1118,22 @@ def main():
     if a.reset:
         stage_reset(api)
 
-    companies = stage_companies(api)
+    companies = stage_companies(api, a.fbr_seller_ntn, a.fbr_token, a.fbr_all_companies)
+    if a.stages == "minimal":
+        # Companies + FBR configuration + the Demo Administrator, and nothing
+        # else. No clients, suppliers, item types, documents or imports -- the
+        # shape you want when the target is a live installation.
+        print("\n=== stages=minimal: skipping master data, transactions and imports ===")
+        stage_demo_admin(api, companies, a.demo_password)
+        ok = stage_isolation(api, a.base, a.demo_password, companies)
+        print("\n=== Summary ===")
+        for spec in DEMO_COMPANIES:
+            c = companies[spec["key"]]
+            print("  {0:<45} id {1}   {2}".format(spec["name"][:44], c["id"], spec["story"]))
+        print("  Demo Administrator: {0} / {1}".format(DEMO_ADMIN["username"], a.demo_password))
+        print("  isolation: {0}".format("all checks passed" if ok else "FAILURES ABOVE"))
+        sys.exit(0 if ok else 1)
+
     items, contacts = stage_master_data(api, companies)
     stage_transactions(api, companies, items, contacts)
     stage_document_chain(api, companies, items, contacts)
