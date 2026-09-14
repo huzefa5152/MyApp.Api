@@ -479,6 +479,135 @@ def stage_transactions(api, companies, items, contacts):
             key, bought, sold, receipts, payments))
 
 
+def stage_document_chain(api, companies, items, contacts):
+    """The documents a demo has to be able to SHOW.
+
+    Sales bills and purchases alone leave six screens empty -- goods receipts,
+    quotes, orders, challans, the FBR sandbox and the customer portal -- and
+    Act 2 of the demo is precisely the chain quote -> order -> challan -> bill.
+    A screen with "No sales orders found" on it during a demo is worse than not
+    opening the screen at all.
+
+    Every conversion goes through the product's OWN convert endpoints
+    (DocumentCopyService), never by re-creating the destination by hand, so what
+    the demo shows is the lineage a customer would get.
+    """
+    print("\n=== Document chain ===")
+    names = [p[0] for p in PRODUCTS]
+    uom_of = {p[0]: p[2] for p in PRODUCTS}
+    price_of = {p[0]: p[4] for p in PRODUCTS}
+
+    for key, company in companies.items():
+        cid = company["id"]
+        clients = contacts[key]["clients"]
+        suppliers = contacts[key]["suppliers"]
+        if not clients or not suppliers:
+            continue
+
+        made = {"receipts": 0, "quotes": 0, "orders": 0, "challans": 0, "portals": 0}
+
+        existing = listing(api.get("/salesquotes/company/{0}".format(cid))[1])
+        if existing:
+            print("  {0:<8} already has {1} quotes - left alone".format(key, len(existing)))
+            continue
+
+        # Goods received against a supplier, before any of it is sold.
+        for n, supplier in enumerate(suppliers[:2]):
+            picks = names[n * 2:n * 2 + 2]
+            st, _ = api.post("/goodsreceipts", {
+                "receiptDate": d(120 - n * 15), "companyId": cid, "supplierId": supplier["id"],
+                "supplierChallanNumber": "SDC-{0}-{1:03d}".format(key.upper()[:3], 200 + n),
+                "site": "Main Store",
+                "items": [{"itemTypeId": items[p], "description": p,
+                           "quantity": 40, "unit": uom_of[p]} for p in picks],
+            })
+            if st in (200, 201):
+                made["receipts"] += 1
+
+        # The chain. Quote -> order -> challan, each through the conversion the
+        # product ships, so the documents carry their lineage.
+        for n in range(3):
+            client = clients[n % len(clients)]
+            picks = names[n * 3 % len(names):][:2] or names[:2]
+            lines = [{"itemTypeId": items[p], "description": p, "quantity": 6 + n * 2,
+                      "unit": uom_of[p], "unitPrice": price_of[p]} for p in picks]
+
+            st, quote = api.post("/salesquotes/company/{0}".format(cid), {
+                "clientId": client["id"], "date": d(95 - n * 20),
+                "validUntil": d(95 - n * 20 - 30),
+                "customerEnquiryRef": "RFQ-{0}-{1:03d}".format(key.upper()[:3], 100 + n),
+                "notes": "Prices valid 30 days. Delivery ex-stock.",
+                "gstRate": 18, "items": lines,
+            })
+            if st not in (200, 201):
+                continue
+            made["quotes"] += 1
+
+            # Only the first two quotes progress. A pipeline where every quote
+            # became an order is not a pipeline anyone recognises.
+            if n == 2:
+                continue
+
+            st, order = api.post("/salesquotes/{0}/convert-to-order".format(quote["id"]), {})
+            if st not in (200, 201):
+                st, order = api.post("/salesorders/company/{0}".format(cid), {
+                    "clientId": client["id"], "orderDate": d(90 - n * 20),
+                    "customerPoNumber": "PO-{0}-{1:03d}".format(key.upper()[:3], 500 + n),
+                    "customerPoDate": d(90 - n * 20), "site": "Main Gate",
+                    "items": lines,
+                })
+            if st not in (200, 201):
+                continue
+            made["orders"] += 1
+
+            # And only the first order is delivered, so the Orders screen shows
+            # one open and one fulfilled.
+            if n == 0:
+                st, _ = api.post("/salesorders/{0}/create-challan".format(order["id"]), {})
+                if st not in (200, 201):
+                    st, _ = api.post("/deliverychallans/company/{0}".format(cid), {
+                        "clientId": client["id"], "poNumber": "PO-{0}-500".format(key.upper()[:3]),
+                        "poDate": d(88), "deliveryDate": d(86), "site": "Main Gate",
+                        "items": [{"itemTypeId": items[p], "description": p,
+                                   "quantity": 4, "unit": uom_of[p]} for p in picks],
+                    })
+                if st in (200, 201):
+                    made["challans"] += 1
+
+        # One customer gets a portal link. It is the only anonymous surface in
+        # the product and worth showing, but only one -- a list of five identical
+        # portals says nothing a single row does not.
+        st, _ = api.post("/customer-portals", {
+            "companyId": cid, "clientId": clients[0]["id"], "documentType": "Bill",
+        })
+        if st in (200, 201):
+            made["portals"] += 1
+
+        print("  {0:<8} {1} goods receipts, {2} quotes, {3} orders, {4} challans, {5} portal".format(
+            key, made["receipts"], made["quotes"], made["orders"],
+            made["challans"], made["portals"]))
+
+
+def stage_fbr_demo_bills(api, companies):
+    """Seed the FBR scenario bills on the FBR-enabled demo company.
+
+    The FBR Sandbox screen is one of the strongest things to show and it opens
+    on "No demo bills yet" until this runs. Seeding writes local demo bills
+    only; it does not contact FBR, which matters because the demo company
+    deliberately carries no token.
+    """
+    print("\n=== FBR demo bills ===")
+    for key, company in companies.items():
+        if not company.get("fbrEnabled"):
+            continue
+        st, out = api.post("/fbr/sandbox/{0}/seed".format(company["id"]), None)
+        if st in (200, 201):
+            print("  {0:<8} created {1}, skipped {2}".format(
+                key, out.get("created"), out.get("skipped")))
+        else:
+            print("  {0:<8} seed refused ({1}) {2}".format(key, st, json.dumps(out)[:200]))
+
+
 def _upload(api, path, files, params):
     r = api.s.post(api.base + "/api" + path, files=files, params=params, timeout=600)
     try:
@@ -899,6 +1028,8 @@ def main():
     companies = stage_companies(api)
     items, contacts = stage_master_data(api, companies)
     stage_transactions(api, companies, items, contacts)
+    stage_document_chain(api, companies, items, contacts)
+    stage_fbr_demo_bills(api, companies)
     stage_demo_admin(api, companies, a.demo_password)
     # As the demo account, deliberately: the import is one of the things it has
     # to be able to do, and running it here is the proof.

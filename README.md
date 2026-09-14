@@ -298,6 +298,27 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-14 — A demo you can actually give
+
+- **`scripts/capture_demo_walkthrough.mjs`** drives the local app as the Demo
+  Administrator and writes two documents from one pass: a **presenter runbook**
+  (every screen, its route, and what to say while it is up) and a **pitch deck**
+  (same screenshots, one claim per slide, prints to a PDF you can send). Both
+  are gitignored and rebuilt in one command.
+- **Six screens were empty the first time it ran** — goods receipts, quotes,
+  orders, challans, the FBR sandbox and the customer portal — which meant Act 2
+  of the demo, the quote → order → challan → bill chain, had nothing to show.
+  The demo seeder now builds that chain through the product's own conversion
+  endpoints, plus goods receipts, a customer portal and the FBR scenario bills.
+- The capture flags any screen whose text reads "No … yet/found", because a
+  screenshot of an empty table is worse than a missing one: it gets presented.
+  It cannot catch everything — Trial Balance opens on "This Month" and every
+  demo transaction is older, so it rendered a full page of zeros and looked fine.
+- Two browser-cache traps are written into the runbook, because both look like
+  faults during a demo and neither is: the company selector caches its list, and
+  the permission set is captured at sign-in, so a tab held open across a demo
+  rebuild claims the account cannot view the dashboard.
+
 ### 2026-09-14 — A demo environment, and three tenant leaks it found
 
 - **`GET /api/dashboard/kpis?companyId=` had no tenant guard.** Anyone who could

@@ -458,3 +458,10 @@ wwwroot/
 # PO-parser production read-only check output: downloaded customer PO PDFs +
 # per-item dumps. Real client-confidential documents — never commit.
 scripts/_prod_dump_out/
+
+# Generated demo walkthrough — 9 MB of screenshots and the runbook built around
+# them. Regenerate in one command rather than carrying it in a public repo:
+#   node scripts/capture_demo_walkthrough.mjs --password "<demo password>"
+docs/demo/shots/
+docs/demo/runbook.html
+docs/demo/deck.html
