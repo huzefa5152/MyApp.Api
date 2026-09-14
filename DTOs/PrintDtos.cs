@@ -132,11 +132,15 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public string? FbrQrPngDataUrl { get; set; }
         /// <summary>
-        /// Path to the deployed FBR logo asset. Stable URL served by
-        /// app.UseStaticFiles() from wwwroot/ — does not depend on the
-        /// gitignored runtime data/ folder. Merge field: {{fbrLogoUrl}}.
+        /// The FBR logo, inlined as a base64 <c>data:</c> URI (see
+        /// <see cref="MyApp.Api.Helpers.FbrLogoAsset"/>). A served path
+        /// ("/images/fbr-logo.png") is a print-time network fetch that 404s on a
+        /// site rooted under "/admin/" (the Trader line) and races the first
+        /// print; embedding the bytes — as the QR already does — renders on any
+        /// base path, under CSP, offline, and on the first print. Merge field:
+        /// {{fbrLogoUrl}}.
         /// </summary>
-        public string FbrLogoUrl { get; set; } = "/images/fbr-logo.png";
+        public string FbrLogoUrl { get; set; } = MyApp.Api.Helpers.FbrLogoAsset.DataUrl;
 
         // ── Credit / Debit note fields ───────────────────────────────────
         // Populated only when the printed row is a note (DocumentType 9/10);

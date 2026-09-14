@@ -290,6 +290,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-15 — FBR logo renders on the tax invoice (embedded, not a served path)
+
+The FBR Digital Invoicing logo was missing from submitted tax invoices — only the QR showed. The QR is an inlined base64 data URI, but the logo used a root-absolute served path (`/images/fbr-logo.png`), which 404s on a site rooted under `/admin/` (the Trader line) and also raced the first print. The logo is now embedded as a base64 `data:` URI (`Helpers/FbrLogoAsset.cs`), exactly as the QR already is, so it renders on any base path, under CSP, offline, and on the first print. One `PrintTaxInvoiceDto.FbrLogoUrl` default fixes Tax Invoice + Credit/Debit note prints.
+
 ### 2026-09-15 — Print templates: default-per-type on new company, cleaner picker, smoother editor
 
 New companies now auto-seed one default print template per document type (`POST /api/printtemplates/company/{id}/seed-defaults`, idempotent, HTML supplied by the SPA), so every document screen prints immediately instead of hitting "No print template configured". The document-screen template picker no longer shows a lone default twice — a single template renders as a plain label, multiple templates list the default once plus the alternatives (override per screen). The template editor now lets you change the document type while creating a NEW template (it was locked), loading that type's default design and updating the suggested name; Save auto-names a blank template from its type instead of erroring. A hardcoded real-client (LOTTE Kolson) conditional was removed from the default tax-invoice template so previews and seeded templates stay fictional, and the missing Payment starters are wired into the gallery.
