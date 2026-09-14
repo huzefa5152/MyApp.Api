@@ -298,6 +298,36 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-15 — Hierarchical admin scope, ported from the Trader line
+
+- **An Administrator now sees only its own tree.** `Users` and `Companies` carry
+  a nullable `CreatedByUserId`; the single seed admin is the root and manages
+  everyone, and every other account manages exactly its descendants — never the
+  seed admin, never a sibling Administrator, never their users or companies.
+  `IManagementScopeService` is the one place that decides it.
+- **Tenant Access filters server-side.** The grid returns only the accounts
+  beneath the caller crossed with the companies the caller itself holds, so an
+  Administrator can delegate only what it has. Endpoint URLs, request bodies and
+  response shapes are unchanged — the filtering is internal.
+- **Grants outside the caller's reach survive a save.** A company the seed admin
+  granted directly to a user is invisible to that user's Administrator and is
+  left untouched when the Administrator edits the rest of the set.
+- **A new seed-admin-only Administrators console** (`/administrators`) lists each
+  Administrator with its users and companies. It reuses `users.manage.view`; no
+  new permission keys.
+- **"No Company Configured"** replaces every company-dependent screen when the
+  account can reach no company, and a stale `selectedCompanyId` in localStorage
+  is now cleared rather than merely ignored.
+- **Custom roles are scoped by their creator's chain**, and a role id outside the
+  caller's view cannot be assigned.
+- **Fixed an IDOR found while porting**: `GET/PUT/DELETE
+  /api/clients/common/{groupId}` and the supplier equivalents took a group id and
+  no access check, so knowing an id was enough to read another tenant's master
+  record, rename it across every company, or delete it across every company —
+  cascading to their invoices. Now scoped by the same all-or-nothing rule the
+  list endpoints already used.
+- Suite: `scripts/test_admin_scope_isolation.py`, 118 checks.
+
 ### 2026-09-14 — A demo you can actually give
 
 - **`scripts/capture_demo_walkthrough.mjs`** drives the local app as the Demo

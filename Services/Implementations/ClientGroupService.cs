@@ -241,8 +241,16 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
         }
 
-        public async Task<CommonClientDetailDto?> GetByIdAsync(int groupId)
+        public async Task<CommonClientDetailDto?> GetByIdAsync(int groupId, ISet<int> accessibleCompanyIds)
         {
+            // Scope: same all-or-nothing rule the lists use. A group spanning
+            // any company the caller cannot reach is not theirs to read, rename
+            // or delete -- and "not found" rather than "forbidden", so an id
+            // cannot be used to probe which groups exist.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            if (!accessibleGroups.Contains(groupId))
+                return null;
+
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId);
             if (group == null) return null;
 
@@ -323,8 +331,16 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto)
+        public async Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto, ISet<int> accessibleCompanyIds)
         {
+            // Scope: same all-or-nothing rule the lists use. A group spanning
+            // any company the caller cannot reach is not theirs to read, rename
+            // or delete -- and "not found" rather than "forbidden", so an id
+            // cannot be used to probe which groups exist.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            if (!accessibleGroups.Contains(groupId))
+                throw new KeyNotFoundException($"Common client {groupId} not found.");
+
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common client group not found.");
 
@@ -397,8 +413,16 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonClientUpdateResultDto> DeleteAsync(int groupId)
+        public async Task<CommonClientUpdateResultDto> DeleteAsync(int groupId, ISet<int> accessibleCompanyIds)
         {
+            // Scope: same all-or-nothing rule the lists use. A group spanning
+            // any company the caller cannot reach is not theirs to read, rename
+            // or delete -- and "not found" rather than "forbidden", so an id
+            // cannot be used to probe which groups exist.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            if (!accessibleGroups.Contains(groupId))
+                throw new KeyNotFoundException($"Common client {groupId} not found.");
+
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common client group not found.");
 

@@ -1902,6 +1902,28 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<UserCompany>()
                 .HasIndex(uc => uc.CompanyId);
 
+            // ── Management ownership (ported from Trader d1049b0) ──
+            // Who created a user / company. Optional self-reference on Users
+            // and a plain optional FK on Companies. NoAction on delete --
+            // UsersController re-parents children to the deleted user's own
+            // parent inside its transaction, and SQL Server would reject
+            // SET NULL here anyway (multiple cascade paths through
+            // UserCompanies).
+            modelBuilder.Entity<User>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(u => u.CreatedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.CreatedByUserId);
+            modelBuilder.Entity<Company>()
+                .HasOne<User>()
+                .WithMany()
+                .HasForeignKey(c => c.CreatedByUserId)
+                .OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Company>()
+                .HasIndex(c => c.CreatedByUserId);
+
             // ── Division-level access: UserDivision ──
             // Composite PK on (UserId, DivisionId). Only consulted when the
             // user's UserCompany.RestrictToDivisions flag is set for the

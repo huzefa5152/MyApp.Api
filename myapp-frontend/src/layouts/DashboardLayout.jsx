@@ -49,10 +49,12 @@ import {
   MdAssessment,
   MdFactCheck,
   MdSummarize,
+  MdSupervisorAccount,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
+import NoCompanyConfigured from "../Components/NoCompanyConfigured";
 import { getAvatarUrl } from "../utils/avatarUrl";
 import {
   isNavPathVisible, visibleNavPermissions, applyFbrCompanyGate, anyCompanyHasFbr,
@@ -183,7 +185,25 @@ export default function DashboardLayout() {
   // selected one: tabs that appear and vanish as you switch company read as a
   // bug, and the pages themselves explain when the selected company is not an
   // FBR one.
-  const { companies } = useCompany();
+  const { companies, loading: companiesLoading } = useCompany();
+
+  // -- No Company Configured gate (ported from Trader d1049b0) --
+  // When the signed-in account can reach no company at all -- nothing created
+  // yet, or every grant revoked -- every company-dependent screen would
+  // otherwise render against nothing. The routes listed here are the ones that
+  // genuinely need no company, so an administrator can still be given one.
+  // Presentation only: the server refuses out-of-scope data regardless.
+  const companyFreeRoute = useMemo(() => {
+    const p = location.pathname.toLowerCase();
+    return p.startsWith("/profile")
+      || p.startsWith("/companies")
+      || p.startsWith("/users")
+      || p.startsWith("/roles")
+      || p.startsWith("/tenant-access")
+      || p.startsWith("/administrators")
+      || p.startsWith("/audit-logs");
+  }, [location.pathname]);
+  const showNoCompany = !companiesLoading && companies.length === 0 && !companyFreeRoute;
   const showFbrScreens = anyCompanyHasFbr(companies);
 
   // Settings — company/system configuration + FBR tooling.
@@ -249,7 +269,7 @@ export default function DashboardLayout() {
   const canSeePurchases     = hasAny(purchasesKeys);
   const canSeeAccounting    = hasAny(accountingKeys);
   const canSeeReports       = hasAny(reportsKeys);
-  const canSeeAdmin         = hasAny(adminKeys);
+  const canSeeAdmin         = hasAny(adminKeys) || !!user?.isSeedAdmin;
 
   // Per-group counts (visible-child count for the section's "[N]" badge).
   // Computed from the same permission keys the section gating uses, so
@@ -275,7 +295,7 @@ export default function DashboardLayout() {
     // Reports — incl. the accounting reports moved here from Accounting.
     if (p.startsWith("/reports") || p.startsWith("/accounting/reports")) return "reports";
     // Data-import/migration ops live under Administration.
-    if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/audit-logs")
+    if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")
       || p.startsWith("/accounting/data-migration") || p.startsWith("/accounting/manager-import")) return "administration";
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase") || p.startsWith("/imports/costing")) return "purchases";
@@ -756,6 +776,12 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "administration"}
               isChildActive={activeSection === "administration"}
             >
+              {user?.isSeedAdmin && (
+                <NavLink to="/administrators" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdSupervisorAccount className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Administrators</span>
+                </NavLink>
+              )}
               <Can permission="users.manage.view">
                 <NavLink to="/users" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdGroupAdd className="dl-subitem__icon" aria-hidden="true" />
@@ -918,7 +944,7 @@ export default function DashboardLayout() {
 
         {/* Page Content */}
         <main className="dl-main" id="main-content">
-          <Outlet />
+          {showNoCompany ? <NoCompanyConfigured /> : <Outlet />}
         </main>
       </div>
     </div>
@@ -965,6 +991,7 @@ function getBreadcrumb(pathname) {
     "/fbr-sandbox": "Configuration / FBR Sandbox",
     "/fbr-monitor": "Configuration / FBR Monitor",
     "/tenant-access": "Administration / Tenant Access",
+    "/administrators": "Administration / Administrators",
     "/audit-logs": "Administration / Audit Logs",
     "/guides/import": "Guides / Import Costing Guide",
   };

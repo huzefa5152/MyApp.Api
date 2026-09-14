@@ -52,10 +52,22 @@ DEMO_ADMIN = {
 }
 DEMO_ROLE = "Demo Administrator"
 
-# Permission MODULES the demo role must not hold. Each is installation-wide
-# rather than company-scoped, so holding it would let the account reach past
-# its own tenants -- tenantaccess most obviously, by granting itself another.
-EXCLUDED_MODULES = {"users", "rbac", "tenantaccess", "divisionaccess", "auditlogs"}
+# Permission MODULES the demo role must not hold.
+#
+# This list SHRANK when hierarchical management scope landed. users, rbac and
+# tenantaccess used to be withheld because they were installation-wide: holding
+# tenantaccess.manage.assign let an account grant itself another tenant. They
+# are now scoped by the CreatedByUserId chain -- an Administrator administers
+# only its own descendants and can delegate only the companies it already holds
+# -- so the demo account can be given them and still reach nothing but its own
+# tree. That is what makes the demo worth showing: it creates its own company
+# and its own user, live.
+#
+# Still withheld, because the hierarchy does NOT scope them:
+#   divisionaccess -- division grants are not part of the creator chain
+#   auditlogs      -- the audit log is installation-wide
+#   companies.manage.delete -- demo safety, nothing to do with scope
+EXCLUDED_MODULES = {"divisionaccess", "auditlogs"}
 EXCLUDED_KEYS = {"companies.manage.delete"}
 
 # NTNs and CNICs are deliberately impossible: a real NTN never starts 000.

@@ -15,9 +15,9 @@ namespace MyApp.Api.Services.Interfaces
         Task<SupplierGroup> EnsureGroupForSupplierAsync(Supplier supplier);
         Task<List<CommonSupplierDto>> GetCommonSuppliersAsync(int companyId, ISet<int> accessibleCompanyIds);
         Task<List<CommonSupplierDto>> GetAllGroupsAsync(ISet<int> accessibleCompanyIds);
-        Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId);
-        Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto);
-        Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId);
+        Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId, ISet<int> accessibleCompanyIds);
+        Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto, ISet<int> accessibleCompanyIds);
+        Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId, ISet<int> accessibleCompanyIds);
         (string GroupKey, string? NormalizedNtn, string NormalizedName) ComputeGroupKey(string? name, string? ntn);
     }
 }

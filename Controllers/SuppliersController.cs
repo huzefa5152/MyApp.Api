@@ -59,7 +59,8 @@ namespace MyApp.Api.Controllers
         [HasPermission("suppliers.manage.view")]
         public async Task<ActionResult<CommonSupplierDetailDto>> GetCommonById(int groupId)
         {
-            var detail = await _groupService.GetByIdAsync(groupId);
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            var detail = await _groupService.GetByIdAsync(groupId, accessible);
             if (detail == null) return NotFound();
             return Ok(detail);
         }
@@ -72,7 +73,8 @@ namespace MyApp.Api.Controllers
             if (!ModelState.IsValid) return BadRequest(ModelState);
             try
             {
-                var result = await _groupService.UpdateAsync(groupId, dto);
+                var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+                var result = await _groupService.UpdateAsync(groupId, dto, accessible);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -91,7 +93,8 @@ namespace MyApp.Api.Controllers
         {
             try
             {
-                var result = await _groupService.DeleteAsync(groupId);
+                var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+                var result = await _groupService.DeleteAsync(groupId, accessible);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)

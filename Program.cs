@@ -581,6 +581,9 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 // a non-seed-admin passes only for companies with an explicit UserCompany
 // row (Company.IsTenantIsolated no longer affects the decision).
 builder.Services.AddScoped<ICompanyAccessGuard, CompanyAccessGuard>();
+// Hierarchical admin scope (ported from Trader d1049b0): who may administer
+// which users and delegate which companies. See IManagementScopeService.
+builder.Services.AddScoped<IManagementScopeService, ManagementScopeService>();
 
 // Division-scope guard — the layer below the company guard: within a
 // company, users flagged RestrictToDivisions on their UserCompany row

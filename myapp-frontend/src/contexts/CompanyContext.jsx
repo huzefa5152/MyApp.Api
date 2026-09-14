@@ -40,7 +40,13 @@ export function CompanyProvider({ children }) {
 
       const savedId = parseInt(localStorage.getItem(STORAGE_KEY));
       const saved = savedId ? list.find((c) => c.id === savedId) : null;
-      setSelectedCompanyState(saved || list[0] || null);
+      // A saved id the server no longer returns is not merely ignored, it is
+      // CLEARED: the list is the authorisation answer, so a revoked company
+      // must not sit in storage waiting for a grant to come back.
+      if (savedId && !saved) localStorage.removeItem(STORAGE_KEY);
+      const next = saved || list[0] || null;
+      if (next?.id) localStorage.setItem(STORAGE_KEY, next.id);
+      setSelectedCompanyState(next);
     } catch {
       setCompanies([]);
       setSelectedCompanyState(null);
@@ -80,9 +86,38 @@ export function CompanyProvider({ children }) {
       // fields (e.g. inventoryFlowVersion after a V1/V2 switch), not the stale
       // reference. Falls back to the first company if it was removed.
       const still = list.find((c) => c.id === selectedCompany.id);
-      setSelectedCompanyState(still || list[0] || null);
+      const next = still || list[0] || null;
+      // Same rule on a refresh: access revoked mid-session drops the stored id
+      // rather than leaving it to be re-selected later.
+      if (next?.id) localStorage.setItem(STORAGE_KEY, next.id);
+      else localStorage.removeItem(STORAGE_KEY);
+      setSelectedCompanyState(next);
     }
   }, [selectedCompany]);
+
+  // -- Access revalidation (ported from Trader d1049b0) --
+  // /api/companies is the server's answer to "which companies may this
+  // account use right now". A grant revoked while the tab is open must not
+  // survive on a stale selectedCompanyId in localStorage, so re-ask:
+  //   * when the tab regains focus / becomes visible again, and
+  //   * whenever any request is refused for the company (httpClient raises
+  //     "company-access-denied" on that 403).
+  // If the selected company is gone it is dropped and the first company still
+  // allowed takes over; with none left the layout shows "No Company
+  // Configured".
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const revalidate = () => { refreshCompanies().catch(() => { /* transient */ }); };
+    const onVisible = () => { if (document.visibilityState === "visible") revalidate(); };
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("company-access-denied", revalidate);
+    return () => {
+      window.removeEventListener("focus", revalidate);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("company-access-denied", revalidate);
+    };
+  }, [isAuthenticated, refreshCompanies]);
 
   return (
     <CompanyContext.Provider

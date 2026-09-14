@@ -172,8 +172,16 @@ namespace MyApp.Api.Services.Implementations
                 .ToList();
         }
 
-        public async Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId)
+        public async Task<CommonSupplierDetailDto?> GetByIdAsync(int groupId, ISet<int> accessibleCompanyIds)
         {
+            // Scope: same all-or-nothing rule the lists use. A group spanning
+            // any company the caller cannot reach is not theirs to read, rename
+            // or delete -- and "not found" rather than "forbidden", so an id
+            // cannot be used to probe which groups exist.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            if (!accessibleGroups.Contains(groupId))
+                return null;
+
             var group = await _db.SupplierGroups.FirstOrDefaultAsync(g => g.Id == groupId);
             if (group == null) return null;
 
@@ -243,8 +251,16 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto)
+        public async Task<CommonSupplierUpdateResultDto> UpdateAsync(int groupId, CommonSupplierUpdateDto dto, ISet<int> accessibleCompanyIds)
         {
+            // Scope: same all-or-nothing rule the lists use. A group spanning
+            // any company the caller cannot reach is not theirs to read, rename
+            // or delete -- and "not found" rather than "forbidden", so an id
+            // cannot be used to probe which groups exist.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            if (!accessibleGroups.Contains(groupId))
+                throw new KeyNotFoundException($"Common supplier {groupId} not found.");
+
             var group = await _db.SupplierGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common supplier group not found.");
 
@@ -305,8 +321,16 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId)
+        public async Task<CommonSupplierUpdateResultDto> DeleteAsync(int groupId, ISet<int> accessibleCompanyIds)
         {
+            // Scope: same all-or-nothing rule the lists use. A group spanning
+            // any company the caller cannot reach is not theirs to read, rename
+            // or delete -- and "not found" rather than "forbidden", so an id
+            // cannot be used to probe which groups exist.
+            var accessibleGroups = await AccessibleGroupIdsAsync(accessibleCompanyIds);
+            if (!accessibleGroups.Contains(groupId))
+                throw new KeyNotFoundException($"Common supplier {groupId} not found.");
+
             var group = await _db.SupplierGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common supplier group not found.");
 

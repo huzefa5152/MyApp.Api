@@ -207,6 +207,13 @@ namespace MyApp.Api.Models
         // challans / standalone exactly as before — strictly opt-in per company.
         public bool RequireSalesOrderForBilling { get; set; } = false;
 
+        // Management ownership (ported from TraderFbrInvoicingSystem d1049b0):
+        // the user who created the company. Day-to-day visibility still runs
+        // on UserCompanies grants; this column lets the seed admin see which
+        // Administrator's tree a company belongs to even after every grant has
+        // been revoked. NULL = legacy / created by the seed admin.
+        public int? CreatedByUserId { get; set; }
+
         public List<DeliveryChallan> DeliveryChallans { get; set; } = new();
         public List<Client> Clients { get; set; } = new();
         public List<Supplier> Suppliers { get; set; } = new();

@@ -23,12 +23,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
+        private readonly IManagementScopeService _scope;
         private readonly int _seedAdminUserId;
 
-        public UserRolesController(AppDbContext context, IPermissionService permissions, IConfiguration configuration)
+        public UserRolesController(AppDbContext context, IPermissionService permissions, IManagementScopeService scope, IConfiguration configuration)
         {
             _context = context;
             _permissions = permissions;
+            _scope = scope;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
@@ -43,6 +45,12 @@ namespace MyApp.Api.Controllers
         [HasPermission("rbac.userroles.view")]
         public async Task<ActionResult<UserRolesDto>> Get(int userId)
         {
+            // Management scope: own row or a descendant only; an out-of-scope
+            // id reads as 404 so nothing leaks about whether it exists.
+            var actor = CurrentUserId() ?? 0;
+            if (userId != actor && !await _scope.CanManageUserAsync(actor, userId))
+                return NotFound(new { message = "User not found" });
+
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null) return NotFound(new { message = "User not found" });
 
@@ -82,19 +90,41 @@ namespace MyApp.Api.Controllers
             if (userId == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin's roles cannot be modified" });
 
+            // Only the seed admin or an ancestor may change this account's
+            // roles -- an Administrator cannot re-role itself or anyone
+            // outside its own tree.
+            if (!await _scope.CanManageUserAsync(CurrentUserId() ?? 0, userId))
+                return NotFound(new { message = "User not found" });
+
             var targetRoleIds = (dto.RoleIds ?? new List<int>()).Distinct().ToList();
             if (targetRoleIds.Count > 0)
             {
-                var found = await _context.Roles.Where(r => targetRoleIds.Contains(r.Id)).Select(r => r.Id).ToListAsync();
-                if (found.Count != targetRoleIds.Count)
+                // Only roles the caller can see may be handed out: system roles,
+                // legacy rows, and custom roles from the caller's own chain. A
+                // sibling Administrator's role id is "invalid" here.
+                var visible = await RolesController.VisibleRoleIdsAsync(_context, _scope, CurrentUserId() ?? 0);
+                if (targetRoleIds.Any(id => !visible.Contains(id)))
                     return BadRequest(new { message = "One or more role IDs are invalid" });
+            }
+
+            // Roles the target already holds that the caller cannot see stay
+            // untouched -- the caller is editing the part of the set it can see.
+            var hiddenExisting = new HashSet<int>();
+            if (!_scope.IsSeedAdmin(CurrentUserId() ?? 0))
+            {
+                var visibleNow = await RolesController.VisibleRoleIdsAsync(_context, _scope, CurrentUserId() ?? 0);
+                hiddenExisting = (await _context.UserRoles
+                        .Where(ur => ur.UserId == userId && !visibleNow.Contains(ur.RoleId))
+                        .Select(ur => ur.RoleId)
+                        .ToListAsync())
+                    .ToHashSet();
             }
 
             var existing = await _context.UserRoles.Where(ur => ur.UserId == userId).ToListAsync();
             var existingIds = existing.Select(ur => ur.RoleId).ToHashSet();
             var target = targetRoleIds.ToHashSet();
 
-            foreach (var ur in existing.Where(ur => !target.Contains(ur.RoleId)).ToList())
+            foreach (var ur in existing.Where(ur => !target.Contains(ur.RoleId) && !hiddenExisting.Contains(ur.RoleId)).ToList())
                 _context.UserRoles.Remove(ur);
 
             var assignedBy = CurrentUserId();

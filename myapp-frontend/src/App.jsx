@@ -45,6 +45,7 @@ import ProfilePage from "./pages/ProfilePage";
 import UsersPage from "./pages/UsersPage";
 import RolesPage from "./pages/RolesPage";
 import TenantAccessPage from "./pages/TenantAccessPage";
+import AdministratorsPage from "./pages/AdministratorsPage";
 import TemplateEditorPage from "./pages/TemplateEditorPage";
 import PrintTemplatesPage from "./pages/PrintTemplatesPage";
 import CustomerPortalsPage from "./pages/CustomerPortalsPage";
@@ -177,6 +178,7 @@ export default function App() {
           <Route path="/users" element={<RequirePermission anyPrefix="users."><UsersPage /></RequirePermission>} />
           <Route path="/roles" element={<RequirePermission anyPrefix="rbac."><RolesPage /></RequirePermission>} />
           <Route path="/tenant-access" element={<RequirePermission anyPrefix={["tenantaccess.", "divisionaccess."]}><TenantAccessPage /></RequirePermission>} />
+          <Route path="/administrators" element={<RequirePermission anyPrefix="users.manage."><AdministratorsPage /></RequirePermission>} />
           <Route path="/templates" element={<RequirePermission anyPrefix="printtemplates."><PrintTemplatesPage /></RequirePermission>} />
           {/* Internal management only. The PUBLIC portal at /portal/<token> is
               rendered outside this router entirely — see main.jsx. */}

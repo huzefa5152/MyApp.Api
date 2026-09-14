@@ -1476,6 +1476,7 @@ them can be resolved from FBR.
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `118/118`) |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
@@ -1536,7 +1537,10 @@ set only by the controller; never widen it, and never let a report skip
 `ScopeToDivisions`.
 
 If you add a new endpoint that takes `companyId`, add a tenant-isolation
-case to `scripts/test_tenant_isolation.py`. If you touch invoice/bill
+case to `scripts/test_tenant_isolation.py`. If you add or change an endpoint that
+reads or writes users, roles-on-users or tenant-access grants, add the
+seed / Admin A / Admin B case to `scripts/test_admin_scope_isolation.py`
+(the model is documented on `IManagementScopeService`). If you touch invoice/bill
 math, add the case to `scripts/test_basic_flows.py`. If you touch stock
 movement reflow (purchase/invoice/challan edits, StockService), add the
 case to `scripts/test_stock_itemtype_reflow.py` (V1 semantics — keep it
