@@ -6,10 +6,11 @@ import {
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { notify } from "../utils/notify";
-import { colors } from "../theme";
+import { colors, formStyles } from "../theme";
 import {
   previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles,
 } from "../api/spreadsheetImportApi";
+import { getItemTypesPaged } from "../api/itemTypeApi";
 import HsCodeAutocomplete from "../Components/HsCodeAutocomplete";
 
 /**
@@ -265,14 +266,34 @@ function SectionLabel({ children }) {
   );
 }
 
-function Field({ label, children }) {
+/**
+ * `required` puts a red asterisk on the label; `hint` adds one line under the
+ * control. Both exist because this form had neither: every field looked
+ * equally necessary, sixteen of them defaulted to a perfectly valid 0, and the
+ * Add button sat greyed out with nothing saying which three actually mattered.
+ */
+function Field({ label, children, required, hint, tone }) {
   return (
     <label style={{ fontSize: 13, color: colors.textSecondary, display: "block" }}>
       {label}
+      {required && <span style={{ color: colors.danger, marginLeft: 3 }} aria-hidden="true">*</span>}
+      {required && <span style={srOnly}> (required)</span>}
       <div style={{ marginTop: 4 }}>{children}</div>
+      {hint && (
+        <div style={{ marginTop: 3, fontSize: 11.5, lineHeight: 1.45, color: tone || colors.textSecondary }}>
+          {hint}
+        </div>
+      )}
     </label>
   );
 }
+
+// Present for a screen reader, invisible on screen -- an asterisk alone does
+// not announce as "required".
+const srOnly = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+  overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+};
 
 /**
  * The "enter a line by hand" form — Identity / Cost / Rates / Outcome,
@@ -289,43 +310,104 @@ function ManualEntryFields({
   staged, onAddLine, onRemoveLine, onEditLine,
 }) {
   const computed = useMemo(() => computeManualCosting(manual), [manual]);
-  // A line is complete enough to stage on the same three fields the server
-  // validates; everything else legitimately defaults to zero.
-  const lineReady = !disabled
-    && manual.gdNumber.trim().length > 0
-    && manual.description.trim().length > 0
-    && Number(manual.quantity) > 0;
+  // Exactly what a line still needs, in the operator's words. A greyed button
+  // with no stated reason reads as a broken screen (theme.js: formStyles.
+  // blockReason), and this form had six numeric fields, three rates and an
+  // autocomplete with no indication that only three of them decide anything.
+  const missing = [];
+  if (!manual.gdNumber.trim()) missing.push("GD number");
+  if (!manual.description.trim()) missing.push("Description");
+  if (!(Number(manual.quantity) > 0)) missing.push("Quantity");
+  const lineReady = !disabled && missing.length === 0;
   // Preview needs at least one line — staged, or complete in the form (the
   // one-line case must not require pressing Add first).
   const canPreview = !disabled && !busy && (staged.length > 0 || lineReady);
 
   const set = (key) => (e) => onChange({ [key]: e.target.value });
 
+  // What this HS code will MATCH on the books, said before Preview rather than
+  // after it. A HINT only -- the server re-resolves the match itself and its
+  // answer is the one that lands, exactly as computeManualCosting above is a
+  // hint about the arithmetic. Best-effort: a caller without the item-catalog
+  // permission simply gets no hint.
+  const [hsMatches, setHsMatches] = useState(null);
+  const hsCode = (manual.hsCode || "").trim();
+  useEffect(() => {
+    if (!companyId || hsCode.length < 4) { setHsMatches(null); return; }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      getItemTypesPaged(companyId, { search: hsCode, pageSize: 50 })
+        .then(({ data }) => {
+          if (cancelled) return;
+          const exact = (data?.items || []).filter(
+            (i) => (i.hsCode || "").replace(/[^0-9.]/g, "") === hsCode.replace(/[^0-9.]/g, ""));
+          setHsMatches(exact);
+        })
+        .catch(() => { if (!cancelled) setHsMatches(null); });
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [companyId, hsCode]);
+
+  const hsHint = useMemo(() => {
+    if (!hsCode) {
+      return { text: "Without a code this line cannot match existing stock.", tone: "#b26a00" };
+    }
+    if (hsMatches === null) return { text: null };
+    if (hsMatches.length === 0) {
+      return { text: "No item on your books under this code — this line will be offered as new stock.", tone: undefined };
+    }
+    if (hsMatches.length === 1) {
+      return { text: `Matches "${hsMatches[0].name}" — its cost will be set.`, tone: colors.success };
+    }
+    return {
+      text: `${hsMatches.length} items share this code (${hsMatches.slice(0, 3).map((i) => i.name).join(", ")}${hsMatches.length > 3 ? "…" : ""}). The line will be reported AMBIGUOUS and no cost written.`,
+      tone: colors.danger,
+    };
+  }, [hsCode, hsMatches]);
+
   return (
     <div>
+      <div style={{
+        padding: "0.7rem 0.85rem", borderRadius: 9, marginBottom: "0.9rem",
+        background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
+        fontSize: 13, lineHeight: 1.6,
+      }}>
+        <strong>Three fields make a line:</strong> GD number, Description and Quantity
+        (marked <span style={{ color: colors.danger }}>*</span>). Everything else may stay
+        at 0 — a GD with no regulatory duty really is 0.
+        <div style={{ marginTop: 4 }}>
+          The <strong>HS code</strong> is what decides whether the line finds stock already
+          on your books, so it is worth setting even though it is not required.
+        </div>
+        <div style={{ marginTop: 4, color: colors.textSecondary }}>
+          One GD normally carries several HS codes. Fill a line, press <strong>Add line</strong>,
+          and repeat — the GD number, unit and rates carry over.
+        </div>
+      </div>
+
       <SectionLabel>Identity</SectionLabel>
       <div style={grid}>
-        <Field label="GD number">
+        <Field label="GD number" required hint="The declaration number, shared by every line of this GD.">
           <input type="text" style={input} placeholder="e.g. KAPW-HC-8876"
             value={manual.gdNumber} onChange={set("gdNumber")} disabled={disabled} />
         </Field>
-        <Field label="GD date">
+        <Field label="GD date" hint="Dates the journal entry when this posts.">
           <input type="date" style={input}
             value={manual.gdDate} onChange={set("gdDate")} disabled={disabled} />
         </Field>
-        <Field label="Description">
+        <Field label="Description" required hint="What the line is, as the declaration words it.">
           <input type="text" style={input} placeholder="e.g. Screw Driver"
             value={manual.description} onChange={set("description")} disabled={disabled} />
         </Field>
-        <Field label="Quantity">
+        <Field label="Quantity" required>
           <input type="number" min="0" step="any" style={input}
             value={manual.quantity} onChange={set("quantity")} disabled={disabled} />
         </Field>
-        <Field label="Unit">
+        <Field label="Unit" hint="Optional. Carries over to the next line.">
           <input type="text" style={input} placeholder="e.g. Pcs"
             value={manual.unit} onChange={set("unit")} disabled={disabled} />
         </Field>
-        <Field label="HS code">
+        <Field label="HS code" hint={hsHint.text} tone={hsHint.tone}>
           <HsCodeAutocomplete companyId={companyId} value={manual.hsCode} style={input}
             onChange={(v) => onChange({ hsCode: v })}
             placeholder="Type a product keyword, or an HS code…" />
@@ -334,7 +416,7 @@ function ManualEntryFields({
 
       <SectionLabel>Cost</SectionLabel>
       <div style={grid}>
-        <Field label="Assessed value">
+        <Field label="Assessed value" hint="Assessed value plus the three duties below IS the landed cost.">
           <input type="number" min="0" step="any" style={input}
             value={manual.assessedValue} onChange={set("assessedValue")} disabled={disabled} />
         </Field>
@@ -378,7 +460,7 @@ function ManualEntryFields({
           <input type="number" min="0" step="any" style={input}
             value={manual.addOnProfit} onChange={set("addOnProfit")} disabled={disabled} />
         </Field>
-        <Field label="Stated selling value (optional)">
+        <Field label="Stated selling value" hint="Optional. Leave blank and the costing chain decides it.">
           <input type="number" min="0" step="any" style={input}
             placeholder="Leave blank to use the computed figure"
             value={manual.sellingValue} onChange={set("sellingValue")} disabled={disabled} />
@@ -413,6 +495,19 @@ function ManualEntryFields({
             : "Preview"}
         </button>
       </div>
+
+      {!disabled && missing.length > 0 && (
+        <div style={{ ...formStyles.blockReason, textAlign: "left" }}>
+          {staged.length > 0
+            ? `This line still needs ${missing.join(", ")} — or press Preview to check the ${staged.length} line(s) already added.`
+            : `Still needed: ${missing.join(", ")}.`}
+        </div>
+      )}
+      {disabled && !busy && (
+        <div style={{ ...formStyles.blockReason, textAlign: "left" }}>
+          Choose a company first.
+        </div>
+      )}
 
       {staged.length > 0 && (
         <div style={{ marginTop: "0.9rem" }}>
