@@ -481,6 +481,20 @@ export default function ImportGuidePage() {
         <h2 style={st.h2}><span style={st.sectionNum}>9</span> Paying a GD</h2>
         <PathPill>Purchases &#9656; Consignments &#9656; Settle</PathPill>
 
+        <div style={st.warn}>
+          <strong>No Settle button on your GDs? That is usually correct.</strong> A{" "}
+          <strong>backfill</strong> import creates <em>nothing to settle</em> — it re-prices
+          stock that was already on your books, and those goods were paid for when they first
+          arrived. No liability, so no Settle.
+          <p style={{ ...st.p, margin: "0.6rem 0 0" }}>
+            Only a <strong>new arrivals</strong> import credits Import Clearing, and only
+            those GDs can be settled. Expand any GD on the Consignments screen and it tells
+            you which case it is. If a GD says <strong>Not posted</strong> but you imported it
+            as new arrivals, the ledger was switched off at the time — turn it on and rebuild
+            (<strong>Accounting &#9656; rebuild the ledger</strong>) and it will post.
+          </p>
+        </div>
+
         <p style={st.p}>
           The Consignments screen lists every GD with what it{" "}
           <strong>credited</strong>, what has been <strong>settled</strong> and what is still{" "}

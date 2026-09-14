@@ -189,7 +189,46 @@ function ConsignmentLines({ detail, loading, canCorrect, onCorrect }) {
 /** "Which GD unpaid" at the document level (Task 23) — every non-cancelled
  * payment settled against this consignment, newest first. */
 function ConsignmentSettlements({ detail }) {
-  if (!detail || detail.importClearingCredited <= 0) return null;
+  if (!detail) return null;
+
+  // A consignment that credited NOTHING has nothing to settle, and the Settle
+  // action is correctly hidden on its row. Saying so beats rendering nothing:
+  // every consignment on a backfill-only company lands here, and an operator
+  // looking for a Settle button that is deliberately absent has no way to tell
+  // "not applicable" from "broken screen".
+  if (detail.importClearingCredited <= 0) {
+    const backfill = (detail.mode || "").toLowerCase() === "backfill";
+    return (
+      <div style={{
+        marginTop: "0.9rem", padding: "0.7rem 0.85rem", borderRadius: 9,
+        background: colors.inputBg, border: `1px solid ${colors.cardBorder}`,
+        fontSize: 13, lineHeight: 1.6,
+      }}>
+        <strong>Nothing to settle on this GD.</strong>{" "}
+        {backfill ? (
+          <>
+            It was imported as <strong>Backfill</strong>, which re-prices stock that was
+            already on your books — those goods were accounted for when they first arrived,
+            so this import created no payable and posted no journal entry. There is no
+            Settle action because there is no liability.
+            <div style={{ marginTop: 5, color: colors.textSecondary }}>
+              Only a <strong>New Arrivals</strong> import credits Import Clearing, and only
+              those GDs can be settled.
+            </div>
+          </>
+        ) : (
+          <>
+            It was imported as <strong>New Arrivals</strong>, but nothing was posted — the
+            general ledger was switched off for this company at the time, or no line was
+            costed. Turn the ledger on and rebuild it
+            (<strong>Accounting ▸ rebuild the ledger</strong>) and this GD will post its
+            Import Clearing liability, after which it can be settled.
+          </>
+        )}
+      </div>
+    );
+  }
+
   const settlements = detail.settlements || [];
   return (
     <div style={{ marginTop: "0.9rem" }}>

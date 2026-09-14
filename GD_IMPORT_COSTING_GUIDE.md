@@ -251,7 +251,24 @@ Both roll everything back. There is no half-correction.
 
 ---
 
-## 9. Settling a GD short — cash plus a write-off
+## 9. Settling a GD — and why most of yours cannot be
+
+**Only a New Arrivals import can be settled.** It is the only mode that credits
+Import Clearing, so it is the only one that creates a payable. A **Backfill**
+import re-prices stock already on the books — those goods were accounted for
+when they first arrived — so it posts nothing and there is nothing to settle.
+The Settle action is hidden on such a row, correctly, and expanding the row now
+says so in as many words rather than showing an empty space.
+
+All nine consignments on production today are Backfill, which is why none of
+them offers Settle. That is the feature working, not a missing button.
+
+A GD that says **Not posted** but WAS imported as New Arrivals means the ledger
+was off for that company at the time. Turn it on and rebuild
+(**Accounting ▸ rebuild the ledger**); the consignment posts then, and becomes
+settleable.
+
+### Settling one short — cash plus a write-off
 
 A GD's Import Clearing liability is an **estimate** until the clearing agent's
 final bill arrives. When the final bill comes in under, the old options were to
