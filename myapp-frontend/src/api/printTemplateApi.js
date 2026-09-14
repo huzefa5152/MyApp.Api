@@ -39,6 +39,13 @@ export const updateTemplateById = (id, payload) =>
 export const setDefaultTemplate = (id) =>
   httpClient.put(`/printtemplates/${id}/default`);
 
+// Seed one default template per document type for a company (idempotent —
+// types that already have a template are skipped). `defaults` is an array of
+// { templateType, name, htmlContent }. Used right after a company is created so
+// every document screen has a working default template from day one.
+export const seedDefaultTemplates = (companyId, defaults) =>
+  httpClient.post(`/printtemplates/company/${companyId}/seed-defaults`, defaults);
+
 export const deleteTemplate = (id) =>
   httpClient.delete(`/printtemplates/${id}`);
 

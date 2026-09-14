@@ -220,6 +220,33 @@ export default function TemplateEditorPage() {
     await handleSelectFromManager(Number(v));
   };
 
+  // Change the document type of an UNSAVED new template. Only reachable while
+  // creating — the select is disabled once a template is saved, because a saved
+  // template's type is immutable. Loads the chosen type's default design so the
+  // editor is never left showing (say) a Challan body under a "Bill" type.
+  const handleTypeChange = async (newType) => {
+    if (!newType || newType === templateType || currentTemplateId) return;
+    const isCustomized = htmlContent && htmlContent !== (DEFAULT_TEMPLATES[templateType] || "");
+    if (isCustomized) {
+      const ok = await confirm({
+        title: "Switch document type?",
+        message: "The editor will load the default design for the new document type. Your current unsaved edits will be replaced.",
+        confirmText: "Switch type",
+      });
+      if (!ok) return;
+    }
+    setTemplateType(newType);
+    setHtmlContent(DEFAULT_TEMPLATES[newType] || "");
+    setOriginalContent("");
+    setTemplateJson(null);
+    setOriginalJson(null);
+    setEditorMode("code");
+    // Keep the name in step when it is still the previous type's suggested name.
+    setTemplateName((n) =>
+      (!n || n === TEMPLATE_TYPE_LABEL[templateType]) ? (TEMPLATE_TYPE_LABEL[newType] || newType) : n);
+    try { localStorage.setItem("te.type", newType); } catch { /* ignore */ }
+  };
+
   // Reload the saved-template list for the current type; optionally re-load one.
   const refreshTemplates = async (preferId) => {
     if (!selectedCompany) return;
@@ -260,11 +287,10 @@ export default function TemplateEditorPage() {
   };
 
   const handleSave = async () => {
-    const name = templateName.trim();
-    if (!name) {
-      showToast("Template name is required", "error");
-      return;
-    }
+    // Auto-name a blank template from its type rather than dead-ending on an
+    // error — keeps the save journey smooth. The operator can rename it on the
+    // Print Templates list page.
+    const name = templateName.trim() || (TEMPLATE_TYPE_LABEL[templateType] || templateType);
     setSaving(true);
     try {
       let saveHtml = htmlContent;
@@ -596,8 +622,9 @@ export default function TemplateEditorPage() {
               <select
                 style={{ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" }}
                 value={templateType}
-                disabled
-                title="Document type is fixed for this template"
+                disabled={!!currentTemplateId}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                title={currentTemplateId ? "Document type is fixed once the template is saved" : "Pick the document type for this new template"}
               >
                 {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
@@ -663,8 +690,9 @@ export default function TemplateEditorPage() {
               <select
                 style={{ ...dropdownStyles.base, minWidth: "180px" }}
                 value={templateType}
-                disabled
-                title="Document type is fixed for this template"
+                disabled={!!currentTemplateId}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                title={currentTemplateId ? "Document type is fixed once the template is saved" : "Pick the document type for this new template"}
               >
                 {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>

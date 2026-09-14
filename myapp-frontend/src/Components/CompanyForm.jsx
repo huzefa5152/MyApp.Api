@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
+import { seedDefaultTemplates } from "../api/printTemplateApi";
+import { DEFAULT_TEMPLATES, TEMPLATE_TYPE_LABEL } from "../utils/templateSampleData";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
@@ -280,6 +282,20 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 const fd = new FormData();
                 fd.append("file", logoFile);
                 await uploadCompanyLogo(savedCompany.id, fd);
+            }
+
+            // New company → give every document type a working default print
+            // template so the doc screens print immediately (no "No template
+            // configured" wall). Idempotent server-side; non-fatal if it fails.
+            if (!company && savedCompany?.id) {
+                try {
+                    const defaults = Object.entries(DEFAULT_TEMPLATES).map(([templateType, htmlContent]) => ({
+                        templateType,
+                        name: `Default ${TEMPLATE_TYPE_LABEL[templateType] || templateType}`,
+                        htmlContent,
+                    }));
+                    await seedDefaultTemplates(savedCompany.id, defaults);
+                } catch { /* templates can be added later on the Print Templates page */ }
             }
 
             onSaved();

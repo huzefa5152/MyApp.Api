@@ -37,25 +37,50 @@ export default function PrintTemplateSelect({ picker, style }) {
 
   if (!picker.canChoose) return null; // print-only role — keeps built-in fallback
 
-  const autoDefault = picker.resolveAuto();
-  const autoLabel = autoDefault ? `Default — ${autoDefault.name}` : "Default";
+  const autoDefault = picker.resolveAuto();       // the default (or oldest) template
+  const templates = picker.templates;
+
+  // Single template → there is no choice to make. Show the default's name as a
+  // plain label, NOT a two-row dropdown (the old code listed the default as
+  // both "★ Default — X" and "X ★", which read as two templates for one).
+  if (templates.length <= 1) {
+    const only = templates[0] || autoDefault;
+    return (
+      <div
+        className="print-template-picker"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }}
+        title="Default print template used by Print / PDF"
+      >
+        <MdPrint size={15} color="#5f6d7e" aria-hidden="true" />
+        <span
+          style={{ fontSize: "0.85rem", color: "#334e68", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {only ? only.name : "Default"}
+        </span>
+      </div>
+    );
+  }
+
+  // Multiple templates → the default is the "Default — X" auto row; list only the
+  // OTHER templates so the default never appears twice. A stored pick that IS the
+  // default collapses back to the auto row.
+  const others = templates.filter((t) => !autoDefault || t.id !== autoDefault.id);
+  const effectiveValue =
+    autoDefault && picker.selectedId === String(autoDefault.id) ? "" : picker.selectedId;
 
   return (
-    <div className="print-template-picker" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }} title="Print template used by Print / PDF">
+    <div className="print-template-picker" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", minWidth: 0, ...style }} title="Print template used by Print / PDF — override per document type here">
       <MdPrint size={15} color="#5f6d7e" aria-hidden="true" />
       <select
         className="filter-select"
         aria-label="Print template"
-        value={picker.selectedId}
+        value={effectiveValue}
         onChange={(e) => picker.setSelectedId(e.target.value)}
         style={{ flex: 1, minWidth: 0, maxWidth: 260 }}
       >
-        <option value="">{`★ ${autoLabel}`}</option>
-        {picker.templates.map((t) => (
-          <option key={t.id} value={String(t.id)}>
-            {t.name}
-            {t.isDefault ? " ★" : ""}
-          </option>
+        <option value="">{`★ Default — ${autoDefault ? autoDefault.name : ""}`}</option>
+        {others.map((t) => (
+          <option key={t.id} value={String(t.id)}>{t.name}</option>
         ))}
       </select>
     </div>

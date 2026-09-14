@@ -182,6 +182,43 @@ namespace MyApp.Api.Controllers
             return Ok(ToDto(t));
         }
 
+        // Seed ONE default template per document type for a (usually brand-new)
+        // company, so every document screen has a working default immediately and
+        // never hits the "No print template configured" wall. The backend owns no
+        // template HTML — the SPA supplies it (from its DEFAULT_TEMPLATES map).
+        // Idempotent: any type that already has a template is left untouched, so
+        // re-running never duplicates. Each seeded template is the first of its
+        // type, so the repository marks it the default.
+        [HttpPost("company/{companyId}/seed-defaults")]
+        [HasPermission("printtemplates.manage.update")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SeedDefaults(int companyId, [FromBody] List<CreatePrintTemplateDto> defaults)
+        {
+            if (defaults == null || defaults.Count == 0)
+                return BadRequest(new { error = "No default templates supplied." });
+
+            var existing = await _repo.GetByCompanyAsync(companyId);
+            var typesWithTemplate = existing.Select(t => t.TemplateType)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var created = new List<string>();
+            foreach (var d in defaults)
+            {
+                if (!ValidTypes.Contains(d.TemplateType)) continue;
+                if (typesWithTemplate.Contains(d.TemplateType)) continue; // leave existing alone
+                if (string.IsNullOrWhiteSpace(d.HtmlContent)) continue;
+                var name = string.IsNullOrWhiteSpace(d.Name) ? "Default" : d.Name.Trim();
+                await _repo.CreateAsync(companyId, d.TemplateType, name, d.HtmlContent,
+                    d.TemplateJson, string.IsNullOrWhiteSpace(d.EditorMode) ? "code" : d.EditorMode, isDefault: true);
+                typesWithTemplate.Add(d.TemplateType);
+                created.Add(d.TemplateType);
+            }
+            if (created.Count > 0)
+                await AuditAsync("PRINTTEMPLATE_SEED_DEFAULTS",
+                    $"Seeded {created.Count} default print templates ({string.Join(", ", created)}) in company {companyId}", companyId);
+            return Ok(new { created = created.Count, types = created });
+        }
+
         [HttpPut("{id:int}")]
         [HasPermission("printtemplates.manage.update")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdatePrintTemplateDto dto)

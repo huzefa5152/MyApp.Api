@@ -290,6 +290,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-15 — Print templates: default-per-type on new company, cleaner picker, smoother editor
+
+New companies now auto-seed one default print template per document type (`POST /api/printtemplates/company/{id}/seed-defaults`, idempotent, HTML supplied by the SPA), so every document screen prints immediately instead of hitting "No print template configured". The document-screen template picker no longer shows a lone default twice — a single template renders as a plain label, multiple templates list the default once plus the alternatives (override per screen). The template editor now lets you change the document type while creating a NEW template (it was locked), loading that type's default design and updating the suggested name; Save auto-names a blank template from its type instead of erroring. A hardcoded real-client (LOTTE Kolson) conditional was removed from the default tax-invoice template so previews and seeded templates stay fictional, and the missing Payment starters are wired into the gallery.
+
 ### 2026-09-15 — FBR purchase import: both sheet layouts + fictional sample download
 
 The FBR purchase importer now surfaces both FBR export layouts — **Annexure-A** (claimed only) and the **Sales Ledger** (all purchases, claimed + unclaimed). The parser already matched both by column name (alias table); the import page adds a *Sheet format* selector and a **Download sample** button that returns a fully-fictional `.xlsx` for the chosen layout (`GET /api/fbr-purchase-import/sample?format=annexa|ledger`). The sample is invented data — no real seller/client — so it is safe for demos and re-uploads cleanly through preview. No schema change; reuses `fbrimport.purchase.preview`.
