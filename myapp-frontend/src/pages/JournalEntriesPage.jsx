@@ -16,6 +16,7 @@ import {
   updateJournalEntry, deleteJournalEntry, getJournalEntryPrintData,
 } from "../api/accountingApi";
 import { getAccountsFlat } from "../api/accountApi";
+import AccountSelect from "../Components/AccountSelect";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
@@ -575,9 +576,10 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
                     <div style={st.miniLabel}>Account</div>
                     <AccountSelect
                       accounts={accounts}
-                      loading={loadingAccounts}
+                      disabled={loadingAccounts}
                       value={l.accountId}
                       onChange={(id) => setLine(l.key, { accountId: id ? String(id) : "" })}
+                      placeholder={loadingAccounts ? "Loading accounts..." : "Select account..."}
                     />
                   </div>
                   <div style={{ flex: "1 1 110px", minWidth: 0 }}>
@@ -669,125 +671,6 @@ function JournalEntryForm({ companyId, entry, onClose, onSaved }) {
  * this page must show name + code chip). Same portal + flip-above positioning
  * so the dropdown never clips inside the scrolling modal body.
  */
-function AccountSelect({ accounts, value, onChange, loading, placeholder = "Select account…" }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [highlightIdx, setHighlightIdx] = useState(-1);
-  const [triggerRect, setTriggerRect] = useState(null);
-  const triggerRef = useRef(null);
-  const searchRef = useRef(null);
-  const wrapperRef = useRef(null);
-
-  const selected = useMemo(
-    () => (accounts || []).find((a) => String(a.id) === String(value)),
-    [accounts, value]
-  );
-
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    const arr = accounts || [];
-    if (!term) return arr;
-    return arr.filter((a) => `${a.name} ${a.code || ""}`.toLowerCase().includes(term));
-  }, [accounts, query]);
-
-  useEffect(() => {
-    const onMouseDown = (e) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target) &&
-          triggerRef.current && !triggerRef.current.contains(e.target)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setHighlightIdx(-1);
-      requestAnimationFrame(() => searchRef.current?.focus());
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const recompute = () => { if (triggerRef.current) setTriggerRect(triggerRef.current.getBoundingClientRect()); };
-    recompute();
-    window.addEventListener("scroll", recompute, true);
-    window.addEventListener("resize", recompute);
-    return () => {
-      window.removeEventListener("scroll", recompute, true);
-      window.removeEventListener("resize", recompute);
-    };
-  }, [open]);
-
-  const pick = (a) => { onChange?.(a ? a.id : ""); setOpen(false); };
-
-  const onKeyDown = (e) => {
-    if (!open) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setHighlightIdx((i) => Math.min(filtered.length - 1, i + 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHighlightIdx((i) => Math.max(0, i - 1)); }
-    else if (e.key === "Enter") { e.preventDefault(); if (highlightIdx >= 0 && highlightIdx < filtered.length) pick(filtered[highlightIdx]); }
-    else if (e.key === "Escape") { setOpen(false); }
-  };
-
-  return (
-    <div style={{ position: "relative", width: "100%" }}>
-      <button
-        type="button"
-        ref={triggerRef}
-        disabled={loading}
-        onClick={() => setOpen((v) => !v)}
-        style={{ ...as.trigger, ...(loading ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}
-      >
-        <span style={as.triggerLabel}>
-          {loading ? <span style={as.placeholder}>Loading…</span>
-            : selected ? (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                <span style={as.selectedName}>{selected.name}</span>
-                {selected.code && <span style={st.codeChip}>{selected.code}</span>}
-              </span>
-            ) : <span style={as.placeholder}>{placeholder}</span>}
-        </span>
-        <MdArrowDropDown size={18} style={{ flexShrink: 0, color: colors.textSecondary }} />
-      </button>
-
-      {open && triggerRect && createPortal(
-        <div ref={wrapperRef} style={as.dropdown(triggerRect)} onKeyDown={onKeyDown}>
-          <div style={as.searchRow}>
-            <MdSearch size={16} style={as.searchIcon} />
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search name or code…"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
-              onKeyDown={onKeyDown}
-              style={as.searchInput}
-            />
-          </div>
-          <div style={as.list}>
-            {filtered.length === 0 && (
-              <div style={as.empty}>{(accounts || []).length === 0 ? "No postable accounts." : `No match for "${query}".`}</div>
-            )}
-            {filtered.map((a, idx) => (
-              <div
-                key={a.id}
-                onMouseDown={() => pick(a)}
-                onMouseEnter={() => setHighlightIdx(idx)}
-                style={{ ...as.row, backgroundColor: idx === highlightIdx ? "#e3f2fd" : "transparent" }}
-              >
-                <span style={as.rowName}>{a.name}</span>
-                {a.code && <span style={st.codeChip}>{a.code}</span>}
-              </div>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
 
 const st = {
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
@@ -850,41 +733,4 @@ const st = {
   totalsCell: { fontSize: "0.82rem", color: colors.textSecondary },
   totalsVal: { color: colors.textPrimary, fontVariantNumeric: "tabular-nums", marginLeft: 4 },
   saveHint: { marginTop: "0.5rem", fontSize: "0.76rem", color: colors.textSecondary, lineHeight: 1.4 },
-};
-
-// AccountSelect styles — mirrors Components/SearchableSelect, 44px trigger.
-const as = {
-  trigger: {
-    display: "flex", alignItems: "center", gap: "0.25rem", width: "100%",
-    padding: "0.5rem 0.7rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 8,
-    backgroundColor: "#fff", fontSize: "0.9rem", color: colors.textPrimary,
-    cursor: "pointer", textAlign: "left", minHeight: 44, boxShadow: "none",
-  },
-  triggerLabel: { flex: 1, minWidth: 0, overflow: "hidden" },
-  selectedName: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  placeholder: { color: "#94a3b8", fontWeight: 400 },
-  dropdown: (rect) => {
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const listHeight = 320;
-    const flipAbove = spaceBelow < 220 && rect.top > spaceBelow;
-    return {
-      position: "fixed",
-      top: flipAbove ? undefined : rect.bottom + 2,
-      bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
-      left: rect.left,
-      width: Math.max(rect.width, 260),
-      maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
-      backgroundColor: "#fff", border: `1px solid ${colors.inputBorder}`, borderRadius: 8,
-      boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 9999,
-      display: "flex", flexDirection: "column",
-    };
-  },
-  searchRow: { display: "flex", alignItems: "center", padding: "0.45rem 0.65rem", borderBottom: `1px solid ${colors.cardBorder}`, position: "relative" },
-  searchIcon: { position: "absolute", left: 12, color: "#94a3b8" },
-  searchInput: { width: "100%", padding: "0.35rem 0.35rem 0.35rem 1.85rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 6, fontSize: "0.85rem", outline: "none", backgroundColor: colors.inputBg },
-  list: { overflowY: "auto", flex: 1 },
-  // Wrap long account names — no nowrap+ellipsis on user-supplied strings.
-  row: { display: "flex", alignItems: "center", gap: 8, padding: "0.55rem 0.7rem", cursor: "pointer", borderBottom: "1px solid #f0f4f8", fontSize: "0.88rem", color: colors.textPrimary, lineHeight: 1.35 },
-  rowName: { flex: 1, minWidth: 0, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" },
-  empty: { padding: "0.8rem", color: colors.textSecondary, fontSize: "0.85rem" },
 };

@@ -298,6 +298,19 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-15 — Journal Entries uses the grouped account picker
+
+- The account dropdown on a journal line listed all 39 postable accounts as one
+  flat list, with no Assets / Liabilities / Equity / Income / Expenses grouping —
+  because `JournalEntriesPage` carried its own **local copy** of `AccountSelect`
+  that shadowed the shared component and had been written without the grouping.
+  The duplicate (and its style block) is gone; the page now imports
+  `Components/AccountSelect`, the same searchable, type-grouped picker every
+  other account field uses. Create and edit share the form, so both are fixed.
+- No data was missing: `/accounts/company/{id}/flat` already returned all five
+  types. Only `Bank & Cash` is withheld, correctly — a journal may not post to it
+  and the server rejects it too.
+
 ### 2026-09-15 — Two FBR fixes found on the live installation
 
 - **Every challan on the installation read "Setup Required".**
