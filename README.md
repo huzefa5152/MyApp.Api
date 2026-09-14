@@ -326,7 +326,11 @@ Publish output optimized from 79 MB to 37 MB via:
   record, rename it across every company, or delete it across every company —
   cascading to their invoices. Now scoped by the same all-or-nothing rule the
   list endpoints already used.
-- Suite: `scripts/test_admin_scope_isolation.py`, 118 checks.
+- Suites: `scripts/test_admin_scope_isolation.py` (118 checks) and
+  `scripts/test_admin_scope_leak_hunt.py` (44), which builds two Administrator
+  trees with distinctive markers and greps raw response bodies rather than
+  trusting status codes — a 200 that quietly contains the other tenant's data
+  is a leak a status-code suite cannot see.
 
 ### 2026-09-14 — A demo you can actually give
 

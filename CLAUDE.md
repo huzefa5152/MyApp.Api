@@ -1477,6 +1477,7 @@ them can be resolved from FBR.
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `118/118`) |
+| Admin scope leak hunt (greps response BODIES for the other tree's markers) | `python scripts/test_admin_scope_leak_hunt.py` | `all checks passed` (currently `44/44`) |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
