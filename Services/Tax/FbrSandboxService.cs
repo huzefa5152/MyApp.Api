@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Helpers;
@@ -57,12 +58,130 @@ namespace MyApp.Api.Services.Tax
         private readonly AppDbContext _db;
         private readonly IFbrService _fbr;
         private readonly IInvoiceRepository _invoiceRepo;
+        private readonly ITaxMappingEngine _taxEngine;
 
         // Legacy floor used when a company has tiny / unset starting numbers.
         // Companies that start lower than this still get demo bills in the
         // 900000+ range (visual cue that they're demo). Companies that
         // already use HIGHER numbering get a per-company adaptive floor —
         // see ComputeDemoFloor below.
+        /// <summary>
+        /// The commodity each scenario is ABOUT.
+        ///
+        /// A scenario fixes the SALE TYPE, and FBR cross-checks that against the
+        /// HS code: it refuses a zero-rated line on goods that are not
+        /// zero-rated [0052], and answers [0204] "sale type not match with
+        /// provided scenario" when the two disagree. Seeding every scenario
+        /// against one arbitrary catalog item — which this did, taking whatever
+        /// <c>OrderBy(Id).First()</c> returned — therefore made nine of the
+        /// eleven importer scenarios impossible to pass, whatever the company's
+        /// configuration.
+        ///
+        /// A code that is absent from the tariff master falls back to the
+        /// sample item's own, which is no worse than the old behaviour.
+        /// </summary>
+        /// <summary>
+        /// The UoM FBR accepts for this HS code, from the local tariff master --
+        /// via <c>TaxMappingEngine.GetValidUomsForHsCodeAsync</c>, the same
+        /// resolver the Item Type form and the FBR pre-flight use, so the
+        /// seeded fixture cannot disagree with the check that will judge it.
+        ///
+        /// Falls back to the sample item's UoM, then to pieces, so a code the
+        /// master does not carry still seeds something.
+        /// </summary>
+        /// <summary>
+        /// The demo item type for one scenario: its own HS code, its own FBR
+        /// sale type, and the UoM that HS code accepts.
+        ///
+        /// Named "[DEMO] &lt;sale type&gt;" so it is recognisable in the catalog
+        /// and reused across companies and reseeds rather than multiplying --
+        /// ItemType is a global catalog (CLAUDE.md 5b-2b), so creating one per
+        /// company per seed would pile up rows nobody can see afterwards.
+        ///
+        /// IsFavorite stays FALSE: these are fixtures, and a favourite would put
+        /// them in every operator's document pickers.
+        /// </summary>
+        private async Task<ItemType?> GetOrCreateScenarioItemAsync(
+            int companyId, TaxScenarios.Scenario sc, ItemType? sampleType)
+        {
+            var hsCode = ScenarioHsCodes.TryGetValue(sc.Code, out var scenarioHs)
+                ? scenarioHs
+                : (sampleType?.HSCode ?? "8481.8090");
+            var (uom, fbrUom) = await ResolveUomAsync(companyId, hsCode, sampleType);
+            var name = $"[DEMO] {sc.SaleType}";
+
+            var existing = await _db.ItemTypes
+                .FirstOrDefaultAsync(t => t.Name == name && !t.IsDeleted);
+            if (existing != null)
+            {
+                // A reseed after this fix must repair a fixture the old code
+                // left with the wrong commodity or unit.
+                existing.HSCode = hsCode;
+                existing.UOM = uom;
+                existing.FbrUOMId = fbrUom;
+                existing.SaleType = sc.SaleType;
+                await _db.SaveChangesAsync();
+                return existing;
+            }
+
+            var created = new ItemType
+            {
+                Name = name,
+                HSCode = hsCode,
+                UOM = uom,
+                FbrUOMId = fbrUom,
+                SaleType = sc.SaleType,
+                IsFavorite = false,
+                CreatedAt = DateTime.UtcNow,
+            };
+            _db.ItemTypes.Add(created);
+            await _db.SaveChangesAsync();
+            return created;
+        }
+
+        private async Task<(string Uom, int FbrUom)> ResolveUomAsync(
+            int companyId, string hsCode, ItemType? sampleType)
+        {
+            // THE resolver (CLAUDE.md 5b-2: "There is exactly ONE place a UOM is
+            // resolved") -- local master, then the company token, then the
+            // installation reference token. Reading HsCode.Uom directly instead
+            // was a second, worse path: 2829.1910 carries no unit in the local
+            // master, so it fell back to pieces and FBR refused the line with
+            // the pre-flight naming KG.
+            var valid = await _taxEngine.GetValidUomsForHsCodeAsync(companyId, hsCode);
+            var first = valid?.FirstOrDefault();
+            if (first != null && !string.IsNullOrWhiteSpace(first.Description))
+                return (first.Description, first.UOM_ID);
+
+            return (sampleType?.UOM ?? "Numbers, pieces, units", sampleType?.FbrUOMId ?? 69);
+        }
+
+        private static readonly Dictionary<string, string> ScenarioHsCodes = new()
+        {
+            ["SN001"] = "8481.8090",   // valves, standard rate
+            ["SN002"] = "8481.8090",
+            ["SN003"] = "7208.1000",   // steel
+            ["SN004"] = "7208.1000",
+            ["SN005"] = "8481.8090",   // reduced rate
+            ["SN006"] = "1001.1900",   // wheat: genuinely exempt
+            ["SN007"] = "1001.1900",   // and genuinely zero-rated
+            ["SN008"] = "3401.1100",   // 3rd Schedule (soap)
+            ["SN009"] = "5208.1100",   // textile
+            ["SN010"] = "8517.1390",   // telecom
+            ["SN011"] = "7208.1000",
+            ["SN012"] = "2710.1210",   // petroleum
+            ["SN013"] = "2716.0000",   // electricity
+            ["SN015"] = "8517.1390",   // mobile phones
+            ["SN016"] = "8481.8090",   // processing / conversion
+            ["SN017"] = "2202.1010",   // aerated waters: really carries FED
+            ["SN021"] = "2523.2100",   // white cement
+            ["SN022"] = "2829.1910",   // potassium chlorates (national line)
+            ["SN024"] = "8481.8090",   // SRO 297(I)/2023
+            ["SN026"] = "8481.8090",
+            ["SN027"] = "3401.1100",
+            ["SN028"] = "0101.2100",
+        };
+
         private const int DemoBaseNumber = 900000;
 
         // Buffer added on top of the company's StartingInvoiceNumber when
@@ -79,11 +198,12 @@ namespace MyApp.Api.Services.Tax
         public FbrSandboxService(
             AppDbContext db,
             IFbrService fbr,
-            IInvoiceRepository invoiceRepo)
+            IInvoiceRepository invoiceRepo, ITaxMappingEngine taxEngine)
         {
             _db = db;
             _fbr = fbr;
             _invoiceRepo = invoiceRepo;
+            _taxEngine = taxEngine;
         }
 
         // ── List ────────────────────────────────────────────────
@@ -262,8 +382,15 @@ namespace MyApp.Api.Services.Tax
                     ? unregisteredClient
                     : registeredClient;
 
-                var (challan, invoice) = BuildScenarioPair(
-                    company, clientForScenario, sampleItemType, sc,
+                // An item type OF ITS OWN per scenario. The line's SaleType is
+                // not enough: FbrService resolves a line's sale type through the
+                // ITEM TYPE, so eleven bills sharing one standard-rate item all
+                // filed as standard rate and FBR answered [0204] "sale type not
+                // match with provided scenario" for the nine that are not.
+                var scenarioItem = await GetOrCreateScenarioItemAsync(company.Id, sc, sampleItemType);
+
+                var (challan, invoice) = await BuildScenarioPairAsync(
+                    company, clientForScenario, scenarioItem ?? sampleItemType, sc,
                     nextChallanNumber++, nextInvoiceNumber++, day++);
 
                 _db.DeliveryChallans.Add(challan);
@@ -444,15 +571,22 @@ namespace MyApp.Api.Services.Tax
             return m.Success ? m.Groups[1].Value.ToUpperInvariant() : null;
         }
 
-        private static (DeliveryChallan challan, Invoice invoice) BuildScenarioPair(
+        // Not static any more: the UoM has to be resolved from the tariff master
+        // per HS code (see ResolveUomAsync), which needs the DbContext.
+        private async Task<(DeliveryChallan challan, Invoice invoice)> BuildScenarioPairAsync(
             Company company, Client client, ItemType? sampleType,
             TaxScenarios.Scenario sc,
             int challanNumber, int invoiceNumber, int dayOffset)
         {
-            // The scenario fixes sale-type + rate; pick HS / UOM defensively.
-            var hsCode = sampleType?.HSCode ?? "8481.8090";
-            var uom    = sampleType?.UOM ?? "Numbers, pieces, units";
-            var fbrUom = sampleType?.FbrUOMId ?? 69;
+            // The scenario fixes the sale type; the COMMODITY has to match it
+            // or FBR refuses the pair (see ScenarioHsCodes). The UoM then has to
+            // match the commodity -- 1001.1900 takes KG, 8481.8090 takes pieces
+            // -- so it is resolved from the HS code rather than inherited from
+            // whatever sample item happened to be picked.
+            var hsCode = ScenarioHsCodes.TryGetValue(sc.Code, out var scenarioHs)
+                ? scenarioHs
+                : (sampleType?.HSCode ?? "8481.8090");
+            var (uom, fbrUom) = await ResolveUomAsync(company.Id, hsCode, sampleType);
             var qty    = 1;
             var unit   = sc.IsThirdSchedule ? 100m : 1000m;
             var lineTotal = qty * unit;
