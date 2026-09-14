@@ -366,13 +366,12 @@ def stage_master_data(api, companies):
         items[name] = out["id"]
     print("  item catalogue: {0} products".format(len(items)))
 
-    # Register the catalogue with the other two companies, so each company's
-    # pickers show it. Creating with a companyId is what registers it
-    # (CLAUDE.md 5b-2b: membership is derived, and a new item has no documents).
-    for key in ("vertex", "prime"):
-        cid = companies[key]["id"]
-        for name in items:
-            api.post("/itemtypes/company/{0}/register".format(cid), {"itemTypeId": items[name]})
+    # No explicit registration call: there isn't one, and there doesn't need to
+    # be. ItemType membership is DERIVED from the documents that reference an
+    # item (CLAUDE.md 5b-2b), so the purchase bills and invoices the next stage
+    # writes for each company are what put the catalogue in that company's
+    # pickers. An earlier version POSTed to a /register route that does not
+    # exist and never checked the 404.
 
     contacts = {}
     for key, company in companies.items():
