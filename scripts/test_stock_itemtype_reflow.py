@@ -136,6 +136,7 @@ def setup(base: str, admin_user: str, admin_pw: str):
         "ntn": "9999999",
         "cnic": "9999999999999",
         "strn": "9999999999999",
+        "fbrSellerRegistrationNo": "9999999",
         "startingChallanNumber": 1,
         "startingInvoiceNumber": 1,
         "startingPurchaseBillNumber": 1,
@@ -1147,6 +1148,7 @@ def set_hard_block(base, token, cid, on: bool) -> bool:
     body = {
         "name": c["name"], "fullAddress": c.get("fullAddress"), "phone": c.get("phone"),
         "ntn": c.get("ntn"), "cnic": c.get("cnic"), "strn": c.get("strn"),
+        "fbrSellerRegistrationNo": c.get("fbrSellerRegistrationNo"),
         "startingChallanNumber": c.get("startingChallanNumber", 1),
         "startingInvoiceNumber": c.get("startingInvoiceNumber", 1),
         "startingPurchaseBillNumber": c.get("startingPurchaseBillNumber", 1),

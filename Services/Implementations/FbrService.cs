@@ -467,14 +467,13 @@ namespace MyApp.Api.Services.Implementations
             static string StripNtn(string? v)    => SanitizeNtn(v);
 
             // ─ Seller ─
-            // Seller identity: prefer CNIC (13 digits) if set, otherwise NTN
-            // (7 digits). FBR accepts either, but Hakimi Traders submissions
-            // must use CNIC per the tax consultant's instruction.
-            var sellerNtn = !string.IsNullOrWhiteSpace(company.CNIC)
-                ? StripDigits(company.CNIC)
-                : StripNtn(company.NTN);
+            // Seller identity comes from the dedicated FBR seller registration
+            // number — the value the company files under at PRAL (a 7-digit NTN
+            // or a 13-digit CNIC), NOT the display NTN/CNIC (those are for print
+            // templates only). One field, so pre-validate and payload agree.
+            var sellerNtn = StripDigits(company.FbrSellerRegistrationNo);
             if (string.IsNullOrWhiteSpace(sellerNtn))
-                errors.Add("Seller NTN/CNIC is required. Configure it in Company settings. [FBR 0001]");
+                errors.Add("Seller NTN/CNIC is required. Set 'Seller NTN / CNIC for FBR' in Company settings. [FBR 0001]");
             else if (sellerNtn.Length != 7 && sellerNtn.Length != 13)
                 errors.Add($"Seller NTN must be 7 digits or CNIC must be 13 digits (current: {sellerNtn.Length}). [FBR 0108]");
 
@@ -958,15 +957,11 @@ namespace MyApp.Api.Services.Implementations
                 buyerNtnCnic = "";
 
             // ── Sanitize NTN/CNIC ──
-            // Uses the shared class-level helpers (FbrService.SanitizeNtn /
-            // StripAllDigits) so pre-validate and payload build can't drift.
-            // Seller: prefer CNIC (13 digits) when configured; fall back to
-            // NTN (7 digits). CNIC is required for Hakimi Traders per the
-            // tax consultant; NTN-only submissions are supported as a legacy
-            // path for other companies.
-            var sellerNtnCnic = !string.IsNullOrWhiteSpace(company.CNIC)
-                ? StripAllDigits(company.CNIC)
-                : SanitizeNtn(company.NTN);
+            // Seller identity is the dedicated FBR seller registration number
+            // (the value filed at PRAL — 7-digit NTN or 13-digit CNIC), stripped
+            // to digits. It is NOT the display NTN/CNIC. Same StripAllDigits the
+            // pre-validate step uses, so the two can't drift.
+            var sellerNtnCnic = StripAllDigits(company.FbrSellerRegistrationNo);
             // Buyer: if NTN use SanitizeNtn (7 digits), if CNIC strip all non-digits (13 digits)
             if (!string.IsNullOrEmpty(buyer.NTN))
                 buyerNtnCnic = SanitizeNtn(buyer.NTN);

@@ -63,6 +63,7 @@ namespace MyApp.Api.Services.Implementations
             FbrBusinessActivity = c.FbrBusinessActivity,
             FbrSector = c.FbrSector,
             FbrEnvironment = c.FbrEnvironment,
+            FbrSellerRegistrationNo = c.FbrSellerRegistrationNo,
             HasFbrToken = !string.IsNullOrEmpty(c.FbrToken),
             HasChallans = hasChallans,
             HasInvoices = hasInvoices,
@@ -114,10 +115,34 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(company, hasChallans, hasInvoices);
         }
 
+        /// <summary>
+        /// The seller registration number filed to FBR (SellerNTNCNIC) must be
+        /// present and be a 7-digit NTN or a 13-digit CNIC after stripping any
+        /// separators. Kept separate from the display NTN/CNIC on purpose: what
+        /// a company prints on its letterhead is not always what it files under.
+        /// Throws <see cref="InvalidOperationException"/> (surfaced as 400 by the
+        /// controller) on a missing or wrong-length value; returns the trimmed
+        /// value to persist.
+        /// </summary>
+        private static string ValidateFbrSellerRegistrationNo(string? raw)
+        {
+            var trimmed = (raw ?? "").Trim();
+            var digits = new string(trimmed.Where(char.IsDigit).ToArray());
+            if (digits.Length == 0)
+                throw new InvalidOperationException(
+                    "Seller NTN / CNIC for FBR is required — enter the 7-digit NTN or 13-digit CNIC you file under.");
+            if (digits.Length != 7 && digits.Length != 13)
+                throw new InvalidOperationException(
+                    $"Seller NTN / CNIC for FBR must be a 7-digit NTN or a 13-digit CNIC (you entered {digits.Length} digits).");
+            return trimmed;
+        }
+
         public async Task<CompanyDto> CreateAsync(CreateCompanyDto dto)
         {
             if (await _repository.ExistsByNameAsync(dto.Name))
                 throw new InvalidOperationException($"A company with the name '{dto.Name}' already exists.");
+
+            var fbrSellerRegNo = ValidateFbrSellerRegistrationNo(dto.FbrSellerRegistrationNo);
 
             var company = new Company
             {
@@ -142,6 +167,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrSector = dto.FbrSector,
                 FbrToken = dto.FbrToken,
                 FbrEnvironment = dto.FbrEnvironment,
+                FbrSellerRegistrationNo = fbrSellerRegNo,
                 FbrDefaultSaleType = dto.FbrDefaultSaleType,
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
@@ -170,6 +196,8 @@ namespace MyApp.Api.Services.Implementations
             if (await _repository.ExistsByNameAsync(dto.Name, id))
                 throw new InvalidOperationException($"A company with the name '{dto.Name}' already exists.");
 
+            var fbrSellerRegNo = ValidateFbrSellerRegistrationNo(dto.FbrSellerRegistrationNo);
+
             company.Name = dto.Name;
             company.BrandName = dto.BrandName;
             company.FullAddress = dto.FullAddress;
@@ -185,6 +213,7 @@ namespace MyApp.Api.Services.Implementations
             company.FbrBusinessActivity = dto.FbrBusinessActivity;
             company.FbrSector = dto.FbrSector;
             company.FbrEnvironment = dto.FbrEnvironment;
+            company.FbrSellerRegistrationNo = fbrSellerRegNo;
             if (dto.FbrToken != null) company.FbrToken = dto.FbrToken;
 
             // Per-company FBR defaults — null is a valid "clear this default" signal
@@ -272,6 +301,24 @@ namespace MyApp.Api.Services.Implementations
                     id);
             }
 
+            return ToDto(updated, hasChallans, hasInvoices);
+        }
+
+        /// <summary>
+        /// Set ONLY the logo path, leaving every other column untouched. The
+        /// logo endpoint used to round-trip a sparse UpdateCompanyDto, which
+        /// (because UpdateAsync writes every FBR/inventory/tenant field from the
+        /// DTO) silently wiped CNIC, FBR config and the seller registration
+        /// number on every logo upload. This path avoids that entirely.
+        /// </summary>
+        public async Task<CompanyDto?> UpdateLogoAsync(int id, string logoPath)
+        {
+            var company = await _repository.GetByIdAsync(id);
+            if (company == null) return null;
+            company.LogoPath = logoPath;
+            var updated = await _repository.UpdateAsync(company);
+            var hasChallans = await _challanRepo.HasChallansForCompanyAsync(id);
+            var hasInvoices = await _invoiceRepo.HasInvoicesForCompanyAsync(id);
             return ToDto(updated, hasChallans, hasInvoices);
         }
 

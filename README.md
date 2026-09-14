@@ -290,6 +290,12 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-14 — Dedicated "Seller NTN / CNIC for FBR" field; company form split into tabs
+
+The identity filed to FBR (`SellerNTNCNIC`) is now its own required `Company.FbrSellerRegistrationNo` — a 7-digit NTN or 13-digit CNIC entered exactly as filed — instead of being derived from the display CNIC/NTN. The display NTN/CNIC/STRN are now print/display-only and optional. `FbrService` (pre-validate, payload, self-invoice check) and `DeliveryChallanService.IsFbrReady` all key off the new field. Migration `AddFbrSellerRegistrationNo` backfills existing rows `COALESCE(CNIC, NTN)`.
+
+The company create/edit modal is reorganised into four tabs — **General / FBR Integration / Numbering / Advanced** — with per-tab validation that jumps to the first tab carrying an error and dots each offending tab. Fixed a latent bug where uploading a company logo round-tripped a sparse DTO and wiped the CNIC/FBR fields (logo now updates in isolation). Seed/test scripts that create companies updated to send the new required field.
+
 ### 2026-09-11 — FBR: exempt goods file as "Exempt"; Processing/FED clear the SRO pre-flight
 
 - **Exempt sale lines are now transmitted to FBR with the rate `Exempt`, not

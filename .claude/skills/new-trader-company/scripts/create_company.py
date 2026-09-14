@@ -102,6 +102,10 @@ def main():
             "ntn": args.ntn,
             "cnic": args.cnic,
             "strn": args.strn,
+            # Seller identity FILED to FBR (SellerNTNCNIC) — required, separate
+            # from the display NTN/CNIC. Prefer the NTN (must be the one the
+            # sandbox token is bound to at PRAL), else the CNIC.
+            "fbrSellerRegistrationNo": args.ntn or args.cnic,
             # Numbering must start at a positive value or bill creation refuses.
             "startingChallanNumber": 1,
             "startingInvoiceNumber": 1,

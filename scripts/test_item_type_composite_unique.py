@@ -66,6 +66,7 @@ status, company = http("POST", "/api/companies", token=token, body={
     "name": "Composite-Unique-Test Co",
     "fullAddress": "Test", "phone": "+92-21-00000000",
     "ntn": "0000099", "cnic": "0000099000099", "strn": "0000099000099",
+    "fbrSellerRegistrationNo": "0000099",
     "startingChallanNumber": 1, "startingInvoiceNumber": 1,
     "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
     "fbrEnvironment": "sandbox", "fbrProvinceCode": 8,

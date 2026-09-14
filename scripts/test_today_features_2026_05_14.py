@@ -97,6 +97,7 @@ for label in ("Src", "Dst", "Extra"):
     payload = {
         "name": f"{TEST_PREFIX} {label}",
         "brandName": f"TEST-{label.upper()}",
+        "fbrSellerRegistrationNo": "1234567",
         "isTenantIsolated": False,
         "startingChallanNumber": 1,
         "startingInvoiceNumber": 1,

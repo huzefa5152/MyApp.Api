@@ -23,6 +23,15 @@ const {
 
 const INT32_MAX = 2147483647;
 
+// Four tabs. Validation is routed to the tab that owns the offending field so
+// the operator always lands on the right place instead of hunting a long form.
+const TABS = [
+    { key: "general", label: "General" },
+    { key: "fbr", label: "FBR Integration" },
+    { key: "numbering", label: "Numbering" },
+    { key: "advanced", label: "Advanced" },
+];
+
 export default function CompanyForm({ company, onClose, onSaved }) {
     const [form, setForm] = useState({
         name: "",
@@ -46,6 +55,10 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         fbrSector: "",
         fbrToken: "",
         fbrEnvironment: "sandbox",
+        // Seller registration number FILED to FBR (SellerNTNCNIC). A 7-digit
+        // NTN or a 13-digit CNIC, entered exactly as filed — kept separate from
+        // the display NTN/CNIC on the General tab, which are print-only.
+        fbrSellerRegistrationNo: "",
         // Per-company FBR defaults applied when a new bill is created without
         // these fields set on the line/header. Null/empty means "use built-in
         // fallback" in InvoiceService.
@@ -72,6 +85,9 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
     const errRef = useScrollToError(error);
+    const [activeTab, setActiveTab] = useState("general");
+    // Which tabs currently carry a validation error → red dot on the tab.
+    const [errorTabs, setErrorTabs] = useState({});
     const [provinces, setProvinces] = useState([]);
     const [activities, setActivities] = useState([]);
     const [sectors, setSectors] = useState([]);
@@ -127,6 +143,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrSector: freshCompany.fbrSector || "",
                 fbrToken: "",
                 fbrEnvironment: freshCompany.fbrEnvironment || "sandbox",
+                fbrSellerRegistrationNo: freshCompany.fbrSellerRegistrationNo || "",
                 fbrDefaultSaleType: freshCompany.fbrDefaultSaleType || "",
                 fbrDefaultUOM: freshCompany.fbrDefaultUOM || "",
                 fbrDefaultPaymentModeRegistered: freshCompany.fbrDefaultPaymentModeRegistered || "",
@@ -194,27 +211,54 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     // The TaxScenarios.SplitCsv on the backend reads these tolerantly.
     const handleCsvChange = (name, csv) => setForm((prev) => ({ ...prev, [name]: csv }));
 
+    // Collect every validation error with the tab it belongs to, so the tab
+    // bar can dot each offending tab and we can jump to the first one.
+    const collectErrors = () => {
+        const errs = [];
+        if (!form.name.trim())
+            errs.push({ tab: "general", msg: "Company name is required." });
+
+        // Display CNIC is optional now; if entered it must still be 13 digits.
+        const cnicDigits = (form.cnic || "").replace(/\D/g, "");
+        if (cnicDigits && cnicDigits.length !== 13)
+            errs.push({ tab: "general", msg: `Display CNIC must be 13 digits if entered (current: ${cnicDigits.length}). Leave blank if not used.` });
+
+        // The FBR seller registration number is REQUIRED and must be a 7-digit
+        // NTN or a 13-digit CNIC.
+        const sellerDigits = (form.fbrSellerRegistrationNo || "").replace(/\D/g, "");
+        if (!sellerDigits)
+            errs.push({ tab: "fbr", msg: "Seller NTN / CNIC for FBR is required — enter the 7-digit NTN or 13-digit CNIC you file under." });
+        else if (sellerDigits.length !== 7 && sellerDigits.length !== 13)
+            errs.push({ tab: "fbr", msg: `Seller NTN / CNIC for FBR must be a 7-digit NTN or a 13-digit CNIC — you entered ${sellerDigits.length} digits.` });
+
+        if (form.startingChallanNumber < 0)
+            errs.push({ tab: "numbering", msg: "Starting challan number cannot be negative." });
+        if (form.startingInvoiceNumber < 0)
+            errs.push({ tab: "numbering", msg: "Starting invoice number cannot be negative." });
+        return errs;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
 
-        if (!form.name) return setError("Company name is required.");
-        // CNIC is required — FBR submissions use this as SellerNTNCNIC.
-        // Must be 13 digits after stripping non-numerics.
-        const cnicDigits = (form.cnic || "").replace(/\D/g, "");
-        if (!cnicDigits) return setError("CNIC is required — it's used as SellerNTNCNIC on FBR submissions.");
-        if (cnicDigits.length !== 13)
-            return setError(`CNIC must be exactly 13 digits (current: ${cnicDigits.length}).`);
-        if (form.startingChallanNumber < 0)
-            return setError("Starting challan number cannot be negative.");
-        if (form.startingInvoiceNumber < 0)
-            return setError("Starting invoice number cannot be negative.");
+        const errs = collectErrors();
+        if (errs.length > 0) {
+            const dotted = {};
+            errs.forEach((x) => { dotted[x.tab] = true; });
+            setErrorTabs(dotted);
+            setActiveTab(errs[0].tab);
+            setError(errs[0].msg);
+            return;
+        }
+        setErrorTabs({});
 
         try {
             const payload = {
                 ...form,
                 fbrProvinceCode: form.fbrProvinceCode === "" ? null : Number(form.fbrProvinceCode),
                 fbrToken: form.fbrToken || null,
+                fbrSellerRegistrationNo: (form.fbrSellerRegistrationNo || "").trim(),
                 // Normalise empty strings to null so the backend treats them as
                 // "use built-in fallback" rather than "operator chose empty string".
                 fbrDefaultSaleType: form.fbrDefaultSaleType || null,
@@ -241,7 +285,13 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             onSaved();
             onClose();
         } catch (err) {
-            setError(err.response?.data?.message || "Something went wrong.");
+            const msg = err.response?.data?.message || "Something went wrong.";
+            setError(msg);
+            // Route a server-side seller-registration rejection to the FBR tab.
+            if (/seller ntn|cnic for fbr/i.test(msg)) {
+                setErrorTabs({ fbr: true });
+                setActiveTab("fbr");
+            }
         }
     };
 
@@ -256,411 +306,395 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                     <div style={{ ...body, maxHeight: "65vh", overflowY: "auto" }}>
                         {error && <div ref={errRef} style={errorStyle}>{error}</div>}
 
-                        <div style={formGroup}>
-                            <label style={label}>Company Name *</label>
-                            <input type="text" name="name" value={form.name} onChange={handleChange} style={input} />
+                        {/* ── Tab bar ─────────────────────────────────────── */}
+                        <div style={tabBar}>
+                            {TABS.map((t) => {
+                                const isActive = activeTab === t.key;
+                                return (
+                                    <button
+                                        key={t.key}
+                                        type="button"
+                                        onClick={() => setActiveTab(t.key)}
+                                        style={{ ...tabBtn, ...(isActive ? tabBtnActive : {}) }}
+                                    >
+                                        {t.label}
+                                        {errorTabs[t.key] && (
+                                            <span style={tabDot} aria-label="has errors" title="This tab has errors" />
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
 
-                        <div style={formGroup}>
-                            <label style={label}>Brand Name (for print header)</label>
-                            <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="e.g. HAKIMI TRADERS" />
-                        </div>
-
-                        <div style={formGroup}>
-                            <label style={label}>Full Address</label>
-                            <input type="text" name="fullAddress" value={form.fullAddress} onChange={handleChange} style={input} />
-                        </div>
-
-                        <div className="form-grid-2col">
+                        {/* ── General ─────────────────────────────────────── */}
+                        <div hidden={activeTab !== "general"}>
                             <div style={formGroup}>
-                                <label style={label}>Phone</label>
-                                <input type="text" name="phone" value={form.phone} onChange={handleChange} style={input} />
+                                <label style={label}>Company Name *</label>
+                                <input type="text" name="name" value={form.name} onChange={handleChange} style={input} />
                             </div>
+
                             <div style={formGroup}>
-                                <label style={label}>NTN</label>
-                                <input type="text" name="ntn" value={form.ntn} onChange={handleChange} style={input} />
+                                <label style={label}>Brand Name (for print header)</label>
+                                <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="e.g. HAKIMI TRADERS" />
                             </div>
-                        </div>
-
-                        <div className="form-grid-2col">
-                            <div style={formGroup}>
-                                <label style={label}>CNIC *</label>
-                                <input
-                                    type="text"
-                                    name="cnic"
-                                    value={form.cnic}
-                                    onChange={handleChange}
-                                    style={input}
-                                    required
-                                    maxLength={15}
-                                    placeholder="13-digit CNIC (used as SellerNTNCNIC on FBR submissions)"
-                                />
-                            </div>
-                            <div style={formGroup}>
-                                <label style={label}>STRN</label>
-                                <input type="text" name="strn" value={form.strn} onChange={handleChange} style={input} />
-                            </div>
-                        </div>
-
-                        <div style={formGroup}>
-                            <label style={label}>Logo</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => setLogoFile(e.target.files[0])}
-                                style={{ ...input, padding: "0.4rem" }}
-                            />
-                            {company?.logoPath && !logoFile && (
-                                <img src={company.logoPath} alt="logo" style={{ marginTop: "0.5rem", height: "40px" }} />
-                            )}
-                        </div>
-
-                        <div style={formGroup}>
-                            <label style={label}>
-                                Starting Challan Number
-                                {freshCompany?.hasChallans && (
-                                    <span style={{ fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 400, marginLeft: "0.5rem" }}>
-                                        (locked — challans exist)
-                                    </span>
-                                )}
-                            </label>
-                            <input
-                                type="number"
-                                name="startingChallanNumber"
-                                value={form.startingChallanNumber}
-                                onChange={handleChange}
-                                style={{ ...input, ...(freshCompany?.hasChallans ? { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-allowed" } : {}) }}
-                                disabled={freshCompany?.hasChallans}
-                            />
-                            {company?.currentChallanNumber > 0 && (
-                                <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                    Current challan number: {company.currentChallanNumber}
-                                </span>
-                            )}
-                        </div>
-
-                        <div style={formGroup}>
-                            <label style={label}>
-                                Starting Invoice Number
-                                {freshCompany?.hasInvoices && (
-                                    <span style={{ fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 400, marginLeft: "0.5rem" }}>
-                                        (locked — invoices exist)
-                                    </span>
-                                )}
-                            </label>
-                            <input
-                                type="number"
-                                name="startingInvoiceNumber"
-                                value={form.startingInvoiceNumber}
-                                onChange={handleChange}
-                                style={{ ...input, ...(freshCompany?.hasInvoices ? { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-allowed" } : {}) }}
-                                disabled={freshCompany?.hasInvoices}
-                            />
-                            {company?.currentInvoiceNumber > 0 && (
-                                <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                    Current invoice number: {company.currentInvoiceNumber}
-                                </span>
-                            )}
-                        </div>
-
-                        {/* Debit/Credit Notes (Return Invoices) run their own
-                            sequence — reversing bill #3821 creates Debit Note
-                            #1, not bill #3822. Locked once a note exists,
-                            mirroring the invoice/challan number locks. */}
-                        <div style={formGroup}>
-                            <label style={label}>
-                                Starting Debit Note Number
-                            </label>
-                            <input
-                                type="number"
-                                name="startingDebitNoteNumber"
-                                value={form.startingDebitNoteNumber}
-                                onChange={handleChange}
-                                style={input}
-                                min="1"
-                            />
-                            {company?.currentDebitNoteNumber > 0 && (
-                                <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                    Current debit note number: {company.currentDebitNoteNumber} (locked — notes exist)
-                                </span>
-                            )}
-                        </div>
-
-                        <div style={formGroup}>
-                            <label style={label}>
-                                Starting Credit Note Number
-                            </label>
-                            <input
-                                type="number"
-                                name="startingCreditNoteNumber"
-                                value={form.startingCreditNoteNumber}
-                                onChange={handleChange}
-                                style={input}
-                                min="1"
-                            />
-                            {company?.currentCreditNoteNumber > 0 && (
-                                <span style={{ fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                    Current credit note number: {company.currentCreditNoteNumber} (locked — notes exist)
-                                </span>
-                            )}
-                        </div>
-
-                        <div className="form-grid-2col">
-                            <div style={formGroup}>
-                                <label style={label}>Starting Sales Quote #</label>
-                                <input
-                                    type="number"
-                                    name="startingSalesQuoteNumber"
-                                    min={1}
-                                    value={form.startingSalesQuoteNumber}
-                                    onChange={handleChange}
-                                    style={input}
-                                />
-                                <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                    Locks once sales quotes exist.
-                                </span>
-                            </div>
-                            <div style={formGroup}>
-                                <label style={label}>Starting Sales Order #</label>
-                                <input
-                                    type="number"
-                                    name="startingSalesOrderNumber"
-                                    min={1}
-                                    value={form.startingSalesOrderNumber}
-                                    onChange={handleChange}
-                                    style={input}
-                                />
-                                <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                    Locks once sales orders exist.
-                                </span>
-                            </div>
-                        </div>
-
-                        <div style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
-                            <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.88rem", color: "#0d47a1" }}>FBR Digital Invoicing</p>
 
                             <div style={formGroup}>
-                                <label style={label}>Invoice Number Prefix</label>
-                                <input type="text" name="invoiceNumberPrefix" value={form.invoiceNumberPrefix} onChange={handleChange} style={input} placeholder="e.g. INV-" />
+                                <label style={label}>Full Address</label>
+                                <input type="text" name="fullAddress" value={form.fullAddress} onChange={handleChange} style={input} />
                             </div>
 
                             <div className="form-grid-2col">
                                 <div style={formGroup}>
-                                    <label style={label}>Province</label>
-                                    <select name="fbrProvinceCode" value={form.fbrProvinceCode} onChange={handleChange} style={input}>
-                                        <option value="">Select...</option>
-                                        {provinces.map((p) => (
-                                            <option key={p.id} value={p.code}>{p.label}</option>
-                                        ))}
-                                    </select>
+                                    <label style={label}>Phone</label>
+                                    <input type="text" name="phone" value={form.phone} onChange={handleChange} style={input} />
                                 </div>
                                 <div style={formGroup}>
-                                    <label style={label}>Environment</label>
-                                    <select name="fbrEnvironment" value={form.fbrEnvironment} onChange={handleChange} style={input}>
-                                        {environments.length > 0 ? environments.map((e) => (
-                                            <option key={e.id} value={e.code}>{e.label}</option>
-                                        )) : (
-                                            <>
-                                                <option value="sandbox">Sandbox</option>
-                                                <option value="production">Production</option>
-                                            </>
-                                        )}
-                                    </select>
+                                    <label style={label}>NTN <span style={hintText}>(display / print only)</span></label>
+                                    <input type="text" name="ntn" value={form.ntn} onChange={handleChange} style={input} placeholder="Shown on print templates" />
                                 </div>
                             </div>
 
                             <div className="form-grid-2col">
                                 <div style={formGroup}>
-                                    <label style={label}>
-                                        Business Activity <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(multiple — drives applicable FBR scenarios)</span>
-                                    </label>
-                                    <MultiSelectChips
-                                        name="fbrBusinessActivity"
-                                        valueCsv={form.fbrBusinessActivity}
-                                        options={activities}
-                                        onChange={handleCsvChange}
+                                    <label style={label}>CNIC <span style={hintText}>(display / print only)</span></label>
+                                    <input
+                                        type="text"
+                                        name="cnic"
+                                        value={form.cnic}
+                                        onChange={handleChange}
+                                        style={input}
+                                        maxLength={15}
+                                        placeholder="13-digit CNIC — optional, shown on print"
                                     />
                                 </div>
                                 <div style={formGroup}>
-                                    <label style={label}>
-                                        Sector <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(multiple)</span>
-                                    </label>
-                                    <MultiSelectChips
-                                        name="fbrSector"
-                                        valueCsv={form.fbrSector}
-                                        options={sectors}
-                                        onChange={handleCsvChange}
-                                    />
+                                    <label style={label}>STRN <span style={hintText}>(display / print only)</span></label>
+                                    <input type="text" name="strn" value={form.strn} onChange={handleChange} style={input} />
                                 </div>
+                            </div>
+
+                            <div style={infoNote}>
+                                NTN, CNIC and STRN here are used only for print templates and company display.
+                                The number filed to FBR is set separately on the <strong>FBR Integration</strong> tab.
                             </div>
 
                             <div style={formGroup}>
-                                <label style={label}>FBR Bearer Token {company?.hasFbrToken && <span style={{ color: "#28a745", fontSize: "0.75rem" }}>(set)</span>}</label>
-                                <input type="password" name="fbrToken" value={form.fbrToken} onChange={handleChange} style={input} placeholder={company?.hasFbrToken ? "Leave blank to keep current" : "Paste token from IRIS portal"} />
+                                <label style={label}>Logo</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => setLogoFile(e.target.files[0])}
+                                    style={{ ...input, padding: "0.4rem" }}
+                                />
+                                {company?.logoPath && !logoFile && (
+                                    <img src={company.logoPath} alt="logo" style={{ marginTop: "0.5rem", height: "40px" }} />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ── FBR Integration ─────────────────────────────── */}
+                        <div hidden={activeTab !== "fbr"}>
+                            {/* The dedicated seller identity — required, filed to FBR. */}
+                            <div style={{ marginBottom: "1rem", padding: "0.85rem", borderRadius: 10, border: "1px solid #0d47a155", backgroundColor: "#e8f0fe" }}>
+                                <div style={formGroup}>
+                                    <label style={label}>
+                                        Seller NTN / CNIC for FBR <span style={{ color: "#e53935" }}>*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        name="fbrSellerRegistrationNo"
+                                        value={form.fbrSellerRegistrationNo}
+                                        onChange={handleChange}
+                                        style={input}
+                                        maxLength={15}
+                                        inputMode="numeric"
+                                        placeholder="7-digit NTN or 13-digit CNIC — exactly as filed at FBR"
+                                    />
+                                    <span style={{ fontSize: "0.76rem", color: "#334e68", marginTop: "0.3rem", display: "block", lineHeight: 1.4 }}>
+                                        Transmitted to FBR on every submission as <strong>SellerNTNCNIC</strong>.
+                                        Enter it here yourself — it is <strong>not</strong> taken from the display
+                                        NTN/CNIC on the General tab. Must be either a 7-character NTN or a 13-digit CNIC.
+                                    </span>
+                                </div>
                             </div>
 
-                            {/* ── Per-company defaults for new bills ──
-                                These pre-fill line items + bill header when the
-                                operator hasn't made an explicit choice, so
-                                day-to-day bill entry doesn't require setting
-                                the same FBR fields over and over. Empty values
-                                fall back to built-in sensible defaults. */}
-                            <div style={{ marginTop: "1.25rem", paddingTop: "0.9rem", borderTop: "1px dashed #d0d7e2" }}>
-                                <h6 style={{ margin: "0 0 0.5rem", fontSize: "0.82rem", fontWeight: 700, color: "#455a64", letterSpacing: "0.03em", textTransform: "uppercase" }}>
-                                    Default values for new bills
-                                </h6>
-                                <p style={{ margin: "0 0 0.75rem", fontSize: "0.76rem", color: "#5f6d7e" }}>
-                                    Used when creating a bill if the line/header didn't specify. Leave blank to use the built-in fallback.
-                                </p>
-                                <div style={{ display: "flex", gap: "0.75rem" }}>
+                            <div style={{ padding: "0.75rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#e3f2fd" }}>
+                                <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.88rem", color: "#0d47a1" }}>FBR Digital Invoicing</p>
+
+                                <div style={formGroup}>
+                                    <label style={label}>Invoice Number Prefix</label>
+                                    <input type="text" name="invoiceNumberPrefix" value={form.invoiceNumberPrefix} onChange={handleChange} style={input} placeholder="e.g. INV-" />
+                                </div>
+
+                                <div className="form-grid-2col">
                                     <div style={formGroup}>
-                                        <label style={label}>Default Sale Type</label>
-                                        {saleTypeOptions.length > 0 ? (
-                                            <select name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input}>
-                                                <option value="">(Use fallback: Goods at Standard Rate)</option>
-                                                {saleTypeOptions.map((s) => (
-                                                    <option key={s.id} value={s.code}>{s.label}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <input type="text" name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input} placeholder="e.g. Goods at Standard Rate (default)" />
-                                        )}
+                                        <label style={label}>Province</label>
+                                        <select name="fbrProvinceCode" value={form.fbrProvinceCode} onChange={handleChange} style={input}>
+                                            <option value="">Select...</option>
+                                            {provinces.map((p) => (
+                                                <option key={p.id} value={p.code}>{p.label}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div style={formGroup}>
-                                        <label style={label}>Default UOM</label>
-                                        {uomOptions.length > 0 ? (
-                                            <select name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input}>
-                                                <option value="">(Use fallback: Numbers, pieces, units)</option>
-                                                {uomOptions.map((u) => (
-                                                    <option key={u.id} value={u.code}>{u.label}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <input type="text" name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input} placeholder="e.g. Numbers, pieces, units" />
-                                        )}
+                                        <label style={label}>Environment</label>
+                                        <select name="fbrEnvironment" value={form.fbrEnvironment} onChange={handleChange} style={input}>
+                                            {environments.length > 0 ? environments.map((e) => (
+                                                <option key={e.id} value={e.code}>{e.label}</option>
+                                            )) : (
+                                                <>
+                                                    <option value="sandbox">Sandbox</option>
+                                                    <option value="production">Production</option>
+                                                </>
+                                            )}
+                                        </select>
                                     </div>
                                 </div>
-                                <div style={{ display: "flex", gap: "0.75rem" }}>
+
+                                <div className="form-grid-2col">
                                     <div style={formGroup}>
-                                        <label style={label}>Default Payment Mode — Registered buyers</label>
-                                        {paymentModeOptions.length > 0 ? (
-                                            <select name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input}>
-                                                <option value="">(Use fallback: Credit)</option>
-                                                {paymentModeOptions.map((p) => (
-                                                    <option key={p.id} value={p.code}>{p.label}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <input type="text" name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input} placeholder="Credit / Bank Transfer / …" />
-                                        )}
+                                        <label style={label}>
+                                            Business Activity <span style={hintText}>(multiple — drives applicable FBR scenarios)</span>
+                                        </label>
+                                        <MultiSelectChips
+                                            name="fbrBusinessActivity"
+                                            valueCsv={form.fbrBusinessActivity}
+                                            options={activities}
+                                            onChange={handleCsvChange}
+                                        />
                                     </div>
                                     <div style={formGroup}>
-                                        <label style={label}>Default Payment Mode — Unregistered buyers</label>
-                                        {paymentModeOptions.length > 0 ? (
-                                            <select name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input}>
-                                                <option value="">(Use fallback: Cash)</option>
-                                                {paymentModeOptions.map((p) => (
-                                                    <option key={p.id} value={p.code}>{p.label}</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <input type="text" name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input} placeholder="Cash / Online / …" />
-                                        )}
+                                        <label style={label}>
+                                            Sector <span style={hintText}>(multiple)</span>
+                                        </label>
+                                        <MultiSelectChips
+                                            name="fbrSector"
+                                            valueCsv={form.fbrSector}
+                                            options={sectors}
+                                            onChange={handleCsvChange}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={formGroup}>
+                                    <label style={label}>FBR Bearer Token {company?.hasFbrToken && <span style={{ color: "#28a745", fontSize: "0.75rem" }}>(set)</span>}</label>
+                                    <input type="password" name="fbrToken" value={form.fbrToken} onChange={handleChange} style={input} placeholder={company?.hasFbrToken ? "Leave blank to keep current" : "Paste token from IRIS portal"} />
+                                </div>
+
+                                {/* ── Per-company defaults for new bills ── */}
+                                <div style={{ marginTop: "1.25rem", paddingTop: "0.9rem", borderTop: "1px dashed #d0d7e2" }}>
+                                    <h6 style={{ margin: "0 0 0.5rem", fontSize: "0.82rem", fontWeight: 700, color: "#455a64", letterSpacing: "0.03em", textTransform: "uppercase" }}>
+                                        Default values for new bills
+                                    </h6>
+                                    <p style={{ margin: "0 0 0.75rem", fontSize: "0.76rem", color: "#5f6d7e" }}>
+                                        Used when creating a bill if the line/header didn't specify. Leave blank to use the built-in fallback.
+                                    </p>
+                                    <div className="form-grid-2col">
+                                        <div style={formGroup}>
+                                            <label style={label}>Default Sale Type</label>
+                                            {saleTypeOptions.length > 0 ? (
+                                                <select name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input}>
+                                                    <option value="">(Use fallback: Goods at Standard Rate)</option>
+                                                    {saleTypeOptions.map((s) => (
+                                                        <option key={s.id} value={s.code}>{s.label}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input type="text" name="fbrDefaultSaleType" value={form.fbrDefaultSaleType} onChange={handleChange} style={input} placeholder="e.g. Goods at Standard Rate (default)" />
+                                            )}
+                                        </div>
+                                        <div style={formGroup}>
+                                            <label style={label}>Default UOM</label>
+                                            {uomOptions.length > 0 ? (
+                                                <select name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input}>
+                                                    <option value="">(Use fallback: Numbers, pieces, units)</option>
+                                                    {uomOptions.map((u) => (
+                                                        <option key={u.id} value={u.code}>{u.label}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input type="text" name="fbrDefaultUOM" value={form.fbrDefaultUOM} onChange={handleChange} style={input} placeholder="e.g. Numbers, pieces, units" />
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="form-grid-2col">
+                                        <div style={formGroup}>
+                                            <label style={label}>Default Payment Mode — Registered buyers</label>
+                                            {paymentModeOptions.length > 0 ? (
+                                                <select name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input}>
+                                                    <option value="">(Use fallback: Credit)</option>
+                                                    {paymentModeOptions.map((p) => (
+                                                        <option key={p.id} value={p.code}>{p.label}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input type="text" name="fbrDefaultPaymentModeRegistered" value={form.fbrDefaultPaymentModeRegistered} onChange={handleChange} style={input} placeholder="Credit / Bank Transfer / …" />
+                                            )}
+                                        </div>
+                                        <div style={formGroup}>
+                                            <label style={label}>Default Payment Mode — Unregistered buyers</label>
+                                            {paymentModeOptions.length > 0 ? (
+                                                <select name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input}>
+                                                    <option value="">(Use fallback: Cash)</option>
+                                                    {paymentModeOptions.map((p) => (
+                                                        <option key={p.id} value={p.code}>{p.label}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input type="text" name="fbrDefaultPaymentModeUnregistered" value={form.fbrDefaultPaymentModeUnregistered} onChange={handleChange} style={input} placeholder="Cash / Online / …" />
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Inventory module ─────────────────────────────── */}
-                        <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
-                            <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>Inventory Module</p>
-
-                            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #b2dfdb", cursor: "pointer", marginBottom: "0.6rem" }}>
+                        {/* ── Numbering ───────────────────────────────────── */}
+                        <div hidden={activeTab !== "numbering"}>
+                            <div style={formGroup}>
+                                <label style={label}>
+                                    Starting Challan Number
+                                    {freshCompany?.hasChallans && (
+                                        <span style={lockHint}>(locked — challans exist)</span>
+                                    )}
+                                </label>
                                 <input
-                                    type="checkbox"
-                                    name="inventoryTrackingEnabled"
-                                    checked={!!form.inventoryTrackingEnabled}
+                                    type="number"
+                                    name="startingChallanNumber"
+                                    value={form.startingChallanNumber}
                                     onChange={handleChange}
-                                    style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                    style={{ ...input, ...(freshCompany?.hasChallans ? lockedInput : {}) }}
+                                    disabled={freshCompany?.hasChallans}
                                 />
-                                <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
-                                    <strong style={{ display: "block" }}>Enable inventory tracking</strong>
-                                    <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
-                                        Stock IN moves on Purchase Bill save, Stock OUT moves on FBR submission. Pre-check blocks FBR submit when oversold. Leave OFF until you've recorded opening balances.
-                                    </span>
-                                </span>
-                            </label>
+                                {company?.currentChallanNumber > 0 && (
+                                    <span style={currentHint}>Current challan number: {company.currentChallanNumber}</span>
+                                )}
+                            </div>
 
-                            {/* Oversell policy (2026-09-11). Applies to bill creation and to
-                                every invoice edit / consultant adjustment: soft = the form warns
-                                and asks the operator to confirm; hard = the server refuses. */}
-                            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: form.inventoryTrackingEnabled ? "pointer" : "not-allowed", opacity: form.inventoryTrackingEnabled ? 1 : 0.55, marginTop: "0.5rem" }}>
+                            <div style={formGroup}>
+                                <label style={label}>
+                                    Starting Invoice Number
+                                    {freshCompany?.hasInvoices && (
+                                        <span style={lockHint}>(locked — invoices exist)</span>
+                                    )}
+                                </label>
                                 <input
-                                    type="checkbox"
-                                    name="stockGuardHardBlock"
-                                    checked={!!form.stockGuardHardBlock}
-                                    disabled={!form.inventoryTrackingEnabled}
+                                    type="number"
+                                    name="startingInvoiceNumber"
+                                    value={form.startingInvoiceNumber}
                                     onChange={handleChange}
-                                    style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                    style={{ ...input, ...(freshCompany?.hasInvoices ? lockedInput : {}) }}
+                                    disabled={freshCompany?.hasInvoices}
                                 />
-                                <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
-                                    <strong style={{ display: "block" }}>Refuse saves that take stock below zero</strong>
-                                    <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
-                                        Off: the invoice form warns "you are out of this inventory" and lets the operator confirm. On: bill creation and invoice edits that oversell an HS item are refused.
-                                    </span>
-                                </span>
-                            </label>
+                                {company?.currentInvoiceNumber > 0 && (
+                                    <span style={currentHint}>Current invoice number: {company.currentInvoiceNumber}</span>
+                                )}
+                            </div>
+
+                            {/* Debit/Credit Notes run their own sequence. */}
+                            <div className="form-grid-2col">
+                                <div style={formGroup}>
+                                    <label style={label}>Starting Debit Note Number</label>
+                                    <input type="number" name="startingDebitNoteNumber" value={form.startingDebitNoteNumber} onChange={handleChange} style={input} min="1" />
+                                    {company?.currentDebitNoteNumber > 0 && (
+                                        <span style={currentHint}>Current: {company.currentDebitNoteNumber} (locked — notes exist)</span>
+                                    )}
+                                </div>
+                                <div style={formGroup}>
+                                    <label style={label}>Starting Credit Note Number</label>
+                                    <input type="number" name="startingCreditNoteNumber" value={form.startingCreditNoteNumber} onChange={handleChange} style={input} min="1" />
+                                    {company?.currentCreditNoteNumber > 0 && (
+                                        <span style={currentHint}>Current: {company.currentCreditNoteNumber} (locked — notes exist)</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="form-grid-2col">
+                                <div style={formGroup}>
+                                    <label style={label}>Starting Sales Quote #</label>
+                                    <input type="number" name="startingSalesQuoteNumber" min={1} value={form.startingSalesQuoteNumber} onChange={handleChange} style={input} />
+                                    <span style={currentHint}>Locks once sales quotes exist.</span>
+                                </div>
+                                <div style={formGroup}>
+                                    <label style={label}>Starting Sales Order #</label>
+                                    <input type="number" name="startingSalesOrderNumber" min={1} value={form.startingSalesOrderNumber} onChange={handleChange} style={input} />
+                                    <span style={currentHint}>Locks once sales orders exist.</span>
+                                </div>
+                            </div>
 
                             <div className="form-grid-2col">
                                 <div style={formGroup}>
                                     <label style={label}>Starting Purchase Bill #</label>
-                                    <input
-                                        type="number"
-                                        name="startingPurchaseBillNumber"
-                                        min={0}
-                                        value={form.startingPurchaseBillNumber}
-                                        onChange={handleChange}
-                                        style={input}
-                                    />
-                                    <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                        Independent of sales-invoice numbering. Locks once purchase bills exist.
-                                    </span>
+                                    <input type="number" name="startingPurchaseBillNumber" min={0} value={form.startingPurchaseBillNumber} onChange={handleChange} style={input} />
+                                    <span style={currentHint}>Independent of sales-invoice numbering. Locks once purchase bills exist.</span>
                                 </div>
                                 <div style={formGroup}>
                                     <label style={label}>Starting Goods Receipt #</label>
-                                    <input
-                                        type="number"
-                                        name="startingGoodsReceiptNumber"
-                                        min={0}
-                                        value={form.startingGoodsReceiptNumber}
-                                        onChange={handleChange}
-                                        style={input}
-                                    />
-                                    <span style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                                        Locks once goods receipts exist.
-                                    </span>
+                                    <input type="number" name="startingGoodsReceiptNumber" min={0} value={form.startingGoodsReceiptNumber} onChange={handleChange} style={input} />
+                                    <span style={currentHint}>Locks once goods receipts exist.</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Tenant Isolation ─────────────────────────────── */}
-                        <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #b26a0030", backgroundColor: "#fff4e0" }}>
-                            <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#b26a00" }}>Tenant Isolation</p>
-                            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #ffd699", cursor: "pointer" }}>
-                                <input
-                                    type="checkbox"
-                                    name="isTenantIsolated"
-                                    checked={!!form.isTenantIsolated}
-                                    onChange={handleChange}
-                                    style={{ marginTop: "0.15rem", flexShrink: 0 }}
-                                />
-                                <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
-                                    <strong style={{ display: "block" }}>Restrict to assigned users only</strong>
-                                    <span style={{ fontSize: "0.74rem", color: "#5f6d7e" }}>
-                                        OFF (default) — any authenticated user with the right RBAC permission can reach this company. ON — only users with an explicit grant in <em>Configuration → Tenant Access</em> see this company in dropdowns and can read/write its data. The seed admin always bypasses.
+                        {/* ── Advanced ────────────────────────────────────── */}
+                        <div hidden={activeTab !== "advanced"}>
+                            {/* Inventory module */}
+                            <div style={{ padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
+                                <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>Inventory Module</p>
+
+                                <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #b2dfdb", cursor: "pointer", marginBottom: "0.6rem" }}>
+                                    <input
+                                        type="checkbox"
+                                        name="inventoryTrackingEnabled"
+                                        checked={!!form.inventoryTrackingEnabled}
+                                        onChange={handleChange}
+                                        style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                    />
+                                    <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
+                                        <strong style={{ display: "block" }}>Enable inventory tracking</strong>
+                                        <span style={hintText}>
+                                            Stock IN moves on Purchase Bill save, Stock OUT moves on FBR submission. Pre-check blocks FBR submit when oversold. Leave OFF until you've recorded opening balances.
+                                        </span>
                                     </span>
-                                </span>
-                            </label>
+                                </label>
+
+                                <label style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", cursor: form.inventoryTrackingEnabled ? "pointer" : "not-allowed", opacity: form.inventoryTrackingEnabled ? 1 : 0.55 }}>
+                                    <input
+                                        type="checkbox"
+                                        name="stockGuardHardBlock"
+                                        checked={!!form.stockGuardHardBlock}
+                                        disabled={!form.inventoryTrackingEnabled}
+                                        onChange={handleChange}
+                                        style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                    />
+                                    <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
+                                        <strong style={{ display: "block" }}>Refuse saves that take stock below zero</strong>
+                                        <span style={hintText}>
+                                            Off: the invoice form warns "you are out of this inventory" and lets the operator confirm. On: bill creation and invoice edits that oversell an HS item are refused.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+
+                            {/* Tenant Isolation */}
+                            <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #b26a0030", backgroundColor: "#fff4e0" }}>
+                                <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#b26a00" }}>Tenant Isolation</p>
+                                <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #ffd699", cursor: "pointer" }}>
+                                    <input
+                                        type="checkbox"
+                                        name="isTenantIsolated"
+                                        checked={!!form.isTenantIsolated}
+                                        onChange={handleChange}
+                                        style={{ marginTop: "0.15rem", flexShrink: 0 }}
+                                    />
+                                    <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
+                                        <strong style={{ display: "block" }}>Restrict to assigned users only</strong>
+                                        <span style={hintText}>
+                                            OFF (default) — any authenticated user with the right RBAC permission can reach this company. ON — only users with an explicit grant in <em>Configuration → Tenant Access</em> see this company in dropdowns and can read/write its data. The seed admin always bypasses.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -673,6 +707,57 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         </div>
     );
 }
+
+// ── Small shared inline styles ──────────────────────────────
+const hintText = { fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" };
+const lockHint = { fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 400, marginLeft: "0.5rem" };
+const currentHint = { fontSize: "0.78rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" };
+const lockedInput = { backgroundColor: "#f0f0f0", color: "#999", cursor: "not-allowed" };
+const infoNote = {
+    margin: "0.25rem 0 0.75rem",
+    padding: "0.55rem 0.7rem",
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    fontSize: "0.76rem",
+    color: "#475569",
+    lineHeight: 1.4,
+};
+const tabBar = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.4rem",
+    padding: "0 0 0.75rem",
+    borderBottom: "1px solid #e5e9f0",
+    marginBottom: "0.9rem",
+};
+const tabBtn = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.45rem 0.85rem",
+    borderRadius: 8,
+    border: "1px solid #d0d7e2",
+    background: "#f8f9fb",
+    color: "#455a64",
+    fontSize: "0.83rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "none",
+};
+const tabBtnActive = {
+    background: "#0d47a1",
+    color: "#fff",
+    borderColor: "#0d47a1",
+};
+const tabDot = {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "#e53935",
+    display: "inline-block",
+    flexShrink: 0,
+};
 
 // ── MultiSelectChips ────────────────────────────────────────
 // Lightweight tag-picker for fields that drive multi-applicability (FBR

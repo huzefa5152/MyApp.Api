@@ -140,6 +140,7 @@ def create_company(token: str, name: str) -> dict:
     s, d = request("POST", "/api/companies", token=token, body={
         "name": name, "fullAddress": f"{name} HQ", "phone": "+92-21-0000000",
         "ntn": "1234567", "cnic": "1234567890123", "strn": "1234567890123",
+        "fbrSellerRegistrationNo": "1234567",
         "startingChallanNumber": 1, "startingInvoiceNumber": 1,
         "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
         "fbrEnvironment": "sandbox", "fbrProvinceCode": 8,

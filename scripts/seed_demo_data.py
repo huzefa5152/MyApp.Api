@@ -25,6 +25,7 @@ COMPANY = {
     "phone":           "+92-21-99999999",
     "ntn":             "1234567-8",          # placeholder
     "strn":            "9999999999990",      # placeholder
+    "fbrSellerRegistrationNo": "1234567",    # filed to FBR (7-digit NTN), placeholder
     "startingChallanNumber": 1001,
     "startingInvoiceNumber": 5001,
     "invoiceNumberPrefix":   "DEMO-",

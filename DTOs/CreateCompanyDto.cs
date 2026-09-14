@@ -22,6 +22,13 @@ namespace MyApp.Api.DTOs
         public string? FbrToken { get; set; }
         public string? FbrEnvironment { get; set; }
 
+        /// <summary>
+        /// Seller registration number FILED to FBR (SellerNTNCNIC): a 7-digit
+        /// NTN or a 13-digit CNIC, entered exactly as filed at PRAL. Required
+        /// and validated server-side — distinct from the display NTN/CNIC.
+        /// </summary>
+        public string? FbrSellerRegistrationNo { get; set; }
+
         // Per-company FBR defaults — used by InvoiceService when a new bill
         // is created without an explicit SaleType / UOM / PaymentMode on the
         // incoming DTO. Null keeps the built-in fallback behaviour.

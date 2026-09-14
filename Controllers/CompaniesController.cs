@@ -272,19 +272,11 @@ namespace MyApp.Api.Controllers
 
             var logoPath = $"/data/uploads/logos/{fileName}";
 
-            var updateDto = new UpdateCompanyDto
-            {
-                Name = company.Name,
-                BrandName = company.BrandName,
-                FullAddress = company.FullAddress,
-                Phone = company.Phone,
-                NTN = company.NTN,
-                STRN = company.STRN,
-                LogoPath = logoPath,
-                StartingChallanNumber = company.StartingChallanNumber,
-                StartingInvoiceNumber = company.StartingInvoiceNumber
-            };
-            var updated = await _companyService.UpdateAsync(id, updateDto);
+            // Logo-only update — never round-trip a sparse UpdateCompanyDto here
+            // (that path rewrites every FBR/inventory/tenant column from DTO
+            // defaults and would wipe CNIC, FBR config and the seller
+            // registration number on every logo upload).
+            var updated = await _companyService.UpdateLogoAsync(id, logoPath);
             return Ok(updated);
         }
     }

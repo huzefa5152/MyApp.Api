@@ -90,6 +90,7 @@ def main() -> int:
         "ntn": "1234567",
         "cnic": "1234567890123",
         "strn": "1234567890123",
+        "fbrSellerRegistrationNo": "1234567",
         "startingChallanNumber": 9001,
         "startingInvoiceNumber": 9001,
         "startingPurchaseBillNumber": 9001,

@@ -37,6 +37,7 @@ SELLER = {
     "phone":           "+92-21-36374811",
     "ntn":             "4228937-8",
     "strn":            "3277876175852",
+    "fbrSellerRegistrationNo": "4228937",
     "startingChallanNumber": 90000,
     "startingInvoiceNumber": 90000,
     "invoiceNumberPrefix":   "HT-FBR-",

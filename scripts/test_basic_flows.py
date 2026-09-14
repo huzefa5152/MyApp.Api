@@ -96,6 +96,7 @@ def setup(base: str, admin_user: str, admin_pw: str):
         "ntn": "9999999",
         "cnic": "9999999999999",
         "strn": "9999999999999",
+        "fbrSellerRegistrationNo": "9999999",
         "startingChallanNumber": 1,
         "startingInvoiceNumber": 1,
         "startingPurchaseBillNumber": 1,

@@ -24,6 +24,12 @@ namespace MyApp.Api.DTOs
         public string? FbrBusinessActivity { get; set; }
         public string? FbrSector { get; set; }
         public string? FbrEnvironment { get; set; }
+        /// <summary>
+        /// Seller registration number FILED to FBR (SellerNTNCNIC): 7-digit NTN
+        /// or 13-digit CNIC. Not a secret (unlike the token), so it is returned
+        /// in full. Distinct from the display NTN/CNIC above.
+        /// </summary>
+        public string? FbrSellerRegistrationNo { get; set; }
         public bool HasFbrToken { get; set; }
         public bool HasChallans { get; set; }
         public bool HasInvoices { get; set; }

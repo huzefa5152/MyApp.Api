@@ -36,6 +36,18 @@ namespace MyApp.Api.Models
         public string? FbrToken { get; set; }
         public string? FbrEnvironment { get; set; }
 
+        // ── FBR seller identity (the registration number FILED to FBR) ──
+        // Distinct from the display NTN/CNIC above — those are only for print
+        // templates and on-screen company display. This is the seller
+        // registration number transmitted as SellerNTNCNIC on every FBR
+        // submission: a 7-digit NTN OR a 13-digit CNIC, entered exactly as
+        // filed at PRAL. The operator sets it explicitly rather than reusing
+        // the display IDs, because what a company shows on its letterhead and
+        // what it files under are not always the same number. Nullable in the
+        // DB so the migration can backfill existing rows (COALESCE(CNIC, NTN));
+        // the API requires it on create/update.
+        public string? FbrSellerRegistrationNo { get; set; }
+
         // ── Per-company FBR defaults for new bills ──
         //
         // Instead of hardcoding "Goods at Standard Rate (default)" and

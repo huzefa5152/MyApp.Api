@@ -22,6 +22,12 @@ namespace MyApp.Api.DTOs
         public string? FbrSector { get; set; }
         public string? FbrToken { get; set; }
         public string? FbrEnvironment { get; set; }
+        /// <summary>
+        /// Seller registration number FILED to FBR (SellerNTNCNIC): 7-digit NTN
+        /// or 13-digit CNIC, exactly as filed. Required and validated
+        /// server-side — distinct from the display NTN/CNIC.
+        /// </summary>
+        public string? FbrSellerRegistrationNo { get; set; }
         public string? FbrDefaultSaleType { get; set; }
         public string? FbrDefaultUOM { get; set; }
         public string? FbrDefaultPaymentModeRegistered { get; set; }

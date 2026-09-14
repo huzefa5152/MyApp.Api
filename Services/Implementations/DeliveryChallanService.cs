@@ -70,9 +70,14 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>Check if company+client have all required FBR fields filled.</summary>
         private static bool IsFbrReady(Company company, Client client)
         {
-            // Company fields
-            if (string.IsNullOrWhiteSpace(company.NTN)) return false;
-            if (string.IsNullOrWhiteSpace(company.STRN)) return false;
+            // Company fields — the seller is fileable only once the dedicated
+            // FBR seller registration number is set (the value filed at PRAL).
+            // The display NTN is no longer the FBR identity.
+            if (string.IsNullOrWhiteSpace(company.FbrSellerRegistrationNo)) return false;
+            // STRN is NOT an FBR digital-invoicing field: the seller/buyer block
+            // FBR validates is NTN/CNIC + name + province + address + registration
+            // type. Requiring an STRN only stranded real, fileable challans in
+            // "Setup Required", so it is no longer part of FBR-readiness.
             if (company.FbrProvinceCode == null) return false;
             if (string.IsNullOrWhiteSpace(company.FbrBusinessActivity)) return false;
             if (string.IsNullOrWhiteSpace(company.FbrSector)) return false;
@@ -81,7 +86,6 @@ namespace MyApp.Api.Services.Implementations
 
             // Client fields
             if (string.IsNullOrWhiteSpace(client.NTN)) return false;
-            if (string.IsNullOrWhiteSpace(client.STRN)) return false;
             if (string.IsNullOrWhiteSpace(client.RegistrationType)) return false;
             if (client.FbrProvinceCode == null) return false;
             // CNIC required for Unregistered/CNIC registration types
@@ -132,7 +136,6 @@ namespace MyApp.Api.Services.Implementations
             if (company != null)
             {
                 if (string.IsNullOrWhiteSpace(company.NTN)) dto.Warnings.Add("Company NTN missing");
-                if (string.IsNullOrWhiteSpace(company.STRN)) dto.Warnings.Add("Company STRN missing");
                 if (company.FbrProvinceCode == null) dto.Warnings.Add("Company FBR Province missing");
                 if (string.IsNullOrWhiteSpace(company.FbrBusinessActivity)) dto.Warnings.Add("Company Business Activity missing");
                 if (string.IsNullOrWhiteSpace(company.FbrSector)) dto.Warnings.Add("Company Sector missing");
@@ -142,7 +145,6 @@ namespace MyApp.Api.Services.Implementations
             if (client != null)
             {
                 if (string.IsNullOrWhiteSpace(client.NTN)) dto.Warnings.Add("Client NTN missing");
-                if (string.IsNullOrWhiteSpace(client.STRN)) dto.Warnings.Add("Client STRN missing");
                 if (string.IsNullOrWhiteSpace(client.RegistrationType)) dto.Warnings.Add("Client Registration Type missing");
                 if (client.FbrProvinceCode == null) dto.Warnings.Add("Client FBR Province missing");
                 if ((client.RegistrationType == "Unregistered" || client.RegistrationType == "CNIC")

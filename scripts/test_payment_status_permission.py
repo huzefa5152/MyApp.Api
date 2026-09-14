@@ -90,6 +90,7 @@ def main() -> int:
         status, company = request("POST", "/api/companies", token=admin, body={
             "name": CO_NAME, "fullAddress": "PayPerm HQ", "phone": "+92-21-00000000",
             "ntn": "1234567", "cnic": "1234567890123", "strn": "1234567890123",
+            "fbrSellerRegistrationNo": "1234567",
             "startingChallanNumber": 1, "startingInvoiceNumber": 1,
             "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
             "fbrEnvironment": "sandbox", "fbrProvinceCode": 8,

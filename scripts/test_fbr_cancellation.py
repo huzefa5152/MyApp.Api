@@ -105,6 +105,7 @@ def main() -> int:
     st, company = http("POST", "/api/companies", api, token=token, body={
         "name": f"_fbr_cancel {tag}", "fullAddress": "1 Test St", "phone": "021-0",
         "ntn": "9999999", "cnic": "9999999999999", "strn": "9999999999999",
+        "fbrSellerRegistrationNo": "9999999",
         "startingChallanNumber": 1, "startingInvoiceNumber": 1,
         "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
         "fbrEnvironment": "sandbox", "fbrProvinceCode": 8,
