@@ -835,14 +835,29 @@ REGISTERED_SHAPES = {
     "SN016": dict(saleType="Processing/Conversion of Goods", rate=18,
                   hs="8481.8090", uom="Numbers, pieces, units", buyer="registered",
                   filesInSuite=True),
-    # FBR lists exactly one rate for this transaction type, "18% and Rs. 80 per
-    # Liter", and refuses [0052] for every HS code tried -- about sixty of them,
-    # across beverages, juices, concentrates, flavourings, tobacco, edible oils,
-    # the whole of 2710 / 3403 / 2711 / 2712 (lubricants, LPG, waxes), vehicles
-    # and cement. FBR publishes no sale-type-to-HS-code mapping to resolve it
-    # from, so the commodity it means is genuinely unknown, not merely unguessed.
-    # Ask PRAL; fill this in with their answer.
-    "SN017": None,
+    # SOLVED 2026-09-14, after about sixty HS codes had been tried and refused
+    # [0052]. "FED goods" and "goods on which FED is collected in SALES TAX
+    # mode" are not the same category: the second is the Federal Excise Act's
+    # SECOND SCHEDULE, which holds three petroleum lines and none of the
+    # beverages, tobacco, ghee or cement that had been tried. The UoM matters as
+    # much as the code -- FBR names both KG and Liter for 2710.1942 and the rate
+    # is per LITER -- and so does the rate string, which is COMPOUND:
+    # salesTax = 18% of value + Rs.80 x litres, enforced by FBR as [0103].
+    "SN017": dict(saleType="Goods (FED in ST Mode)", rate=18,
+                  hs="2710.1942", uom="Liter", buyer="registered",
+                  filesInSuite=True),
+    # Four published rates, none a percentage: "Rs.2"/"Rs.3"/"Rs.5"/"Rs.10"
+    # (rateValue 2/3/5/10). The old 18 matched none and filed as "18%" [0046].
+    "SN021": dict(saleType="Cement /Concrete Block", rate=2,
+                  hs="2523.2100", uom="KG", buyer="registered",
+                  filesInSuite=True),
+    # Compound rate "18% along with rupees 60 per kilogram", so FBR does not
+    # read it as 18% and demands a schedule [0077]. SroSchedule for rateId 734
+    # answers "EIGHTH SCHEDULE Table 1"; its only serial is 56.
+    "SN022": dict(saleType="Potassium Chlorate", rate=18,
+                  hs="2829.1910", uom="KG", buyer="registered",
+                  sro="EIGHTH SCHEDULE Table 1", serial="56", retail=3000,
+                  filesInSuite=True),
     # Eight other spellings of this schedule are refused [0077].
     "SN024": dict(saleType="Goods as per SRO.297(|)/2023", rate=25,
                   hs="8481.8090", uom="Numbers, pieces, units", buyer="registered",

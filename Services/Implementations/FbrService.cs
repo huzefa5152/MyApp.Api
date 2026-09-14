@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -158,6 +159,77 @@ namespace MyApp.Api.Services.Implementations
             };
 
         /// <summary>Exempt goods, however the row spelled it.</summary>
+        /// <summary>
+        /// The rate string FBR expects for this sale type — ITS OWN wording,
+        /// not a formatted percentage.
+        ///
+        /// The exempt case has been handled this way for a while ("Exempt", not
+        /// "0%", or FBR answers [0046]); this is the same rule for every other
+        /// sale type, because plenty of them are not percentages at all:
+        ///
+        ///   Cement / Concrete Block   "Rs.2", "Rs.3", "Rs.5", "Rs.10"
+        ///   Potassium Chlorate        "18% along with rupees 60 per kilogram"
+        ///   Goods (FED in ST Mode)    "18% and Rs. 80 per Liter"
+        ///
+        /// Sending "18%" for any of those draws [0046] "Provided Rate is not
+        /// correct", which reads as an arithmetic problem and is a vocabulary
+        /// one. Resolved through <c>SaleTypeToRate</c> (CLAUDE.md §10: never
+        /// guess a rate — reduced rate alone publishes 21 of them).
+        ///
+        /// Falls back to the old <c>{GSTRate}%</c> whenever the reference call
+        /// cannot answer or publishes several rates none of which matches this
+        /// invoice, so no currently-working submission changes shape: the
+        /// standard-rate case resolves to "18%" either way.
+        /// </summary>
+        private async Task<string> ResolveRateDescAsync(Company company, Invoice invoice, string saleType)
+        {
+            var fallback = $"{invoice.GSTRate:0.##}%";
+            if (IsExemptSaleType(saleType)) return "Exempt";
+            if (string.IsNullOrWhiteSpace(saleType) || company.FbrProvinceCode == null) return fallback;
+
+            try
+            {
+                var types = await GetTransactionTypesAsync(company.Id);
+                var match = types.FirstOrDefault(t =>
+                    string.Equals(SquashSpaces(t.TRANSACTION_DESC), SquashSpaces(saleType),
+                                  StringComparison.OrdinalIgnoreCase));
+                if (match == null) return fallback;
+
+                // dd-MMM-yyyy, NOT ISO. An ISO date is not rejected -- it comes
+                // back as an EMPTY list, which reads as "this sale type has no
+                // rates" (CLAUDE.md §10). That silence is why these three
+                // scenarios looked unfixable.
+                var date = invoice.Date.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture);
+                var rates = await GetSaleTypeRatesAsync(
+                    company.Id, date, match.TRANSACTION_TYPE_ID, company.FbrProvinceCode.Value);
+                if (rates == null || rates.Count == 0) return fallback;
+
+                // One published rate: it is the answer, whatever its shape.
+                if (rates.Count == 1) return rates[0].RATE_DESC;
+
+                // Several: the one whose value is the rate this invoice carries.
+                var byValue = rates.FirstOrDefault(r => r.RATE_VALUE == invoice.GSTRate);
+                if (byValue != null) return byValue.RATE_DESC;
+
+                // Several fixed amounts and nothing matches -- the operator has
+                // to choose a slab. Keep today's behaviour and let FBR say so.
+                return fallback;
+            }
+            catch
+            {
+                // A reference lookup must never be what stops a filing.
+                return fallback;
+            }
+        }
+
+        /// <summary>FBR's own transaction descriptions are not tidy — padded
+        /// (" 3rd Schedule Goods "), inconsistently spaced. Compare on a
+        /// squashed form. Distinct from <c>NormalizeSaleType</c>, which maps OUR
+        /// stored spelling onto FBR's; this only tidies whitespace, on both
+        /// sides of a comparison against what FBR itself returned.</summary>
+        private static string SquashSpaces(string? v)
+            => string.Join(" ", (v ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries)).Trim();
+
         internal static bool IsExemptSaleType(string? saleType) =>
             !string.IsNullOrWhiteSpace(saleType)
             && saleType.Trim().StartsWith("Exempt", StringComparison.OrdinalIgnoreCase);
@@ -1077,11 +1149,14 @@ namespace MyApp.Api.Services.Implementations
             //      salesTax = retailPrice × rate / (1 + rate)
             //   2) Unregistered-buyer standard-rate: add 4% further tax
             //   3) End-consumer retail (SN026/027/028): NO further tax even if unregistered
+            // One reference lookup per DISTINCT sale type, not per line. The
+            // rates are the same for every line that shares a sale type, and a
+            // ten-line bill would otherwise make twenty HTTP calls to PRAL
+            // before it made the one that matters.
+            var rateDescBySaleType = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var item in fbrItems)
             {
-                var (salesTax, furtherTax, retailPrice) =
-                    MyApp.Api.Helpers.FbrLineTax.Compute(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId,
-                        invoice.FurtherTaxRate);
                 var uomDesc = await ResolveUomDesc(company, item.FbrUOMId, item.UOM, item.HSCode);
                 // Normalise the sale-type string to the §9 canonical form.
                 // Older seed rows + manually-entered bills sometimes carry
@@ -1091,6 +1166,20 @@ namespace MyApp.Api.Services.Implementations
                 // here means the FBR payload is always canonical regardless
                 // of what the row stored.
                 var saleType = NormalizeSaleType(FbrSaleTypeDefaults.Resolve(item.SaleType, company));
+
+                // FBR's own wording for this line's rate, resolved BEFORE the
+                // tax is worked out: a compound rate ("18% and Rs. 80 per
+                // Liter") changes the AMOUNT as well as the string, and filing
+                // the percentage leg alone is refused [0103].
+                if (!rateDescBySaleType.TryGetValue(saleType, out var rateDesc))
+                {
+                    rateDesc = await ResolveRateDescAsync(company, invoice, saleType);
+                    rateDescBySaleType[saleType] = rateDesc;
+                }
+
+                var (salesTax, furtherTax, retailPrice) =
+                    MyApp.Api.Helpers.FbrLineTax.Compute(item, invoice.GSTRate, buyerRegType, fbrRequest.ScenarioId,
+                        invoice.FurtherTaxRate, rateDesc);
 
                 // FBR rule [0077]: "Valid SRO/Schedule No. is mandatory where rate
                 // is not 18%." Prefer the operator-set value on the item; fall
@@ -1120,7 +1209,7 @@ namespace MyApp.Api.Services.Implementations
                     // (ratE_ID 133, ratE_DESC "Exempt", value 0). Sending "0%"
                     // draws [0046] "Provided Rate is not correct", which reads
                     // as a rate problem and is really a vocabulary one.
-                    Rate = IsExemptSaleType(saleType) ? "Exempt" : $"{invoice.GSTRate:0.##}%",
+                    Rate = rateDesc,
                     UoM = uomDesc,
                     // Quantity is stored at 12dp since 2026-09-02, but PRAL has only ever
                     // received <=4dp (the old decimal(18,4) column), so keep transmitting

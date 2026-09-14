@@ -107,7 +107,8 @@ namespace MyApp.Api.Services.Tax
             var hsCode = ScenarioHsCodes.TryGetValue(sc.Code, out var scenarioHs)
                 ? scenarioHs
                 : (sampleType?.HSCode ?? "8481.8090");
-            var (uom, fbrUom) = await ResolveUomAsync(companyId, hsCode, sampleType);
+            var (uom, fbrUom) = await ResolveUomAsync(
+                companyId, hsCode, sampleType, ScenarioUoms.GetValueOrDefault(sc.Code));
             var name = $"[DEMO] {sc.SaleType}";
 
             var existing = await _db.ItemTypes
@@ -140,7 +141,7 @@ namespace MyApp.Api.Services.Tax
         }
 
         private async Task<(string Uom, int FbrUom)> ResolveUomAsync(
-            int companyId, string hsCode, ItemType? sampleType)
+            int companyId, string hsCode, ItemType? sampleType, string? preferred = null)
         {
             // THE resolver (CLAUDE.md 5b-2: "There is exactly ONE place a UOM is
             // resolved") -- local master, then the company token, then the
@@ -149,12 +150,28 @@ namespace MyApp.Api.Services.Tax
             // master, so it fell back to pieces and FBR refused the line with
             // the pre-flight naming KG.
             var valid = await _taxEngine.GetValidUomsForHsCodeAsync(companyId, hsCode);
-            var first = valid?.FirstOrDefault();
+            var first = valid?.FirstOrDefault(u => preferred != null
+                            && string.Equals(u.Description, preferred, StringComparison.OrdinalIgnoreCase))
+                        ?? valid?.FirstOrDefault();
             if (first != null && !string.IsNullOrWhiteSpace(first.Description))
                 return (first.Description, first.UOM_ID);
 
             return (sampleType?.UOM ?? "Numbers, pieces, units", sampleType?.FbrUOMId ?? 69);
         }
+
+        /// <summary>
+        /// The unit a scenario's rate is quoted in, where its rate is per-unit.
+        ///
+        /// FBR lists more than one valid UoM for some codes — 2710.1942 takes
+        /// both KG and Liter — and taking the first is a coin flip on a scenario
+        /// whose rate is "18% and Rs. 80 per Liter". Only stated where it
+        /// matters; everything else keeps the first unit FBR names.
+        /// </summary>
+        private static readonly Dictionary<string, string> ScenarioUoms = new()
+        {
+            ["SN017"] = "Liter",
+            ["SN022"] = "KG",
+        };
 
         private static readonly Dictionary<string, string> ScenarioHsCodes = new()
         {
@@ -173,7 +190,10 @@ namespace MyApp.Api.Services.Tax
             ["SN013"] = "2716.0000",   // electricity
             ["SN015"] = "8517.1390",   // mobile phones
             ["SN016"] = "8481.8090",   // processing / conversion
-            ["SN017"] = "2202.1010",   // aerated waters: really carries FED
+            // NOT an ordinary FED good. "FED charged in ST mode" is the Federal
+            // Excise Act's SECOND SCHEDULE, which holds three petroleum lines;
+            // aerated waters, tobacco, ghee and cement are all refused [0052].
+            ["SN017"] = "2710.1942",   // Petroleum Top Naphtha
             ["SN021"] = "2523.2100",   // white cement
             ["SN022"] = "2829.1910",   // potassium chlorates (national line)
             ["SN024"] = "8481.8090",   // SRO 297(I)/2023
@@ -586,7 +606,8 @@ namespace MyApp.Api.Services.Tax
             var hsCode = ScenarioHsCodes.TryGetValue(sc.Code, out var scenarioHs)
                 ? scenarioHs
                 : (sampleType?.HSCode ?? "8481.8090");
-            var (uom, fbrUom) = await ResolveUomAsync(company.Id, hsCode, sampleType);
+            var (uom, fbrUom) = await ResolveUomAsync(
+                company.Id, hsCode, sampleType, ScenarioUoms.GetValueOrDefault(sc.Code));
             var qty    = 1;
             var unit   = sc.IsThirdSchedule ? 100m : 1000m;
             var lineTotal = qty * unit;

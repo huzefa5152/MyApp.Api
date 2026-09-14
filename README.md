@@ -298,6 +298,38 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-14 — Every FBR scenario now files, including the one nobody could crack
+
+- **All 11 importer scenarios validate AND submit against the FBR sandbox** for a
+  newly-onboarded importer — 11 IRNs issued, none refused. Three had never passed.
+- **A rate at FBR is not always a percentage, and the invoice now says what FBR
+  says.** The line's `rate` used to be a formatted `18%`; it is now FBR's own
+  published `ratE_DESC`, resolved through `SaleTypeToRate` (the exempt supply had
+  been handled this way for a while — this is the same rule for every sale type).
+  FBR publishes `Rs.2`, `18% along with rupees 60 per kilogram` and
+  `18% and Rs. 80 per Liter`, none of which a percentage can express. Falls back
+  to the old behaviour whenever the reference call cannot answer, so nothing that
+  already filed changes shape.
+- **Compound rates are computed, not just quoted.** Where FBR publishes a
+  percentage AND an amount per unit, the sales tax is the ad valorem leg plus
+  amount × quantity. Filing only the percentage is refused `[0103]`. Known gap,
+  written down in `Helpers/FbrLineTax`: the invoice's own GST is a single
+  percentage, so the printed figure can read lower than the filed one on such a
+  supply.
+- **SN017 solved.** "FED goods" and "goods on which FED is collected in *sales
+  tax* mode" are different categories — the second is the Federal Excise Act's
+  Second Schedule, three petroleum lines. About sixty beverages, tobaccos, oils
+  and cements had been tried and refused `[0052]`. It files on `2710.1942` with
+  UoM **Liter** (FBR names both KG and Liter; the rate is per litre).
+- **SN021 and SN022 solved** the same way — by resolving rather than guessing.
+  Cement carries four fixed amounts and no percentage; potassium chlorate's
+  compound rate makes FBR demand an SRO schedule, resolved to
+  `EIGHTH SCHEDULE Table 1` serial `56`.
+- **SN015's SRO serial corrected** from `1` to `1(A)` — `SROItem` publishes four
+  and none of them is a bare digit.
+- Reference lookups are now made **once per distinct sale type per bill**, not
+  once per line.
+
 ### 2026-09-14 — The first real import, and the guards it taught us
 
 - **All three client costing sheets imported on production**, and the figures

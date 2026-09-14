@@ -23,6 +23,11 @@ namespace MyApp.Api.Helpers
     ///      furtherTax = 0 even though the buyer is Unregistered — exempting
     ///      that is the whole point of the SN026/27/28 scenario family.
     ///
+    ///  (4) A compound rate (SN017, SN022)
+    ///      salesTax = value x rate + amount x quantity. FBR publishes rates
+    ///      like "18% along with rupees 60 per kilogram" and rejects the
+    ///      percentage on its own with [0102]/[0103].
+    ///
     /// Pure and static on purpose: no dependency to inject, so a report can call
     /// it without taking FbrService along.
     /// </summary>
@@ -39,9 +44,16 @@ namespace MyApp.Api.Helpers
         /// filing 4% is the worse outcome. Null leaves the original behaviour:
         /// derive it from the buyer's registration and the sale type.
         /// </param>
+        /// <param name="fbrRateDescription">
+        /// FBR's own published wording for this line's sale type
+        /// (<c>ratE_DESC</c>), when it has been resolved. Only consulted for the
+        /// COMPOUND shapes — see (4) below. Null leaves the arithmetic exactly
+        /// as it was, which is what every caller that has no reference lookup
+        /// (the Sales Detail report) gets.
+        /// </param>
         public static (decimal SalesTax, decimal FurtherTax, decimal RetailPrice) Compute(
             InvoiceItem item, decimal gstRate, string buyerRegType, string? scenarioId,
-            decimal? documentFurtherTaxRate = null)
+            decimal? documentFurtherTaxRate = null, string? fbrRateDescription = null)
         {
             var rate = gstRate / 100m;
             var retail = item.FixedNotifiedValueOrRetailPrice ?? 0m;
@@ -63,6 +75,36 @@ namespace MyApp.Api.Helpers
             else
             {
                 salesTax = Math.Round(item.LineTotal * rate, 2, MidpointRounding.AwayFromZero);
+            }
+
+            // (4) A COMPOUND rate: a percentage AND an amount per unit.
+            //
+            // FBR publishes rates like "18% along with rupees 60 per kilogram"
+            // (Potassium Chlorate) and "18% and Rs. 80 per Liter" (goods where
+            // FED is charged in sales-tax mode), and it CHECKS the arithmetic:
+            // sending only the 18% leg is refused [0103] "Provided sales tax
+            // amount does not match the calculated sales tax amount in case
+            // where sale type is ...".
+            //
+            // The ad valorem leg stays exactly as computed above -- it is what
+            // the invoice itself charges -- and the specific leg is added on
+            // top, so a line filed under a compound rate carries the whole tax
+            // FBR expects. A rate that is ONLY a fixed amount ("Rs.2", cement)
+            // is deliberately left alone: FBR accepts the percentage arithmetic
+            // there, and changing what already files would be a regression for
+            // the sake of tidiness.
+            //
+            // KNOWN GAP: Invoice.GSTRate is a single percentage, so the
+            // document's own GSTAmount carries the ad valorem leg only and will
+            // read lower than the filed figure on such a supply. Modelling a
+            // compound rate on the invoice itself (and therefore on the print
+            // and the GL) is a larger change; until then the operator has to
+            // set a rate that covers both legs if the printed bill must agree.
+            var compound = FbrRateDescription.Parse(fbrRateDescription);
+            if (compound.IsCompound && item.Quantity > 0m)
+            {
+                salesTax += Math.Round(
+                    compound.PerUnitAmount * item.Quantity, 2, MidpointRounding.AwayFromZero);
             }
 
             // (2) Unregistered + standard-rate => 4% further tax

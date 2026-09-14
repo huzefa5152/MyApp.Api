@@ -143,7 +143,12 @@ namespace MyApp.Api.Services.Tax
                 "Mobile Phones", 18m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false,
                 RequiresSroReference: true,
-                DefaultSroScheduleNo: "NINTH SCHEDULE", DefaultSroItemSerialNo: "1"),
+                // Serial "1" is not one FBR knows -- [0078] "Valid Item Sr. No.
+                // is mandatory where SRO/Schedule No. is provided". SROItem for
+                // the NINTH SCHEDULE at 18% (srO_ID 445) publishes exactly four,
+                // all parenthesised: 1(A), 1(B), 1(E), 1(F). At 25% it is a
+                // different schedule id (446), with 1(B) and 1(G).
+                DefaultSroScheduleNo: "NINTH SCHEDULE", DefaultSroItemSerialNo: "1(A)"),
 
             // "Processing/Conversion of Goods" with NO space after the slash.
             // That is how it appears in FBR's own transaction-type list, and the
@@ -154,6 +159,16 @@ namespace MyApp.Api.Services.Tax
                 "Processing/Conversion of Goods", 18m, "Registered",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
 
+            // "FED goods" and "goods on which FED is collected in SALES TAX mode"
+            // are not the same category, which is what made this scenario look
+            // unfixable: aerated waters, tobacco, ghee and cement all carry FED
+            // and are all refused [0052]. The Second Schedule to the Federal
+            // Excise Act -- the list of goods whose duty is collected in ST mode
+            // -- holds three: 2710.1942 Petroleum Top Naphtha, 2710.1240 White
+            // Spirit / MTT and 2710.1250 Solvent Oil, all at Rs.80 per litre.
+            // 2710.1942 with UoM "Liter" is accepted (2026-09-14). The rate is
+            // compound ("18% and Rs. 80 per Liter"), so the tax is the ad
+            // valorem leg PLUS 80 x litres -- see Helpers/FbrRateDescription.
             new("SN017", "Sale of Goods where FED is charged in ST mode",
                 "Goods (FED in ST Mode)", 18m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
@@ -170,13 +185,33 @@ namespace MyApp.Api.Services.Tax
                 "Electric Vehicle", 1m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
 
+            // 2, not 18. FBR publishes FOUR rates for this sale type and none of
+            // them is a percentage: "Rs.2", "Rs.3", "Rs.5", "Rs.10" (rateValue
+            // 2/3/5/10). 18 matches none, so the line went out as "18%" and was
+            // refused [0046]; carrying FBR's own rateValue is what lets
+            // FbrService resolve the published wording "Rs.2" and file it.
+            //
+            // The operator picks the slab that applies to their product -- this
+            // is only the default. Note the invoice still charges 2% ad valorem:
+            // Invoice.GSTRate is a single percentage and cannot express "Rs.2
+            // per unit". FBR accepts that for this sale type (it does not check
+            // the arithmetic here, unlike Potassium Chlorate), but the figure is
+            // not the statutory one. See Helpers/FbrLineTax rule (4).
             new("SN021", "Sale of Cement / Concrete Block",
-                "Cement /Concrete Block", 18m, "Any",
+                "Cement /Concrete Block", 2m, "Any",
                 IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
 
+            // Resolved from FBR, not spelled (CLAUDE.md 10b). Its published rate
+            // is "18% along with rupees 60 per kilogram" -- a COMPOUND rate --
+            // and FBR does not read that as 18%, so it demands a schedule:
+            // [0077] "Valid SRO/Schedule No. is mandatory where rate is not
+            // 18%". SroSchedule for rateId 734 answers srO_ID 444 "EIGHTH
+            // SCHEDULE Table 1", whose only SROItem serial is 56.
             new("SN022", "Sale of Potassium Chlorate",
                 "Potassium Chlorate", 18m, "Any",
-                IsThirdSchedule: false, IsEndConsumerRetail: false, RequiresSroReference: false),
+                IsThirdSchedule: false, IsEndConsumerRetail: false,
+                RequiresSroReference: true,
+                DefaultSroScheduleNo: "EIGHTH SCHEDULE Table 1", DefaultSroItemSerialNo: "56"),
 
             new("SN023", "Sale of CNG",
                 "CNG Sales", 18m, "Any",

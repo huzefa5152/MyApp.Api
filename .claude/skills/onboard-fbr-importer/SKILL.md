@@ -128,7 +128,22 @@ Production databases are otherwise read-only (CLAUDE.md).
 ## Known-good reference
 
 `R & R Engineering (Private) Limited`, NTN `5326972-8`, files as `5326972`,
-Importer / All Other Sectors, province Sindh (8), sandbox. 11 scenarios apply;
-7–8 pass per run. Open: SN017 (needs a commodity that carries FED in ST mode),
-SN021 and SN022 (need the rate resolved from `saletyperates` rather than the
-catalog default).
+Importer / All Other Sectors, province Sindh (8), sandbox. 11 scenarios apply.
+**All 11 validated and submitted on 2026-09-14**, 11 IRNs issued.
+
+Three of them had never passed, and the reasons generalise:
+
+| | |
+|---|---|
+| SN017 | Not an ordinary FED good. "FED collected in **sales tax** mode" is the Federal Excise Act's **Second Schedule** — three petroleum lines. `2710.1942` with UoM **Liter** (FBR names KG first; the rate is per litre). |
+| SN021 | Cement publishes four fixed amounts and no percentage: `Rs.2`/`Rs.3`/`Rs.5`/`Rs.10`. The catalog rate has to be FBR's own `ratE_VALUE`, or the line files as `18%` and is refused `[0046]`. |
+| SN022 | Compound rate `18% along with rupees 60 per kilogram`. FBR does not read that as 18%, so it demands a schedule `[0077]` — resolved to `EIGHTH SCHEDULE Table 1` serial `56` — and it checks the arithmetic `[0103]`. |
+
+Two rules worth carrying to the next company:
+
+- **The UoM is part of the answer.** FBR often names several for one HS code and
+  the rate tells you which: a rate quoted "per Liter" wants Liter, not the KG
+  that happens to come first.
+- **Never spell a rate, a schedule or a serial.** `SaleTypeToRate` →
+  `SroSchedule` → `SROItem` answers all three. SN015 sat on serial `1` for
+  months; `SROItem` publishes `1(A)`, `1(B)`, `1(E)`, `1(F)` and no bare digit.
