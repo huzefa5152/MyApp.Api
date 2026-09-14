@@ -1406,6 +1406,50 @@ else:
 
         request("DELETE", f"/api/import-consignments/{beta_cid}", token=admin)
 
+# ── Suite 20: three routes that took a companyId and never checked it ──
+# All three were live on 2026-09-14 and were found by signing in as a freshly
+# created user and asking for another company's data. They are pinned here
+# because the shapes recur: a query-string companyId (easy to forget, since
+# [AuthorizeCompany] reads the route first), an id-only download whose company
+# lives on the stored row, and a "reference data" lookup that is only reference
+# data on the way OUT -- resolving it can spend the named company's FBR token.
+print("\n  Suite 20 - companyId-bearing routes that had no guard")
+suite20 = "unguarded companyId routes"
+
+# The dashboard. Its own comment used to say it trusted an upstream guard, and
+# there was none: this returned Beta's sales, its top clients BY NAME, its
+# recent invoices and its stock to anyone holding dashboard.view.
+s, body20 = request("GET", f"/api/dashboard/kpis?companyId={beta['id']}&period=all-time",
+                    token=tokens["alice"])
+status_check(suite20, "alice GET another tenant's dashboard KPIs", s, 403)
+
+# Sanity, so the 403 above is the tenant guard and not a broken route.
+s, body20 = request("GET", f"/api/dashboard/kpis?companyId={beta['id']}&period=all-time",
+                    token=tokens["bob"])
+check(suite20, "bob (Beta access) reads the same dashboard fine",
+      s == 200 and isinstance(body20, dict) and body20.get("companyId") == beta["id"],
+      f"status {s}")
+
+# The PO import archive. The list ignored access entirely and the download took
+# a document id and no company at all -- and these are customers' own purchase
+# orders. The download answers 404 rather than 403 on purpose: a distinct
+# answer for "exists but not yours" enumerates other tenants' uploads.
+s, arch20 = request("GET", f"/api/poimport/archives?companyId={beta['id']}&page=1&pageSize=5",
+                    token=tokens["alice"])
+check(suite20, "alice sees no PO archive rows for another tenant",
+      s in (401, 403) or not (arch20 or {}).get("rows"),
+      f"status {s}, rows {(arch20 or {}).get('rows')}")
+s, _ = request("GET", "/api/poimport/archives/999999999/file", token=tokens["alice"])
+status_check(suite20, "alice downloads an unknown archive file", s, 404)
+
+# The two HS hint lookups. The ANSWER is tariff reference data, but resolving it
+# can fall back to that company's own FBR token (audit H-9).
+for route20 in ("uoms-for-hs", "fbr-hints"):
+    s, _ = request("GET", f"/api/itemtypes/{route20}?companyId={beta['id']}&hsCode=8481.8090",
+                   token=tokens["alice"])
+    status_check(suite20, f"alice calls {route20} against another tenant", s, 403)
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]
