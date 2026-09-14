@@ -22,7 +22,7 @@ FICTIONAL DATA ONLY. No real NTN/CNIC/STRN/address/client is used.
 Usage:  python seed_demo_environment.py
 """
 from __future__ import annotations
-import json, re, sys
+import argparse, json, re, sys
 from datetime import datetime, timedelta
 from urllib import request as urlreq, error as urlerr
 
@@ -35,6 +35,13 @@ DEFAULT_TEMPLATES_JS = r"D:\huzefa-portfolio\github-projects\MyApp.Api\myapp-fro
 # makes IsFbrReady() pass so demo challans become billable and bills show the
 # "FBR: Ready to Validate" state during a recording. Not a real secret.
 DEMO_TOKEN = "DEMO-SANDBOX-TOKEN-NOT-FOR-SUBMISSION"
+
+# Overridable at runtime (see main's argparse) so the SAME script can target a
+# directed prod backend and set a real FBR token + seller registration for a
+# validation-ready demo. Defaults keep the local placeholder behaviour. The
+# token is passed on the command line only — never hardcoded, never logged.
+FBR_TOKEN = DEMO_TOKEN
+FBR_SELLER_OVERRIDE = None  # None = per-company placeholder; else applied to all
 
 # FBR sandbox does a REAL active-taxpayer (STATL) lookup on a REGISTERED buyer,
 # so a fictional NTN fails validation with [0205]. These are known-good
@@ -246,14 +253,14 @@ def seed_company(token, cdef, type_ids, bill_tpl, tax_tpl):
         "name": cdef["name"], "brandName": cdef["brandName"],
         "fullAddress": cdef["fullAddress"], "phone": cdef["phone"],
         "ntn": cdef["ntn"], "strn": cdef["strn"],
-        "fbrSellerRegistrationNo": cdef["fbrSellerRegistrationNo"],
+        "fbrSellerRegistrationNo": FBR_SELLER_OVERRIDE or cdef["fbrSellerRegistrationNo"],
         "startingChallanNumber": 1001, "startingInvoiceNumber": 5001,
         "startingPurchaseBillNumber": 2001, "startingGoodsReceiptNumber": 3001,
         "startingSalesQuoteNumber": 4001, "startingSalesOrderNumber": 6001,
         "invoiceNumberPrefix": cdef["prefix"],
         "fbrProvinceCode": cdef["province"],
         "inventoryTrackingEnabled": True, "stockGuardHardBlock": False,
-        "isTenantIsolated": True, "fbrToken": DEMO_TOKEN,
+        "isTenantIsolated": True, "fbrToken": FBR_TOKEN,
         **FBR_DEFAULTS,
     }
     s, comp = _req("POST", "/api/companies", company, token)
@@ -372,6 +379,25 @@ def seed_company(token, cdef, type_ids, bill_tpl, tax_tpl):
 
 # ── Main ───────────────────────────────────────────────────────────────────
 def main():
+    global BASE, SEED_ADMIN, FBR_TOKEN, FBR_SELLER_OVERRIDE
+    ap = argparse.ArgumentParser(
+        description="Seed the isolated demo environment on a local OR explicitly-directed prod backend.")
+    ap.add_argument("--base-url", default=BASE, help="Backend base URL (default local :5136).")
+    ap.add_argument("--admin-user", default=SEED_ADMIN["username"])
+    ap.add_argument("--admin-pass", default=SEED_ADMIN["password"])
+    ap.add_argument("--fbr-token", default=None,
+                    help="Real FBR token to set on the demo companies (makes invoices validation-ready). Never logged.")
+    ap.add_argument("--fbr-seller-reg", default=None,
+                    help="Seller NTN/CNIC filed to FBR, applied to ALL demo companies (must match the token binding at PRAL).")
+    args = ap.parse_args()
+    BASE = args.base_url
+    SEED_ADMIN = {"username": args.admin_user, "password": args.admin_pass}
+    if args.fbr_token:
+        FBR_TOKEN = args.fbr_token
+    if args.fbr_seller_reg:
+        FBR_SELLER_OVERRIDE = args.fbr_seller_reg
+
+    print(f"→ target {BASE}")
     print("→ login seed admin")
     seed_token = login(SEED_ADMIN)
 
