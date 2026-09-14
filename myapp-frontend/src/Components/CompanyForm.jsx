@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createCompany, updateCompany, uploadCompanyLogo, getCompanyById } from "../api/companyApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
@@ -20,6 +20,9 @@ const {
     submit,
 } = formStyles;
 
+
+// Small grey qualifier beside a field label ("(13 digits)").
+const hintSpan = { fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" };
 const INT32_MAX = 2147483647;
 
 // Tabbed sections — keeps a big single-screen form digestible without
@@ -42,6 +45,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         phone: "",
         ntn: "",
         cnic: "",
+        fbrSellerNtnCnic: "",
         strn: "",
         // Company-wide default withholding-tax rate (%). Prefills the WHT
         // control on new sales + purchase bills. Empty string / null = no
@@ -78,7 +82,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         // tracked from day one. Operator can turn it off in the Inventory tab.
         inventoryTrackingEnabled: true,
         // Hard-block over-commit/oversell (409) when tracking is on (Q4).
-        stockGuardHardBlock: false,
+        stockGuardHardBlock: false,
+
         inventoryOverlayEnabled: false,
         // General Ledger — ON by default for new companies (seeds the Chart of
         // Accounts + turns posting on at create). Create-only; existing
@@ -131,6 +136,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 phone: freshCompany.phone || "",
                 ntn: freshCompany.ntn || "",
                 cnic: freshCompany.cnic || "",
+                fbrSellerNtnCnic: freshCompany.fbrSellerNtnCnic || "",
                 strn: freshCompany.strn || "",
                 defaultWithholdingTaxRate: freshCompany.defaultWithholdingTaxRate ?? "",
                 startingChallanNumber: freshCompany.startingChallanNumber || 0,
@@ -156,7 +162,8 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultPaymentModeRegistered: freshCompany.fbrDefaultPaymentModeRegistered || "",
                 fbrDefaultPaymentModeUnregistered: freshCompany.fbrDefaultPaymentModeUnregistered || "",
                 inventoryTrackingEnabled: !!freshCompany.inventoryTrackingEnabled,
-                stockGuardHardBlock: !!freshCompany.stockGuardHardBlock,
+                stockGuardHardBlock: !!freshCompany.stockGuardHardBlock,
+
                 inventoryOverlayEnabled: !!freshCompany.inventoryOverlayEnabled,
                 requireSalesOrderForBilling: !!freshCompany.requireSalesOrderForBilling,
                 startingPurchaseBillNumber: freshCompany.startingPurchaseBillNumber || 0,
@@ -211,26 +218,106 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
     const handleCsvChange = (name, csv) => setForm((prev) => ({ ...prev, [name]: csv }));
 
+    // Narrow mirror of Helpers/FbrSellerIdentity, for the label and the save
+    // guard only. The SERVER resolves what is actually sent; this exists so the
+    // form can say which value that will be instead of leaving it a mystery,
+    // and so Save fails here rather than at submit time.
+    const sellerId = useMemo(() => {
+        // An explicit value on the FBR tab wins, exactly as
+        // Helpers/FbrSellerIdentity does server-side.
+        const stated = (form.fbrSellerNtnCnic || "").trim();
+        if (stated) {
+            const d = stated.replace(/\D/g, "");
+            if (d.length === 13) return { value: d, source: "CNIC you entered", error: null };
+            const core = stated.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+            if (core.length === 7) return { value: core, source: "NTN you entered", error: null };
+            return {
+                value: "", source: "",
+                error: `The FBR seller NTN/CNIC "${stated}" is ${core.length} character(s). FBR files a 7-character NTN (no check digit) or a 13-digit CNIC.`,
+            };
+        }
+
+        const cnicDigits = (form.cnic || "").replace(/\D/g, "");
+        if (cnicDigits.length === 13) return { value: cnicDigits, source: "CNIC", error: null };
+
+        const raw = (form.ntn || "").trim();
+        const core = raw.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+        // A letter-prefixed NTN keeps its letter and drops the check digit
+        // (A113680-1 -> A113680); a numeric one files as its first 7 digits.
+        const ntnValue = /[A-Z]/.test(core)
+            ? (core.length >= 7 ? core.slice(0, 7) : "")
+            : ((raw.replace(/\D/g, "").length >= 7) ? raw.replace(/\D/g, "").slice(0, 7) : "");
+        if (ntnValue) return { value: ntnValue, source: "NTN", error: null };
+
+        if (cnicDigits.length > 0) {
+            return { value: "", source: "", error: `CNIC has ${cnicDigits.length} digits; a CNIC is 13. Correct it, or set a 7-character NTN instead.` };
+        }
+        if (core.length > 0) {
+            return { value: "", source: "", error: `NTN "${raw}" is too short; FBR files a 7-character NTN. Correct it, or set a 13-digit CNIC instead.` };
+        }
+        return { value: "", source: "", error: "FBR needs an NTN or a CNIC as sellerNTNCNIC. Add one on the General tab." };
+    }, [form.ntn, form.cnic, form.fbrSellerNtnCnic]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
 
-        if (!form.name) { setActiveTab("general"); return setError("Company name is required."); }
-        // CNIC is only required when FBR is enabled (used as SellerNTNCNIC on
-        // FBR submissions). Non-FBR companies can leave it blank.
-        if (form.fbrEnabled) {
-            const cnicDigits = (form.cnic || "").replace(/\D/g, "");
-            if (!cnicDigits) { setActiveTab("fbr"); return setError("CNIC is required when FBR is enabled — it's used as SellerNTNCNIC on FBR submissions."); }
-            if (cnicDigits.length !== 13) { setActiveTab("fbr"); return setError(`CNIC must be exactly 13 digits (current: ${cnicDigits.length}).`); }
+        // Every check states the TAB that owns the field, and the first failure
+        // switches to it. A modal with six tabs and one error line at the top is
+        // otherwise a guessing game -- the field being complained about can be
+        // two tabs away from the one on screen.
+        //
+        // Only two tabs carry anything mandatory: General (the company's own
+        // name) and FBR Integration (everything FBR refuses a submission
+        // without). Document Numbers, Inventory, Accounting and Access are all
+        // optional and can be filled in later.
+        const problems = [
+            // ── General ──────────────────────────────────────────────────
+            [!form.name?.trim(), "general",
+             "Company name is required."],
+
+            // ── FBR Integration: only when the flag is on ────────────────
+            // Each of these is something FBR itself refuses the submission
+            // without, so a company saved without them would look configured
+            // and fail at the first bill.
+            [form.fbrEnabled && !(form.fbrSellerNtnCnic || "").trim(), "fbr",
+             "Enter the Seller NTN / CNIC for FBR — the 7-character NTN or 13-digit CNIC this company files under. It is required when FBR Digital Invoicing is on."],
+            [form.fbrEnabled && (form.fbrSellerNtnCnic || "").trim() && !sellerId.value, "fbr",
+             sellerId.error],
+            [form.fbrEnabled && !form.fbrProvinceCode, "fbr",
+             "Choose the seller Province — FBR requires it on every invoice."],
+            [form.fbrEnabled && !(form.fbrEnvironment || "").trim(), "fbr",
+             "Choose the FBR Environment (Sandbox or Production)."],
+            [form.fbrEnabled && !(form.fbrBusinessActivity || "").trim(), "fbr",
+             "Choose at least one Business Activity — it decides which FBR scenarios apply to this company."],
+            [form.fbrEnabled && !(form.fbrSector || "").trim(), "fbr",
+             "Choose at least one Sector — it decides which FBR scenarios apply to this company."],
+            // Address lives on General but is only mandatory because FBR sends
+            // it as sellerAddress, so say why and send them to the right tab.
+            [form.fbrEnabled && !(form.fullAddress || "").trim(), "general",
+             "Enter the company Address on the General tab — FBR sends it as the seller address on every invoice."],
+
+            // ── Document Numbers: not required, but must be sane ─────────
+            [form.startingChallanNumber < 0, "numbering",
+             "Starting challan number cannot be negative."],
+            [form.startingInvoiceNumber < 0, "numbering",
+             "Starting invoice number cannot be negative."],
+        ];
+
+        const failed = problems.find(([bad]) => bad);
+        if (failed) {
+            setActiveTab(failed[1]);
+            return setError(failed[2]);
         }
-        if (form.startingChallanNumber < 0) { setActiveTab("numbering"); return setError("Starting challan number cannot be negative."); }
-        if (form.startingInvoiceNumber < 0) { setActiveTab("numbering"); return setError("Starting invoice number cannot be negative."); }
 
         try {
             const payload = {
                 ...form,
                 fbrProvinceCode: form.fbrProvinceCode === "" ? null : Number(form.fbrProvinceCode),
                 fbrToken: form.fbrToken || null,
+                // Blank means "derive it" (Helpers/FbrSellerIdentity), so send null
+                // rather than an empty string the server would treat as stated.
+                fbrSellerNtnCnic: (form.fbrSellerNtnCnic || "").trim() || null,
                 fbrDefaultSaleType: form.fbrDefaultSaleType || null,
                 fbrDefaultUOM: form.fbrDefaultUOM || null,
                 fbrDefaultPaymentModeRegistered: form.fbrDefaultPaymentModeRegistered || null,
@@ -338,9 +425,20 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                         <input type="text" name="phone" value={form.phone} onChange={handleChange} style={input} />
                                     </div>
                                     <div style={formGroup}>
-                                        <label style={label}>NTN</label>
-                                        <input type="text" name="ntn" value={form.ntn} onChange={handleChange} style={input} />
+                                        <label style={label}>NTN <span style={hintSpan}>(as IRIS issues it, e.g. 5326972-8 or A113680-1)</span></label>
+                                        <input type="text" name="ntn" value={form.ntn} onChange={handleChange} style={input} placeholder="5326972-8" />
                                     </div>
+                                    <div style={formGroup}>
+                                        <label style={label}>CNIC <span style={hintSpan}>(13 digits)</span></label>
+                                        <input type="text" name="cnic" value={form.cnic} onChange={handleChange} style={input} maxLength={15} placeholder="13-digit CNIC" />
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: "-0.4rem", marginBottom: "0.8rem", lineHeight: 1.5 }}>
+                                    Optional — these appear on printed documents, so enter them as issued
+                                    (the NTN keeps its check digit and any leading letter). What FBR
+                                    receives is a separate, required field on the
+                                    {" "}<strong>FBR Integration</strong> tab, because a business files under
+                                    whichever it is registered with in IRIS.
                                 </div>
                                 <div style={formGroup}>
                                     <label style={label}>STRN</label>
@@ -421,8 +519,47 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 {form.fbrEnabled ? (
                                     <div style={{ marginTop: "0.9rem", padding: "0.85rem", borderRadius: 10, border: "1px solid #0d47a130", backgroundColor: "#f5f9ff" }}>
                                         <div style={formGroup}>
-                                            <label style={label}>CNIC * <span style={{ fontWeight: 400, color: "#5f6d7e", fontSize: "0.72rem" }}>(required for FBR — used as SellerNTNCNIC on submissions)</span></label>
-                                            <input type="text" name="cnic" value={form.cnic} onChange={handleChange} style={input} maxLength={15} placeholder="13-digit CNIC" />
+                                            <label style={label}>
+                                                Seller NTN / CNIC for FBR
+                                                <span style={{ color: "#c62828", marginLeft: 3 }} aria-hidden="true">*</span>
+                                                <span style={hintSpan}> — 7-character NTN or 13-digit CNIC, exactly as filed</span>
+                                            </label>
+                                            <input
+                                                type="text" name="fbrSellerNtnCnic"
+                                                value={form.fbrSellerNtnCnic || ""} onChange={handleChange}
+                                                style={input} maxLength={20}
+                                                placeholder={`e.g. ${(form.ntn || "5326972").replace(/[^0-9A-Za-z]/g, "").slice(0, 7) || "5326972"} or a 13-digit CNIC`}
+                                            />
+                                            <div style={{ fontSize: "0.74rem", color: "#5f6d7e", marginTop: 3, lineHeight: 1.5 }}>
+                                                This is what goes out as <code>sellerNTNCNIC</code>. Use whichever
+                                                this business logs into IRIS with — the NTN <strong>without</strong>
+                                                {" "}its check digit (5326972-8 → 5326972), or the CNIC's 13 digits.
+                                                <strong> Required while FBR Digital Invoicing is on.</strong>
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            marginBottom: "0.9rem", padding: "0.6rem 0.75rem", borderRadius: 8,
+                                            border: `1px solid ${sellerId.value ? "#2e7d3230" : "#c6282830"}`,
+                                            backgroundColor: sellerId.value ? "#f1f8f2" : "#fdf3f3",
+                                            fontSize: "0.8rem", lineHeight: 1.55,
+                                        }}>
+                                            {sellerId.value ? (
+                                                <>
+                                                    Submissions will be filed as <code>sellerNTNCNIC</code>{" "}
+                                                    <strong>{sellerId.value}</strong>, from this company's{" "}
+                                                    <strong>{sellerId.source}</strong>.
+                                                    <div style={{ color: "#5f6d7e", marginTop: 3 }}>
+                                                        FBR accepts a 7-character NTN or a 13-digit CNIC — a CNIC is
+                                                        not required.
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <strong>{sellerId.error}</strong> Enter it above, or fill the NTN
+                                                    or CNIC on the <strong>General</strong> tab and leave this blank.
+                                                </>
+                                            )}
                                         </div>
                                         <div className="form-grid-2col">
                                             <div style={formGroup}>
