@@ -444,6 +444,26 @@ def account_by_control(api, h, company_id, control_type):
     return next((a for a in rows if a.get("isActive")), rows[0] if rows else None)
 
 
+def gd_preview_manual(api, h, company_id, lines, mode=None):
+    """Hand entry (Task 18, multi-line since 2026-09-14). ALL lines in ONE
+    call -- matching and per-balance pooling reason over the set."""
+    params = {"companyId": company_id}
+    if mode:
+        params["mode"] = mode
+    return requests.post(f"{api}/spreadsheet-import/gd-costing/preview-manual",
+                         headers=h, timeout=60, params=params, json={"lines": lines})
+
+
+def manual_line(gd, hs, desc, qty=1, assessed=0, duty=0, acd=0, regduty=0, others=0,
+                st=18, ast=3, it=6, addon=0, selling=None, unit="Pcs", gddate="2026-07-01"):
+    return {
+        "gdNumber": gd, "gdDate": gddate, "description": desc, "hsCode": hs,
+        "quantity": qty, "unit": unit, "assessedValue": assessed, "customsDuty": duty,
+        "acd": acd, "regulatoryDuty": regduty, "others": others, "salesTaxRate": st,
+        "astRate": ast, "incomeTaxRate": it, "addOnProfit": addon, "sellingValue": selling,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:5134")
@@ -3131,6 +3151,188 @@ def main():
         r = requests.delete(f"{api}/companies/{hist_co}", headers=h, timeout=300)
         check("25: deleting a company with cost history succeeds",
               r.status_code in (200, 204), f"http {r.status_code}: {r.text[:200]}")
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 26 -- Warning before a Backfill writes a cost that does not fit
+        # ══════════════════════════════════════════════════════════════════
+        # Backfill spreads one GD's unit cost across a balance's WHOLE quantity.
+        # Sound while the priced goods represent the goods on the books; on the
+        # first real production import it was not: one balance merged four
+        # products under one HS code, the GDs priced two of them, and the higher
+        # rate was extrapolated over all 2,970 units -- a -85% margin.
+        print("\n-- 26. Cost-plausibility and rate warnings --")
+
+        warn_co = make_company(api, h, f"GD Costing Warn {tag}")
+        created_companies.append(warn_co)
+
+        # (a) The production shape: a balance far bigger than the GD prices,
+        #     at a unit value far below the GD's.
+        warn_item = make_item(api, h, warn_co, f"GD Warn Merged {tag}", hs="8513.1090")
+        # 2,970 units selling for 999,924.33 -> expected cost 857,078 at 18/3.
+        set_opening(api, h, warn_co, warn_item, qty=2970, value=999924.33, rate=18)
+        bad_cells = row_cells(BASE_COLS, f"GD-WARN-{tag}", "8513.1090",
+                              desc=f"GD Warn Merged {tag}", qty=565, assessed=351989,
+                              st=18, ast=3, it=6)
+        r = gd_preview(api, h, warn_co, build_sheet(BASE_HEADINGS, [bad_cells]), GD_MAPPING,
+                       mode="backfill")
+        wp = r.json() if r.ok else {}
+        check("26: the sheet previews", r.ok, f"http {r.status_code}: {r.text[:200]}")
+        wline = (wp.get("lines") or [{}])[0]
+        check("26: extrapolating 565 units' cost over 2,970 is flagged",
+              bool(wline.get("costPlausibilityWarning")),
+              f"warning={wline.get('costPlausibilityWarning')!r} derived={wline.get('derivedActualCost')}")
+        check("26: the warning names the projected figure and why",
+              "1,850,278" in (wline.get("costPlausibilityWarning") or "")
+              and "565" in (wline.get("costPlausibilityWarning") or ""),
+              f"warning={wline.get('costPlausibilityWarning')!r}")
+        check("26: and it is counted on the preview",
+              wp.get("costPlausibilityWarningCount") == 1,
+              f"count={wp.get('costPlausibilityWarningCount')}")
+        check("26: it does NOT block the import -- a genuine outlier must still commit",
+              wp.get("canCommit") is True, f"canCommit={wp.get('canCommit')} errors={wp.get('blockingErrors')}")
+
+        # (b) An ordinary, representative line must stay silent, or the warning
+        #     becomes noise and gets ignored -- the only way this check fails.
+        ok_item = make_item(api, h, warn_co, f"GD Warn Normal {tag}", hs="8481.1000")
+        ok_cost = compute_costing(assessed=60000, st=18, ast=3, it=6)
+        set_opening(api, h, warn_co, ok_item, qty=100,
+                    value=float(ok_cost["sellingValue"]), rate=18)
+        ok_cells = row_cells(BASE_COLS, f"GD-OK-{tag}", "8481.1000",
+                             desc=f"GD Warn Normal {tag}", qty=100, assessed=60000,
+                             st=18, ast=3, it=6)
+        r = gd_preview(api, h, warn_co, build_sheet(BASE_HEADINGS, [ok_cells]), GD_MAPPING,
+                       mode="backfill")
+        okp = r.json() if r.ok else {}
+        okline = (okp.get("lines") or [{}])[0]
+        check("26: a representative line is NOT flagged",
+              okline.get("costPlausibilityWarning") is None
+              and okp.get("costPlausibilityWarningCount") == 0,
+              f"warning={okline.get('costPlausibilityWarning')!r}")
+
+        # (c) New Arrivals ADDS for the quantity it brings, so there is no
+        #     extrapolation to be wrong about.
+        r = gd_preview(api, h, warn_co, build_sheet(BASE_HEADINGS, [bad_cells]), GD_MAPPING,
+                       mode="new-arrivals")
+        nap = r.json() if r.ok else {}
+        check("26: New Arrivals never raises it -- it does not extrapolate",
+              nap.get("costPlausibilityWarningCount") == 0,
+              f"count={nap.get('costPlausibilityWarningCount')}")
+
+        # (d) A rate no GD carries. Two lines of a real AY sheet held 100%.
+        rate_cells = row_cells(BASE_COLS, f"GD-RATE-{tag}", "8481.1000",
+                               desc=f"GD Warn Normal {tag}", qty=10, assessed=5000,
+                               st=18, ast=3, it=1)   # a bare 1 reads as 100%
+        r = gd_preview(api, h, warn_co, build_sheet(BASE_HEADINGS, [rate_cells]), GD_MAPPING,
+                       mode="backfill")
+        rp = r.json() if r.ok else {}
+        rline = (rp.get("lines") or [{}])[0]
+        check("26: an income-tax rate of 1 reads as 100% and is flagged",
+              close(rline.get("incomeTaxRate"), 100) and bool(rline.get("rateWarning")),
+              f"rate={rline.get('incomeTaxRate')} warning={rline.get('rateWarning')!r}")
+        check("26: the rate warning is counted", rp.get("rateWarningCount") == 1,
+              f"count={rp.get('rateWarningCount')}")
+        check("26: and it says cost/selling are unaffected",
+              "Cost and selling value are unaffected" in (rline.get("rateWarning") or ""),
+              f"warning={rline.get('rateWarning')!r}")
+        check("26: an ordinary 6% rate raises nothing",
+              okline.get("rateWarning") is None, f"warning={okline.get('rateWarning')!r}")
+
+        # ══════════════════════════════════════════════════════════════════
+        # SECTION 27 -- Hand entry takes a whole GD, not one line
+        # ══════════════════════════════════════════════════════════════════
+        # A real GD carries several HS codes (Alpha's one declaration has 26
+        # lines). One line at a time could only record the rare single-line
+        # consignment: committing line 1 then line 2 under the same GD number
+        # is refused, because GdNumber is unique per company.
+        print("\n-- 27. Multi-line hand entry --")
+
+        man_co = make_company(api, h, f"GD Costing Manual {tag}")
+        created_companies.append(man_co)
+        man_a = make_item(api, h, man_co, f"GD Manual A {tag}", hs="8481.1000")
+        man_b = make_item(api, h, man_co, f"GD Manual B {tag}", hs="8484.1029")
+        set_opening(api, h, man_co, man_a, qty=100, value=250000)
+        set_opening(api, h, man_co, man_b, qty=50, value=90000)
+
+        man_gd = f"GD-MAN-{tag}"
+        lines = [
+            manual_line(man_gd, "8481.1000", f"GD Manual A {tag}", qty=100, assessed=60000),
+            manual_line(man_gd, "8484.1029", f"GD Manual B {tag}", qty=50, assessed=30000),
+        ]
+
+        r = gd_preview_manual(api, h, man_co, [], mode="backfill")
+        check("27: previewing with no lines is refused", r.status_code == 400,
+              f"http {r.status_code}: {r.text[:160]}")
+
+        r = gd_preview_manual(api, h, man_co, lines, mode="backfill")
+        mp = r.json() if r.ok else {}
+        check("27: one GD with two HS codes previews in a single call", r.ok,
+              f"http {r.status_code}: {r.text[:220]}")
+        check("27: both lines come back", len(mp.get("lines", [])) == 2,
+              f"lines={len(mp.get('lines', []))}")
+        check("27: they group into ONE consignment, not two",
+              len(mp.get("consignments", [])) == 1,
+              f"consignments={[c.get('gdNumber') for c in mp.get('consignments', [])]}")
+        check("27: each line matched its own item",
+              sorted(l.get("itemTypeId") for l in mp.get("lines", [])) == sorted([man_a, man_b]),
+              f"matched={[(l.get('hsCode'), l.get('itemTypeId')) for l in mp.get('lines', [])]}")
+
+        r = gd_commit(api, h, {
+            "companyId": man_co, "fileSha256": mp.get("fileSha256"),
+            "fileName": mp.get("fileName"), "fileSizeBytes": mp.get("fileSizeBytes"),
+            "lines": mp.get("lines", []), "mode": "backfill",
+        })
+        mres = r.json() if r.ok else {}
+        check("27: it commits as one consignment carrying two lines",
+              r.ok and mres.get("consignmentsWritten") == 1 and mres.get("linesWritten") == 2,
+              f"http {r.status_code}: {r.text[:220]}")
+
+        man_cid = find_consignment_id(api, h, man_co, man_gd)
+        detail = get_consignment(api, h, man_cid).json()
+        check("27: and the recorded consignment really holds both HS codes",
+              sorted((l.get("hsCode") or "") for l in detail.get("lines", []))
+              == ["8481.1000", "8484.1029"],
+              f"lines={[l.get('hsCode') for l in detail.get('lines', [])]}")
+
+        # Two lines landing on the SAME balance must pool into one unit cost --
+        # the property a line-at-a-time preview cannot have, and the exact
+        # arithmetic behind the production mispricing.
+        pool_co = make_company(api, h, f"GD Costing Pool {tag}")
+        created_companies.append(pool_co)
+        pool_item = make_item(api, h, pool_co, f"GD Pool Item {tag}", hs="8481.1000")
+        set_opening(api, h, pool_co, pool_item, qty=200, value=500000)
+        pool_gd = f"GD-POOL-{tag}"
+        pool_lines = [
+            manual_line(pool_gd, "8481.1000", f"GD Pool Item {tag}", qty=60, assessed=30000),
+            manual_line(pool_gd, "8481.1000", f"GD Pool Item {tag}", qty=40, assessed=50000),
+        ]
+        r = gd_preview_manual(api, h, pool_co, pool_lines, mode="backfill")
+        pp = r.json() if r.ok else {}
+        check("27: two lines on one item preview together", r.ok and len(pp.get("lines", [])) == 2,
+              f"http {r.status_code}: {r.text[:200]}")
+        # pooled unit cost = (30,000 + 50,000) / (60 + 40) = 800; x 200 = 160,000
+        derived = {l.get("derivedActualCost") for l in pp.get("lines", [])}
+        check("27: they POOL into one unit cost applied to the whole balance",
+              derived == {160000.0},
+              f"derived={derived} (expected 160000 = (30000+50000)/(60+40) x 200)")
+        check("27: and both lines report the SAME balance figure, not their own",
+              len(derived) == 1, f"derived={derived}")
+
+        # Re-submitting the identical set collides, exactly as a re-uploaded
+        # workbook does; changing any line makes a different consignment.
+        r = gd_preview_manual(api, h, man_co, lines, mode="backfill")
+        again = r.json() if r.ok else {}
+        check("27: re-submitting the same lines is caught as already imported",
+              r.ok and not again.get("canCommit") and len(again.get("blockingErrors", [])) > 0,
+              f"canCommit={again.get('canCommit')} errors={again.get('blockingErrors')}")
+        check("27: the fingerprint spans the whole set, so an edited line differs",
+              gd_preview_manual(api, h, man_co,
+                                [lines[0], dict(lines[1], assessedValue=31000)],
+                                mode="backfill").json().get("fileSha256") != mp.get("fileSha256"),
+              "an edited second line produced the same fingerprint")
+
+        r = gd_preview_manual(api, hr, mixed_co, lines, mode="backfill")
+        check("27: hand entry refuses a company the caller cannot reach",
+              r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
 
     finally:
         if not args.keep:
