@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { MdClose, MdUploadFile, MdCheck, MdBlock } from "react-icons/md";
-import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
+import { colors, formStyles, modalSizes } from "../theme";
 import { notify } from "../utils/notify";
 import {
   importBankStatement,
@@ -9,6 +9,7 @@ import {
   ignoreStatementLine,
 } from "../api/accountingApi";
 import { getAccountsFlat } from "../api/accountApi";
+import AccountSelect from "./AccountSelect";
 
 // "PKR 1,234.00" — negatives keep their sign (styled red at the call site).
 const pkr = (x) =>
@@ -226,21 +227,19 @@ export default function StatementImportModal({ companyId, account, onClose, onDo
                           </td>
                           <td style={st.td}>
                             <div style={st.actionCell}>
-                              <select
-                                style={{ ...dropdownStyles.base, flex: 1, minWidth: 160 }}
-                                value={selections[line.id] || ""}
-                                disabled={busy || !accountsLoaded}
-                                onChange={(e) => setSelections((prev) => ({ ...prev, [line.id]: e.target.value }))}
-                              >
-                                <option value="">
-                                  {accountsLoaded ? "Category account…" : "Loading accounts…"}
-                                </option>
-                                {contraAccounts.map((a) => (
-                                  <option key={a.id} value={a.id}>
-                                    {a.name}{a.code ? ` (${a.code})` : ""}
-                                  </option>
-                                ))}
-                              </select>
+                              {/* Shared type-grouped picker. It never fetches, so
+                                  one per statement line costs no extra request. */}
+                              <div style={{ flex: 1, minWidth: 160 }}>
+                                <AccountSelect
+                                  accounts={contraAccounts}
+                                  value={selections[line.id] || ""}
+                                  disabled={busy || !accountsLoaded}
+                                  onChange={(id) => setSelections((prev) => ({
+                                    ...prev, [line.id]: id ? String(id) : "",
+                                  }))}
+                                  placeholder={accountsLoaded ? "Category account…" : "Loading accounts…"}
+                                />
+                              </div>
                               <button
                                 type="button"
                                 style={{ ...st.rowBtn, ...st.catBtn, opacity: busy ? 0.6 : 1 }}

@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { MdClose } from "react-icons/md";
-import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
+import { formStyles, modalSizes, colors } from "../theme";
 import SearchableSelect from "./SearchableSelect";
 import BankCashSelect from "./BankCashSelect";
 import useScrollToError from "../hooks/useScrollToError";
 import { createPayment, updatePayment } from "../api/paymentApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
 import { getAccountsFlat } from "../api/accountApi";
+import AccountSelect from "./AccountSelect";
 import { getImportConsignment } from "../api/importConsignmentApi";
 
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
@@ -293,16 +294,16 @@ export default function SettleConsignmentDialog({ companyId, consignment, paymen
               {glOn && (
                 <div style={formStyles.formGroup}>
                   <label style={formStyles.label}>Post it to</label>
-                  <select
-                    style={{ ...dropdownStyles.base, width: "100%" }}
+                  {/* The shared, type-grouped picker -- the same control every
+                      other GL account field uses. A flat list of every account
+                      made the operator hunt for the right one. */}
+                  <AccountSelect
+                    accounts={activeAccounts}
                     value={adjAccountId}
-                    onChange={(e) => setAdjAccountId(e.target.value)}
-                  >
-                    <option value="">— Choose an account —</option>
-                    {activeAccounts.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
+                    onChange={(id) => setAdjAccountId(id ? String(id) : "")}
+                    placeholder="— Choose an account —"
+                    style={{ width: "100%" }}
+                  />
                   {needsAccount && (
                     <div style={{ marginTop: "0.35rem", fontSize: 12.5, color: colors.danger }}>
                       Choose the account the adjustment posts to.

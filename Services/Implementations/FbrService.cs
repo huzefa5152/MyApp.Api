@@ -1104,7 +1104,17 @@ namespace MyApp.Api.Services.Implementations
                 // Sandbox requires a scenarioId (FBR 0201) — including for
                 // debit/credit notes (confirmed: omitting it → 0201). Notes
                 // carry the same scenario as their originating sale.
-                ScenarioId = isSandbox ? (scenarioId ?? "SN001") : null,
+                // The default must follow the BUYER. SN001 is "goods at standard
+                // rate to REGISTERED buyers" and SN002 is the unregistered
+                // equivalent, so defaulting every bill to SN001 guaranteed
+                // [0205] "Provided scenario not valid for unregistered user" on
+                // any ordinary sandbox bill raised for a walk-in customer -- the
+                // scenario contradicted the buyer the same payload carried
+                // (found on production 2026-09-15). Sandbox only; production
+                // sends no scenario at all.
+                ScenarioId = isSandbox
+                    ? (scenarioId ?? (buyerRegType == "Registered" ? "SN001" : "SN002"))
+                    : null,
                 Items = new List<FbrInvoiceItemRequest>()
             };
 
