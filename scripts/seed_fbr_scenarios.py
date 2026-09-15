@@ -194,9 +194,12 @@ SCENARIOS = [
             {
                 "desc":    "Branded Lubricant Bottle 1L (3rd Schedule item, MRP Rs. 1180)",
                 "qty":     100,
-                "uom":     "Litre",
+                # FBR rejects UoM "Litre" for this HS code ([0099]); the unit must
+                # come from the HS code's OWN valid list, not from what the product
+                # is sold in. Resolved from the accepted sandbox filing.
+                "uom":     "Numbers, pieces, units",
                 "unitPrice": 1000,
-                "hsCode":  "3923.3090",
+                "hsCode":  "8481.8090",
                 "saleType": "3rd Schedule Goods",
                 # MRP per unit × qty = 1180 × 100. FBR expects tax backed OUT of
                 # this value — (118000 × 18% / 118%) = 18000 salesTax.
@@ -216,7 +219,8 @@ SCENARIOS = [
                 "qty":     5,
                 "uom":     "Numbers, pieces, units",
                 "unitPrice": 120,
-                "hsCode":  "7411.1000",
+                # 7411.1000 is refused against the standard-rate sale type ([0052]).
+                "hsCode":  "8481.8090",
                 "saleType": "Goods at Standard Rate (default)",
             }
         ],
@@ -231,9 +235,9 @@ SCENARIOS = [
             {
                 "desc":    "Branded Lubricant Bottle 1L (Retail, MRP Rs. 1180)",
                 "qty":     2,
-                "uom":     "Litre",
+                "uom":     "Numbers, pieces, units",   # see SN008
                 "unitPrice": 1000,
-                "hsCode":  "3923.3090",
+                "hsCode":  "8481.8090",
                 "saleType": "3rd Schedule Goods",
                 # 1180 × 2 = 2360 retail; FBR salesTax = 2360 × 18% / 118% = 360
                 "retailPrice": 2360,
@@ -244,16 +248,26 @@ SCENARIOS = [
         "sn": "SN028",
         "label": "End Consumer Retail, Reduced Rate",
         "clientKey": "walkin",
-        "gstRate": 5,
+        # 8th Schedule Table 1 serial 70 files at 1%, not 5% — the rate belongs to
+        # the SRO entry, never to a guess (see CLAUDE.md FBR section).
+        "gstRate": 1,
         "paymentMode": "Cash",
         "items": [
             {
-                "desc":    "Industrial Valve (reduced-rate SRO 297(I)/2023 item)",
+                "desc":    "Live Horse (8th Schedule Table 1 reduced-rate item)",
                 "qty":     1,
                 "uom":     "Numbers, pieces, units",
-                "unitPrice": 5000,
-                "hsCode":  "8481.8090",
+                "unitPrice": 99.01,
+                # A reduced-rate line needs a genuinely reduced-rate commodity:
+                # 8481.8090 is refused here. Resolved from the accepted filing.
+                "hsCode":  "0101.2100",
                 "saleType": "Goods at Reduced Rate",
+                # [0078]: an SRO/Schedule is meaningless without its item serial,
+                # and once ANY schedule is in play FBR also demands a retail price
+                # ([0090]) — so these three travel together.
+                "sroScheduleNo":   "EIGHTH SCHEDULE Table 1",
+                "sroItemSerialNo": "70",
+                "retailPrice":     100,
             }
         ],
     },
@@ -439,6 +453,11 @@ def create_scenario_bill(api: Api, company_id: int, client_id: int, scenario: di
         # 3rd-schedule MRP × qty — required by FBR (error 0090) for SN008/SN027
         if "retailPrice" in si:
             item_payload["fixedNotifiedValueOrRetailPrice"] = si["retailPrice"]
+        # SRO/Schedule reference. FBR rejects a schedule without its item serial
+        # ([0078]), so the pair is sent together or not at all.
+        if si.get("sroScheduleNo"):
+            item_payload["sroScheduleNo"]   = si["sroScheduleNo"]
+            item_payload["sroItemSerialNo"] = si["sroItemSerialNo"]
         invoice_items.append(item_payload)
 
     invoice_dto = {

@@ -290,6 +290,25 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-15 — FBR sandbox scenario seeder: all six wholesaler scenarios validate
+
+Seeding a new wholesaler company's FBR scenarios produced four bills FBR refused,
+so a fresh company could only ever reach 2/6. The recipes carried values that read
+correctly but are not what FBR accepts: a UoM taken from how the product is really
+sold ("Litre") rather than from the HS code's own valid list ([0099]), an HS code
+refused against the standard-rate sale type ([0052]), and a reduced-rate line with
+no SRO/Schedule item serial ([0078]) and no retail price ([0090]). Each is now
+corrected against a filing FBR actually accepted, and the seeder passes an
+SRO/Schedule reference and its item serial together — FBR rejects either alone.
+A newly created company with its own sandbox token and registration number now
+validates 6/6 (verified on two companies, one filing under a 7-character NTN and
+one under a 13-digit CNIC).
+
+The Trader onboarding skill's setup notes were corrected to match the code: FBR
+readiness needs the dedicated seller registration number, not an STRN (that
+requirement was removed because it stranded genuinely fileable challans), and the
+display NTN is not the FBR identity.
+
 ### 2026-09-15 — FBR logo renders on the tax invoice (embedded, not a served path)
 
 The FBR Digital Invoicing logo was missing from submitted tax invoices — only the QR showed. The QR is an inlined base64 data URI, but the logo used a root-absolute served path (`/images/fbr-logo.png`), which 404s on a site rooted under `/admin/` (the Trader line) and also raced the first print. The logo is now embedded as a base64 `data:` URI (`Helpers/FbrLogoAsset.cs`), exactly as the QR already is, so it renders on any base path, under CSP, offline, and on the first print. One `PrintTaxInvoiceDto.FbrLogoUrl` default fixes Tax Invoice + Credit/Debit note prints.

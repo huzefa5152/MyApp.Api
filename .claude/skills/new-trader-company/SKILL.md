@@ -47,16 +47,34 @@ scope here.)
    `Local database selected from branch TraderFbrInvoicingSystem: .\MSSQLSERVER02 / MyApp_Trader_Local`.
    Use `http://localhost:5136` as `--base-url` everywhere below. Kill it with
    PowerShell `Stop-Process` when done (git-bash mangles `taskkill /F` into `F:/`).
-3. **NTN + STRN + a sandbox token make the company "FBR-ready".** A challan is
-   only billable once its seller AND buyer are FBR-ready
+3. **A registration number + a sandbox token make the company "FBR-ready".**
+   A challan is only billable once its seller AND buyer are FBR-ready
    (`DeliveryChallanService.IsFbrReady`); until then it parks in **"Setup
    Required"** and the seeder's bill create returns *"not in a billable status"*.
-   For the seller (this company) FBR-ready needs a non-empty **NTN**, **STRN**,
-   province, activity, sector, environment AND **FbrToken**. So to seed and test,
-   pass `--ntn` and `--strn` along with `--token` — and the **NTN must be the one
-   the sandbox token is bound to at PRAL**, or FBR rejects the submit. (The
-   seeder's own buyers already carry NTN/STRN, so only the company side needs
-   filling.) Creating the bare company needs none of this; seeding/testing does.
+
+   For the seller (this company) that means a non-empty
+   **`FbrSellerRegistrationNo`**, province, activity, sector, environment AND
+   **`FbrToken`** — and nothing else. Two things this is easy to get wrong:
+
+   - **STRN is NOT required, and must not be reintroduced as a requirement.**
+     FBR's seller/buyer block is registration number + name + province + address
+     + registration type; demanding an STRN only stranded genuinely fileable
+     challans in "Setup Required". `IsFbrReady` carries a comment saying so.
+   - **The display `NTN` is not the FBR identity.** `FbrSellerRegistrationNo` is
+     the value filed as `SellerNTNCNIC`, and it is what **must be bound to the
+     sandbox token at PRAL** or FBR rejects the submit. It is either a 7-character
+     NTN (a leading letter counts — IRIS issues `A113680-1`, file `A113680`) or a
+     13-digit CNIC. `create_company.py` sets it from `--ntn`, else `--cnic`.
+
+   So to seed and test, pass `--token` plus whichever of `--ntn` / `--cnic` the
+   token is bound to. (The seeder's own buyers already carry their identifiers,
+   so only the company side needs filling.) Creating the bare company needs none
+   of this; seeding/testing does.
+
+   Note: on the **reuse** path (a company of this name already exists)
+   `create_company.py` refreshes the token, NTN and STRN but NOT
+   `FbrSellerRegistrationNo` — check that field on the company screen if a reused
+   company will not file.
 
 ## Steps
 
@@ -69,12 +87,13 @@ user; the port is whatever the backend is on.
 python .claude/skills/new-trader-company/scripts/create_company.py \
     --base-url http://localhost:5136 \
     --name "<Company Name>" --cnic <CNIC> \
-    [--ntn <NTN>] [--strn <STRN>] [--token <FBR_TOKEN>]
+    [--ntn <NTN>] [--token <FBR_TOKEN>]
 ```
 
-Pass `--ntn --strn --token` when you intend to seed + test (see prerequisite 3);
-name + CNIC alone is enough to just create the company. Re-running with the same
-name reuses the company and refreshes whichever of NTN/STRN/token you pass.
+Pass `--token` plus the identifier the token is bound to when you intend to
+seed + test (see prerequisite 3); name + CNIC alone is enough to just create the
+company. Re-running with the same name reuses the company and refreshes
+whichever of NTN/STRN/token you pass.
 
 It logs in as `admin/admin123`, creates the company with the fixed profile
 (numbering all start at 1, inventory tracking off), sets the token if given, and
