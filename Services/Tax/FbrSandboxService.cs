@@ -140,7 +140,7 @@ namespace MyApp.Api.Services.Tax
             return created;
         }
 
-        private async Task<(string Uom, int FbrUom)> ResolveUomAsync(
+        private async Task<(string Uom, int? FbrUom)> ResolveUomAsync(
             int companyId, string hsCode, ItemType? sampleType, string? preferred = null)
         {
             // THE resolver (CLAUDE.md 5b-2: "There is exactly ONE place a UOM is
@@ -155,6 +155,20 @@ namespace MyApp.Api.Services.Tax
                         ?? valid?.FirstOrDefault();
             if (first != null && !string.IsNullOrWhiteSpace(first.Description))
                 return (first.Description, first.UOM_ID);
+
+            // The valid list can come back EMPTY - one transient PRAL failure
+            // while seeding is enough, and the pre-flight then answers the same
+            // question successfully a moment later. Dropping the scenario's
+            // STATED unit here is what seeds a bill FBR refuses: "Numbers,
+            // pieces, units" is not valid for 2710.1942 (SN017) or 2829.1910
+            // (SN022), both of which then had to be repaired by hand. A scenario
+            // that states its unit knows it better than the generic default.
+            //
+            // The id is deliberately NULL, not 0: ResolveUomDesc prefers a set
+            // FbrUOMId over the description, and null is its "unset" sentinel,
+            // so submit-time resolution against the HS code fills it in.
+            if (!string.IsNullOrWhiteSpace(preferred))
+                return (preferred, null);
 
             return (sampleType?.UOM ?? "Numbers, pieces, units", sampleType?.FbrUOMId ?? 69);
         }
@@ -318,6 +332,18 @@ namespace MyApp.Api.Services.Tax
                 .OrderBy(c => c.Id)
                 .FirstOrDefaultAsync();
 
+            // PRAL's STATL decides the buyer's registration type from the
+            // NUMBER, not from what we put in the payload, so the demo
+            // registered buyer needs one STATL actually knows. A brand-new
+            // company has no customers to borrow from, and the old fallback
+            // then seeded FBR's spec sample number - which sanitises to the
+            // perfectly well-formed but entirely fake 1000000, is classified
+            // Unregistered, and fails EVERY registered scenario: [0053] on the
+            // B2B ones and [0205] on SN001. That is not a per-company data
+            // problem to fix by hand, so there is an installation-level
+            // setting for it, the same pattern Fbr.ReferenceToken uses.
+            var demoRegisteredNtn = await ResolveDemoRegisteredNtnAsync(realRegistered);
+
             if (registeredClient == null)
             {
                 registeredClient = new Client
@@ -325,12 +351,11 @@ namespace MyApp.Api.Services.Tax
                     CompanyId = companyId,
                     Name = DemoRegisteredName,
                     Address = realRegistered?.Address ?? "Karachi",
-                    // Real registered NTN — passes PRAL's STATL check.
-                    // Falls back to FBR's V1.12 §4 sample NTN if the
-                    // company has no real registered customers (operator
-                    // will need to update the NTN manually before the
-                    // demo bills can submit successfully to PRAL).
-                    NTN = realRegistered?.NTN ?? "1000000000000",
+                    // A number STATL recognises as Registered, or the
+                    // placeholder - which cannot file, and which the seed
+                    // result says so about rather than leaving the operator
+                    // to discover it one FBR rejection at a time.
+                    NTN = demoRegisteredNtn ?? PlaceholderRegisteredNtn,
                     STRN = realRegistered?.STRN,
                     RegistrationType = "Registered",
                     FbrProvinceCode = realRegistered?.FbrProvinceCode
@@ -339,15 +364,16 @@ namespace MyApp.Api.Services.Tax
                 _db.Clients.Add(registeredClient);
                 await _db.SaveChangesAsync();
             }
-            else if (registeredClient.NTN == "1000000000000" && realRegistered != null)
+            else if (demoRegisteredNtn != null && !IsUsableRegisteredNtn(registeredClient.NTN))
             {
-                // Self-heal: an earlier seed left a placeholder NTN on the
-                // demo client. Refresh from a real registered client so
-                // future submits clear PRAL's STATL gate.
-                registeredClient.NTN = realRegistered.NTN;
-                registeredClient.STRN = realRegistered.STRN;
-                registeredClient.Address = realRegistered.Address ?? registeredClient.Address;
-                registeredClient.FbrProvinceCode = realRegistered.FbrProvinceCode
+                // Self-heal: an earlier seed left an unfileable NTN on the demo
+                // client. Tested on the VALUE rather than on the literal
+                // placeholder, so a company seeded before this setting existed
+                // is repaired by the next seed instead of staying broken.
+                registeredClient.NTN = demoRegisteredNtn;
+                registeredClient.STRN = realRegistered?.STRN ?? registeredClient.STRN;
+                registeredClient.Address = realRegistered?.Address ?? registeredClient.Address;
+                registeredClient.FbrProvinceCode = realRegistered?.FbrProvinceCode
                                                    ?? registeredClient.FbrProvinceCode;
                 await _db.SaveChangesAsync();
             }
@@ -385,6 +411,15 @@ namespace MyApp.Api.Services.Tax
             int nextChallanNumber = await NextDemoChallanNumberAsync(companyId);
 
             var notes = new List<string>();
+            if (demoRegisteredNtn == null)
+            {
+                notes.Add(
+                    "WARNING: no NTN available for the demo registered buyer, so every " +
+                    "Registered scenario will be refused by FBR ([0053], and [0205] on SN001). " +
+                    "This company has no registered customer to borrow one from. Set the " +
+                    $"installation setting {SandboxRegisteredBuyerNtnKey} to an NTN that FBR's " +
+                    "STATL lists as Registered, then seed again - the demo buyer repairs itself.");
+            }
             int created = 0, skipped = 0;
             int day = 0;
 
@@ -435,6 +470,48 @@ namespace MyApp.Api.Services.Tax
         }
 
         // ── Run (validate / submit) ─────────────────────────────
+
+        /// <summary>
+        /// FBR's V1.12 sample buyer NTN. It sanitises to 1000000, which is
+        /// well-formed and unknown to STATL - so it files, and is then refused.
+        /// </summary>
+        private const string PlaceholderRegisteredNtn = "1000000000000";
+
+        /// <summary>
+        /// Installation-wide NTN used for the seeded demo registered buyer when
+        /// the company has no registered customer of its own. Installation
+        /// scope, not tenant scope, on purpose: copying one tenant's customer
+        /// number into another tenant's client list would be a cross-tenant
+        /// leak, and this value is test configuration rather than anyone's data.
+        /// </summary>
+        public const string SandboxRegisteredBuyerNtnKey = "Fbr.SandboxRegisteredBuyerNtn";
+
+        /// <summary>
+        /// Whether this NTN can file as a Registered buyer. Cannot prove STATL
+        /// knows it - only FBR can - but it rejects the two shapes that are
+        /// certain to fail: an unusable number, and the spec placeholder.
+        /// </summary>
+        private static bool IsUsableRegisteredNtn(string? ntn)
+        {
+            if (string.IsNullOrWhiteSpace(ntn)) return false;
+            if (FbrBuyerIdentity.Digits(ntn) == PlaceholderRegisteredNtn) return false;
+            var (value, error) = FbrBuyerIdentity.Resolve(ntn, null, registered: true);
+            return error == null && value.Length == 7;
+        }
+
+        /// <summary>
+        /// The NTN to give the demo registered buyer: this company's own
+        /// registered customer first, else the installation setting, else null
+        /// (the caller warns rather than seeding a set that cannot pass).
+        /// </summary>
+        private async Task<string?> ResolveDemoRegisteredNtnAsync(Client? realRegistered)
+        {
+            if (IsUsableRegisteredNtn(realRegistered?.NTN)) return realRegistered!.NTN;
+
+            var configured = (await _db.SystemSettings.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Key == SandboxRegisteredBuyerNtnKey))?.Value;
+            return IsUsableRegisteredNtn(configured) ? configured!.Trim() : null;
+        }
 
         public Task<SandboxRunResult> ValidateAllAsync(int companyId)
             => RunAllAsync(companyId, isSubmit: false);

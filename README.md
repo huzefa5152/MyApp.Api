@@ -298,6 +298,35 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-15 — FBR sandbox seeding works on a brand-new company
+
+Seeding the FBR scenarios for a newly created company produced a set FBR
+refused, and the two causes were independent.
+
+The demo **registered buyer** took its NTN from a real registered customer of
+that company. A new company has no customers, so it fell back to FBR's sample
+number — which is well-formed but unknown to PRAL's STATL, so FBR classified the
+buyer as unregistered and refused every registered scenario ([0053], and [0205]
+on the first). The buyer's number now falls back to a new installation-level
+setting, `Fbr.SandboxRegisteredBuyerNtn`, and when even that is absent the seed
+result says so plainly instead of quietly producing bills that cannot pass. The
+setting is installation-wide rather than per company on purpose: taking one
+tenant's customer number into another tenant's client list would cross a
+boundary that must not be crossed. A company seeded before this repairs itself
+on the next seed, because the check now tests the stored value rather than one
+literal placeholder.
+
+The second cause only appeared once the first was fixed. Two scenarios state the
+unit their rate is quoted in — Liter for the petroleum line, KG for the chemical
+one — but that stated unit was discarded whenever the valid-unit lookup came
+back empty, and the generic "Numbers, pieces, units" that replaced it is refused
+for both commodities. A single transient failure while seeding was enough to
+produce a bill needing hand repair. The stated unit now survives an empty
+lookup.
+
+Verified end to end against the sandbox: a new importer company's eleven
+applicable scenarios all validate, and all eleven submit and receive IRNs.
+
 ### 2026-09-15 — Sandbox scenario now follows the buyer
 
 - **The default sandbox scenario was hardcoded `SN001`** — "goods at standard
