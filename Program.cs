@@ -49,6 +49,10 @@ builder.Host.UseSerilog((ctx, services, lc) => lc
     .ReadFrom.Services(services)
     .Enrich.FromLogContext()
     .Enrich.WithProperty("Application", "MyApp.Api")
+    // The Customer Portal token travels in the URL path, which request logging
+    // records verbatim on every request. This rewrites it to *** before the
+    // event reaches any sink — see Helpers/PortalTokenLogMasker.
+    .Enrich.With(new MyApp.Api.Helpers.PortalTokenLogMasker())
     .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
     // Defaults if config doesn't override — durable rolling file in
     // logs/ next to the binary, 30-day retention, 50 MB cap per file.
@@ -295,6 +299,22 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         }));
 
+    // Public Customer Portal. Partitioned on the TOKEN, not the IP: behind the
+    // host's proxy the remote IP is not reliably the caller's
+    // (ForwardedHeaders:KnownProxies is still unset — audit C-12), so an
+    // IP-partitioned limit would either throttle every customer together or
+    // nobody. Nothing about secrecy rests on this — at 256 bits of entropy the
+    // token cannot be guessed — it is here to stop noise and accidental loops.
+    options.AddPolicy("portal", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Request.RouteValues["token"]?.ToString() ?? "anonymous-portal",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
     // Audit H-6: password change. BCrypt verify + hash = ~200 ms CPU
     // each. 5/hour/user is plenty for legitimate change flows.
     options.AddPolicy("passwordChange", httpContext =>
@@ -364,6 +384,9 @@ builder.Services.AddScoped<IPostingService, PostingService>();
 // The accounting reports. They read the ledger and reuse its primitives —
 // nothing here recomputes a balance of its own.
 builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
+// Customer Portal: management for internal users, plus the only anonymous
+// surface in the app. See PublicCustomerPortalController for why.
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just resolves paths under data/attachments) so it registers as a singleton.
 builder.Services.AddScoped<IFolderService, FolderService>();
@@ -2064,6 +2087,13 @@ app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 // matches /admin/assets/*.js, and StaticFileMiddleware skips any request
 // that already matched an endpoint — serving HTML for every asset.
 app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+
+// The PUBLIC customer portal. The link a customer is sent is /portal/<token>,
+// which is NOT under /admin — so without this it would fall through to the
+// landing page below. It serves the same SPA shell: the shell's asset URLs are
+// absolute (/admin/assets/...), so they still resolve, and main.jsx detects the
+// path and renders the portal outside the router and the auth providers.
+app.MapFallbackToFile("portal/{*path:nonfile}", "admin/index.html");
 
 // Everything else — including "/" — serves the public landing page.
 app.MapFallbackToFile("index.html");

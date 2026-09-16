@@ -322,6 +322,13 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // 0. Customer portals. The FK is Restrict so a live public
+                //    link can never vanish silently, but deleting the client
+                //    the link is FOR is the operator saying so explicitly —
+                //    and leaving the row would block the delete with a raw
+                //    constraint error instead of an answer.
+                await _context.CustomerPortals.Where(p => p.ClientId == id).ExecuteDeleteAsync();
+
                 // 1. Unlink challans from invoices for this client
                 await _context.DeliveryChallans
                     .Where(dc => dc.ClientId == id && dc.InvoiceId != null)

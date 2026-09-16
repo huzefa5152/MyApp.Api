@@ -337,6 +337,13 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // 0. Customer portals FIRST. Both their FKs are Restrict on
+                //    purpose — a live public link must never vanish by accident
+                //    — so a portal left in place blocks step 4's client delete
+                //    with a raw constraint error. Deleting the company is the
+                //    operator saying its links go too.
+                await _context.CustomerPortals.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
+
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)

@@ -39,6 +39,7 @@ import {
   MdAccountTree,
   MdMenuBook,
   MdSpaceDashboard,
+  MdPublic,
   MdPayments,
   MdFolder,
   MdSupervisorAccount,
@@ -166,6 +167,7 @@ export default function DashboardLayout() {
     "folders.list.view",
     "fbr.config.update",
     "fbr.sandbox.view",
+    "customerportals.manage.view",
   ];
   const salesKeys = [
     // Sales tab visible if the user has any of: see-bills (Bills + Invoices
@@ -252,7 +254,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
-      || p.startsWith("/templates") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
+      || p.startsWith("/templates") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor") || p.startsWith("/customer-portals")) return "configuration";
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")) return "administration";
     return "main";
   }, [location.pathname]);
@@ -585,6 +587,12 @@ export default function DashboardLayout() {
                   <span>Navigation Menu</span>
                 </NavLink>
               </Can>
+              <Can permission="customerportals.manage.view">
+                <NavLink to="/customer-portals" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdPublic className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Customer Portals</span>
+                </NavLink>
+              </Can>
               <Can permission="fbr.config.update">
                 <NavLink to="/fbr-settings" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdTune className="dl-subitem__icon" aria-hidden="true" />
@@ -767,6 +775,7 @@ function getBreadcrumb(pathname) {
     "/journal-entries": "Accounting / Journal Entries",
     "/accounting/overview": "Accounting / Overview",
     "/accounting/reports": "Accounting / Reports",
+    "/customer-portals": "Configuration / Customer Portals",
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",

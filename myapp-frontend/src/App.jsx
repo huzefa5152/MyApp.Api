@@ -14,6 +14,7 @@ import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import JournalEntriesPage from "./pages/JournalEntriesPage";
 import AccountingDashboardPage from "./pages/AccountingDashboardPage";
 import AccountingReportsPage from "./pages/AccountingReportsPage";
+import CustomerPortalsPage from "./pages/CustomerPortalsPage";
 import NavigationMenuPage from "./pages/NavigationMenuPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
@@ -67,6 +68,11 @@ export default function App() {
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
 
+      {/* NOTE: the PUBLIC customer portal at /portal/<token> is NOT routed
+          here. It renders in main.jsx, before and outside this router — the
+          router's basename is "/admin" so the path could never match, and the
+          portal must stay outside the auth providers. */}
+
       {/* Protected app routes – auth guard + DashboardLayout */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
@@ -90,6 +96,7 @@ export default function App() {
           <Route path="/journal-entries" element={<JournalEntriesPage />} />
           <Route path="/accounting/overview" element={<AccountingDashboardPage />} />
           <Route path="/accounting/reports" element={<AccountingReportsPage />} />
+          <Route path="/customer-portals" element={<CustomerPortalsPage />} />
           {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
               bulk actions, but shows a per-row "Submitted to FBR" badge so
               the operator knows which bills are locked. */}

@@ -102,6 +102,11 @@ namespace MyApp.Api.Data
         public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
         public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
 
+        // ── Customer Portal ──
+        // A public, token-scoped window onto one client's invoices. The token
+        // column is a bearer secret; see Models/CustomerPortal.
+        public DbSet<CustomerPortal> CustomerPortals { get; set; }
+
         // ── Unified attachments + document folders ──
         // One Attachment entity serves both the folder document-library and
         // per-document transaction attachments (bytes on disk, never in the DB).
@@ -1332,6 +1337,34 @@ namespace MyApp.Api.Data
             // The account-ledger drill-down and every balance read key on this.
             modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
                 .HasIndex(l => l.AccountId);
+
+            // ── Customer Portal ────────────────────────────────────────────────
+            // Both FKs Restrict: a portal is a live public link, and neither
+            // deleting a company nor a client should silently leave one
+            // resolving — or take one away without the operator noticing.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasOne(p => p.Company).WithMany()
+                .HasForeignKey(p => p.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CustomerPortal>()
+                .HasOne(p => p.Client).WithMany()
+                .HasForeignKey(p => p.ClientId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CustomerPortal>()
+                .Property(p => p.PublicToken).HasMaxLength(64).IsRequired();
+            modelBuilder.Entity<CustomerPortal>()
+                .Property(p => p.DocumentType).HasMaxLength(20);
+            // The token is the lookup key on every public request, and it must
+            // be unique or two portals could answer to one link.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasIndex(p => p.PublicToken).IsUnique();
+            // At most ONE ACTIVE portal per (company, client). Filtered, so a
+            // client may accumulate disabled portals in their history without
+            // ever having two live links in circulation.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasIndex(p => new { p.CompanyId, p.ClientId })
+                .IsUnique()
+                .HasFilter("[IsActive] = 1");
 
             // ── Payments / Receipts (AR/AP subledger) ──────────────────────────
             // Payment header → Company (Restrict: a company's payment history

@@ -63,9 +63,14 @@ export const PERMISSION_SECTIONS = [
   {
     section: "Accounting",
     modules: [
-      // Module string in PermissionCatalog.cs is "Accounting" — Receipts
-      // (money in) + Payments (money out), the AR/AP payment subledger.
+      // Module string in PermissionCatalog.cs is "Accounting" — the chart of
+      // accounts, the general ledger, journal entries, the reports, and the
+      // Receipts / Payments subledger.
       { key: "Accounting" },
+      // The public customer-portal links. Kept its own module because the keys
+      // govern publishing a customer's invoices to an unauthenticated URL,
+      // which is a different kind of decision from the rest of Accounting.
+      { key: "CustomerPortals", label: "Customer Portals" },
     ],
   },
   {

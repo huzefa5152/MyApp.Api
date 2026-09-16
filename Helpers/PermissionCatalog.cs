@@ -281,6 +281,17 @@ namespace MyApp.Api.Helpers
             // privacy boundary that does not exist.
             new("accounting.reports.view",    "Accounting", "Reports", "View",   "View the accounting reports: statements, party ledgers, aging, cash book, expenses, tax control and the dashboard"),
 
+            // ── Customer Portal ─────────────────────────────────────────────
+            // Issuing a portal publishes a client's invoices to anyone holding
+            // the link, and the management response CARRIES that link — so
+            // create, update and delete are split from view, and .view is
+            // already enough to walk away with every live token. Grant it the
+            // way you would grant a key cabinet.
+            new("customerportals.manage.view",   "CustomerPortals", "Manage", "View",   "View customer portals and their public links"),
+            new("customerportals.manage.create", "CustomerPortals", "Manage", "Create", "Issue a public portal link for a customer"),
+            new("customerportals.manage.update", "CustomerPortals", "Manage", "Update", "Enable, disable, or change the document a portal serves"),
+            new("customerportals.manage.delete", "CustomerPortals", "Manage", "Delete", "Revoke a portal for good — the link stops working permanently"),
+
             // ── Accounting — Receipts & Payments (AR/AP subledger) ──────────
             // Receipts (money in, settle sales invoices) and Payments (money
             // out, settle purchase bills) are split into separate keys for
