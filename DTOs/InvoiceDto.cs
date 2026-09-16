@@ -13,6 +13,20 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
+        // ── Document taxes ──
+        // Both default to NONE: a null rate means the operator did not select
+        // the tax, which is how every existing document reads.
+        /// <summary>Further tax (s.3(1A)) rate %, or null when not charged. The
+        /// amount is INSIDE GrandTotal.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+        public decimal FurtherTaxAmount { get; set; }
+        /// <summary>Withholding income tax (s.153) rate %, or null in
+        /// fixed-amount mode / when not withheld. NEVER part of GrandTotal.</summary>
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>What the customer actually pays: GrandTotal − withholding.
+        /// Equal to GrandTotal whenever nothing is withheld.</summary>
+        public decimal Collectible { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
         public int? DocumentType { get; set; }
@@ -274,6 +288,17 @@ namespace MyApp.Api.DTOs
         /// challans; leave blank to keep deriving the PO from the challans.</summary>
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
+
+        // ── Document taxes — both optional, both default to NONE ──
+        /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
+        /// server resolves the amount from the subtotal and adds it to the
+        /// grand total; a client-supplied amount is never trusted.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+        /// <summary>Withholding income tax (s.153) rate %. Null with an amount
+        /// means fixed-amount mode; null with no amount means nothing is
+        /// withheld. The server resolves and clamps the amount.</summary>
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal? WithholdingTaxAmount { get; set; }
     }
 
     public class CreateInvoiceItemDto
@@ -314,6 +339,17 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        // ── Document taxes — both optional, both default to NONE ──
+        /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
+        /// server resolves the amount from the subtotal and adds it to the
+        /// grand total; a client-supplied amount is never trusted.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+        /// <summary>Withholding income tax (s.153) rate %. Null with an amount
+        /// means fixed-amount mode; null with no amount means nothing is
+        /// withheld. The server resolves and clamps the amount.</summary>
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal? WithholdingTaxAmount { get; set; }
+
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
@@ -474,6 +510,17 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        // ── Document taxes — both optional, both default to NONE ──
+        /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
+        /// server resolves the amount from the subtotal and adds it to the
+        /// grand total; a client-supplied amount is never trusted.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+        /// <summary>Withholding income tax (s.153) rate %. Null with an amount
+        /// means fixed-amount mode; null with no amount means nothing is
+        /// withheld. The server resolves and clamps the amount.</summary>
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal? WithholdingTaxAmount { get; set; }
+
         /// <summary>
         /// Optional new bill date. When null, the existing date is preserved.
         /// FBR rejects future dates with [0043], so the service caps this at

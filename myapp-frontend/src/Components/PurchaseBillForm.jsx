@@ -9,6 +9,7 @@ import { formStyles } from "../theme";
 import { notify } from "../utils/notify";
 import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import DocumentTaxFields from "./DocumentTaxFields";
 import QuantityInput from "./QuantityInput";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
@@ -37,6 +38,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [supplierBillNumber, setSupplierBillNumber] = useState("");
   const [supplierIRN, setSupplierIRN] = useState("");
   const [gstRate, setGstRate] = useState(18);
+  // Withholding defaults to NONE — nothing is withheld unless the operator
+  // adds it. Further tax has no purchase-side counterpart (see PurchaseBill).
+  const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
+  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
@@ -101,6 +106,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setSupplierBillNumber(data.supplierBillNumber || "");
         setSupplierIRN(data.supplierIRN || "");
         setGstRate(data.gstRate);
+        setWithholdingTaxRate(data.withholdingTaxRate ?? null);
+        setWithholdingTaxAmount(
+          data.withholdingTaxRate == null && data.withholdingTaxAmount > 0 ? data.withholdingTaxAmount : null);
         setPaymentTerms(data.paymentTerms || "");
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
@@ -220,6 +228,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         supplierBillNumber: supplierBillNumber || null,
         supplierIRN: supplierIRN || null,
         gstRate: parseFloat(gstRate),
+        // null, not 0 — only null means nothing is withheld.
+        withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
+        withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
         paymentTerms: paymentTerms || null,
         paymentMode: paymentMode || null,
         items: items.map(i => ({
@@ -481,6 +492,17 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               <span></span>
               <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
+
+            <DocumentTaxFields
+              subtotal={subtotal}
+              gstAmount={gstAmount}
+              withholdingTaxRate={withholdingTaxRate}
+              withholdingTaxAmount={withholdingTaxAmount}
+              onWithholdingChange={({ rate, amount }) => {
+                setWithholdingTaxRate(rate);
+                setWithholdingTaxAmount(amount);
+              }}
+            />
           </fieldset>
           {/* Inside the scrollable body (never clipped), but outside the
               disabled fieldset so view-mode preview/download stay clickable;

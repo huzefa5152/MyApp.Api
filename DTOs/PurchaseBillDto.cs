@@ -2,6 +2,14 @@ namespace MyApp.Api.DTOs
 {
     public class PurchaseBillDto
     {
+        // ── Withholding income tax (s.153) ──
+        // We withhold it and remit it to FBR, so it reduces what the supplier is
+        // owed without moving the grand total. Defaults to none.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>What the supplier is actually owed: GrandTotal − withholding.</summary>
+        public decimal Collectible { get; set; }
+
         public int Id { get; set; }
         public int PurchaseBillNumber { get; set; }
         public DateTime Date { get; set; }
@@ -77,6 +85,13 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreatePurchaseBillDto
     {
+        // ── Withholding income tax (s.153) — optional, defaults to none ──
+        /// <summary>Rate %. Null with an amount means fixed-amount mode; null
+        /// with no amount means nothing is withheld. The server resolves and
+        /// clamps the amount — a client-supplied figure is never trusted.</summary>
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal? WithholdingTaxAmount { get; set; }
+
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int SupplierId { get; set; }
@@ -120,6 +135,13 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdatePurchaseBillDto
     {
+        // ── Withholding income tax (s.153) — optional, defaults to none ──
+        /// <summary>Rate %. Null with an amount means fixed-amount mode; null
+        /// with no amount means nothing is withheld. The server resolves and
+        /// clamps the amount — a client-supplied figure is never trusted.</summary>
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal? WithholdingTaxAmount { get; set; }
+
         public DateTime? Date { get; set; }
         public string? SupplierBillNumber { get; set; }
         public string? SupplierIRN { get; set; }

@@ -27,6 +27,13 @@ namespace MyApp.Api.Services.Implementations
             _logger = logger;
         }
 
+        /// <summary>What the supplier is actually owed: the grand total less
+        /// anything we withhold at source and remit to FBR ourselves. Equal to
+        /// the grand total on every bill that withholds nothing, which is all of
+        /// them until an operator says otherwise.</summary>
+        private static decimal Collectible(PurchaseBill pb) =>
+            WithholdingTaxCalculator.Collectible(pb.GrandTotal, pb.WithholdingTaxAmount);
+
         private static PurchaseBillDto ToDto(PurchaseBill pb) => new()
         {
             Id = pb.Id,
@@ -52,9 +59,15 @@ namespace MyApp.Api.Services.Implementations
             // derived at read time (Pakistan calendar).
             DueDate = pb.DueDate,
             AmountPaid = pb.AmountPaid,
-            BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(pb.GrandTotal, pb.AmountPaid),
-            PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(pb.GrandTotal, pb.AmountPaid, pb.DueDate).ToString(),
-            DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(pb.GrandTotal, pb.AmountPaid, pb.DueDate),
+            // Against the COLLECTIBLE: we only owe the supplier the grand total
+            // minus whatever we withhold and remit to FBR ourselves. Identical
+            // to the grand total whenever nothing is withheld.
+            WithholdingTaxRate = pb.WithholdingTaxRate,
+            WithholdingTaxAmount = pb.WithholdingTaxAmount,
+            Collectible = Collectible(pb),
+            BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(Collectible(pb), pb.AmountPaid),
+            PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(Collectible(pb), pb.AmountPaid, pb.DueDate).ToString(),
+            DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(Collectible(pb), pb.AmountPaid, pb.DueDate),
             Items = pb.Items?.Select(i => new PurchaseItemDto
             {
                 Id = i.Id,
@@ -359,6 +372,11 @@ namespace MyApp.Api.Services.Implementations
             var subtotal = items.Sum(x => x.LineTotal);
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100m, 2);
             var grandTotal = subtotal + gstAmount;
+            // Withholding never moves the grand total — it is derived FROM it
+            // and only reduces what the supplier is owed. Defaults to none.
+            var withholdingTaxRate = dto.WithholdingTaxRate;
+            var withholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                withholdingTaxRate, grandTotal, dto.WithholdingTaxAmount ?? 0m);
 
             var bill = new PurchaseBill
             {
@@ -372,6 +390,8 @@ namespace MyApp.Api.Services.Implementations
                 GSTRate = dto.GSTRate,
                 GSTAmount = gstAmount,
                 GrandTotal = grandTotal,
+                WithholdingTaxRate = withholdingTaxRate,
+                WithholdingTaxAmount = withholdingTaxAmount,
                 AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                 PaymentTerms = dto.PaymentTerms,
                 DocumentType = dto.DocumentType,
@@ -504,6 +524,10 @@ namespace MyApp.Api.Services.Implementations
             bill.SupplierBillNumber = dto.SupplierBillNumber?.Trim();
             bill.SupplierIRN = newIrn;
             bill.GSTRate = dto.GSTRate;
+            // Re-stated on every edit so clearing the selection clears the tax.
+            // The amount is derived from the recalculated grand total below.
+            bill.WithholdingTaxRate = dto.WithholdingTaxRate;
+            bill.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
             bill.PaymentTerms = dto.PaymentTerms;
             bill.DocumentType = dto.DocumentType;
             bill.PaymentMode = dto.PaymentMode;
@@ -558,6 +582,8 @@ namespace MyApp.Api.Services.Implementations
             bill.Subtotal = newItems.Sum(x => x.LineTotal);
             bill.GSTAmount = Math.Round(bill.Subtotal * dto.GSTRate / 100m, 2);
             bill.GrandTotal = bill.Subtotal + bill.GSTAmount;
+            bill.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                bill.WithholdingTaxRate, bill.GrandTotal, bill.WithholdingTaxAmount);
             bill.AmountInWords = NumberToWordsConverter.Convert(bill.GrandTotal);
 
             await _context.SaveChangesAsync();

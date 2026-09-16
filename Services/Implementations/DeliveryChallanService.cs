@@ -588,7 +588,13 @@ namespace MyApp.Api.Services.Implementations
             // Recalculate totals
             invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
             invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
-            invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
+            // Re-derive further tax from the new subtotal. The bill keeps the
+            // RATE it was issued at; only the amount follows the quantity.
+            invoice.FurtherTaxAmount = Helpers.FurtherTaxCalculator.Resolve(invoice.FurtherTaxRate, invoice.Subtotal);
+            invoice.GrandTotal = Helpers.FurtherTaxCalculator.GrandTotal(
+                invoice.Subtotal, invoice.GSTAmount, invoice.FurtherTaxAmount);
+            invoice.WithholdingTaxAmount = Helpers.WithholdingTaxCalculator.Resolve(
+                invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
             invoice.AmountInWords = Helpers.NumberToWordsConverter.Convert(invoice.GrandTotal);
 
             // If any invoice item now has UnitPrice=0, mark FBR status as needing re-validation

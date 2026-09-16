@@ -7,6 +7,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
+import DocumentTaxFields from "./DocumentTaxFields";
 import { isDecimalUnit } from "../utils/formatQuantity";
 
 // Tax Claim Snapshot temporarily HIDDEN (2026-07-11, user request). Everything
@@ -156,6 +157,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
   const [units, setUnits] = useState([]);
   const [gstRate, setGstRate] = useState(18);
+  // Optional document taxes, both NONE until added. Only editable in the full
+  // bill edit — the Invoices-tab narrow edit must not change what was charged.
+  const [furtherTaxRate, setFurtherTaxRate] = useState(null);
+  const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
+  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [billDate, setBillDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
@@ -287,6 +293,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setUnits(unitsRes.data || []);
         setClientId(data.clientId ? String(data.clientId) : "");
         setGstRate(data.gstRate ?? 18);
+        setFurtherTaxRate(data.furtherTaxRate ?? null);
+        setWithholdingTaxRate(data.withholdingTaxRate ?? null);
+        setWithholdingTaxAmount(
+          data.withholdingTaxRate == null && data.withholdingTaxAmount > 0 ? data.withholdingTaxAmount : null);
         // Date arrives as ISO string; the <input type="date"> control wants
         // YYYY-MM-DD in LOCAL time. Pre-fix (.toISOString().slice(0,10))
         // converted to UTC first, which rolled the calendar day forward in
@@ -1208,7 +1218,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
-  const grandTotal = subtotal + gstAmount;
+  // Preview only — the server re-derives further tax from its own subtotal.
+  const furtherTaxAmount = furtherTaxRate === null || furtherTaxRate === ""
+    ? 0
+    : Math.round(subtotal * (Number(furtherTaxRate) || 0) / 100 * 100) / 100;
+  const grandTotal = subtotal + gstAmount + furtherTaxAmount;
 
   // Field-level gating booleans, derived once for clarity:
   //   • lockNonItemType — locks every BILL-level field outside the
@@ -1425,6 +1439,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
+          // null, not 0 — only null clears the tax.
+          furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
+          withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
+          withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
           paymentTerms: ptToSave,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
@@ -2322,11 +2340,36 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     <span>GST ({gstRate}%):</span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
+                  {furtherTaxAmount > 0 && (
+                    <div style={styles.totalsRow}>
+                      <span>Further tax ({furtherTaxRate}%):</span>
+                      <strong>Rs. {furtherTaxAmount.toLocaleString()}</strong>
+                    </div>
+                  )}
                   <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
                     <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
                   </div>
                 </div>
+
+                {/* Only in the full bill edit. The Invoices-tab narrow edit
+                    re-classifies and re-prices lines under a total-preservation
+                    guard; letting it change WHICH taxes a filed bill carried
+                    would defeat that guard entirely. */}
+                {billsMode && !lockNonItemType && (
+                  <DocumentTaxFields
+                    subtotal={subtotal}
+                    gstAmount={gstAmount}
+                    furtherTaxRate={furtherTaxRate}
+                    onFurtherTaxRateChange={setFurtherTaxRate}
+                    withholdingTaxRate={withholdingTaxRate}
+                    withholdingTaxAmount={withholdingTaxAmount}
+                    onWithholdingChange={({ rate, amount }) => {
+                      setWithholdingTaxRate(rate);
+                      setWithholdingTaxAmount(amount);
+                    }}
+                  />
+                )}
 
                 {/* Total-preservation guard — only shown in itemType+qty
                     (+price) mode. Lets the operator see in real time

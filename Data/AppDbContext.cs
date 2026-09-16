@@ -447,6 +447,14 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
+            // Document taxes. Rates are (5,2) like GSTRate — a percentage, not
+            // money; the amounts are (18,2) money like every other total.
+            modelBuilder.Entity<Invoice>().Property(i => i.FurtherTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.FurtherTaxAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(b => b.WithholdingTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(b => b.WithholdingTaxAmount).HasPrecision(18, 2);
             // (28,12): see AdjustedUnitPrice above. LineTotal stays (18,2) -
             // it is money and 2dp is correct; only the RATE needs the extra
             // scale so Quantity x UnitPrice can land on an exact line total.

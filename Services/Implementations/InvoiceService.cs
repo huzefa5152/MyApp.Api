@@ -223,6 +223,13 @@ namespace MyApp.Api.Services.Implementations
             return ii.LineTotal;
         }
 
+        /// <summary>What the customer actually pays: the grand total less
+        /// anything they withhold at source and remit to FBR on our behalf.
+        /// Equal to the grand total on every invoice that withholds nothing,
+        /// which is all of them until an operator says otherwise.</summary>
+        private static decimal Collectible(Invoice inv) =>
+            WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+
         private InvoiceDto ToDto(Invoice inv)
         {
             var missing = ComputeFbrMissing(inv);
@@ -288,9 +295,18 @@ namespace MyApp.Api.Services.Implementations
             // correctly without a write.
             DueDate = inv.DueDate,
             AmountPaid = inv.AmountPaid,
-            BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(inv.GrandTotal, inv.AmountPaid),
-            PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(inv.GrandTotal, inv.AmountPaid, inv.DueDate).ToString(),
-            DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(inv.GrandTotal, inv.AmountPaid, inv.DueDate),
+            // Measured against the COLLECTIBLE, not the grand total: the
+            // customer only ever pays GrandTotal minus what they withhold, so an
+            // invoice with withholding on it would otherwise never read as paid.
+            // Identical to the grand total whenever nothing is withheld.
+            FurtherTaxRate = inv.FurtherTaxRate,
+            FurtherTaxAmount = inv.FurtherTaxAmount,
+            WithholdingTaxRate = inv.WithholdingTaxRate,
+            WithholdingTaxAmount = inv.WithholdingTaxAmount,
+            Collectible = Collectible(inv),
+            BalanceDue = MyApp.Api.Helpers.PaymentStatusCalculator.BalanceDue(Collectible(inv), inv.AmountPaid),
+            PaymentStatus = MyApp.Api.Helpers.PaymentStatusCalculator.Status(Collectible(inv), inv.AmountPaid, inv.DueDate).ToString(),
+            DaysOverdue = MyApp.Api.Helpers.PaymentStatusCalculator.DaysOverdue(Collectible(inv), inv.AmountPaid, inv.DueDate),
             // Customer document handover — DERIVED, never stored. Gated to
             // FBR-submitted, non-cancelled, non-demo bills; everything else is
             // "—" (NotApplicable). Independent of FBR/payment/print events.
@@ -676,7 +692,17 @@ namespace MyApp.Api.Services.Implementations
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
-            var grandTotal = subtotal + gstAmount;
+            // Further tax defaults to NONE: a null rate resolves to 0 and the
+            // grand total is the same two-term sum it has always been. Routed
+            // through the calculator so the third term cannot be forgotten.
+            var furtherTaxRate = FurtherTaxCalculator.Resolve(dto.FurtherTaxRate, subtotal) > 0m ? dto.FurtherTaxRate : null;
+            var furtherTaxAmount = FurtherTaxCalculator.Resolve(furtherTaxRate, subtotal);
+            var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, furtherTaxAmount);
+            // Withholding never moves the grand total — it is worked out FROM it
+            // and only changes what the customer actually pays.
+            var withholdingTaxRate = dto.WithholdingTaxRate;
+            var withholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                withholdingTaxRate, grandTotal, dto.WithholdingTaxAmount ?? 0m);
 
             // Audit C-14 (2026-05-13): pre-save stock availability check.
             // Only blocks when Company.StockGuardHardBlock = true; with
@@ -811,6 +837,10 @@ namespace MyApp.Api.Services.Implementations
                         Subtotal = subtotal,
                         GSTRate = dto.GSTRate,
                         GSTAmount = gstAmount,
+                        FurtherTaxRate = furtherTaxRate,
+                        FurtherTaxAmount = furtherTaxAmount,
+                        WithholdingTaxRate = withholdingTaxRate,
+                        WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms = dto.PaymentTerms,
@@ -1079,7 +1109,17 @@ namespace MyApp.Api.Services.Implementations
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
             var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
-            var grandTotal = subtotal + gstAmount;
+            // Further tax defaults to NONE: a null rate resolves to 0 and the
+            // grand total is the same two-term sum it has always been. Routed
+            // through the calculator so the third term cannot be forgotten.
+            var furtherTaxRate = FurtherTaxCalculator.Resolve(dto.FurtherTaxRate, subtotal) > 0m ? dto.FurtherTaxRate : null;
+            var furtherTaxAmount = FurtherTaxCalculator.Resolve(furtherTaxRate, subtotal);
+            var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, furtherTaxAmount);
+            // Withholding never moves the grand total — it is worked out FROM it
+            // and only changes what the customer actually pays.
+            var withholdingTaxRate = dto.WithholdingTaxRate;
+            var withholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                withholdingTaxRate, grandTotal, dto.WithholdingTaxAmount ?? 0m);
 
             // Audit C-14 (2026-05-13): same pre-save availability check
             // as the regular CreateAsync — only blocks under hard-block.
@@ -1178,6 +1218,10 @@ namespace MyApp.Api.Services.Implementations
                         Subtotal = subtotal,
                         GSTRate = dto.GSTRate,
                         GSTAmount = gstAmount,
+                        FurtherTaxRate = furtherTaxRate,
+                        FurtherTaxAmount = furtherTaxAmount,
+                        WithholdingTaxRate = withholdingTaxRate,
+                        WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms = finalPaymentTerms,
@@ -1406,6 +1450,15 @@ namespace MyApp.Api.Services.Implementations
                     invoice.Date = newDate;
                 }
                 invoice.GSTRate = dto.GSTRate;
+                // Both taxes are re-stated on every full edit, so clearing the
+                // selection genuinely clears the tax rather than leaving the
+                // previous rate stuck on the document. The AMOUNTS are derived
+                // below from the recalculated totals — a client-supplied amount
+                // is never trusted, only the fixed-amount withholding figure,
+                // and even that is clamped.
+                invoice.FurtherTaxRate = dto.FurtherTaxRate is > 0m ? dto.FurtherTaxRate : null;
+                invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
+                invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
@@ -1517,7 +1570,13 @@ namespace MyApp.Api.Services.Implementations
                 // Recalculate totals
                 invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
                 invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
-                invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
+                // The stored further-tax RATE survives an edit; the amount is
+                // always re-derived from the new subtotal, never carried over.
+                invoice.FurtherTaxAmount = FurtherTaxCalculator.Resolve(invoice.FurtherTaxRate, invoice.Subtotal);
+                invoice.GrandTotal = FurtherTaxCalculator.GrandTotal(
+                    invoice.Subtotal, invoice.GSTAmount, invoice.FurtherTaxAmount);
+                invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                    invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
 
                 // Any edit invalidates a previous validation
@@ -1987,7 +2046,14 @@ namespace MyApp.Api.Services.Implementations
                     {
                         invoice.Subtotal = newSubtotal;
                         invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
-                        invoice.GrandTotal = newSubtotal + invoice.GSTAmount;
+                        // Re-derive further tax from the new subtotal. Leaving
+                        // the old two-term sum here would have DROPPED it from
+                        // the grand total on every narrow edit.
+                        invoice.FurtherTaxAmount = FurtherTaxCalculator.Resolve(invoice.FurtherTaxRate, newSubtotal);
+                        invoice.GrandTotal = FurtherTaxCalculator.GrandTotal(
+                            newSubtotal, invoice.GSTAmount, invoice.FurtherTaxAmount);
+                        invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(
+                            invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
                     }
                 }
 
@@ -2845,7 +2911,10 @@ namespace MyApp.Api.Services.Implementations
             {
                 subtotal   = noteItems.Sum(i => i.LineTotal);
                 gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
-                grandTotal = subtotal + gstAmount;
+                // A partial note carries the original's further-tax rate, so the
+                // reversal is proportionate to what was charged.
+                grandTotal = FurtherTaxCalculator.GrandTotal(
+                    subtotal, gstAmount, FurtherTaxCalculator.Resolve(original.FurtherTaxRate, subtotal));
             }
 
             // A reference note's value cannot exceed the original invoice
@@ -2925,6 +2994,11 @@ namespace MyApp.Api.Services.Implementations
                         Subtotal      = subtotal,
                         GSTRate       = gstRate,
                         GSTAmount     = gstAmount,
+                        // A note reverses (or adds to) a sale that carried
+                        // further tax, so it carries the same rate; the amount
+                        // is already inside grandTotal above.
+                        FurtherTaxRate   = original.FurtherTaxRate,
+                        FurtherTaxAmount = FurtherTaxCalculator.Resolve(original.FurtherTaxRate, subtotal),
                         GrandTotal    = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
@@ -3068,7 +3142,8 @@ namespace MyApp.Api.Services.Implementations
             var subtotal   = plannedLines.Sum(l => l.LineTotal);
             var gstRate    = original.GSTRate;
             var gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
-            var grandTotal = subtotal + gstAmount;
+            var supplementFurtherTax = FurtherTaxCalculator.Resolve(original.FurtherTaxRate, subtotal);
+            var grandTotal = FurtherTaxCalculator.GrandTotal(subtotal, gstAmount, supplementFurtherTax);
 
             // Which original challans to clone, matched to delta lines by description.
             var plannedChallans = new List<(DeliveryChallan Src, List<(int? ItemTypeId, string Description, string Unit, decimal Quantity)> Items)>();
@@ -3123,6 +3198,9 @@ namespace MyApp.Api.Services.Implementations
                         Subtotal = subtotal,
                         GSTRate = gstRate,
                         GSTAmount = gstAmount,
+                        // A supplement bills the delta at the ORIGINAL's rate.
+                        FurtherTaxRate = original.FurtherTaxRate,
+                        FurtherTaxAmount = supplementFurtherTax,
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms = original.PaymentTerms,

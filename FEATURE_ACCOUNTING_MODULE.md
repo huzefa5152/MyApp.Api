@@ -347,6 +347,8 @@ the code.
 
 | 2026-09-16 | 2 | **General ledger core DONE.** `JournalEntry` + `JournalLine`, `Company.GlPostingEnabled` / `GlLockDate` (migration `AddGeneralLedger`), `GeneralLedgerService` (the one place an entry is written, plus balances / account ledger / trial balance), `JournalEntryService`, `AccountingController`, `JournalEntriesController`, `JournalEntriesPage.jsx`, `AccountLedgerDialog.jsx`, period close on the CoA screen. GL is on at company creation with no route to turn it off. New suite `test_accounting_gl.py` 93/93; whole existing Trader table green (stock reflow 161/161, chart 103/103). **The suite caught a real bug on its first run:** the manual-journal EDIT path replaced lines in place without going through `WriteEntryAsync`, so an unbalanced edit was accepted and the ledger went out of balance — the invariant is now `AssertEntryIsLegalAsync` on the GL service and both paths call it. |
 
+| 2026-09-16 | 3a | **The two taxes DONE.** `FurtherTaxRate/Amount` + `WithholdingTaxRate/Amount` on `Invoice`, `WithholdingTaxRate/Amount` on `PurchaseBill` (migration `AddWithholdingAndFurtherTax`), `FurtherTaxCalculator`, `WithholdingTaxCalculator`, `DocumentTaxFields.jsx` wired into the bill create, bill edit and purchase-bill forms. Both default to NONE and the field does not exist on the form until added. New suite `test_document_taxes.py` 67/67; whole Trader table green. **Deviations from §5:** migrations 3 and 4 are ONE migration — they always ship together and two would add nothing. |
+
 ### Notes for the next session
 
 - **This branch is not in `local.databases.json`.** It is mapped to

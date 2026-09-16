@@ -48,6 +48,23 @@ namespace MyApp.Api.Models
         public decimal AmountPaid { get; set; }
         public DateTime? DueDate { get; set; }
 
+        // ── Withholding income tax (s.153) ──
+        // The mirror of the sales-invoice field: WE withhold this from the
+        // supplier's payment and owe it to FBR. It never moves GrandTotal — it
+        // reduces what the supplier is owed:
+        //     Collectible = GrandTotal − WithholdingTaxAmount
+        // and posts Cr "WHT payable".
+        //
+        // DEFAULT IS NONE: a null rate and a zero amount mean nothing is
+        // withheld, which is how every bill written before this existed reads.
+        // See Helpers/WithholdingTaxCalculator.
+        //
+        // NOTE: further tax has no counterpart here. It is a SALES-side tax we
+        // charge a buyer; a supplier's further tax arrives inside their bill
+        // total as part of what we owe them, with no separate treatment.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+
         // FBR digital-invoicing classification — copied from supplier's
         // invoice for completeness (informational; we don't post this).
         public int? DocumentType { get; set; }
