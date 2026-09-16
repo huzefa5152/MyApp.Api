@@ -336,6 +336,20 @@ namespace MyApp.Api.Services.Implementations
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
                     .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
 
+                // 1b. Receipts / payments and their allocation lines. These
+                //     MUST go before the invoices and purchase bills below:
+                //     PaymentAllocation -> Invoice / PurchaseBill is Restrict,
+                //     so an allocation still pointing at an invoice makes the
+                //     invoice delete fail and rolls the whole thing back.
+                var paymentIds = await _context.Payments
+                    .Where(p => p.CompanyId == id).Select(p => p.Id).ToListAsync();
+                if (paymentIds.Count > 0)
+                {
+                    await _context.PaymentAllocations
+                        .Where(a => paymentIds.Contains(a.PaymentId)).ExecuteDeleteAsync();
+                    await _context.Payments.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
+                }
+
                 // 2. Delete invoice items, then invoices
                 var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();
                 if (invoiceIds.Count > 0)
@@ -406,6 +420,14 @@ namespace MyApp.Api.Services.Implementations
                 //    becomes undeleteable.
                 await _context.FbrCommunicationLogs.Where(l => l.CompanyId == id).ExecuteDeleteAsync();
                 await _context.UserCompanies.Where(uc => uc.CompanyId == id).ExecuteDeleteAsync();
+
+                // 7b. Chart of accounts. Accounts -> AccountGroup and both ->
+                //     Company are Restrict, so the chart has to go before the
+                //     company row. Accounts first, then the groups; the groups'
+                //     self-reference (ParentGroupId) is satisfied because one
+                //     DELETE removes the whole tree in a single statement.
+                await _context.Accounts.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
+                await _context.AccountGroups.Where(g => g.CompanyId == id).ExecuteDeleteAsync();
 
                 // 8. Delete the company
                 await _repository.DeleteAsync(company);

@@ -320,6 +320,7 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IFolderRepository, FolderRepository>();
 builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 
@@ -347,9 +348,12 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 // IDeliveryChallanService (create-challan-from-order). No true DI cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
-// Receipts (money in) + Payments (money out) — AR/AP subledger. GL-free port:
-// no IPostingService dependency (master has no Chart of Accounts).
+// Receipts (money in) + Payments (money out) — AR/AP subledger.
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+// Chart of Accounts: the account tree plus the sector preset that makes a new
+// company's chart usable without hand-building it.
+builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just resolves paths under data/attachments) so it registers as a singleton.
 builder.Services.AddScoped<IFolderService, FolderService>();

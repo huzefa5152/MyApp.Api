@@ -6,9 +6,9 @@ namespace MyApp.Api.Models.Accounting
     ///   • <see cref="InvoiceId"/>      — a Receipt settling a sales invoice (AR).
     ///   • <see cref="PurchaseBillId"/> — a Payment settling a purchase bill (AP).
     ///   • <see cref="AccountId"/>      — a direct income/expense line with no
-    ///     document. There is no Chart of Accounts in master, so this is a plain
-    ///     FK-less nullable column carried for shape-compatibility with the
-    ///     accounting build; the master UI does not populate it.
+    ///     document. A plain FK-less nullable column: a Chart of Accounts now
+    ///     exists, but nothing populates this until the posting engine does, and
+    ///     an FK added before then would only constrain rows that are all null.
     ///
     /// BalanceDue/AmountPaid on the target invoice/bill is recomputed from the sum
     /// of these allocations inside the same transaction that writes them.

@@ -343,3 +343,18 @@ the code.
 | Date | Phase | State |
 |---|---|---|
 | 2026-09-16 | — | Plan written and committed. Nothing implemented yet. |
+| 2026-09-16 | 1 | **Chart of accounts DONE.** `AccountGroups` + `Accounts` (migration `20260916170348_AddChartOfAccounts`), `AccountService`, `AccountsController`, `CoaPresetSeeder`, `accounting.coa.view` / `accounting.coa.manage`, `ChartOfAccountsPage.jsx`, `AccountSelect.jsx`, `BankCashSelect.jsx`. New suite `test_accounting_chart.py` 103/103; whole existing Trader table green (stock reflow 161/161). Also fixed: `CompanyService.DeleteAsync` did not cascade payments or the chart, so a company with either was undeletable. |
+
+### Notes for the next session
+
+- **This branch is not in `local.databases.json`.** It is mapped to
+  `MyApp_Trader_Local` through the gitignored `local.databases.local.json`, so
+  the shared map stays identical on every branch. A fresh checkout needs that
+  file (or the branch renamed) or the app falls through to the appsettings
+  chain and `DevelopmentSqlGuard` stops it. `run-local.ps1` (untracked) also
+  carries an entry for the branch on port 5104.
+- `test_fbr_token_unreadable_survives_save.py` is listed in §7 but **does not
+  exist on this line** — it is an importer suite. Everything else in the table
+  ran.
+- Phase 2 picks up where `AccountService.LiveBalance` is marked: that is the one
+  place a balance is computed, and journal movement is added on top of it there.

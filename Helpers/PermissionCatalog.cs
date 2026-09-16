@@ -253,11 +253,19 @@ namespace MyApp.Api.Helpers
             new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
             new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
 
+            // ── Accounting — Chart of Accounts ──────────────────────────────
+            // Two keys, not four: reading the chart is harmless, but every write
+            // (new group, new account, rename, deactivate, reclassify, seed the
+            // preset) reshapes where money lands, so they share one key rather
+            // than letting a role hold "create account" without "edit account".
+            new("accounting.coa.view",        "Accounting", "Chart of Accounts", "View",   "View the chart of accounts and account balances"),
+            new("accounting.coa.manage",      "Accounting", "Chart of Accounts", "Manage", "Create, edit, deactivate or delete accounts and groups, and seed the sector preset"),
+
             // ── Accounting — Receipts & Payments (AR/AP subledger) ──────────
             // Receipts (money in, settle sales invoices) and Payments (money
             // out, settle purchase bills) are split into separate keys for
             // separation of duties: a cashier may record receipts without being
-            // able to pay money out. GL-free — no Chart of Accounts in master.
+            // able to pay money out.
             new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
             new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
             new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),
