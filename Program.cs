@@ -361,6 +361,9 @@ builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
 // The posting engine decides a document's legs; the ledger service above is
 // what actually writes them, so the balance invariant has one home.
 builder.Services.AddScoped<IPostingService, PostingService>();
+// The accounting reports. They read the ledger and reuse its primitives —
+// nothing here recomputes a balance of its own.
+builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just resolves paths under data/attachments) so it registers as a singleton.
 builder.Services.AddScoped<IFolderService, FolderService>();

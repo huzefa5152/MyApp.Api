@@ -351,6 +351,8 @@ the code.
 
 | 2026-09-16 | 3b | **Posting from documents DONE.** `IPostingService` / `PostingService` (legs only — `GeneralLedgerService.WriteEntryAsync` still writes them, so the balance invariant keeps one home), `Company.DefaultSalesAccountId` / `DefaultPurchaseAccountId` (migration `AddCompanyDefaultGlAccounts`), posting wired into every invoice mutation point (the same seven places stock reflows), the void and delete paths, purchase bills and payments, plus a `rebuild` endpoint that re-posts a company from scratch. New suite `test_accounting_posting.py` 82/82; whole Trader table green. **Deviation from §5:** migration 6 (`AddItemTypeCompanyGlAccounts`) is NOT done — see below. |
 
+| 2026-09-17 | 4 | **Accounting reports DONE.** `AccountingReportService` + partials (Parties, CashBank, TaxControl), `AccountingReportsController`, `AccountingReportsPage.jsx` (7 tabs, CSV export), `AccountingDashboardPage.jsx`, `accounting.reports.view`, shared `utils/csvExport.js`. New suite `test_accounting_reports.py` 55/55, built entirely out of cross-checks; whole Trader table green. **Found in UI verification:** all three new pages defaulted their date controls from `toISOString()`, which is UTC — between midnight and 5am Karachi that reads a day behind, so every report excluded the day's own documents. `utils/dateInput.todayYmd()` already existed for exactly this; they now use it. |
+
 ### Notes for the next session
 
 - **This branch is not in `local.databases.json`.** It is mapped to
@@ -373,6 +375,13 @@ the code.
   `(CompanyId, ItemTypeId, SaleAccountId, PurchaseAccountId)` table and add it to
   `PostingService.ResolveSalesAsync` / `ResolvePurchasesAsync` — nothing else has
   to change.
+- **Pre-existing `toISOString()` date defaults elsewhere.** The same UTC bug the
+  new report pages had is still in `CreateChallanFromOrderModal.jsx`,
+  `PaymentForm.jsx`, `SalesOrderForm.jsx` and `SalesQuoteForm.jsx` — each
+  defaults a date input from `new Date().toISOString().slice(0, 10)`, so between
+  midnight and 5am Karachi they offer yesterday. Left alone here because they
+  are outside the accounting module, but they are a one-line fix each
+  (`todayYmd()` from `utils/dateInput`) and worth doing on the Trader line.
 - `PostingService`'s unallocated-remainder branch is unreachable through the
   payments API: `PaymentService` sets `Payment.Amount` to the sum of its
   allocations, so there is never a remainder. It is kept, and commented as such,

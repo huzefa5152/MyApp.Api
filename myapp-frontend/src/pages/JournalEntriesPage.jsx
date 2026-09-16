@@ -8,6 +8,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
+import { todayYmd } from "../utils/dateInput";
 import useIsNarrow from "../hooks/useIsNarrow";
 import useScrollToError from "../hooks/useScrollToError";
 import usePageSize from "../hooks/usePageSize";
@@ -25,7 +26,7 @@ const money = (n) => {
 };
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
-const todayIso = () => new Date().toISOString().slice(0, 10);
+
 
 /**
  * Accounting → Journal Entries. The listing is the whole general ledger: every
@@ -316,7 +317,7 @@ export default function JournalEntriesPage() {
 // ── Create / edit a manual journal ──
 function JournalForm({ entry, companyId, accounts, isNarrow, onClose, onSaved }) {
   const isEdit = !!entry;
-  const [date, setDate] = useState(entry ? String(entry.date).slice(0, 10) : todayIso());
+  const [date, setDate] = useState(entry ? String(entry.date).slice(0, 10) : todayYmd());
   const [narration, setNarration] = useState(entry?.narration || "");
   const [lines, setLines] = useState(() =>
     entry

@@ -275,6 +275,12 @@ namespace MyApp.Api.Helpers
             new("accounting.journal.update",  "Accounting", "Journal Entries", "Update", "Edit a manual journal entry"),
             new("accounting.journal.delete",  "Accounting", "Journal Entries", "Delete", "Delete a manual journal entry"),
 
+            // One key for the whole reporting suite. They are all views of the
+            // same ledger, so a role that may read the trial balance can already
+            // work out the balance sheet — splitting them would suggest a
+            // privacy boundary that does not exist.
+            new("accounting.reports.view",    "Accounting", "Reports", "View",   "View the accounting reports: statements, party ledgers, aging, cash book, expenses, tax control and the dashboard"),
+
             // ── Accounting — Receipts & Payments (AR/AP subledger) ──────────
             // Receipts (money in, settle sales invoices) and Payments (money
             // out, settle purchase bills) are split into separate keys for
