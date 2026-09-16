@@ -31,9 +31,15 @@ export default function QuantityInput({
   // Order line) it takes precedence over the UOM default, so the spinner can't
   // step below it. Falls back to 0 (decimal UOM) / 1 (integer UOM).
   min,
+  // Force whole numbers regardless of the UOM. Used by the Invoices-tab
+  // narrow edit, where an exact line total is reproduced as
+  // quantity x unit price and a fractional quantity cannot round-trip
+  // (the server refuses one there). Default false, so every existing
+  // caller keeps its UOM-driven behaviour.
+  integerOnly = false,
   ...rest
 }) {
-  const allowsDecimal = isDecimalUnit(unit, units);
+  const allowsDecimal = isDecimalUnit(unit, units) && !integerOnly;
   const effectiveMin = min != null ? min : (allowsDecimal ? 0 : 1);
 
   return (
@@ -57,7 +63,9 @@ export default function QuantityInput({
         unit
           ? allowsDecimal
             ? `Decimal allowed for ${unit} (e.g. 12.5, 0.0004 — up to 4 places)`
-            : `Whole numbers only for ${unit}`
+            : integerOnly
+              ? `Whole numbers only — an exact line total must divide into whole ${unit}`
+              : `Whole numbers only for ${unit}`
           : undefined
       }
       style={style}

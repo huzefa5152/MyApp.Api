@@ -407,7 +407,13 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<InvoiceItemAdjustment>()
                 .Property(a => a.AdjustedQuantity).HasPrecision(18, 4);
             modelBuilder.Entity<InvoiceItemAdjustment>()
-                .Property(a => a.AdjustedUnitPrice).HasPrecision(18, 2);
+                // (28,12) not (18,2): the Invoices-tab narrow edit can set a
+                // unit price derived from an exact line total (1,383,048 over
+                // 6,301 units is 219.496270433265), and a 2dp column silently
+                // rounds that to 219.50 - which reproduces 1,383,069.50 and
+                // breaks the total-preservation guard the same edit must pass.
+                // Matches the scale the importer and customize lines already run.
+                .Property(a => a.AdjustedUnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<InvoiceItemAdjustment>()
                 .Property(a => a.AdjustedLineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItemAdjustment>()
@@ -428,7 +434,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
-            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
+            // (28,12): see AdjustedUnitPrice above. LineTotal stays (18,2) -
+            // it is money and 2dp is correct; only the RATE needs the extra
+            // scale so Quantity x UnitPrice can land on an exact line total.
+            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 
             // Quantity columns — decimal(18,4) so fractional UOMs (KG, Liter,

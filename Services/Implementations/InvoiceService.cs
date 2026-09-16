@@ -1645,6 +1645,62 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"Bill item id(s) [{string.Join(", ", unknownIds)}] do not belong to this bill.");
 
+            // ── "Exact Line Total" adjustment method (2026-09-16) ────────────
+            // The operator states what a line must COME TO and the unit price is
+            // derived, instead of typing a price and hoping it multiplies back.
+            // The grouped view sums several lines into one row, so the caller
+            // allocates its target across those lines and states each line's
+            // share; resolving it here (rather than trusting a client-computed
+            // price) is what makes SUM(LineTotal) land on the target exactly.
+            //
+            // Normalising into row.UnitPrice deliberately keeps every path below
+            // untouched: the overlay writer, the bill writer and the subtotal
+            // recompute all continue to read Quantity x UnitPrice.
+            if (allowQuantityEdit)
+            {
+                var existingById = invoice.Items.ToDictionary(ii => ii.Id);
+                foreach (var row in dto.Items)
+                {
+                    // A price beyond the column's scale would be silently
+                    // rounded on save, so the bill would not reproduce what the
+                    // operator was shown. Refuse it instead.
+                    if (row.UnitPrice.HasValue && decimal.Round(row.UnitPrice.Value, 12) != row.UnitPrice.Value)
+                        throw new InvalidOperationException(
+                            $"Unit price for bill item id {row.Id} has more than 12 decimal places.");
+
+                    if (!row.ExactLineTotal.HasValue) continue;
+
+                    var target = row.ExactLineTotal.Value;
+                    if (target <= 0m)
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} must be greater than zero.");
+                    if (decimal.Round(target, 2) != target)
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} must be a rupee amount with at most 2 decimal places.");
+
+                    var qty = row.Quantity ?? existingById[row.Id].Quantity;
+                    if (qty <= 0m)
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} needs a quantity greater than zero.");
+                    if (qty != decimal.Truncate(qty))
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} needs a whole-number quantity (got {qty}).");
+
+                    // 12dp is the column's scale, so this is the most precise
+                    // rate that survives the round trip.
+                    var derived = decimal.Round(target / qty, 12, MidpointRounding.AwayFromZero);
+                    var reproduced = decimal.Round(qty * derived, 2, MidpointRounding.AwayFromZero);
+                    if (reproduced != target)
+                        throw new InvalidOperationException(
+                            $"Bill item id {row.Id}: {target:N2} cannot be reproduced exactly from a whole quantity of " +
+                            $"{qty:N0} at the stored precision (closest is {reproduced:N2}). " +
+                            $"Adjust the quantity or the target amount.");
+
+                    row.UnitPrice = derived;
+                    row.Quantity ??= qty;
+                }
+            }
+
             var referencedTypeIds = dto.Items
                 .Where(i => i.ItemTypeId.HasValue)
                 .Select(i => i.ItemTypeId!.Value)
@@ -3378,6 +3434,62 @@ namespace MyApp.Api.Services.Implementations
                                 GSTAmount = gstAmt,
                                 TotalInclTax = lineTotal + gstAmt,
                                 HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode
+                            };
+                        }).ToList(),
+
+                // The BILL's own view of the same invoice (2026-09-16), for a
+                // Sales Tax Invoice template that must show what the customer
+                // was billed rather than what was filed: grouped by the bill's
+                // item type, summing the bill's quantity and line total, with
+                // NO overlay applied anywhere. The commercial item type usually
+                // carries no HS code, which is exactly why this cannot be
+                // derived from Items above.
+                //
+                // Same two shapes as Items: group when every line is classified,
+                // otherwise render a row per line, so a part-classified bill
+                // still prints every line instead of collapsing into one blank
+                // group.
+                BillItems = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                    ? inv.Items
+                        .GroupBy(ii => ii.ItemTypeName)
+                        .Select(g =>
+                        {
+                            var totalQty = g.Sum(ii => ii.Quantity);
+                            var totalValue = g.Sum(ii => ii.LineTotal);
+                            var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
+                            return new PrintTaxItemDto
+                            {
+                                ItemTypeName = g.Key,
+                                Quantity = totalQty,
+                                // 2dp: this is a printed money column, and the
+                                // stored rate can now carry 12 (the exact-line-
+                                // total edit). The value, not the rate, is what
+                                // has to tie out on the page.
+                                UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
+                                UOM = g.Select(x => x.UOM).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "",
+                                Description = g.Key,
+                                ValueExclTax = totalValue,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = totalValue + gstAmt,
+                                HSCode = g.Select(x => x.HSCode).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                            };
+                        }).ToList()
+                    : inv.Items.Select(ii =>
+                        {
+                            var gstAmt = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2);
+                            return new PrintTaxItemDto
+                            {
+                                ItemTypeName = ii.ItemTypeName,
+                                Quantity = ii.Quantity,
+                                UnitPrice = ii.Quantity != 0 ? Math.Round(ii.LineTotal / ii.Quantity, 2) : 0m,
+                                UOM = ii.UOM,
+                                Description = ii.Description,
+                                ValueExclTax = ii.LineTotal,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = ii.LineTotal + gstAmt,
+                                HSCode = ii.HSCode
                             };
                         }).ToList()
             };

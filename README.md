@@ -290,6 +290,45 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
+
+**Exact Line Total.** The Invoices tab lets a restricted role re-classify lines
+and adjust quantity and price, under a guard that the bill's total must not
+move — but landing on that total exactly was not actually possible. The grouped
+row shows one unit price for several lines, and a rate rounded for display then
+applied to every line drifts the total: 6,301 units at a displayed 219.5 makes
+1,383,069.50 against a bill of 1,383,048.00, out by 21.50. Underneath, the unit
+price column stored only 2 decimals, so even a correctly derived rate could not
+be kept.
+
+Each grouped row now offers a choice of adjustment method. **Qty & Unit Price**
+works as before, with whole-number quantities and a rate carrying up to 12
+decimals. **Exact Line Total** turns it around: state what the line must come
+to, and the rate is derived — by the server, not the browser — with quantity and
+price locked while that target is authoritative and an explicit control to
+unlock them again. A target spread across several underlying lines is allocated
+in whole paisa so the lines re-sum to it exactly, rather than each rounding
+independently and leaving a few paisa unaccounted for. A figure that genuinely
+cannot be reproduced from a whole quantity is refused, naming the closest
+achievable amount, instead of quietly booking something else.
+
+The totals panel now names the two figures it compares (Original Bill Total and
+Adjusted Invoice Total, both before sales tax), says what the bill comes to with
+sales tax added, and distinguishes an exact match from merely being inside the
+rounding tolerance. The unit price column stores 12 decimal places
+(`WidenInvoiceUnitPriceTo12Decimals`); sales tax and every printed money figure
+stay at 2, and nothing sent to FBR changes — the filing carries line values, not
+rates.
+
+**Both item views on the Sales Tax Invoice.** That document rendered one item
+table: the filed decomposition, grouped by the HS-coded item type at the
+adjusted quantity and price. Templates can now render the bill's own view
+instead, through `{{#each billItems}}` — grouped by the commercial item type,
+which usually has no HS code, at the quantity and value the customer was
+actually billed. Once a filing has been adjusted neither table can be derived
+from the other, so both are published and the template picks one. Existing
+templates bind only the filed view and are unchanged.
+
 ### 2026-09-15 — FBR sandbox scenario seeder: all six wholesaler scenarios validate
 
 Seeding a new wholesaler company's FBR scenarios produced four bills FBR refused,
