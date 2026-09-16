@@ -161,8 +161,18 @@ export const SAMPLE_DATA = {
     grandTotal: 177000,
     amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
     items: [
-      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
-      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", unitPrice: 14000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
+      { quantity: 10, uom: "Pcs", description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8481.8090", unitPrice: 8000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
+      { quantity: 5, uom: "Pcs", description: "Sample Item Two", itemTypeName: "Hydraulic", hsCode: "8412.2100", unitPrice: 14000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
+    ],
+    // The same money as `items`, but as the BILL states it: the commercial
+    // item type (no HS code) and the real quantity sold. Deliberately a
+    // DIFFERENT decomposition from `items` above - same 150,000 subtotal,
+    // different quantities and grouping - because that is the whole point of
+    // the block, and a sample where both tables looked identical would hide a
+    // template that bound the wrong one.
+    billItems: [
+      { quantity: 3, uom: "Pcs", description: "Valve Assembly", itemTypeName: "Valve Assembly", hsCode: "", unitPrice: 30000, valueExclTax: 90000, gstRate: 18, gstAmount: 16200, totalInclTax: 106200 },
+      { quantity: 4, uom: "Pcs", description: "Fitting Set", itemTypeName: "Fitting Set", hsCode: "", unitPrice: 15000, valueExclTax: 60000, gstRate: 18, gstAmount: 10800, totalInclTax: 70800 },
     ],
   },
   SalesQuote: {

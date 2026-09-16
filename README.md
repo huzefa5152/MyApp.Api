@@ -290,6 +290,83 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
+
+**Exact Line Total.** The Invoices tab lets a restricted role re-classify lines
+and adjust quantity and price, under a guard that the bill's total must not
+move — but landing on that total exactly was not actually possible. The grouped
+row shows one unit price for several lines, and a rate rounded for display then
+applied to every line drifts the total: 6,301 units at a displayed 219.5 makes
+1,383,069.50 against a bill of 1,383,048.00, out by 21.50. Underneath, the unit
+price column stored only 2 decimals, so even a correctly derived rate could not
+be kept.
+
+Each grouped row now offers a choice of adjustment method. **Qty & Unit Price**
+works as before, with whole-number quantities and a rate carrying up to 12
+decimals. **Exact Line Total** turns it around: state what the line must come
+to and the quantity it covers, and the rate is derived from the two — by the
+server, not the browser — with the unit price shown read-only at full precision
+while that target is authoritative, and an explicit control to return to manual
+entry. A target spread across several underlying lines is allocated
+in whole paisa so the lines re-sum to it exactly, rather than each rounding
+independently and leaving a few paisa unaccounted for. A figure that genuinely
+cannot be reproduced from a whole quantity is refused, naming the closest
+achievable amount, instead of quietly booking something else.
+
+The totals panel now names the two figures it compares (Original Bill Total and
+Adjusted Invoice Total, both before sales tax), says what the bill comes to with
+sales tax added, and distinguishes an exact match from merely being inside the
+rounding tolerance. The unit price column stores 12 decimal places
+(`WidenInvoiceUnitPriceTo12Decimals`); sales tax and every printed money figure
+stay at 2, and nothing sent to FBR changes — the filing carries line values, not
+rates.
+
+**Both item views on the Sales Tax Invoice.** That document rendered one item
+table: the filed decomposition, grouped by the HS-coded item type at the
+adjusted quantity and price. Templates can now render the bill's own view
+instead, through `{{#each billItems}}` — grouped by the commercial item type,
+which usually has no HS code, at the quantity and value the customer was
+actually billed. Once a filing has been adjusted neither table can be derived
+from the other, so both are published and the template picks one. Existing
+templates bind only the filed view and are unchanged.
+
+### 2026-09-15 — FBR sandbox scenario seeder: all six wholesaler scenarios validate
+
+Seeding a new wholesaler company's FBR scenarios produced four bills FBR refused,
+so a fresh company could only ever reach 2/6. The recipes carried values that read
+correctly but are not what FBR accepts: a UoM taken from how the product is really
+sold ("Litre") rather than from the HS code's own valid list ([0099]), an HS code
+refused against the standard-rate sale type ([0052]), and a reduced-rate line with
+no SRO/Schedule item serial ([0078]) and no retail price ([0090]). Each is now
+corrected against a filing FBR actually accepted, and the seeder passes an
+SRO/Schedule reference and its item serial together — FBR rejects either alone.
+A newly created company with its own sandbox token and registration number now
+validates 6/6 (verified on two companies, one filing under a 7-character NTN and
+one under a 13-digit CNIC).
+
+The Trader onboarding skill's setup notes were corrected to match the code: FBR
+readiness needs the dedicated seller registration number, not an STRN (that
+requirement was removed because it stranded genuinely fileable challans), and the
+display NTN is not the FBR identity.
+
+### 2026-09-15 — FBR logo renders on the tax invoice (embedded, not a served path)
+
+The FBR Digital Invoicing logo was missing from submitted tax invoices — only the QR showed. The QR is an inlined base64 data URI, but the logo used a root-absolute served path (`/images/fbr-logo.png`), which 404s on a site rooted under `/admin/` (the Trader line) and also raced the first print. The logo is now embedded as a base64 `data:` URI (`Helpers/FbrLogoAsset.cs`), exactly as the QR already is, so it renders on any base path, under CSP, offline, and on the first print. One `PrintTaxInvoiceDto.FbrLogoUrl` default fixes Tax Invoice + Credit/Debit note prints.
+
+### 2026-09-15 — Print templates: default-per-type on new company, cleaner picker, smoother editor
+
+New companies now auto-seed one default print template per document type (`POST /api/printtemplates/company/{id}/seed-defaults`, idempotent, HTML supplied by the SPA), so every document screen prints immediately instead of hitting "No print template configured". The document-screen template picker no longer shows a lone default twice — a single template renders as a plain label, multiple templates list the default once plus the alternatives (override per screen). The template editor now lets you change the document type while creating a NEW template (it was locked), loading that type's default design and updating the suggested name; Save auto-names a blank template from its type instead of erroring. A hardcoded real-client (LOTTE Kolson) conditional was removed from the default tax-invoice template so previews and seeded templates stay fictional, and the missing Payment starters are wired into the gallery.
+
+### 2026-09-15 — FBR purchase import: both sheet layouts + fictional sample download
+
+The FBR purchase importer now surfaces both FBR export layouts — **Annexure-A** (claimed only) and the **Sales Ledger** (all purchases, claimed + unclaimed). The parser already matched both by column name (alias table); the import page adds a *Sheet format* selector and a **Download sample** button that returns a fully-fictional `.xlsx` for the chosen layout (`GET /api/fbr-purchase-import/sample?format=annexa|ledger`). The sample is invented data — no real seller/client — so it is safe for demos and re-uploads cleanly through preview. No schema change; reuses `fbrimport.purchase.preview`.
+
+### 2026-09-14 — Dedicated "Seller NTN / CNIC for FBR" field; company form split into tabs
+
+The identity filed to FBR (`SellerNTNCNIC`) is now its own required `Company.FbrSellerRegistrationNo` — a 7-digit NTN or 13-digit CNIC entered exactly as filed — instead of being derived from the display CNIC/NTN. The display NTN/CNIC/STRN are now print/display-only and optional. `FbrService` (pre-validate, payload, self-invoice check) and `DeliveryChallanService.IsFbrReady` all key off the new field. Migration `AddFbrSellerRegistrationNo` backfills existing rows `COALESCE(CNIC, NTN)`.
+
+The company create/edit modal is reorganised into four tabs — **General / FBR Integration / Numbering / Advanced** — with per-tab validation that jumps to the first tab carrying an error and dots each offending tab. Fixed a latent bug where uploading a company logo round-tripped a sparse DTO and wiped the CNIC/FBR fields (logo now updates in isolation). Seed/test scripts that create companies updated to send the new required field.
+
 ### 2026-09-11 — FBR: exempt goods file as "Exempt"; Processing/FED clear the SRO pre-flight
 
 - **Exempt sale lines are now transmitted to FBR with the rate `Exempt`, not

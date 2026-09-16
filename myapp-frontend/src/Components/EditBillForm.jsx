@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
 import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
@@ -108,6 +108,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [anyOverlay, setAnyOverlay] = useState(false);
   const [confirmingSendBack, setConfirmingSendBack] = useState(false);
   const [items, setItems] = useState([]);
+  // "Exact Line Total" adjustment method, per grouped row (group.key -> string).
+  // A key being PRESENT is what makes that group's target authoritative and
+  // locks its Qty / Unit Price; clearing it is an explicit act, never a silent
+  // unlock, so it is always obvious which value is driving the line.
+  const [exactTotals, setExactTotals] = useState({});
   // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
   // 760px the individual-lines view renders as tap-friendly stacked cards
   // instead (grouped view keeps the table — it's a summary lens).
@@ -886,6 +891,127 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // untouched. Group key = itemTypeId (the name is derived from it); a
   // line without an Item Type gets its own singleton group so nothing is
   // ever hidden.
+  // Round half-away-from-zero at 2dp on a value already scaled to paisa, so
+  // the browser's binary floats cannot drift a rupee figure.
+  const toPaisa = (v) => Math.round((Number(v) || 0) * 100);
+
+  // Spread an EXACT group target across the group's underlying lines.
+  //
+  // Allocation is done in PAISA (integers), proportionally to each line's
+  // quantity, with the remainder handed to the largest line. Rounding each
+  // line independently is exactly what leaves a few paisa unaccounted for, so
+  // the last share is computed as "target minus everything already given out"
+  // rather than rounded on its own: SUM(line totals) == target, always.
+  //
+  // Each line then carries its own exactLineTotal, and the SERVER derives the
+  // unit price from it (see UpdateInvoiceItemTypeRow.ExactLineTotal) - the
+  // price computed here is for display only.
+  // Split a whole group quantity into whole per-line quantities, proportional to
+  // a stable weight, remainder largest-fraction-first. Whole numbers because an
+  // exact line total has to be reproducible as quantity x rate, and the server
+  // refuses a fractional quantity on this path.
+  const splitWholeQty = (total, weights) => {
+    const wTotal = weights.reduce((a, b) => a + b, 0) || weights.length;
+    const exact = weights.map((w) => (total * (w || 1)) / wTotal);
+    const base = exact.map((x) => Math.floor(x));
+    let rem = total - base.reduce((a, b) => a + b, 0);
+    const order = exact
+      .map((x, k) => ({ k, frac: x - Math.floor(x) }))
+      .sort((a, b) => b.frac - a.frac || a.k - b.k);
+    for (let n = 0; n < order.length && rem > 0; n++, rem--) base[order[n].k] += 1;
+    // Nothing may end at zero: the server rejects a zero-quantity line.
+    for (let k = 0; k < base.length; k++) {
+      if (base[k] > 0) continue;
+      const donor = base.indexOf(Math.max(...base));
+      if (base[donor] > 1) { base[donor] -= 1; base[k] = 1; }
+    }
+    return base;
+  };
+
+  // Write the group's lines from an exact target and a set of whole quantities.
+  // Both come from the operator; only the RATE is derived.
+  const writeExact = (next, group, targetPaisa, qtys) => {
+    const idxs = group.lineIndices;
+    const qtyTotal = qtys.reduce((a, b) => a + b, 0);
+    if (qtyTotal <= 0) return next;
+
+    let biggest = 0;
+    for (let k = 1; k < qtys.length; k++) if (qtys[k] > qtys[biggest]) biggest = k;
+
+    let handedOut = 0;
+    const shares = qtys.map((q, k) => {
+      if (k === biggest) return null;
+      const share = Math.floor((targetPaisa * q) / qtyTotal);
+      handedOut += share;
+      return share;
+    });
+    shares[biggest] = targetPaisa - handedOut;
+
+    idxs.forEach((itemIdx, k) => {
+      const lineTotal = shares[k] / 100;
+      const q = qtys[k];
+      next[itemIdx] = {
+        ...next[itemIdx],
+        quantity: String(q),
+        unitPrice: q > 0 ? String(Number((lineTotal / q).toFixed(12))) : "0",
+        lineTotal,
+        exactLineTotal: lineTotal,
+      };
+    });
+    return next;
+  };
+
+  // Operator changed the QUANTITY while an exact total is in force: re-split the
+  // quantity, then re-allocate the same target over it. Both in ONE pass, or the
+  // two functional updates would race and the rate would follow a stale qty.
+  const setGroupExactQty = (group, rawQty) => {
+    const qty = Math.round(Number(rawQty) || 0);
+    const targetPaisa = toPaisa(exactTotals[group.key]);
+    if (qty <= 0 || !Number.isFinite(targetPaisa) || targetPaisa <= 0) return;
+    setItems((prev) => {
+      const next = [...prev];
+      const weights = group.lineIndices.map(
+        (i) => parseFloat(originalItemsRef.current[i]?.quantity) || 1,
+      );
+      return writeExact(next, group, targetPaisa, splitWholeQty(qty, weights));
+    });
+  };
+
+  const setGroupExactTotal = (group, rawValue) => {
+    setExactTotals((prev) => ({ ...prev, [group.key]: rawValue }));
+
+    const targetPaisa = toPaisa(rawValue);
+    if (!Number.isFinite(targetPaisa) || targetPaisa <= 0) return;
+
+    setItems((prev) => {
+      const next = [...prev];
+      const idxs = group.lineIndices;
+      const qtys = idxs.map((i) => Math.round(parseFloat(next[i]?.quantity) || 0));
+      const qtyTotal = qtys.reduce((a, b) => a + b, 0);
+      if (qtyTotal <= 0) return prev;
+
+      return writeExact(next, group, targetPaisa, qtys);
+    });
+  };
+
+  // Explicit un-lock. Drops the per-line authority as well as the typed target,
+  // so nothing keeps overriding the operator's manual qty / price afterwards.
+  const clearGroupExactTotal = (group) => {
+    setExactTotals((prev) => {
+      const next = { ...prev };
+      delete next[group.key];
+      return next;
+    });
+    setItems((prev) => {
+      const next = [...prev];
+      for (const i of group.lineIndices) {
+        const { exactLineTotal, ...rest } = next[i] || {};
+        next[i] = rest;
+      }
+      return next;
+    });
+  };
+
   const itemGroups = useMemo(() => {
     const map = new Map();
     items.forEach((it, idx) => {
@@ -944,7 +1070,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // Weighted-average unit price (Σvalue / Σqty). FBR itself never
         // carries a grouped unit price — it takes summed qty + summed value —
         // so this is a display/entry convenience only.
-        unitPrice: totalQty > 0 ? Math.round((totalValue / totalQty) * 100) / 100 : 0,
+        // Up to 12dp, trailing zeros trimmed by Number(): a clean rate still
+        // reads "219.5", but a derived one shows its real value rather than a
+        // 2dp rounding that does NOT reproduce the line total. Rounding here is
+        // what made an exact-total row display 219.5 while it had actually
+        // stored 219.496587843199.
+        unitPrice: totalQty > 0 ? Number((totalValue / totalQty).toFixed(12)) : 0,
       };
     });
   }, [items]);
@@ -1123,6 +1254,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   }, [items]);
   const subtotalDiff = currentSubtotal - originalSubtotal;
   const totalsMatch = Math.abs(subtotalDiff) <= NARROW_EDIT_TOLERANCE_PKR;
+  // "Exact" means it rounds to Rs. 0.00 at paisa precision - a stricter, and
+  // far more reassuring, state than merely being inside the tolerance window.
+  const totalsExact = Math.abs(subtotalDiff) < 0.005;
   // Show the indicator only when narrow edit + price/qty are unlocked,
   // i.e. itemTypeAndQtyMode. Full-edit mode lets the operator change
   // the total freely; itemTypeOnlyMode locks both qty and price so
@@ -1267,6 +1401,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             itemTypeId: i.itemTypeId || null,
             quantity: parseFloat(i.quantity) || 0,
             unitPrice: parseFloat(i.unitPrice) || 0,
+            // Present only for lines under an authoritative exact total. The
+            // server re-derives the unit price from it rather than trusting the
+            // one above, which is what makes the saved lines re-sum exactly.
+            exactLineTotal: i.exactLineTotal != null ? Number(i.exactLineTotal) : null,
           })),
           writeMode,
         );
@@ -1369,7 +1507,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         <strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>.
                       </div>
                       <div style={{ marginTop: 4 }}>
-                        The rows below show <strong>your last adjusted</strong> quantities &amp; unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the total matches the bill total (<strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> — see the guard below), then <strong>Save Item Types, Qty &amp; Price</strong>. FBR <strong>Validate</strong> &amp; <strong>Submit</strong> stay blocked until you do.
+                        The rows below show <strong>your last adjusted</strong> quantities &amp; unit prices; each <span style={{ color: "#e65100" }}>“bill: …”</span> note shows what the bill now says. Re-adjust the grouped Qty / Unit Price so the total matches the bill total (<strong>Rs. {Number(invoice.subtotal).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong> — see the guard below), then <strong>Save Adjustments</strong>. FBR <strong>Validate</strong> &amp; <strong>Submit</strong> stay blocked until you do.
                       </div>
                     </div>
                   </div>
@@ -1847,7 +1985,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
                         <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
                         <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
-                        <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Unit Price</th>
+                        <th style={{ ...styles.th, width: 190, minWidth: 190 }}>Unit Price</th>
                         <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
                         {/* HS Code is FBR data — only relevant on the Invoices
                             tab. Bills mode is pre-FBR data entry, so hide it. */}
@@ -1865,8 +2003,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                           setGroupUnitPrice); Save reads items[] as always. */}
                       {renderGrouped && itemGroups.map((group) => {
                         const multi = group.lineIndices.length > 1;
+                        const exactRaw    = exactTotals[group.key];
+                        const exactActive = exactRaw != null;
+                        const exactNum    = Number(exactRaw);
+                        const exactValid  = exactActive && Number.isFinite(exactNum) && exactNum > 0;
+                        const wholeQty    = Math.round(group.totalQty || 0);
                         return (
-                          <tr key={group.key} style={multi ? styles.groupedRow : undefined}>
+                          <Fragment key={group.key}>
+                          <tr style={multi ? styles.groupedRow : undefined}>
                             <td style={styles.td}>
                               {lockItemType ? (
                                 <div style={styles.readOnlyText}>{group.itemTypeName || <span style={styles.muted}>—</span>}</div>
@@ -1893,11 +2037,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   lines (integer-aware) — see setGroupQty. */}
                               <QuantityInput
                                 value={group.totalQty}
-                                onChange={(val) => setGroupQty(group, val)}
+                                onChange={(val) => (exactTotals[group.key] != null
+                                  ? setGroupExactQty(group, val)
+                                  : setGroupQty(group, val))}
                                 unit={group.uom}
                                 units={units}
                                 disabled={lockQty}
                                 readOnly={lockQty}
+                                integerOnly
                                 style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
                               />
                               {invoice?.fbrAdjustmentStale && Math.abs(group.billQty - group.totalQty) > 0.0001 && (
@@ -1915,12 +2062,22 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   single price across every line in the group. */}
                               <input
                                 type="number"
-                                style={{ ...styles.tableInput, ...(lockPrice ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                style={{
+                                  ...styles.tableInput,
+                                  ...((lockPrice || exactTotals[group.key] != null) ? styles.readOnlyInput : {}),
+                                  textAlign: "right",
+                                  minWidth: 150,
+                                  fontVariantNumeric: "tabular-nums",
+                                }}
                                 value={group.unitPrice}
                                 onChange={(e) => setGroupUnitPrice(group, e.target.value)}
                                 min={0}
-                                step={0.01}
-                                readOnly={lockPrice}
+                                // "any" rather than 0.01: the step attribute is a
+                                // validation constraint too, so 0.01 makes a
+                                // 12dp rate read as invalid in the browser.
+                                step="any"
+                                readOnly={lockPrice || exactTotals[group.key] != null}
+                                title={`${group.unitPrice} — up to 12 decimal places`}
                               />
                               {invoice?.fbrAdjustmentStale && Math.abs(group.billUnitPrice - group.unitPrice) > 0.005 && (
                                 <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
@@ -1928,9 +2085,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   bill: {group.billUnitPrice.toLocaleString()}
                                 </div>
                               )}
-                              {multi && !lockPrice && (
-                                <div style={styles.groupMeta} title="Weighted average across the grouped lines. Editing sets one price for the whole group.">
-                                  avg · applies to all {group.lineIndices.length}
+                              {!lockPrice && (
+                                <div style={styles.priceMeta}
+                                     title="Weighted average across the grouped lines. Editing sets one price for the whole group. Up to 12 decimal places.">
+                                  {multi ? `avg · all ${group.lineIndices.length} · ` : ""}max 12 dp
                                 </div>
                               )}
                             </td>
@@ -1944,6 +2102,81 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                               {group.saleType || <span style={styles.muted}>—</span>}
                             </td>
                           </tr>
+                          {/* Adjustment method — only where the operator may
+                              actually edit qty/price (the Invoices-tab narrow
+                              edit). Read-only views render nothing extra. */}
+                          {showTotalsGuard && !lockQty && (
+                            <tr style={styles.adjustRow}>
+                              <td colSpan={8} style={styles.adjustCell}>
+                                <div style={styles.adjustWrap}>
+                                  <span style={styles.adjustLabel}>Adjustment method</span>
+                                  <div style={styles.segmented} role="group" aria-label="Adjustment method">
+                                    <button
+                                      type="button"
+                                      onClick={() => clearGroupExactTotal(group)}
+                                      aria-pressed={!exactActive}
+                                      style={{ ...styles.segBtn, ...(!exactActive ? styles.segBtnOn : {}) }}
+                                    >
+                                      Qty &amp; Unit Price
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setGroupExactTotal(group, String(Number(group.totalValue || 0).toFixed(2)))}
+                                      aria-pressed={exactActive}
+                                      style={{ ...styles.segBtn, ...(exactActive ? styles.segBtnOn : {}) }}
+                                    >
+                                      Exact Line Total
+                                    </button>
+                                  </div>
+
+                                  {exactActive && (
+                                    <div style={styles.exactBox}>
+                                      <label style={styles.exactLabel} htmlFor={`exact-${group.key}`}>
+                                        Exact Line Total (before GST)
+                                      </label>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                                        <span style={styles.muted}>Rs.</span>
+                                        <input
+                                          id={`exact-${group.key}`}
+                                          type="number"
+                                          min={0}
+                                          step="0.01"
+                                          value={exactRaw}
+                                          onChange={(e) => setGroupExactTotal(group, e.target.value)}
+                                          style={{ ...styles.tableInput, minWidth: 170, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                                        />
+                                        <button type="button" onClick={() => clearGroupExactTotal(group)} style={styles.clearExactBtn}>
+                                          Clear Exact Total
+                                        </button>
+                                      </div>
+                                      <div style={styles.groupMeta}>
+                                        Enter the exact subtotal this grouped item must equal, and the Qty above.
+                                        The unit price is calculated automatically.
+                                      </div>
+                                      {exactValid && wholeQty > 0 && (
+                                        <div style={styles.exactDerived}>
+                                          Qty {wholeQty.toLocaleString("en-PK")} → calculated unit price{" "}
+                                          <strong style={{ fontFamily: "monospace" }}>
+                                            {Number((exactNum / wholeQty).toFixed(12))}
+                                          </strong>
+                                          <div style={styles.groupMeta}>
+                                            Enter the total and the quantity; the unit price is calculated and locked
+                                            {multi && `, and the total is split across the group's ${group.lineIndices.length} lines so they re-sum to it exactly`}.
+                                          </div>
+                                        </div>
+                                      )}
+                                      {exactActive && !exactValid && (
+                                        <div style={{ ...styles.groupMeta, color: "#c62828" }}>
+                                          ✗ Enter an amount greater than zero.
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                         );
                       })}
                       {!renderGrouped && items.map((item, idx) => {
@@ -2030,6 +2263,55 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                 </div>
                 )}
 
+                {showTotalsGuard && (
+                  <div style={{
+                    ...styles.totalsBox,
+                    background: totalsMatch ? "#e8f5e9" : "#fff4e0",
+                    borderColor: totalsMatch ? "#a5d6a7" : "#ffcc80",
+                    borderLeft: `4px solid ${totalsMatch ? "#2e7d32" : "#e65100"}`,
+                    marginTop: "0.6rem",
+                  }}>
+                    <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.4rem", fontWeight: 600 }}>
+                      Total-preservation guard
+                      <span style={{ color: colors.textSecondary, fontWeight: 400, marginLeft: "0.4rem" }}>
+                        — qty / price edits must keep the bill total within ±Rs. {NARROW_EDIT_TOLERANCE_PKR} of the original
+                      </span>
+                    </div>
+                    <div style={styles.totalsRow}>
+                      <span>Original Bill Total <span style={styles.muted}>(before GST)</span>:</span>
+                      <strong>Rs. {originalSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>
+                    </div>
+                    <div style={styles.totalsRow}>
+                      <span>Adjusted Invoice Total <span style={styles.muted}>(before GST)</span>:</span>
+                      <strong>Rs. {currentSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>
+                    </div>
+                    {/* Spelled out because "Line Total" and "Invoice Total" are
+                        different numbers, and entering a GST-inclusive figure
+                        into a before-GST field would tax it a second time. */}
+                    <div style={{ ...styles.totalsRow, fontSize: "0.74rem", color: colors.textSecondary }}>
+                      <span>with GST ({gstRate}%) this bill comes to:</span>
+                      <span>Rs. {(currentSubtotal + Math.round(currentSubtotal * (Number(gstRate) || 0)) / 100).toLocaleString("en-PK", { maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div style={{ ...styles.totalsRow, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.4rem", marginTop: "0.4rem" }}>
+                      <span style={{ fontWeight: 700 }}>Difference:</span>
+                      <strong style={{
+                        fontSize: "1rem",
+                        color: totalsMatch ? "#2e7d32" : "#c62828",
+                      }}>
+                        {totalsMatch ? "✓ " : "✗ "}
+                        Rs. {Math.abs(subtotalDiff) < 0.005
+                          ? "0.00"
+                          : subtotalDiff.toLocaleString("en-PK", { maximumFractionDigits: 2 })}
+                        {totalsExact
+                          ? " — Exact match"
+                          : totalsMatch
+                            ? " (within tolerance — Save enabled)"
+                            : ` (exceeds Rs. ${NARROW_EDIT_TOLERANCE_PKR} tolerance — Save blocked)`}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+
                 {/* Totals */}
                 <div style={styles.totalsBox}>
                   <div style={styles.totalsRow}>
@@ -2075,43 +2357,6 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   </div>
                 )}
 
-                {showTotalsGuard && (
-                  <div style={{
-                    ...styles.totalsBox,
-                    background: totalsMatch ? "#e8f5e9" : "#fff4e0",
-                    borderColor: totalsMatch ? "#a5d6a7" : "#ffcc80",
-                    borderLeft: `4px solid ${totalsMatch ? "#2e7d32" : "#e65100"}`,
-                    marginTop: "0.6rem",
-                  }}>
-                    <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.4rem", fontWeight: 600 }}>
-                      Total-preservation guard
-                      <span style={{ color: colors.textSecondary, fontWeight: 400, marginLeft: "0.4rem" }}>
-                        — qty / price edits must keep the bill total within ±Rs. {NARROW_EDIT_TOLERANCE_PKR} of the original
-                      </span>
-                    </div>
-                    <div style={styles.totalsRow}>
-                      <span>Original subtotal (locked):</span>
-                      <strong>Rs. {originalSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>
-                    </div>
-                    <div style={styles.totalsRow}>
-                      <span>Current subtotal:</span>
-                      <strong>Rs. {currentSubtotal.toLocaleString("en-PK", { maximumFractionDigits: 2 })}</strong>
-                    </div>
-                    <div style={{ ...styles.totalsRow, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.4rem", marginTop: "0.4rem" }}>
-                      <span style={{ fontWeight: 700 }}>Difference:</span>
-                      <strong style={{
-                        fontSize: "1rem",
-                        color: totalsMatch ? "#2e7d32" : "#c62828",
-                      }}>
-                        {totalsMatch ? "✓ " : "✗ "}
-                        Rs. {subtotalDiff.toLocaleString("en-PK", { maximumFractionDigits: 2 })}
-                        {totalsMatch
-                          ? " (within tolerance — Save enabled)"
-                          : ` (exceeds Rs. ${NARROW_EDIT_TOLERANCE_PKR} tolerance — Save blocked)`}
-                      </strong>
-                    </div>
-                  </div>
-                )}
 
                 {invoice?.fbrStatus === "Validated" && (
                   <div style={styles.warnNote}>
@@ -2184,7 +2429,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     : itemTypeOnlyMode
                       ? "Save Item Types"
                       : itemTypeAndQtyMode
-                        ? "Save Item Types, Qty & Price"
+                        ? "Save Adjustments"
                         : "Save Changes"}
                 </button>
               );
@@ -3594,7 +3839,8 @@ const styles = {
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
   thead: { backgroundColor: "#f5f7fa" },
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+  td: {
+    verticalAlign: "top", padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
   narrowPermissionBanner: {
     display: "flex", alignItems: "flex-start", gap: "0.5rem",
@@ -3621,6 +3867,37 @@ const styles = {
   // Grouped table affordances.
   groupedRow: { backgroundColor: "#fbfcfe" },
   groupMeta: { marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary, fontStyle: "italic" },
+  // Static helper copy, so nowrap is safe here — the "never nowrap" rule is
+  // about user-supplied names, which collapse into look-alikes when truncated.
+  priceMeta: {
+    marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary,
+    fontStyle: "italic", whiteSpace: "nowrap", textAlign: "right",
+  },
+  adjustRow: { background: "#f7f9fc" },
+  adjustCell: {
+    padding: "0.5rem 0.75rem 0.75rem 1.1rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderLeft: `3px solid ${colors.blue}`,
+  },
+  // auto-fit + min() so the controls stack on a phone with no media query
+  adjustWrap: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "0.6rem" },
+  adjustLabel: { fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, alignSelf: "center" },
+  segmented: { display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, overflow: "hidden" },
+  segBtn: {
+    padding: "0.4rem 0.7rem", fontSize: "0.75rem", border: "none", background: "#fff",
+    color: colors.textSecondary, cursor: "pointer", minHeight: 36,
+  },
+  segBtnOn: { background: colors.blue, color: "#fff", fontWeight: 600 },
+  exactBox: {
+    flex: "1 1 min(320px, 100%)", background: "#fff", border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 6, padding: "0.5rem 0.6rem",
+  },
+  exactLabel: { display: "block", fontSize: "0.72rem", fontWeight: 600, color: colors.textPrimary, marginBottom: "0.3rem" },
+  exactDerived: { marginTop: "0.35rem", fontSize: "0.74rem", color: colors.textPrimary },
+  clearExactBtn: {
+    padding: "0.35rem 0.6rem", fontSize: "0.72rem", borderRadius: 4, minHeight: 36,
+    border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer",
+  },
   requiredHint: { marginTop: 2, fontSize: "0.66rem", color: colors.warn, fontWeight: 700 },
   stockHint: { marginTop: 2, fontSize: "0.66rem", color: "#c62828", fontWeight: 700, lineHeight: 1.3 },
   totalsBox: { marginTop: "1rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 8, maxWidth: 360, marginLeft: "auto" },

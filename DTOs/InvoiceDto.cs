@@ -587,6 +587,24 @@ namespace MyApp.Api.DTOs
         /// total amount the buyer was actually billed.
         /// </summary>
         public decimal? UnitPrice { get; set; }
+        /// <summary>
+        /// Optional EXACT line total for this row, in rupees at 2dp — the
+        /// "Exact Line Total" adjustment method. Honoured only on the .qty
+        /// path, alongside Quantity.
+        ///
+        /// When present it is AUTHORITATIVE for this line: the service derives
+        /// UnitPrice = ExactLineTotal / Quantity itself rather than trusting
+        /// the client's arithmetic, and refuses the save if the stored
+        /// precision cannot reproduce the figure (rather than silently booking
+        /// a different amount).
+        ///
+        /// It exists because the grouped view sums several lines into one row,
+        /// and a per-line unit price rounded independently cannot be relied on
+        /// to re-sum to the operator's target: the caller allocates the group's
+        /// target across its lines and states each line's share here, so
+        /// SUM(LineTotal) lands on the target exactly.
+        /// </summary>
+        public decimal? ExactLineTotal { get; set; }
     }
 
     /// <summary>

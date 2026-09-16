@@ -739,6 +739,7 @@ using (var scope = app.Services.CreateScope())
     // Division-free.)
     await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);          // SalesQuote / SalesOrder
     await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db); // Credit/Debit Note, PurchaseBill, GoodsReceipt
+    await MyApp.Api.Data.TaxInvoiceBillItemsMergeFieldSeeder.SeedAsync(db); // TaxInvoice {{#each billItems}}
 
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
