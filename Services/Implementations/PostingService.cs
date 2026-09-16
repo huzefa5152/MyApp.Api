@@ -330,39 +330,73 @@ namespace MyApp.Api.Services.Implementations
 
             await EnsureDefaultAccountsAsync(companyId);
 
-            // System-posted entries only. A manual journal is the operator's
-            // own work and nothing here can reproduce it, so a rebuild that
-            // took them out would destroy data no document can restore.
-            result.RemovedEntries = await _context.JournalEntries
-                .Where(e => e.CompanyId == companyId && e.SourceDocType != SourceDocType.ManualJournal)
-                .ExecuteDeleteAsync();
+            // A CLOSED PERIOD IS OFF LIMITS TO A REBUILD, and this is not a
+            // formality. The removal below is raw SQL, which the ledger's own
+            // lock check never sees; the re-post that follows goes through the
+            // writer, which does. Rebuilding across a lock without this filter
+            // therefore DELETES the closed period and then refuses to write it
+            // back — the one way in this module to lose a filed figure.
+            // So: entries dated in the closed period stay, and the documents
+            // behind them are not re-posted.
+            var lockDate = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == companyId)
+                .Select(c => c.GlLockDate)
+                .FirstOrDefaultAsync();
+            bool IsOpen(DateTime date) => lockDate == null || date.Date > lockDate.Value.Date;
 
-            var invoices = await _context.Invoices
-                .Where(i => i.CompanyId == companyId).ToListAsync();
-            foreach (var i in invoices)
+            // And a transaction over the whole thing, because a rebuild removes
+            // before it writes: a document that fails half-way through would
+            // otherwise leave the books emptied of everything not yet re-posted.
+            var owned = _context.Database.CurrentTransaction == null;
+            var tx = owned ? await _context.Database.BeginTransactionAsync() : null;
+            try
             {
-                await PostInvoiceAsync(i);
-                if (!i.IsDemo && !i.IsCancelled && i.GrandTotal != 0m) result.PostedInvoices++;
-            }
+                // System-posted entries only. A manual journal is the operator's
+                // own work and nothing here can reproduce it, so a rebuild that
+                // took them out would destroy data no document can restore.
+                result.RemovedEntries = await _context.JournalEntries
+                    .Where(e => e.CompanyId == companyId
+                             && e.SourceDocType != SourceDocType.ManualJournal
+                             && (lockDate == null || e.Date > lockDate.Value))
+                    .ExecuteDeleteAsync();
 
-            var bills = await _context.PurchaseBills
-                .Where(b => b.CompanyId == companyId).ToListAsync();
-            foreach (var b in bills)
+                var invoices = await _context.Invoices
+                    .Where(i => i.CompanyId == companyId).ToListAsync();
+                foreach (var i in invoices.Where(i => IsOpen(i.Date)))
+                {
+                    await PostInvoiceAsync(i);
+                    if (!i.IsDemo && !i.IsCancelled && i.GrandTotal != 0m) result.PostedInvoices++;
+                }
+
+                var bills = await _context.PurchaseBills
+                    .Where(b => b.CompanyId == companyId).ToListAsync();
+                foreach (var b in bills.Where(b => IsOpen(b.Date)))
+                {
+                    await PostPurchaseBillAsync(b);
+                    if (b.GrandTotal != 0m) result.PostedPurchaseBills++;
+                }
+
+                var payments = await _context.Payments
+                    .Include(p => p.Allocations)
+                    .Where(p => p.CompanyId == companyId).ToListAsync();
+                foreach (var p in payments.Where(p => IsOpen(p.Date)))
+                {
+                    await PostPaymentAsync(p);
+                    if (!p.IsCancelled && p.Amount != 0m) result.PostedPayments++;
+                }
+
+                if (tx != null) await tx.CommitAsync();
+                return result;
+            }
+            catch
             {
-                await PostPurchaseBillAsync(b);
-                if (b.GrandTotal != 0m) result.PostedPurchaseBills++;
+                if (tx != null) await tx.RollbackAsync();
+                throw;
             }
-
-            var payments = await _context.Payments
-                .Include(p => p.Allocations)
-                .Where(p => p.CompanyId == companyId).ToListAsync();
-            foreach (var p in payments)
+            finally
             {
-                await PostPaymentAsync(p);
-                if (!p.IsCancelled && p.Amount != 0m) result.PostedPayments++;
+                if (tx != null) await tx.DisposeAsync();
             }
-
-            return result;
         }
 
         // ── Writing ───────────────────────────────────────────────────────────

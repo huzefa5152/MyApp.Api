@@ -781,6 +781,18 @@ using (var scope = app.Services.CreateScope())
     await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db); // Credit/Debit Note, PurchaseBill, GoodsReceipt
     await MyApp.Api.Data.TaxInvoiceBillItemsMergeFieldSeeder.SeedAsync(db); // TaxInvoice {{#each billItems}}
 
+    // ── GL back-post ────────────────────────────────────────────────────
+    // Companies created from now on keep books from their first document.
+    // A company that existed BEFORE the ledger did has documents and no
+    // entries, so this brings it up to date once. Guarded by its own
+    // audit-log marker; see Data/GlBackfill for why it cannot double-post
+    // and why one company failing does not stop the rest — or the app.
+    await MyApp.Api.Data.GlBackfill.RunAsync(
+        db,
+        scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.ICoaPresetSeeder>(),
+        scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPostingService>(),
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("GlBackfill"));
+
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
     // connection string at the DeliveryChallanDemo database). Lays down
