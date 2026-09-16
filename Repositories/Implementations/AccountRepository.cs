@@ -45,12 +45,13 @@ namespace MyApp.Api.Repositories.Implementations
             await _context.Accounts.AnyAsync(a => a.AccountGroupId == groupId)
             || await _context.AccountGroups.AnyAsync(g => g.ParentGroupId == groupId);
 
-        // The referencing tables grow as the module does: journal lines arrive
-        // with the general ledger and transfers with bank/cash movement. Each is
-        // added to BOTH activity checks below in the phase that introduces it —
-        // miss one and an account with history becomes hard-deletable.
+        // The referencing tables grow as the module does — transfers arrive with
+        // bank/cash movement. Each new one is added to BOTH activity checks
+        // below at the same time: miss one and an account with history becomes
+        // hard-deletable from a list screen that said it was safe.
         public async Task<bool> AccountHasActivityAsync(int accountId) =>
-            await _context.PaymentAllocations.AnyAsync(a => a.AccountId == accountId)
+            await _context.JournalLines.AnyAsync(l => l.AccountId == accountId)
+            || await _context.PaymentAllocations.AnyAsync(a => a.AccountId == accountId)
             || await _context.Payments.AnyAsync(p => p.BankAccountId == accountId);
 
         public async Task<HashSet<int>> GetAccountIdsWithActivityAsync(IReadOnlyCollection<int> accountIds)
@@ -60,6 +61,9 @@ namespace MyApp.Api.Repositories.Implementations
             var candidates = accountIds.ToList();
             // One query per referencing table, each restricted to the candidate
             // ids — cheap regardless of how many rows the list shows.
+            result.UnionWith(await _context.JournalLines
+                .Where(l => candidates.Contains(l.AccountId))
+                .Select(l => l.AccountId).Distinct().ToListAsync());
             result.UnionWith(await _context.PaymentAllocations
                 .Where(a => a.AccountId.HasValue && candidates.Contains(a.AccountId.Value))
                 .Select(a => a.AccountId!.Value).Distinct().ToListAsync());

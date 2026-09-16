@@ -8,24 +8,30 @@ namespace MyApp.Api.Services.Implementations
     public class AccountService : IAccountService
     {
         private readonly IAccountRepository _repo;
+        private readonly IGeneralLedgerService _gl;
 
-        public AccountService(IAccountRepository repo)
+        public AccountService(IAccountRepository repo, IGeneralLedgerService gl)
         {
             _repo = repo;
+            _gl = gl;
         }
 
         /// <summary>
         /// An account's live balance, signed debit-positive: a debit balance is
         /// positive, a credit balance negative, whatever the account's type.
         ///
-        /// This is the ONE place a balance is computed — the tree, the flat list
-        /// and the bank/cash picker all route through it, so they can never
-        /// disagree. Today it is the signed opening balance; once the general
-        /// ledger posts, journal movement is added on top here and every caller
-        /// picks that up without a shape change.
+        /// This is the ONE place a balance is assembled for this service — the
+        /// tree, the flat list and the bank/cash picker all route through it, so
+        /// they can never disagree. The movement half comes from
+        /// <see cref="IGeneralLedgerService.GetAccountBalancesAsync"/>, which is
+        /// the ledger's own primitive, so nothing here re-derives a balance by
+        /// summing journal lines of its own. A company with no entries yet falls
+        /// back to the signed opening balance.
         /// </summary>
-        private static decimal LiveBalance(Account a) =>
-            a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance;
+        private static decimal LiveBalance(Account a, IReadOnlyDictionary<int, decimal> balances) =>
+            balances.TryGetValue(a.Id, out var b)
+                ? b
+                : (a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance);
 
         // ── Tree ──────────────────────────────────────────────────────────────
 
@@ -33,6 +39,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var groups = await _repo.GetGroupsAsync(companyId);
             var accounts = await _repo.GetAccountsAsync(companyId);
+            // One ledger read for the whole tree — not one per account.
+            var balances = await _gl.GetAccountBalancesAsync(companyId);
 
             var accountsByGroup = accounts.GroupBy(a => a.AccountGroupId)
                 .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Position).ThenBy(a => a.Id).ToList());
@@ -55,7 +63,7 @@ namespace MyApp.Api.Services.Implementations
                     IsSystem = g.IsSystem,
                     ExternalRef = g.ExternalRef,
                     Accounts = accountsByGroup.TryGetValue(g.Id, out var accs)
-                        ? accs.Select(ToDto).ToList() : new(),
+                        ? accs.Select(a => ToDto(a, balances)).ToList() : new(),
                     Children = childrenByParent.TryGetValue(g.Id, out var kids)
                         ? kids.Select(Build).ToList() : new(),
                 };
@@ -107,8 +115,11 @@ namespace MyApp.Api.Services.Implementations
             return new CoaTreeDto { BalanceSheet = bs, ProfitAndLoss = pl };
         }
 
-        public async Task<List<AccountDto>> GetAccountsFlatAsync(int companyId) =>
-            (await _repo.GetAccountsAsync(companyId)).Select(ToDto).ToList();
+        public async Task<List<AccountDto>> GetAccountsFlatAsync(int companyId)
+        {
+            var balances = await _gl.GetAccountBalancesAsync(companyId);
+            return (await _repo.GetAccountsAsync(companyId)).Select(a => ToDto(a, balances)).ToList();
+        }
 
         public async Task<List<AccountDto>> GetBankCashAccountsAsync(int companyId, bool includeInactive = false)
         {
@@ -117,6 +128,8 @@ namespace MyApp.Api.Services.Implementations
             bool IsBankCashGroup(int gid) =>
                 groupNameById.TryGetValue(gid, out var n) && (n.Contains("bank") || n.Contains("cash"));
 
+            var balances = await _gl.GetAccountBalancesAsync(companyId);
+
             // Control-typed BankCash accounts OR asset accounts filed under a
             // bank/cash group — the second arm catches a chart whose bank
             // accounts were created by hand or imported without the flag.
@@ -124,7 +137,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(a => (includeInactive || a.IsActive)
                          && a.AccountType == AccountType.Asset
                          && (a.ControlType == ControlType.BankCash || IsBankCashGroup(a.AccountGroupId)))
-                .Select(ToDto).ToList();
+                .Select(a => ToDto(a, balances)).ToList();
 
             // Management screen: flag which rows are referenced (can't hard-delete).
             // The picker path (includeInactive = false) skips the extra query.
@@ -139,7 +152,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<AccountDto?> GetAccountByIdAsync(int id)
         {
             var a = await _repo.GetAccountByIdAsync(id);
-            return a == null ? null : ToDto(a);
+            return a == null ? null : ToDto(a, await _gl.GetAccountBalancesAsync(a.CompanyId));
         }
 
         public async Task<AccountGroupDto?> GetGroupByIdAsync(int id)
@@ -284,7 +297,7 @@ namespace MyApp.Api.Services.Implementations
                 account.IsControlAccount = control != ControlType.None;
                 account.ControlType = control;
                 await _repo.SaveAsync();
-                return ToDto(account);
+                return ToDto(account, await _gl.GetAccountBalancesAsync(account.CompanyId));
             }
 
             account = new Account
@@ -306,7 +319,7 @@ namespace MyApp.Api.Services.Implementations
                 ExternalRef = string.IsNullOrWhiteSpace(dto.ExternalRef) ? null : dto.ExternalRef.Trim(),
             };
             await _repo.AddAccountAsync(account);
-            return ToDto(account);
+            return ToDto(account, await _gl.GetAccountBalancesAsync(account.CompanyId));
         }
 
         public async Task<AccountDto?> UpdateAccountAsync(int id, UpdateAccountDto dto)
@@ -356,7 +369,7 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Position.HasValue) a.Position = dto.Position.Value;
 
             await _repo.SaveAsync();
-            return ToDto(a);
+            return ToDto(a, await _gl.GetAccountBalancesAsync(a.CompanyId));
         }
 
         public async Task<AccountDto?> AdjustOpeningBalanceAsync(int id, AdjustOpeningBalanceDto dto)
@@ -371,7 +384,7 @@ namespace MyApp.Api.Services.Implementations
             decimal oldSigned = a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance;
             decimal newSigned = dto.OpeningBalanceIsDebit ? newAmount : -newAmount;
             decimal delta = newSigned - oldSigned;
-            if (delta == 0m) return ToDto(a);   // no-op
+            if (delta == 0m) return ToDto(a, await _gl.GetAccountBalancesAsync(a.CompanyId));   // no-op
 
             a.OpeningBalance = newAmount;
             a.OpeningBalanceIsDebit = dto.OpeningBalanceIsDebit;
@@ -396,7 +409,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             await _repo.SaveAsync();
-            return ToDto(a);
+            return ToDto(a, await _gl.GetAccountBalancesAsync(a.CompanyId));
         }
 
         public async Task<bool> DeleteAccountAsync(int id)
@@ -417,7 +430,7 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Mapping + parsing ─────────────────────────────────────────────────
 
-        private static AccountDto ToDto(Account a) => new()
+        private static AccountDto ToDto(Account a, IReadOnlyDictionary<int, decimal> balances) => new()
         {
             Id = a.Id,
             CompanyId = a.CompanyId,
@@ -437,7 +450,7 @@ namespace MyApp.Api.Services.Implementations
             IsActive = a.IsActive,
             Position = a.Position,
             ExternalRef = a.ExternalRef,
-            Balance = LiveBalance(a),
+            Balance = LiveBalance(a, balances),
         };
 
         private static AccountGroupDto ToGroupDto(AccountGroup g) => new()

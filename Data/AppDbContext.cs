@@ -89,6 +89,12 @@ namespace MyApp.Api.Data
         public DbSet<MyApp.Api.Models.Accounting.AccountGroup> AccountGroups { get; set; }
         public DbSet<MyApp.Api.Models.Accounting.Account> Accounts { get; set; }
 
+        // ── General ledger ──
+        // Balanced double-entry: one JournalEntry header per document (or per
+        // manual journal) and its Dr/Cr JournalLines.
+        public DbSet<MyApp.Api.Models.Accounting.JournalEntry> JournalEntries { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.JournalLine> JournalLines { get; set; }
+
         // ── Payments / Receipts (AR/AP subledger) ──
         // Receipt (money in) + Payment (money out) documents and their
         // allocation lines, which settle invoices/bills and drive balance-due +
@@ -1257,6 +1263,59 @@ namespace MyApp.Api.Data
                 .HasIndex(a => new { a.CompanyId, a.Code })
                 .IsUnique()
                 .HasFilter("[Code] IS NOT NULL");
+
+            // ── General ledger ─────────────────────────────────────────────────
+            // Entry → Company is Restrict (a company's ledger is not something a
+            // cascade should erase); Line → Entry is Cascade, because a line has
+            // no meaning without its entry and removing an entry must take its
+            // lines or the ledger stops balancing.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasOne(e => e.Company).WithMany()
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .Property(e => e.Narration).HasMaxLength(500);
+            // JE-#### per company, allocated max+1 under NumberAllocationRetry;
+            // this index is what makes the loser of a race retry instead of
+            // duplicating a number.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.EntryNo }).IsUnique();
+            // At most ONE entry per source document. Filtered, so manual
+            // journals (SourceDocId null) are exempt and an operator may write
+            // as many as they like. This index is the idempotency guarantee that
+            // stops an edited document being posted twice.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.SourceDocType, e.SourceDocId })
+                .IsUnique()
+                .HasFilter("[SourceDocId] IS NOT NULL");
+            // Every report filters by date within a company.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.Date });
+
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.JournalEntry).WithMany(e => e.Lines)
+                .HasForeignKey(l => l.JournalEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Line → Account is Restrict: an account with ledger history must
+            // not be deletable, and AccountService says so in words first.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.Account).WithMany()
+                .HasForeignKey(l => l.AccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // (19,4) to match the chart's opening balances: a ledger line is
+            // where an apportioned or converted figure lands, and rounding it to
+            // paisa on the way in is a rounding the books never recover.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Debit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Credit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.PartyType).HasMaxLength(20);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Description).HasMaxLength(500);
+            // The account-ledger drill-down and every balance read key on this.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.AccountId);
 
             // ── Payments / Receipts (AR/AP subledger) ──────────────────────────
             // Payment header → Company (Restrict: a company's payment history

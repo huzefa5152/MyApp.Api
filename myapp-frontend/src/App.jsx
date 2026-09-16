@@ -11,6 +11,7 @@ import SalesQuotePage from "./pages/SalesQuotePage";
 import SalesOrderPage from "./pages/SalesOrderPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
+import JournalEntriesPage from "./pages/JournalEntriesPage";
 import NavigationMenuPage from "./pages/NavigationMenuPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
           <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
           <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+          <Route path="/journal-entries" element={<JournalEntriesPage />} />
           {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
               bulk actions, but shows a per-row "Submitted to FBR" badge so
               the operator knows which bills are locked. */}

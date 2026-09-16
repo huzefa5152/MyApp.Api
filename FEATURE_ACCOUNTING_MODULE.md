@@ -345,6 +345,8 @@ the code.
 | 2026-09-16 | — | Plan written and committed. Nothing implemented yet. |
 | 2026-09-16 | 1 | **Chart of accounts DONE.** `AccountGroups` + `Accounts` (migration `20260916170348_AddChartOfAccounts`), `AccountService`, `AccountsController`, `CoaPresetSeeder`, `accounting.coa.view` / `accounting.coa.manage`, `ChartOfAccountsPage.jsx`, `AccountSelect.jsx`, `BankCashSelect.jsx`. New suite `test_accounting_chart.py` 103/103; whole existing Trader table green (stock reflow 161/161). Also fixed: `CompanyService.DeleteAsync` did not cascade payments or the chart, so a company with either was undeletable. |
 
+| 2026-09-16 | 2 | **General ledger core DONE.** `JournalEntry` + `JournalLine`, `Company.GlPostingEnabled` / `GlLockDate` (migration `AddGeneralLedger`), `GeneralLedgerService` (the one place an entry is written, plus balances / account ledger / trial balance), `JournalEntryService`, `AccountingController`, `JournalEntriesController`, `JournalEntriesPage.jsx`, `AccountLedgerDialog.jsx`, period close on the CoA screen. GL is on at company creation with no route to turn it off. New suite `test_accounting_gl.py` 93/93; whole existing Trader table green (stock reflow 161/161, chart 103/103). **The suite caught a real bug on its first run:** the manual-journal EDIT path replaced lines in place without going through `WriteEntryAsync`, so an unbalanced edit was accepted and the ledger went out of balance — the invariant is now `AssertEntryIsLegalAsync` on the GL service and both paths call it. |
+
 ### Notes for the next session
 
 - **This branch is not in `local.databases.json`.** It is mapped to

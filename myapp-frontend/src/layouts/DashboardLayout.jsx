@@ -37,6 +37,7 @@ import {
   MdAccountBalanceWallet,
   MdReceiptLong,
   MdAccountTree,
+  MdMenuBook,
   MdPayments,
   MdFolder,
   MdSupervisorAccount,
@@ -184,6 +185,7 @@ export default function DashboardLayout() {
   ];
   const accountingKeys = [
     "accounting.coa.view",
+    "accounting.journal.view",
     "accounting.receipts.view",
     "accounting.payments.view",
   ];
@@ -244,7 +246,7 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts")) return "accounting";
+    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -459,6 +461,12 @@ export default function DashboardLayout() {
                 <NavLink to="/chart-of-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
                   <span>Chart of Accounts</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.journal.view">
+                <NavLink to="/journal-entries" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Journal Entries</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.receipts.view">
@@ -742,6 +750,7 @@ function getBreadcrumb(pathname) {
     "/purchase-bills": "Purchases / Purchase Bills",
     "/goods-receipts": "Purchases / Goods Receipts",
     "/chart-of-accounts": "Accounting / Chart of Accounts",
+    "/journal-entries": "Accounting / Journal Entries",
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",

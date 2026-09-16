@@ -261,6 +261,20 @@ namespace MyApp.Api.Helpers
             new("accounting.coa.view",        "Accounting", "Chart of Accounts", "View",   "View the chart of accounts and account balances"),
             new("accounting.coa.manage",      "Accounting", "Chart of Accounts", "Manage", "Create, edit, deactivate or delete accounts and groups, and seed the sector preset"),
 
+            // ── Accounting — General ledger ─────────────────────────────────
+            // There is no "enable GL" key: posting is on for every company and
+            // cannot be turned off, so there is no such capability to grant.
+            // accounting.gl.manage gates the PERIOD CLOSE, which is the one
+            // ledger-wide setting an operator can change — and closing a period
+            // freezes everyone's figures, so it is deliberately separate from
+            // reading the ledger.
+            new("accounting.gl.view",         "Accounting", "General Ledger", "View",   "View ledger status, account ledgers and the trial balance"),
+            new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Close or reopen an accounting period (lock date)"),
+            new("accounting.journal.view",    "Accounting", "Journal Entries", "View",   "View journal entries, both system-posted and manual"),
+            new("accounting.journal.create",  "Accounting", "Journal Entries", "Create", "Write a manual journal entry"),
+            new("accounting.journal.update",  "Accounting", "Journal Entries", "Update", "Edit a manual journal entry"),
+            new("accounting.journal.delete",  "Accounting", "Journal Entries", "Delete", "Delete a manual journal entry"),
+
             // ── Accounting — Receipts & Payments (AR/AP subledger) ──────────
             // Receipts (money in, settle sales invoices) and Payments (money
             // out, settle purchase bills) are split into separate keys for

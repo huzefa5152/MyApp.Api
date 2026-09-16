@@ -354,6 +354,10 @@ builder.Services.AddScoped<IPaymentService, PaymentService>();
 // company's chart usable without hand-building it.
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
+// The general ledger: the one place an entry is written, plus the balance
+// primitives every screen and report reads instead of summing lines itself.
+builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
+builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just resolves paths under data/attachments) so it registers as a singleton.
 builder.Services.AddScoped<IFolderService, FolderService>();

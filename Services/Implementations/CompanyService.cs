@@ -181,6 +181,12 @@ namespace MyApp.Api.Services.Implementations
                 StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber > 0 ? dto.StartingSalesQuoteNumber : 1,
                 StartingSalesOrderNumber = dto.StartingSalesOrderNumber > 0 ? dto.StartingSalesOrderNumber : 1,
                 IsTenantIsolated = dto.IsTenantIsolated,
+                // Every new company keeps books from its first document. This is
+                // NOT read from the DTO and there is no endpoint that clears it:
+                // a company that has posted cannot stop posting without its
+                // ledger drifting away from its documents, so the choice is made
+                // once, here.
+                GlPostingEnabled = true,
             };
 
             var created = await _repository.AddAsync(company);
@@ -421,11 +427,22 @@ namespace MyApp.Api.Services.Implementations
                 await _context.FbrCommunicationLogs.Where(l => l.CompanyId == id).ExecuteDeleteAsync();
                 await _context.UserCompanies.Where(uc => uc.CompanyId == id).ExecuteDeleteAsync();
 
-                // 7b. Chart of accounts. Accounts -> AccountGroup and both ->
-                //     Company are Restrict, so the chart has to go before the
-                //     company row. Accounts first, then the groups; the groups'
-                //     self-reference (ParentGroupId) is satisfied because one
-                //     DELETE removes the whole tree in a single statement.
+                // 7b. General ledger, then the chart of accounts. Order is
+                //     forced by the FKs: JournalLine -> Account is Restrict, so
+                //     the ledger goes first; Accounts -> AccountGroup and both
+                //     -> Company are Restrict, so the chart goes before the
+                //     company row. Lines cascade from their entries.
+                var entryIds = await _context.JournalEntries
+                    .Where(e => e.CompanyId == id).Select(e => e.Id).ToListAsync();
+                if (entryIds.Count > 0)
+                {
+                    await _context.JournalLines
+                        .Where(l => entryIds.Contains(l.JournalEntryId)).ExecuteDeleteAsync();
+                    await _context.JournalEntries.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
+                }
+                // Accounts first, then the groups; the groups' self-reference
+                // (ParentGroupId) is satisfied because one DELETE removes the
+                // whole tree in a single statement.
                 await _context.Accounts.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
                 await _context.AccountGroups.Where(g => g.CompanyId == id).ExecuteDeleteAsync();
 
