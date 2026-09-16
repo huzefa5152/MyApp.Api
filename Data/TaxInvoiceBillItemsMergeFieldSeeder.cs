@@ -46,12 +46,23 @@ namespace MyApp.Api.Data
                 new() { TemplateType = T, FieldExpression = "{{this.description}}", Label = "Bill Item Description (in loop)", Category = "Bill Items", SortOrder = 93 },
                 new() { TemplateType = T, FieldExpression = "{{fmtQty this.quantity}}", Label = "Bill Quantity — summed per item type (in loop)", Category = "Bill Items", SortOrder = 94 },
                 new() { TemplateType = T, FieldExpression = "{{this.uom}}", Label = "Bill UOM (in loop)", Category = "Bill Items", SortOrder = 95 },
-                new() { TemplateType = T, FieldExpression = "{{fmt this.unitPrice}}", Label = "Bill Unit Price — value ÷ quantity (in loop)", Category = "Bill Items", SortOrder = 96 },
-                new() { TemplateType = T, FieldExpression = "{{fmt this.valueExclTax}}", Label = "Bill Value excl. Sales Tax (in loop)", Category = "Bill Items", SortOrder = 97 },
+                // fmtDec, not fmt: every other money column on this template is
+                // 2dp, and `fmt` renders whole rupees — a unit price of 219.50
+                // would print as "220".
+                new() { TemplateType = T, FieldExpression = "{{fmtDec this.valueExclTax}}", Label = "Bill Value excl. Sales Tax (in loop)", Category = "Bill Items", SortOrder = 97 },
                 new() { TemplateType = T, FieldExpression = "{{this.gstRate}}", Label = "Bill Sales Tax Rate % (in loop)", Category = "Bill Items", SortOrder = 98 },
-                new() { TemplateType = T, FieldExpression = "{{fmt this.gstAmount}}", Label = "Bill Sales Tax Amount (in loop)", Category = "Bill Items", SortOrder = 99 },
-                new() { TemplateType = T, FieldExpression = "{{fmt this.totalInclTax}}", Label = "Bill Total incl. Sales Tax (in loop)", Category = "Bill Items", SortOrder = 100 },
+                new() { TemplateType = T, FieldExpression = "{{fmtDec this.gstAmount}}", Label = "Bill Sales Tax Amount (in loop)", Category = "Bill Items", SortOrder = 99 },
+                new() { TemplateType = T, FieldExpression = "{{fmtDec this.totalInclTax}}", Label = "Bill Total incl. Sales Tax (in loop)", Category = "Bill Items", SortOrder = 100 },
                 new() { TemplateType = T, FieldExpression = "{{this.hsCode}}", Label = "Bill HS Code — usually blank (in loop)", Category = "Bill Items", SortOrder = 101 },
+
+                // Unit price, rounded for print. ONE row serves BOTH loops:
+                // Handlebars resolves `this` against whichever #each is open,
+                // and the picker is keyed on (TemplateType, FieldExpression), so
+                // a second identical row is impossible anyway. The filed Items
+                // block never offered a unit price at all — the seeded list goes
+                // straight from description to value — even though the figure has
+                // always been on the DTO.
+                new() { TemplateType = T, FieldExpression = "{{fmtDec this.unitPrice}}", Label = "Unit Price, 2 decimals (in either items or billItems loop)", Category = "Items", SortOrder = 44 },
             };
 
             var existing = (await db.MergeFields

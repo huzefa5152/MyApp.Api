@@ -362,8 +362,16 @@ def main() -> int:
         exprs = {f.get("fieldExpression") for f in (fields or [])} if status == 200 else set()
         check("7", "merge field {{#each billItems}} is offered",
               "{{#each billItems}}" in exprs, f"{len(exprs)} TaxInvoice fields")
-        for expr in ("{{fmtQty this.quantity}}", "{{fmt this.unitPrice}}", "{{fmt this.valueExclTax}}"):
+        # The money fields are fmtDec (2dp), not fmt (whole rupees): a unit price
+        # of 219.50 must not print as "220". {{fmtDec this.unitPrice}} is a single
+        # row serving BOTH loops - the picker is keyed on the expression, so the
+        # same string cannot appear twice.
+        for expr in ("{{fmtQty this.quantity}}", "{{fmtDec this.unitPrice}}",
+                     "{{fmtDec this.valueExclTax}}", "{{fmtDec this.totalInclTax}}"):
             check("7", f"merge field {expr} is offered", expr in exprs, "missing")
+        check("7", "no whole-rupee fmt left on a TaxInvoice money field",
+              not [e for e in exprs if e.startswith("{{fmt this.")],
+              f"{[e for e in exprs if e.startswith('{{fmt this.')]}")
 
         # Re-classify + restate the filing on ONE line, leaving the bill alone.
         status, alt = http("POST", "/api/itemtypes", base, token=token, body={
