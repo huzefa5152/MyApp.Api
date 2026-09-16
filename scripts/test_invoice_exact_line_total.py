@@ -143,7 +143,13 @@ def main() -> int:
             "name": "[TEMP] Exact Line Total Suite",
             "brandName": "[TEMP] Exact Line Total Suite",
             "fullAddress": "Karachi", "cnic": "4220100000000",
-            # Required on this branch even with FBR off (FbrSellerIdentity).
+            # Deliberately supplies the union of what the production lines ask
+            # for, so ONE fixture is billable on any of them: master gates
+            # FBR-readiness on the company's NTN + STRN, while the trader line
+            # replaced that with a dedicated seller registration number and
+            # dropped STRN entirely. A field a branch does not have simply has
+            # nowhere to bind.
+            "ntn": "1234567-8", "strn": "1234567890123",
             "fbrSellerRegistrationNo": "4220100000000",
             "startingChallanNumber": 1, "startingInvoiceNumber": 1,
             "startingDebitNoteNumber": 1, "startingCreditNoteNumber": 1,
@@ -164,6 +170,9 @@ def main() -> int:
         status, client = http("POST", "/api/clients", base, token=token, body={
             "companyId": company_id, "name": "[TEMP] Exact Total Buyer",
             "address": "Karachi", "ntn": "4228937-8",
+            # STRN for the same reason as the company above — master requires a
+            # buyer STRN, the trader line does not.
+            "strn": "9876543210987",
             "registrationType": "Registered", "fbrProvinceCode": 8,
         })
         if not check("0", "buyer created", status in (200, 201), f"{status} {err_text(client)}"):
