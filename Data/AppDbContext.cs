@@ -1272,6 +1272,14 @@ namespace MyApp.Api.Data
                 .IsUnique()
                 .HasFilter("[Code] IS NOT NULL");
 
+            // Company.DefaultSalesAccountId / DefaultPurchaseAccountId are
+            // deliberately PLAIN COLUMNS with no foreign key. Two account FKs
+            // from Companies would give SQL Server a second cascade path and it
+            // refuses that outright (1785); and a dangling id is harmless here
+            // because the posting engine checks the pinned account is still in
+            // the company's active list before using it, and re-pins when it is
+            // not. Nothing is lost by leaving the constraint off.
+
             // ── General ledger ─────────────────────────────────────────────────
             // Entry → Company is Restrict (a company's ledger is not something a
             // cascade should erase); Line → Entry is Cascade, because a line has

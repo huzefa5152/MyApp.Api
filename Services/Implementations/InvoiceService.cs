@@ -35,6 +35,7 @@ namespace MyApp.Api.Services.Implementations
         // (and the availability pre-flight kicks in) without waiting
         // for the operator to validate / submit.
         private readonly IStockService _stock;
+        private readonly IPostingService _posting;
         // 2026-05-13: used by the standalone + update paths to auto-fill
         // the FBR-recommended UOM when the operator picked an HSCode but
         // left UOM blank. Also lets the server reject "no UOM AND no
@@ -53,6 +54,7 @@ namespace MyApp.Api.Services.Implementations
             IAuditLogService auditLog,
             IStockService stock,
             ITaxMappingEngine taxEngine,
+            IPostingService posting,
             ILogger<InvoiceService> logger)
         {
             _invoiceRepo = invoiceRepo;
@@ -66,6 +68,7 @@ namespace MyApp.Api.Services.Implementations
             _auditLog = auditLog;
             _stock = stock;
             _taxEngine = taxEngine;
+            _posting = posting;
         }
 
         /// <summary>
@@ -919,6 +922,10 @@ namespace MyApp.Api.Services.Implementations
 
                     // 2026-05-12: stock-out on save (create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+                // Post to the ledger from the same places stock reflows: those are
+                // exactly the points where the bill changed. A no-op while the
+                // company's ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
 
                     // Reload with includes
@@ -1271,6 +1278,10 @@ namespace MyApp.Api.Services.Implementations
 
                     // 2026-05-12: stock-out on save (standalone create path).
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+                // Post to the ledger from the same places stock reflows: those are
+                // exactly the points where the bill changed. A no-op while the
+                // company's ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
 
                     var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
@@ -1594,6 +1605,10 @@ namespace MyApp.Api.Services.Implementations
                 // 2026-05-12: stock-out on save (full-edit path).
                 // See UpdateItemTypesAsync for rationale.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // Post to the ledger from the same places stock reflows: those are
+                // exactly the points where the bill changed. A no-op while the
+                // company's ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostInvoiceAsync(invoice);
                 // Stock guard (2026-09-11): hard-block rolls back here,
                 // soft mode rides back on the DTO as warnings.
                 var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
@@ -2075,6 +2090,10 @@ namespace MyApp.Api.Services.Implementations
                 // before this code shipped) gets them now. No-op when
                 // inventory tracking is off for the company.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // Post to the ledger from the same places stock reflows: those are
+                // exactly the points where the bill changed. A no-op while the
+                // company's ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostInvoiceAsync(invoice);
                 // Stock guard (2026-09-11): the consultant's classification is
                 // what actually takes HS stock out, so this is where an
                 // oversell is caught. Hard-block → exception → rollback →
@@ -2369,6 +2388,10 @@ namespace MyApp.Api.Services.Implementations
                 // sync reads IsFbrExcluded off the entity, so one call
                 // handles both directions idempotently.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // Post to the ledger from the same places stock reflows: those are
+                // exactly the points where the bill changed. A no-op while the
+                // company's ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostInvoiceAsync(invoice);
                 await transaction.CommitAsync();
             }
             catch (Exception ex)
@@ -2632,6 +2655,13 @@ namespace MyApp.Api.Services.Implementations
                 if (staleMovements.Count > 0)
                     _context.StockMovements.RemoveRange(staleMovements);
 
+                // Same reasoning for the ledger: a journal entry references its
+                // document by SourceDocId, which is not a foreign key, so
+                // nothing cascades it away. Removed here, in the same
+                // transaction that removes the bill.
+                await _posting.RemoveForSourceAsync(
+                    invoice.CompanyId, MyApp.Api.Models.Accounting.SourceDocType.Invoice, invoice.Id);
+
                 // Remove all invoice items via tracked delete (avoids conflict with loaded graph)
                 foreach (var item in invoice.Items.ToList())
                 {
@@ -2722,6 +2752,11 @@ namespace MyApp.Api.Services.Implementations
                 invoice.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
 
                 await _context.SaveChangesAsync();
+                // A voided bill is not a sale. Re-posting it removes its entry,
+                // which is what the engine does with a cancelled document — no
+                // reversing entry, because the bill itself carries the void and
+                // a reversal would double the paper trail.
+                await _posting.PostInvoiceAsync(invoice);
                 await transaction.CommitAsync();
             }
             catch (Exception ex)
@@ -3024,6 +3059,10 @@ namespace MyApp.Api.Services.Implementations
                     // move) — Credit Note → IN (return), Debit Note → OUT
                     // (extra goods). Value-only notes leave inventory alone.
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+                // Post to the ledger from the same places stock reflows: those are
+                // exactly the points where the bill changed. A no-op while the
+                // company's ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostInvoiceAsync(created);
 
                     // A CREDIT note that reverses the bill IN FULL puts the goods
                     // back, so the delivery challans behind it are undelivered
@@ -3264,6 +3303,10 @@ namespace MyApp.Api.Services.Implementations
                     // Stock: same pipeline as a normal bill. An unclassified (no-HS)
                     // line records no movement until it is classified downstream.
                     await _stock.SyncInvoiceStockMovementsAsync(created);
+                // Post to the ledger from the same places stock reflows: those are
+                // exactly the points where the bill changed. A no-op while the
+                // company's ledger is not live, and replace-on-edit otherwise.
+                await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
 
                     try

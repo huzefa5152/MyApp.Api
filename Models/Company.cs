@@ -117,6 +117,14 @@ namespace MyApp.Api.Models
         // Null = no period has been closed yet.
         public DateTime? GlLockDate { get; set; }
 
+        // Where a sale's revenue and a purchase's cost land when nothing more
+        // specific says otherwise. Pinned on the company so the posting engine
+        // resolves them by id rather than guessing from account names on every
+        // document. Null until the chart is built, at which point the engine
+        // adopts the seeded Sales / Cost-of-goods-sold accounts.
+        public int? DefaultSalesAccountId { get; set; }
+        public int? DefaultPurchaseAccountId { get; set; }
+
         // ── Tenant isolation ──
         // When false (default), any authenticated user with the right
         // RBAC permission can access this company's data — preserves

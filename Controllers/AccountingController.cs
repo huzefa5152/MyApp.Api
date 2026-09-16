@@ -21,11 +21,14 @@ namespace MyApp.Api.Controllers
     public class AccountingController : ControllerBase
     {
         private readonly IGeneralLedgerService _gl;
+        private readonly IPostingService _posting;
         private readonly ILogger<AccountingController> _logger;
 
-        public AccountingController(IGeneralLedgerService gl, ILogger<AccountingController> logger)
+        public AccountingController(IGeneralLedgerService gl, IPostingService posting,
+            ILogger<AccountingController> logger)
         {
             _gl = gl;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -53,6 +56,32 @@ namespace MyApp.Api.Controllers
                 return Ok(await _gl.GetStatusAsync(companyId));
             }
             catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
+        /// <summary>Re-post every document of a company from scratch. The repair
+        /// hatch: it removes the system-posted entries, leaves manual journals
+        /// alone, and posts each document again from its current state.
+        ///
+        /// Safe to run at any time — posting is replace-on-edit, so a rebuild
+        /// lands on the same ledger a document-by-document history would have.
+        /// Gated on gl.manage because it rewrites everybody's figures.</summary>
+        [HttpPost("gl/company/{companyId}/rebuild")]
+        [HasPermission("accounting.gl.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> Rebuild(int companyId)
+        {
+            try
+            {
+                var result = await _posting.RebuildAsync(companyId);
+                var status = await _gl.GetStatusAsync(companyId);
+                return Ok(new { result, status });
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ledger rebuild failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { error = "Could not rebuild the ledger." });
+            }
         }
 
         [HttpGet("reports/company/{companyId}/trial-balance")]

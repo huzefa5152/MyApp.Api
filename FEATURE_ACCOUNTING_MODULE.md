@@ -349,6 +349,8 @@ the code.
 
 | 2026-09-16 | 3a | **The two taxes DONE.** `FurtherTaxRate/Amount` + `WithholdingTaxRate/Amount` on `Invoice`, `WithholdingTaxRate/Amount` on `PurchaseBill` (migration `AddWithholdingAndFurtherTax`), `FurtherTaxCalculator`, `WithholdingTaxCalculator`, `DocumentTaxFields.jsx` wired into the bill create, bill edit and purchase-bill forms. Both default to NONE and the field does not exist on the form until added. New suite `test_document_taxes.py` 67/67; whole Trader table green. **Deviations from §5:** migrations 3 and 4 are ONE migration — they always ship together and two would add nothing. |
 
+| 2026-09-16 | 3b | **Posting from documents DONE.** `IPostingService` / `PostingService` (legs only — `GeneralLedgerService.WriteEntryAsync` still writes them, so the balance invariant keeps one home), `Company.DefaultSalesAccountId` / `DefaultPurchaseAccountId` (migration `AddCompanyDefaultGlAccounts`), posting wired into every invoice mutation point (the same seven places stock reflows), the void and delete paths, purchase bills and payments, plus a `rebuild` endpoint that re-posts a company from scratch. New suite `test_accounting_posting.py` 82/82; whole Trader table green. **Deviation from §5:** migration 6 (`AddItemTypeCompanyGlAccounts`) is NOT done — see below. |
+
 ### Notes for the next session
 
 - **This branch is not in `local.databases.json`.** It is mapped to
@@ -360,5 +362,18 @@ the code.
 - `test_fbr_token_unreadable_survives_save.py` is listed in §7 but **does not
   exist on this line** — it is an importer suite. Everything else in the table
   ran.
-- Phase 2 picks up where `AccountService.LiveBalance` is marked: that is the one
-  place a balance is computed, and journal movement is added on top of it there.
+- **Per-item-type GL accounts (§5 migration 6) are deliberately NOT built.** On
+  the importer they live on `CompanyItemTypeSetting`, which also carries the
+  V1/V2 inventory-flow redesign, per-company tracking modes and a division scope
+  — none of which this line has, and the stock-reflow gate depends on its V1
+  behaviour. Porting the table would drag the inventory redesign in with it. The
+  need it serves (which account a sale posts to) is met by
+  `Company.DefaultSalesAccountId` / `DefaultPurchaseAccountId`. If per-item-type
+  mapping is wanted later, build a trader-native
+  `(CompanyId, ItemTypeId, SaleAccountId, PurchaseAccountId)` table and add it to
+  `PostingService.ResolveSalesAsync` / `ResolvePurchasesAsync` — nothing else has
+  to change.
+- `PostingService`'s unallocated-remainder branch is unreachable through the
+  payments API: `PaymentService` sets `Payment.Amount` to the sum of its
+  allocations, so there is never a remainder. It is kept, and commented as such,
+  because `Amount` is a stored column an import could set on its own.

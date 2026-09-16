@@ -358,6 +358,9 @@ builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
 // primitives every screen and report reads instead of summing lines itself.
 builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
 builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
+// The posting engine decides a document's legs; the ledger service above is
+// what actually writes them, so the balance invariant has one home.
+builder.Services.AddScoped<IPostingService, PostingService>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just resolves paths under data/attachments) so it registers as a singleton.
 builder.Services.AddScoped<IFolderService, FolderService>();

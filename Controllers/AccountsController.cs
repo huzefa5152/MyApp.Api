@@ -26,16 +26,18 @@ namespace MyApp.Api.Controllers
         private readonly IAccountService _service;
         private readonly ICoaPresetSeeder _seeder;
         private readonly IGeneralLedgerService _gl;
+        private readonly IPostingService _posting;
         private readonly ICompanyAccessGuard _access;
         private readonly ILogger<AccountsController> _logger;
 
         public AccountsController(
             IAccountService service, ICoaPresetSeeder seeder, IGeneralLedgerService gl,
-            ICompanyAccessGuard access, ILogger<AccountsController> logger)
+            IPostingService posting, ICompanyAccessGuard access, ILogger<AccountsController> logger)
         {
             _service = service;
             _seeder = seeder;
             _gl = gl;
+            _posting = posting;
             _access = access;
             _logger = logger;
         }
@@ -203,6 +205,10 @@ namespace MyApp.Api.Controllers
             try
             {
                 var n = await _seeder.SeedWholesaleAsync(companyId);
+                // Pin the sales and purchase defaults on the company now the
+                // chart exists, so the posting engine resolves them by id
+                // instead of guessing from account names on every document.
+                await _posting.EnsureDefaultAccountsAsync(companyId);
                 return Ok(new { created = n, message = n == 0 ? "Preset already present." : $"Seeded {n} groups/accounts." });
             }
             catch (Exception ex)

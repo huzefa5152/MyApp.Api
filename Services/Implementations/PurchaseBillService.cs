@@ -18,12 +18,15 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        private readonly IPostingService _posting;
         private readonly ILogger<PurchaseBillService> _logger;
 
-        public PurchaseBillService(AppDbContext context, IStockService stock, ILogger<PurchaseBillService> logger)
+        public PurchaseBillService(AppDbContext context, IStockService stock,
+            IPostingService posting, ILogger<PurchaseBillService> logger)
         {
             _context = context;
             _stock = stock;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -471,6 +474,11 @@ namespace MyApp.Api.Services.Implementations
                     notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}");
             }
 
+            // Post to the ledger next to the stock reflow — both are derived
+            // state that has to follow the bill. A no-op while the company's
+            // ledger is not live, and replace-on-edit otherwise.
+            await _posting.PostPurchaseBillAsync(bill);
+
             await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
             }
@@ -587,6 +595,10 @@ namespace MyApp.Api.Services.Implementations
             bill.AmountInWords = NumberToWordsConverter.Convert(bill.GrandTotal);
 
             await _context.SaveChangesAsync();
+            // Post to the ledger next to the stock reflow — both are derived
+            // state that has to follow the bill. A no-op while the company's
+            // ledger is not live, and replace-on-edit otherwise.
+            await _posting.PostPurchaseBillAsync(bill);
 
             // Reconcile stock to the new line set by DELTA only: compare what
             // this bill already posted (per ItemType, from the ledger) with
@@ -730,6 +742,11 @@ namespace MyApp.Api.Services.Implementations
             // whose ItemType was classified after creation isn't over-reversed.
             await ReversePostedStockAsync(bill, bill.Date,
                 $"Reversal — Purchase Bill #{bill.PurchaseBillNumber} deleted");
+
+            // The journal entry references the bill by SourceDocId, which is
+            // not a foreign key, so nothing cascades it away.
+            await _posting.RemoveForSourceAsync(
+                bill.CompanyId, MyApp.Api.Models.Accounting.SourceDocType.PurchaseBill, bill.Id);
 
             _context.PurchaseBills.Remove(bill);
             await _context.SaveChangesAsync();
