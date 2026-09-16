@@ -906,6 +906,77 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Each line then carries its own exactLineTotal, and the SERVER derives the
   // unit price from it (see UpdateInvoiceItemTypeRow.ExactLineTotal) - the
   // price computed here is for display only.
+  // Split a whole group quantity into whole per-line quantities, proportional to
+  // a stable weight, remainder largest-fraction-first. Whole numbers because an
+  // exact line total has to be reproducible as quantity x rate, and the server
+  // refuses a fractional quantity on this path.
+  const splitWholeQty = (total, weights) => {
+    const wTotal = weights.reduce((a, b) => a + b, 0) || weights.length;
+    const exact = weights.map((w) => (total * (w || 1)) / wTotal);
+    const base = exact.map((x) => Math.floor(x));
+    let rem = total - base.reduce((a, b) => a + b, 0);
+    const order = exact
+      .map((x, k) => ({ k, frac: x - Math.floor(x) }))
+      .sort((a, b) => b.frac - a.frac || a.k - b.k);
+    for (let n = 0; n < order.length && rem > 0; n++, rem--) base[order[n].k] += 1;
+    // Nothing may end at zero: the server rejects a zero-quantity line.
+    for (let k = 0; k < base.length; k++) {
+      if (base[k] > 0) continue;
+      const donor = base.indexOf(Math.max(...base));
+      if (base[donor] > 1) { base[donor] -= 1; base[k] = 1; }
+    }
+    return base;
+  };
+
+  // Write the group's lines from an exact target and a set of whole quantities.
+  // Both come from the operator; only the RATE is derived.
+  const writeExact = (next, group, targetPaisa, qtys) => {
+    const idxs = group.lineIndices;
+    const qtyTotal = qtys.reduce((a, b) => a + b, 0);
+    if (qtyTotal <= 0) return next;
+
+    let biggest = 0;
+    for (let k = 1; k < qtys.length; k++) if (qtys[k] > qtys[biggest]) biggest = k;
+
+    let handedOut = 0;
+    const shares = qtys.map((q, k) => {
+      if (k === biggest) return null;
+      const share = Math.floor((targetPaisa * q) / qtyTotal);
+      handedOut += share;
+      return share;
+    });
+    shares[biggest] = targetPaisa - handedOut;
+
+    idxs.forEach((itemIdx, k) => {
+      const lineTotal = shares[k] / 100;
+      const q = qtys[k];
+      next[itemIdx] = {
+        ...next[itemIdx],
+        quantity: String(q),
+        unitPrice: q > 0 ? String(Number((lineTotal / q).toFixed(12))) : "0",
+        lineTotal,
+        exactLineTotal: lineTotal,
+      };
+    });
+    return next;
+  };
+
+  // Operator changed the QUANTITY while an exact total is in force: re-split the
+  // quantity, then re-allocate the same target over it. Both in ONE pass, or the
+  // two functional updates would race and the rate would follow a stale qty.
+  const setGroupExactQty = (group, rawQty) => {
+    const qty = Math.round(Number(rawQty) || 0);
+    const targetPaisa = toPaisa(exactTotals[group.key]);
+    if (qty <= 0 || !Number.isFinite(targetPaisa) || targetPaisa <= 0) return;
+    setItems((prev) => {
+      const next = [...prev];
+      const weights = group.lineIndices.map(
+        (i) => parseFloat(originalItemsRef.current[i]?.quantity) || 1,
+      );
+      return writeExact(next, group, targetPaisa, splitWholeQty(qty, weights));
+    });
+  };
+
   const setGroupExactTotal = (group, rawValue) => {
     setExactTotals((prev) => ({ ...prev, [group.key]: rawValue }));
 
@@ -919,34 +990,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       const qtyTotal = qtys.reduce((a, b) => a + b, 0);
       if (qtyTotal <= 0) return prev;
 
-      // Largest line absorbs the remainder; ties resolve to the lowest index so
-      // the split is deterministic across re-renders.
-      let biggest = 0;
-      for (let k = 1; k < qtys.length; k++) if (qtys[k] > qtys[biggest]) biggest = k;
-
-      let handedOut = 0;
-      const shares = qtys.map((q, k) => {
-        if (k === biggest) return null;             // filled in below
-        const share = Math.floor((targetPaisa * q) / qtyTotal);
-        handedOut += share;
-        return share;
-      });
-      shares[biggest] = targetPaisa - handedOut;
-
-      idxs.forEach((itemIdx, k) => {
-        const lineTotal = shares[k] / 100;
-        const q = qtys[k];
-        next[itemIdx] = {
-          ...next[itemIdx],
-          quantity: String(q),
-          // 12dp is the column's scale (decimal(28,12)) - the most precise
-          // rate that survives the round trip.
-          unitPrice: q > 0 ? String(Number((lineTotal / q).toFixed(12))) : "0",
-          lineTotal,
-          exactLineTotal: lineTotal,
-        };
-      });
-      return next;
+      return writeExact(next, group, targetPaisa, qtys);
     });
   };
 
@@ -1026,7 +1070,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // Weighted-average unit price (Σvalue / Σqty). FBR itself never
         // carries a grouped unit price — it takes summed qty + summed value —
         // so this is a display/entry convenience only.
-        unitPrice: totalQty > 0 ? Math.round((totalValue / totalQty) * 100) / 100 : 0,
+        // Up to 12dp, trailing zeros trimmed by Number(): a clean rate still
+        // reads "219.5", but a derived one shows its real value rather than a
+        // 2dp rounding that does NOT reproduce the line total. Rounding here is
+        // what made an exact-total row display 219.5 while it had actually
+        // stored 219.496587843199.
+        unitPrice: totalQty > 0 ? Number((totalValue / totalQty).toFixed(12)) : 0,
       };
     });
   }, [items]);
@@ -1936,7 +1985,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         <th style={{ ...styles.th, minWidth: 140 }}>Description</th>
                         <th style={{ ...styles.th, width: 120, minWidth: 120 }}>Qty</th>
                         <th style={{ ...styles.th, width: 110, minWidth: 110 }}>UOM</th>
-                        <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Unit Price</th>
+                        <th style={{ ...styles.th, width: 190, minWidth: 190 }}>Unit Price</th>
                         <th style={{ ...styles.th, width: 100, minWidth: 100 }}>Line Total</th>
                         {/* HS Code is FBR data — only relevant on the Invoices
                             tab. Bills mode is pre-FBR data entry, so hide it. */}
@@ -1988,13 +2037,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   lines (integer-aware) — see setGroupQty. */}
                               <QuantityInput
                                 value={group.totalQty}
-                                onChange={(val) => setGroupQty(group, val)}
+                                onChange={(val) => (exactTotals[group.key] != null
+                                  ? setGroupExactQty(group, val)
+                                  : setGroupQty(group, val))}
                                 unit={group.uom}
                                 units={units}
-                                disabled={lockQty || exactTotals[group.key] != null}
-                                readOnly={lockQty || exactTotals[group.key] != null}
+                                disabled={lockQty}
+                                readOnly={lockQty}
                                 integerOnly
-                                style={{ ...styles.tableInput, ...((lockQty || exactTotals[group.key] != null) ? styles.readOnlyInput : {}), textAlign: "right" }}
+                                style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
                               />
                               {invoice?.fbrAdjustmentStale && Math.abs(group.billQty - group.totalQty) > 0.0001 && (
                                 <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
@@ -2026,20 +2077,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 // 12dp rate read as invalid in the browser.
                                 step="any"
                                 readOnly={lockPrice || exactTotals[group.key] != null}
-                                title={String(group.unitPrice)}
+                                title={`${group.unitPrice} — up to 12 decimal places`}
                               />
-                              {!lockPrice && exactTotals[group.key] == null && (
-                                <div style={styles.groupMeta}>Up to 12 decimal places</div>
-                              )}
                               {invoice?.fbrAdjustmentStale && Math.abs(group.billUnitPrice - group.unitPrice) > 0.005 && (
                                 <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
                                      title="Unit price on the current bill. The bill changed after you adjusted this invoice — re-adjust so the group total matches the bill.">
                                   bill: {group.billUnitPrice.toLocaleString()}
                                 </div>
                               )}
-                              {multi && !lockPrice && (
-                                <div style={styles.groupMeta} title="Weighted average across the grouped lines. Editing sets one price for the whole group.">
-                                  avg · applies to all {group.lineIndices.length}
+                              {!lockPrice && (
+                                <div style={styles.priceMeta}
+                                     title="Weighted average across the grouped lines. Editing sets one price for the whole group. Up to 12 decimal places.">
+                                  {multi ? `avg · all ${group.lineIndices.length} · ` : ""}max 12 dp
                                 </div>
                               )}
                             </td>
@@ -2101,17 +2150,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                         </button>
                                       </div>
                                       <div style={styles.groupMeta}>
-                                        Enter the exact subtotal this grouped item must equal. The unit price is calculated automatically.
+                                        Enter the exact subtotal this grouped item must equal, and the Qty above.
+                                        The unit price is calculated automatically.
                                       </div>
                                       {exactValid && wholeQty > 0 && (
                                         <div style={styles.exactDerived}>
-                                          Using Qty {wholeQty.toLocaleString("en-PK")} → calculated unit price{" "}
+                                          Qty {wholeQty.toLocaleString("en-PK")} → calculated unit price{" "}
                                           <strong style={{ fontFamily: "monospace" }}>
                                             {Number((exactNum / wholeQty).toFixed(12))}
                                           </strong>
                                           <div style={styles.groupMeta}>
-                                            Qty and Unit Price are locked because the exact total is the authoritative value
-                                            {multi && ` — it is split across the group's ${group.lineIndices.length} lines so they re-sum to it exactly`}.
+                                            Enter the total and the quantity; the unit price is calculated and locked
+                                            {multi && `, and the total is split across the group's ${group.lineIndices.length} lines so they re-sum to it exactly`}.
                                           </div>
                                         </div>
                                       )}
@@ -2213,51 +2263,6 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                 </div>
                 )}
 
-                {/* Totals */}
-                <div style={styles.totalsBox}>
-                  <div style={styles.totalsRow}>
-                    <span>Subtotal:</span>
-                    <strong>Rs. {subtotal.toLocaleString()}</strong>
-                  </div>
-                  <div style={styles.totalsRow}>
-                    <span>GST ({gstRate}%):</span>
-                    <strong>Rs. {gstAmount.toLocaleString()}</strong>
-                  </div>
-                  <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
-                    <span style={{ fontWeight: 700 }}>Grand Total:</span>
-                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
-                  </div>
-                </div>
-
-                {/* Total-preservation guard — only shown in itemType+qty
-                    (+price) mode. Lets the operator see in real time
-                    whether their qty/price edits balance back to the
-                    original subtotal. Save is blocked until they do. */}
-                {!billsMode && stockNegatives.length > 0 && (
-                  <div style={{
-                    ...styles.totalsBox,
-                    background: "#fff4e0",
-                    borderColor: "#ffcc80",
-                    borderLeft: "4px solid #e65100",
-                    marginTop: "0.6rem",
-                  }}>
-                    <div style={{ fontSize: "0.78rem", color: "#c62828", marginBottom: "0.4rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
-                      <MdWarning size={16} /> Stock warning — this save takes inventory below zero
-                    </div>
-                    {stockNegatives.map((w) => (
-                      <div key={w.name} style={styles.totalsRow}>
-                        <span>{w.name}</span>
-                        <strong style={{ color: "#c62828" }}>
-                          on-hand {fmtQty(w.onHand)} − {fmtQty(w.planned)} = {fmtQty(w.projected)}
-                        </strong>
-                      </div>
-                    ))}
-                    <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.35rem" }}>
-                      You will be asked to confirm on Save. Companies with the hard stock guard on cannot save this at all.
-                    </div>
-                  </div>
-                )}
-
                 {showTotalsGuard && (
                   <div style={{
                     ...styles.totalsBox,
@@ -2306,6 +2311,52 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     </div>
                   </div>
                 )}
+
+                {/* Totals */}
+                <div style={styles.totalsBox}>
+                  <div style={styles.totalsRow}>
+                    <span>Subtotal:</span>
+                    <strong>Rs. {subtotal.toLocaleString()}</strong>
+                  </div>
+                  <div style={styles.totalsRow}>
+                    <span>GST ({gstRate}%):</span>
+                    <strong>Rs. {gstAmount.toLocaleString()}</strong>
+                  </div>
+                  <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
+                    <span style={{ fontWeight: 700 }}>Grand Total:</span>
+                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
+                  </div>
+                </div>
+
+                {/* Total-preservation guard — only shown in itemType+qty
+                    (+price) mode. Lets the operator see in real time
+                    whether their qty/price edits balance back to the
+                    original subtotal. Save is blocked until they do. */}
+                {!billsMode && stockNegatives.length > 0 && (
+                  <div style={{
+                    ...styles.totalsBox,
+                    background: "#fff4e0",
+                    borderColor: "#ffcc80",
+                    borderLeft: "4px solid #e65100",
+                    marginTop: "0.6rem",
+                  }}>
+                    <div style={{ fontSize: "0.78rem", color: "#c62828", marginBottom: "0.4rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      <MdWarning size={16} /> Stock warning — this save takes inventory below zero
+                    </div>
+                    {stockNegatives.map((w) => (
+                      <div key={w.name} style={styles.totalsRow}>
+                        <span>{w.name}</span>
+                        <strong style={{ color: "#c62828" }}>
+                          on-hand {fmtQty(w.onHand)} − {fmtQty(w.planned)} = {fmtQty(w.projected)}
+                        </strong>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.35rem" }}>
+                      You will be asked to confirm on Save. Companies with the hard stock guard on cannot save this at all.
+                    </div>
+                  </div>
+                )}
+
 
                 {invoice?.fbrStatus === "Validated" && (
                   <div style={styles.warnNote}>
@@ -3788,7 +3839,8 @@ const styles = {
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
   thead: { backgroundColor: "#f5f7fa" },
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+  td: {
+    verticalAlign: "top", padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
   narrowPermissionBanner: {
     display: "flex", alignItems: "flex-start", gap: "0.5rem",
@@ -3815,8 +3867,18 @@ const styles = {
   // Grouped table affordances.
   groupedRow: { backgroundColor: "#fbfcfe" },
   groupMeta: { marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary, fontStyle: "italic" },
-  adjustRow: { background: "#fafbfc" },
-  adjustCell: { padding: "0.5rem 0.75rem 0.75rem", borderBottom: `1px solid ${colors.cardBorder}` },
+  // Static helper copy, so nowrap is safe here — the "never nowrap" rule is
+  // about user-supplied names, which collapse into look-alikes when truncated.
+  priceMeta: {
+    marginTop: 2, fontSize: "0.68rem", color: colors.textSecondary,
+    fontStyle: "italic", whiteSpace: "nowrap", textAlign: "right",
+  },
+  adjustRow: { background: "#f7f9fc" },
+  adjustCell: {
+    padding: "0.5rem 0.75rem 0.75rem 1.1rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    borderLeft: `3px solid ${colors.blue}`,
+  },
   // auto-fit + min() so the controls stack on a phone with no media query
   adjustWrap: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "0.6rem" },
   adjustLabel: { fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, alignSelf: "center" },

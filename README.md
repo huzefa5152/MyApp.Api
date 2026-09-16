@@ -304,9 +304,10 @@ be kept.
 Each grouped row now offers a choice of adjustment method. **Qty & Unit Price**
 works as before, with whole-number quantities and a rate carrying up to 12
 decimals. **Exact Line Total** turns it around: state what the line must come
-to, and the rate is derived — by the server, not the browser — with quantity and
-price locked while that target is authoritative and an explicit control to
-unlock them again. A target spread across several underlying lines is allocated
+to and the quantity it covers, and the rate is derived from the two — by the
+server, not the browser — with the unit price shown read-only at full precision
+while that target is authoritative, and an explicit control to return to manual
+entry. A target spread across several underlying lines is allocated
 in whole paisa so the lines re-sum to it exactly, rather than each rounding
 independently and leaving a few paisa unaccounted for. A figure that genuinely
 cannot be reproduced from a whole quantity is refused, naming the closest
