@@ -14,6 +14,18 @@ namespace MyApp.Api.Models.Accounting
         AccountTransfer = 4,
         PurchaseDebitNote = 5, // supplier debit note (Dr AP / Cr inventory-or-account / Cr input tax)
         ImportConsignment = 6, // GD costing consignment, New Arrivals mode only (Dr Inventory-new-stock-lines / Dr Input tax / Dr Advance income tax on imports / Cr Import Clearing)
+
+        /// <summary>
+        /// One calendar month's stock relief (Dr Cost of goods sold / Dr-Cr
+        /// Inventory adjustments / Cr Inventory). SourceDocId is the period key
+        /// <c>year * 100 + month</c> — 202608 — NOT a row in any table, which is
+        /// what lets the existing per-source uniqueness and replace-on-repost
+        /// behaviour carry a derived figure with no document behind it.
+        ///
+        /// Monthly rather than per invoice because weighted average is
+        /// path-dependent; see docs/superpowers/specs/2026-09-17-cogs-relief-declared-basis-design.md.
+        /// </summary>
+        InventoryPeriod = 7,
     }
 
     /// <summary>

@@ -1135,6 +1135,14 @@ namespace MyApp.Api.Services.Implementations
                 var inventoryOpeningPosted =
                     await PostCreatedStockToInventoryAsync(dto.CompanyId, newStockValue, result);
 
+                // Costing rewrites what stock is WORTH, and new opening balances
+                // change the pool every later sale is costed from — so the
+                // monthly stock-relief entries are recomputed from the start.
+                // Null rather than a date: a costing run can touch balances of
+                // any vintage, and these books are small enough that a full
+                // recompute is cheaper than working out the earliest one.
+                await _posting.PostInventoryPeriodsAsync(dto.CompanyId, null);
+
                 var run = new ImportRun
                 {
                     CompanyId = dto.CompanyId,
@@ -1571,7 +1579,7 @@ namespace MyApp.Api.Services.Implementations
                          && a.ControlType == ControlType.Inventory
                          && a.IsActive)
                 .OrderBy(a => a.Id)
-                .Select(a => new { a.Id, a.Name, a.OpeningBalance, a.OpeningBalanceIsDebit })
+                .Select(a => new { a.Id, a.Name })
                 .FirstOrDefaultAsync();
 
             if (inventory == null)
@@ -1582,19 +1590,9 @@ namespace MyApp.Api.Services.Implementations
                 return 0m;
             }
 
-            // Signed, debit-positive — the same convention AdjustOpeningBalanceAsync
-            // works in, so a company whose inventory somehow sits on the credit
-            // side still moves the right way.
-            var current = inventory.OpeningBalanceIsDebit
-                ? inventory.OpeningBalance
-                : -inventory.OpeningBalance;
-            var updated = Money(current + valueCreated);
-
-            await _accounts.AdjustOpeningBalanceAsync(inventory.Id, new AdjustOpeningBalanceDto
-            {
-                OpeningBalance = Math.Abs(updated),
-                OpeningBalanceIsDebit = updated >= 0m,
-            });
+            // Shared with the stock-sheet importer and the manual opening-balance
+            // endpoint. Additive, and offsets to Retained earnings.
+            await _posting.AdjustInventoryOpeningAsync(companyId, valueCreated);
 
             result.Messages.Add(
                 $"{valueCreated:N2} added to {inventory.Name} for the opening stock this import created.");

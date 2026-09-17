@@ -15,6 +15,7 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly AppDbContext _db;
         private readonly IAccountService _accounts;
+        private readonly IPostingService _posting;
         private readonly ISpreadsheetImportService _imports;
         private readonly ILogger<OpeningStockImportService> _logger;
 
@@ -25,11 +26,13 @@ namespace MyApp.Api.Services.Implementations
         public OpeningStockImportService(
             AppDbContext db,
             IAccountService accounts,
+            IPostingService posting,
             ISpreadsheetImportService imports,
             ILogger<OpeningStockImportService> logger)
         {
             _db = db;
             _accounts = accounts;
+            _posting = posting;
             _imports = imports;
             _logger = logger;
         }
@@ -653,6 +656,10 @@ namespace MyApp.Api.Services.Implementations
                 if (dto.PostInventoryValue)
                     result.InventoryValuePosted = await PostInventoryValueAsync(
                         dto.CompanyId, rows.Sum(r => r.Value), result);
+
+                // A new opening position re-prices every sale that follows it,
+                // so the monthly stock-relief entries are recomputed in full.
+                await _posting.PostInventoryPeriodsAsync(dto.CompanyId, null);
 
                 var run = new ImportRun
                 {

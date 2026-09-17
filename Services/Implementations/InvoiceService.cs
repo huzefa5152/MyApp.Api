@@ -2501,6 +2501,13 @@ namespace MyApp.Api.Services.Implementations
                 invoice.FbrCancelledBy = actorUserName;
 
                 await _context.SaveChangesAsync();
+
+                // The goods came back, so their cost has to come back out of
+                // cost of goods sold. This path purges movements DIRECTLY
+                // rather than through SyncInvoiceStockMovementsAsync, so it
+                // does not get the repost for free.
+                await _stock.RepostInventoryPeriodsAsync(invoice.CompanyId, invoice.Date);
+
                 await transaction.CommitAsync();
             }
             catch
@@ -2694,6 +2701,11 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
 
+                // A deleted bill's stock went back on the shelf; its cost has to
+                // leave cost of goods sold. This path purges movements directly,
+                // so it does not inherit the repost from the sync wrapper.
+                await _stock.RepostInventoryPeriodsAsync(invoice.CompanyId, invoice.Date);
+
                 await transaction.CommitAsync();
                 return true;
             }
@@ -2759,6 +2771,13 @@ namespace MyApp.Api.Services.Implementations
                 // GL: a cancelled bill's journal entry is removed (the engine
                 // treats IsCancelled as "no posting").
                 await _posting.PostInvoiceAsync(invoice);
+
+                // The goods went back on the shelf, so their cost has to leave
+                // cost of goods sold. This path purges movements DIRECTLY
+                // rather than through SyncInvoiceStockMovementsAsync, so it does
+                // not inherit that method's repost.
+                await _stock.RepostInventoryPeriodsAsync(invoice.CompanyId, invoice.Date);
+
                 await transaction.CommitAsync();
             }
             catch (Exception ex)

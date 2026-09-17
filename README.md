@@ -298,6 +298,41 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-17 — Sales now relieve inventory (cost of goods sold)
+
+- **Nothing ever credited the Inventory control account.** It was an opening
+  balance plus purchases, so every stock-tracking company reported revenue with
+  no matched cost and its balance sheet overstated stock by everything it had
+  ever sold — 9.7M on one importer alone. `AccountingReportService.Statements`
+  has been printing a notice admitting this; it is now fixed rather than
+  disclosed.
+- **One journal entry per company per month** (`SourceDocType.InventoryPeriod`,
+  `SourceDocId` = `year * 100 + month`): Dr Cost of goods sold, Dr/Cr Inventory
+  adjustments, Cr Inventory. Monthly rather than per invoice because weighted
+  average is path-dependent — editing one old bill changes the cost of every
+  sale after it — and because the customs stock sheet is already monthly.
+- Values come from the existing `StockValuation` walk on the **declared** basis.
+  Breakage and revaluation go to their own account, so cost of goods SOLD keeps
+  meaning that and a future write-off cannot land in gross margin silently.
+- Backfilled at startup (`COGS_PERIOD_BACKFILL_V1`). Not optional: with the
+  repost automatic on any stock change, a skipped company would sprout a full
+  month's COGS the first time anyone edited an old invoice.
+- **Three defects found while building it**, each caught by the new suite's
+  invariant rather than by reading code:
+  - `StockValuation` traces a revaluation's RAW delta, but the value it applies
+    is clamped — so contributions are now derived from the running value, which
+    telescopes to exactly opening − closing however the walk clamps.
+  - `POST /stock/opening` never posted to the Inventory account, the same gap
+    the GD costing import had. All three opening-stock paths now share one
+    `AdjustInventoryOpeningAsync`.
+  - Cancelling or deleting an invoice never reversed its COGS: those paths purge
+    movements directly and so did not inherit the sync wrapper's repost.
+- New `scripts/test_cogs_periodic.py` (21 checks). Its load-bearing assertion,
+  repeated after every step, is **Inventory account == the stock walk's closing
+  value** — the invariant the original defect broke.
+- Gross profit will read near zero for companies that invoice at declared
+  customs value. That is the honest declared-basis picture, not a fault.
+
 ### 2026-09-17 — One producer for the shipped import templates
 
 - **`scripts/build_opening_stock_template.py` was deleted.** It still held the

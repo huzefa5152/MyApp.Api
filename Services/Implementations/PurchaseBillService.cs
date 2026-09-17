@@ -523,6 +523,9 @@ namespace MyApp.Api.Services.Implementations
 
             // GL posting (Dr Inventory/Purchases + Input tax / Cr AP) — same tx.
             await _posting.PostPurchaseBillAsync(bill);
+            // Stock this bill brought in re-prices every later sale's cost,
+            // so the monthly relief entries from this date on are rewritten.
+            await _stock.RepostInventoryPeriodsAsync(bill.CompanyId, bill.Date);
             await tx.CommitAsync();
             return (await GetByIdAsync(bill.Id))!;
             }
@@ -655,6 +658,9 @@ namespace MyApp.Api.Services.Implementations
 
             // GL re-post: totals changed → replace the bill's journal entry.
             await _posting.PostPurchaseBillAsync(bill);
+            // Stock this bill brought in re-prices every later sale's cost,
+            // so the monthly relief entries from this date on are rewritten.
+            await _stock.RepostInventoryPeriodsAsync(bill.CompanyId, bill.Date);
             await tx.CommitAsync();
             return await GetByIdAsync(bill.Id);
             }

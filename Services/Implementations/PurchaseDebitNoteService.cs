@@ -223,6 +223,9 @@ namespace MyApp.Api.Services.Implementations
 
                     // GL: Dr AP / Cr inventory-or-account / Cr input tax (same tx).
                     await _posting.PostPurchaseDebitNoteAsync(note);
+                    // Goods going back to the supplier change the pool the
+                    // later sales are costed from.
+                    await _stock.RepostInventoryPeriodsAsync(note.CompanyId, note.Date);
 
                     await tx.CommitAsync();
                     return (await GetByIdAsync(note.Id))!;
@@ -294,6 +297,7 @@ namespace MyApp.Api.Services.Implementations
                 // Reconcile stock by DELTA only (OUT semantics), then re-post GL.
                 await ReconcileStockToLinesAsync(note, newItems);
                 await _posting.PostPurchaseDebitNoteAsync(note);
+                await _stock.RepostInventoryPeriodsAsync(note.CompanyId, note.Date);
 
                 await tx.CommitAsync();
                 return await GetByIdAsync(note.Id);

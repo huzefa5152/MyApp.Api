@@ -10,13 +10,30 @@ namespace MyApp.Api.Services.Implementations
     public class StockService : IStockService
     {
         private readonly AppDbContext _context;
+        private readonly IPostingService _posting;
         private readonly ILogger<StockService> _logger;
 
-        public StockService(AppDbContext context, ILogger<StockService> logger)
+        public StockService(AppDbContext context, IPostingService posting, ILogger<StockService> logger)
         {
             _context = context;
+            _posting = posting;
             _logger = logger;
         }
+
+        /// <summary>
+        /// Rewrites the monthly stock-relief entries after stock has moved, so
+        /// the Inventory control account keeps matching what the stock walk says
+        /// the goods are worth.
+        ///
+        /// Callers that write movements or opening balances OUTSIDE
+        /// <see cref="SyncInvoiceStockMovementsAsync"/> — the adjust endpoint,
+        /// the purchase paths, the two spreadsheet importers — call this once
+        /// when their document is complete, not per line.
+        ///
+        /// No-op when the ledger is off for the company.
+        /// </summary>
+        public Task RepostInventoryPeriodsAsync(int companyId, DateTime? changedFrom = null) =>
+            _posting.PostInventoryPeriodsAsync(companyId, changedFrom);
 
         public async Task<bool> IsTrackingEnabledAsync(int companyId)
         {
@@ -353,9 +370,25 @@ namespace MyApp.Api.Services.Implementations
             return result;
         }
 
+        /// <summary>
+        /// Syncs the document's movements, then reposts the affected months.
+        ///
+        /// The repost is deliberately OUTSIDE the sync body: that body returns
+        /// early on several paths — an FBR-excluded bill, a cancelled one, a
+        /// value-only note, a demo bill — and every one of those PURGES
+        /// movements, which changes stock just as much as adding them does.
+        /// Putting the call at each return was how a path would eventually be
+        /// missed.
+        /// </summary>
         public async Task SyncInvoiceStockMovementsAsync(Invoice invoice)
         {
             if (invoice == null) return;
+            await SyncInvoiceStockMovementsCoreAsync(invoice);
+            await RepostInventoryPeriodsAsync(invoice.CompanyId, invoice.Date);
+        }
+
+        private async Task SyncInvoiceStockMovementsCoreAsync(Invoice invoice)
+        {
             if (!await IsTrackingEnabledAsync(invoice.CompanyId)) return;
 
             // 2026-07-02: an FBR-EXCLUDED document must hold NO stock

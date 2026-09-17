@@ -696,6 +696,291 @@ namespace MyApp.Api.Services.Implementations
                 consignment.GdDate, label, null, lines);
         }
 
+        // ── Inventory periods (monthly stock relief) ────────────────────────────
+
+        /// <summary>
+        /// Rewrites the company's monthly stock-relief entries: one per calendar
+        /// month, Dr Cost of goods sold / Dr-Cr Inventory adjustments / Cr
+        /// Inventory, at the declared weighted-average value the stock dashboard
+        /// itself walks.
+        ///
+        /// Without this the Inventory control account only ever goes UP — it is
+        /// an opening balance plus purchases, and no sale credits it. Every
+        /// stock-tracking company therefore reports revenue with no matched
+        /// cost, and its balance sheet overstates stock by everything it has
+        /// ever sold.
+        ///
+        /// ALWAYS REPOSTS FROM <paramref name="changedFrom"/> TO THE LATEST
+        /// MONTH, never one month alone. Weighted average is path-dependent, so
+        /// a movement added or removed in March changes the cost of every sale
+        /// after it. Passing null recomputes the whole history (the backfill).
+        ///
+        /// A month that computes to nothing has its entry removed, so cancelling
+        /// the only invoice in a month leaves no orphan.
+        ///
+        /// Locked periods are skipped rather than thrown on: a chronological
+        /// walk means a new document cannot alter a closed month's cost, and a
+        /// backdated one is already refused by <see cref="AssertPeriodOpenAsync"/>,
+        /// so a locked month reaching here is a backfill over history that was
+        /// closed before this feature existed — which must not fail the caller's
+        /// save.
+        /// </summary>
+        public async Task PostInventoryPeriodsAsync(int companyId, DateTime? changedFrom = null)
+        {
+            if (!await IsEnabledAsync(companyId)) return;
+
+            var openingRows = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .Select(o => new
+                {
+                    o.ItemTypeId,
+                    o.Quantity,
+                    o.ValueExcludingTax,
+                    o.ActualCostExcludingTax,
+                    o.SalesTaxRate,
+                })
+                .ToListAsync();
+
+            var movements = await _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId)
+                .ToListAsync();
+
+            if (openingRows.Count == 0 && movements.Count == 0)
+            {
+                await RemoveAllInventoryPeriodsAsync(companyId);
+                return;
+            }
+
+            // Several opening rows can share an item type; the walk takes one
+            // starting position per item, so they are summed exactly as the
+            // dashboard's own on-hand query sums them.
+            var openings = openingRows
+                .GroupBy(o => o.ItemTypeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new InventoryPeriodConsumption.Opening(
+                        g.Sum(x => x.Quantity),
+                        g.Sum(x => x.ValueExcludingTax),
+                        g.Sum(x => x.ActualCostExcludingTax),
+                        g.Max(x => x.SalesTaxRate)));
+
+            var byItem = movements
+                .GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var periods = InventoryPeriodConsumption.Compute(openings, byItem);
+
+            // Only months at or after the change need rewriting, but every LATER
+            // month does — see the note above. Existing entries outside the
+            // computed set are removed so a month that emptied does not linger.
+            var floor = changedFrom.HasValue
+                ? changedFrom.Value.Year * 100 + changedFrom.Value.Month
+                : 0;
+
+            var existing = await _context.JournalEntries.AsNoTracking()
+                .Where(e => e.CompanyId == companyId
+                         && e.SourceDocType == SourceDocType.InventoryPeriod
+                         && e.SourceDocId != null)
+                .Select(e => e.SourceDocId!.Value)
+                .ToListAsync();
+
+            var wanted = periods.Keys.Select(p => p.SourceDocId).ToHashSet();
+            var (_, lockDate, _, _) = await FlagsAsync(companyId);
+
+            foreach (var stale in existing.Where(id => id >= floor && !wanted.Contains(id)))
+                await RemoveForSourceAsync(companyId, SourceDocType.InventoryPeriod, stale);
+
+            if (periods.Count == 0) return;
+
+            var accounts = await LoadAccountsAsync(companyId);
+            var inventory = await ResolveAsync(companyId, accounts, ControlType.Inventory, "inventory");
+            Account? cogs = null;
+            Account? adjustments = null;
+
+            foreach (var (period, totals) in periods)
+            {
+                if (period.SourceDocId < floor) continue;
+
+                // Skipped, not thrown — a backfill must not fail a save because
+                // history predates the lock date.
+                if (lockDate.HasValue && period.EndDate.Date <= lockDate.Value.Date)
+                {
+                    _logger.LogInformation(
+                        "Company {CompanyId}: inventory period {Period} is before the lock date — skipped.",
+                        companyId, period);
+                    continue;
+                }
+
+                cogs ??= await ResolveCostOfGoodsSoldAsync(companyId, accounts);
+                if (totals.Adjustments != 0m)
+                    adjustments ??= await ResolveInventoryAdjustmentsAsync(companyId, accounts);
+
+                var lines = new List<JournalLine>();
+
+                // Value LEAVING is the ordinary direction: Dr expense, Cr
+                // Inventory. A month whose credit notes outweigh its sales is
+                // genuinely negative and flips instead of being clamped —
+                // clamping would stop it reconciling to the stock walk, which is
+                // the whole point of the entry.
+                AddLine(lines, cogs.Id,
+                    totals.CostOfGoodsSold > 0m ? totals.CostOfGoodsSold : 0m,
+                    totals.CostOfGoodsSold < 0m ? -totals.CostOfGoodsSold : 0m,
+                    null, $"Cost of goods sold — {period}");
+
+                if (totals.Adjustments != 0m && adjustments != null)
+                    AddLine(lines, adjustments.Id,
+                        totals.Adjustments > 0m ? totals.Adjustments : 0m,
+                        totals.Adjustments < 0m ? -totals.Adjustments : 0m,
+                        null, $"Inventory adjustments — {period}");
+
+                AddLine(lines, inventory.Id,
+                    totals.Total < 0m ? -totals.Total : 0m,
+                    totals.Total > 0m ? totals.Total : 0m,
+                    null, $"Stock relieved — {period}");
+
+                await WriteEntryAsync(companyId, SourceDocType.InventoryPeriod, period.SourceDocId,
+                    period.EndDate, $"Stock relief {period}", null, lines);
+            }
+        }
+
+        /// <summary>
+        /// Moves the Inventory control account's OPENING balance by
+        /// <paramref name="delta"/>, offsetting to Retained earnings so the
+        /// opening balance sheet stays balanced.
+        ///
+        /// Opening stock is an opening POSITION, not a movement, so it belongs
+        /// on the account's opening figure rather than in a journal entry — the
+        /// same boundary the stock-sheet importer already draws.
+        ///
+        /// Shared on purpose. Three paths create opening stock — the stock-sheet
+        /// import, the GD costing import and the manual opening-balance endpoint
+        /// — and each one that remembered this separately was a chance to
+        /// forget. Two of them already had: the costing import (fixed 5c7f569,
+        /// 3,028,198.61 adrift across two companies) and the manual endpoint
+        /// (found 2026-09-17 by the COGS invariant test, which is what this
+        /// consolidation exists to keep true).
+        ///
+        /// ADDITIVE: <see cref="IAccountService.AdjustOpeningBalanceAsync"/>
+        /// takes an ABSOLUTE figure, so passing a raw value would wipe whatever
+        /// the other paths had contributed.
+        /// </summary>
+        public async Task AdjustInventoryOpeningAsync(int companyId, decimal delta)
+        {
+            if (delta == 0m) return;
+
+            var accounts = await _context.Accounts
+                .Where(a => a.CompanyId == companyId && a.IsActive)
+                .ToListAsync();
+
+            var inventory = accounts
+                .Where(a => a.ControlType == ControlType.Inventory)
+                .OrderBy(a => a.Id)
+                .FirstOrDefault();
+            if (inventory == null)
+            {
+                _logger.LogWarning(
+                    "Company {CompanyId} has no Inventory account — opening stock of {Delta} not posted.",
+                    companyId, delta);
+                return;
+            }
+
+            // Signed, debit-positive, before and after — the same convention
+            // AccountService.AdjustOpeningBalanceAsync works in. Done here
+            // against the context rather than through that service because
+            // PostingService -> IAccountService -> IGeneralLedgerService ->
+            // IPostingService is a DI cycle, and the offset below is the whole
+            // of what that method would have contributed.
+            var current = inventory.OpeningBalanceIsDebit
+                ? inventory.OpeningBalance
+                : -inventory.OpeningBalance;
+            var updated = Math.Round(current + delta, 2, MidpointRounding.AwayFromZero);
+            inventory.OpeningBalance = Math.Abs(updated);
+            inventory.OpeningBalanceIsDebit = updated >= 0m;
+
+            // Contra to Retained earnings (else Suspense) so the sum of opening
+            // balances is unchanged and the opening balance sheet still
+            // balances. A company with no equity anchor is not running balanced
+            // books yet, so the inventory side still moves and nothing offsets.
+            var offset = accounts.FirstOrDefault(a => a.ControlType == ControlType.RetainedEarnings)
+                      ?? accounts.FirstOrDefault(a => a.ControlType == ControlType.Suspense);
+            if (offset != null && offset.Id != inventory.Id)
+            {
+                var offOld = offset.OpeningBalanceIsDebit
+                    ? offset.OpeningBalance
+                    : -offset.OpeningBalance;
+                var offNew = Math.Round(offOld - delta, 2, MidpointRounding.AwayFromZero);
+                offset.OpeningBalance = Math.Abs(offNew);
+                offset.OpeningBalanceIsDebit = offNew >= 0m;
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task RemoveAllInventoryPeriodsAsync(int companyId)
+        {
+            await _context.JournalEntries
+                .Where(e => e.CompanyId == companyId
+                         && e.SourceDocType == SourceDocType.InventoryPeriod)
+                .ExecuteDeleteAsync();
+        }
+
+        /// <summary>
+        /// The expense account stock relief debits. Deliberately NOT
+        /// <see cref="ResolvePurchasesAsync"/>, which returns the Inventory
+        /// control account when the company tracks stock — reusing it would
+        /// debit and credit the same account and relieve nothing.
+        /// </summary>
+        private async Task<Account> ResolveCostOfGoodsSoldAsync(int companyId, List<Account> accounts)
+        {
+            var hit = accounts.FirstOrDefault(a => a.ExternalRef == "seed:cogs")
+                   ?? accounts.FirstOrDefault(a => a.AccountType == AccountType.Expense &&
+                          a.Name.Contains("cost of goods", StringComparison.OrdinalIgnoreCase))
+                   ?? accounts.FirstOrDefault(a => a.ExternalRef == "seed:inv-purchases"
+                          && a.AccountType == AccountType.Expense);
+            if (hit != null) return hit;
+
+            var group = await EnsurePlGroupAsync(companyId, AccountType.Expense, accounts);
+            var created = new Account
+            {
+                CompanyId = companyId,
+                Name = "Cost of goods sold",
+                AccountGroup = group,
+                AccountType = AccountType.Expense,
+                IsActive = true,
+                ExternalRef = "seed:cogs",
+            };
+            _context.Accounts.Add(created);
+            await _context.SaveChangesAsync();
+            accounts.Add(created);
+            return created;
+        }
+
+        /// <summary>
+        /// Where breakage, count corrections and revaluations land. Kept out of
+        /// cost of goods SOLD so gross margin stays honest and a future stock
+        /// write-off cannot land in it silently.
+        /// </summary>
+        private async Task<Account> ResolveInventoryAdjustmentsAsync(int companyId, List<Account> accounts)
+        {
+            var hit = accounts.FirstOrDefault(a => a.ExternalRef == "seed:inventory-adjustments");
+            if (hit != null) return hit;
+
+            var group = await EnsurePlGroupAsync(companyId, AccountType.Expense, accounts);
+            var created = new Account
+            {
+                CompanyId = companyId,
+                Name = "Inventory adjustments",
+                AccountGroup = group,
+                AccountType = AccountType.Expense,
+                IsActive = true,
+                ExternalRef = "seed:inventory-adjustments",
+            };
+            _context.Accounts.Add(created);
+            await _context.SaveChangesAsync();
+            accounts.Add(created);
+            return created;
+        }
+
         // ── Removal ────────────────────────────────────────────────────────────
 
         public async Task RemoveForSourceAsync(int companyId, SourceDocType type, int sourceDocId)

@@ -78,6 +78,30 @@ namespace MyApp.Api.Services.Interfaces
         /// entry follows.</summary>
         Task PostImportConsignmentAsync(ImportConsignment consignment);
 
+        /// <summary>
+        /// Rewrites the monthly stock-relief entries (Dr Cost of goods sold /
+        /// Dr-Cr Inventory adjustments / Cr Inventory) from
+        /// <paramref name="changedFrom"/>'s month to the latest, or the whole
+        /// history when it is null.
+        ///
+        /// Always reposts every LATER month too: weighted average is
+        /// path-dependent, so a movement changing in March changes the cost of
+        /// every sale after it.
+        /// </summary>
+        Task PostInventoryPeriodsAsync(int companyId, DateTime? changedFrom = null);
+
+        /// <summary>
+        /// Moves the Inventory control account's OPENING balance by
+        /// <paramref name="delta"/>, offsetting to Retained earnings.
+        ///
+        /// Every path that creates or changes opening stock calls this — the
+        /// stock-sheet import, the GD costing import and the manual
+        /// opening-balance endpoint. Opening stock is a POSITION, not a
+        /// movement, so it belongs on the opening figure rather than in a
+        /// journal entry.
+        /// </summary>
+        Task AdjustInventoryOpeningAsync(int companyId, decimal delta);
+
         /// <summary>Deletes the journal entry (and lines) for a source document.
         /// Called from document delete paths. Safe when none exists.</summary>
         Task RemoveForSourceAsync(int companyId, SourceDocType type, int sourceDocId);

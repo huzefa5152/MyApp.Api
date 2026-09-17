@@ -64,6 +64,19 @@ namespace MyApp.Api.Services.Interfaces
         /// <param name="salesTaxRate">Rate as a percentage (18, 25). Carried
         /// so an item bought at a different rate re-prices the stock it
         /// joins, rather than inheriting whatever the opening balance said.</param>
+        /// <summary>
+        /// Rewrites the monthly stock-relief journal entries (Dr Cost of goods
+        /// sold / Cr Inventory) after stock has moved.
+        ///
+        /// <see cref="SyncInvoiceStockMovementsAsync"/> already does this for
+        /// itself. Callers that write movements or opening balances by another
+        /// route — the adjust endpoint, the purchase paths, the spreadsheet
+        /// importers — call this ONCE when their document is complete.
+        /// Skipping it leaves the Inventory account drifting above the stock
+        /// walk, which is the defect this whole mechanism exists to prevent.
+        /// </summary>
+        Task RepostInventoryPeriodsAsync(int companyId, DateTime? changedFrom = null);
+
         Task RecordMovementAsync(
             int companyId,
             int itemTypeId,
