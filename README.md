@@ -298,6 +298,38 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-17 — GD costing imports now reach "Inventory on hand"
+
+- **A GD costing import that created opening stock never posted its value to
+  the Chart of Accounts.** A stock-sheet import puts its total on the Inventory
+  control account (`OpeningStockImportService.PostInventoryValueAsync`); the
+  costing importer wrote the same kind of opening position and posted nothing,
+  so "Inventory on hand" silently understated the books by the value of every
+  balance a costing run brought in. Found while reconciling a customer's stock
+  sheet against the dashboard: two companies on the importer line were short by
+  2,685,861.50 and 342,337.11 respectively, while a third — whose costing run
+  happened to create no balances — was correctly untouched, which is what
+  pinned the cause to the create path rather than the costing path.
+- `GdCostingImportService.CreateMissingStockAsync` now reports the value it
+  brought onto the books, and `PostCreatedStockToInventoryAsync` adds that to
+  the Inventory account's **opening balance**, offsetting to Retained earnings
+  the same way the stock-sheet importer does. It is **additive** — the account
+  already carries the stock sheet's own contribution, and
+  `AdjustOpeningBalanceAsync` takes an absolute figure, so posting the raw
+  value would have wiped it.
+- Still **no journal entry**: an opening position is not a movement, so the
+  boundary `CreateMissingStockAsync` already documented is unchanged. A
+  cost-only run, which creates nothing, posts nothing.
+- New `inventoryOpeningPosted` on the commit result, plus a message saying what
+  was added and to which account.
+- Covered by section 28 of `scripts/test_gd_import_costing.py` (419/419),
+  which asserts the account grows by exactly the created value, that the
+  earlier stock-sheet figure is added to rather than replaced, that no journal
+  entry is written, and that a cost-only run leaves the account alone.
+- **Existing production balances are not corrected by this** — the fix changes
+  what future imports do. The two affected companies need their Inventory
+  opening balance adjusted by hand.
+
 ### 2026-09-15 — Sandbox scenario now follows the buyer
 
 - **The default sandbox scenario was hardcoded `SN001`** — "goods at standard

@@ -17,6 +17,7 @@ namespace MyApp.Api.Services.Implementations
     public class GdCostingImportService : IGdCostingImportService
     {
         private readonly AppDbContext _db;
+        private readonly IAccountService _accounts;
         private readonly ISpreadsheetImportService _imports;
         private readonly IPostingService _posting;
         private readonly IStockCostAuditService _costAudit;
@@ -29,12 +30,14 @@ namespace MyApp.Api.Services.Implementations
 
         public GdCostingImportService(
             AppDbContext db,
+            IAccountService accounts,
             ISpreadsheetImportService imports,
             IPostingService posting,
             IStockCostAuditService costAudit,
             ILogger<GdCostingImportService> logger)
         {
             _db = db;
+            _accounts = accounts;
             _imports = imports;
             _posting = posting;
             _costAudit = costAudit;
@@ -1122,8 +1125,15 @@ namespace MyApp.Api.Services.Implementations
                 // inline in the loop above, because a group sharing one
                 // (HsCode, Name) target needs every member's own recomputed
                 // Cost/SellingValue collected first.
-                var (itemTypesCreated, itemTypesAdopted, openingBalancesCreated) =
+                var (itemTypesCreated, itemTypesAdopted, openingBalancesCreated, newStockValue) =
                     await CreateMissingStockAsync(dto.CompanyId, newStockLines, userId);
+
+                // The value that stock brought onto the books belongs on the
+                // Inventory control account, the same way a stock sheet's does.
+                // Inside the transaction, so a rollback takes the account back
+                // with everything else.
+                var inventoryOpeningPosted =
+                    await PostCreatedStockToInventoryAsync(dto.CompanyId, newStockValue, result);
 
                 var run = new ImportRun
                 {
@@ -1215,6 +1225,7 @@ namespace MyApp.Api.Services.Implementations
                 result.ItemTypesCreated = itemTypesCreated;
                 result.ItemTypesAdopted = itemTypesAdopted;
                 result.OpeningBalancesCreated = openingBalancesCreated;
+                result.InventoryOpeningPosted = inventoryOpeningPosted;
                 result.JournalEntries = postedEntries;
                 result.TotalPosted = Money(postedEntries.Sum(e => e.Amount));
 
@@ -1282,17 +1293,25 @@ namespace MyApp.Api.Services.Implementations
         /// OPENING position, not a live movement (brief part B) — the same
         /// boundary <see cref="IGdCostingImportService"/>'s own doc comment
         /// already draws around the CostOnly path.
+        ///
+        /// It DOES report the selling value it brought onto the books, so the
+        /// caller can put that on the Inventory control account's opening
+        /// balance — see <see cref="PostCreatedStockToInventoryAsync"/>. That
+        /// is an opening balance, not a journal entry, so the boundary above
+        /// still holds.
         /// </summary>
-        private async Task<(int Created, int Adopted, int BalancesCreated)> CreateMissingStockAsync(
+        private async Task<(int Created, int Adopted, int BalancesCreated, decimal ValueCreated)>
+            CreateMissingStockAsync(
             int companyId,
             List<(ImportConsignmentLine Entity, NewStockGroupKey Key, GdCostingLineDto Line)> newStockLines,
             int userId)
         {
-            if (newStockLines.Count == 0) return (0, 0, 0);
+            if (newStockLines.Count == 0) return (0, 0, 0, 0m);
 
             var itemTypesCreated = 0;
             var itemTypesAdopted = 0;
             var openingBalancesCreated = 0;
+            var valueCreated = 0m;
 
             var groups = newStockLines.GroupBy(t => t.Key).ToList();
 
@@ -1399,7 +1418,7 @@ namespace MyApp.Api.Services.Implementations
                 resolved.Add((itemType, members));
             }
 
-            if (resolved.Count == 0) return (itemTypesCreated, itemTypesAdopted, 0);
+            if (resolved.Count == 0) return (itemTypesCreated, itemTypesAdopted, 0, 0m);
 
             // Flush new ItemTypes (and the IsFavorite adoption flips) so
             // every group below has a real ItemTypeId to point
@@ -1469,6 +1488,7 @@ namespace MyApp.Api.Services.Implementations
                     };
                     _db.OpeningStockBalances.Add(balance);
                     openingBalancesCreated++;
+                    valueCreated += totalValue;
                 }
                 else
                 {
@@ -1484,6 +1504,10 @@ namespace MyApp.Api.Services.Implementations
                     balance.ValueExcludingTax = Money(balance.ValueExcludingTax + totalValue);
                     balance.ActualCostExcludingTax = Money(balance.ActualCostExcludingTax + totalCost);
                     balance.Notes = Trim($"{balance.Notes} | {originNote}".Trim(' ', '|'), 500);
+                    // Value arriving on an EXISTING balance is just as new to
+                    // the books as a created one, so it belongs on the
+                    // Inventory account too.
+                    valueCreated += totalValue;
                 }
 
                 await _costAudit.RecordAsync(
@@ -1510,7 +1534,71 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
-            return (itemTypesCreated, itemTypesAdopted, openingBalancesCreated);
+            return (itemTypesCreated, itemTypesAdopted, openingBalancesCreated, Money(valueCreated));
+        }
+
+        /// <summary>
+        /// Puts the value of the opening stock this import CREATED onto the
+        /// company's Inventory control account, exactly as
+        /// <c>OpeningStockImportService.PostInventoryValueAsync</c> does for a
+        /// stock sheet. Without this the two importers disagree: a stock sheet
+        /// reaches the Chart of Accounts and a GD costing sheet does not, so
+        /// "Inventory on hand" silently understates the books by the value of
+        /// every balance a costing import brought in (found on the importer
+        /// production line 2026-09-17 — two companies, 3,028,198.61 between
+        /// them).
+        ///
+        /// ADDITIVE on purpose. The account already carries whatever an
+        /// earlier import put there, and
+        /// <see cref="IAccountService.AdjustOpeningBalanceAsync"/> takes an
+        /// ABSOLUTE figure — so the delta is added to the current opening
+        /// rather than replacing it. Passing the raw value here would wipe the
+        /// stock sheet's own contribution.
+        ///
+        /// Still no journal entry: an opening position is not a movement
+        /// (see <see cref="CreateMissingStockAsync"/>). The contra side goes
+        /// to Retained earnings inside AdjustOpeningBalanceAsync, so the
+        /// opening balance sheet stays balanced without anything being posted
+        /// here.
+        /// </summary>
+        private async Task<decimal> PostCreatedStockToInventoryAsync(
+            int companyId, decimal valueCreated, GdCostingCommitResultDto result)
+        {
+            if (valueCreated <= 0m) return 0m;
+
+            var inventory = await _db.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == companyId
+                         && a.ControlType == ControlType.Inventory
+                         && a.IsActive)
+                .OrderBy(a => a.Id)
+                .Select(a => new { a.Id, a.Name, a.OpeningBalance, a.OpeningBalanceIsDebit })
+                .FirstOrDefaultAsync();
+
+            if (inventory == null)
+            {
+                result.Messages.Add(
+                    "No Inventory account was found, so the value of the new opening stock was not "
+                    + "posted. Seed the chart of accounts, then set it by hand.");
+                return 0m;
+            }
+
+            // Signed, debit-positive — the same convention AdjustOpeningBalanceAsync
+            // works in, so a company whose inventory somehow sits on the credit
+            // side still moves the right way.
+            var current = inventory.OpeningBalanceIsDebit
+                ? inventory.OpeningBalance
+                : -inventory.OpeningBalance;
+            var updated = Money(current + valueCreated);
+
+            await _accounts.AdjustOpeningBalanceAsync(inventory.Id, new AdjustOpeningBalanceDto
+            {
+                OpeningBalance = Math.Abs(updated),
+                OpeningBalanceIsDebit = updated >= 0m,
+            });
+
+            result.Messages.Add(
+                $"{valueCreated:N2} added to {inventory.Name} for the opening stock this import created.");
+            return valueCreated;
         }
 
         /// <summary>
