@@ -278,6 +278,15 @@ namespace MyApp.Api.Services.Implementations
             foreach (var t in transfers) { await _posting.PostTransferAsync(t); result.PostedTransfers++; }
             _context.ChangeTracker.Clear();
 
+            // Monthly stock relief is derived from the stock walk, not from a
+            // document, so the document loops above cannot recreate it. Without
+            // this the rebuild would wipe every cost-of-goods-sold entry and
+            // leave the Inventory account standing at its opening balance
+            // again — silently undoing the fix, with no failing document to
+            // point at. Last, so it sees the ledger the rebuild just wrote.
+            await _posting.PostInventoryPeriodsAsync(companyId, null);
+            _context.ChangeTracker.Clear();
+
             _logger.LogInformation(
                 "GL rebuild for company {CompanyId}: {Invoices} invoices, {Bills} bills, {DebitNotes} debit notes, {Consignments} consignments, {Payments} payments, {Transfers} transfers ({Removed} old entries removed).",
                 companyId, result.PostedInvoices, result.PostedBills, result.PostedDebitNotes, result.PostedConsignments, result.PostedPayments, result.PostedTransfers, removed);
@@ -678,6 +687,34 @@ namespace MyApp.Api.Services.Implementations
                 summary.Income = -plByAccount.Where(x => x.Type == AccountType.Income).Sum(x => x.Net);
                 summary.Expenses = plByAccount.Where(x => x.Type == AccountType.Expense).Sum(x => x.Net);
                 summary.NetProfit = summary.Income - summary.Expenses;
+
+                // ── Importer-oriented positions (2026-09-17) ───────────────
+                // An importer has no trade creditors, so the Payables card
+                // reads 0.00 and this screen said nothing about its largest
+                // asset (stock) or what it actually owes (tax). These are
+                // POSITIONS, not period flows, so they use the balances above
+                // rather than the period's journal lines.
+                var positionAccounts = await _context.Accounts.AsNoTracking()
+                    .Where(a => a.CompanyId == companyId && a.IsActive)
+                    .Select(a => new { a.Id, a.ControlType })
+                    .ToListAsync();
+
+                decimal Position(params ControlType[] roles)
+                {
+                    var wanted = roles.ToHashSet();
+                    return Math.Round(
+                        positionAccounts.Where(a => wanted.Contains(a.ControlType))
+                                        .Sum(a => balances.GetValueOrDefault(a.Id)),
+                        2, MidpointRounding.AwayFromZero);
+                }
+
+                summary.InventoryOnHand = Position(ControlType.Inventory);
+                // Liabilities sit credit-side; negate so "owed" reads positive.
+                summary.TaxPayable = -Position(ControlType.OutputTax,
+                    ControlType.FurtherTaxPayable, ControlType.WithholdingPayable);
+                summary.ImportClearing = -Position(ControlType.ImportClearing);
+                summary.RecoverableTax = Position(ControlType.InputTax,
+                    ControlType.AdvanceIncomeTaxOnImports);
             }
 
             // Working capital buckets (subledger).

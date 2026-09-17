@@ -153,6 +153,67 @@ namespace MyApp.Api.Helpers
             return result;
         }
 
+        /// <summary>
+        /// The same walk, totalled over an ARBITRARY date range instead of
+        /// bucketed into months.
+        ///
+        /// The dashboard's periods are not month-aligned (All Time, this week,
+        /// a custom range), and summing whole monthly entries would pull a
+        /// whole month's cost into a part-month view. Both this and
+        /// <see cref="Compute"/> walk the same history the same way, so a
+        /// whole-month selection agrees with the posted entry by construction.
+        ///
+        /// <paramref name="from"/> is inclusive, <paramref name="to"/>
+        /// EXCLUSIVE — matching how the dashboard's own period filters compare
+        /// dates, so a bill on the last day of a range is counted once.
+        /// </summary>
+        public static Totals ComputeRange(
+            IReadOnlyDictionary<int, Opening> openings,
+            IReadOnlyDictionary<int, List<StockMovement>> movementsByItem,
+            DateTime? from,
+            DateTime? to)
+        {
+            var cogs = 0m;
+            var adjustments = 0m;
+
+            foreach (var (itemTypeId, movements) in movementsByItem)
+            {
+                if (movements.Count == 0) continue;
+                openings.TryGetValue(itemTypeId, out var open);
+
+                var trace = new List<StockValuation.Step>(movements.Count);
+                StockValuation.Compute(
+                    open.Quantity, open.ValueExcludingTax, open.ActualCostExcludingTax,
+                    open.SalesTaxRate, movements, trace);
+
+                var byId = movements.ToDictionary(m => m.Id);
+                var previous = Round(open.ValueExcludingTax);
+
+                foreach (var step in trace)
+                {
+                    var contribution = previous - step.RunningValue;
+                    previous = step.RunningValue;
+
+                    if (contribution == 0m) continue;
+                    if (!byId.TryGetValue(step.MovementId, out var m)) continue;
+
+                    // Filtered AFTER the walk, never before: the average a sale
+                    // is costed at depends on every movement before it, so a
+                    // walk over only the range would price the range wrongly.
+                    if (from.HasValue && m.MovementDate < from.Value) continue;
+                    if (to.HasValue && m.MovementDate >= to.Value) continue;
+
+                    switch (Classify(m.SourceType))
+                    {
+                        case Bucket.Cogs: cogs += contribution; break;
+                        case Bucket.Adjustment: adjustments += contribution; break;
+                    }
+                }
+            }
+
+            return new Totals(Round(cogs), Round(adjustments));
+        }
+
         private enum Bucket { Skip, Cogs, Adjustment }
 
         private static Bucket Classify(StockMovementSourceType source) => source switch

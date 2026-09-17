@@ -8,7 +8,7 @@ import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockM
 import { saveBlob } from "../api/accountingReportApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getAllUnits } from "../api/unitsApi";
-import { dropdownStyles } from "../theme";
+import { dropdownStyles, formStyles, modalSizes } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -210,12 +210,17 @@ export default function StockDashboardPage() {
   // Totals follow the search, not the whole company — an operator filtering to
   // one supplier's items wants that subset's worth, and the unfiltered figure
   // is one keystroke away.
+  // `actual` is the LANDED-cost pool, which an importer cares about more than
+  // the declared one: declared value is what the customs sheet and the ledger
+  // carry, landed cost is what the goods really cost. The gap between them is
+  // the margin the declared-basis P&L cannot show.
   const onhandTotals = filteredOnhand.reduce((acc, r) => ({
     qty: acc.qty + (r.onHand || 0),
     excl: acc.excl + (r.valueExcludingTax || 0),
     tax: acc.tax + (r.salesTax || 0),
     incl: acc.incl + (r.valueIncludingTax || 0),
-  }), { qty: 0, excl: 0, tax: 0, incl: 0 });
+    actual: acc.actual + (r.actualCostExcludingTax || 0),
+  }), { qty: 0, excl: 0, tax: 0, incl: 0, actual: 0 });
 
   const filteredSummary = summary.filter(r =>
     !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
@@ -696,6 +701,19 @@ export default function StockDashboardPage() {
                   <ValueTile label="Excluding tax" value={money(onhandTotals.excl)} />
                   <ValueTile label="Sales tax" value={money(onhandTotals.tax)} />
                   <ValueTile label="Including tax" value={money(onhandTotals.incl)} strong />
+                  {/* Landed cost and the margin over it. Shown only when a
+                      costing import has actually supplied an actual cost —
+                      otherwise these would read 0 and imply the stock cost
+                      nothing. */}
+                  {onhandTotals.actual > 0 && (
+                    <ValueTile label="Actual (landed) cost" value={money(onhandTotals.actual)} />
+                  )}
+                  {onhandTotals.actual > 0 && (
+                    <ValueTile
+                      label="Margin over cost"
+                      value={money(onhandTotals.excl - onhandTotals.actual)}
+                    />
+                  )}
                 </div>
               )}
               {loading ? (
@@ -1722,19 +1740,90 @@ function TabBtn({ active, children, onClick }) {
   );
 }
 
+/// Opening-balance and adjustment dialog.
+///
+/// Uses the shared formStyles rather than a hand-rolled overlay. The
+/// hand-rolled one centred the card in a backdrop with no overflow and put no
+/// maxHeight on the card, so the Adjustment form -- two modes, five fields, a
+/// notes box -- grew taller than the viewport and pushed Cancel, Save AND the
+/// close X off-screen with no way to scroll to them. Reported from production
+/// 2026-09-17: "i can't cancel or update anything".
+///
+/// This is the same defect CLAUDE.md section 3 records against CorrectionWizard.
+/// The fix is the documented one: backdrop scrolls, card caps at 96vh, and the
+/// BODY scrolls inside it so the header and footer stay put.
 function SmallModal({ title, children, onClose, onSubmit }) {
+  // Escape closes, because a dialog you cannot dismiss is the whole complaint.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(15,20,30,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "2vh 1rem" }}>
-      <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, padding: "1.25rem", boxShadow: "0 20px 60px rgba(13,71,161,0.2)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+    <div
+      style={{ ...formStyles.backdrop, alignItems: "flex-start" }}
+      // Clicking the backdrop dismisses; clicks inside the card must not.
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      role="presentation"
+    >
+      <div
+        style={{
+          ...formStyles.modal,
+          maxWidth: modalSizes.md,
+          // Sits just below the top of a tall viewport, but is free to grow
+          // downward and scroll internally on a short one.
+          margin: "auto",
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "1rem 1.25rem", borderBottom: "1px solid #e6ecf4",
+          flexShrink: 0,
+        }}>
           <h3 style={{ margin: 0, fontSize: "1.05rem", color: "#1a2332" }}>{title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#5f6d7e", cursor: "pointer", padding: 0, fontSize: "1.5rem", lineHeight: 1 }}>×</button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: "none", border: "none", color: "#5f6d7e", cursor: "pointer",
+              // padding 0 + no shadow: index.css's global button rule would
+              // otherwise stretch this into a pill and shove the X off-centre.
+              padding: 0, boxShadow: "none",
+              fontSize: "1.5rem", lineHeight: 1,
+              display: "grid", placeItems: "center", width: 44, height: 44,
+            }}
+          >×</button>
         </div>
-        <form onSubmit={onSubmit}>
-          {children}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-            <button type="button" onClick={onClose} style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "1px solid #d0d7e2", background: "#fff", color: "#1a2332", cursor: "pointer", boxShadow: "none" }}>Cancel</button>
-            <button type="submit" style={{ padding: "0.45rem 1rem", borderRadius: 8, border: "none", background: "#0d47a1", color: "#fff", cursor: "pointer", fontWeight: 600, boxShadow: "none" }}>Save</button>
+
+        <form
+          onSubmit={onSubmit}
+          style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}
+        >
+          {/* Only the body scrolls, so the footer buttons are always reachable. */}
+          <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "1.25rem" }}>
+            {children}
+          </div>
+          <div style={{
+            display: "flex", justifyContent: "flex-end", gap: "0.5rem",
+            padding: "0.85rem 1.25rem", borderTop: "1px solid #e6ecf4",
+            background: "#fff", flexShrink: 0,
+          }}>
+            <button type="button" onClick={onClose} style={{
+              padding: "0.55rem 1.1rem", borderRadius: 8, border: "1px solid #d0d7e2",
+              background: "#fff", color: "#1a2332", cursor: "pointer", boxShadow: "none",
+              minHeight: 44,
+            }}>Cancel</button>
+            <button type="submit" style={{
+              padding: "0.55rem 1.1rem", borderRadius: 8, border: "none",
+              background: "#0d47a1", color: "#fff", cursor: "pointer", fontWeight: 600,
+              boxShadow: "none", minHeight: 44,
+            }}>Save</button>
           </div>
         </form>
       </div>

@@ -298,6 +298,50 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-17 — Dashboards rebuilt around what an importer actually has
+
+- **Half the hero band said nothing.** An importer buys nothing on purchase
+  bills — stock arrives through opening stock and GD costing — so Total
+  Purchases read Rs 0 and Net (Sales − Purchases) merely restated Total Sales
+  while looking like profit: on one company a card read 11.4M next to a rising
+  arrow when real gross profit was −6,195. Meanwhile stock and debtors, the two
+  largest numbers in the business, were not shown at all.
+- New cards: **Cost of Goods Sold**, **Gross Profit** (with margin %), **Stock
+  on Hand**, **Receivables** (with the overdue slice), **Payables** (everything
+  owed, not just trade creditors), and **Recoverable from FBR** (input tax and
+  advance income tax on imports — assets, not liabilities). Total Sales keeps
+  its tax-inclusive headline and gains an **ex-tax second line**, which is the
+  difference that started the whole investigation.
+- **One layout, cards hidden when their concept is empty**, extending the
+  hiding the dashboard already did by permission. Chosen over two layouts
+  because the only companies with purchase bills were demo data. A configured
+  but not-yet-trading company gets an empty state rather than a wall of zeroes.
+- **Accounting dashboard** gains a Stock & tax position row (inventory, tax
+  payable, import clearing, recoverable tax). Its Payables card is supplier
+  aging and legitimately Rs 0 for an importer, which said nothing about what is
+  actually owed.
+- **Stock dashboard** gains Actual (landed) cost and Margin over cost, shown
+  only when a costing import has supplied an actual cost — that is where the
+  real margin lives, since the declared-basis P&L reads near zero by design.
+- **Two defects in the day's own COGS work, caught by wiring these up:**
+  - The monthly relief entry was dated month-END, so a running month's cost sat
+    in the future and every report ending "today" showed income with no cost —
+    expenses Rs 0, profit overstated by the whole cost of sales. A running month
+    is now dated today; finished months keep month-end.
+  - `GeneralLedgerService.RebuildAsync` deletes every entry and re-posts
+    documents, but stock relief is derived from the walk rather than a document,
+    so a rebuild silently wiped all of it. Now reposted at the end of a rebuild.
+- **Stock value had two answers on one screen.** The Inventory section derived
+  it from purchase-bill lines alone (Rs 0 for an importer) while the new card
+  walked the stock. Both now use one method.
+- Modal fix: the stock dashboard's opening-balance and adjustment dialog used a
+  hand-rolled overlay with no `overflowY` and no `maxHeight`, so a tall form
+  pushed Cancel, Save and the close X off-screen — the CorrectionWizard defect
+  in CLAUDE.md §3, repeating. Now uses the shared `formStyles`, closes on Escape
+  and on backdrop click. Verified at 600px height and 375px width.
+- Removed `GET /api/itemtypes/saved-hscodes` and its service/repository chain —
+  no caller anywhere, and it carried no `[HasPermission]`.
+
 ### 2026-09-17 — Sales now relieve inventory (cost of goods sold)
 
 - **Nothing ever credited the Inventory control account.** It was an opening

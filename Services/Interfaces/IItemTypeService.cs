@@ -63,6 +63,5 @@ namespace MyApp.Api.Services.Interfaces
         Task<ItemTypeDto> CreateAsync(ItemTypeDto dto, int? companyId = null);
         Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? companyId = null);
         Task DeleteAsync(int id);
-        Task<List<string>> GetSavedHsCodesAsync();
     }
 }

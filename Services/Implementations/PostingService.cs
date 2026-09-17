@@ -803,13 +803,23 @@ namespace MyApp.Api.Services.Implementations
 
                 // Skipped, not thrown — a backfill must not fail a save because
                 // history predates the lock date.
-                if (lockDate.HasValue && period.EndDate.Date <= lockDate.Value.Date)
+                var wouldBeDated = period.EndDate > DateTime.Now.Date ? DateTime.Now.Date : period.EndDate;
+                if (lockDate.HasValue && wouldBeDated.Date <= lockDate.Value.Date)
                 {
                     _logger.LogInformation(
                         "Company {CompanyId}: inventory period {Period} is before the lock date — skipped.",
                         companyId, period);
                     continue;
                 }
+
+                // Month-end, EXCEPT for a month still running: an entry dated
+                // 30 September is in the future on 17 September, so every
+                // report that ends "today" showed the month's income with none
+                // of its cost and overstated profit — the very defect this
+                // whole mechanism exists to remove, reappearing one step later.
+                // A finished month keeps its month-end date.
+                var today = DateTime.Now.Date;
+                var entryDate = period.EndDate > today ? today : period.EndDate;
 
                 cogs ??= await ResolveCostOfGoodsSoldAsync(companyId, accounts);
                 if (totals.Adjustments != 0m)
@@ -839,7 +849,7 @@ namespace MyApp.Api.Services.Implementations
                     null, $"Stock relieved — {period}");
 
                 await WriteEntryAsync(companyId, SourceDocType.InventoryPeriod, period.SourceDocId,
-                    period.EndDate, $"Stock relief {period}", null, lines);
+                    entryDate, $"Stock relief {period}", null, lines);
             }
         }
 

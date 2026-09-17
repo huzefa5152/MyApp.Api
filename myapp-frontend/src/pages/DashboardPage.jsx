@@ -31,6 +31,7 @@ import {
   MdTrendingUp, MdShoppingCart, MdReceipt, MdInventory, MdCloudDone,
   MdHourglassEmpty, MdError, MdCheckCircle, MdLock, MdRefresh,
   MdOpenInNew, MdInfo, MdAttachMoney, MdAccountBalance,
+  MdLocalShipping, MdRequestQuote, MdSavings, MdAssignmentReturn, MdWarehouse,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { useCompany } from "../contexts/CompanyContext";
@@ -63,6 +64,12 @@ const accents = {
   purchases: "#00897b",
   fbr:       "#6a1b9a",
   inventory: "#e65100",
+  // Importer-oriented cards (2026-09-17).
+  cogs:        "#8d6e63",
+  profit:      "#2e7d32",
+  receivables: "#0277bd",
+  payables:    "#c62828",
+  recoverable: "#00796b",
 };
 
 function formatPkr(v) {
@@ -363,10 +370,50 @@ function HeroBand({ data }) {
   // Hide individual hero cards based on perms. A user with only sales
   // gets 2 cards (Total Sales + Net would be misleading without
   // purchases, so we hide Net too). Admin gets all 4.
+  //
+  // 2026-09-17: AND on whether the concept has any data for this company.
+  // An importer buys nothing on purchase bills — stock arrives through
+  // opening stock and GD costing — so Total Purchases read 0 and Net
+  // (Sales − Purchases) merely restated Total Sales while looking like
+  // profit. One layout with empty cards hidden, rather than two layouts:
+  // the only companies with purchase bills were demo data.
+  const hasPurchases = hero.hasPurchases !== false;
   const showSales = flags.canViewSales;
-  const showPurchases = flags.canViewPurchases;
-  const showNet = showSales && showPurchases;
-  const showGstNet = showSales && showPurchases;
+  const showPurchases = flags.canViewPurchases && hasPurchases;
+  const showNet = showSales && flags.canViewPurchases && hasPurchases;
+  const showGstNet = showSales && flags.canViewPurchases;
+
+  const money = (v) => `Rs. ${formatPkrCompact(v)}`;
+  const exact = (v) =>
+    v == null || isNaN(v) ? "—" : Number(v).toLocaleString("en-PK", { maximumFractionDigits: 0 });
+
+  const showStock = showSales && hero.hasStock;
+  const showCogs = showSales && hero.hasStock;
+  const showReceivables = showSales && (hero.receivablesTotal || 0) !== 0;
+  const showPayables = showSales && (hero.payablesTotal || 0) !== 0;
+  const showRecoverable = showSales && (hero.recoverableTaxTotal || 0) !== 0;
+
+  // A configured tenant that has not started trading gets one honest panel
+  // rather than a wall of zeroes.
+  if (hero.hasAnyActivity === false) {
+    return (
+      <section style={{
+        ...styles.card,
+        display: "flex", flexDirection: "column", alignItems: "center",
+        gap: "0.6rem", padding: "2.4rem 1.2rem", textAlign: "center",
+      }} aria-label="No activity yet">
+        <MdWarehouse size={30} style={{ color: "#94a3b8" }} />
+        <div style={{ fontSize: "1.02rem", fontWeight: 600, color: "#0c1830" }}>
+          No activity yet
+        </div>
+        <div style={{ color: "#69788f", fontSize: "0.86rem", maxWidth: 460, lineHeight: 1.5 }}>
+          This company is set up but has no stock, bills or invoices. Import an
+          opening stock sheet or raise the first bill, and the figures will
+          appear here.
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="dash-hero-grid" style={styles.heroGrid} aria-label="Headline KPIs">
@@ -376,10 +423,14 @@ function HeroBand({ data }) {
           value={hero.totalSales}
           prevValue={hero.totalSalesPrev}
           accent={accents.sales}
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
+          format={money}
           trend={sales?.trend12m}
           icon={<MdAttachMoney size={16} />}
-          title="Sum of GrandTotal across all sales invoices in the selected period"
+          // The ex-tax line is the whole reason this card was confusing: the
+          // headline is tax-INCLUSIVE, and a customs stock sheet is not, so
+          // comparing the two showed a gap nothing on screen explained.
+          subValue={`excl. tax  Rs. ${exact(hero.totalSalesExcludingTax)}`}
+          title="Tax-inclusive GrandTotal across all sales invoices in the period. The second line is the same sales excluding sales tax — the basis a stock sheet uses."
         />
       )}
       {showPurchases && (
@@ -416,6 +467,111 @@ function HeroBand({ data }) {
           icon={<MdAccountBalance size={16} />}
           higherIsBetter={false}
           title="Output Tax (collected on sales) minus Input Tax (paid on purchases) — what you owe FBR"
+        />
+      )}
+
+      {/* ── Importer cards (2026-09-17) ────────────────────────────────
+          Cost, margin, stock and debtors. The first three come from the
+          same weighted-average walk the ledger's monthly relief entries
+          use, so the dashboard and the balance sheet cannot disagree. */}
+
+      {showCogs && (
+        <KpiCard
+          label="Cost of Goods Sold"
+          value={hero.costOfGoodsSold}
+          accent={accents.cogs}
+          format={money}
+          icon={<MdLocalShipping size={16} />}
+          higherIsBetter={false}
+          subValue={
+            (hero.inventoryAdjustments || 0) !== 0
+              ? `adjustments  Rs. ${exact(hero.inventoryAdjustments)}`
+              : null
+          }
+          title="Declared value of the goods that left stock in this period, at weighted average — the same figure the ledger relieves Inventory by. Breakage and revaluations are shown separately, not counted as cost of sales."
+        />
+      )}
+
+      {showCogs && (
+        <KpiCard
+          label="Gross Profit"
+          value={hero.grossProfit}
+          accent={accents.profit}
+          format={money}
+          icon={<MdTrendingUp size={16} />}
+          subValue={
+            hero.grossMarginPercent == null
+              ? "no sales in this period"
+              : `margin  ${Number(hero.grossMarginPercent).toFixed(1)}%  ·  on ex-tax sales`
+          }
+          title="Sales excluding tax minus cost of goods sold. A company that invoices at its declared customs value will read close to zero here — that is the honest declared-basis picture, not an error."
+        />
+      )}
+
+      {showStock && (
+        <KpiCard
+          label="Stock on Hand"
+          value={hero.stockOnHandValue}
+          accent={accents.inventory}
+          format={money}
+          icon={<MdWarehouse size={16} />}
+          subValue="declared value  ·  position, not period"
+          title="What the goods in the warehouse are worth right now, declared basis. Not filtered by the period — stock is a position, not a flow."
+        />
+      )}
+
+      {showReceivables && (
+        <KpiCard
+          label="Receivables"
+          value={hero.receivablesTotal}
+          accent={accents.receivables}
+          format={money}
+          icon={<MdRequestQuote size={16} />}
+          higherIsBetter={false}
+          subValue={
+            (hero.receivablesOverdue || 0) > 0
+              ? `overdue  Rs. ${exact(hero.receivablesOverdue)}`
+              : "none overdue"
+          }
+          title="Invoiced and not yet collected, across all time. The second line is the slice already past its due date."
+        />
+      )}
+
+      {showPayables && (
+        <KpiCard
+          label="Payables"
+          value={hero.payablesTotal}
+          accent={accents.payables}
+          format={money}
+          icon={<MdAssignmentReturn size={16} />}
+          higherIsBetter={false}
+          // Everything owed, not just trade creditors: an importer has no
+          // suppliers on the books, so an AccountsPayable-only figure reads
+          // 0.00 and teaches the operator nothing.
+          subValue={[
+            (hero.payablesTax || 0) !== 0 ? `tax Rs. ${exact(hero.payablesTax)}` : null,
+            (hero.payablesTrade || 0) !== 0 ? `suppliers Rs. ${exact(hero.payablesTrade)}` : null,
+            (hero.payablesImportClearing || 0) !== 0
+              ? `import clearing Rs. ${exact(hero.payablesImportClearing)}` : null,
+          ].filter(Boolean).join("  ·  ") || null}
+          title="Everything owed: sales tax and other tax payable, trade creditors, and unsettled import clearing. Not just supplier invoices — an importer usually has none of those."
+        />
+      )}
+
+      {showRecoverable && (
+        <KpiCard
+          label="Recoverable from FBR"
+          value={hero.recoverableTaxTotal}
+          accent={accents.recoverable}
+          format={money}
+          icon={<MdSavings size={16} />}
+          subValue={[
+            (hero.recoverableInputTax || 0) !== 0
+              ? `input tax Rs. ${exact(hero.recoverableInputTax)}` : null,
+            (hero.recoverableAdvanceIncomeTax || 0) !== 0
+              ? `adv. income tax Rs. ${exact(hero.recoverableAdvanceIncomeTax)}` : null,
+          ].filter(Boolean).join("  ·  ") || null}
+          title="Input sales tax and advance income tax paid at import — assets you credit back, not money you owe. Appears once a GD is recorded as a New Arrival."
         />
       )}
     </section>

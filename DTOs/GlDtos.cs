@@ -180,6 +180,29 @@ namespace MyApp.Api.DTOs
         public decimal Expenses { get; set; }
         public decimal NetProfit { get; set; }
 
+        // ── Importer-oriented (2026-09-17) ─────────────────────────────────
+        // An importer has no trade creditors, so Payables reads 0.00 and the
+        // screen says nothing about what is actually owed or held. These three
+        // are read from the ledger, so they agree with the balance sheet.
+
+        /// <summary>Inventory control account — usually the largest asset on an
+        /// importer's balance sheet, and previously absent from this screen.</summary>
+        public decimal InventoryOnHand { get; set; }
+
+        /// <summary>Owed to the tax authority: output sales tax, further tax and
+        /// withholding payable. Separate from <see cref="Payables"/>, which is
+        /// supplier aging and legitimately zero for an importer.</summary>
+        public decimal TaxPayable { get; set; }
+
+        /// <summary>Unsettled import clearing — what is owed on goods cleared
+        /// but not yet paid for.</summary>
+        public decimal ImportClearing { get; set; }
+
+        /// <summary>Recoverable FROM the tax authority: input sales tax plus
+        /// advance income tax on imports. Assets, not liabilities — an import's
+        /// duties are paid at clearance and credited back afterwards.</summary>
+        public decimal RecoverableTax { get; set; }
+
         // Money movement in the period (subledger)
         public int ReceiptCount { get; set; }
         public decimal ReceiptsTotal { get; set; }

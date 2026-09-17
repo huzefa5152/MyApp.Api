@@ -39,6 +39,11 @@ export default function KpiCard({
   title = "",
   // Icon shown next to the label.
   icon = null,
+  // Optional second line under the main figure -- the ex-tax figure under
+  // Total Sales, the overdue slice under Receivables, the split under
+  // Payables. A string or a node. Wraps rather than truncating, because
+  // these are the numbers that explain the big one above them.
+  subValue = null,
 }) {
   // Compute % delta vs previous when both numbers are available.
   let deltaPct = null;
@@ -127,6 +132,22 @@ export default function KpiCard({
       }}>
         {format(value)}
       </div>
+
+      {subValue != null && subValue !== "" && (
+        <div className="dash-kpi-card__sub" style={{
+          marginTop: "-0.3rem",
+          color: "#69788f",
+          fontSize: "0.76rem",
+          lineHeight: 1.35,
+          fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontVariantNumeric: "tabular-nums",
+          // Wraps on a phone instead of clipping: a split like
+          // "FBR 1,743,215 - trade 0" is the whole point of the line.
+          overflowWrap: "anywhere",
+        }}>
+          {subValue}
+        </div>
+      )}
 
       {(deltaPct != null) && (
         <div className="dash-kpi-card__delta" style={{

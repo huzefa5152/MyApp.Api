@@ -32,7 +32,7 @@ import {
   MdBusiness, MdAccountBalanceWallet, MdReceiptLong, MdPayments, MdSwapVert,
   MdTrendingUp, MdTrendingDown, MdAttachMoney, MdAccountBalance, MdExpandMore,
   MdCallReceived, MdCallMade, MdAutorenew, MdCheckCircle, MdErrorOutline,
-  MdLock, MdClose, MdCalendarToday,
+  MdLock, MdClose, MdCalendarToday, MdInventory2,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -337,6 +337,58 @@ export default function AccountingDashboardPage() {
                   onOpen={navigate}
                 />
               </div>
+
+              {/* ── Row 2b · What an importer actually holds and owes ──────
+                  The Payables card above is SUPPLIER aging, and an importer
+                  has no suppliers on the books — so it reads 0.00 while the
+                  business owes real tax and holds its capital in stock.
+                  Each card renders only when it has a figure, so a company
+                  this does not apply to sees nothing extra. */}
+              {(summary.inventoryOnHand || summary.taxPayable
+                || summary.importClearing || summary.recoverableTax) ? (
+                <>
+                  <SectionLabel>Stock &amp; tax position</SectionLabel>
+                  <div style={st.kpiGrid}>
+                    {!!summary.inventoryOnHand && (
+                      <MoneyCard
+                        label="Inventory on hand"
+                        icon={MdInventory2}
+                        accent="#e65100"
+                        value={fmtMoney(summary.inventoryOnHand)}
+                        sub="Declared value, relieved as stock sells"
+                      />
+                    )}
+                    {!!summary.taxPayable && (
+                      <MoneyCard
+                        label="Tax payable"
+                        icon={MdAccountBalance}
+                        accent={colors.danger}
+                        value={fmtMoney(summary.taxPayable)}
+                        valueColor={colors.danger}
+                        sub="Output sales tax, further tax and withholding"
+                      />
+                    )}
+                    {!!summary.importClearing && (
+                      <MoneyCard
+                        label="Import clearing"
+                        icon={MdCallMade}
+                        accent="#6a1b9a"
+                        value={fmtMoney(summary.importClearing)}
+                        sub="Cleared but not yet settled"
+                      />
+                    )}
+                    {!!summary.recoverableTax && (
+                      <MoneyCard
+                        label="Recoverable from FBR"
+                        icon={MdCallReceived}
+                        accent="#00796b"
+                        value={fmtMoney(summary.recoverableTax)}
+                        sub="Input tax + advance income tax on imports"
+                      />
+                    )}
+                  </div>
+                </>
+              ) : null}
 
               {/* ── Row 3 · Profitability (GL figures — hidden until on) ─ */}
               {summary.glEnabled && (

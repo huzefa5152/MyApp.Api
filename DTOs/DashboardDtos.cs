@@ -52,6 +52,79 @@ namespace MyApp.Api.DTOs
         public decimal? TotalPurchasesPrev { get; set; }
         public decimal? NetPrev { get; set; }
         public decimal? GstNetPrev { get; set; }
+
+        // ── Importer-oriented figures (2026-09-17) ─────────────────────────
+        // An importer buys nothing on purchase bills — stock arrives through
+        // opening stock and GD costing — so Total Purchases reads 0 and Net
+        // (Sales − Purchases) merely restates Total Sales while looking like
+        // profit. Meanwhile the two largest numbers in the business, stock and
+        // debtors, were not on the dashboard at all. See
+        // docs/superpowers/specs/2026-09-17-importer-dashboard-kpis-design.md.
+
+        /// <summary>Sales excluding tax. <see cref="TotalSales"/> is the
+        /// tax-INCLUSIVE GrandTotal, which is what made an operator compare it
+        /// against an ex-tax stock sheet and find a gap nothing explained.</summary>
+        public decimal TotalSalesExcludingTax { get; set; }
+
+        /// <summary>Cost of the goods sold in the period, declared basis,
+        /// from the same walk the ledger's monthly relief entries use.</summary>
+        public decimal CostOfGoodsSold { get; set; }
+
+        /// <summary>Breakage, count corrections and revaluations — NOT cost of
+        /// goods sold, kept apart so gross margin stays honest.</summary>
+        public decimal InventoryAdjustments { get; set; }
+
+        /// <summary><see cref="TotalSalesExcludingTax"/> − <see cref="CostOfGoodsSold"/>.
+        /// Reads near zero for a company that invoices at declared customs
+        /// value; that is the honest declared-basis picture, not a fault.</summary>
+        public decimal GrossProfit { get; set; }
+
+        /// <summary>Gross profit as a percentage of ex-tax sales; null when
+        /// there were no sales to divide by.</summary>
+        public decimal? GrossMarginPercent { get; set; }
+
+        /// <summary>What the goods on hand are worth right now (declared
+        /// basis). Not period-scoped — stock is a position, not a flow.</summary>
+        public decimal StockOnHandValue { get; set; }
+
+        /// <summary>Outstanding receivables, and the overdue slice of them.</summary>
+        public decimal ReceivablesTotal { get; set; }
+        public decimal ReceivablesOverdue { get; set; }
+
+        /// <summary>Everything owed, not just trade creditors: an importer has
+        /// no suppliers on the books, so an AccountsPayable-only figure reads
+        /// 0.00 and teaches the operator nothing.</summary>
+        public decimal PayablesTotal { get; set; }
+        public decimal PayablesTrade { get; set; }
+        public decimal PayablesTax { get; set; }
+        public decimal PayablesImportClearing { get; set; }
+
+        /// <summary>Recoverable FROM the tax authority — input sales tax and
+        /// advance income tax on imports. These are assets, not payables: an
+        /// import's duties are paid at clearance and then credited back. Zero
+        /// until a GD is recorded as a New Arrival, which is exactly when it
+        /// should appear.</summary>
+        public decimal RecoverableTaxTotal { get; set; }
+        public decimal RecoverableInputTax { get; set; }
+        public decimal RecoverableAdvanceIncomeTax { get; set; }
+
+        // ── Which cards have anything to say ───────────────────────────────
+        // One layout, cards hidden when their concept is empty for this
+        // company. Chosen over two layouts because the only companies with
+        // purchase bills were demo data — building a second arrangement for a
+        // case no customer has is cost without benefit.
+
+        /// <summary>False when the company has never raised a purchase bill, so
+        /// Total Purchases and Net are hidden rather than shown as 0.</summary>
+        public bool HasPurchases { get; set; }
+
+        /// <summary>False when the company tracks no stock at all.</summary>
+        public bool HasStock { get; set; }
+
+        /// <summary>False when the company has no documents of any kind — a
+        /// configured but not-yet-trading tenant, which gets an empty state
+        /// instead of a wall of zeroes.</summary>
+        public bool HasAnyActivity { get; set; }
     }
 
     public class DashboardTrendPoint
