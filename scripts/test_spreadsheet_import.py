@@ -1106,11 +1106,48 @@ def main():
             r = upload(stock_preview, h, tpl.read_bytes(), "opening-stock-template.xlsx",
                        None, std_params)
             tprev = r.json() if r.ok else {}
+            # The template ships EIGHT data rows that import as SEVEN stock
+            # lines: two Industrial Bearing rows share HS 8482.1000 on purpose,
+            # so the importer groups them (scripts/build_sample_import_sheets.py).
+            # Assert the item names, not a bare count -- this case existed to
+            # catch drift between the shipped file and the layout that reads it,
+            # and a count alone let the whole sheet be replaced (2026-09-14, when
+            # the three real-client rows were swapped for fictional data) while
+            # still "passing" for the wrong reason.
+            tpl_rows = tprev.get("rows", [])
+            tpl_by_name = {x["itemName"]: x for x in tpl_rows}
+            expected_names = {
+                "Electrical Cable 2.5mm",
+                "Hydraulic Hose 1/2 inch",
+                "Industrial Bearing 6204",
+                "Machine Oil 20W 5L",
+                "Rubber O-Ring Seal 25mm",
+                "Safety Gloves Coated",
+                "Stainless Steel Bolt M10",
+            }
             check("and its example rows import cleanly",
-                  r.ok and len(tprev.get("rows", [])) == 3
+                  r.ok and len(tpl_rows) == 7
                   and all(x["quantity"] > 0 and x["value"] > 0 and x["salesTaxRate"] > 0
-                          for x in tprev.get("rows", [])),
-                  f"http {r.status_code} rows={[(x['itemName'], x['quantity'], x['salesTaxRate']) for x in tprev.get('rows', [])]}")
+                          for x in tpl_rows),
+                  f"http {r.status_code} rows={[(x['itemName'], x['quantity'], x['salesTaxRate']) for x in tpl_rows]}")
+            check("the shipped template still carries the fictional sample items",
+                  set(tpl_by_name) == expected_names,
+                  f"missing={sorted(expected_names - set(tpl_by_name))} "
+                  f"unexpected={sorted(set(tpl_by_name) - expected_names)} -- if the "
+                  f"template was regenerated, update this list; if it grew REAL "
+                  f"customer rows, it must be rebuilt with build_sample_import_sheets.py")
+            # The two same-HS bearing rows (480 + 320) must arrive as one line
+            # of 800 -- the grouping the template exists to demonstrate.
+            bearing = tpl_by_name.get("Industrial Bearing 6204")
+            check("its two same-HS bearing rows group into one line of 800",
+                  bearing is not None and abs(bearing["quantity"] - 800) < 0.01,
+                  f"bearing={bearing and (bearing['itemName'], bearing['quantity'])} "
+                  f"(expected 800 = 480 + 320 under HS 8482.1000)")
+            # And a per-row rate that is not 18%, or the sheet teaches nobody
+            # that the rate column is read per row.
+            check("and it carries a row at a rate other than 18%",
+                  any(abs(x["salesTaxRate"] - 18.0) > 0.001 for x in tpl_rows),
+                  f"rates={sorted({x['salesTaxRate'] for x in tpl_rows})}")
         else:
             skip("the shipped template recognises itself with no mapping",
                  "template file not present")

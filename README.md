@@ -298,6 +298,26 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-17 — One producer for the shipped import templates
+
+- **`scripts/build_opening_stock_template.py` was deleted.** It still held the
+  three rows lifted from a live client sheet — their GD numbers, product names
+  and landed costs — that were deliberately replaced with fictional data on
+  2026-09-14, and it wrote the SAME file as
+  `scripts/build_sample_import_sheets.py`. Anyone running the old command
+  silently re-published that customer's data to a template served publicly out
+  of `wwwroot/`. `build_sample_import_sheets.py` already claimed to be "the
+  only way the files are produced"; now it is.
+- **The suite case that should have caught it only counted rows.** It asserted
+  three rows, so the entire sheet could be swapped and it would still fail for
+  the wrong reason — a stale count rather than a wrong sheet. It now asserts
+  the seven sample item names, that the two same-HS bearing rows group into one
+  line of 800 (the behaviour the template exists to demonstrate), and that some
+  row carries a rate other than 18%. A failure now says whether the template was
+  regenerated or grew real customer rows.
+- `verify_no_production_identifiers.py` does not cover this: it checks
+  production database and host names, not customer identifiers.
+
 ### 2026-09-17 — GD costing imports now reach "Inventory on hand"
 
 - **A GD costing import that created opening stock never posted its value to
