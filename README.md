@@ -298,6 +298,28 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-18 — A company with one tax number can be saved again
+
+- **Three reported symptoms, one cause.** A company with FBR on could not be
+  updated, its logo would not save, and the error pointed at the wrong tab. All
+  of it came from one form guard.
+- **The explicit seller registration is now required only when it is genuinely
+  ambiguous** — when a company holds BOTH a usable NTN and a 13-digit CNIC, so
+  only IRIS knows which it files under. Holding just one leaves nothing to
+  infer, and the save now goes through. The NTN and CNIC on the General tab are
+  optional and for display, which is what they were always meant to be.
+  `FbrSellerIdentity.Resolve` already worked this way; only the form was stricter.
+- **The logo failure was not a logo failure.** It uploads after the company
+  saves, because it needs the id — so a blocked save silently took the logo with
+  it and read as "the logo will not save". A logo error is now reported on its
+  own ("the company was saved, but the logo could not be uploaded"), and a
+  blocked save says the logo did not go either.
+- **The message named the wrong field.** It asked for an NTN or CNIC on the
+  General tab; the field that resolves it is "Seller NTN / CNIC" on the FBR
+  Integration tab. It now names that field first, and a server-side rejection
+  switches to the tab that owns it rather than complaining about something two
+  tabs away.
+
 ### 2026-09-17 — Importer KPIs, with drill-downs that add up
 
 - **Dead stock is the headline.** Items bought and never sold: on this line

@@ -82,11 +82,20 @@ namespace MyApp.Api.Helpers
             var digits = FbrBuyerIdentity.SanitizeNtn(ntn);
             if (digits.Length == 7) return (digits, null);
 
+            // Name the field that actually FIXES this, and name it first.
+            // The old wording sent the operator to the General tab to add an
+            // NTN or CNIC, which are optional and for display; the authoritative
+            // value is Seller NTN/CNIC on the FBR Integration tab. Following the
+            // message led straight past the one field that resolves it
+            // (reported 2026-09-18 while editing a company holding neither).
             return ("", digits.Length == 0
-                ? "This company has no NTN or CNIC. FBR needs one of them as sellerNTNCNIC — "
-                + "set the 7-digit NTN, or the 13-digit CNIC, on the company's General tab."
+                ? "FBR needs a seller registration number. Set \"Seller NTN / CNIC\" on the "
+                + "company's FBR Integration tab — the 7-character NTN or 13-digit CNIC this "
+                + "company files under. (The NTN and CNIC on the General tab are optional and "
+                + "used for display; either one will also be used if you prefer to set it there.)"
                 : $"The company NTN has {digits.Length} digit(s); FBR files a 7-digit NTN. "
-                + "Correct it, or set a 13-digit CNIC instead.");
+                + "Correct it, set a 13-digit CNIC, or state the value outright as "
+                + "\"Seller NTN / CNIC\" on the FBR Integration tab.");
         }
 
         /// <inheritdoc cref="Resolve(string?, string?, string?)"/>

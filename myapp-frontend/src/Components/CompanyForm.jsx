@@ -255,8 +255,25 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         if (core.length > 0) {
             return { value: "", source: "", error: `NTN "${raw}" is too short; FBR files a 7-character NTN. Correct it, or set a 13-digit CNIC instead.` };
         }
-        return { value: "", source: "", error: "FBR needs an NTN or a CNIC as sellerNTNCNIC. Add one on the General tab." };
+        return { value: "", source: "", error: "FBR needs a seller registration number. Enter \"Seller NTN / CNIC\" here, or an NTN or CNIC on the General tab." };
     }, [form.ntn, form.cnic, form.fbrSellerNtnCnic]);
+
+    // Is the choice actually ambiguous? Only when the company carries BOTH a
+    // usable NTN and a 13-digit CNIC does the system genuinely not know which
+    // one IRIS files under, and only then must the operator state it.
+    //
+    // Demanding it unconditionally blocked companies holding exactly one of the
+    // two -- there is nothing to infer there, and the save was refused for a
+    // company whose NTN resolved perfectly well (reported 2026-09-18).
+    const sellerIdAmbiguous = useMemo(() => {
+        const cnicOk = (form.cnic || "").replace(/\D/g, "").length === 13;
+        const raw = (form.ntn || "").trim();
+        const core = raw.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+        const ntnOk = /[A-Z]/.test(core)
+            ? core.length >= 7
+            : raw.replace(/\D/g, "").length >= 7;
+        return cnicOk && ntnOk;
+    }, [form.ntn, form.cnic]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -280,8 +297,13 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             // Each of these is something FBR itself refuses the submission
             // without, so a company saved without them would look configured
             // and fail at the first bill.
-            [form.fbrEnabled && !(form.fbrSellerNtnCnic || "").trim(), "fbr",
-             "Enter the Seller NTN / CNIC for FBR — the 7-character NTN or 13-digit CNIC this company files under. It is required when FBR Digital Invoicing is on."],
+            // Required only when the company holds BOTH an NTN and a CNIC (so
+            // which one it files under cannot be inferred), or when neither
+            // resolves to anything FBR would accept.
+            [form.fbrEnabled && !(form.fbrSellerNtnCnic || "").trim() && sellerIdAmbiguous, "fbr",
+             "This company has both an NTN and a CNIC, so FBR cannot tell which it files under. Enter the one it uses as \"Seller NTN / CNIC\"."],
+            [form.fbrEnabled && !(form.fbrSellerNtnCnic || "").trim() && !sellerIdAmbiguous && !sellerId.value, "fbr",
+             sellerId.error || "Enter the Seller NTN / CNIC for FBR — the 7-character NTN or 13-digit CNIC this company files under."],
             [form.fbrEnabled && (form.fbrSellerNtnCnic || "").trim() && !sellerId.value, "fbr",
              sellerId.error],
             [form.fbrEnabled && !form.fbrProvinceCode, "fbr",
@@ -338,16 +360,43 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 savedCompany = res.data;
             }
 
+            // The logo goes up only after the company itself saved, because it
+            // needs the id. That means a rejected save silently takes the logo
+            // with it -- which read as "I cannot save the logo" rather than
+            // "the company did not save" (reported 2026-09-18). The catch below
+            // now says so.
             if (logoFile && savedCompany?.id) {
-                const fd = new FormData();
-                fd.append("file", logoFile);
-                await uploadCompanyLogo(savedCompany.id, fd);
+                try {
+                    const fd = new FormData();
+                    fd.append("file", logoFile);
+                    await uploadCompanyLogo(savedCompany.id, fd);
+                } catch (logoErr) {
+                    // The company DID save; only the image failed. Saying
+                    // "something went wrong" here would send the operator back
+                    // to re-enter fields that are already stored.
+                    setError(
+                        "The company was saved, but the logo could not be uploaded: "
+                        + (logoErr.response?.data?.message || "upload failed")
+                        + ". Reopen the company and try the logo on its own.");
+                    onSaved();
+                    return;
+                }
             }
 
             onSaved();
             onClose();
         } catch (err) {
-            setError(err.response?.data?.message || "Something went wrong.");
+            const message = err.response?.data?.message || "Something went wrong.";
+            // A server-side rejection names a field that may live on a tab the
+            // operator cannot see. Switch to the one that owns it, the same way
+            // the client-side checks above do -- otherwise the message talks
+            // about a field two tabs away.
+            if (/seller\s*ntn|sellerNTNCNIC|FBR Integration/i.test(message)) setActiveTab("fbr");
+            else if (/address|company name/i.test(message)) setActiveTab("general");
+            setError(
+                logoFile
+                    ? message + " (The logo was not uploaded either — it only uploads once the company saves.)"
+                    : message);
         }
     };
 
