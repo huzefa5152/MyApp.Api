@@ -53,5 +53,38 @@ namespace MyApp.Api.Controllers
             var response = await _dashboard.GetKpisAsync(companyId, period, User);
             return Ok(response);
         }
+
+        /// <summary>
+        /// GET /api/dashboard/breakdown?companyId=X&amp;kind=dead-stock&amp;period=all-time
+        ///
+        /// The rows behind one KPI. The rows sum to exactly what the card
+        /// shows, because both come out of the same computation — see
+        /// <c>DashboardService.GetBreakdownAsync</c>.
+        ///
+        /// Same tenant guard as the KPI endpoint, for the same reason: these
+        /// rows name clients, item types and GD numbers, so an unguarded
+        /// companyId would hand another tenant's book to anyone who could sign
+        /// in (the defect found on the KPI endpoint on 2026-09-14).
+        ///
+        /// Kinds: sales, cogs, cogs-landed, real-margin, stock-on-hand,
+        /// dead-stock, stock-converted, stock-ageing, unrealised-margin,
+        /// inventory-adjustments, receivables, payables, recoverable-tax,
+        /// import-book, duty-burden.
+        /// </summary>
+        [HttpGet("breakdown")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetBreakdown(
+            [FromQuery] int companyId,
+            [FromQuery] string kind,
+            [FromQuery] string period = "this-month")
+        {
+            if (companyId <= 0)
+                return BadRequest(new { error = "companyId is required." });
+            if (string.IsNullOrWhiteSpace(kind))
+                return BadRequest(new { error = "kind is required." });
+
+            var response = await _dashboard.GetBreakdownAsync(companyId, kind, period, User);
+            return Ok(response);
+        }
     }
 }

@@ -44,6 +44,10 @@ export default function KpiCard({
   // Payables. A string or a node. Wraps rather than truncating, because
   // these are the numbers that explain the big one above them.
   subValue = null,
+  // When set, the card becomes a button that opens its drill-down. The rows
+  // behind it come from the same computation as the figure above, so they add
+  // up to it -- see Components/dashboard/KpiDrilldown.jsx.
+  onDrillDown = null,
 }) {
   // Compute % delta vs previous when both numbers are available.
   let deltaPct = null;
@@ -87,8 +91,17 @@ export default function KpiCard({
         overflow: "hidden",
         minHeight: 136,
         boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
+        cursor: onDrillDown ? "pointer" : undefined,
       }}
-      title={title}
+      title={onDrillDown ? `${title}
+
+Click to see the breakdown.` : title}
+      onClick={onDrillDown || undefined}
+      onKeyDown={onDrillDown ? (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDrillDown(); }
+      } : undefined}
+      role={onDrillDown ? "button" : undefined}
+      tabIndex={onDrillDown ? 0 : undefined}
     >
       {/* Thin accent strip — keeps section identity readable at a glance,
           even when the card is collapsed under its peers on mobile. */}

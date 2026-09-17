@@ -125,6 +125,75 @@ namespace MyApp.Api.DTOs
         /// configured but not-yet-trading tenant, which gets an empty state
         /// instead of a wall of zeroes.</summary>
         public bool HasAnyActivity { get; set; }
+
+        // ── Capital tied up in stock (2026-09-17) ──────────────────────────
+        // The questions an importer actually asks: what have I bought that
+        // never sold, what am I really earning, and how much of what I
+        // imported has turned back into money.
+
+        /// <summary>Declared value of items that have an opening balance and
+        /// have never gone out. On this line that runs to 82% of stock for one
+        /// company — the most actionable figure on the dashboard.</summary>
+        public decimal DeadStockValue { get; set; }
+        public int DeadStockItemCount { get; set; }
+
+        /// <summary>Dead stock as a share of all stock ever held.</summary>
+        public decimal? DeadStockPercent { get; set; }
+
+        /// <summary>Cost of the goods sold at ACTUAL landed cost rather than
+        /// declared. Declared-basis gross profit reads ~0 for a company that
+        /// invoices at customs value; this is what it really earned.</summary>
+        public decimal CostOfGoodsSoldLanded { get; set; }
+        public decimal RealMargin { get; set; }
+        public decimal? RealMarginPercent { get; set; }
+
+        /// <summary>Declared value that has converted to sales, and what share
+        /// of everything ever held that represents. Deliberately NOT expressed
+        /// as months of cover: these companies have 10–16 days of sales
+        /// history, so any annualised rate would be noise.</summary>
+        public decimal StockConvertedValue { get; set; }
+        public decimal? StockConvertedPercent { get; set; }
+
+        /// <summary>Stock still held, split by how long since it last moved.
+        /// Opening balances share one as-of date, so early on these bunch into
+        /// a single bucket — that is honest, not broken.</summary>
+        public decimal StockAgeUnder30 { get; set; }
+        public decimal StockAge30To90 { get; set; }
+        public decimal StockAgeOver90 { get; set; }
+    }
+
+    /// <summary>
+    /// One row of a KPI's drill-down. The rows of a breakdown SUM TO THE CARD
+    /// — that is the contract, and it is why every breakdown is computed from
+    /// the same source the card is rather than recomputed a second way. A
+    /// drill-down that disagreed with its own headline would be worse than no
+    /// drill-down at all.
+    /// </summary>
+    public class DashboardBreakdownRowDto
+    {
+        public int? Id { get; set; }
+        public string Label { get; set; } = "";
+        /// <summary>Secondary line — HS code, invoice date, GD number.</summary>
+        public string? Sub { get; set; }
+        /// <summary>The figure that sums to the card's value.</summary>
+        public decimal Amount { get; set; }
+        /// <summary>An optional companion figure (quantity, a second basis).</summary>
+        public decimal? Secondary { get; set; }
+        public string? SecondaryLabel { get; set; }
+        /// <summary>Set when the row deserves attention — overdue, never sold.</summary>
+        public bool Flagged { get; set; }
+    }
+
+    public class DashboardBreakdownDto
+    {
+        public string Kind { get; set; } = "";
+        public string Title { get; set; } = "";
+        /// <summary>What the card shows. Rows sum to this.</summary>
+        public decimal Total { get; set; }
+        public string? AmountLabel { get; set; }
+        /// <summary>Plain-English note on what the rows mean.</summary>
+        public string? Note { get; set; }
+        public List<DashboardBreakdownRowDto> Rows { get; set; } = new();
     }
 
     public class DashboardTrendPoint

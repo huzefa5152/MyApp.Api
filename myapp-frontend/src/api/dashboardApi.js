@@ -23,3 +23,22 @@ export async function getDashboardKpis(companyId, period = "this-month") {
   });
   return data;
 }
+
+/**
+ * GET /api/dashboard/breakdown?companyId=X&kind=dead-stock&period=all-time
+ *
+ * The rows behind one KPI. They sum to exactly what that card shows, because
+ * the server computes both from the same walk rather than twice.
+ *
+ * Kinds: sales | cogs | cogs-landed | real-margin | stock-on-hand |
+ *        dead-stock | stock-converted | stock-ageing | unrealised-margin |
+ *        inventory-adjustments | receivables | payables | recoverable-tax |
+ *        import-book | duty-burden
+ */
+export async function getDashboardBreakdown(companyId, kind, period = "this-month") {
+  const { data } = await httpClient.get("/dashboard/breakdown", {
+    params: { companyId, kind, period },
+    timeout: 60000,
+  });
+  return data;
+}

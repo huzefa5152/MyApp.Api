@@ -298,6 +298,39 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-17 — Importer KPIs, with drill-downs that add up
+
+- **Dead stock is the headline.** Items bought and never sold: on this line
+  that reaches **82% of one company's stock** (55.5M), 63% on another. Nothing
+  on any screen said so. Now a card, with the worst offenders behind it.
+- **Margin on landed cost**, next to declared gross profit. The declared basis
+  reads ~0 by construction for a company that invoices at customs value, so it
+  cannot answer "did we make money"; this can.
+- **Stock converted** — what share of everything imported has turned back into
+  sales. Deliberately a share, not months of cover: these companies have 10–16
+  days of sales history, so an annualised rate would be noise dressed as insight.
+- **Stock ageing** by days since last movement.
+- **Accounting gains the import book** — GD count, landed cost, duty and tax at
+  import with its share of landed cost, and clearing outstanding.
+  `ImportConsignments` drives the whole business and appeared on no screen at
+  all. Plus unrealised margin on stock held, and where the capital sits
+  (stock / owed / collected).
+- **Every KPI drills down, and the rows add up to the card.** That is the
+  contract: `GET /api/dashboard/breakdown` computes the rows from the same walk
+  the card uses rather than a second time, and the panel prints the row sum
+  next to the headline so a drift would be visible instead of silent. Fifteen
+  kinds; all eleven with a single card behind them verified reconciling.
+- `Helpers/ItemStockPositions.cs` is the one walk everything reads — cost of
+  sales, stock on hand, dead stock, margin, conversion, ageing and their
+  breakdowns. Built precisely so a card and its own drill-down cannot diverge.
+- **Two defects the reconciliation check caught in this work**, which is what it
+  is for: the margin breakdown summed declared-less-landed per item while its
+  card was sales-less-landed (fixed by attributing real revenue per item, with
+  an explicit row for lines carrying no item type); and `UnrealisedMargin` was
+  declared on the DTO and never assigned, so its card read 0 against real rows.
+- Phone: the drill-down renders stacked cards rather than a wide table, per
+  CLAUDE.md §3. Verified at 375px — no horizontal scroll, dialog fits.
+
 ### 2026-09-17 — Dashboards rebuilt around what an importer actually has
 
 - **Half the hero band said nothing.** An importer buys nothing on purchase

@@ -715,6 +715,67 @@ namespace MyApp.Api.Services.Implementations
                 summary.ImportClearing = -Position(ControlType.ImportClearing);
                 summary.RecoverableTax = Position(ControlType.InputTax,
                     ControlType.AdvanceIncomeTaxOnImports);
+
+                // ── The import book ───────────────────────────────────────
+                // Every GD costed into this company. This drives the whole
+                // business and appeared on no screen at all before today.
+                var gds = await _context.ImportConsignments.AsNoTracking()
+                    .Where(c => c.CompanyId == companyId)
+                    .Select(c => new
+                    {
+                        c.TotalCostExcludingTax, c.TotalInputTax, c.TotalIncomeTax,
+                        c.AmountSettled, c.ImportClearingCredited,
+                    })
+                    .ToListAsync();
+                summary.ImportGdCount = gds.Count;
+                summary.ImportLandedCost = Math.Round(gds.Sum(g => g.TotalCostExcludingTax), 2);
+                summary.ImportInputTax = Math.Round(gds.Sum(g => g.TotalInputTax), 2);
+                summary.ImportIncomeTax = Math.Round(gds.Sum(g => g.TotalIncomeTax), 2);
+                // A Backfill consignment credits nothing by design, so its
+                // outstanding is zero rather than its whole value.
+                summary.ImportOutstanding = Math.Round(
+                    gds.Sum(g => g.ImportClearingCredited - g.AmountSettled), 2);
+                summary.ImportDutyBurdenPercent = summary.ImportLandedCost > 0m
+                    ? Math.Round((summary.ImportInputTax + summary.ImportIncomeTax)
+                                 / summary.ImportLandedCost * 100m, 1, MidpointRounding.AwayFromZero)
+                    : null;
+
+                // Profit locked up in unsold stock: declared value less landed
+                // cost on what is still held. From the same walk the drill-down
+                // uses, so the card and its rows cannot disagree — this field
+                // was declared and then left unassigned on the first pass,
+                // which the reconciliation check caught.
+                var stockOpenings = (await _context.OpeningStockBalances.AsNoTracking()
+                        .Where(o => o.CompanyId == companyId)
+                        .Select(o => new
+                        {
+                            o.ItemTypeId, o.Quantity, o.ValueExcludingTax,
+                            o.ActualCostExcludingTax, o.SalesTaxRate,
+                        })
+                        .ToListAsync())
+                    .GroupBy(o => o.ItemTypeId)
+                    .ToDictionary(g => g.Key, g => new ItemStockPositions.Opening(
+                        g.Sum(x => x.Quantity), g.Sum(x => x.ValueExcludingTax),
+                        g.Sum(x => x.ActualCostExcludingTax), g.Max(x => x.SalesTaxRate)));
+                var stockMovements = (await _context.StockMovements.AsNoTracking()
+                        .Where(sm => sm.CompanyId == companyId).ToListAsync())
+                    .GroupBy(sm => sm.ItemTypeId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+                var stockIds = stockOpenings.Keys.Union(stockMovements.Keys).Distinct().ToList();
+                var stockNames = await _context.ItemTypes.AsNoTracking()
+                    .Where(it => stockIds.Contains(it.Id) && !it.IsDeleted)
+                    .Select(it => new { it.Id, it.Name, it.HSCode })
+                    .ToDictionaryAsync(x => x.Id, x => (x.Name, (string?)x.HSCode));
+                var stockPositions = ItemStockPositions.Compute(
+                    stockOpenings, stockMovements, stockNames);
+                summary.UnrealisedMargin = Math.Round(
+                    stockPositions.Where(pp => pp.ClosingDeclared != 0m)
+                                  .Sum(pp => pp.UnrealisedMargin), 2);
+
+                // Where the working capital sits.
+                summary.CapitalInStock = summary.InventoryOnHand;
+                summary.CapitalOwedByCustomers = summary.Receivables.Total;
+                summary.CapitalCollected = summary.CashAndBankTotal;
             }
 
             // Working capital buckets (subledger).

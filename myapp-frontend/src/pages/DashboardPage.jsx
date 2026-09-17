@@ -36,8 +36,9 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { getDashboardKpis } from "../api/dashboardApi";
+import { getDashboardKpis, getDashboardBreakdown } from "../api/dashboardApi";
 import KpiCard from "../Components/dashboard/KpiCard";
+import KpiDrilldown from "../Components/dashboard/KpiDrilldown";
 import Sparkline from "../Components/dashboard/Sparkline";
 import TopList from "../Components/dashboard/TopList";
 import ByCounterpartyCard from "../Components/dashboard/ByCounterpartyCard";
@@ -180,7 +181,7 @@ export default function DashboardPage() {
         <>
           {/* Hero band — 4 KPIs. Hides cards the user can't see (sales-
               only role gets 2 hero cards; admin gets 4). */}
-          <HeroBand data={data} />
+          <HeroBand data={data} companyId={selectedCompany?.id} period={period} />
 
           {/* Counterparty breakdown row — Sales by Client + Purchases by
               Supplier. Sits right under the hero so the operator sees
@@ -361,8 +362,30 @@ function LoadingShimmer() {
 
 // ── Hero band ──────────────────────────────────────────────────────
 
-function HeroBand({ data }) {
+function HeroBand({ data, companyId, period }) {
   const hero = data.hero || {};
+
+  // Drill-down state. One panel serves every card; the `kind` decides which
+  // rows the server returns, and those rows add up to the card that opened it.
+  const [drill, setDrill] = useState(null);       // { kind, cardValue }
+  const [drillData, setDrillData] = useState(null);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState("");
+
+  useEffect(() => {
+    if (!drill || !companyId) return;
+    let cancelled = false;
+    setDrillLoading(true);
+    setDrillError("");
+    setDrillData(null);
+    getDashboardBreakdown(companyId, drill.kind, period)
+      .then((d) => { if (!cancelled) setDrillData(d); })
+      .catch(() => { if (!cancelled) setDrillError("Could not load the breakdown."); })
+      .finally(() => { if (!cancelled) setDrillLoading(false); });
+    return () => { cancelled = true; };
+  }, [drill, companyId, period]);
+
+  const openDrill = (kind, cardValue) => () => setDrill({ kind, cardValue });
   const sales = data.sales;
   const purchases = data.purchases;
   const flags = data.permissions || {};
@@ -421,6 +444,7 @@ function HeroBand({ data }) {
         <KpiCard
           label="Total Sales"
           value={hero.totalSales}
+          onDrillDown={openDrill("sales", hero.totalSales)}
           prevValue={hero.totalSalesPrev}
           accent={accents.sales}
           format={money}
@@ -479,6 +503,7 @@ function HeroBand({ data }) {
         <KpiCard
           label="Cost of Goods Sold"
           value={hero.costOfGoodsSold}
+          onDrillDown={openDrill("cogs", hero.costOfGoodsSold)}
           accent={accents.cogs}
           format={money}
           icon={<MdLocalShipping size={16} />}
@@ -512,6 +537,7 @@ function HeroBand({ data }) {
         <KpiCard
           label="Stock on Hand"
           value={hero.stockOnHandValue}
+          onDrillDown={openDrill("stock-on-hand", hero.stockOnHandValue)}
           accent={accents.inventory}
           format={money}
           icon={<MdWarehouse size={16} />}
@@ -524,6 +550,7 @@ function HeroBand({ data }) {
         <KpiCard
           label="Receivables"
           value={hero.receivablesTotal}
+          onDrillDown={openDrill("receivables", hero.receivablesTotal)}
           accent={accents.receivables}
           format={money}
           icon={<MdRequestQuote size={16} />}
@@ -541,6 +568,7 @@ function HeroBand({ data }) {
         <KpiCard
           label="Payables"
           value={hero.payablesTotal}
+          onDrillDown={openDrill("payables", hero.payablesTotal)}
           accent={accents.payables}
           format={money}
           icon={<MdAssignmentReturn size={16} />}
@@ -562,6 +590,7 @@ function HeroBand({ data }) {
         <KpiCard
           label="Recoverable from FBR"
           value={hero.recoverableTaxTotal}
+          onDrillDown={openDrill("recoverable-tax", hero.recoverableTaxTotal)}
           accent={accents.recoverable}
           format={money}
           icon={<MdSavings size={16} />}
@@ -574,6 +603,86 @@ function HeroBand({ data }) {
           title="Input sales tax and advance income tax paid at import — assets you credit back, not money you owe. Appears once a GD is recorded as a New Arrival."
         />
       )}
+
+      {/* ── Capital tied up in stock ────────────────────────────────────
+          The questions an importer actually asks. Dead stock first: on
+          this line it reaches 82% of one company's stock, and nothing on
+          any screen said so. */}
+
+      {showStock && (hero.deadStockValue || 0) > 0 && (
+        <KpiCard
+          label="Dead Stock"
+          value={hero.deadStockValue}
+          accent="#b71c1c"
+          format={money}
+          icon={<MdWarehouse size={16} />}
+          higherIsBetter={false}
+          subValue={
+            `${hero.deadStockItemCount} item${hero.deadStockItemCount === 1 ? "" : "s"} never sold`
+            + (hero.deadStockPercent != null ? `  ·  ${Number(hero.deadStockPercent).toFixed(1)}% of stock` : "")
+          }
+          title="Declared value of items that have never gone out once. Capital sitting still — usually the most actionable number on this screen."
+          onDrillDown={openDrill("dead-stock", hero.deadStockValue)}
+        />
+      )}
+
+      {showCogs && (hero.costOfGoodsSoldLanded || 0) > 0 && (
+        <KpiCard
+          label="Margin on Landed Cost"
+          value={hero.realMargin}
+          accent={accents.recoverable}
+          format={money}
+          icon={<MdSavings size={16} />}
+          subValue={
+            (hero.realMarginPercent == null
+              ? "landed basis"
+              : `margin ${Number(hero.realMarginPercent).toFixed(1)}%`)
+            + `  ·  cost ${exact(hero.costOfGoodsSoldLanded)}`
+          }
+          title="Sales excluding tax less what the goods ACTUALLY cost, rather than their declared customs value. Declared-basis gross profit reads near zero by construction; this is what the business really earned."
+          onDrillDown={openDrill("real-margin", hero.realMargin)}
+        />
+      )}
+
+      {showStock && (hero.stockConvertedValue || 0) > 0 && (
+        <KpiCard
+          label="Stock Converted"
+          value={hero.stockConvertedValue}
+          accent={accents.cogs}
+          format={money}
+          icon={<MdLocalShipping size={16} />}
+          subValue={
+            hero.stockConvertedPercent != null
+              ? `${Number(hero.stockConvertedPercent).toFixed(1)}% of everything ever held`
+              : null
+          }
+          title="Declared value that has turned back into sales. Shown as a share rather than months of cover, which would be noise on a short sales history."
+          onDrillDown={openDrill("stock-converted", hero.stockConvertedValue)}
+        />
+      )}
+
+      {showStock && (hero.stockAgeOver90 || hero.stockAge30To90 || hero.stockAgeUnder30) ? (
+        <KpiCard
+          label="Stock Sitting 90+ Days"
+          value={hero.stockAgeOver90}
+          accent="#6a1b9a"
+          format={money}
+          icon={<MdHourglassEmpty size={16} />}
+          higherIsBetter={false}
+          subValue={`under 30d ${exact(hero.stockAgeUnder30)}  ·  30–90d ${exact(hero.stockAge30To90)}`}
+          title="Stock still held, split by how long since it last moved. Opening balances share one as-of date, so early on these bunch into a single bucket."
+          onDrillDown={openDrill("stock-ageing", null)}
+        />
+      ) : null}
+
+      <KpiDrilldown
+        open={!!drill}
+        onClose={() => setDrill(null)}
+        loading={drillLoading}
+        error={drillError}
+        data={drillData}
+        cardValue={drill?.cardValue}
+      />
     </section>
   );
 }
