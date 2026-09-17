@@ -762,8 +762,12 @@ namespace MyApp.Api.Services.Implementations
                     .GroupBy(sm => sm.ItemTypeId)
                     .ToDictionary(g => g.Key, g => g.ToList());
                 var stockIds = stockOpenings.Keys.Union(stockMovements.Keys).Distinct().ToList();
+                // Soft-deleted catalog rows included on purpose: a delete removes
+                // the catalog entry, not the goods, and the ledger's own relief
+                // walk never filtered them. Excluding them here would put this
+                // figure below the Inventory account it is meant to explain.
                 var stockNames = await _context.ItemTypes.AsNoTracking()
-                    .Where(it => stockIds.Contains(it.Id) && !it.IsDeleted)
+                    .Where(it => stockIds.Contains(it.Id))
                     .Select(it => new { it.Id, it.Name, it.HSCode })
                     .ToDictionaryAsync(x => x.Id, x => (x.Name, (string?)x.HSCode));
                 var stockPositions = ItemStockPositions.Compute(

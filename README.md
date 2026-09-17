@@ -330,6 +330,12 @@ Publish output optimized from 79 MB to 37 MB via:
   declared on the DTO and never assigned, so its card read 0 against real rows.
 - Phone: the drill-down renders stacked cards rather than a wide table, per
   CLAUDE.md §3. Verified at 375px — no horizontal scroll, dialog fits.
+- **Soft-deleted items keep their value.** The on-hand grid hides them, which is
+  right for a list of things you can act on, but excluding them from the stock
+  VALUE put the dashboard 56,358.17 below the Inventory account on one live
+  company — a delete removes a catalog entry, not the goods. They are now
+  included and labelled "(deleted item)", so the dashboard matches the ledger
+  again. Caught on production, by the same invariant.
 
 ### 2026-09-17 — Dashboards rebuilt around what an importer actually has
 

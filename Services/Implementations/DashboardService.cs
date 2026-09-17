@@ -859,12 +859,22 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var ids = openings.Keys.Union(movementsByItem.Keys).Distinct().ToList();
-            // Soft-deleted catalog rows drop out, exactly as they do on the
-            // on-hand grid — their movements survive a delete.
+
+            // Soft-deleted catalog rows are INCLUDED, and marked.
+            //
+            // The on-hand GRID hides them, which is right for a list of things
+            // you can act on. Their VALUE is a different question: a delete
+            // removes a catalog entry, not the goods, and the ledger's relief
+            // walk never filtered them — so excluding them here put the
+            // dashboard 56,358.17 below the Inventory account on one company
+            // and broke the one invariant this all rests on. The stock is real;
+            // the row just has no live catalog entry to point at.
             var names = await _context.ItemTypes.AsNoTracking()
-                .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
-                .Select(it => new { it.Id, it.Name, it.HSCode })
-                .ToDictionaryAsync(x => x.Id, x => (x.Name, (string?)x.HSCode));
+                .Where(it => ids.Contains(it.Id))
+                .Select(it => new { it.Id, it.Name, it.HSCode, it.IsDeleted })
+                .ToDictionaryAsync(
+                    x => x.Id,
+                    x => (x.IsDeleted ? x.Name + " (deleted item)" : x.Name, (string?)x.HSCode));
 
             return ItemStockPositions.Compute(openings, movementsByItem, names, from, to);
         }
