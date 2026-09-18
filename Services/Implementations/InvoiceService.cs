@@ -500,8 +500,12 @@ namespace MyApp.Api.Services.Implementations
         /// races on their own, so this MUST be called inside the per-company
         /// app-lock (<see cref="AcquireInvoiceNumberLockAsync"/>); the UNIQUE
         /// (CompanyId, NoteKind, InvoiceNumber) index is the backstop.
+        ///
+        /// <paramref name="excludeInvoiceId"/> is the row being RENUMBERED, left
+        /// out of the probe so a bill does not report itself as a clash.
         /// </summary>
-        private async Task<int> ResolveSaleInvoiceNumberAsync(int companyId, Company company, int? requested)
+        private async Task<int> ResolveSaleInvoiceNumberAsync(
+            int companyId, Company company, int? requested, int? excludeInvoiceId = null)
         {
             if (requested is null)
             {
@@ -525,7 +529,8 @@ namespace MyApp.Api.Services.Implementations
             // company's demo bills, so the probe deliberately covers them too.
             var taken = await _context.Invoices
                 .AsNoTracking()
-                .AnyAsync(i => i.CompanyId == companyId && i.NoteKind == 0 && i.InvoiceNumber == number);
+                .AnyAsync(i => i.CompanyId == companyId && i.NoteKind == 0 && i.InvoiceNumber == number
+                               && (excludeInvoiceId == null || i.Id != excludeInvoiceId));
             if (taken)
                 throw new InvalidOperationException(
                     $"Bill #{number} already exists for this company. Pick another number.");
@@ -1514,6 +1519,44 @@ namespace MyApp.Api.Services.Implementations
                         throw new InvalidOperationException(FutureDateMessage(newDate));
                     invoice.Date = newDate;
                 }
+                // ── Renumbering ──────────────────────────────────────
+                // Null means the caller did not mention the number, and the same
+                // number is a no-op, so an ordinary edit never reaches any of this.
+                if (dto.InvoiceNumber.HasValue && dto.InvoiceNumber.Value != invoice.InvoiceNumber)
+                {
+                    // Deliberately TIGHTER than IsInvoiceEditable, which allows an
+                    // edit while a submit is in flight or its outcome is unknown.
+                    // Editing line data then is one thing; changing the NUMBER is
+                    // another: "Submitting" means a POST carrying the current
+                    // number is on the wire, and "Uncertain" means FBR may already
+                    // hold the bill under it. Renumbering in either state leaves
+                    // our record disagreeing with FBR's filing, with nothing on
+                    // our side able to reconcile it.
+                    if (!FbrSubmissionStatus.IsSubmittable(invoice.FbrStatus)
+                        || !string.IsNullOrEmpty(invoice.FbrIRN))
+                        throw new InvalidOperationException(
+                            "This bill's number cannot be changed — it has been sent to FBR. " +
+                            "Reset its FBR submission first if the filing was never accepted.");
+
+                    // Same serialization as the create paths, so a renumber and a
+                    // concurrent create cannot both land on the number.
+                    await AcquireInvoiceNumberLockAsync(invoice.CompanyId);
+
+                    var numberingCompany = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.Id == invoice.CompanyId)
+                        ?? throw new InvalidOperationException("Company not found for this bill.");
+
+                    var renumbered = await ResolveSaleInvoiceNumberAsync(
+                        invoice.CompanyId, numberingCompany, dto.InvoiceNumber, excludeInvoiceId: invoice.Id);
+
+                    invoice.InvoiceNumber = renumbered;
+                    // The printed document number follows the sequence number, the
+                    // same way both create paths derive it.
+                    invoice.FbrInvoiceNumber = string.IsNullOrEmpty(numberingCompany.InvoiceNumberPrefix)
+                        ? renumbered.ToString()
+                        : $"{numberingCompany.InvoiceNumberPrefix}{renumbered}";
+                }
+
                 invoice.GSTRate = dto.GSTRate;
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.DocumentType = dto.DocumentType;

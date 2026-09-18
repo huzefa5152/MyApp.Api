@@ -316,8 +316,15 @@ not rewind. The old "Next bill #" hint was removed — it was computed in the
 browser from the last number issued, so it disagreed with the real sequence
 after the trailing bill was deleted.
 
-Suite: `python scripts/test_custom_bill_number.py` (32 checks, both create
-paths).
+**An existing bill can be renumbered too**, from Edit Bill — the same box, the
+same checks, starting on the number the bill already has, and leaving it alone
+is always valid. It is refused once anything has gone to FBR under that number:
+a bill FBR accepted, one whose submission is still in flight, and one whose
+outcome is unknown all keep their number, because ours has to keep matching
+theirs. The form says which of those applies rather than just greying the box.
+
+Suite: `python scripts/test_custom_bill_number.py` (47 checks, both create
+paths and the edit path; `--db` adds the FBR-filed lock cases).
 
 ### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
 

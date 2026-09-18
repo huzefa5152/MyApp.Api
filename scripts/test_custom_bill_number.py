@@ -22,6 +22,9 @@ What this pins:
     bill continues from it.
   • The next-number endpoint answers what the forms need, honours the two
     separately-grantable create permissions, and is company-scoped.
+  • An existing bill can be RENUMBERED from the edit screen, under the same
+    rules — and a bill that has gone to FBR cannot be, because its number was
+    filed under an IRN.
 
 Runs against a THROWAWAY company it creates and deletes. Never touches
 existing data.
@@ -386,6 +389,146 @@ def suite_scope(base, token, company):
           status in (400, 403, 404), f"got {status} {d}")
 
 
+# ── Suite 5: renumbering an existing bill ───────────────────────────────────
+def suite_edit(base, token, company, client, item_type, prefix):
+    s = "5. Renumbering on edit"
+    print(f"\n=== {s} ===")
+    cid = company["id"]
+    created = []
+
+    status, inv = make_standalone(base, token, company, client, item_type, number=2100)
+    if not check(s, "a bill to renumber", status in (200, 201), f"{status} {err_text(inv)}"):
+        return created
+    created.append(inv["id"])
+
+    def edit(invoice, **extra):
+        body = {
+            "gstRate": invoice.get("gstRate", 18),
+            "items": [{
+                "id": it["id"],
+                "description": it.get("description") or "",
+                "quantity": it["quantity"],
+                "unitPrice": it["unitPrice"],
+                "itemTypeId": it.get("itemTypeId"),
+                "uom": it.get("uom"),
+                "hsCode": it.get("hsCode"),
+                "saleType": it.get("saleType"),
+            } for it in invoice.get("items", [])],
+        }
+        body.update(extra)
+        return http("PUT", f"/api/invoices/{invoice['id']}", base, token=token, body=body)
+
+    # Omitting the field entirely must leave the number alone — an API client
+    # editing only line data must not have to restate it.
+    status, back = edit(inv)
+    check(s, "an edit that does not mention the number keeps it",
+          status == 200 and back.get("invoiceNumber") == 2100,
+          f"{status} {err_text(back)}")
+
+    # Sending the SAME number is a no-op, not a clash with itself.
+    status, back = edit(inv, invoiceNumber=2100)
+    check(s, "re-sending the current number is not a self-clash",
+          status == 200 and back.get("invoiceNumber") == 2100,
+          f"{status} {err_text(back)}")
+
+    # A free number is taken, and the document number follows it.
+    status, back = edit(inv, invoiceNumber=2101)
+    ok = status == 200 and back.get("invoiceNumber") == 2101
+    check(s, "the number can be changed", ok, f"{status} {err_text(back)}")
+    if ok:
+        check(s, "the document number follows the new number",
+              back.get("fbrInvoiceNumber") == f"{prefix}2101",
+              f"{back.get('fbrInvoiceNumber')!r}")
+        inv = back
+
+    # A number another bill holds is refused, and the bill keeps the one it had.
+    status, other = make_standalone(base, token, company, client, item_type, number=2200)
+    if status in (200, 201):
+        created.append(other["id"])
+        status, back = edit(inv, invoiceNumber=2200)
+        check(s, "renumbering onto a taken number is refused",
+              status == 400 and "2200" in err_text(back), f"{status} {err_text(back)}")
+        status, again = http("GET", f"/api/invoices/{inv['id']}", base, token=token)
+        check(s, "a refused renumber leaves the bill on its own number",
+              status == 200 and again.get("invoiceNumber") == 2101,
+              f"invoiceNumber={again.get('invoiceNumber') if isinstance(again, dict) else again}")
+
+    # The reserved band and non-positive numbers are refused here too.
+    status, back = edit(inv, invoiceNumber=900000)
+    check(s, "the demo band is refused on edit", status == 400, f"{status} {err_text(back)}")
+    status, back = edit(inv, invoiceNumber=-4)
+    check(s, "a negative number is refused on edit", status == 400, f"{status} {err_text(back)}")
+
+    # Renumbering must free the number the bill used to hold.
+    status, d = next_number(base, token, cid, 2100)
+    check(s, "the vacated number reads free again",
+          status == 200 and d.get("checkedAvailable") is True, f"{status} {d}")
+
+    return created
+
+
+def suite_edit_fbr_lock(base, token, company, client, item_type, db):
+    """A bill FBR holds may not be renumbered. The status is set directly in the
+    database because reaching it legitimately means a live PRAL submission, which
+    this suite has no business making."""
+    s = "6. A filed bill cannot be renumbered"
+    print(f"\n=== {s} ===")
+    created = []
+    if not db:
+        print("  SKIP (needs --db to set an FBR status without calling PRAL)")
+        return created
+
+    try:
+        import pyodbc  # noqa: F401
+    except ImportError:
+        print("  SKIP (pyodbc not installed)")
+        return created
+    import pyodbc
+
+    status, inv = make_standalone(base, token, company, client, item_type, number=3100)
+    if not check(s, "a bill to file", status in (200, 201), f"{status} {err_text(inv)}"):
+        return created
+    created.append(inv["id"])
+
+    def set_status(fbr_status, irn):
+        conn = pyodbc.connect(db, autocommit=True)
+        cur = conn.cursor()
+        cur.execute("UPDATE Invoices SET FbrStatus = ?, FbrIRN = ? WHERE Id = ?",
+                    fbr_status, irn, inv["id"])
+        conn.close()
+
+    def try_renumber(n):
+        body = {
+            "gstRate": inv.get("gstRate", 18),
+            "invoiceNumber": n,
+            "items": [{
+                "id": it["id"], "description": it.get("description") or "",
+                "quantity": it["quantity"], "unitPrice": it["unitPrice"],
+                "itemTypeId": it.get("itemTypeId"), "uom": it.get("uom"),
+                "hsCode": it.get("hsCode"), "saleType": it.get("saleType"),
+            } for it in inv.get("items", [])],
+        }
+        return http("PUT", f"/api/invoices/{inv['id']}", base, token=token, body=body)
+
+    for label, st, irn in [
+        ("Submitting (a POST is on the wire)", "Submitting", None),
+        ("Uncertain (FBR may already hold it)", "Uncertain", None),
+        ("Validated but already carrying an IRN", "Validated", "IRN-TEST-0001"),
+    ]:
+        set_status(st, irn)
+        status, back = try_renumber(3999)
+        check(s, f"refused: {label}", status == 400 and "FBR" in err_text(back),
+              f"{status} {err_text(back)}")
+
+    # Validated with no IRN is still a bill FBR has not accepted, so it may move.
+    set_status("Validated", None)
+    status, back = try_renumber(3101)
+    check(s, "allowed: Validated with no IRN (nothing filed yet)",
+          status == 200 and back.get("invoiceNumber") == 3101, f"{status} {err_text(back)}")
+
+    return created
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
@@ -394,6 +537,9 @@ def main() -> int:
     p.add_argument("--admin-pw", default="admin123")
     p.add_argument("--prefix", default="TST-")
     p.add_argument("--keep", action="store_true")
+    p.add_argument("--db", default=None,
+                   help="ODBC connection string; enables the FBR-filed lock suite, "
+                        "which has to set a submission status without calling PRAL.")
     args = p.parse_args()
 
     print("=== Setup ===")
@@ -404,6 +550,8 @@ def main() -> int:
         suite_standalone(args.base, token, company, client, item_type, args.prefix)
         suite_from_challan(args.base, token, company, client, item_type, args.prefix)
         suite_scope(args.base, token, company)
+        suite_edit(args.base, token, company, client, item_type, args.prefix)
+        suite_edit_fbr_lock(args.base, token, company, client, item_type, args.db)
     finally:
         if args.keep:
             print(f"\n=== Keeping company id={company['id']} ===")

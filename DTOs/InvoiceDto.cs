@@ -552,6 +552,19 @@
         /// When null, the existing client is preserved.
         /// </summary>
         public int? ClientId { get; set; }
+
+        /// <summary>
+        /// Optional new bill / invoice number. NULL means "leave it alone" — an
+        /// API client editing only line data must not have to restate it — and a
+        /// value equal to the current number is a no-op.
+        ///
+        /// Only accepted while the bill could still be submitted to FBR
+        /// (see <see cref="MyApp.Api.Helpers.FbrSubmissionStatus.IsSubmittable"/>)
+        /// and holds no IRN: once a number has gone to PRAL, our record of it has
+        /// to keep matching theirs.
+        /// </summary>
+        public int? InvoiceNumber { get; set; }
+
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 

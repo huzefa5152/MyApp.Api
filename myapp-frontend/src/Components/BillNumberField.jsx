@@ -20,6 +20,13 @@ import { getNextInvoiceNumber } from "../api/invoiceApi";
 // that reads free here can still be taken by the time Save is pressed; the
 // create path re-checks under the lock and reports a plain message. This exists
 // so the operator learns about a clash BEFORE filling in a whole bill.
+//
+// variant="edit" serves the Edit Bill screen, where the bill already HAS a
+// number: no Auto/Custom choice, the box starts on the current number, and
+// leaving it alone is always valid. It shares this file rather than growing a
+// second control so one set of rules decides what a number may be, wherever it
+// is typed. `lockedReason`, when given, renders the number read-only and says
+// why — the Edit screen passes it once a bill has gone to FBR.
 
 const colors = {
   blue: "#0d47a1",
@@ -36,22 +43,31 @@ const colors = {
 
 /**
  * @param {number}   companyId
- * @param {"auto"|"custom"} mode
+ * @param {"create"|"edit"} variant
+ * @param {"auto"|"custom"} mode            create only
  * @param {(m: "auto"|"custom") => void} onModeChange
- * @param {string}   number          raw text of the custom box (controlled)
+ * @param {string}   number          raw text of the number box (controlled)
  * @param {(v: string) => void} onNumberChange
- * @param {(ok: boolean) => void} onValidityChange  false while a custom entry is unusable
+ * @param {(ok: boolean) => void} onValidityChange  false while the entry is unusable
+ * @param {number}   currentNumber   edit only: the number the bill already has
+ * @param {string}   lockedReason    edit only: renders read-only and explains why
  * @param {boolean}  disabled
  */
 export default function BillNumberField({
   companyId,
+  variant = "create",
   mode = "auto",
   onModeChange,
   number = "",
   onNumberChange,
   onValidityChange,
+  currentNumber,
+  lockedReason,
   disabled = false,
 }) {
+  const isEdit = variant === "edit";
+  // On edit there is no Auto: the bill has a number and the box always shows one.
+  const effectiveMode = isEdit ? "custom" : mode;
   const [info, setInfo] = useState(null);      // the Auto answer
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -63,6 +79,8 @@ export default function BillNumberField({
   const probeSeq = useRef(0);
 
   const loadNext = useCallback(async () => {
+    // The edit screen never offers "the next number" — it only needs the prefix
+    // and the ceiling, which the same call carries.
     if (!companyId) return;
     setLoading(true);
     setLoadError("");
@@ -82,12 +100,20 @@ export default function BillNumberField({
   // Debounced availability probe. Only the custom box asks — Auto is resolved
   // server-side at save time and has nothing to check.
   useEffect(() => {
-    if (mode !== "custom") { setProbe(null); return; }
+    if (effectiveMode !== "custom" || lockedReason) { setProbe(null); return; }
     const raw = (number || "").trim();
     if (!raw) { setProbe(null); return; }
 
     const seq = ++probeSeq.current;
     const parsed = Number(raw);
+    // Leaving an existing bill on its own number is not a clash with itself.
+    // The server excludes the row being renumbered for the same reason; this
+    // just keeps the form from flashing a false error before it answers.
+    if (isEdit && currentNumber != null && parsed === Number(currentNumber)) {
+      setProbe({ available: true, error: "", unchanged: true });
+      setProbing(false);
+      return;
+    }
     if (!Number.isInteger(parsed) || parsed <= 0) {
       setProbe({ available: false, error: "Enter a whole number greater than zero." });
       return;
@@ -114,11 +140,13 @@ export default function BillNumberField({
     }, 400);
 
     return () => clearTimeout(t);
-  }, [mode, number, companyId]);
+  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId]);
 
   // Report usability upward so the parent can block Save.
   const customUsable =
-    mode !== "custom" ? true : !!(number || "").trim() && probe?.available === true && !probing;
+    lockedReason ? true
+      : effectiveMode !== "custom" ? true
+        : !!(number || "").trim() && probe?.available === true && !probing;
 
   useEffect(() => {
     onValidityChange?.(customUsable);
@@ -158,6 +186,7 @@ export default function BillNumberField({
         Bill / Invoice No.
       </label>
 
+      {isEdit ? null : (
       <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", marginBottom: "0.4rem" }}>
         <button
           type="button"
@@ -178,8 +207,21 @@ export default function BillNumberField({
           Custom
         </button>
       </div>
+      )}
 
-      {mode === "auto" ? (
+      {lockedReason ? (
+        <>
+          <input
+            type="text"
+            readOnly
+            value={currentNumber == null ? "—" : String(currentNumber)}
+            style={{ ...inputStyle, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
+          />
+          <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
+            {lockedReason}
+          </div>
+        </>
+      ) : effectiveMode === "auto" ? (
         <>
           <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
             <input
@@ -242,6 +284,8 @@ export default function BillNumberField({
           <div style={{ fontSize: "0.72rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
             {!(number || "").trim() ? (
               <span style={{ color: colors.warn }}>Enter a bill number.</span>
+            ) : probe?.unchanged ? (
+              <span style={{ color: colors.textSecondary }}>Unchanged.</span>
             ) : probing ? (
               <span style={{ color: colors.textSecondary }}>Checking…</span>
             ) : probe && probe.available === false ? (
