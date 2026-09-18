@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -47,6 +47,13 @@ namespace MyApp.Api.Controllers
             await _permissions.HasPermissionAsync(CurrentUserId, "accounting.paymentstatus.view")
             || await _permissions.HasPermissionAsync(CurrentUserId, "accounting.receipts.view")
             || await _permissions.HasPermissionAsync(CurrentUserId, "accounting.receipts.create");
+
+        // Either bill-create permission is enough to ask what the next bill
+        // number is: the two flows (from a challan / standalone) are separately
+        // grantable, and both have to number the bill they are about to write.
+        private async Task<bool> CanCreateBillAsync() =>
+            await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.create")
+            || await _permissions.HasPermissionAsync(CurrentUserId, "bills.manage.create.standalone");
 
         private async Task ScrubPaymentIfDenied(IEnumerable<InvoiceDto> rows)
         {
@@ -207,6 +214,33 @@ namespace MyApp.Api.Controllers
             var dto = await _service.GetPurchaseTemplateAsync(invoiceId);
             if (dto == null) return NotFound();
             return Ok(dto);
+        }
+
+        /// <summary>
+        /// Feeds the "Bill / Invoice No." control on BOTH create forms: the number
+        /// an Auto bill would take, and — with <c>check</c> — whether a number the
+        /// operator typed is free.
+        ///
+        /// Gated by EITHER create permission rather than a new key: a role granted
+        /// only the standalone flow still has to number its bills, and a role with
+        /// neither has nothing to number. Advisory only — it reads outside the
+        /// allocation lock and writes nothing.
+        /// </summary>
+        [HttpGet("company/{companyId}/next-number")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<NextInvoiceNumberDto>> GetNextNumber(
+            int companyId, [FromQuery] int? check)
+        {
+            if (!await CanCreateBillAsync())
+                return Forbid();
+            try
+            {
+                return Ok(await _service.GetNextInvoiceNumberAsync(companyId, check));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
         }
 
         [HttpPost]

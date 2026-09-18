@@ -247,6 +247,11 @@ endpoints_to_test = [
     ("GET",  "/api/suppliers/common?companyId={cid}"),
     ("GET",  "/api/invoices/company/{cid}"),
     ("GET",  "/api/invoices/company/{cid}/paged"),
+    # Bill numbering for the create forms. [AuthorizeCompany]-gated, so a
+    # forbidden company 403s before the sequence is read — a tenant must not
+    # learn another's next bill number, nor probe which numbers it has used.
+    ("GET",  "/api/invoices/company/{cid}/next-number"),
+    ("GET",  "/api/invoices/company/{cid}/next-number?check=1"),
     ("GET",  "/api/invoices/count?companyId={cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}/paged"),

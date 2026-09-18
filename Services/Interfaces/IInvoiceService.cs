@@ -1,4 +1,4 @@
-using MyApp.Api.DTOs;
+﻿using MyApp.Api.DTOs;
 
 namespace MyApp.Api.Services.Interfaces
 {
@@ -27,6 +27,14 @@ namespace MyApp.Api.Services.Interfaces
         /// bills.
         /// </summary>
         Task<InvoiceDto> CreateStandaloneAsync(CreateStandaloneInvoiceDto dto);
+
+        /// <summary>
+        /// The number an "Auto" bill would take right now, plus — when
+        /// <paramref name="check"/> is given — whether that hand-typed number is
+        /// free. Read-only and advisory: the create path re-resolves under the
+        /// per-company allocation lock. See <see cref="NextInvoiceNumberDto"/>.
+        /// </summary>
+        Task<NextInvoiceNumberDto> GetNextInvoiceNumberAsync(int companyId, int? check);
         Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto);
         /// <summary>
         /// Narrow update path: re-derives FBR fields (HS / UOM / SaleType)

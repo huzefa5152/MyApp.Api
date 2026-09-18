@@ -16,6 +16,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
 // to /lookup/units. Replaces the plain text input on each row's UOM
 // cell so operators get the saved-units suggestions instead of having
@@ -158,6 +159,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [scenarioPickerOpen, setScenarioPickerOpen] = useState(false);
   const [buyerOpen, setBuyerOpen] = useState(true);
   const [billHeaderOpen, setBillHeaderOpen] = useState(true);
+  // Bill / Invoice number — same control and same contract as the no-challan
+  // form (StandaloneInvoiceForm). "auto" sends invoiceNumber null and the
+  // server allocates MAX + 1 under its per-company lock; "custom" sends the
+  // typed number verbatim and billNumberOk gates Save on the field's own
+  // availability check.
+  const [billNumberMode, setBillNumberMode] = useState("auto");
+  const [billNumber, setBillNumber] = useState("");
+  const [billNumberOk, setBillNumberOk] = useState(true);
 
   // Bulk-apply mode — drives the "Apply same Item Type to: [All / Only empty]"
   // selector above the items grid. Saves 20+ catalog picks when every line on
@@ -584,6 +593,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting invoice number has not been set for this company. Please set it in the Companies page first.");
 
+    if (billNumberMode === "custom" && !billNumberOk)
+      return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
+
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
 
@@ -618,6 +630,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         companyId,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        // null = Auto (server allocates the next number in sequence).
+        invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         paymentTerms: paymentTermsToSave,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
@@ -959,11 +973,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               Starting bill number not set for this company. Please configure it in the Companies page.
                             </div>
                           )}
-                          {company && company.startingInvoiceNumber > 0 && (
-                            <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
-                              Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
@@ -985,6 +994,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         <span style={styles.stepNum}>3</span>
                         <span style={styles.scenarioCollapseTitle}>Bill Details</span>
                         <span style={styles.scenarioCollapseSummary}>
+                          <span>{billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}</span>
+                          <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
                           <span>{gstRate}% GST</span>
@@ -1003,6 +1014,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
                           <div style={styles.row}>
+                            <div style={{ flex: 1, minWidth: 180 }}>
+                              <BillNumberField
+                                companyId={companyId}
+                                mode={billNumberMode}
+                                onModeChange={setBillNumberMode}
+                                number={billNumber}
+                                onNumberChange={setBillNumber}
+                                onValidityChange={setBillNumberOk}
+                                disabled={saving}
+                              />
+                            </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -1636,10 +1658,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </span>
             )}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            {billNumberMode === "custom" && !billNumberOk && (
+              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
+                Enter a bill number that isn&apos;t already in use, or switch back to Auto.
+              </span>
+            )}
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid || !billNumberOk ? 0.6 : 1 }}
+              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid || !billNumberOk}
             >
               {saving ? "Creating..." : "Create Bill"}
             </button>

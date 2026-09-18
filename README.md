@@ -290,6 +290,35 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
+
+Both bill-create screens — **New Bill** (from a delivery challan) and **New
+Bill (No Challan)** — now carry a **Bill / Invoice No.** field. It opens on
+**Auto**, which is exactly what happened before: the next number in the
+company's own sequence, allocated by the server when the bill is saved, so
+nothing changes for anyone who does not touch it. The number is shown while
+the bill is being written, with the company's prefix applied, instead of being
+a surprise on the Bills list afterwards.
+
+Switching to **Custom** lets the operator type the number. It is checked
+against the company's existing bills as it is typed — an already-used number,
+a zero and the FBR Sandbox's reserved 900000+ band each say so in plain words
+and block Save, and a free one confirms what the document will print. The
+server checks again when the bill is saved, under the same per-company
+allocation lock the automatic sequence uses, and a clash there is reported with
+the number in the message. A hand-typed number is never quietly swapped for a
+different one.
+
+Both screens share one control and one server path, so they cannot disagree
+about what is next or about which numbers they accept. A custom number above
+the current highest moves the sequence on; back-filling a gap below it does
+not rewind. The old "Next bill #" hint was removed — it was computed in the
+browser from the last number issued, so it disagreed with the real sequence
+after the trailing bill was deleted.
+
+Suite: `python scripts/test_custom_bill_number.py` (32 checks, both create
+paths).
+
 ### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
 
 **Exact Line Total.** The Invoices tab lets a restricted role re-classify lines
