@@ -1,4 +1,5 @@
 import Handlebars from "handlebars";
+import { withBillFbrSection } from "./billFbrSection";
 import { materializeStamp } from "./stampSlot.js";
 
 // Register custom helpers
@@ -158,6 +159,9 @@ export function setActiveStamps(dict) {
 
 
 export function mergeTemplate(htmlTemplate, data) {
+  // Upgrade existing company layouts at render time, without rewriting their
+  // stored HTML or GrapesJS project. Other document types remain untouched.
+  if (data?.printTemplateType === "Bill") htmlTemplate = withBillFbrSection(htmlTemplate);
   // Safety net for the {{stamp}} slot. resolveTemplate() normally materializes
   // it upstream (see utils/stampSlot.js), but any path that reaches here with
   // the raw token still in place would have Handlebars resolve it to "" and
@@ -209,6 +213,16 @@ export const MERGE_FIELDS = {
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
+    { field: "{{clientPhone}}", label: "Client Phone" },
+    { field: "{{fmt this.valueExclTax}}", label: "Item Value Excluding Tax (in loop)" },
+    { field: "{{this.gstRate}}", label: "Item GST Rate (in loop)" },
+    { field: "{{fmt this.gstAmount}}", label: "Item GST Amount (in loop)" },
+    { field: "{{fmt this.totalInclTax}}", label: "Item Value Including Tax (in loop)" },
+    { field: "{{fbrIRN}}", label: "FBR Invoice Reference Number (IRN)" },
+    { field: "{{fbrStatus}}", label: "FBR Status" },
+    { field: "{{fmtDate fbrSubmittedAt}}", label: "FBR Submission Date" },
+    { field: "{{fbrQrPngDataUrl}}", label: "FBR QR Code (base64 PNG)" },
+    { field: "{{fbrLogoUrl}}", label: "FBR Logo (inline image)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },

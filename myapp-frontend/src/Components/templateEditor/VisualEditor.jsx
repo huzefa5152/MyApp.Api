@@ -96,6 +96,9 @@ const VisualEditor = forwardRef(function VisualEditor(
     getProjectData() {
       return editorRef.current?.getProjectData() || null;
     },
+    replaceHtml(html) {
+      if (editorRef.current) loadFromHtml(editorRef.current, html);
+    },
     insertMergeField,
   }));
 

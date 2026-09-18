@@ -3386,6 +3386,8 @@ namespace MyApp.Api.Services.Implementations
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (inv == null) return null;
 
+            var submitted = inv.FbrStatus == "Submitted" && !string.IsNullOrWhiteSpace(inv.FbrIRN);
+
             // A STANDALONE bill has no challan to carry a PO, so it keeps its
             // own on Invoice.PoNumber — set on the bill form. Taking the PO
             // from the challans alone printed nothing for those bills, however
@@ -3401,6 +3403,11 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintBillDto
             {
+                FbrStatus = inv.FbrStatus,
+                FbrIRN = submitted ? inv.FbrIRN : null,
+                FbrSubmittedAt = submitted ? inv.FbrSubmittedAt : null,
+                FbrQrPngDataUrl = submitted ? FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN) : null,
+                FbrLogoUrl = submitted ? FbrLogoAsset.DataUrl : null,
                 CompanyBrandName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 CompanyLogoPath = inv.Company?.LogoPath,
                 CompanyAddress = inv.Company?.FullAddress,
@@ -3417,6 +3424,7 @@ namespace MyApp.Api.Services.Implementations
                 PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
                 ClientName = inv.Client?.Name ?? "",
                 ClientAddress = inv.Client?.Address,
+                ClientPhone = inv.Client?.Phone,
                 ConcernDepartment = string.Join(", ", inv.DeliveryChallans
                     .Select(dc => dc.Site)
                     .Where(s => !string.IsNullOrEmpty(s))
@@ -3443,7 +3451,8 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = ii.Quantity,
                     UOM = ii.UOM,
                     UnitPrice = ii.UnitPrice,
-                    LineTotal = ii.LineTotal
+                    LineTotal = ii.LineTotal,
+                    GSTRate = inv.GSTRate
                 }).ToList()
             };
         }

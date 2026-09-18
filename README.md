@@ -290,6 +290,32 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-18 — An item type holding stock can no longer be deleted
+
+Deleting an item type was blocked only by *pending documents*, on the reasoning
+that "StockMovements carry the qty data we need regardless". That is true of the
+ledger and false of the dashboard: the on-hand grid joins the catalog and skips
+deleted rows, so deleting an item that still held goods made real stock vanish
+from the screen while its movements kept listing underneath it.
+
+It happened on a live company. An item type holding **134 units** was deleted,
+and three things broke at once that looked like three separate bugs: On-Hand
+showed nothing while Movements showed 330 in and 196 out; the bill whose FBR
+overlay pointed at that item lost its classification in the edit form, because
+the picker's list excludes deleted rows; and the out-of-stock warning then
+landed on a different, empty item type. One deletion, three symptoms.
+
+The delete now refuses while any company still holds stock of that item,
+naming the quantity and where it is, and the same guard covers a line
+reclassified **onto** the item by the dual-book overlay — previously invisible
+to the check. An item type with no stock deletes exactly as before.
+
+Suites: `python scripts/test_item_type_delete_guard.py` (5 checks, half of them
+deliberately proving an empty item type is still deletable) and
+`test_stock_itemtype_reflow.py` suite 7, which now pins both rules — the delete
+is refused while stocked, and once the stock is zeroed the item still drops off
+the grid, which is the behaviour that suite originally existed to protect.
+
 ### 2026-09-18 — A standalone bill's PO prints, and the sandbox demo buyer is one FBR accepts
 
 **The PO on a bill raised without a challan now reaches the page.** A bill made

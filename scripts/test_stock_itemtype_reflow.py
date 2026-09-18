@@ -715,13 +715,22 @@ def suite_noop_delta(base, token, cid, client, supplier, suffix):
           approx(row["totalOut"], 25) and approx(row["onHand"], 75), str(row))
 
 
-# ── Suite 7 — Soft-deleted item type drops off the on-hand grid ────
-# Regression for 2026-07-07: an ItemType delete is a soft-delete and does
-# NOT purge its StockMovements (purchase movements don't block delete), so
-# StockController.GetOnHand must filter IsDeleted or the deleted item keeps
-# showing on the dashboard.
+# ── Suite 7 — Deleting a stocked item type, and what the grid then shows ──
+# Two rules, and they were learned in this order.
+#
+# 2026-07-07: an ItemType delete is a soft-delete and does NOT purge its
+# StockMovements, so StockController.GetOnHand must filter IsDeleted or the
+# deleted item keeps showing on the dashboard. Still true — 7.4/7.5 pin it.
+#
+# 2026-09-18: allowing that delete WHILE the item still held stock is what
+# made real goods vanish. On a live company an item type holding 134 units was
+# deleted; the grid hid it (correctly, per the rule above) while its movements
+# kept listing underneath, and the bill whose overlay pointed at the deleted
+# row lost its classification in the edit form at the same time. So the delete
+# is now REFUSED while stock is on hand (7.2) — the operator zeroes it first
+# (7.3), and only then does the original behaviour apply.
 def suite_deleted_item_hidden(base, token, cid, supplier, suffix):
-    s = "7. Soft-deleted item hidden from grid"
+    s = "7. Deleting a stocked item type"
     print(f"\n=== {s} ===")
     E = make_item_type(base, token, f"DEL_E_{suffix}", hs=next_hs())
     if not E:
@@ -738,13 +747,30 @@ def suite_deleted_item_hidden(base, token, cid, supplier, suffix):
           in_grid(base, token, cid, eid) and approx(onhand(base, token, cid, eid), 50),
           f"in_grid={in_grid(base, token, cid, eid)} onHand={onhand(base, token, cid, eid)}")
 
-    # 7.2 soft-delete the item type (allowed — only a purchase movement refs it)
-    st, _ = http("DELETE", f"/api/itemtypes/{eid}", base, token=token)
-    check(s, "7.2 delete item type ok", st in (200, 204), f"{st}")
+    # 7.2 the delete is REFUSED while the goods are still on hand, and says so.
+    st, res = http("DELETE", f"/api/itemtypes/{eid}", base, token=token)
+    msg = (res.get("error") or res.get("message") or "") if isinstance(res, dict) else str(res or "")
+    check(s, "7.2 delete REFUSED while it holds stock", st == 400, f"{st} {msg[:120]}")
+    check(s, "7.2 refusal names the stock", "stock" in msg.lower(), f"message: {msg[:120]}")
+    check(s, "7.2 E still on the grid after the refusal",
+          in_grid(base, token, cid, eid) and approx(onhand(base, token, cid, eid), 50),
+          f"onHand={onhand(base, token, cid, eid)}")
 
-    # 7.3 it must disappear from the on-hand grid even though its movement
-    #     row still exists in the ledger.
-    check(s, "7.3 E ABSENT from on-hand grid after delete",
+    # 7.3 zero it the way an operator would, then the delete is allowed.
+    st, _ = http("POST", "/api/stock/adjust", base, token=token, body={
+        "companyId": cid, "itemTypeId": eid, "delta": -50,
+        "movementDate": TODAY, "notes": "suite 7 — clear before delete"})
+    check(s, "7.3 adjust E to zero", st in (200, 201, 204), f"{st}")
+    check(s, "7.3 E on-hand is now 0", approx(onhand(base, token, cid, eid), 0),
+          f"onHand={onhand(base, token, cid, eid)}")
+
+    # 7.4 soft-delete now succeeds (nothing is held any more)
+    st, res = http("DELETE", f"/api/itemtypes/{eid}", base, token=token)
+    check(s, "7.4 delete item type ok once empty", st in (200, 204), f"{st} {res}")
+
+    # 7.5 ...and it must disappear from the on-hand grid even though its
+    #     movement rows still exist in the ledger. (The 2026-07-07 regression.)
+    check(s, "7.5 E ABSENT from on-hand grid after delete",
           not in_grid(base, token, cid, eid), "still showing on grid")
 
 

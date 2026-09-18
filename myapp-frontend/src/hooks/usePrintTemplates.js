@@ -110,10 +110,6 @@ export function usePrintTemplates(templateType) {
     () => Object.fromEntries((companyStamps || []).map((s) => [s.slug, s.url])),
     [companyStamps]
   );
-  const defaultStampSlug = useMemo(
-    () => (companyStamps || []).find((s) => s.isDefault)?.slug || null,
-    [companyStamps]
-  );
 
   // Explicit pick wins; Auto (or a not-yet-validated stale pick) falls back to
   // the default template. The `doc` argument is accepted for call-site
@@ -124,8 +120,8 @@ export function usePrintTemplates(templateType) {
   // here, so none of those ~20 call sites needs to know stamps exist. Keep this
   // wrap in place when porting — it is what makes the feature branch-portable.
   const resolveTemplate = useCallback(
-    (_doc) => withStamp(selectedTemplate || resolveAuto(), stampsBySlug, defaultStampSlug),
-    [selectedTemplate, resolveAuto, stampsBySlug, defaultStampSlug]
+    (_doc) => withStamp(selectedTemplate || resolveAuto(), stampsBySlug),
+    [selectedTemplate, resolveAuto, stampsBySlug]
   );
 
   return {

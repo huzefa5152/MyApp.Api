@@ -220,7 +220,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 > `master`** (a direct push, or a merge/PR that lands on it), you MUST:
 > 1. have a backend running against a schema-current DB, and
 > 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
->    passed`** (currently **161/161**).
+>    passed`** (currently **166/166**).
 >
 > If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
 > in/out flow must never reach master — ever. Run it even when the change looks
@@ -234,10 +234,11 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| Deleting an item type that still holds stock is refused | `python scripts/test_item_type_delete_guard.py` | `5/5 checks passed` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `47/47 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
-| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `161/161`) |
+| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `166/166`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

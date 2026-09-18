@@ -10,7 +10,7 @@ import {
   getTemplatesByCompany, setDefaultTemplate,
 } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
-import { mergeTemplate } from "../utils/templateEngine";
+import { mergeTemplate, MERGE_FIELDS } from "../utils/templateEngine";
 import {
   TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, SAMPLE_DATA, DEFAULT_TEMPLATES,
 } from "../utils/templateSampleData";
@@ -18,6 +18,7 @@ import { dropdownStyles } from "../theme";
 import CodeEditor from "../Components/templateEditor/CodeEditor";
 import MergeFieldSidebar from "../Components/templateEditor/MergeFieldSidebar";
 import StampPicker from "../Components/templateEditor/StampPicker";
+import { signatureAreas, currentStampArea, positionStamp } from "../utils/stampPlacement";
 import {
   STAMP_STATE, detectStampState, injectSignatureBlock, convertPinnedToSlot, pinnedSlugs,
   firstEmbeddedImage, replaceEmbeddedImageWithSlot, materializeStamp,
@@ -108,13 +109,21 @@ export default function TemplateEditorPage() {
     (async () => {
       try {
         const { data } = await getMergeFields(templateType);
-        setFields(data.map(f => ({
+        const catalog = data.map(f => ({
           field: f.fieldExpression,
           label: f.label,
           category: f.category,
-        })));
+        }));
+        // These additive Bill fields ship with the print DTO; expose them even
+        // when the production merge-field catalog predates this release.
+        if (templateType === "Bill") {
+          for (const field of MERGE_FIELDS.Bill) {
+            if (!catalog.some(f => f.field === field.field)) catalog.push({ ...field, category: /fbr/i.test(field.field) ? "FBR" : "Bill" });
+          }
+        }
+        setFields(catalog);
       } catch {
-        setFields([]);
+        setFields(MERGE_FIELDS[templateType] || []);
       }
     })();
   }, [templateType]);
@@ -182,6 +191,7 @@ export default function TemplateEditorPage() {
   const loadIntoEditor = (dto) => {
     setTemplateType(dto.templateType || templateType);
     setCurrentTemplateId(dto.id);
+    setStampId(dto.stampId ?? null);
     setTemplateName(dto.name || "");
     setOriginalName(dto.name || "");
     setHtmlContent(dto.htmlContent || "");
@@ -196,6 +206,7 @@ export default function TemplateEditorPage() {
   // Start a brand-new (unsaved) template of the current type.
   const startNewTemplate = () => {
     setCurrentTemplateId(null);
+    setStampId(null);
     setTemplateName("");
     setOriginalName("");
     const def = DEFAULT_TEMPLATES[templateType] || "";
@@ -393,15 +404,30 @@ export default function TemplateEditorPage() {
   // Which stamp mechanism the buffer currently uses. Derived from the live
   // editor text, so adding or removing a slot by hand updates the control.
   const stampState = detectStampState(htmlContent);
+  const stampAreas = signatureAreas(htmlContent);
+
+  const handleStampPosition = (areaId) => {
+    const source = editorMode === "visual" && visualEditorRef.current
+      ? visualEditorRef.current.getHtml() : htmlContent;
+    const result = positionStamp(source, areaId);
+    if (!result.changed) { showToast("Choose a signature label in this template", "error"); return; }
+    setHtmlContent(result.html);
+    if (editorMode === "visual" && visualEditorRef.current) {
+      visualEditorRef.current.replaceHtml(result.html);
+      setTemplateJson(JSON.stringify(visualEditorRef.current.getProjectData()));
+    } else setTemplateJson(null);
+    showToast("Stamp position updated — save the template to keep it");
+  };
 
   // Assignment persists immediately when the template already exists; on an
   // unsaved new template it is held locally and written by handleSave.
   const handleEditorStampChange = async (id) => {
+    const previousId = stampId;
     setStampId(id);
     if (!currentTemplateId) return;
     setStampSaving(true);
     try { await setTemplateStamp(currentTemplateId, id); }
-    catch { showToast("Failed to update signature", "error"); }
+    catch { setStampId(previousId); showToast("Failed to update signature", "error"); }
     finally { setStampSaving(false); }
   };
 
@@ -420,6 +446,8 @@ export default function TemplateEditorPage() {
     const slug = pinnedSlugs(htmlContent)[0];
     if (!slug) return;
     setHtmlContent(convertPinnedToSlot(htmlContent, slug));
+    setTemplateJson(null);
+    setEditorMode("code");
     const match = companyStamps.find((s) => s.slug === slug);
     if (match) setStampId(match.id);
     showToast("Signature is now changeable — remember to save");
@@ -760,21 +788,6 @@ export default function TemplateEditorPage() {
               style={{ display: "none" }}
               onChange={handleImportHtml}
             />
-            {companyStamps.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", minWidth: 0 }}>
-                <span style={{ fontSize: "0.78rem", color: "#5f6d7e", whiteSpace: "nowrap" }}>Signature</span>
-                <StampPicker
-                  stamps={companyStamps}
-                  value={stampId}
-                  state={stampState}
-                  pinnedSlug={pinnedSlugs(htmlContent)[0]}
-                  busy={stampSaving}
-                  onChange={handleEditorStampChange}
-                  onAddBlock={handleEditorAddBlock}
-                  onConvert={handleEditorConvert}
-                />
-              </div>
-            )}
             <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={handleReset} title="Reset to default">
               <MdRefresh size={16} /> Reset
             </button>
@@ -788,6 +801,27 @@ export default function TemplateEditorPage() {
             {hasChanges && <span style={{ fontSize: "0.78rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
           </div>
         )}
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", padding: "0.65rem 1rem", background: "#f7f9fc" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", minWidth: 0 }}>
+          <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Signature stamp</span>
+          <StampPicker stamps={companyStamps} value={stampId} state={stampState}
+            pinnedSlug={pinnedSlugs(htmlContent)[0]} busy={stampSaving || saving}
+            onChange={handleEditorStampChange} onAddBlock={handleEditorAddBlock} onConvert={handleEditorConvert} />
+        </div>
+        {stampAreas.length > 0 && stampState !== STAMP_STATE.PINNED && (
+          <label style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", fontSize: "0.8rem" }}>
+            Stamp position
+            <select aria-label="Stamp position" value={currentStampArea(htmlContent)}
+              disabled={saving || stampSaving} onChange={e => handleStampPosition(e.target.value)}
+              style={{ minHeight: 44, flex: 1, maxWidth: 260, padding: "0.4rem", border: "1px solid #d0d7e2", borderRadius: 7 }}>
+              <option value="" disabled>Choose signature area…</option>
+              {stampAreas.map(area => <option key={area.id} value={area.id}>Above {area.label}</option>)}
+            </select>
+          </label>
+        )}
+        <span style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>Duplicate a template to keep signed and unsigned versions. “No signature” leaves the stamp blank.</span>
       </div>
 
       {/* Main Content */}
