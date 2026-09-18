@@ -1,0 +1,4 @@
+interface:
+  display_name: "MyApp Customize Print Templates"
+  short_description: "Match Customize layouts with its own merge fields"
+  default_prompt: "Use $myapp-customize-print-templates to create a professional template matching my reference on customize-solution-for-other."
