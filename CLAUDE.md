@@ -1476,38 +1476,8 @@ them can be resolved from FBR.
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
-| Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division | `python scripts/test_custom_bill_number.py` | `38/38 checks passed` |
-| Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `118/118`) |
-| Admin scope leak hunt (greps response BODIES for the other tree's markers) | `python scripts/test_admin_scope_leak_hunt.py` | `all checks passed` (currently `44/44`) |
-| Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
-| Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
-| Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
-| Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
-| Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
-| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `120/120 checks passed` |
-| Customer receipts, advances + FIFO auto-allocation | `python scripts/test_customer_receipts_ledger.py` | `184/184 checks passed` (3 skipped without `--db`) |
-| Customer ledger | `python scripts/test_customer_ledger.py` | `100/100 checks passed` |
-| Customer ledger grouping | `python scripts/test_customer_ledger_groups.py` | `47/47 checks passed` |
-| Client Ledger report | `python scripts/test_client_ledger_report.py` | `97/97 checks passed` |
-| Accounting reports | `python scripts/test_accounting_reports.py` | `326/326 checks passed` |
-| Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
-| Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
-| PDF page breaks never cut a line item (offline) | `node scripts/test_pdf_page_cuts.mjs` | `10 passed, 0 failed` |
-| Bulk invoice download / consolidated print, through BOTH callers | `python scripts/test_invoice_bulk.py` | `39 passed, 0 failed` |
-| HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
-| Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
-| Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Spreadsheet import (layouts, heading aliases, tax-rate guard, stock, lots, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (135 checks) |
-| Bill line pricing, advance tax (236G/236H) + further tax s.3(1A), incl. edit and GL posting | `python scripts/test_bill_pricing_advance_tax.py` | `102/102 checks passed` |
-| Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
-| Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
-| Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
-| Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
-| Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
-| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (256 checks) |
-| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (40 checks) |
-| FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
+| Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `53/53 checks passed` (5 skipped without `--db`) |
+| Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
