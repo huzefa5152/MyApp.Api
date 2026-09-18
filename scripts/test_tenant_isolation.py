@@ -30,7 +30,9 @@ from __future__ import annotations
 import json, os, sys, uuid, urllib.request, urllib.error
 from typing import Any
 
-BASE = "http://localhost:5134"
+# Override with MYAPP_BASE when this branch's backend runs on a second port
+# (the default keeps the historic behaviour for anyone who never sets it).
+BASE = os.environ.get("MYAPP_BASE", "http://localhost:5134")
 
 PASS = "PASS"
 FAIL = "FAIL"
@@ -302,6 +304,11 @@ endpoints_to_test = [
     # [AuthorizeCompany] — which runs before model binding, so a bodyless probe
     # still has to be refused.
     ("POST", "/api/invoices/bulk/company/{cid}"),
+    # Bill numbering for the create forms. [AuthorizeCompany]-gated, so a
+    # forbidden company 403s before the sequence is read — a tenant must not
+    # learn another's next bill number, nor probe which numbers it has used.
+    ("GET",  "/api/invoices/company/{cid}/next-number"),
+    ("GET",  "/api/invoices/company/{cid}/next-number?check=1"),
     ("GET",  "/api/invoices/count?companyId={cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}/paged"),

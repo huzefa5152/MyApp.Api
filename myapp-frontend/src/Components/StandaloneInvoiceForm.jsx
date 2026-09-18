@@ -21,6 +21,7 @@ import DivisionSelect from "./DivisionSelect";
 import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import AttachmentManager from "./AttachmentManager";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
@@ -172,6 +173,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [scenarioPickerOpen, setScenarioPickerOpen] = useState(false);
   const [buyerOpen, setBuyerOpen] = useState(true);
   const [billHeaderOpen, setBillHeaderOpen] = useState(true);
+  // Bill / Invoice number. "auto" is the default and reproduces the behaviour
+  // that existed before this control: invoiceNumber is sent as null and the
+  // server allocates the next number in this bill's own (per-division)
+  // sequence. "custom" sends the typed number verbatim; billNumberOk mirrors
+  // the field's availability check so Save can't fire on a refused number.
+  const [billNumberMode, setBillNumberMode] = useState("auto");
+  const [billNumber, setBillNumber] = useState("");
+  const [billNumberOk, setBillNumberOk] = useState(true);
   const [rows, setRows] = useState([blankRow()]);
 
   // Bulk-apply mode for the "set Item Type on every row" toolbar — saves
@@ -662,6 +671,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
     if (fbrEnabled && !chosenScenario) return setError("Pick an FBR scenario first.");
+    if (billNumberMode === "custom" && !billNumberOk)
+      return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
     if (rows.some((r) => !r.itemTypeId && !r.nonInventoryItemId)) {
       return setError("Every line must have an Item Type or Non-Inventory item selected.");
@@ -679,6 +690,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         divisionId: divisionId ? parseInt(divisionId) : null,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        // null = Auto (server allocates the next number in sequence).
+        invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // Withholding tax: rate-mode ships the %, fixed-amount mode ships null
         // rate + the typed amount. Backend recomputes/clamps the amount.
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
@@ -981,11 +994,6 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                               <PermissionLackedHint perm="clients.manage.create" what="add a new buyer" />
                             )}
                           </div>
-                          {company && company.startingInvoiceNumber > 0 && (
-                            <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
-                              Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1010,6 +1018,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         <span style={styles.stepNum}>3</span>
                         <span style={styles.scenarioCollapseTitle}>Bill Details</span>
                         <span style={styles.scenarioCollapseSummary}>
+                          <span>{billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}</span>
+                          <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
                           <span>{gstRate}% GST</span>
@@ -1028,6 +1038,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
                           <div style={styles.row}>
+                            <div style={{ flex: 1, minWidth: 180 }}>
+                              <BillNumberField
+                                companyId={companyId}
+                                divisionId={divisionId}
+                                mode={billNumberMode}
+                                onModeChange={setBillNumberMode}
+                                number={billNumber}
+                                onNumberChange={setBillNumber}
+                                onValidityChange={setBillNumberOk}
+                                disabled={saving}
+                              />
+                            </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -1442,19 +1464,23 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
             )}
           </div>
           <div style={formStyles.footer}>
-            {!allRowsValid && rows.length > 0 && chosenScenario && selectedClientId && (
+            {billNumberMode === "custom" && !billNumberOk ? (
+              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
+                Enter a bill number that isn&apos;t already in use, or switch back to Auto.
+              </span>
+            ) : !allRowsValid && rows.length > 0 && chosenScenario && selectedClientId ? (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 Some required fields are missing.
               </span>
-            )}
+            ) : null}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
               style={{
                 ...formStyles.button, ...formStyles.submit,
-                opacity: saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid ? 0.6 : 1,
+                opacity: saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk ? 0.6 : 1,
               }}
-              disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid}
+              disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk}
             >
               {saving ? "Creating…" : `Create Bill${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
             </button>

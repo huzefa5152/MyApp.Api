@@ -140,3 +140,17 @@ export const getPurchaseTemplate = (invoiceId) =>
  */
 export const resolveInvoiceBulk = (companyId, body) =>
   httpClient.post(`/invoices/bulk/company/${companyId}`, body);
+
+// Numbering for the bill-create forms: what an "Auto" bill would be numbered
+// right now, and — when `check` is given — whether that hand-typed number is
+// free. Advisory: the server re-resolves under the per-company allocation lock
+// when the bill is actually saved.
+export const getNextInvoiceNumber = (companyId, { divisionId, check } = {}) =>
+  httpClient.get(`/invoices/company/${companyId}/next-number`, {
+    params: {
+      // Numbering is PER DIVISION, so a division-tagged bill draws from its
+      // own sequence — omitting this asks about the company-level one.
+      ...(divisionId ? { divisionId } : {}),
+      ...(check == null ? {} : { check }),
+    },
+  });

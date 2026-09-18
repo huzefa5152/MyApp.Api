@@ -298,6 +298,769 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+
+
+### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
+
+Both bill-create screens — **New Bill** (from a delivery challan) and **New
+Bill (No Challan)** — now carry a **Bill / Invoice No.** field. It opens on
+**Auto**, which is exactly what happened before: the next number in the
+company's own sequence, allocated by the server when the bill is saved, so
+nothing changes for anyone who does not touch it. The number is shown while
+the bill is being written, with the company's prefix applied, instead of being
+a surprise on the Bills list afterwards.
+
+Switching to **Custom** lets the operator type the number. It is checked
+against the existing bills in that same sequence as it is typed — an
+already-used number, a zero and the FBR Sandbox's reserved 900000+ band each say
+so in plain words and block Save, and a free one confirms what the document will
+print. The
+server checks again when the bill is saved, under the same per-company
+allocation lock the automatic sequence uses, and a clash there is reported with
+the number in the message. A hand-typed number is never quietly swapped for a
+different one.
+
+Both screens share one control and one server path, so they cannot disagree
+about what is next or about which numbers they accept. Numbering is per
+division, and the field follows the division picked on the bill: a number used
+in one division stays free in another, and issuing one there leaves the
+company-level sequence where it was. A custom number above the current highest
+moves its own sequence on; back-filling a gap below it does not rewind. The old "Next bill #" hint was removed — it was computed in the
+browser from the last number issued, so it disagreed with the real sequence
+after the trailing bill was deleted.
+
+Suite: `python scripts/test_custom_bill_number.py` (38 checks, both create
+paths, company-level and per-division).
+
+### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
+
+### 2026-09-18 — A company with one tax number can be saved again
+
+- **Three reported symptoms, one cause.** A company with FBR on could not be
+  updated, its logo would not save, and the error pointed at the wrong tab. All
+  of it came from one form guard.
+- **The explicit seller registration is now required only when it is genuinely
+  ambiguous** — when a company holds BOTH a usable NTN and a 13-digit CNIC, so
+  only IRIS knows which it files under. Holding just one leaves nothing to
+  infer, and the save now goes through. The NTN and CNIC on the General tab are
+  optional and for display, which is what they were always meant to be.
+  `FbrSellerIdentity.Resolve` already worked this way; only the form was stricter.
+- **The logo failure was not a logo failure.** It uploads after the company
+  saves, because it needs the id — so a blocked save silently took the logo with
+  it and read as "the logo will not save". A logo error is now reported on its
+  own ("the company was saved, but the logo could not be uploaded"), and a
+  blocked save says the logo did not go either.
+- **The message named the wrong field.** It asked for an NTN or CNIC on the
+  General tab; the field that resolves it is "Seller NTN / CNIC" on the FBR
+  Integration tab. It now names that field first, and a server-side rejection
+  switches to the tab that owns it rather than complaining about something two
+  tabs away.
+
+### 2026-09-17 — Importer KPIs, with drill-downs that add up
+
+- **Dead stock is the headline.** Items bought and never sold: on this line
+  that reaches **82% of one company's stock** (55.5M), 63% on another. Nothing
+  on any screen said so. Now a card, with the worst offenders behind it.
+- **Margin on landed cost**, next to declared gross profit. The declared basis
+  reads ~0 by construction for a company that invoices at customs value, so it
+  cannot answer "did we make money"; this can.
+- **Stock converted** — what share of everything imported has turned back into
+  sales. Deliberately a share, not months of cover: these companies have 10–16
+  days of sales history, so an annualised rate would be noise dressed as insight.
+- **Stock ageing** by days since last movement.
+- **Accounting gains the import book** — GD count, landed cost, duty and tax at
+  import with its share of landed cost, and clearing outstanding.
+  `ImportConsignments` drives the whole business and appeared on no screen at
+  all. Plus unrealised margin on stock held, and where the capital sits
+  (stock / owed / collected).
+- **Every KPI drills down, and the rows add up to the card.** That is the
+  contract: `GET /api/dashboard/breakdown` computes the rows from the same walk
+  the card uses rather than a second time, and the panel prints the row sum
+  next to the headline so a drift would be visible instead of silent. Fifteen
+  kinds; all eleven with a single card behind them verified reconciling.
+- `Helpers/ItemStockPositions.cs` is the one walk everything reads — cost of
+  sales, stock on hand, dead stock, margin, conversion, ageing and their
+  breakdowns. Built precisely so a card and its own drill-down cannot diverge.
+- **Two defects the reconciliation check caught in this work**, which is what it
+  is for: the margin breakdown summed declared-less-landed per item while its
+  card was sales-less-landed (fixed by attributing real revenue per item, with
+  an explicit row for lines carrying no item type); and `UnrealisedMargin` was
+  declared on the DTO and never assigned, so its card read 0 against real rows.
+- Phone: the drill-down renders stacked cards rather than a wide table, per
+  CLAUDE.md §3. Verified at 375px — no horizontal scroll, dialog fits.
+- **Soft-deleted items keep their value.** The on-hand grid hides them, which is
+  right for a list of things you can act on, but excluding them from the stock
+  VALUE put the dashboard 56,358.17 below the Inventory account on one live
+  company — a delete removes a catalog entry, not the goods. They are now
+  included and labelled "(deleted item)", so the dashboard matches the ledger
+  again. Caught on production, by the same invariant.
+
+### 2026-09-17 — Dashboards rebuilt around what an importer actually has
+
+- **Half the hero band said nothing.** An importer buys nothing on purchase
+  bills — stock arrives through opening stock and GD costing — so Total
+  Purchases read Rs 0 and Net (Sales − Purchases) merely restated Total Sales
+  while looking like profit: on one company a card read 11.4M next to a rising
+  arrow when real gross profit was −6,195. Meanwhile stock and debtors, the two
+  largest numbers in the business, were not shown at all.
+- New cards: **Cost of Goods Sold**, **Gross Profit** (with margin %), **Stock
+  on Hand**, **Receivables** (with the overdue slice), **Payables** (everything
+  owed, not just trade creditors), and **Recoverable from FBR** (input tax and
+  advance income tax on imports — assets, not liabilities). Total Sales keeps
+  its tax-inclusive headline and gains an **ex-tax second line**, which is the
+  difference that started the whole investigation.
+- **One layout, cards hidden when their concept is empty**, extending the
+  hiding the dashboard already did by permission. Chosen over two layouts
+  because the only companies with purchase bills were demo data. A configured
+  but not-yet-trading company gets an empty state rather than a wall of zeroes.
+- **Accounting dashboard** gains a Stock & tax position row (inventory, tax
+  payable, import clearing, recoverable tax). Its Payables card is supplier
+  aging and legitimately Rs 0 for an importer, which said nothing about what is
+  actually owed.
+- **Stock dashboard** gains Actual (landed) cost and Margin over cost, shown
+  only when a costing import has supplied an actual cost — that is where the
+  real margin lives, since the declared-basis P&L reads near zero by design.
+- **Two defects in the day's own COGS work, caught by wiring these up:**
+  - The monthly relief entry was dated month-END, so a running month's cost sat
+    in the future and every report ending "today" showed income with no cost —
+    expenses Rs 0, profit overstated by the whole cost of sales. A running month
+    is now dated today; finished months keep month-end.
+  - `GeneralLedgerService.RebuildAsync` deletes every entry and re-posts
+    documents, but stock relief is derived from the walk rather than a document,
+    so a rebuild silently wiped all of it. Now reposted at the end of a rebuild.
+- **Stock value had two answers on one screen.** The Inventory section derived
+  it from purchase-bill lines alone (Rs 0 for an importer) while the new card
+  walked the stock. Both now use one method.
+- Modal fix: the stock dashboard's opening-balance and adjustment dialog used a
+  hand-rolled overlay with no `overflowY` and no `maxHeight`, so a tall form
+  pushed Cancel, Save and the close X off-screen — the CorrectionWizard defect
+  in CLAUDE.md §3, repeating. Now uses the shared `formStyles`, closes on Escape
+  and on backdrop click. Verified at 600px height and 375px width.
+- Removed `GET /api/itemtypes/saved-hscodes` and its service/repository chain —
+  no caller anywhere, and it carried no `[HasPermission]`.
+
+### 2026-09-17 — Sales now relieve inventory (cost of goods sold)
+
+- **Nothing ever credited the Inventory control account.** It was an opening
+  balance plus purchases, so every stock-tracking company reported revenue with
+  no matched cost and its balance sheet overstated stock by everything it had
+  ever sold — 9.7M on one importer alone. `AccountingReportService.Statements`
+  has been printing a notice admitting this; it is now fixed rather than
+  disclosed.
+- **One journal entry per company per month** (`SourceDocType.InventoryPeriod`,
+  `SourceDocId` = `year * 100 + month`): Dr Cost of goods sold, Dr/Cr Inventory
+  adjustments, Cr Inventory. Monthly rather than per invoice because weighted
+  average is path-dependent — editing one old bill changes the cost of every
+  sale after it — and because the customs stock sheet is already monthly.
+- Values come from the existing `StockValuation` walk on the **declared** basis.
+  Breakage and revaluation go to their own account, so cost of goods SOLD keeps
+  meaning that and a future write-off cannot land in gross margin silently.
+- Backfilled at startup (`COGS_PERIOD_BACKFILL_V1`). Not optional: with the
+  repost automatic on any stock change, a skipped company would sprout a full
+  month's COGS the first time anyone edited an old invoice.
+- **Three defects found while building it**, each caught by the new suite's
+  invariant rather than by reading code:
+  - `StockValuation` traces a revaluation's RAW delta, but the value it applies
+    is clamped — so contributions are now derived from the running value, which
+    telescopes to exactly opening − closing however the walk clamps.
+  - `POST /stock/opening` never posted to the Inventory account, the same gap
+    the GD costing import had. All three opening-stock paths now share one
+    `AdjustInventoryOpeningAsync`.
+  - Cancelling or deleting an invoice never reversed its COGS: those paths purge
+    movements directly and so did not inherit the sync wrapper's repost.
+- New `scripts/test_cogs_periodic.py` (21 checks). Its load-bearing assertion,
+  repeated after every step, is **Inventory account == the stock walk's closing
+  value** — the invariant the original defect broke.
+- Gross profit will read near zero for companies that invoice at declared
+  customs value. That is the honest declared-basis picture, not a fault.
+
+### 2026-09-17 — One producer for the shipped import templates
+
+- **`scripts/build_opening_stock_template.py` was deleted.** It still held the
+  three rows lifted from a live client sheet — their GD numbers, product names
+  and landed costs — that were deliberately replaced with fictional data on
+  2026-09-14, and it wrote the SAME file as
+  `scripts/build_sample_import_sheets.py`. Anyone running the old command
+  silently re-published that customer's data to a template served publicly out
+  of `wwwroot/`. `build_sample_import_sheets.py` already claimed to be "the
+  only way the files are produced"; now it is.
+- **The suite case that should have caught it only counted rows.** It asserted
+  three rows, so the entire sheet could be swapped and it would still fail for
+  the wrong reason — a stale count rather than a wrong sheet. It now asserts
+  the seven sample item names, that the two same-HS bearing rows group into one
+  line of 800 (the behaviour the template exists to demonstrate), and that some
+  row carries a rate other than 18%. A failure now says whether the template was
+  regenerated or grew real customer rows.
+- `verify_no_production_identifiers.py` does not cover this: it checks
+  production database and host names, not customer identifiers.
+
+### 2026-09-17 — GD costing imports now reach "Inventory on hand"
+
+- **A GD costing import that created opening stock never posted its value to
+  the Chart of Accounts.** A stock-sheet import puts its total on the Inventory
+  control account (`OpeningStockImportService.PostInventoryValueAsync`); the
+  costing importer wrote the same kind of opening position and posted nothing,
+  so "Inventory on hand" silently understated the books by the value of every
+  balance a costing run brought in. Found while reconciling a customer's stock
+  sheet against the dashboard: two companies on the importer line were short by
+  2,685,861.50 and 342,337.11 respectively, while a third — whose costing run
+  happened to create no balances — was correctly untouched, which is what
+  pinned the cause to the create path rather than the costing path.
+- `GdCostingImportService.CreateMissingStockAsync` now reports the value it
+  brought onto the books, and `PostCreatedStockToInventoryAsync` adds that to
+  the Inventory account's **opening balance**, offsetting to Retained earnings
+  the same way the stock-sheet importer does. It is **additive** — the account
+  already carries the stock sheet's own contribution, and
+  `AdjustOpeningBalanceAsync` takes an absolute figure, so posting the raw
+  value would have wiped it.
+- Still **no journal entry**: an opening position is not a movement, so the
+  boundary `CreateMissingStockAsync` already documented is unchanged. A
+  cost-only run, which creates nothing, posts nothing.
+- New `inventoryOpeningPosted` on the commit result, plus a message saying what
+  was added and to which account.
+- Covered by section 28 of `scripts/test_gd_import_costing.py` (419/419),
+  which asserts the account grows by exactly the created value, that the
+  earlier stock-sheet figure is added to rather than replaced, that no journal
+  entry is written, and that a cost-only run leaves the account alone.
+- **Existing production balances are not corrected by this** — the fix changes
+  what future imports do. The two affected companies need their Inventory
+  opening balance adjusted by hand.
+
+### 2026-09-15 — Sandbox scenario now follows the buyer
+
+- **The default sandbox scenario was hardcoded `SN001`** — "goods at standard
+  rate to REGISTERED buyers" — so any ordinary sandbox bill raised for a
+  walk-in customer contradicted its own buyer block and FBR answered
+  `[0205] Provided scenario not valid for unregistered user`. The default now
+  follows the buyer (SN001 registered / SN002 not), and a STORED `[SN00x]`
+  marker that contradicts the buyer loses: those two scenarios differ in exactly
+  one thing, and the buyer is a fact while the marker is a hint. Every other
+  scenario is passed through untouched — they encode a sale type, not a buyer.
+  Sandbox only; production sends no scenario at all.
+- **Demo clients are created Unregistered with a CNIC.** A buyer is "Registered"
+  only if FBR's STATL list says so, and the demo NTNs are deliberately
+  impossible, so claiming Registered made every demo invoice unfileable. An
+  unregistered buyer still needs an identifier — with neither NTN nor CNIC FBR
+  cannot place the buyer at all.
+- Two more account dropdowns now use the shared type-grouped picker: the
+  consignment settlement's "Post it to" and the bank-statement import's
+  per-line category account.
+
+### 2026-09-15 — Journal Entries uses the grouped account picker
+
+- The account dropdown on a journal line listed all 39 postable accounts as one
+  flat list, with no Assets / Liabilities / Equity / Income / Expenses grouping —
+  because `JournalEntriesPage` carried its own **local copy** of `AccountSelect`
+  that shadowed the shared component and had been written without the grouping.
+  The duplicate (and its style block) is gone; the page now imports
+  `Components/AccountSelect`, the same searchable, type-grouped picker every
+  other account field uses. Create and edit share the form, so both are fixed.
+- No data was missing: `/accounts/company/{id}/flat` already returned all five
+  types. Only `Bank & Cash` is withheld, correctly — a journal may not post to it
+  and the server rejects it too.
+
+### 2026-09-15 — Two FBR fixes found on the live installation
+
+- **Every challan on the installation read "Setup Required".**
+  `DeliveryChallanService.IsFbrReady` gated on `Company.STRN` — a field that is
+  **not on the FBR seller block at all** and is optional on the company form, so
+  it was empty on every company of the production installation and parked every
+  challan for ever. It also demanded `Company.NTN` specifically, when the seller
+  number may legitimately be a CNIC or the value re-entered on the FBR tab. Both
+  replaced by the single resolver, `Helpers/FbrSellerIdentity` — "can this
+  company produce a sellerNTNCNIC at all". The matching "Company STRN missing"
+  warning is gone for the same reason.
+- **A failed Validate left FBR Monitor empty.** A pre-flight rejection never
+  reaches FBR, and it was not written to the communication log either — so the
+  operator saw an error on screen and an empty trail, which reads as "the system
+  did nothing". Pre-flight rejections are now logged with HTTP status 0 (what
+  "we never called them" looks like) and the reason, so the Monitor explains
+  every failure.
+
+### 2026-09-15 — Hierarchical admin scope, ported from the Trader line
+
+- **An Administrator now sees only its own tree.** `Users` and `Companies` carry
+  a nullable `CreatedByUserId`; the single seed admin is the root and manages
+  everyone, and every other account manages exactly its descendants — never the
+  seed admin, never a sibling Administrator, never their users or companies.
+  `IManagementScopeService` is the one place that decides it.
+- **Tenant Access filters server-side.** The grid returns only the accounts
+  beneath the caller crossed with the companies the caller itself holds, so an
+  Administrator can delegate only what it has. Endpoint URLs, request bodies and
+  response shapes are unchanged — the filtering is internal.
+- **Grants outside the caller's reach survive a save.** A company the seed admin
+  granted directly to a user is invisible to that user's Administrator and is
+  left untouched when the Administrator edits the rest of the set.
+- **A new seed-admin-only Administrators console** (`/administrators`) lists each
+  Administrator with its users and companies. It reuses `users.manage.view`; no
+  new permission keys.
+- **"No Company Configured"** replaces every company-dependent screen when the
+  account can reach no company, and a stale `selectedCompanyId` in localStorage
+  is now cleared rather than merely ignored.
+- **Custom roles are scoped by their creator's chain**, and a role id outside the
+  caller's view cannot be assigned.
+- **Fixed an IDOR found while porting**: `GET/PUT/DELETE
+  /api/clients/common/{groupId}` and the supplier equivalents took a group id and
+  no access check, so knowing an id was enough to read another tenant's master
+  record, rename it across every company, or delete it across every company —
+  cascading to their invoices. Now scoped by the same all-or-nothing rule the
+  list endpoints already used.
+- Suites: `scripts/test_admin_scope_isolation.py` (118 checks) and
+  `scripts/test_admin_scope_leak_hunt.py` (44), which builds two Administrator
+  trees with distinctive markers and greps raw response bodies rather than
+  trusting status codes — a 200 that quietly contains the other tenant's data
+  is a leak a status-code suite cannot see.
+
+### 2026-09-14 — A demo you can actually give
+
+- **`scripts/capture_demo_walkthrough.mjs`** drives the local app as the Demo
+  Administrator and writes two documents from one pass: a **presenter runbook**
+  (every screen, its route, and what to say while it is up) and a **pitch deck**
+  (same screenshots, one claim per slide, prints to a PDF you can send). Both
+  are gitignored and rebuilt in one command.
+- **Six screens were empty the first time it ran** — goods receipts, quotes,
+  orders, challans, the FBR sandbox and the customer portal — which meant Act 2
+  of the demo, the quote → order → challan → bill chain, had nothing to show.
+  The demo seeder now builds that chain through the product's own conversion
+  endpoints, plus goods receipts, a customer portal and the FBR scenario bills.
+- The capture flags any screen whose text reads "No … yet/found", because a
+  screenshot of an empty table is worse than a missing one: it gets presented.
+  It cannot catch everything — Trial Balance opens on "This Month" and every
+  demo transaction is older, so it rendered a full page of zeros and looked fine.
+- Two browser-cache traps are written into the runbook, because both look like
+  faults during a demo and neither is: the company selector caches its list, and
+  the permission set is captured at sign-in, so a tab held open across a demo
+  rebuild claims the account cannot view the dashboard.
+
+### 2026-09-14 — A demo environment, and three tenant leaks it found
+
+- **`GET /api/dashboard/kpis?companyId=` had no tenant guard.** Anyone who could
+  sign in and held `dashboard.view` could read any company's headline sales, its
+  top clients **by name**, its recent invoices and its stock, by changing one
+  number in the query string. The action's own comment said "we trust the
+  upstream guard"; there was no upstream guard. Now `[AuthorizeCompany]`.
+- **The PO import archive was unscoped.** `GET /api/poimport/archives` ignored
+  access entirely, and `archives/{id}/file` took a document id and no company at
+  all — those files are customers' own purchase orders. The list is now scoped to
+  the caller's accessible companies and the download asserts on the row's own
+  company (404, not 403, so it cannot be used to enumerate).
+- **`/api/itemtypes/uoms-for-hs` and `/fbr-hints` are guarded too.** The answer
+  is reference data, but resolving it can fall back to that company's own FBR
+  token, and spending one tenant's credential for a caller who cannot reach that
+  tenant is what audit H-9 was about.
+- **The shipped opening-stock sample contained a live client's data** — their GD
+  numbers, product names and landed costs, in a file served publicly from
+  `wwwroot/`. Both sample workbooks are now generated by
+  `scripts/build_sample_import_sheets.py` from fictional data, with real tariff
+  HS codes so they import for real.
+- **A GD costing sample now exists and is downloadable** from the Import Costing
+  screen, with every column, worked example rows and a sheet explaining which
+  columns are typed and which the system works out.
+- **`scripts/setup_demo_environment.py`** builds three fictional companies with
+  believable master data and six months of transactions, runs both sample
+  imports, creates a Demo Administrator scoped to those companies only, and then
+  tries to reach every other company on the installation 156 different ways.
+- Deleting a company **orphans its bespoke item types**: `ItemType` is a global
+  catalog and its visibility is derived from the documents that reference it, so
+  the rows become invisible to every API while still holding the unique
+  (name, HS code) key — un-creatable and un-findable. Written down in the demo
+  skill; the reset works around it by noting the ids first.
+
+### 2026-09-14 — Every FBR scenario now files, including the one nobody could crack
+
+- **All 11 importer scenarios validate AND submit against the FBR sandbox** for a
+  newly-onboarded importer — 11 IRNs issued, none refused. Three had never passed.
+- **A rate at FBR is not always a percentage, and the invoice now says what FBR
+  says.** The line's `rate` used to be a formatted `18%`; it is now FBR's own
+  published `ratE_DESC`, resolved through `SaleTypeToRate` (the exempt supply had
+  been handled this way for a while — this is the same rule for every sale type).
+  FBR publishes `Rs.2`, `18% along with rupees 60 per kilogram` and
+  `18% and Rs. 80 per Liter`, none of which a percentage can express. Falls back
+  to the old behaviour whenever the reference call cannot answer, so nothing that
+  already filed changes shape.
+- **Compound rates are computed, not just quoted.** Where FBR publishes a
+  percentage AND an amount per unit, the sales tax is the ad valorem leg plus
+  amount × quantity. Filing only the percentage is refused `[0103]`. Known gap,
+  written down in `Helpers/FbrLineTax`: the invoice's own GST is a single
+  percentage, so the printed figure can read lower than the filed one on such a
+  supply.
+- **SN017 solved.** "FED goods" and "goods on which FED is collected in *sales
+  tax* mode" are different categories — the second is the Federal Excise Act's
+  Second Schedule, three petroleum lines. About sixty beverages, tobaccos, oils
+  and cements had been tried and refused `[0052]`. It files on `2710.1942` with
+  UoM **Liter** (FBR names both KG and Liter; the rate is per litre).
+- **SN021 and SN022 solved** the same way — by resolving rather than guessing.
+  Cement carries four fixed amounts and no percentage; potassium chlorate's
+  compound rate makes FBR demand an SRO schedule, resolved to
+  `EIGHTH SCHEDULE Table 1` serial `56`.
+- **SN015's SRO serial corrected** from `1` to `1(A)` — `SROItem` publishes four
+  and none of them is a bare digit.
+- Reference lookups are now made **once per distinct sale type per bill**, not
+  once per line.
+
+### 2026-09-14 — The first real import, and the guards it taught us
+
+- **All three client costing sheets imported on production**, and the figures
+  landed exactly as the local baseline predicted: 26 / 51 / 83 lines, nothing
+  skipped, nothing ambiguous, and the worked reference line reproducing to the
+  paisa. The invariant that mattered most held — the 173 balances that already
+  existed carried a selling value of 159,578,674.68 before and after, so the
+  backfill moved no selling figure anywhere; the increase was entirely the 12
+  new items the import created.
+- **Fixed on production: one item was costed at nearly twice what it sells
+  for.** A stock sheet legitimately groups products by HS code, and one code
+  held four different rechargeable lights — torch lights at 172/unit beside
+  vanity mirrors at 746/unit. The costing sheets priced only two of them, and a
+  backfill spreads one unit cost across the whole item, so 2,080 torch lights
+  were costed at three times their worth. Corrected to what the declarations
+  actually prove plus the standard relationship for the rest; the item now
+  shows a 14.3% margin instead of −85%, and both the original import and the
+  correction are visible side by side in its cost history.
+- **New: the preview warns when a cost would not fit the stock it lands on.**
+  The system now checks each backfill line against what the item's own selling
+  value implies it should have cost, and says so when the two disagree — naming
+  the figures, how much of the item the declaration actually covers, and how
+  many products the stock sheet merged under that code, because that last one
+  tells you the answer is to split the item rather than retype a number. Run
+  against the import that caused the problem it flags 3 rows out of 110. It
+  never blocks: a genuine outlier must still be importable, and the check
+  assumes your selling value came from the costing convention, which is true on
+  an importer's books and might not be on someone else's.
+- **New: a rate above 50% is called out.** A spreadsheet cell holding `1` cannot
+  be told apart from a fraction, so it reads as 100%. Two lines of a real sheet
+  meant 1% income tax and got 100%, overstating that declaration's income tax by
+  about 1.9M. Cost and selling value were unaffected — income tax sits outside
+  both — but the same rate drives the ledger posting if that consignment is ever
+  imported as new arrivals.
+- **Entering a GD by hand now takes the whole GD.** It used to take exactly one
+  line, and a second line under the same GD number is refused outright, so it
+  could only ever record the rare single-line declaration — while a real one
+  carries 24 or 26. Type the GD number once, add each line, then preview them
+  together. Together matters: two lines landing on the same item have to pool
+  into a single unit cost, and checking them one at a time would report each as
+  though it were alone — the same arithmetic that produced the mispricing above.
+
+### 2026-09-13 — GD import costing: what the stock actually cost
+
+- **New: import a customs GD costing workbook.** **Purchases ▸ Import Costing**
+  reads a Goods Declaration costing sheet and loads the ACTUAL LANDED COST of
+  stock that is already on the books. Until now the system knew only what stock
+  was worth to sell; it now knows what it cost, so margin is answerable.
+- **Cost is assessed customs value plus duties** (C.Duty + ACD + RD). Sales tax,
+  additional sales tax and income tax at import are computed and shown but
+  deliberately excluded — they are recoverable or adjustable, not cost.
+- **The selling value the sheet derives is not a markup.** It is the value at
+  which the output sales tax on the eventual sale exactly absorbs the input tax
+  paid at import, which at the usual 18% / 3% works out as a fixed one-sixth
+  uplift. A manually typed selling value on a line always wins over the
+  computed one.
+- **One built-in layout reads every workbook in use.** Columns are located from
+  the sheet's own heading row, so three different real layouts import with no
+  setup. A rate written `0.18`, `18%` or `18` is understood as the same rate. A
+  "Total" row at the end of a consignment is recognised and skipped, and every
+  skip, every relocated column and every manual override is reported as a
+  named warning on the preview.
+- **Matching is per line, and the system never guesses.** Each line is matched
+  to existing stock by GD number and HS code. Where a balance holds more than
+  the consignment covers, the consignment's UNIT cost is applied to the
+  balance's own quantity, and the preview says so in words. A code matching more
+  than one item is reported as ambiguous and left alone.
+- **Preview changes nothing; commit writes only the cost.** Selling values,
+  quantities, stock movements and anything filed with FBR are untouched.
+  Re-running the same file sets the same figures rather than adding them up.
+- **Opening balances gained Actual cost and Margin** on **Dashboards ▸ Inventory
+  ▸ Opening Balances**, editable by hand. Leaving the cost box empty keeps what
+  is stored; typing 0 clears it. Margin may be negative, and Margin % shows a
+  dash when an item has no selling value to measure against.
+- **New in-app guide** at **Guides ▸ Import Guide**, written for whoever runs
+  the import: what the workbook needs, the steps with real navigation paths, a
+  glossary and the common questions.
+- **A line with no match can now be brought in as new stock, if you ask for
+  it.** Import Costing has an unticked "Also bring unmatched lines in as new
+  stock" switch. Off (the default), an unmatched line is skipped exactly as
+  before. On, each such line gets a catalog item — reusing one that already
+  carries the same HS code AND name, or creating a new one alongside it when
+  the name differs (the same HS code legitimately covers more than one
+  product) — plus an opening balance at its own quantity, cost and selling
+  value. Nothing is guessed: a line the server itself finds a real match for
+  is costed onto that match instead, whatever the sheet review claimed, and a
+  line matching more than one balance is still left alone.
+- **A New Arrivals import now posts to the general ledger.** Two control
+  accounts, **Import Clearing** (liability) and **Advance Income Tax on
+  Imports** (asset), are seeded onto every chart of accounts. Committing a
+  costing sheet in **new arrivals** mode writes one balanced entry per GD,
+  dated the GD's own declaration date: Inventory is debited for genuinely new
+  stock only, Input Tax for the sales tax + additional sales tax + Others,
+  Advance Income Tax on Imports for the income tax collected at import, and
+  Import Clearing carries the balancing liability. A line that only re-prices
+  stock already on the books gets no inventory debit — that stock was never in
+  the ledger to begin with. A **backfill** import — re-costing stock cleared
+  months ago — posts nothing at all, and neither does a company with GL
+  posting switched off.
+- **Actual cost and margin now deplete as stock sells, and show on the
+  On-Hand tab too.** Until now the landed cost only lived on the Opening
+  Balances screen, as a static figure. The same weighted-average walk that
+  already prices stock on hand now carries actual cost alongside selling
+  value: 100 units landed at 800,000, sell 40, and the 60 left show 480,000 —
+  never a fixed number. **Dashboards ▸ Inventory ▸ On-Hand** gains Actual Cost
+  and Margin, on the desktop table and the mobile cards, and the movements
+  history shows the actual cost behind each line — all from the one walk,
+  never recomputed. Margin shows a dash rather than a false 0% when there is
+  no selling value yet, the same rule the Opening Balances screen already
+  follows.
+- **Stock Adjustment can now correct the actual cost too**, on **Dashboards ▸
+  Inventory ▸ On-Hand**. "Correct it to" gains an Actual cost box beside the
+  value box; "Adjust by" gains an actual-cost change and, on a quantity
+  increase, an actual unit cost — mirroring the value fields beside them
+  exactly. A live margin preview shows selling less actual cost as it is
+  typed. Before this, a wrong opening actual cost had no way to be fixed once
+  stock had moved — only the Opening Balances screen could touch it, and only
+  before anything sold.
+- **A monthly costing sheet no longer overwrites new stock with old.** The
+  sheet is run every month, and each month can bring NEW goods — but a matched
+  line always SET the cost, so a second month's GD silently dropped whatever
+  quantity it brought. Import Costing now asks, next to the file, which this
+  import is: **these goods are already on the books** (a one-time backfill —
+  sets the cost, quantity untouched — the default, unchanged from before) or
+  **these are new arrivals** (a monthly GD — adds the quantity, cost and
+  selling value to what a matched balance already holds, so the stored cost
+  stays a genuine weighted average). The preview states the consequence per
+  line before Commit, and both duplicate guards (the same file, the same GD
+  number) still apply under either choice.
+- **An imported consignment can now be viewed, and undone.** **Purchases ▸
+  Consignments** lists every GD costing consignment imported into a company —
+  cost, selling value, mode, whether it posted to the ledger — and expands to
+  its lines: HS code, quantity, the item or balance it resolved to, and the
+  disposition note explaining what happened and why. Deleting one reverses
+  exactly what the commit did: a **backfill** match has its cost reset to 0.00
+  (it SET the cost, so there is nothing else to restore it to); a **new
+  arrivals** match has the quantity, cost and value it added subtracted back
+  out; an opening balance the import created is removed, unless the item has
+  since been sold, adjusted, or otherwise moved, or another consignment now
+  relies on the same balance — either refuses the whole delete rather than
+  leaving it half undone. Any journal entry the consignment posted is
+  withdrawn. Once deleted, the same GD number can be imported again — until
+  then, the "already recorded" message now says where to go to remove it.
+- **An architecture review of this feature found and fixed three real
+  defects, and brought the runbook back in line with what actually ships.**
+  New Arrivals' Inventory debit was undercounting: a matched (cost-only) line
+  is exactly where a New Arrivals GD ADDS new quantity, cost and selling
+  value onto an existing balance, so its landed cost belongs in Inventory the
+  same as a brand-new line's does — excluding it silently understated
+  Inventory while Import Clearing still carried the full liability, wrong on
+  the ordinary matched-line path from month 2 onward. Fixed to read the
+  consignment's own Mode rather than disposition alone.
+  **`stock.actualcost.view` existed as a permission and the frontend already
+  gated on it, but no controller enforced it** — the on-hand grid, the Excel
+  export and the movements drill-down all handed back actual cost and margin
+  regardless of whether the caller held it; now redacted server-side (nulled,
+  never zeroed, so a hidden figure is never misread as "no cost imported",
+  and Margin never reads as a false 100%) across all three. And nothing
+  stopped a
+  second Backfill from silently overwriting a balance an earlier GD had
+  already costed — already corrupted 26 real opening balances across two
+  companies. The preview now warns, naming the figure that would be
+  replaced, before a Backfill line would overwrite an existing actual cost,
+  without blocking a deliberate re-backfill after a correction.
+  `GD_IMPORT_COSTING_GUIDE.md`'s own §7 is rewritten to match — it still
+  claimed the import posts nothing to the GL at all, which commit
+  `077f3db` had already made false.
+- **You can now see which GD is still unpaid, and settle it.** A New
+  Arrivals import credits Import Clearing, but until now there was no way to
+  tell which consignment's share of that balance had been paid and which
+  hadn't. **Purchases ▸ Consignments** gains Credited, Settled and
+  Outstanding columns and a status (Not posted / Unpaid / Part paid /
+  Settled) on every row, sorts what is still owed to the top by default, can
+  filter to only that, and shows a company-wide total that ties to the
+  Import Clearing account balance. A "Settle" action on any row that still
+  owes something records an ordinary money-out payment against it — the
+  same Payments engine a purchase-bill payment already uses — and a row's
+  detail lists every payment that has settled against it. Over-settling is
+  refused, as is settling a Backfill consignment (it never posted a
+  liability to begin with) or deleting a consignment that anything has
+  already been paid against.
+- **Fixed: a GL rebuild silently skipped GD consignments.** Rebuilding the
+  ledger (including the one every "Enable GL" runs) re-posts invoices, bills,
+  debit notes, payments and transfers, but never touched a consignment — so a
+  New Arrivals GD committed while GL posting was off stayed permanently
+  unposted, and rebuilding a company that already had one posted actually
+  destroyed its entry without recreating it (the wipe at the top of every
+  rebuild already removes a consignment's entry; only the re-post was
+  missing). Rebuild now re-derives every New Arrivals consignment's Import
+  Clearing entry exactly as it does the other document types. A Backfill
+  consignment is still never posted, by design; a part-settled consignment
+  keeps what has already been settled against it untouched; and running a
+  rebuild twice leaves exactly one entry per GD, not two.
+- **New: a cost history behind every item.** An item's actual cost is
+  *replaced*, not accumulated — a backfill import overwrites it, a new-arrivals
+  import adds to it, a hand edit replaces it, deleting a consignment reverses
+  it — and until now nothing anywhere recorded what a figure had been. "The
+  margin looks wrong" could only be answered by re-deriving it from the
+  sheets, which is exactly what the person asking no longer trusts.
+  **Dashboards ▸ Inventory ▸ On-Hand** gains a **History** button on each row
+  and a **Cost History** button in the header for the whole company (use that
+  one when an import went wrong but you don't yet know which item). Every
+  entry states the time, the person, what did it — a GD import naming its GD,
+  a line correction carrying the reason typed at the time, a consignment
+  delete, an opening-balance edit or removal, a stock adjustment carrying the
+  operator's own note — and all three figures before and after, with the ones
+  that didn't move shown quietly so the one that did stands out. Saving
+  without changing anything records nothing. Seeing it needs the same **Actual
+  Cost** permission that redacts the cost columns on the grid. It starts empty
+  on 13 September 2026: earlier changes were never recorded and cannot be
+  reconstructed.
+- **One line of a recorded GD can now be corrected in place.** Before this the
+  only fix was deleting the consignment and re-importing the sheet — and a GD
+  you have already paid against cannot be deleted at all, so one mistyped duty
+  on one row of an 83-line sheet had nowhere to go. **Purchases ▸ Consignments
+  ▸** expand the GD **▸** the pencil on a line edits its costing figures; the
+  server recalculates cost and selling value itself, moves the item's stored
+  figures the way that line's own mode implies (a backfill line's cost is
+  re-derived from the corrected unit cost applied to the whole balance; a
+  new-arrivals line's difference is applied, leaving anything that happened
+  since alone), and withdraws and re-posts the GD's journal entry so Import
+  Clearing carries the corrected liability — exactly one entry per GD, never
+  two. Which item a line belongs to is deliberately not editable here; that is
+  still a delete-and-reimport. A correction that would take an item negative,
+  or drop the GD's liability below what has already been settled against it,
+  is refused whole with both figures named.
+- **A GD can be settled short.** Its Import Clearing liability is an estimate
+  until the clearing agent's final bill arrives, and the only way to close one
+  that came in under was to overstate the cash paid — which then made the bank
+  balance disagree with the statement. The Settle dialog now offers **Discount
+  received**, **Write back the rest** or **Other account** for the remainder:
+  Import Clearing clears by the full amount, the bank is credited with the
+  cash only, and the difference lands in the chosen account. The GD then reads
+  Settled rather than part paid, because it is, and the over-settle guard
+  counts both halves so a GD cannot be settled twice — once in cash and once
+  as a write-off.
+- **A GD settlement can be edited again.** It used to be view/delete-only on
+  the Payments screen: the general payment form keys a saved allocation back
+  to a row by invoice or bill id, and a GD line has neither, so it would have
+  vanished on load and been dropped on the next save. Edit now opens the same
+  Settle dialog that created it, pre-filled, with the amount capped at what
+  the GD has room for *with this payment's own contribution added back* — so
+  re-saving an unchanged settlement is never read as paying twice.
+- **Fixed: further tax could be credited to the wrong liability.** Two control
+  accounts, **Further Tax Payable** and the superseded **Advance from
+  Customers**, were declared as the same internal value. On a chart carrying
+  the legacy advances account, further tax collected under s.3(1A) — money
+  owed to FBR — could be posted to it instead: the entry balances and the
+  balance sheet is wrong, the worst shape this class of bug takes. The same
+  collision also made the automatic seeder read that row as proof the company
+  already had a Further Tax Payable account, so such a chart was never given
+  the real one. The two are now separate, with a migration restamping any
+  legacy row. **A company that filed further tax while this was wrong should
+  rebuild its ledger** (Accounting ▸ rebuild) to move those amounts onto the
+  correct account.
+- **The Chart of Accounts can now designate the newer control accounts.** The
+  Control type picker stopped at Rounding, so Discount allowed, Discount
+  received, Bad debts written off, Sundry balances written back, Further Tax
+  Payable, Import Clearing and Advance Income Tax on Imports could only ever
+  be created by the seeder — and a chart missing one silently sent its
+  postings to Suspense. All seven are now selectable when creating an account.
+- **The in-app Import Guide caught up with what actually ships.** Its
+  accounting section still described general-ledger posting as "planned — not
+  built yet" and said no accounts payable is created for an import. Both had
+  been false for days, and an operator following it would have recorded the
+  liability a second time by hand. It now states plainly that a new-arrivals
+  import posts and a backfill does not, that **Import Clearing IS the payable
+  for an import**, and adds sections on paying a GD (including settling short)
+  and on the cost history.
+- **Fixed: the spreadsheet-import suite was eroding the shared item catalog.**
+  Item types are installation-wide with no company of their own, so deleting a
+  test company leaves them behind. The suite adopted the published HS-tariff
+  placeholder for each of its four codes, renamed it to a fixture name, and
+  left it that way — which then made its own "every item is new on a first
+  upload" check fail on the next run, and renamed three item types that real
+  companies hold stock against. It now snapshots those codes before it runs
+  and restores them afterwards, and the check itself was corrected: adopting
+  the tariff placeholder for a code IS the designed first-upload behaviour, so
+  it now pins the property that matters — four distinct items, none of them an
+  item somebody already owns. A related discovery worth knowing: an item type
+  whose only company has been deleted is invisible to every screen and every
+  API, because visibility is derived from the companies you can reach. Such
+  orphans accumulate where nobody can see them.
+
+### 2026-09-13 — Stock export scrolls properly, and Cost of Good Sold fills itself
+
+- **Cost of Good Sold now carries real figures instead of an empty column.**
+  Where the GD costing import has priced an item, the block states the imported
+  landed cost of the opening and of what is still on hand, so the Consumed
+  column is what the goods that actually sold cost. Where no costing exists it
+  falls back to the arithmetic the client's own sheet uses — cost = value x rate
+  / (rate + 3%) — which reproduces 110 of the 117 rows of their workbook
+  exactly. Every cell stays a formula or a plain number, so an accountant can
+  still type over any of them. On a live company 47 of 60 items now price
+  themselves from the imported costing.
+- **Fixed: the stock export locked nine columns, leaving almost nothing to
+  scroll.** The sheet froze everything through Unit — about 1,430 pixels, wider
+  than the window on a 1366-wide laptop — so the 23 columns to the right of it
+  had a sliver to scroll through and the workbook read as broken. Only the
+  header rows are frozen now, so they stay put while scrolling down and the
+  whole sheet scrolls across.
+
+- **Fixed: the stock export locked nine columns, leaving almost nothing to
+  scroll.** The sheet froze everything through Unit — about 1,430 pixels, wider
+  than the window on a 1366-wide laptop — so the 23 columns to the right of it
+  had a sliver to scroll through and the workbook read as broken. Only the
+  header rows are frozen now, so they stay put while scrolling down and the
+  whole sheet scrolls across.
+
+### 2026-09-12 — The stock export is now the customs-lot stock sheet
+
+- **Stock dashboard Excel export rebuilt to the client's own layout.** The
+  workbook now IS the customs-lot stock sheet the importer clients keep by hand
+  — the same shape the opening-stock import reads — instead of a separate design
+  they had to re-key. One row per item across three blocks: **Opening** (Qty /
+  Exl / Rate / S.Tax), **Consumed**, **Balance**, plus the **Cost of Good Sold**
+  band and the identity columns (Claim Month, GDs No, GD Date, Items, Sub cat,
+  4- and 8-digit HS code, Price, Unit). Verified cell-for-cell against a real
+  client workbook: headings, merged band labels, row heights and all 32 column
+  widths are identical.
+- **The figures still cannot disagree with the screen.** Balance is the live
+  weighted-average position written as a value, never `=Opening − Consumed` —
+  stock valuation clamps an emptied bin to zero, so the subtraction can
+  legitimately differ from the walk. Opening folds in purchases since, which is
+  what keeps the sheet's own arithmetic true for a company that buys as well as
+  imports. Columns the dashboard does not report (Price, S.Tax, the 4-digit
+  code, the whole Cost of Good Sold block) are live formulas, so the sheet
+  recomputes as an accountant edits it.
+- **Cost of Good Sold is left to be filled in.** Its opening Excluding column is
+  empty for the accountant to key; sales tax, VAT and the consumed and balance
+  blocks follow by formula the moment they do. Those formulas use each row's own
+  tax rate, so a 25% line is not quietly costed at 18%.
+- **GDs No and GD Date are stated only where an item's customs lots agree on one
+  declaration.** An item held across several GDs, or bought on purchase bills,
+  leaves them blank rather than attributing the whole position to one
+  declaration. Claim Month and Sub cat stay blank — the system records neither.
+- **Provenance moved to a Summary sheet** (company, period, headline totals, the
+  filters and scope applied, and what the operator has to fill in), so the data
+  sheet can be the client's layout exactly while the export can still admit when
+  it was filtered or truncated.
+- **Fixed:** a long unit description ("Numbers, pieces, units") was cut off in
+  the Unit column; Items, GDs No and Unit now wrap instead of clipping.
+- **Changed:** the export no longer nests each item's movement history, so it no
+  longer needs the Movements ▸ View permission — "Export stock dashboard" alone
+  is the whole gate. Movement history remains on the Stock Movements page.
+- Suites: `scripts/stock_export_harness` (255 offline layout checks) and
+  `scripts/test_stock_export_excel.py` (39 live checks).
+
+### 2026-09-12 — Billing the last of a fractional bin
+
+- **"Bill all" on a standalone bill line.** Stock on a whole-unit item can be
+  fractional (an import or an adjustment left 331.9597 Pcs worth 317,028.67),
+  and the operator who wanted to invoice the whole of it could not: the amount
+  rounded to 332, which the oversell guard refused, and 331 stranded value in
+  the bin. Typing the stock's full value, or pressing **Bill all** next to the
+  on-hand figure, now bills the whole bin as whole units (332 Pcs) at the
+  rate that makes the line exactly the bin's value. The missing fraction is
+  settled in the stock ledger as a zero-cost rounding adjustment recorded
+  with the sale, so the bin ends at zero quantity and zero value; a fraction
+  on a whole-unit item is still refused.
+- The stock dashboard shows the on-hand figure as it is (up to 4 decimals)
+  instead of rounding 331.9597 to 332.
+
 ### 2026-09-11 — Stock hard-block is opt-in only; the bill modal stops hiding save errors
 
 - **Switching a company to Inventory V2 no longer silently turns on the hard

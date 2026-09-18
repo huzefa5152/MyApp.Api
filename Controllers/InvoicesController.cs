@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -200,6 +200,36 @@ namespace MyApp.Api.Controllers
             var dto = await _service.GetPurchaseTemplateAsync(invoiceId);
             if (dto == null) return NotFound();
             return Ok(dto);
+        }
+
+        /// <summary>
+        /// Feeds the "Bill / Invoice No." control on BOTH create forms: the number
+        /// an Auto bill would take, and — with <c>check</c> — whether a number the
+        /// operator typed is free.
+        ///
+        /// Gated by EITHER create permission rather than a new key: a role granted
+        /// only the standalone flow still has to number its bills, and a role with
+        /// neither has nothing to number. Advisory only — it writes nothing and
+        /// the create path resolves the number again when the bill is saved.
+        /// </summary>
+        [HttpGet("company/{companyId}/next-number")]
+        [HasAnyPermission("bills.manage.create", "bills.manage.create.standalone")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<NextInvoiceNumberDto>> GetNextNumber(
+            int companyId, [FromQuery] int? divisionId, [FromQuery] int? check)
+        {
+            // Numbering is per division, so this answers about ONE sequence —
+            // and a division-restricted user may only ask about theirs.
+            if (divisionId.HasValue)
+                await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId.Value);
+            try
+            {
+                return Ok(await _service.GetNextInvoiceNumberAsync(companyId, divisionId, check));
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
         }
 
         [HttpPost]
