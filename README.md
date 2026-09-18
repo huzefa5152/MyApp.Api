@@ -290,6 +290,30 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-18 — A standalone bill's PO prints, and the sandbox demo buyer is one FBR accepts
+
+**The PO on a bill raised without a challan now reaches the page.** A bill made
+through **New Bill (No Challan)** keeps its own PO number — there is no challan
+to carry one — but both print paths were assembling the PO from the linked
+challans alone. So the field the operator filled in was stored, shown on the
+bill card, and then printed as nothing. Bill and Tax Invoice prints now use the
+same precedence the card already used: the bill's own PO when it has one, else
+rolled up from its challans. The PO date had the same gap. No template change is
+needed — `{{poNumber}}` and `{{#if poNumber}}` already exist as merge fields, so
+wrapping the row shows it only when a PO is present.
+
+**FBR Sandbox scenarios stopped failing two out of six.** The sandbox seeder
+gave its demo Registered buyer the sample number FBR documents, which PRAL's
+STATL lookup classifies as *unregistered* — so SN001 and SN008, the only two
+scenarios that need a registered buyer, were rejected `[0205]` / `[0053]` on
+every freshly seeded company while the four unregistered-buyer scenarios passed.
+Two things were wrong: the seeder trusted the operator's own *Registration type*
+when copying an NTN from a real client, and its self-heal only ran on companies
+that already had real clients — never on a new sandbox company. It now asks PRAL
+which client is genuinely registered and falls back to a number PRAL confirms,
+so a fresh seed validates all six. A PRAL outage answers "don't know" rather
+than "unregistered", so it can never churn a working number.
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New
