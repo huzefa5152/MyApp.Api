@@ -186,10 +186,16 @@ window.__EXTRA_TEMPLATES__ = window.__EXTRA_TEMPLATES__ || {};
 // to that many items renders at exactly the same height. That count is the
 // honest boundary for a "always fits one page" guarantee — past it the table
 // grows per row and the answer depends on the layout.
-window.__STARTER_INFO__ = taxInvoiceStarters.map((s) => {
-  const m = s.html.match(/emptyRows \(math (\d+)/);
-  return { id: s.id, name: s.name, padRows: m ? parseInt(m[1], 10) : 0 };
-});
+const padRowsOf = (html) => {
+  const m = html.match(/emptyRows \(math (\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+};
+window.__STARTER_INFO__ = taxInvoiceStarters.map((s) => ({ id: s.id, name: s.name, padRows: padRowsOf(s.html) }));
+// The shipped default is measured the same way, so the suite's one-page
+// guarantee follows the template's own pad instead of a number frozen in the
+// suite — a redesign that pads to 7 rows must not fail against the 20 the
+// design it replaced padded to.
+window.__DEFAULT_INFO__ = { padRows: padRowsOf(defaultTaxInvoiceTemplate) };
 window.__STARTER_IDS__ = taxInvoiceStarters.map((s) => s.id);
 window.__HARNESS_READY__ = true;
 document.getElementById("status").textContent = "";
