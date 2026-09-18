@@ -369,6 +369,39 @@ which client is genuinely registered and falls back to a number PRAL confirms,
 so a fresh seed validates all six. A PRAL outage answers "don't know" rather
 than "unregistered", so it can never churn a working number.
 
+### 2026-09-18 — Print templates: create, switch and manage without the round trips
+
+**Configuration → Print Templates** and the **Template Editor** now work the
+way the day-to-day use of them wants to.
+
+- **New Template is one dialog.** Pick the document type, give it a name (a
+  unique one is suggested), and say what it starts from — the built-in
+  default, a copy of one of your own templates of that type, or a starter
+  design chosen from the gallery. **Create & open** writes the template and
+  opens the editor on it. The old flow opened an empty editor with Save greyed
+  out until you had typed a name.
+- **The editor's Document Type dropdown is live.** Picking another type opens
+  that type's default template on the spot (or the built-in default as an
+  unsaved draft if the type has none yet), instead of walking back to the list,
+  re-filtering and re-opening. Unsaved edits ask before they are discarded. A
+  saved template's own type does not change — merge fields differ per document
+  type — so reusing a design elsewhere is **Copy to…**.
+- **Templates (n)** in the editor opens a manager for the current document
+  type: open another, set the default, rename in place, duplicate, copy to
+  another document type, delete, or start a new one — without leaving the
+  editor. Deleting the open template falls back to the type's default.
+- **Filters and the active tab survive leaving the page.** The document type,
+  search, "Default only", and the Starter tab's search and sort are kept per
+  company for the session, restored when you come back from the editor, and
+  the card you were just editing is highlighted and scrolled into view.
+- The list is **grouped by document type** with counts, an *Only this type*
+  shortcut and a *New* link per group; the type filter shows how many
+  templates each type has; only the card being acted on shows a spinner rather
+  than every card locking; stamp upload is a proper dialog with a preview; and
+  previews show a spinner until the page has rendered instead of a blank sheet.
+- Duplicate and Copy now carry the source template's signature assignment
+  across, as they were always meant to.
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New

@@ -64,19 +64,30 @@ function PreviewSkeleton() {
  */
 export default function StarterGallery({
   lockType = null, selectLabel = "Use this", embedded = false, onSelect, onClose,
-  // Optional controlled document-type filter. The Print Templates page passes
-  // its own filter state so the choice survives switching between the Print /
-  // Starter / Excel tabs instead of each tab keeping a private copy.
+  // Optional controlled filters. The Print Templates page passes its own state
+  // for the document type, the search text and the sort, so what the operator
+  // typed survives switching between the Print / Starter / Excel tabs (this
+  // component unmounts on every switch) and coming back from the editor.
   typeFilter: typeFilterProp, onTypeFilterChange,
+  search: searchProp, onSearchChange,
+  sort: sortProp, onSortChange,
+  // Id of the starter a create is running for: that card shows "Creating…"
+  // and every card's button locks, so a double click cannot make two.
+  busyStarterId = null,
 }) {
   const { selectedCompany } = useCompany();
-  const [search, setSearch] = useState("");
+  const [searchLocal, setSearchLocal] = useState("");
   const [typeFilterLocal, setTypeFilterLocal] = useState(lockType || "");
+  const [sortLocal, setSortLocal] = useState("catalog"); // catalog | name
   const isControlled = typeFilterProp !== undefined;
   const typeFilter = isControlled ? typeFilterProp : typeFilterLocal;
   const setTypeFilter = isControlled ? (onTypeFilterChange || (() => {})) : setTypeFilterLocal;
-  const [sort, setSort] = useState("catalog"); // catalog | name
+  const search = searchProp !== undefined ? searchProp : searchLocal;
+  const setSearch = searchProp !== undefined ? (onSearchChange || (() => {})) : setSearchLocal;
+  const sort = sortProp !== undefined ? sortProp : sortLocal;
+  const setSort = sortProp !== undefined ? (onSortChange || (() => {})) : setSortLocal;
   const [previewStarter, setPreviewStarter] = useState(null);
+  const busy = busyStarterId != null;
 
   const list = useMemo(() => {
     let items = STARTER_TEMPLATES.filter((t) => {
@@ -158,8 +169,10 @@ export default function StarterGallery({
                 {!lockType && <span style={s.typeBadge}>{TEMPLATE_TYPE_LABEL[t.type] || t.type}</span>}
                 <div style={s.cardDesc} title={t.description}>{t.description}</div>
               </div>
-              <button style={s.useBtn} onClick={() => onSelect(t)}>
-                <MdCheckCircle size={16} /> {selectLabel}
+              <button style={{ ...s.useBtn, ...(busy ? s.useBtnBusy : {}) }} disabled={busy} onClick={() => onSelect(t)}>
+                {busyStarterId === t.id
+                  ? <><span style={s.spinLight} /> Creating…</>
+                  : <><MdCheckCircle size={16} /> {selectLabel}</>}
               </button>
             </div>
           ))}
@@ -176,7 +189,7 @@ export default function StarterGallery({
             <span style={s.typeBadge}>{TEMPLATE_TYPE_LABEL[previewStarter.type] || previewStarter.type}</span>
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button style={s.useBtnSm} onClick={() => { const t = previewStarter; setPreviewStarter(null); onSelect(t); }}>
+            <button style={s.useBtnSm} disabled={busy} onClick={() => { const t = previewStarter; setPreviewStarter(null); onSelect(t); }}>
               <MdCheckCircle size={15} /> {selectLabel}
             </button>
             <button style={s.closeBtn} onClick={() => setPreviewStarter(null)} aria-label="Close preview"><MdClose size={20} /></button>
@@ -249,6 +262,8 @@ const s = {
     border: "none", borderTop: "1px solid #eef1f6", background: "#0d47a1", color: "#fff",
     padding: "0.55rem", fontSize: "0.84rem", fontWeight: 700, cursor: "pointer",
   },
+  useBtnBusy: { opacity: 0.75, cursor: "default" },
+  spinLight: { width: 14, height: 14, borderRadius: "50%", display: "inline-block", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#fff", animation: "spin 0.7s linear infinite" },
   useBtnSm: { display: "inline-flex", alignItems: "center", gap: "0.3rem", border: "none", background: "#0d47a1", color: "#fff", borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer" },
   previewOverlay: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: "1rem" },
   previewModal: { background: "#e8e8e8", borderRadius: 14, width: "min(920px, 96vw)", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden" },
