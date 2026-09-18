@@ -88,6 +88,11 @@ window.runPdfCase = async ({ template, itemCount, fontStack }) => {
     ...SAMPLE_DATA.TaxInvoice,
     items: mkItems(itemCount),
     fbrIRN: "4230193299489DI3H0H1A639572",
+    // The print DTO now carries fbrStatus, and the shipped templates render
+    // the FBR block only for a submitted invoice. Without it the block is
+    // never rendered and the "must never be cut" assertion has nothing to
+    // measure — every case fails as "FBR block not found".
+    fbrStatus: "Submitted",
     fbrSubmittedAt: new Date().toISOString(),
     fbrQrPngDataUrl: STUB_PNG,
     fbrLogoUrl: STUB_PNG,
