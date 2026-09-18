@@ -305,6 +305,11 @@ endpoints_to_test = [
     # [AuthorizeCompany] — which runs before model binding, so a bodyless probe
     # still has to be refused.
     ("POST", "/api/invoices/bulk/company/{cid}"),
+    # Bill numbering for the create forms. [AuthorizeCompany]-gated, so a
+    # forbidden company 403s before the sequence is read — a tenant must not
+    # learn another's next bill number, nor probe which numbers it has used.
+    ("GET",  "/api/invoices/company/{cid}/next-number"),
+    ("GET",  "/api/invoices/company/{cid}/next-number?check=1"),
     ("GET",  "/api/invoices/count?companyId={cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}"),
     ("GET",  "/api/deliverychallans/company/{cid}/paged"),

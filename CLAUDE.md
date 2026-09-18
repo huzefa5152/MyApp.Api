@@ -1,4 +1,4 @@
-# MyApp.Api — Claude Code session standards
+﻿# MyApp.Api — Claude Code session standards
 
 You are working on **MyApp.Api**, an FBR Digital Invoicing ERP for Pakistani
 wholesalers. Production live at `hakimitraders.runasp.net` (MonsterASP).
@@ -1476,6 +1476,7 @@ them can be resolved from FBR.
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division | `python scripts/test_custom_bill_number.py` | `38/38 checks passed` |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `118/118`) |
 | Admin scope leak hunt (greps response BODIES for the other tree's markers) | `python scripts/test_admin_scope_leak_hunt.py` | `all checks passed` (currently `44/44`) |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
