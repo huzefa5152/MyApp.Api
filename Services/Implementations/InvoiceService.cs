@@ -3386,11 +3386,18 @@ namespace MyApp.Api.Services.Implementations
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (inv == null) return null;
 
-            var poNumbers = inv.DeliveryChallans
-                .Select(dc => dc.PoNumber)
-                .Where(p => !string.IsNullOrEmpty(p))
-                .Distinct()
-                .ToList();
+            // A STANDALONE bill has no challan to carry a PO, so it keeps its
+            // own on Invoice.PoNumber — set on the bill form. Taking the PO
+            // from the challans alone printed nothing for those bills, however
+            // carefully the operator filled the field in. Same precedence as
+            // InvoiceDto: the invoice's own PO wins, else roll up the challans'.
+            var poNumbers = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                ? new List<string> { inv.PoNumber!.Trim() }
+                : inv.DeliveryChallans
+                    .Select(dc => dc.PoNumber)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct()
+                    .ToList()!;
 
             return new PrintBillDto
             {
@@ -3405,7 +3412,9 @@ namespace MyApp.Api.Services.Implementations
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 ChallanDates = inv.DeliveryChallans.Select(dc => dc.DeliveryDate).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
-                PoDate = inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
+                // Same fallback as the number above: a standalone bill's PO
+                // date lives on the invoice.
+                PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
                 ClientName = inv.Client?.Name ?? "",
                 ClientAddress = inv.Client?.Address,
                 ConcernDepartment = string.Join(", ", inv.DeliveryChallans
@@ -3447,11 +3456,18 @@ namespace MyApp.Api.Services.Implementations
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (inv == null) return null;
 
-            var poNumbers = inv.DeliveryChallans
-                .Select(dc => dc.PoNumber)
-                .Where(p => !string.IsNullOrEmpty(p))
-                .Distinct()
-                .ToList();
+            // A STANDALONE bill has no challan to carry a PO, so it keeps its
+            // own on Invoice.PoNumber — set on the bill form. Taking the PO
+            // from the challans alone printed nothing for those bills, however
+            // carefully the operator filled the field in. Same precedence as
+            // InvoiceDto: the invoice's own PO wins, else roll up the challans'.
+            var poNumbers = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                ? new List<string> { inv.PoNumber!.Trim() }
+                : inv.DeliveryChallans
+                    .Select(dc => dc.PoNumber)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct()
+                    .ToList()!;
 
             return new PrintTaxInvoiceDto
             {
