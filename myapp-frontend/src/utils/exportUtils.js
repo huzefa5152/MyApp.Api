@@ -1,3 +1,4 @@
+import { paginateInvoice } from "./paginateInvoice";
 import { saveAs } from "file-saver";
 import { choosePageCuts } from "./pdfPageCuts";
 
@@ -185,6 +186,15 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
   await waitForImages(wrapper);
 
   try {
+    const composed = await paginateInvoice(content);
+    if (composed.length) {
+      for (let i = 0; i < composed.length; i++) {
+        if (i) pdf.addPage();
+        const canvas = await html2canvas(composed[i], { scale: 2, useCORS: true, backgroundColor: "#fff" });
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 12, 12, 186, 273);
+      }
+      return composed.length;
+    }
     const canvas = await html2canvas(content, {
       scale: 2,
       useCORS: true,

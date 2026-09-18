@@ -148,6 +148,13 @@ namespace MyApp.Api.DTOs
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
+        // Display-only columns for detailed commercial invoice layouts.
+        public string? HSCode { get; set; }
+        public decimal GSTRate { get; set; }
+        public decimal ValueExclTax => LineTotal;
+        public decimal GSTAmount => Math.Round(LineTotal * GSTRate / 100m, 2);
+        public decimal TotalInclTax => LineTotal + GSTAmount;
+
     }
 
     // Data for printing a Sales Tax Invoice

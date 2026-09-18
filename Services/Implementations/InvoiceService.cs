@@ -3761,7 +3761,11 @@ namespace MyApp.Api.Services.Implementations
                                 Quantity = qty,
                                 UOM = g.First().UOM,
                                 UnitPrice = qty != 0 ? Math.Round(amount / qty, 12) : 0m,
-                                LineTotal = amount
+                                LineTotal = amount,
+                                // Preserve grouping while showing each distinct classification.
+                                HSCode = string.Join(", ", g.Select(x => x.HSCode)
+                                    .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct()),
+                                GSTRate = inv.GSTRate
                             };
                         }).ToList()
                     : inv.Items.Select((ii, idx) => new PrintBillItemDto
@@ -3772,7 +3776,9 @@ namespace MyApp.Api.Services.Implementations
                             Quantity = ii.Quantity,
                             UOM = ii.UOM,
                             UnitPrice = ii.UnitPrice,
-                            LineTotal = ii.LineTotal
+                            LineTotal = ii.LineTotal,
+                            HSCode = ii.HSCode,
+                            GSTRate = inv.GSTRate
                         }).ToList()
             };
         }

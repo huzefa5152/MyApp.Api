@@ -240,6 +240,11 @@ export const MERGE_FIELDS = {
     { field: "{{fmt this.unitPrice}}", label: "Item Unit Price (in loop)" },
     { field: "{{fmtPrice this.unitPrice}}", label: "Item Unit Price — keeps up to 12 decimals" },
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
+    { field: "{{this.hsCode}}", label: "HS code (bill row)" },
+    { field: "{{fmt this.valueExclTax}}", label: "Value excluding tax (bill row)" },
+    { field: "{{this.gstRate}}", label: "GST rate (bill row)" },
+    { field: "{{fmt this.gstAmount}}", label: "Sales tax (bill row)" },
+    { field: "{{fmt this.totalInclTax}}", label: "Value including tax (bill row)" },
   ],
   TaxInvoice: [
     { field: "{{supplierName}}", label: "Supplier Name" },
