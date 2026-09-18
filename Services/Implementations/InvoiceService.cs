@@ -467,9 +467,13 @@ namespace MyApp.Api.Services.Implementations
         /// SQL 2601 instead of a sentence the operator can act on. Note this is
         /// WIDER than the Auto sequence's scope, deliberately: what the index
         /// forbids is what the operator must be told about.
+        ///
+        /// <paramref name="excludeInvoiceId"/> is the row being RENUMBERED, left
+        /// out of the probe so a bill does not report itself as a clash.
         /// </summary>
         private async Task<int> ResolveSaleInvoiceNumberAsync(
-            int companyId, int? divisionId, int seedStarting, int? requested)
+            int companyId, int? divisionId, int seedStarting, int? requested,
+            int? excludeInvoiceId = null)
         {
             if (requested is null)
             {
@@ -497,7 +501,8 @@ namespace MyApp.Api.Services.Implementations
                     "reserved for FBR Sandbox test bills.");
 
             var takenQuery = _context.Invoices.AsNoTracking()
-                .Where(i => i.CompanyId == companyId && i.NoteKind == 0 && i.InvoiceNumber == number);
+                .Where(i => i.CompanyId == companyId && i.NoteKind == 0 && i.InvoiceNumber == number
+                            && (excludeInvoiceId == null || i.Id != excludeInvoiceId));
             takenQuery = divisionId.HasValue
                 ? takenQuery.Where(i => i.DivisionId == divisionId.Value)
                 : takenQuery.Where(i => i.DivisionId == null);
@@ -1417,6 +1422,54 @@ namespace MyApp.Api.Services.Implementations
                 // because the edit form always re-submits its own date.
                 if (dto.Date.HasValue)
                     invoice.Date = dto.Date.Value;
+
+                // ── Renumbering ──────────────────────────────────────
+                // Null means the caller did not mention the number, and the same
+                // number is a no-op, so an ordinary edit never reaches any of this.
+                if (dto.InvoiceNumber.HasValue && dto.InvoiceNumber.Value != invoice.InvoiceNumber)
+                {
+                    // A number FBR holds may not move: our record of it has to
+                    // keep matching theirs, and nothing on our side can reconcile
+                    // a disagreement. IsInvoiceEditable already stops an edit to a
+                    // "Submitted" bill, so the IRN is the condition that adds
+                    // anything here — a bill can carry one without the status
+                    // having been written back. (This line has no "Submitting" /
+                    // "Uncertain" states; the atomic submit claim was not ported
+                    // here, so there is no in-flight case to exclude.)
+                    if (invoice.FbrStatus == "Submitted" || !string.IsNullOrEmpty(invoice.FbrIRN))
+                        throw new InvalidOperationException(
+                            "This bill's number cannot be changed — it has been sent to FBR.");
+
+                    // No application lock here, because the create paths on this
+                    // line do not take one either: they rely on the UNIQUE
+                    // (CompanyId, DivisionId, NoteKind, InvoiceNumber) index and
+                    // retry. A renumber has no retry loop — reissuing a DIFFERENT
+                    // number than the operator typed is exactly what this feature
+                    // must not do — so the losing writer is TOLD, below.
+                    var numberingCompany = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.Id == invoice.CompanyId)
+                        ?? throw new InvalidOperationException("Company not found for this bill.");
+
+                    // Numbering is per division, so a renumber stays inside the
+                    // bill's OWN sequence — its division's, or the company's.
+                    var numberingDivision = await MyApp.Api.Helpers.DivisionNumbering
+                        .ResolveAsync(_context, invoice.CompanyId, invoice.DivisionId);
+                    var renumberSeed = numberingDivision != null
+                        ? numberingDivision.StartingInvoiceNumber
+                        : numberingCompany.StartingInvoiceNumber;
+
+                    var renumbered = await ResolveSaleInvoiceNumberAsync(
+                        invoice.CompanyId, invoice.DivisionId, renumberSeed, dto.InvoiceNumber,
+                        excludeInvoiceId: invoice.Id);
+
+                    invoice.InvoiceNumber = renumbered;
+                    // The printed document number follows the sequence number, the
+                    // same way both create paths derive it.
+                    invoice.FbrInvoiceNumber = string.IsNullOrEmpty(numberingCompany.InvoiceNumberPrefix)
+                        ? renumbered.ToString()
+                        : $"{numberingCompany.InvoiceNumberPrefix}{renumbered}";
+                }
+
                 invoice.GSTRate = dto.GSTRate;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
@@ -1579,6 +1632,18 @@ namespace MyApp.Api.Services.Implementations
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
                 return reloaded == null ? null : ToDto(reloaded);
+            }
+            catch (DbUpdateException dupEx)
+                when (dto.InvoiceNumber.HasValue && NumberAllocationRetry.IsUniqueViolation(dupEx))
+            {
+                // Someone took the number between the probe and this save. There is
+                // no retry here on purpose: the operator asked for THIS number, and
+                // quietly issuing a different one is the failure this feature exists
+                // to avoid. So they are told, and can pick another.
+                await transaction.RollbackAsync();
+                throw new InvalidOperationException(
+                    $"Bill #{dto.InvoiceNumber.Value} already exists for this company. Pick another number.",
+                    dupEx);
             }
             catch (Exception ex)
             {

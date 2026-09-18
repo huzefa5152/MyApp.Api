@@ -332,6 +332,22 @@ after the trailing bill was deleted.
 Suite: `python scripts/test_custom_bill_number.py` (38 checks, both create
 paths, company-level and per-division).
 
+**An existing bill can be renumbered too**, from Edit Bill — the same box, the
+same checks, starting on the number the bill already has, and leaving it alone
+is always valid. It is refused once the bill has gone to
+FBR — one FBR accepted, or one already carrying an IRN, keeps its number,
+because ours has to keep matching theirs. The form says which applies rather
+than just greying the box.
+
+Suite: `python scripts/test_custom_bill_number.py` (47 checks, both create
+paths and the edit path; `--db` adds the FBR-filed lock cases).
+
+One caution the form raises while a number is being changed: the Customer
+Portal addresses a document by its number, so a portal link already shared for
+that bill points at the old one and stops working. The portal's own document
+list still resolves, so this is said rather than refused — but the operator is
+the only one who can tell the customer.
+
 ### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
 
 ### 2026-09-18 — A company with one tax number can be saved again

@@ -434,7 +434,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
-| Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division | `python scripts/test_custom_bill_number.py` | `38/38 checks passed` |
+| Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `52/52 checks passed` (4 skipped without `--db`) |
 | Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
 | Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
 | Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |

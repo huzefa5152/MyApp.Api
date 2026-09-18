@@ -562,6 +562,24 @@
 
         public decimal? WithholdingTaxRate { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
+        /// <summary>Further tax (s.3(1A)) rate as a percentage. null leaves the
+        /// stored rate alone; 0 clears it -- the same absent-vs-none distinction
+        /// AdvanceTaxSection makes, so an API client editing only the items
+        /// cannot silently drop the charge.</summary>
+        public decimal? FurtherTaxRate { get; set; }
+
+        /// <summary>
+        /// Optional new bill / invoice number. NULL means "leave it alone" — an
+        /// API client editing only line data must not have to restate it — and a
+        /// value equal to the current number is a no-op.
+        ///
+        /// Only accepted while the bill could still be submitted to FBR
+        /// (see <see cref="MyApp.Api.Helpers.FbrSubmissionStatus.IsSubmittable"/>)
+        /// and holds no IRN: once a number has gone to PRAL, our record of it has
+        /// to keep matching theirs.
+        /// </summary>
+        public int? InvoiceNumber { get; set; }
+
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 
