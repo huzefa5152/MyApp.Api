@@ -316,6 +316,15 @@ catalog does not know, so the whole-number path ran.)
 Suite: `node scripts/test_group_quantity_split.mjs` (21 checks, offline — no
 backend or database) pins the split against INV-3932's actual 37 quantities.
 
+**The adjustment controls reach a single-line bill.** The grouped row is where
+*Qty & Unit Price* / *Exact Line Total* live, and it only rendered when
+grouping actually collapsed lines — so a bill with one line per Item Type fell
+through to the plain table, where Line Total is static text, and the one
+control that sets an exact total was unreachable on exactly the bills that most
+need it. The grouped row now renders whenever the Invoices tab does; the
+grouped/individual toggle still appears only when switching would change what
+is listed. (Same behaviour as the Trader line.)
+
 ### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
 
 **Exact Line Total.** The Invoices tab lets a restricted role re-classify lines

@@ -1174,10 +1174,15 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     });
   };
 
-  // Grouped view is offered on the Invoices tab (Item Type column visible)
-  // and only actually renders grouped rows when grouping collapses lines.
+  // The TOGGLE is offered only when switching actually changes something —
+  // with one line per Item Type the two views list the same rows.
   const showGroupToggle = !billsMode && items.length > 1 && groupingCollapses;
-  const renderGrouped = showGroupToggle && groupedView;
+  // ...but the grouped row is where the adjustment controls live (Qty & Unit
+  // Price vs Exact Line Total), so it renders on the Invoices tab regardless.
+  // Gating it on `showGroupToggle` meant a SINGLE-LINE bill fell through to the
+  // plain table, where Line Total is static text — so the one control that sets
+  // an exact total was unreachable on exactly the bills that most need it.
+  const renderGrouped = !billsMode && groupedView;
 
   // Derived: what's the common Item Type across rows? Used to drive
   // the bulk picker's `value` so the dropdown actually reflects what's
