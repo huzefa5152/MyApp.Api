@@ -235,12 +235,13 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
+| Grouped quantity spread — no bill line left at zero (offline) | `node scripts/test_group_quantity_split.mjs` | `21 passed, 0 failed` |
 | Deleting an item type that still holds stock is refused | `python scripts/test_item_type_delete_guard.py` | `5/5 checks passed` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `47/47 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `166/166`) |
-| PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
+| PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |

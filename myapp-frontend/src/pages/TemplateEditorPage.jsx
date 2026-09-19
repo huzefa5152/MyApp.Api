@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   MdCode, MdBusiness, MdSave, MdRefresh, MdContentCopy,
   MdVisibility, MdEdit as MdEditIcon, MdBrush,
-  MdUploadFile, MdArrowBack, MdLock, MdAutoAwesome, MdStar,
+  MdUploadFile, MdArrowBack, MdLock, MdAutoAwesome, MdStar, MdViewList,
 } from "react-icons/md";
 import {
   getTemplateById, createTemplate, updateTemplateById, getMergeFields,
-  getTemplatesByCompany, setDefaultTemplate,
+  getTemplatesByCompany, setDefaultTemplate, deleteTemplate,
 } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { mergeTemplate, MERGE_FIELDS } from "../utils/templateEngine";
@@ -28,6 +28,9 @@ import PreviewPane from "../Components/templateEditor/PreviewPane";
 import SyncWarningModal from "../Components/templateEditor/SyncWarningModal";
 import VisualEditor from "../Components/templateEditor/VisualEditor";
 import StarterGallery from "../Components/templateEditor/StarterGallery";
+import SavedTemplatesManager from "../Components/templateEditor/SavedTemplatesManager";
+import NewTemplateDialog, { uniqueTemplateName } from "../Components/templateEditor/NewTemplateDialog";
+import { markRecentTemplate } from "../utils/templateEditorNav";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -40,17 +43,25 @@ const colors = {
   inputBorder: "#d0d7e2",
 };
 
+// The type's default template, else its oldest, else nothing.
+const pickForType = (list, type) => {
+  const ofType = list.filter((t) => t.templateType === type).sort((a, b) => a.id - b.id);
+  return ofType.find((t) => t.isDefault) || ofType[0] || null;
+};
+
 export default function TemplateEditorPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
+  const canDelete = has("printtemplates.manage.delete");
   const { companies, selectedCompany, setSelectedCompany, loading, companyStamps } = useCompany();
 
   // ── Entry contract (set by PrintTemplatesPage before navigating here) ──
-  //   te.type       — the document type to edit/create (e.g. "Challan").
+  //   te.type       — the document type to open (e.g. "Challan").
   //   te.companyId  — the owning company id (string).
-  //   te.templateId — the template id to EDIT; ABSENT means CREATE a new one.
+  //   te.templateId — the template to EDIT; absent (or gone) means open the
+  //                   type's default, or a built-in draft if the type has none.
   // Captured ONCE at mount so later state changes can't disturb the resolution.
   const entryRef = useRef({
     type: localStorage.getItem("te.type") || "Challan",
@@ -63,7 +74,8 @@ export default function TemplateEditorPage() {
   const entry = entryRef.current;
 
   const [templateType, setTemplateType] = useState(entry.type);
-  // Current saved template id (null while creating and not yet saved).
+  // Current saved template id (null while a draft — a type with no saved
+  // template yet — is open and not yet saved).
   const [currentTemplateId, setCurrentTemplateId] = useState(null);
   const [templateName, setTemplateName] = useState("");
   const [originalName, setOriginalName] = useState("");
@@ -81,15 +93,24 @@ export default function TemplateEditorPage() {
   const [toast, setToast] = useState(null);
   const [showSyncWarning, setShowSyncWarning] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
-  // All saved templates of the current type (drives the Saved Templates switch dropdown).
+  const [showManager, setShowManager] = useState(false);
+  const [newDialog, setNewDialog] = useState(false);
+  // EVERY template of the company, all types — so switching document type in
+  // the toolbar is a filter, not a refetch. The list carries each body, which
+  // is what makes switching templates instant.
   const [allTemplates, setAllTemplates] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
   const [managerBusy, setManagerBusy] = useState(false);
+  const [managerBusyId, setManagerBusyId] = useState(null);
   const [fields, setFields] = useState([]);
   const htmlImportRef = useRef(null);
   const codeEditorRef = useRef(null);
   const visualEditorRef = useRef(null);
-  // Guards the one-shot mount load so StrictMode's double-invoke can't re-run it.
+  // Guards the one-shot entry resolution so StrictMode's double-invoke and a
+  // later list refresh can't re-run it.
   const initedRef = useRef(false);
+  // Mirrors currentTemplateId for async callbacks that must not go stale.
+  const currentIdRef = useRef(null);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -128,67 +149,9 @@ export default function TemplateEditorPage() {
     })();
   }, [templateType]);
 
-  // One-shot mount: EDIT an existing template (by id) or SEED a new one.
-  useEffect(() => {
-    if (initedRef.current) return;
-    initedRef.current = true;
-    const { type, templateId } = entry;
-
-    if (templateId) {
-      // Editing — load the template by id and populate from its DTO.
-      (async () => {
-        try {
-          const { data } = await getTemplateById(templateId);
-          setTemplateType(data.templateType || type);
-          setCurrentTemplateId(data.id);
-          setTemplateName(data.name || "");
-          setOriginalName(data.name || "");
-          setHtmlContent(data.htmlContent || "");
-          setOriginalContent(data.htmlContent || "");
-          setTemplateJson(data.templateJson || null);
-          setOriginalJson(data.templateJson || null);
-          setEditorMode(data.editorMode || "code");
-          setStampId(data.stampId ?? null);
-          setActiveTab("editor");
-        } catch {
-          showToast("Failed to load template", "error");
-        }
-      })();
-    } else {
-      // Creating — start from the type's built-in default; first Save persists it.
-      const def = DEFAULT_TEMPLATES[type] || "";
-      setTemplateType(type);
-      setCurrentTemplateId(null);
-      setTemplateName("");           // blank — operator names it (required before Save)
-      setOriginalName("");
-      setHtmlContent(def);
-      setOriginalContent("");
-      setTemplateJson(null);
-      setOriginalJson(null);
-      setEditorMode("code");
-      setActiveTab("editor");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Keep the Saved-Templates list in sync with the current type + company.
-  useEffect(() => {
-    if (!selectedCompany) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await getTemplatesByCompany(selectedCompany.id);
-        if (!cancelled) setAllTemplates((data || []).filter((t) => t.templateType === templateType));
-      } catch {
-        if (!cancelled) setAllTemplates([]);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateType, selectedCompany]);
-
   // Load a template DTO into the editor as a clean (not-dirty) baseline.
-  const loadIntoEditor = (dto) => {
+  const loadIntoEditor = (dto, { keepTab = false } = {}) => {
+    currentIdRef.current = dto.id;
     setTemplateType(dto.templateType || templateType);
     setCurrentTemplateId(dto.id);
     setStampId(dto.stampId ?? null);
@@ -199,108 +162,207 @@ export default function TemplateEditorPage() {
     setTemplateJson(dto.templateJson || null);
     setOriginalJson(dto.templateJson || null);
     setEditorMode(dto.editorMode || "code");
-    localStorage.setItem("te.templateId", String(dto.id));
-    setActiveTab("editor");
+    setStampId(dto.stampId ?? null);
+    try {
+      localStorage.setItem("te.type", dto.templateType || templateType);
+      localStorage.setItem("te.templateId", String(dto.id));
+    } catch { /* ignore */ }
+    // The list page lands on this card when the operator goes back.
+    markRecentTemplate(dto.id);
+    if (!keepTab) setActiveTab("editor");
   };
 
-  // Start a brand-new (unsaved) template of the current type.
-  const startNewTemplate = () => {
+  // A type with no saved template: show its built-in default as an unsaved
+  // draft, already named, so the first Save creates it (the server makes the
+  // first template of a type the default).
+  const seedDraft = (type) => {
+    currentIdRef.current = null;
+    setTemplateType(type);
     setCurrentTemplateId(null);
-    setStampId(null);
-    setTemplateName("");
+    setTemplateName(TEMPLATE_TYPE_LABEL[type] || type);
     setOriginalName("");
-    const def = DEFAULT_TEMPLATES[templateType] || "";
-    setHtmlContent(def);
+    setHtmlContent(DEFAULT_TEMPLATES[type] || "");
     setOriginalContent("");
     setTemplateJson(null);
     setOriginalJson(null);
     setEditorMode("code");
-    try { localStorage.removeItem("te.templateId"); } catch { /* ignore */ }
+    setStampId(null);
+    try { localStorage.setItem("te.type", type); localStorage.removeItem("te.templateId"); } catch { /* ignore */ }
     setActiveTab("editor");
+  };
+
+  // Open whatever a type should show: a specific template if asked, else its
+  // default, else a draft.
+  const openType = (list, type, preferId = null) => {
+    const wanted = preferId != null ? list.find((t) => t.id === preferId && t.templateType === type) : null;
+    const pick = wanted || pickForType(list, type);
+    if (pick) loadIntoEditor(pick); else seedDraft(type);
+  };
+
+  // The company's templates, loaded once per company. The first load also
+  // resolves the entry contract — but only once the company the list page
+  // pointed at is the selected one, otherwise the wrong company's templates
+  // would decide what opens.
+  useEffect(() => {
+    if (!selectedCompany || !companies.length) return;
+    const targetExists = !entry.companyId || companies.some((c) => c.id === entry.companyId);
+    if (targetExists && entry.companyId && selectedCompany.id !== entry.companyId) return; // still switching
+    let cancelled = false;
+    setListLoading(true);
+    (async () => {
+      try {
+        const { data } = await getTemplatesByCompany(selectedCompany.id);
+        if (cancelled) return;
+        const list = data || [];
+        setAllTemplates(list);
+        if (!initedRef.current) {
+          initedRef.current = true;
+          openType(list, entry.type, entry.templateId);
+        }
+      } catch {
+        if (cancelled) return;
+        setAllTemplates([]);
+        if (!initedRef.current) { initedRef.current = true; seedDraft(entry.type); }
+        showToast("Failed to load templates", "error");
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompany?.id, companies.length]);
+
+  // Reload the list; optionally re-load one template as the clean baseline.
+  const refreshTemplates = async (preferId) => {
+    if (!selectedCompany) return [];
+    const { data } = await getTemplatesByCompany(selectedCompany.id);
+    const list = data || [];
+    setAllTemplates(list);
+    if (preferId != null) {
+      const found = list.find((t) => t.id === preferId);
+      if (found) loadIntoEditor(found, { keepTab: true });
+    }
+    return list;
+  };
+
+  const hasChanges =
+    htmlContent !== originalContent ||
+    templateJson !== originalJson ||
+    templateName.trim() !== originalName;
+
+  // Every path that replaces the buffer asks first when it holds unsaved work.
+  const confirmDiscard = async () => {
+    if (!hasChanges) return true;
+    return confirm({ title: "Discard changes?", message: "You have unsaved changes. Leave this template and discard them?", variant: "danger", confirmText: "Discard" });
+  };
+
+  // Switch document type. The dropdown is a navigator: it opens that type's
+  // default template (or a built-in draft when the type has none), so every
+  // document type is one pick away instead of a round trip through the list.
+  // A saved template's own type never changes — merge fields differ per type,
+  // and "Copy to…" is how a design is reused for another document.
+  const handleTypeChange = async (newType) => {
+    if (!newType || newType === templateType) return;
+    if (!(await confirmDiscard())) return;
+    openType(allTemplates, newType);
   };
 
   // Quick-switch dropdown (toolbar): pick a saved template id, or "__new__".
   const handleSwitchTemplate = async (v) => {
-    const current = currentTemplateId ? String(currentTemplateId) : "__new__";
+    const current = currentTemplateId ? String(currentTemplateId) : "__draft__";
     if (v === current) return;
-    if (hasChanges) {
-      const ok = await confirm({ title: "Discard changes?", message: "You have unsaved changes. Switch templates and discard them?", variant: "danger", confirmText: "Discard" });
-      if (!ok) return;
-    }
-    if (v === "__new__") { startNewTemplate(); return; }
-    await handleSelectFromManager(Number(v));
+    if (v === "__new__") { openNew(); return; }
+    if (!(await confirmDiscard())) return;
+    const t = allTemplates.find((x) => String(x.id) === v);
+    if (t) loadIntoEditor(t, { keepTab: true });
   };
 
-  // Change the document type of an UNSAVED new template. Only reachable while
-  // creating — the select is disabled once a template is saved, because a saved
-  // template's type is immutable. Loads the chosen type's default design so the
-  // editor is never left showing (say) a Challan body under a "Bill" type.
-  const handleTypeChange = async (newType) => {
-    if (!newType || newType === templateType || currentTemplateId) return;
-    const isCustomized = htmlContent && htmlContent !== (DEFAULT_TEMPLATES[templateType] || "");
-    if (isCustomized) {
-      const ok = await confirm({
-        title: "Switch document type?",
-        message: "The editor will load the default design for the new document type. Your current unsaved edits will be replaced.",
-        confirmText: "Switch type",
-      });
-      if (!ok) return;
-    }
-    setTemplateType(newType);
-    setHtmlContent(DEFAULT_TEMPLATES[newType] || "");
-    setOriginalContent("");
-    setTemplateJson(null);
-    setOriginalJson(null);
-    setEditorMode("code");
-    // Keep the name in step when it is still the previous type's suggested name.
-    setTemplateName((n) =>
-      (!n || n === TEMPLATE_TYPE_LABEL[templateType]) ? (TEMPLATE_TYPE_LABEL[newType] || newType) : n);
-    try { localStorage.setItem("te.type", newType); } catch { /* ignore */ }
+  const openNew = async () => {
+    if (!(await confirmDiscard())) return;
+    setShowManager(false);
+    setNewDialog(true);
+  };
+  const onCreated = async (dto) => {
+    setNewDialog(false);
+    await refreshTemplates();
+    loadIntoEditor(dto);
+    showToast(`Created "${dto.name}"`);
   };
 
-  // Reload the saved-template list for the current type; optionally re-load one.
-  const refreshTemplates = async (preferId) => {
-    if (!selectedCompany) return;
-    const { data } = await getTemplatesByCompany(selectedCompany.id);
-    const ofType = (data || []).filter((t) => t.templateType === templateType);
-    setAllTemplates(ofType);
-    if (preferId != null) {
-      const found = (data || []).find((t) => t.id === preferId);
-      if (found) loadIntoEditor(found);
-    }
+  // ── Manager actions ──
+  const handleManagerSelect = async (id) => {
+    if (id === currentTemplateId) { setShowManager(false); return; }
+    if (!(await confirmDiscard())) return;
+    const t = allTemplates.find((x) => x.id === id);
+    if (t) { loadIntoEditor(t, { keepTab: true }); setShowManager(false); }
   };
 
-  // Load a saved template into the editor (used by the Saved Templates dropdown).
-  const handleSelectFromManager = async (id) => {
-    try {
-      const { data } = await getTemplateById(id);
-      loadIntoEditor(data);
-    } catch {
-      showToast("Failed to load template", "error");
-    }
-  };
-
-  // Make the currently-open saved template the default for its document type.
-  // (Rename / duplicate / copy-to-type / delete all live on the Print Templates
-  // list page — the editor stays focused on authoring one template.)
-  const handleSetCurrentDefault = async () => {
-    if (!currentTemplateId) return;
+  const runManager = async (id, work, okMsg, failMsg) => {
+    setManagerBusyId(id);
     setManagerBusy(true);
-    try {
-      await setDefaultTemplate(currentTemplateId);
-      await refreshTemplates(currentTemplateId);
-      showToast("Set as default for this document type");
-    } catch {
-      showToast("Failed to set default", "error");
-    } finally {
-      setManagerBusy(false);
-    }
+    try { await work(); if (okMsg) showToast(okMsg); }
+    catch (err) { showToast(err?.response?.data?.error || failMsg, "error"); }
+    finally { setManagerBusy(false); setManagerBusyId(null); }
+  };
+
+  const handleSetDefault = (id) => runManager(id, async () => {
+    await setDefaultTemplate(id);
+    await refreshTemplates();
+  }, "Default template updated", "Failed to set default");
+
+  const handleDuplicate = (t) => runManager(t.id, async () => {
+    if (!(await confirmDiscard())) return;
+    const { data } = await createTemplate(selectedCompany.id, {
+      templateType: t.templateType, name: uniqueTemplateName(`${t.name} (copy)`, allTemplates),
+      htmlContent: t.htmlContent, templateJson: t.templateJson, editorMode: t.editorMode,
+      isDefault: false, stampId: t.stampId ?? null,
+    });
+    await refreshTemplates();
+    loadIntoEditor(data);
+    setShowManager(false);
+    showToast(`Duplicated as "${data.name}"`);
+  }, null, "Failed to duplicate template");
+
+  // Rename writes name + the SAVED body back together (the update endpoint
+  // takes both), read fresh by id so a rename can never blank the HTML or
+  // save the editor's half-finished edits by accident.
+  const handleRename = (id, name) => runManager(id, async () => {
+    const { data: full } = await getTemplateById(id);
+    await updateTemplateById(id, { name, htmlContent: full.htmlContent, templateJson: full.templateJson, editorMode: full.editorMode });
+    setAllTemplates((list) => list.map((t) => (t.id === id ? { ...t, name } : t)));
+    if (id === currentIdRef.current) { setTemplateName(name); setOriginalName(name); }
+  }, "Template renamed", "Failed to rename template");
+
+  const handleCopyToType = (t, targetType) => runManager(t.id, async () => {
+    if (!(await confirmDiscard())) return;
+    const { data } = await createTemplate(selectedCompany.id, {
+      templateType: targetType,
+      name: uniqueTemplateName(`${t.name} → ${TEMPLATE_TYPE_LABEL[targetType]}`, allTemplates),
+      htmlContent: t.htmlContent, templateJson: t.templateJson, editorMode: t.editorMode,
+      isDefault: false, stampId: t.stampId ?? null,
+    });
+    await refreshTemplates();
+    loadIntoEditor(data);
+    setShowManager(false);
+    showToast(`Copied to ${TEMPLATE_TYPE_LABEL[targetType]} — adjust the merge fields for the new document type`);
+  }, null, "Failed to copy template");
+
+  const handleManagerDelete = async (t) => {
+    const ok = await confirm({
+      title: "Delete Template?",
+      message: `Delete "${t.name}" (${TEMPLATE_TYPE_LABEL[t.templateType]})? This cannot be undone.`,
+      variant: "danger", confirmText: "Delete",
+    });
+    if (!ok) return;
+    await runManager(t.id, async () => {
+      await deleteTemplate(t.id);
+      const list = await refreshTemplates();
+      // Deleted the open one: fall to the type's default, or a draft.
+      if (t.id === currentIdRef.current) openType(list, templateType);
+    }, "Template deleted", "Failed to delete template");
   };
 
   const handleSave = async () => {
-    // Auto-name a blank template from its type rather than dead-ending on an
-    // error — keeps the save journey smooth. The operator can rename it on the
-    // Print Templates list page.
     const name = templateName.trim() || (TEMPLATE_TYPE_LABEL[templateType] || templateType);
     setSaving(true);
     try {
@@ -333,8 +395,10 @@ export default function TemplateEditorPage() {
           editorMode, isDefault: false, stampId,
         });
         // Switch into "editing that id" mode so subsequent saves update it.
+        currentIdRef.current = data.id;
         setCurrentTemplateId(data.id);
-        localStorage.setItem("te.templateId", String(data.id));
+        try { localStorage.setItem("te.templateId", String(data.id)); } catch { /* ignore */ }
+        markRecentTemplate(data.id);
       }
 
       setTemplateName(name);
@@ -420,7 +484,7 @@ export default function TemplateEditorPage() {
   };
 
   // Assignment persists immediately when the template already exists; on an
-  // unsaved new template it is held locally and written by handleSave.
+  // unsaved draft it is held locally and written by handleSave.
   const handleEditorStampChange = async (id) => {
     const previousId = stampId;
     setStampId(id);
@@ -541,13 +605,11 @@ export default function TemplateEditorPage() {
     }
   })();
 
-  const hasChanges =
-    htmlContent !== originalContent ||
-    templateJson !== originalJson ||
-    templateName.trim() !== originalName;
   const typeLabel = TEMPLATE_TYPE_LABEL[templateType] || templateType;
+  const ofType = allTemplates.filter((t) => t.templateType === templateType).sort((a, b) => (b.isDefault - a.isDefault) || a.id - b.id);
   // Is the template currently open already the default for its type?
-  const currentIsDefault = !!allTemplates.find((t) => t.id === currentTemplateId)?.isDefault;
+  const currentIsDefault = !!ofType.find((t) => t.id === currentTemplateId)?.isDefault;
+  const isDraft = !currentTemplateId;
 
   if (!canManage) {
     return (
@@ -578,6 +640,39 @@ export default function TemplateEditorPage() {
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
+  // Toolbar pieces shared by the phone and desktop layouts.
+  const typeSelect = (style) => (
+    <select
+      style={style}
+      value={templateType}
+      onChange={(e) => handleTypeChange(e.target.value)}
+      disabled={listLoading || managerBusy}
+      title="Open another document type's template"
+      aria-label="Document type"
+    >
+      {TEMPLATE_TYPES.map((t) => {
+        const n = allTemplates.filter((x) => x.templateType === t.value).length;
+        return <option key={t.value} value={t.value}>{t.label}{n ? ` (${n})` : ""}</option>;
+      })}
+    </select>
+  );
+  const templateSelect = (style) => (
+    <select
+      style={style}
+      value={currentTemplateId ? String(currentTemplateId) : "__draft__"}
+      onChange={(e) => handleSwitchTemplate(e.target.value)}
+      disabled={listLoading || managerBusy}
+      title="Switch between this document type's saved templates, or start a new one"
+      aria-label="Saved template"
+    >
+      {isDraft && <option value="__draft__">Built-in default (unsaved)</option>}
+      {ofType.map((t) => (
+        <option key={t.id} value={String(t.id)}>{t.isDefault ? `★ ${t.name}` : t.name}</option>
+      ))}
+      <option value="__new__">➕ New template…</option>
+    </select>
+  );
+
   return (
     <div style={{ height: "calc(100vh - 80px)", display: "flex", flexDirection: "column", gap: "0" }}>
       {/* Toast */}
@@ -588,7 +683,7 @@ export default function TemplateEditorPage() {
           background: toast.type === "error" ? "#dc3545" : "#28a745",
           color: "#fff", fontWeight: 600, fontSize: "0.9rem",
           boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-        }}>
+        }} role="status">
           {toast.msg}
         </div>
       )}
@@ -611,13 +706,44 @@ export default function TemplateEditorPage() {
         />
       )}
 
+      {/* Everything about this type's templates, without leaving the editor. */}
+      {showManager && (
+        <SavedTemplatesManager
+          templateType={templateType}
+          templates={ofType}
+          currentTemplateId={currentTemplateId}
+          canDelete={canDelete}
+          busy={managerBusy}
+          busyId={managerBusyId}
+          onSelect={handleManagerSelect}
+          onSetDefault={handleSetDefault}
+          onDuplicate={handleDuplicate}
+          onRename={handleRename}
+          onCopyToType={handleCopyToType}
+          onDelete={handleManagerDelete}
+          onNew={openNew}
+          onClose={() => setShowManager(false)}
+        />
+      )}
+
+      {newDialog && selectedCompany && (
+        <NewTemplateDialog
+          companyId={selectedCompany.id}
+          templates={allTemplates}
+          initialType={templateType}
+          onCreated={onCreated}
+          onClose={() => setNewDialog(false)}
+        />
+      )}
+
       {/* Top Bar */}
       <div style={styles.topBar}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <button
             onClick={() => navigate("/templates")}
             title="Back to Print Templates"
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, borderRadius: 8, padding: isMobile ? "0.3rem 0.5rem" : "0.4rem 0.7rem", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+            aria-label="Back to Print Templates"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, borderRadius: 8, padding: isMobile ? "0 0.6rem" : "0 0.7rem", minHeight: isMobile ? 40 : 36, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", flexShrink: 0, boxShadow: "none" }}
           >
             <MdArrowBack size={16} /> {isMobile ? "" : "Print Templates"}
           </button>
@@ -626,11 +752,13 @@ export default function TemplateEditorPage() {
           </div>
           <div>
             <h2 style={{ margin: 0, fontSize: isMobile ? "1rem" : "1.3rem", fontWeight: 700, color: colors.textPrimary }}>
-              {currentTemplateId ? "Edit Template" : "New Template"}
+              {isDraft ? `New ${typeLabel}` : "Edit Template"}
             </h2>
             {!isMobile && (
               <p style={{ margin: 0, fontSize: "0.82rem", color: colors.textSecondary }}>
-                Customize print templates for each company
+                {isDraft
+                  ? `${typeLabel} has no saved template yet — this is the built-in default. Save to keep it.`
+                  : "Customize print templates for each company"}
               </p>
             )}
           </div>
@@ -647,29 +775,11 @@ export default function TemplateEditorPage() {
             </div>
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Document Type</label>
-              <select
-                style={{ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" }}
-                value={templateType}
-                disabled={!!currentTemplateId}
-                onChange={(e) => handleTypeChange(e.target.value)}
-                title={currentTemplateId ? "Document type is fixed once the template is saved" : "Pick the document type for this new template"}
-              >
-                {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              {typeSelect({ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" })}
             </div>
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Saved Templates</label>
-              <select
-                style={{ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" }}
-                value={currentTemplateId ? String(currentTemplateId) : "__new__"}
-                onChange={(e) => handleSwitchTemplate(e.target.value)}
-                title="Switch between saved templates for this document type, or start a new one"
-              >
-                {allTemplates.map((t) => (
-                  <option key={t.id} value={String(t.id)}>{t.name}{t.isDefault ? " ★" : ""}</option>
-                ))}
-                <option value="__new__">➕ New template…</option>
-              </select>
+              {templateSelect({ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" })}
             </div>
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Template Name</label>
@@ -682,19 +792,22 @@ export default function TemplateEditorPage() {
               />
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-              <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flex: 1, justifyContent: "center" }} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
-                <MdAutoAwesome size={14} /> Design Gallery
+              <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flex: 1, justifyContent: "center" }} onClick={() => setShowManager(true)} title="Manage this document type's templates">
+                <MdViewList size={14} /> Templates
+              </button>
+              <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flex: 1, justifyContent: "center" }} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
+                <MdAutoAwesome size={14} /> Designs
               </button>
               {currentTemplateId && !currentIsDefault && (
-                <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={handleSetCurrentDefault} disabled={managerBusy} title="Make this the default template used for printing this document type">
+                <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flexShrink: 0 }} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
                   <MdStar size={14} /> Set default
                 </button>
               )}
-              <button style={{ ...styles.btn, ...styles.btnOutline, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }} onClick={handleReset} title="Reset to default">
+              <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flexShrink: 0 }} onClick={handleReset} title="Reset to default">
                 <MdRefresh size={14} /> Reset
               </button>
               <button
-                style={{ ...styles.btn, ...styles.btnPrimary, opacity: (saving || !templateName.trim()) ? 0.7 : 1, padding: "0.4rem 0.6rem", fontSize: "0.78rem", flexShrink: 0 }}
+                style={{ ...styles.btn, ...styles.btnPrimary, ...styles.btnSm, opacity: (saving || !templateName.trim()) ? 0.7 : 1, flexShrink: 0 }}
                 onClick={handleSave}
                 disabled={saving || !templateName.trim()}
               >
@@ -715,30 +828,12 @@ export default function TemplateEditorPage() {
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Document Type</label>
-              <select
-                style={{ ...dropdownStyles.base, minWidth: "180px" }}
-                value={templateType}
-                disabled={!!currentTemplateId}
-                onChange={(e) => handleTypeChange(e.target.value)}
-                title={currentTemplateId ? "Document type is fixed once the template is saved" : "Pick the document type for this new template"}
-              >
-                {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              {typeSelect({ ...dropdownStyles.base, minWidth: "180px" })}
             </div>
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Saved Templates</label>
-              <select
-                style={{ ...dropdownStyles.base, minWidth: "180px" }}
-                value={currentTemplateId ? String(currentTemplateId) : "__new__"}
-                onChange={(e) => handleSwitchTemplate(e.target.value)}
-                title="Switch between saved templates for this document type, or start a new one"
-              >
-                {allTemplates.map((t) => (
-                  <option key={t.id} value={String(t.id)}>{t.name}{t.isDefault ? " ★" : ""}</option>
-                ))}
-                <option value="__new__">➕ New template…</option>
-              </select>
+              {templateSelect({ ...dropdownStyles.base, minWidth: "200px" })}
             </div>
 
             <div style={styles.fieldGroup}>
@@ -770,11 +865,14 @@ export default function TemplateEditorPage() {
               </button>
             </div>
 
+            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowManager(true)} title="Open, rename, duplicate, copy, delete or create this document type's templates">
+              <MdViewList size={16} /> Templates{ofType.length ? ` (${ofType.length})` : ""}
+            </button>
             <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
               <MdAutoAwesome size={16} /> Design Gallery
             </button>
             {currentTemplateId && !currentIsDefault && (
-              <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={handleSetCurrentDefault} disabled={managerBusy} title="Make this the default template used for printing this document type">
+              <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
                 <MdStar size={16} /> Set as default
               </button>
             )}
@@ -827,8 +925,14 @@ export default function TemplateEditorPage() {
       {/* Main Content */}
       <div style={{ flex: 1, display: "flex", gap: "0", overflow: "hidden", borderTop: `1px solid ${colors.cardBorder}` }}>
 
-        {/* Visual Editor Mode */}
-        {editorMode === "visual" ? (
+        {listLoading ? (
+          // Never paint an empty code box before the template has arrived —
+          // an operator who starts typing into it would be editing nothing.
+          <div style={styles.editorLoading} role="status">
+            <span style={styles.editorSpin} />
+            <span>Loading template…</span>
+          </div>
+        ) : editorMode === "visual" ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {/* Tabs for visual mode */}
             <div style={styles.tabs}>
@@ -971,7 +1075,9 @@ const styles = {
     fontWeight: 600,
     cursor: "pointer",
     transition: "all 0.2s",
+    minHeight: 36,
   },
+  btnSm: { padding: "0.4rem 0.6rem", fontSize: "0.78rem", minHeight: 40 },
   btnPrimary: {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
     color: "#fff",
@@ -981,6 +1087,7 @@ const styles = {
     background: "#fff",
     color: colors.textSecondary,
     border: `1px solid ${colors.inputBorder}`,
+    boxShadow: "none",
   },
   modeToggle: {
     display: "inline-flex",
@@ -1000,6 +1107,7 @@ const styles = {
     fontWeight: 600,
     cursor: "pointer",
     transition: "all 0.2s",
+    boxShadow: "none",
   },
   modeBtnActive: {
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
@@ -1024,6 +1132,7 @@ const styles = {
     color: colors.textSecondary,
     borderBottom: "2px solid transparent",
     transition: "all 0.2s",
+    boxShadow: "none",
   },
   tabActive: {
     color: colors.blue,
@@ -1035,9 +1144,24 @@ const styles = {
     fontSize: "0.8rem",
     color: colors.textSecondary,
   },
-  btnDanger: {
+  editorLoading: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.6rem",
+    color: colors.textSecondary,
+    fontSize: "0.9rem",
+    fontWeight: 600,
     background: "#fff",
-    color: "#c62828",
-    border: "1px solid #c6282830",
+  },
+  editorSpin: {
+    width: 22,
+    height: 22,
+    border: `3px solid ${colors.cardBorder}`,
+    borderTopColor: colors.blue,
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite",
+    display: "inline-block",
   },
 };

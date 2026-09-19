@@ -290,6 +290,46 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-19 — Adjusting an invoice is now: pick the item type, type the quantity
+
+The Invoices-tab edit opens with **Exact Line Total** already selected on every
+grouped row, pre-filled with that group's total **from the bill itself**. The
+unit price is derived and read-only, so the consultant's whole job is the two
+things only they know: the item type that carries the right HS code (UOM and
+sale type follow it), and the quantity actually supplied. The value never
+moves, which is what the ±2 PKR total-preservation guard — and FBR — expect, so
+Save stays available without any arithmetic on their side.
+
+Re-classifying a group re-seeds the same bill total under the new item type, so
+the total does not have to be re-entered after every re-pick. *Qty & Unit
+Price* is still one click away when the price is what needs to change, and a
+group switched back to it stays that way. Opening a bill and changing nothing
+rewrites nothing: the lines are re-decomposed only when a quantity or a total
+is actually edited.
+
+### 2026-09-19 — A grouped quantity no longer leaves bill lines at zero
+
+The Invoices-tab edit shows every line sharing an Item Type as **one row with
+a summed quantity** — the shape FBR receives — and retyping that sum spreads it
+back across the underlying lines, proportionally to their bill quantities. For
+whole-unit items each share was floored and only the remainder handed out, so a
+37-line bill of 137 units retyped to **61** left every 1-unit line at
+0.45 → **0**, and Save refused with "Quantity must be greater than 0" about
+lines the grouped view never shows.
+
+The spread now finishes with a repair pass: a line left at zero takes one unit
+from the largest line, so **no line ends at zero while there are at least as
+many units as lines**. Retyping the same total still reproduces the original
+lines exactly. A total the group cannot hold (fewer units than lines) is called
+out under the quantity — **"needs at least 4 — one per line"** — and Save names
+the item and the smallest total that works instead of the blind per-line error.
+Both grouped methods, *Qty & Unit Price* and *Exact Line Total*, share the one
+split.
+
+Suite: `node scripts/test_group_quantity_split.mjs` (21 checks, offline — no
+backend or database). Ported from the master line, where the bill that exposed
+it lives.
+
 ### 2026-09-18 — Type the amount a line must come to, and the rate follows
 
 **Both bill-creation screens take a Line Total.** Enter quantity and unit price
@@ -368,6 +408,39 @@ that already had real clients — never on a new sandbox company. It now asks PR
 which client is genuinely registered and falls back to a number PRAL confirms,
 so a fresh seed validates all six. A PRAL outage answers "don't know" rather
 than "unregistered", so it can never churn a working number.
+
+### 2026-09-18 — Print templates: create, switch and manage without the round trips
+
+**Configuration → Print Templates** and the **Template Editor** now work the
+way the day-to-day use of them wants to.
+
+- **New Template is one dialog.** Pick the document type, give it a name (a
+  unique one is suggested), and say what it starts from — the built-in
+  default, a copy of one of your own templates of that type, or a starter
+  design chosen from the gallery. **Create & open** writes the template and
+  opens the editor on it. The old flow opened an empty editor with Save greyed
+  out until you had typed a name.
+- **The editor's Document Type dropdown is live.** Picking another type opens
+  that type's default template on the spot (or the built-in default as an
+  unsaved draft if the type has none yet), instead of walking back to the list,
+  re-filtering and re-opening. Unsaved edits ask before they are discarded. A
+  saved template's own type does not change — merge fields differ per document
+  type — so reusing a design elsewhere is **Copy to…**.
+- **Templates (n)** in the editor opens a manager for the current document
+  type: open another, set the default, rename in place, duplicate, copy to
+  another document type, delete, or start a new one — without leaving the
+  editor. Deleting the open template falls back to the type's default.
+- **Filters and the active tab survive leaving the page.** The document type,
+  search, "Default only", and the Starter tab's search and sort are kept per
+  company for the session, restored when you come back from the editor, and
+  the card you were just editing is highlighted and scrolled into view.
+- The list is **grouped by document type** with counts, an *Only this type*
+  shortcut and a *New* link per group; the type filter shows how many
+  templates each type has; only the card being acted on shows a spinner rather
+  than every card locking; stamp upload is a proper dialog with a preview; and
+  previews show a spinner until the page has rendered instead of a blank sheet.
+- Duplicate and Copy now carry the source template's signature assignment
+  across, as they were always meant to.
 
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
