@@ -290,6 +290,23 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-19 — Adjusting an invoice is now: pick the item type, type the quantity
+
+The Invoices-tab edit opens with **Exact Line Total** already selected on every
+grouped row, pre-filled with that group's total **from the bill itself**. The
+unit price is derived and read-only, so the consultant's whole job is the two
+things only they know: the item type that carries the right HS code (UOM and
+sale type follow it), and the quantity actually supplied. The value never
+moves, which is what the ±2 PKR total-preservation guard — and FBR — expect, so
+Save stays available without any arithmetic on their side.
+
+Re-classifying a group re-seeds the same bill total under the new item type, so
+the total does not have to be re-entered after every re-pick. *Qty & Unit
+Price* is still one click away when the price is what needs to change, and a
+group switched back to it stays that way. Opening a bill and changing nothing
+rewrites nothing: the lines are re-decomposed only when a quantity or a total
+is actually edited.
+
 ### 2026-09-19 — A grouped quantity no longer leaves bill lines at zero
 
 The Invoices-tab edit shows every line sharing an Item Type as **one row with

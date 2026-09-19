@@ -115,6 +115,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // locks its Qty / Unit Price; clearing it is an explicit act, never a silent
   // unlock, so it is always obvious which value is driving the line.
   const [exactTotals, setExactTotals] = useState({});
+  // Groups the operator explicitly switched back to "Qty & Unit Price". The
+  // seeding effect below defaults every group to Exact Line Total, so without
+  // this the next render would re-seed the one they just unlocked.
+  const clearedExactKeys = useRef(new Set());
   // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
   // 760px the individual-lines view renders as tap-friendly stacked cards
   // instead (grouped view keeps the table — it's a summary lens).
@@ -972,6 +976,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   };
 
   const setGroupExactTotal = (group, rawValue) => {
+    clearedExactKeys.current.delete(group.key);
     setExactTotals((prev) => ({ ...prev, [group.key]: rawValue }));
 
     const targetPaisa = toPaisa(rawValue);
@@ -991,6 +996,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Explicit un-lock. Drops the per-line authority as well as the typed target,
   // so nothing keeps overriding the operator's manual qty / price afterwards.
   const clearGroupExactTotal = (group) => {
+    clearedExactKeys.current.add(group.key);
     setExactTotals((prev) => {
       const next = { ...prev };
       delete next[group.key];
@@ -1256,6 +1262,40 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // the total freely; itemTypeOnlyMode locks both qty and price so
   // there's nothing to indicate.
   const showTotalsGuard = itemTypeAndQtyMode;
+
+  // ── Exact Line Total is the DEFAULT adjustment method ──────────────────
+  // The consultant's job on this screen is: pick the item type that carries
+  // the right HS code, then say how many units it really was. The VALUE must
+  // not move — the bill's own total is what the ±2 PKR guard (and FBR) expect
+  // — so the total is seeded from the BILL and the unit price is derived from
+  // whatever quantity they type. Seeding the target only; the lines themselves
+  // are rewritten when the operator actually changes the qty or the total, so
+  // simply opening a bill never re-decomposes it.
+  //
+  // Re-seeds under the NEW key after a reclassification (the group key is the
+  // item type), which is exactly when the operator needs the total again, and
+  // skips any group they deliberately switched back to Qty & Unit Price.
+  useEffect(() => {
+    if (!showTotalsGuard || lockQty) return;
+    setExactTotals((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const g of itemGroups) {
+        if (next[g.key] != null || clearedExactKeys.current.has(g.key)) continue;
+        // The bill's own value for these lines — never the adjusted one, which
+        // may already have drifted from it.
+        const billValue = g.lineIndices.reduce((sum, i) => {
+          const o = originalItemsRef.current?.[i];
+          const lt = parseFloat(o?.lineTotal);
+          if (Number.isFinite(lt)) return sum + lt;
+          return sum + (parseFloat(o?.quantity) || 0) * (parseFloat(o?.unitPrice) || 0);
+        }, 0);
+        const target = Math.round((billValue > 0 ? billValue : g.totalValue || 0) * 100) / 100;
+        if (target > 0) { next[g.key] = target.toFixed(2); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [itemGroups, showTotalsGuard, lockQty]);
   // Buyer reassignment: only meaningful for standalone bills (no
   // linked challan) AND only in full-edit mode. Challan-linked bills
   // would diverge from their challan if the buyer changed, so the
