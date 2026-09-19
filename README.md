@@ -290,6 +290,29 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-19 — A grouped quantity no longer leaves bill lines at zero
+
+The Invoices-tab edit shows every line sharing an Item Type as **one row with
+a summed quantity** — the shape FBR receives — and retyping that sum spreads it
+back across the underlying lines, proportionally to their bill quantities. For
+whole-unit items each share was floored and only the remainder handed out, so a
+37-line bill of 137 units retyped to **61** left every 1-unit line at
+0.45 → **0**, and Save refused with "Quantity must be greater than 0" about
+lines the grouped view never shows.
+
+The spread now finishes with a repair pass: a line left at zero takes one unit
+from the largest line, so **no line ends at zero while there are at least as
+many units as lines**. Retyping the same total still reproduces the original
+lines exactly. A total the group cannot hold (fewer units than lines) is called
+out under the quantity — **"needs at least 4 — one per line"** — and Save names
+the item and the smallest total that works instead of the blind per-line error.
+Both grouped methods, *Qty & Unit Price* and *Exact Line Total*, share the one
+split.
+
+Suite: `node scripts/test_group_quantity_split.mjs` (21 checks, offline — no
+backend or database). Ported from the master line, where the bill that exposed
+it lives.
+
 ### 2026-09-18 — Type the amount a line must come to, and the rate follows
 
 **Both bill-creation screens take a Line Total.** Enter quantity and unit price

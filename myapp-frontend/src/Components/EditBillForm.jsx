@@ -8,6 +8,7 @@ import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
 import { isDecimalUnit } from "../utils/formatQuantity";
+import { splitGroupQuantity } from "../utils/groupQuantitySplit";
 
 // Tax Claim Snapshot temporarily HIDDEN (2026-07-11, user request). Everything
 // is left intact — flip this flag to true to bring the whole panel back
@@ -917,23 +918,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // a stable weight, remainder largest-fraction-first. Whole numbers because an
   // exact line total has to be reproducible as quantity x rate, and the server
   // refuses a fractional quantity on this path.
-  const splitWholeQty = (total, weights) => {
-    const wTotal = weights.reduce((a, b) => a + b, 0) || weights.length;
-    const exact = weights.map((w) => (total * (w || 1)) / wTotal);
-    const base = exact.map((x) => Math.floor(x));
-    let rem = total - base.reduce((a, b) => a + b, 0);
-    const order = exact
-      .map((x, k) => ({ k, frac: x - Math.floor(x) }))
-      .sort((a, b) => b.frac - a.frac || a.k - b.k);
-    for (let n = 0; n < order.length && rem > 0; n++, rem--) base[order[n].k] += 1;
-    // Nothing may end at zero: the server rejects a zero-quantity line.
-    for (let k = 0; k < base.length; k++) {
-      if (base[k] > 0) continue;
-      const donor = base.indexOf(Math.max(...base));
-      if (base[donor] > 1) { base[donor] -= 1; base[k] = 1; }
-    }
-    return base;
-  };
+  // The split itself lives in utils/groupQuantitySplit (shared with the plain
+  // Qty editor below, and pinned by scripts/test_group_quantity_split.mjs).
+  const splitWholeQty = (total, weights) => splitGroupQuantity(total, weights).shares;
 
   // Write the group's lines from an exact target and a set of whole quantities.
   // Both come from the operator; only the RATE is derived.
@@ -1136,41 +1123,34 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     setItems((prev) => {
       const next = [...prev];
       const idxs = group.lineIndices;
-      let weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
-      let weightTotal = weights.reduce((s, w) => s + w, 0);
-      if (weightTotal <= 0) { weights = idxs.map(() => 1); weightTotal = idxs.length; }
+      const weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
       const allowDecimal = isDecimalUnit(group.uom, units);
-
-      let assigned;
-      if (!allowDecimal && Number.isInteger(target)) {
-        const shares = weights.map((w) => target * (w / weightTotal));
-        assigned = shares.map((s) => Math.floor(s));
-        let rem = target - assigned.reduce((a, b) => a + b, 0);
-        const order = shares
-          .map((s, k) => ({ k, frac: s - Math.floor(s) }))
-          .sort((a, b) => b.frac - a.frac);
-        for (let j = 0; j < order.length && rem > 0; j++) { assigned[order[j].k]++; rem--; }
-      } else {
-        assigned = [];
-        let remaining = target;
-        idxs.forEach((_i, k) => {
-          if (k === idxs.length - 1) {
-            assigned[k] = Math.round(Math.max(0, remaining) * 10000) / 10000;
-          } else {
-            const q = Math.round(target * (weights[k] / weightTotal) * 10000) / 10000;
-            assigned[k] = q;
-            remaining -= q;
-          }
-        });
-      }
+      const { shares } = splitGroupQuantity(target, weights, { allowDecimal });
 
       idxs.forEach((i, k) => {
         const price = parseFloat(next[i].unitPrice) || 0;
-        const q = assigned[k];
+        const q = shares[k];
         next[i] = { ...next[i], quantity: q, lineTotal: Math.round(q * price * 100) / 100 };
       });
       return next;
     });
+  };
+
+  // A grouped row whose typed total cannot give every underlying line a unit
+  // (fewer units than lines, or nothing typed yet). Save must explain it in
+  // the grouped row's own terms — the zero lines are not on screen.
+  const groupsWithZeroLines = (rows) =>
+    itemGroups.filter((g) => g.lineIndices.some((i) => (parseFloat(rows[i]?.quantity) || 0) <= 0));
+  const zeroQtyGroupMessage = (rows) => {
+    const bad = groupsWithZeroLines(rows);
+    if (bad.length === 0) return null;
+    const g = bad[0];
+    const n = g.lineIndices.length;
+    const name = g.itemTypeName || g.description || "This item";
+    return n > 1
+      ? `“${name}” is grouped from ${n} lines, so its quantity must be at least ${n} — one whole unit per line — ` +
+        `and it is ${g.totalQty.toLocaleString("en-PK")}. Enter a larger quantity, or switch to Individual lines to change lines one by one.`
+      : `“${name}” needs a quantity greater than 0.`;
   };
 
   // Reclassify an entire group to a different Item Type — applies to every
@@ -1404,7 +1384,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // Total-preservation guard: new Σ(qty × unitPrice) must equal
         // the original Subtotal within ±2 PKR (server-side enforced).
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
-          return setError("Quantity must be greater than 0.");
+          // In the grouped view the offending line is not on screen; name the
+          // group and the smallest total that works instead.
+          return setError((renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.");
         }
         if (items.some((i) => (parseFloat(i.unitPrice) || 0) <= 0)) {
           return setError("Unit price must be greater than 0.");
@@ -1440,7 +1422,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       } else {
         // Full edit path — same validation as before.
         if (items.some((i) => !i.description?.trim())) return setError("All items must have a description.");
-        if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) return setError("Quantity must be greater than 0.");
+        if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
+          return setError((renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.");
+        }
         if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0)) return setError("Unit price cannot be negative.");
 
         // Re-write paymentTerms to keep the [SNxxx] tag in sync with the
@@ -2100,6 +2084,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 <div style={{ ...styles.groupMeta, color: "#e65100", textAlign: "right" }}
                                      title="The bill changed after you adjusted this invoice. This field shows the qty you last filed; the bill now shows this qty. Re-adjust so the total matches the bill.">
                                   bill: {group.billQty.toLocaleString()}
+                                </div>
+                              )}
+                              {/* Fewer units than lines: the spread has left a
+                                  line at zero, which Save (and the server)
+                                  refuse. Say so here, next to the number that
+                                  caused it, rather than only at Save. */}
+                              {!lockQty && multi && group.lineIndices.some((i) => (parseFloat(items[i]?.quantity) || 0) <= 0) && (
+                                <div style={{ ...styles.groupMeta, color: "#c62828", textAlign: "right" }}
+                                     title={`This row is ${group.lineIndices.length} bill lines; every line needs at least one whole unit.`}>
+                                  needs at least {group.lineIndices.length} — one per line
                                 </div>
                               )}
                             </td>
