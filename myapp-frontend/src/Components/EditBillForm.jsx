@@ -9,6 +9,7 @@ import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
 import DocumentTaxFields from "./DocumentTaxFields";
 import { isDecimalUnit } from "../utils/formatQuantity";
+import { splitGroupQuantity } from "../utils/groupQuantitySplit";
 
 // Tax Claim Snapshot temporarily HIDDEN (2026-07-11, user request). Everything
 // is left intact — flip this flag to true to bring the whole panel back
@@ -24,6 +25,7 @@ import { useConfirm } from "./ConfirmDialog";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import BillNumberField from "./BillNumberField";
 
 const colors = {
   blue: "#0d47a1",
@@ -114,6 +116,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // locks its Qty / Unit Price; clearing it is an explicit act, never a silent
   // unlock, so it is always obvious which value is driving the line.
   const [exactTotals, setExactTotals] = useState({});
+  // Groups the operator explicitly switched back to "Qty & Unit Price". The
+  // seeding effect below defaults every group to Exact Line Total, so without
+  // this the next render would re-seed the one they just unlocked.
+  const clearedExactKeys = useRef(new Set());
   // Responsive: the wide FBR line-item table side-scrolls on a phone, so below
   // 760px the individual-lines view renders as tap-friendly stacked cards
   // instead (grouped view keeps the table — it's a summary lens).
@@ -163,6 +169,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [billDate, setBillDate] = useState("");
+  // The bill number is editable here, but only while nothing has gone to
+  // FBR under it (see billNumberLock below). Held as text so the box can be
+  // cleared while typing; null is sent when it is unchanged.
+  const [billNumber, setBillNumber] = useState("");
+  const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
@@ -305,6 +316,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // takes the date prefix verbatim when the API string starts with
         // YYYY-MM-DD (it always does).
         setBillDate(toLocalYmd(data.date));
+        setBillNumber(data.invoiceNumber != null ? String(data.invoiceNumber) : "");
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
         setPaymentMode(data.paymentMode ?? "");
@@ -920,23 +932,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // a stable weight, remainder largest-fraction-first. Whole numbers because an
   // exact line total has to be reproducible as quantity x rate, and the server
   // refuses a fractional quantity on this path.
-  const splitWholeQty = (total, weights) => {
-    const wTotal = weights.reduce((a, b) => a + b, 0) || weights.length;
-    const exact = weights.map((w) => (total * (w || 1)) / wTotal);
-    const base = exact.map((x) => Math.floor(x));
-    let rem = total - base.reduce((a, b) => a + b, 0);
-    const order = exact
-      .map((x, k) => ({ k, frac: x - Math.floor(x) }))
-      .sort((a, b) => b.frac - a.frac || a.k - b.k);
-    for (let n = 0; n < order.length && rem > 0; n++, rem--) base[order[n].k] += 1;
-    // Nothing may end at zero: the server rejects a zero-quantity line.
-    for (let k = 0; k < base.length; k++) {
-      if (base[k] > 0) continue;
-      const donor = base.indexOf(Math.max(...base));
-      if (base[donor] > 1) { base[donor] -= 1; base[k] = 1; }
-    }
-    return base;
-  };
+  // The split itself lives in utils/groupQuantitySplit (shared with the plain
+  // Qty editor below, and pinned by scripts/test_group_quantity_split.mjs).
+  const splitWholeQty = (total, weights) => splitGroupQuantity(total, weights).shares;
 
   // Write the group's lines from an exact target and a set of whole quantities.
   // Both come from the operator; only the RATE is derived.
@@ -988,6 +986,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   };
 
   const setGroupExactTotal = (group, rawValue) => {
+    clearedExactKeys.current.delete(group.key);
     setExactTotals((prev) => ({ ...prev, [group.key]: rawValue }));
 
     const targetPaisa = toPaisa(rawValue);
@@ -1007,6 +1006,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Explicit un-lock. Drops the per-line authority as well as the typed target,
   // so nothing keeps overriding the operator's manual qty / price afterwards.
   const clearGroupExactTotal = (group) => {
+    clearedExactKeys.current.add(group.key);
     setExactTotals((prev) => {
       const next = { ...prev };
       delete next[group.key];
@@ -1139,41 +1139,34 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     setItems((prev) => {
       const next = [...prev];
       const idxs = group.lineIndices;
-      let weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
-      let weightTotal = weights.reduce((s, w) => s + w, 0);
-      if (weightTotal <= 0) { weights = idxs.map(() => 1); weightTotal = idxs.length; }
+      const weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
       const allowDecimal = isDecimalUnit(group.uom, units);
-
-      let assigned;
-      if (!allowDecimal && Number.isInteger(target)) {
-        const shares = weights.map((w) => target * (w / weightTotal));
-        assigned = shares.map((s) => Math.floor(s));
-        let rem = target - assigned.reduce((a, b) => a + b, 0);
-        const order = shares
-          .map((s, k) => ({ k, frac: s - Math.floor(s) }))
-          .sort((a, b) => b.frac - a.frac);
-        for (let j = 0; j < order.length && rem > 0; j++) { assigned[order[j].k]++; rem--; }
-      } else {
-        assigned = [];
-        let remaining = target;
-        idxs.forEach((_i, k) => {
-          if (k === idxs.length - 1) {
-            assigned[k] = Math.round(Math.max(0, remaining) * 10000) / 10000;
-          } else {
-            const q = Math.round(target * (weights[k] / weightTotal) * 10000) / 10000;
-            assigned[k] = q;
-            remaining -= q;
-          }
-        });
-      }
+      const { shares } = splitGroupQuantity(target, weights, { allowDecimal });
 
       idxs.forEach((i, k) => {
         const price = parseFloat(next[i].unitPrice) || 0;
-        const q = assigned[k];
+        const q = shares[k];
         next[i] = { ...next[i], quantity: q, lineTotal: Math.round(q * price * 100) / 100 };
       });
       return next;
     });
+  };
+
+  // A grouped row whose typed total cannot give every underlying line a unit
+  // (fewer units than lines, or nothing typed yet). Save must explain it in
+  // the grouped row's own terms — the zero lines are not on screen.
+  const groupsWithZeroLines = (rows) =>
+    itemGroups.filter((g) => g.lineIndices.some((i) => (parseFloat(rows[i]?.quantity) || 0) <= 0));
+  const zeroQtyGroupMessage = (rows) => {
+    const bad = groupsWithZeroLines(rows);
+    if (bad.length === 0) return null;
+    const g = bad[0];
+    const n = g.lineIndices.length;
+    const name = g.itemTypeName || g.description || "This item";
+    return n > 1
+      ? `“${name}” is grouped from ${n} lines, so its quantity must be at least ${n} — one whole unit per line — ` +
+        `and it is ${g.totalQty.toLocaleString("en-PK")}. Enter a larger quantity, or switch to Individual lines to change lines one by one.`
+      : `“${name}” needs a quantity greater than 0.`;
   };
 
   // Reclassify an entire group to a different Item Type — applies to every
@@ -1199,10 +1192,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
     });
   };
 
-  // Grouped view is offered on the Invoices tab (Item Type column visible)
-  // and only actually renders grouped rows when grouping collapses lines.
+  // The TOGGLE is offered only when switching actually changes something —
+  // with one line per Item Type the two views list the same rows.
   const showGroupToggle = !billsMode && items.length > 1 && groupingCollapses;
-  const renderGrouped = showGroupToggle && groupedView;
+  // ...but the grouped row is where the adjustment controls live (Qty & Unit
+  // Price vs Exact Line Total), so it renders on the Invoices tab regardless.
+  // Gating it on `showGroupToggle` meant a SINGLE-LINE bill fell through to the
+  // plain table, where Line Total is static text — so the one control that sets
+  // an exact total was unreachable on exactly the bills that most need it. A
+  // live bill printed 220,000.20 against a 220,000.00 total with no way to
+  // correct it (2026-09-18).
+  const renderGrouped = !billsMode && groupedView;
 
   // Derived: what's the common Item Type across rows? Used to drive
   // the bulk picker's `value` so the dropdown actually reflects what's
@@ -1276,12 +1276,61 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // the total freely; itemTypeOnlyMode locks both qty and price so
   // there's nothing to indicate.
   const showTotalsGuard = itemTypeAndQtyMode;
+
+  // ── Exact Line Total is the DEFAULT adjustment method ──────────────────
+  // The consultant's job on this screen is: pick the item type that carries
+  // the right HS code, then say how many units it really was. The VALUE must
+  // not move — the bill's own total is what the ±2 PKR guard (and FBR) expect
+  // — so the total is seeded from the BILL and the unit price is derived from
+  // whatever quantity they type. Seeding the target only; the lines themselves
+  // are rewritten when the operator actually changes the qty or the total, so
+  // simply opening a bill never re-decomposes it.
+  //
+  // Re-seeds under the NEW key after a reclassification (the group key is the
+  // item type), which is exactly when the operator needs the total again, and
+  // skips any group they deliberately switched back to Qty & Unit Price.
+  useEffect(() => {
+    if (!showTotalsGuard || lockQty) return;
+    setExactTotals((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const g of itemGroups) {
+        if (next[g.key] != null || clearedExactKeys.current.has(g.key)) continue;
+        // The bill's own value for these lines — never the adjusted one, which
+        // may already have drifted from it.
+        const billValue = g.lineIndices.reduce((sum, i) => {
+          const o = originalItemsRef.current?.[i];
+          const lt = parseFloat(o?.lineTotal);
+          if (Number.isFinite(lt)) return sum + lt;
+          return sum + (parseFloat(o?.quantity) || 0) * (parseFloat(o?.unitPrice) || 0);
+        }, 0);
+        const target = Math.round((billValue > 0 ? billValue : g.totalValue || 0) * 100) / 100;
+        if (target > 0) { next[g.key] = target.toFixed(2); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [itemGroups, showTotalsGuard, lockQty]);
   // Buyer reassignment: only meaningful for standalone bills (no
   // linked challan) AND only in full-edit mode. Challan-linked bills
   // would diverge from their challan if the buyer changed, so the
   // backend rejects the change and we lock it client-side.
   const isChallanLinked = !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
   const lockClient      = lockNonItemType || isChallanLinked;
+  // Renumbering is gated TIGHTER than editing. A bill whose submit is in
+  // flight ("Submitting"), whose outcome is unknown ("Uncertain"), or that FBR
+  // accepted (an IRN, or "Submitted") was filed under its current number, so
+  // changing it here would leave our copy disagreeing with FBR's — mirrors the
+  // server's own refusal in InvoiceService.UpdateAsync.
+  const billNumberLock = (() => {
+    if (readOnly) return "Read-only.";
+    if (lockNonItemType) return "Not editable in this mode.";
+    const st = invoice?.fbrStatus;
+    if (invoice?.fbrIRN) return `Filed with FBR (IRN ${invoice.fbrIRN}) — the number cannot change.`;
+    if (st === "Submitted") return "Submitted to FBR — the number cannot change.";
+    if (st === "Submitting") return "A submission is in flight — the number cannot change.";
+    if (st === "Uncertain") return "FBR may already hold this bill — reset its submission before renumbering.";
+    return "";
+  })();
 
   // ── Soft stock warning (2026-09-11) ─────────────────────────────────
   // Only HS-coded item types move stock, and only the invoice-mode
@@ -1389,7 +1438,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         // Total-preservation guard: new Σ(qty × unitPrice) must equal
         // the original Subtotal within ±2 PKR (server-side enforced).
         if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
-          return setError("Quantity must be greater than 0.");
+          // In the grouped view the offending line is not on screen; name the
+          // group and the smallest total that works instead.
+          return setError((renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.");
         }
         if (items.some((i) => (parseFloat(i.unitPrice) || 0) <= 0)) {
           return setError("Unit price must be greater than 0.");
@@ -1425,7 +1476,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       } else {
         // Full edit path — same validation as before.
         if (items.some((i) => !i.description?.trim())) return setError("All items must have a description.");
-        if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) return setError("Quantity must be greater than 0.");
+        if (items.some((i) => (parseFloat(i.quantity) || 0) <= 0)) {
+          return setError((renderGrouped && zeroQtyGroupMessage(items)) || "Quantity must be greater than 0.");
+        }
         if (items.some((i) => (parseFloat(i.unitPrice) || 0) < 0)) return setError("Unit price cannot be negative.");
 
         // Re-write paymentTerms to keep the [SNxxx] tag in sync with the
@@ -1450,6 +1503,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           // refuses to reassign on challan-linked bills, so omitting the
           // field on those (when locked) avoids a needless 400.
           clientId: !lockClient && clientId ? parseInt(clientId) : null,
+          // null = "not mentioned", which is what an unchanged number means —
+          // the server then leaves it alone.
+          invoiceNumber: (() => {
+            if (billNumberLock) return null;
+            const parsed = Number((billNumber || "").trim());
+            if (!Number.isInteger(parsed) || parsed <= 0) return null;
+            return parsed === invoice?.invoiceNumber ? null : parsed;
+          })(),
           items: items.map((i) => ({
             id: i.id || 0,
             deliveryItemId: i.deliveryItemId || null,
@@ -1628,6 +1689,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
                 {/* Bill-level fields */}
                 <div style={styles.row}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <BillNumberField
+                      companyId={invoice?.companyId}
+                      variant="edit"
+                      number={billNumber}
+                      onNumberChange={setBillNumber}
+                      onValidityChange={setBillNumberOk}
+                      currentNumber={invoice?.invoiceNumber}
+                      lockedReason={billNumberLock}
+                      disabled={saving}
+                    />
+                  </div>
                   <div style={{ flex: 1, minWidth: 240 }}>
                     <label style={styles.label}>
                       Buyer
@@ -2071,6 +2144,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                   bill: {group.billQty.toLocaleString()}
                                 </div>
                               )}
+                              {/* Fewer units than lines: the spread has left a
+                                  line at zero, which Save (and the server)
+                                  refuse. Say so here, next to the number that
+                                  caused it, rather than only at Save. */}
+                              {!lockQty && multi && group.lineIndices.some((i) => (parseFloat(items[i]?.quantity) || 0) <= 0) && (
+                                <div style={{ ...styles.groupMeta, color: "#c62828", textAlign: "right" }}
+                                     title={`This row is ${group.lineIndices.length} bill lines; every line needs at least one whole unit.`}>
+                                  needs at least {group.lineIndices.length} — one per line
+                                </div>
+                              )}
                             </td>
                             <td style={{ ...styles.td, ...styles.readOnlyCell }} title="Comes from Item Type">
                               {group.uom || <span style={styles.muted}>—</span>}
@@ -2457,15 +2540,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
               // In itemType+qty(+price) mode, block save when totals
               // drift past the tolerance. Tooltip explains the gap.
               const blockedByTotals = showTotalsGuard && !totalsMatch;
-              const disabled = saving || blockedByTotals;
+              const disabled = saving || blockedByTotals || !billNumberOk;
               return (
                 <button
                   type="submit"
                   style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.5 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
                   disabled={disabled}
-                  title={blockedByTotals
-                    ? `Bill total mismatch: Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off (tolerance Rs. ${NARROW_EDIT_TOLERANCE_PKR}). Adjust qty / unit price to balance.`
-                    : ""}
+                  title={!billNumberOk
+                    ? "Enter a bill number that isn't already in use."
+                    : blockedByTotals
+                      ? `Bill total mismatch: Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off (tolerance Rs. ${NARROW_EDIT_TOLERANCE_PKR}). Adjust qty / unit price to balance.`
+                      : ""}
                 >
                   {saving
                     ? "Saving..."

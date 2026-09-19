@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
@@ -471,11 +471,26 @@ namespace MyApp.Api.Services.Implementations
             //     • Any DeliveryItem points at this ItemType AND the
             //       challan is still open (Invoice == null) OR its bill
             //       is unsubmitted.
-            //   PurchaseItem / StockMovement do not block — purchase
-            //   bills are inbound (no FBR submission of our own), and
-            //   StockMovements carry the qty data we need regardless.
+            //   A PurchaseItem alone does not block — purchase bills are
+            //   inbound and carry no FBR submission of our own.
+            //
+            //   STOCK DOES BLOCK (2026-09-18). The original rule reasoned that
+            //   "StockMovements carry the qty data we need regardless", which is
+            //   true of the ledger and false of the dashboard: the on-hand grid
+            //   joins the catalog and skips deleted rows, so deleting an item
+            //   that still holds goods makes real stock vanish from the screen
+            //   while its movements keep listing underneath. That happened on a
+            //   live company — 134 units went invisible, and the bill whose
+            //   overlay pointed at the deleted row lost its classification in
+            //   the edit form at the same time. Goods on hand are pending work
+            //   by any reading, so they belong in this guard.
             var hasPendingInvoiceLine = await _context.InvoiceItems
-                .AnyAsync(ii => ii.ItemTypeId == id && ii.Invoice.FbrStatus != "Submitted");
+                .AnyAsync(ii => (ii.ItemTypeId == id
+                                 // ...including a line reclassified ONTO this type
+                                 // by the dual-book overlay, which is what the FBR
+                                 // view and stock actually read.
+                                 || (ii.Adjustment != null && ii.Adjustment.AdjustedItemTypeId == id))
+                                && ii.Invoice.FbrStatus != "Submitted");
             var hasPendingChallanLine = await _context.DeliveryItems
                 .AnyAsync(di => di.ItemTypeId == id
                               && di.DeliveryChallan.Status != "Cancelled"
@@ -485,6 +500,44 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException(
                     $"Cannot delete \"{it.Name}\" — it's referenced by a bill or challan that hasn't been submitted to FBR yet. " +
                     "Submit or cancel those documents first, then try again.");
+
+            // Stock still on hand, per company: opening balance + ins − outs.
+            // Measured PER COMPANY rather than in total so two companies whose
+            // holdings happen to cancel out cannot look like zero between them.
+            var openingByCompany = await _context.OpeningStockBalances
+                .Where(o => o.ItemTypeId == id)
+                .GroupBy(o => o.CompanyId)
+                .Select(g => new { CompanyId = g.Key, Qty = g.Sum(o => o.Quantity) })
+                .ToListAsync();
+            var movedByCompany = await _context.StockMovements
+                .Where(m => m.ItemTypeId == id)
+                .GroupBy(m => m.CompanyId)
+                .Select(g => new
+                {
+                    CompanyId = g.Key,
+                    Qty = g.Sum(m => m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity)
+                })
+                .ToListAsync();
+
+            var onHandByCompany = openingByCompany
+                .Select(x => new { x.CompanyId, x.Qty })
+                .Concat(movedByCompany.Select(x => new { x.CompanyId, x.Qty }))
+                .GroupBy(x => x.CompanyId)
+                .Select(g => new { CompanyId = g.Key, Qty = g.Sum(x => x.Qty) })
+                .Where(x => x.Qty != 0)
+                .ToList();
+
+            if (onHandByCompany.Count > 0)
+            {
+                var names = await _context.Companies
+                    .Where(c => onHandByCompany.Select(x => x.CompanyId).Contains(c.Id))
+                    .ToDictionaryAsync(c => c.Id, c => c.Name);
+                var held = string.Join(", ", onHandByCompany
+                    .Select(x => $"{x.Qty:0.####} at {(names.TryGetValue(x.CompanyId, out var n) ? n : $"company {x.CompanyId}")}"));
+                throw new InvalidOperationException(
+                    $"Cannot delete \"{it.Name}\" — it still holds stock ({held}). " +
+                    "Issue or adjust that stock to zero first, then try again.");
+            }
 
             await _repo.DeleteAsync(it);
         }

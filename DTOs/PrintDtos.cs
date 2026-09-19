@@ -28,6 +28,13 @@ namespace MyApp.Api.DTOs
     // Data for printing a Bill (Invoice)
     public class PrintBillDto
     {
+        // Identifies this DTO to the shared renderer, including saved layouts.
+        public string PrintTemplateType => "Bill";
+        public string? FbrIRN { get; set; }
+        public string? FbrStatus { get; set; }
+        public DateTime? FbrSubmittedAt { get; set; }
+        public string? FbrQrPngDataUrl { get; set; }
+        public string? FbrLogoUrl { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -42,6 +49,7 @@ namespace MyApp.Api.DTOs
         public DateTime? PoDate { get; set; }
         public string ClientName { get; set; } = "";
         public string? ClientAddress { get; set; }
+        public string? ClientPhone { get; set; }
         public string? ConcernDepartment { get; set; }
         public string? ClientNTN { get; set; }
         public string? ClientSTRN { get; set; }
@@ -63,6 +71,12 @@ namespace MyApp.Api.DTOs
         public string UOM { get; set; } = "";
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
+        // Print-only aliases/calculations for the same eight-column layout as
+        // the tax invoice. These always use the original commercial bill line.
+        public decimal ValueExclTax => LineTotal;
+        public decimal GSTRate { get; set; }
+        public decimal GSTAmount => Math.Round(LineTotal * GSTRate / 100m, 2);
+        public decimal TotalInclTax => LineTotal + GSTAmount;
     }
 
     // Data for printing a Sales Tax Invoice

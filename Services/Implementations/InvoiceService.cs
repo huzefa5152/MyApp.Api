@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -495,6 +495,118 @@ namespace MyApp.Api.Services.Implementations
                 "IF @invAllocLock < 0 THROW 51000, 'Could not acquire invoice-number allocation lock', 1;",
                 $"invoice-alloc-{companyId}");
 
+        /// <summary>
+        /// Lowest number a hand-typed bill number may NOT take. The FBR Sandbox
+        /// issues its demo bills from 900000 up (FbrSandboxService.DemoBaseNumber)
+        /// and the automatic sequence is MAX(InvoiceNumber) + 1 over the NON-demo
+        /// rows, so a real bill parked in that band would leave every later
+        /// automatic number colliding with a demo one.
+        /// </summary>
+        private const int DemoInvoiceNumberBase = 900000;
+
+        /// <summary>
+        /// The number a new SALE bill is issued under — the ONE place both bill
+        /// creation paths resolve it, so Auto and Custom cannot drift apart.
+        ///
+        /// A null <paramref name="requested"/> is "Auto": MAX(InvoiceNumber) + 1 so
+        /// a deleted trailing number is reused (no gaps after deleting the last
+        /// bill), falling back to the company's StartingInvoiceNumber for its
+        /// first bill. IsDemo bills live in their own 900000+ range and must not
+        /// influence that sequence.
+        ///
+        /// A requested number is issued VERBATIM and is checked here for being
+        /// free. Both the MAX read and the in-use probe are check-then-insert
+        /// races on their own, so this MUST be called inside the per-company
+        /// app-lock (<see cref="AcquireInvoiceNumberLockAsync"/>); the UNIQUE
+        /// (CompanyId, NoteKind, InvoiceNumber) index is the backstop.
+        ///
+        /// <paramref name="excludeInvoiceId"/> is the row being RENUMBERED, left
+        /// out of the probe so a bill does not report itself as a clash.
+        /// </summary>
+        private async Task<int> ResolveSaleInvoiceNumberAsync(
+            int companyId, Company company, int? requested, int? excludeInvoiceId = null)
+        {
+            if (requested is null)
+            {
+                int maxExistingInvoice = await _context.Invoices
+                    .Where(i => i.CompanyId == companyId && !i.IsDemo)
+                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+                return maxExistingInvoice > 0
+                    ? maxExistingInvoice + 1
+                    : company.StartingInvoiceNumber;
+            }
+
+            var number = requested.Value;
+            if (number <= 0)
+                throw new InvalidOperationException("Bill number must be a positive whole number.");
+            if (number >= DemoInvoiceNumberBase)
+                throw new InvalidOperationException(
+                    $"Bill number must be below {DemoInvoiceNumberBase:N0} — that range is reserved for FBR Sandbox test bills.");
+
+            // A sale bill is NoteKind 0 and shares the unique key with this
+            // company's demo bills, so the probe deliberately covers them too.
+            var taken = await _context.Invoices
+                .AsNoTracking()
+                .AnyAsync(i => i.CompanyId == companyId && i.NoteKind == 0 && i.InvoiceNumber == number
+                               && (excludeInvoiceId == null || i.Id != excludeInvoiceId));
+            if (taken)
+                throw new InvalidOperationException(
+                    $"Bill #{number} already exists for this company. Pick another number.");
+
+            return number;
+        }
+
+        /// <inheritdoc />
+        public async Task<NextInvoiceNumberDto> GetNextInvoiceNumberAsync(int companyId, int? check)
+        {
+            var company = await _companyRepo.GetByIdAsync(companyId)
+                ?? throw new KeyNotFoundException("Company not found.");
+
+            int maxExistingInvoice = await _context.Invoices
+                .Where(i => i.CompanyId == companyId && !i.IsDemo)
+                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
+
+            var next = maxExistingInvoice > 0
+                ? maxExistingInvoice + 1
+                : company.StartingInvoiceNumber;
+
+            var result = new NextInvoiceNumberDto
+            {
+                NextNumber = next,
+                Prefix = company.InvoiceNumberPrefix,
+                FormattedNext = FormatInvoiceNumber(company.InvoiceNumberPrefix, next),
+                StartingNumberSet = company.StartingInvoiceNumber > 0,
+                MaxAllowed = DemoInvoiceNumberBase - 1
+            };
+
+            if (check is int wanted)
+            {
+                result.Checked = wanted;
+                result.FormattedChecked = FormatInvoiceNumber(company.InvoiceNumberPrefix, wanted);
+                if (wanted <= 0)
+                    result.CheckedError = "Bill number must be a positive whole number.";
+                else if (wanted >= DemoInvoiceNumberBase)
+                    result.CheckedError =
+                        $"Bill number must be below {DemoInvoiceNumberBase:N0} — that range is reserved for FBR Sandbox test bills.";
+                else if (await _context.Invoices.AsNoTracking()
+                             .AnyAsync(i => i.CompanyId == companyId && i.NoteKind == 0 && i.InvoiceNumber == wanted))
+                    result.CheckedError = $"Bill #{wanted} already exists for this company.";
+                result.CheckedAvailable = result.CheckedError == null;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// The printed document number: the company's prefix, if any, in front of
+        /// the sequence number. Mirrors what both create paths store on
+        /// <c>Invoice.FbrInvoiceNumber</c>, so the form previews exactly what the
+        /// bill will carry.
+        /// </summary>
+        private static string FormatInvoiceNumber(string? prefix, int number) =>
+            string.IsNullOrEmpty(prefix) ? number.ToString() : $"{prefix}{number}";
+
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
         {
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
@@ -791,18 +903,10 @@ namespace MyApp.Api.Services.Implementations
                                 $"Challan {conflict.ChallanNumber} was just billed by another request — refresh and try again.");
                     }
 
-                    // Use MAX(InvoiceNumber) so a deleted trailing number is reused on the next
-                    // create (no gaps after deleting the last bill). Falls back to StartingInvoiceNumber
-                    // when the company has no invoices yet. IsDemo bills live in their
-                    // own 900000+ range and must not influence the regular sequence.
-                    // Read under the app-lock so the value can't be stale.
-                    int maxExistingInvoice = await _context.Invoices
-                        .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-                    nextInvoiceNumber = maxExistingInvoice > 0
-                        ? maxExistingInvoice + 1
-                        : company.StartingInvoiceNumber;
+                    // Auto (dto.InvoiceNumber null) or the operator's own number.
+                    // Resolved under the app-lock so neither the MAX read nor the
+                    // in-use probe can go stale between here and the INSERT.
+                    nextInvoiceNumber = await ResolveSaleInvoiceNumberAsync(dto.CompanyId, company, dto.InvoiceNumber);
                     company.CurrentInvoiceNumber = nextInvoiceNumber;
 
                     // Fresh, navigation-free line clones for THIS attempt. The
@@ -942,6 +1046,14 @@ namespace MyApp.Api.Services.Implementations
                         "Invoice number {Number} for company {CompanyId} collided with a concurrent create; retrying (attempt {Attempt}).",
                         nextInvoiceNumber, dto.CompanyId, attempt);
                     await transaction.RollbackAsync();
+                    // A hand-typed number is the OPERATOR's choice, so a collision
+                    // is reported, never retried: recomputing MAX + 1 here would
+                    // quietly issue a different number than the one on their
+                    // screen, which is the one failure this feature must not have.
+                    if (dto.InvoiceNumber.HasValue)
+                        throw new InvalidOperationException(
+                            $"Bill #{dto.InvoiceNumber.Value} already exists for this company. Pick another number.", dupEx);
+
                     // Full reset so no rolled-back tracked entity (invoice,
                     // items, company, or the challan graph re-attached during
                     // the transition step) leaks into the next attempt and gets
@@ -1187,15 +1299,9 @@ namespace MyApp.Api.Services.Implementations
                     await AcquireInvoiceNumberLockAsync(dto.CompanyId);
 
                     // Share the regular numbering sequence — standalone bills are
-                    // real bills, not demos. MAX(InvoiceNumber) excluding IsDemo
-                    // matches CreateAsync.
-                    int maxExistingInvoice = await _context.Invoices
-                        .Where(i => i.CompanyId == dto.CompanyId && !i.IsDemo)
-                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-                    nextInvoiceNumber = maxExistingInvoice > 0
-                        ? maxExistingInvoice + 1
-                        : company.StartingInvoiceNumber;
+                    // real bills, not demos — and the same Auto / Custom resolver
+                    // as the challan-linked path.
+                    nextInvoiceNumber = await ResolveSaleInvoiceNumberAsync(dto.CompanyId, company, dto.InvoiceNumber);
                     company.CurrentInvoiceNumber = nextInvoiceNumber;
 
                     // Fresh, navigation-free line clones per attempt (see CreateAsync).
@@ -1294,6 +1400,14 @@ namespace MyApp.Api.Services.Implementations
                         "Standalone invoice number {Number} for company {CompanyId} collided with a concurrent create; retrying (attempt {Attempt}).",
                         nextInvoiceNumber, dto.CompanyId, attempt);
                     await transaction.RollbackAsync();
+                    // A hand-typed number is the OPERATOR's choice, so a collision
+                    // is reported, never retried: recomputing MAX + 1 here would
+                    // quietly issue a different number than the one on their
+                    // screen, which is the one failure this feature must not have.
+                    if (dto.InvoiceNumber.HasValue)
+                        throw new InvalidOperationException(
+                            $"Bill #{dto.InvoiceNumber.Value} already exists for this company. Pick another number.", dupEx);
+
                     // Full reset — no rolled-back tracked entity leaks into the next attempt.
                     _context.ChangeTracker.Clear();
                     if (attempt < maxAttempts)
@@ -1460,6 +1574,44 @@ namespace MyApp.Api.Services.Implementations
                         throw new InvalidOperationException(FutureDateMessage(newDate));
                     invoice.Date = newDate;
                 }
+                // ── Renumbering ──────────────────────────────────────
+                // Null means the caller did not mention the number, and the same
+                // number is a no-op, so an ordinary edit never reaches any of this.
+                if (dto.InvoiceNumber.HasValue && dto.InvoiceNumber.Value != invoice.InvoiceNumber)
+                {
+                    // Deliberately TIGHTER than IsInvoiceEditable, which allows an
+                    // edit while a submit is in flight or its outcome is unknown.
+                    // Editing line data then is one thing; changing the NUMBER is
+                    // another: "Submitting" means a POST carrying the current
+                    // number is on the wire, and "Uncertain" means FBR may already
+                    // hold the bill under it. Renumbering in either state leaves
+                    // our record disagreeing with FBR's filing, with nothing on
+                    // our side able to reconcile it.
+                    if (!FbrSubmissionStatus.IsSubmittable(invoice.FbrStatus)
+                        || !string.IsNullOrEmpty(invoice.FbrIRN))
+                        throw new InvalidOperationException(
+                            "This bill's number cannot be changed — it has been sent to FBR. " +
+                            "Reset its FBR submission first if the filing was never accepted.");
+
+                    // Same serialization as the create paths, so a renumber and a
+                    // concurrent create cannot both land on the number.
+                    await AcquireInvoiceNumberLockAsync(invoice.CompanyId);
+
+                    var numberingCompany = await _context.Companies
+                        .FirstOrDefaultAsync(c => c.Id == invoice.CompanyId)
+                        ?? throw new InvalidOperationException("Company not found for this bill.");
+
+                    var renumbered = await ResolveSaleInvoiceNumberAsync(
+                        invoice.CompanyId, numberingCompany, dto.InvoiceNumber, excludeInvoiceId: invoice.Id);
+
+                    invoice.InvoiceNumber = renumbered;
+                    // The printed document number follows the sequence number, the
+                    // same way both create paths derive it.
+                    invoice.FbrInvoiceNumber = string.IsNullOrEmpty(numberingCompany.InvoiceNumberPrefix)
+                        ? renumbered.ToString()
+                        : $"{numberingCompany.InvoiceNumberPrefix}{renumbered}";
+                }
+
                 invoice.GSTRate = dto.GSTRate;
                 // Both taxes are re-stated on every full edit, so clearing the
                 // selection genuinely clears the tax rather than leaving the
@@ -3355,14 +3507,28 @@ namespace MyApp.Api.Services.Implementations
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (inv == null) return null;
 
-            var poNumbers = inv.DeliveryChallans
-                .Select(dc => dc.PoNumber)
-                .Where(p => !string.IsNullOrEmpty(p))
-                .Distinct()
-                .ToList();
+            var submitted = inv.FbrStatus == "Submitted" && !string.IsNullOrWhiteSpace(inv.FbrIRN);
+
+            // A STANDALONE bill has no challan to carry a PO, so it keeps its
+            // own on Invoice.PoNumber — set on the bill form. Taking the PO
+            // from the challans alone printed nothing for those bills, however
+            // carefully the operator filled the field in. Same precedence as
+            // InvoiceDto: the invoice's own PO wins, else roll up the challans'.
+            var poNumbers = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                ? new List<string> { inv.PoNumber!.Trim() }
+                : inv.DeliveryChallans
+                    .Select(dc => dc.PoNumber)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct()
+                    .ToList()!;
 
             return new PrintBillDto
             {
+                FbrStatus = inv.FbrStatus,
+                FbrIRN = submitted ? inv.FbrIRN : null,
+                FbrSubmittedAt = submitted ? inv.FbrSubmittedAt : null,
+                FbrQrPngDataUrl = submitted ? FbrQrCodeGenerator.BuildVerifyQrDataUrl(inv.FbrIRN) : null,
+                FbrLogoUrl = submitted ? FbrLogoAsset.DataUrl : null,
                 CompanyBrandName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 CompanyLogoPath = inv.Company?.LogoPath,
                 CompanyAddress = inv.Company?.FullAddress,
@@ -3374,9 +3540,12 @@ namespace MyApp.Api.Services.Implementations
                 ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
                 ChallanDates = inv.DeliveryChallans.Select(dc => dc.DeliveryDate).ToList(),
                 PoNumber = string.Join(", ", poNumbers),
-                PoDate = inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
+                // Same fallback as the number above: a standalone bill's PO
+                // date lives on the invoice.
+                PoDate = inv.PoDate ?? inv.DeliveryChallans.Select(dc => dc.PoDate).FirstOrDefault(),
                 ClientName = inv.Client?.Name ?? "",
                 ClientAddress = inv.Client?.Address,
+                ClientPhone = inv.Client?.Phone,
                 ConcernDepartment = string.Join(", ", inv.DeliveryChallans
                     .Select(dc => dc.Site)
                     .Where(s => !string.IsNullOrEmpty(s))
@@ -3403,7 +3572,8 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = ii.Quantity,
                     UOM = ii.UOM,
                     UnitPrice = ii.UnitPrice,
-                    LineTotal = ii.LineTotal
+                    LineTotal = ii.LineTotal,
+                    GSTRate = inv.GSTRate
                 }).ToList()
             };
         }
@@ -3416,11 +3586,18 @@ namespace MyApp.Api.Services.Implementations
             var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
             if (inv == null) return null;
 
-            var poNumbers = inv.DeliveryChallans
-                .Select(dc => dc.PoNumber)
-                .Where(p => !string.IsNullOrEmpty(p))
-                .Distinct()
-                .ToList();
+            // A STANDALONE bill has no challan to carry a PO, so it keeps its
+            // own on Invoice.PoNumber — set on the bill form. Taking the PO
+            // from the challans alone printed nothing for those bills, however
+            // carefully the operator filled the field in. Same precedence as
+            // InvoiceDto: the invoice's own PO wins, else roll up the challans'.
+            var poNumbers = !string.IsNullOrWhiteSpace(inv.PoNumber)
+                ? new List<string> { inv.PoNumber!.Trim() }
+                : inv.DeliveryChallans
+                    .Select(dc => dc.PoNumber)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct()
+                    .ToList()!;
 
             return new PrintTaxInvoiceDto
             {

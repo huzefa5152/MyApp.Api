@@ -1,3 +1,5 @@
+import { slotMarkup } from "./stampSlot";
+
 /**
  * GrapesJS configuration for the template visual editor.
  * Sets up A4 canvas, custom blocks for invoice sections,
@@ -372,6 +374,12 @@ export function registerCustomBlocks(editor) {
         <div style="font-size:9px;font-weight:bold">Receiver Signature</div>
       </div>
     </div>`,
+  });
+
+  bm.add("assigned-signature-stamp", {
+    label: "Assigned signature stamp",
+    category: "Invoice",
+    content: slotMarkup(),
   });
 
   bm.add("stamp-box", {

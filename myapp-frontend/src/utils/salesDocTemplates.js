@@ -1,3 +1,5 @@
+import { slotMarkup } from "./stampSlot";
+
 // Default print templates for the Sales Quote (priced) and Sales Order
 // (quantity-only) documents. Tokens are Handlebars and match the PrintQuoteDto
 // / PrintOrderDto fields. Company-level only (no division). These are the
@@ -109,7 +111,7 @@ export const defaultQuoteTemplate = `<!DOCTYPE html><html><head><title>Quotation
   <div class="words"><strong>Amount in words:</strong> {{amountInWords}}</div>
   {{#if notes}}<div class="notes"><strong>Notes / Terms:</strong><br>{{{nl2br notes}}}</div>{{/if}}
 
-  <div class="sig"><div class="b"><div class="line"></div><div class="l">For {{companyBrandName}}</div></div></div>
+  <div class="sig"><div class="b">${slotMarkup()}<div class="line"></div><div class="l">Authorized Signatory</div></div></div>
 </body></html>`;
 
 export const defaultOrderTemplate = `<!DOCTYPE html><html><head><title>Sales Order #{{salesOrderNumber}}</title>
@@ -173,5 +175,5 @@ export const defaultOrderTemplate = `<!DOCTYPE html><html><head><title>Sales Ord
 
   <div class="statusline">Fulfilment Status: {{status}}</div>
 
-  <div class="sig"><div class="b"><div class="line"></div><div class="l">Authorised Signature</div></div></div>
+  <div class="sig"><div class="b">${slotMarkup()}<div class="line"></div><div class="l">Authorised Signature</div></div></div>
 </body></html>`;

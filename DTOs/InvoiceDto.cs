@@ -1,4 +1,4 @@
-namespace MyApp.Api.DTOs
+﻿namespace MyApp.Api.DTOs
 {
     public class InvoiceDto
     {
@@ -288,6 +288,14 @@ namespace MyApp.Api.DTOs
         /// challans; leave blank to keep deriving the PO from the challans.</summary>
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
+        /// <summary>
+        /// Operator-chosen bill / invoice number. NULL (the default, and what
+        /// the form sends in "Auto" mode) keeps the automatic per-company
+        /// sequence. A value here is issued VERBATIM: if it is already in use
+        /// the create fails with a plain message rather than quietly landing a
+        /// different number than the one on the operator's screen.
+        /// </summary>
+        public int? InvoiceNumber { get; set; }
 
         // ── Document taxes — both optional, both default to NONE ──
         /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
@@ -371,6 +379,14 @@ namespace MyApp.Api.DTOs
         /// no challan to carry the PO — e.g. billing directly from a Sales Order).</summary>
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
+        /// <summary>
+        /// Operator-chosen bill / invoice number. NULL (the default, and what
+        /// the form sends in "Auto" mode) keeps the automatic per-company
+        /// sequence. A value here is issued VERBATIM: if it is already in use
+        /// the create fails with a plain message rather than quietly landing a
+        /// different number than the one on the operator's screen.
+        /// </summary>
+        public int? InvoiceNumber { get; set; }
         public List<CreateStandaloneInvoiceItemDto> Items { get; set; } = new();
     }
 
@@ -395,6 +411,50 @@ namespace MyApp.Api.DTOs
         public string? SroScheduleNo { get; set; }
         /// <summary>Serial number within the referenced SRO/Schedule — required when SroScheduleNo is set (FBR rule 0078).</summary>
         public string? SroItemSerialNo { get; set; }
+    }
+
+    /// <summary>
+    /// What the bill-create forms need to offer "Auto" numbering, and — when
+    /// <c>check</c> is supplied — whether one hand-typed number is free.
+    ///
+    /// The availability answer is ADVISORY: it is read outside the per-company
+    /// allocation lock, so a number that reads free here can still be taken by
+    /// the time the bill is saved. The create path re-checks under the lock and
+    /// the UNIQUE (CompanyId, NoteKind, InvoiceNumber) index is the backstop —
+    /// this exists so the operator is told BEFORE they fill in a whole bill.
+    /// </summary>
+    public class NextInvoiceNumberDto
+    {
+        /// <summary>The number an Auto bill would be issued under right now.</summary>
+        public int NextNumber { get; set; }
+
+        /// <summary>The company's invoice-number prefix, if it has one.</summary>
+        public string? Prefix { get; set; }
+
+        /// <summary>Prefix + <see cref="NextNumber"/> — what the document will print.</summary>
+        public string FormattedNext { get; set; } = "";
+
+        /// <summary>
+        /// False when the company has no StartingInvoiceNumber, which is the one
+        /// case where creating a bill fails before it starts. The form says so
+        /// rather than offering a meaningless "next number".
+        /// </summary>
+        public bool StartingNumberSet { get; set; }
+
+        /// <summary>Highest number a custom entry may take (the demo range starts above it).</summary>
+        public int MaxAllowed { get; set; }
+
+        /// <summary>Echo of the number asked about, when one was.</summary>
+        public int? Checked { get; set; }
+
+        /// <summary>Prefix + <see cref="Checked"/> — what a custom bill would print.</summary>
+        public string? FormattedChecked { get; set; }
+
+        /// <summary>True when <see cref="Checked"/> is usable.</summary>
+        public bool? CheckedAvailable { get; set; }
+
+        /// <summary>Why <see cref="Checked"/> is not usable — operator-facing.</summary>
+        public string? CheckedError { get; set; }
     }
 
     /// <summary>
@@ -539,6 +599,19 @@ namespace MyApp.Api.DTOs
         /// When null, the existing client is preserved.
         /// </summary>
         public int? ClientId { get; set; }
+
+        /// <summary>
+        /// Optional new bill / invoice number. NULL means "leave it alone" — an
+        /// API client editing only line data must not have to restate it — and a
+        /// value equal to the current number is a no-op.
+        ///
+        /// Only accepted while the bill could still be submitted to FBR
+        /// (see <see cref="MyApp.Api.Helpers.FbrSubmissionStatus.IsSubmittable"/>)
+        /// and holds no IRN: once a number has gone to PRAL, our record of it has
+        /// to keep matching theirs.
+        /// </summary>
+        public int? InvoiceNumber { get; set; }
+
         public List<UpdateInvoiceItemDto> Items { get; set; } = new();
     }
 

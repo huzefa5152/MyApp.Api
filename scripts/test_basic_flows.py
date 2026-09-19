@@ -316,6 +316,24 @@ def test_invoice_update(base: str, token: str, bill: dict | None) -> None:
           updated.get("invoiceNumber") == bill.get("invoiceNumber"),
           f"old={bill.get('invoiceNumber')} new={updated.get('invoiceNumber')}")
 
+    # The eight-column Bill print must use original bill lines and expose
+    # their tax columns; it must not borrow the tax consultant's overlay.
+    status, printed = http("GET", f"/api/invoices/{bill['id']}/print/bill", base, token=token)
+    check(suite, "bill print returns 200", status == 200, f"got {status}")
+    if status == 200:
+        check(suite, "bill print identifies its template type", printed.get("printTemplateType") == "Bill")
+        check(suite, "unsubmitted bill has no FBR images or IRN",
+              not any(printed.get(k) for k in ("fbrIRN", "fbrQrPngDataUrl", "fbrLogoUrl")))
+        rows = printed.get("items") or []
+        check(suite, "bill print preserves all original rows", len(rows) == len(updated["items"]))
+        for original, row in zip(updated["items"], rows):
+            check(suite, "bill print uses original quantity and unit price",
+                  row.get("quantity") == original["quantity"] and row.get("unitPrice") == original["unitPrice"])
+            check(suite, "bill print exposes eight-column tax values",
+                  row.get("valueExclTax") == 750 and row.get("gstRate") == 18
+                  and row.get("gstAmount") == 135 and row.get("totalInclTax") == 885,
+                  f"got {row}")
+
 
 # ── Suite 5: Item Rate History (qty/price suggestion source) ───────
 def test_item_rate_history(base: str, token: str, company: dict, classified: dict | None) -> None:

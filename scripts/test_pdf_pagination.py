@@ -5,13 +5,15 @@ Guards the defect that shipped to production: the PDF download rasterised the
 whole invoice with html2canvas and sliced the bitmap at fixed pixel offsets,
 so anything straddling a page boundary was guillotined mid-glyph. Operators on
 a machine without Calibri hit it and operators with Calibri did not, because
-the 20-row invoice renders at 289mm-308mm depending on which fonts resolve,
-against a 297mm page.
+the then 20-row padded invoice rendered at 289mm-308mm depending on which
+fonts resolved, against a 297mm page.
 
 Two invariants:
 
-  1. Every invoice up to the template's 20 padded rows exports as ONE page, on
-     every font stack. That is the whole of current production.
+  1. Every invoice up to the template's padded row count exports as ONE page,
+     on every font stack. The pad is read from the template itself (7 rows in
+     the current design, 20 in the one it replaced), so the guarantee follows
+     the design. Production invoices are 1-3 lines, which must hold on any font.
   2. Any invoice long enough to genuinely paginate never puts a page cut
      through the FBR block, which carries the IRN and the verification QR.
      A sliced QR does not scan.
@@ -42,8 +44,14 @@ from contextlib import closing
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "myapp-frontend")
 HARNESS_PATH = "/src/devtools/pdfPaginationHarness.html"
 
-# The template pads its item table to a fixed 20 rows, so 1 item and 20 items
-# render at the same height.
+# The shipped default pads its item table to a fixed number of rows, so 1 item
+# and a full pad render at the same height. That pad is a property of the
+# template and is read from it at runtime (the harness exposes it, the same
+# way it does for every starter): 7 rows in the current design, 20 in the one
+# it replaced. Up to the pad the invoice MUST be one page; past it the table
+# grows per row and pagination is allowed, provided the FBR block stays whole.
+# The constant below is only the fallback when the harness cannot read it, and
+# the sentinel FONT_STACKS uses to say "the template's pad".
 PADDED_ROWS = 20
 SINGLE_PAGE_COUNTS = [1, 2, 3, 5, 10, 20]
 MULTI_PAGE_COUNTS = [25, 30, 40, 60]
@@ -60,10 +68,10 @@ PRODUCTION_SHAPE = 3
 # html2canvas hardcodes scale 2, so neither DPR nor zoom moves the layout.
 #
 # Calibri / Segoe UI / Arial / Liberation Sans are near enough in metrics that
-# a full 20-row invoice still fits one page. Verdana is the outlier at ~383mm,
-# standing in for DejaVu Sans -- what a Linux box falls back to when the whole
-# stack is missing. There a 10+ item invoice legitimately paginates, and the
-# guarantee that survives is the one that matters: the FBR block stays whole.
+# a fully padded invoice still fits one page. Verdana is the outlier, standing
+# in for DejaVu Sans -- what a Linux box falls back to when the whole stack is
+# missing. There a longer invoice legitimately paginates, and the guarantee
+# that survives is the one that matters: the FBR block stays whole.
 FONT_STACKS = [
     (None, PADDED_ROWS),
     ("Arial, sans-serif", PADDED_ROWS),
@@ -224,15 +232,20 @@ def run_engine(pw, engine_name, base_url, templates, results):
     try:
         for dsf in DEVICE_SCALE_FACTORS:
             context = browser.new_context(device_scale_factor=dsf, accept_downloads=True)
+            # The shipped default's pad comes from the template itself, read
+            # the same way the starters' are, so a redesign moves the one-page
+            # guarantee with it instead of failing against a frozen number.
+            probe = fresh_page(context)
+            default_pad = probe.evaluate("(window.__DEFAULT_INFO__ || {}).padRows") or PADDED_ROWS
+            starters = probe.evaluate("window.__STARTER_INFO__") or []
+            probe.close()
+            font_stacks = [(f, default_pad if n == PADDED_ROWS else n) for f, n in FONT_STACKS]
+            counts = sorted(set(SINGLE_PAGE_COUNTS) | {default_pad}) + MULTI_PAGE_COUNTS
             for tpl in ["shipped-default"] + sorted(templates.keys()):
-                sweep(context, dsf, tpl, FONT_STACKS,
-                      SINGLE_PAGE_COUNTS + MULTI_PAGE_COUNTS)
+                sweep(context, dsf, tpl, font_stacks, counts)
                 print("    %-32s dsf=%d done (%d cases)" % (tpl, dsf, len(results)))
 
             if dsf == DEVICE_SCALE_FACTORS[0]:
-                probe = fresh_page(context)
-                starters = probe.evaluate("window.__STARTER_INFO__") or []
-                probe.close()
                 for s in starters:
                     pad = s["padRows"]
                     # At the pad count the table is still full-height-constant;
@@ -354,10 +367,12 @@ def main():
         with open(args.json, "w") as fh:
             json.dump(results, fh, indent=2)
 
-    heights = [r["heightMm"] for r in results if r["items"] == PADDED_ROWS]
+    default_rows = [r for r in results if r["template"] == "shipped-default"]
+    pad = max((r["singlePageUpto"] for r in default_rows), default=PADDED_ROWS)
+    heights = [r["heightMm"] for r in default_rows if r["items"] == pad]
     if heights:
-        print("\n%d-row invoice height across fonts/engines: %.1fmm - %.1fmm (page is 297mm)"
-              % (PADDED_ROWS, min(heights), max(heights)))
+        print("\nshipped default pads to %d rows; %d-row invoice height across fonts/engines: "
+              "%.1fmm - %.1fmm (page is 297mm)" % (pad, pad, min(heights), max(heights)))
 
     starters = sorted({r["template"] for r in results if r["template"].startswith("taxinvoice-")})
     if starters:

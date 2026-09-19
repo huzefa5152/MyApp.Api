@@ -290,6 +290,194 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-19 — Adjusting an invoice is now: pick the item type, type the quantity
+
+The Invoices-tab edit opens with **Exact Line Total** already selected on every
+grouped row, pre-filled with that group's total **from the bill itself**. The
+unit price is derived and read-only, so the consultant's whole job is the two
+things only they know: the item type that carries the right HS code (UOM and
+sale type follow it), and the quantity actually supplied. The value never
+moves, which is what the ±2 PKR total-preservation guard — and FBR — expect, so
+Save stays available without any arithmetic on their side.
+
+Re-classifying a group re-seeds the same bill total under the new item type, so
+the total does not have to be re-entered after every re-pick. *Qty & Unit
+Price* is still one click away when the price is what needs to change, and a
+group switched back to it stays that way. Opening a bill and changing nothing
+rewrites nothing: the lines are re-decomposed only when a quantity or a total
+is actually edited.
+
+### 2026-09-19 — A grouped quantity no longer leaves bill lines at zero
+
+The Invoices-tab edit shows every line sharing an Item Type as **one row with
+a summed quantity** — the shape FBR receives — and retyping that sum spreads it
+back across the underlying lines, proportionally to their bill quantities. For
+whole-unit items each share was floored and only the remainder handed out, so a
+37-line bill of 137 units retyped to **61** left every 1-unit line at
+0.45 → **0**, and Save refused with "Quantity must be greater than 0" about
+lines the grouped view never shows.
+
+The spread now finishes with a repair pass: a line left at zero takes one unit
+from the largest line, so **no line ends at zero while there are at least as
+many units as lines**. Retyping the same total still reproduces the original
+lines exactly. A total the group cannot hold (fewer units than lines) is called
+out under the quantity — **"needs at least 4 — one per line"** — and Save names
+the item and the smallest total that works instead of the blind per-line error.
+Both grouped methods, *Qty & Unit Price* and *Exact Line Total*, share the one
+split.
+
+Suite: `node scripts/test_group_quantity_split.mjs` (21 checks, offline — no
+backend or database). Ported from the master line, where the bill that exposed
+it lives.
+
+### 2026-09-18 — Type the amount a line must come to, and the rate follows
+
+**Both bill-creation screens take a Line Total.** Enter quantity and unit price
+and the total computes, as before; or enter quantity and the **amount the line
+must come to** and the unit price is derived from it. On the from-a-challan
+screen the quantity is the challan's and cannot move, so there it is the total
+that drives the rate. Whichever box was just typed is never rewritten under the
+operator, and the bill subtotal adds up the amounts actually stated.
+
+The rate is derived at the twelve decimals `InvoiceItem.UnitPrice` stores, which
+is what makes the arithmetic honest: the server recomputes
+`LineTotal = Quantity × UnitPrice`, so a two-decimal rate silently bills a
+different figure than the one typed. 220,000 over 196 units at 1122.45 comes to
+**220,000.20**; at 1122.448979591837 it comes to 220,000.00. That 20-paisa gap
+was visible on a real Sales Tax Invoice, with the line and the total disagreeing
+on the printed page.
+
+**The Exact Line Total control is reachable on a single-line bill.** It lives on
+the grouped row of the invoice edit, and grouping only rendered when a bill had
+more than one line — so the one control that sets an exact total was missing from
+exactly the bills that most often need it, including the one above. The grouped
+row now renders whenever the Invoices tab does; the grouped/individual toggle
+still appears only when switching would actually change what is listed.
+
+Suite: `node scripts/test_line_amount.mjs` (23 checks, offline — no backend or
+database), which pins the round trip rather than the formatting: every
+total-over-quantity split it tries must reproduce the typed total exactly once
+stored at two decimals.
+
+### 2026-09-18 — An item type holding stock can no longer be deleted
+
+Deleting an item type was blocked only by *pending documents*, on the reasoning
+that "StockMovements carry the qty data we need regardless". That is true of the
+ledger and false of the dashboard: the on-hand grid joins the catalog and skips
+deleted rows, so deleting an item that still held goods made real stock vanish
+from the screen while its movements kept listing underneath it.
+
+It happened on a live company. An item type holding **134 units** was deleted,
+and three things broke at once that looked like three separate bugs: On-Hand
+showed nothing while Movements showed 330 in and 196 out; the bill whose FBR
+overlay pointed at that item lost its classification in the edit form, because
+the picker's list excludes deleted rows; and the out-of-stock warning then
+landed on a different, empty item type. One deletion, three symptoms.
+
+The delete now refuses while any company still holds stock of that item,
+naming the quantity and where it is, and the same guard covers a line
+reclassified **onto** the item by the dual-book overlay — previously invisible
+to the check. An item type with no stock deletes exactly as before.
+
+Suites: `python scripts/test_item_type_delete_guard.py` (5 checks, half of them
+deliberately proving an empty item type is still deletable) and
+`test_stock_itemtype_reflow.py` suite 7, which now pins both rules — the delete
+is refused while stocked, and once the stock is zeroed the item still drops off
+the grid, which is the behaviour that suite originally existed to protect.
+
+### 2026-09-18 — A standalone bill's PO prints, and the sandbox demo buyer is one FBR accepts
+
+**The PO on a bill raised without a challan now reaches the page.** A bill made
+through **New Bill (No Challan)** keeps its own PO number — there is no challan
+to carry one — but both print paths were assembling the PO from the linked
+challans alone. So the field the operator filled in was stored, shown on the
+bill card, and then printed as nothing. Bill and Tax Invoice prints now use the
+same precedence the card already used: the bill's own PO when it has one, else
+rolled up from its challans. The PO date had the same gap. No template change is
+needed — `{{poNumber}}` and `{{#if poNumber}}` already exist as merge fields, so
+wrapping the row shows it only when a PO is present.
+
+**FBR Sandbox scenarios stopped failing two out of six.** The sandbox seeder
+gave its demo Registered buyer the sample number FBR documents, which PRAL's
+STATL lookup classifies as *unregistered* — so SN001 and SN008, the only two
+scenarios that need a registered buyer, were rejected `[0205]` / `[0053]` on
+every freshly seeded company while the four unregistered-buyer scenarios passed.
+Two things were wrong: the seeder trusted the operator's own *Registration type*
+when copying an NTN from a real client, and its self-heal only ran on companies
+that already had real clients — never on a new sandbox company. It now asks PRAL
+which client is genuinely registered and falls back to a number PRAL confirms,
+so a fresh seed validates all six. A PRAL outage answers "don't know" rather
+than "unregistered", so it can never churn a working number.
+
+### 2026-09-18 — Print templates: create, switch and manage without the round trips
+
+**Configuration → Print Templates** and the **Template Editor** now work the
+way the day-to-day use of them wants to.
+
+- **New Template is one dialog.** Pick the document type, give it a name (a
+  unique one is suggested), and say what it starts from — the built-in
+  default, a copy of one of your own templates of that type, or a starter
+  design chosen from the gallery. **Create & open** writes the template and
+  opens the editor on it. The old flow opened an empty editor with Save greyed
+  out until you had typed a name.
+- **The editor's Document Type dropdown is live.** Picking another type opens
+  that type's default template on the spot (or the built-in default as an
+  unsaved draft if the type has none yet), instead of walking back to the list,
+  re-filtering and re-opening. Unsaved edits ask before they are discarded. A
+  saved template's own type does not change — merge fields differ per document
+  type — so reusing a design elsewhere is **Copy to…**.
+- **Templates (n)** in the editor opens a manager for the current document
+  type: open another, set the default, rename in place, duplicate, copy to
+  another document type, delete, or start a new one — without leaving the
+  editor. Deleting the open template falls back to the type's default.
+- **Filters and the active tab survive leaving the page.** The document type,
+  search, "Default only", and the Starter tab's search and sort are kept per
+  company for the session, restored when you come back from the editor, and
+  the card you were just editing is highlighted and scrolled into view.
+- The list is **grouped by document type** with counts, an *Only this type*
+  shortcut and a *New* link per group; the type filter shows how many
+  templates each type has; only the card being acted on shows a spinner rather
+  than every card locking; stamp upload is a proper dialog with a preview; and
+  previews show a spinner until the page has rendered instead of a blank sheet.
+- Duplicate and Copy now carry the source template's signature assignment
+  across, as they were always meant to.
+
+### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
+
+Both bill-create screens — **New Bill** (from a delivery challan) and **New
+Bill (No Challan)** — now carry a **Bill / Invoice No.** field. It opens on
+**Auto**, which is exactly what happened before: the next number in the
+company's own sequence, allocated by the server when the bill is saved, so
+nothing changes for anyone who does not touch it. The number is shown while
+the bill is being written, with the company's prefix applied, instead of being
+a surprise on the Bills list afterwards.
+
+Switching to **Custom** lets the operator type the number. It is checked
+against the company's existing bills as it is typed — an already-used number,
+a zero and the FBR Sandbox's reserved 900000+ band each say so in plain words
+and block Save, and a free one confirms what the document will print. The
+server checks again when the bill is saved, under the same per-company
+allocation lock the automatic sequence uses, and a clash there is reported with
+the number in the message. A hand-typed number is never quietly swapped for a
+different one.
+
+Both screens share one control and one server path, so they cannot disagree
+about what is next or about which numbers they accept. A custom number above
+the current highest moves the sequence on; back-filling a gap below it does
+not rewind. The old "Next bill #" hint was removed — it was computed in the
+browser from the last number issued, so it disagreed with the real sequence
+after the trailing bill was deleted.
+
+**An existing bill can be renumbered too**, from Edit Bill — the same box, the
+same checks, starting on the number the bill already has, and leaving it alone
+is always valid. It is refused once anything has gone to FBR under that number:
+a bill FBR accepted, one whose submission is still in flight, and one whose
+outcome is unknown all keep their number, because ours has to keep matching
+theirs. The form says which of those applies rather than just greying the box.
+
+Suite: `python scripts/test_custom_bill_number.py` (47 checks, both create
+paths and the edit path; `--db` adds the FBR-filed lock cases).
+
 ### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
 
 **Exact Line Total.** The Invoices tab lets a restricted role re-classify lines

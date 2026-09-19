@@ -1,0 +1,4 @@
+interface:
+  display_name: "MyApp Trader Print Templates"
+  short_description: "Match Trader layouts with its own merge fields"
+  default_prompt: "Use $myapp-print-templates to create a professional template matching my reference on TraderFbrInvoicingSystem."

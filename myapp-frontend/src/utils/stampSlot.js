@@ -33,7 +33,7 @@ export const STAMP_STATE = { SLOTTED: "slotted", PINNED: "pinned", NONE: "none" 
 
 /** Markup inserted by "Add signature block" and carried by every starter. */
 export function slotMarkup() {
-  return '<span class="stamp-slot"><img class="stamp-img" src="{{stamp}}" alt=""></span>';
+  return '<span class="stamp-slot" style="display:block;text-align:center"><img class="stamp-img" src="{{stamp}}" alt="Signature stamp" style="display:block;height:64px;max-width:180px;object-fit:contain;margin:0 auto 4px"></span>';
 }
 
 /** CSS that keeps an arbitrary upload from blowing out the signature row. */
@@ -73,7 +73,10 @@ export function pinnedSlugs(html) {
  */
 export function materializeStamp(html, url) {
   if (!html) return html;
-  if (url) return html.replace(SLOT_TOKEN_RE, escapeAttr(url));
+  // Legacy/custom layouts wrap the slot in {{#if stamp}}. Resolve that
+  // condition too: the print DTO intentionally does not carry the stamp URL.
+  const resolved = html.replace(/\{\{#if\s+stamp\s*\}\}/g, url ? "{{#if true}}" : "{{#if false}}");
+  if (url) return resolved.replace(SLOT_TOKEN_RE, escapeAttr(url));
   // Unassigned: drop the slot rather than leave src="" behind, which renders as
   // a broken-image glyph on the print.
   //
@@ -82,8 +85,9 @@ export function materializeStamp(html, url) {
   // in mergeTemplate() — so removing every slot unconditionally would delete the
   // <img> withStamp had just resolved, and an assigned stamp would silently
   // vanish from every document.
-  return html
+  return resolved
     .replace(SLOT_RE, (slot) => (/\{\{\s*stamp\s*\}\}/.test(slot) ? "" : slot))
+    .replace(/<img\b[^>]*\{\{\s*stamp\s*\}\}[^>]*>/gi, "")
     .replace(SLOT_TOKEN_RE, "");
 }
 
@@ -92,9 +96,11 @@ export function materializeStamp(html, url) {
  * mergeTemplate() call site reaches its template through here, so no call site
  * needs to know stamps exist.
  */
-export function withStamp(tpl, stampsBySlug, fallbackSlug = null) {
+export function withStamp(tpl, stampsBySlug) {
   if (!tpl || !tpl.htmlContent) return tpl;
-  const slug = tpl.stampSlug || fallbackSlug || null;
+  // No assignment means unsigned, even if the company has a default stamp.
+  // Otherwise a duplicate explicitly set to "No signature" still prints signed.
+  const slug = tpl.stampSlug || null;
   const url = slug ? stampsBySlug?.[slug] || null : null;
   const htmlContent = materializeStamp(tpl.htmlContent, url);
   return htmlContent === tpl.htmlContent ? tpl : { ...tpl, htmlContent };
@@ -121,6 +127,14 @@ export function injectSignatureBlock(html) {
 
   const block = slotMarkup();
   const withCss = ensureSlotCss(html);
+
+  // Prefer the signing label itself over a row shared with other signatories.
+  const signingLabel = />(\s*(?:Verified\s+By|Authori[sz]ed\s+(?:Signatory|Signature))\s*)</i;
+  if (signingLabel.test(withCss)) {
+    return { html: withCss.replace(signingLabel, (_m, label) =>
+      '><span style="display:inline-flex;flex-direction:column;align-items:center">' + block + '<span>' + label + '</span></span><'),
+      anchor: "signature-text", changed: true };
+  }
 
   // 1. An existing signature row — the block belongs inside it.
   const rowRe = /(<[a-z]+[^>]*class="[^"]*\b(?:sig-row|sign-row|sig-block|signature)\b[^"]*"[^>]*>)/i;

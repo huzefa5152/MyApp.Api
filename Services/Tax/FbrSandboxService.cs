@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
@@ -65,6 +65,11 @@ namespace MyApp.Api.Services.Tax
         // see ComputeDemoFloor below.
         private const int DemoBaseNumber = 900000;
 
+        // How many clients to put to PRAL when looking for a Registered buyer.
+        // Bounded so a company with a long client list cannot turn one seed
+        // into a long run of STATL calls.
+        private const int MaxRegisteredBuyerProbes = 8;
+
         // Buffer added on top of the company's StartingInvoiceNumber when
         // computing the demo floor. Keeps demo bills well above any
         // realistic growth in the real-bill range so they can never collide
@@ -75,6 +80,80 @@ namespace MyApp.Api.Services.Tax
         // the demo floor — handles the case where a company started low
         // but has already accumulated many real bills.
         private const int DemoRealMaxBuffer = 100_000;
+
+        // FBR V1.12 §4's documented sample buyer number. PRAL's STATL classifies
+        // it Unregistered, so a demo buyer wearing it can never pass SN001 or
+        // SN008 — it is kept ONLY to recognise clients an older seed created
+        // with it, never to assign.
+        private const string LegacySampleRegisteredNtn = "1000000000000";
+
+        // The demo Registered buyer's fallback, used when the company has no
+        // client of its own that PRAL confirms. It has to be a number PRAL's
+        // sandbox STATL actually returns "Registered" for — anything invented
+        // comes back Unregistered and the two registered-buyer scenarios fail.
+        // This one is already used by the repo's other sandbox seeders
+        // (scripts/seed_fbr_scenarios.py, Data/DemoDataSeeder.cs), so it adds
+        // no identifier the repo did not already carry. Sandbox only: nothing
+        // here is ever used against FBR production.
+        private const string DefaultRegisteredBuyerNtn = "8655568-8";
+
+        /// <summary>
+        /// Whether PRAL's STATL treats this number as a Registered buyer.
+        /// <c>null</c> means we could not find out (no token, PRAL down, a
+        /// malformed answer) — which callers must NOT read as "unregistered",
+        /// or an outage would rewrite a perfectly good NTN.
+        /// </summary>
+        private async Task<bool?> IsPralRegisteredAsync(int companyId, string? regNo)
+        {
+            if (string.IsNullOrWhiteSpace(regNo)) return false;
+            try
+            {
+                var res = await _fbr.GetRegistrationTypeAsync(companyId, regNo);
+                if (res == null || string.IsNullOrWhiteSpace(res.REGISTRATION_TYPE)) return null;
+                return string.Equals(res.REGISTRATION_TYPE.Trim(), "Registered",
+                                     StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// The company's first client that PRAL actually confirms as Registered.
+        /// Our stored RegistrationType only narrows the candidates — it is the
+        /// operator's word, and PRAL's STATL is what the submit is judged on.
+        /// Falls back to the first locally-flagged client when PRAL cannot be
+        /// asked, so seeding still works offline; returns null when the company
+        /// has no registered customers at all.
+        /// </summary>
+        private async Task<Client?> PickPralRegisteredClientAsync(int companyId)
+        {
+            var candidates = await _db.Clients
+                .Where(c => c.CompanyId == companyId
+                            && c.RegistrationType == "Registered"
+                            && !c.Name.StartsWith("[DEMO]"))
+                .OrderBy(c => c.Id)
+                .Take(MaxRegisteredBuyerProbes)
+                .ToListAsync();
+            if (candidates.Count == 0) return null;
+
+            var reachedPral = false;
+            foreach (var candidate in candidates)
+            {
+                var verdict = await IsPralRegisteredAsync(companyId, candidate.NTN);
+                if (verdict == true) return candidate;
+                if (verdict != null) reachedPral = true;
+            }
+
+            // Every candidate answered, and none is Registered: there is nothing
+            // better to offer, so keep the first and let the scenario fail with
+            // FBR's own message rather than silently seeding something else.
+            // If PRAL was never reachable, the same first pick is the old
+            // behaviour, unchanged.
+            _ = reachedPral;
+            return candidates[0];
+        }
 
         public FbrSandboxService(
             AppDbContext db,
@@ -165,12 +244,15 @@ namespace MyApp.Api.Services.Tax
             // Registered (or Unregistered) client on the company. The
             // demo client's NAME stays generic "[DEMO]…" so the operator
             // never sees a real customer name on a sandbox bill.
-            var realRegistered = await _db.Clients
-                .Where(c => c.CompanyId == companyId
-                            && c.RegistrationType == "Registered"
-                            && !c.Name.StartsWith("[DEMO]"))
-                .OrderBy(c => c.Id)
-                .FirstOrDefaultAsync();
+            //
+            // ...and the Registered one is chosen by ASKING PRAL, because our
+            // own RegistrationType is just what somebody typed into the client
+            // form. Picking the lowest-id client we had flagged Registered
+            // handed the demo buyer an NTN that PRAL's STATL calls
+            // unregistered, so SN001 and SN008 — the two scenarios that need a
+            // Registered buyer — failed [0205] / [0053] on every seed while the
+            // four unregistered-buyer scenarios passed.
+            var realRegistered = await PickPralRegisteredClientAsync(companyId);
             var realUnregistered = await _db.Clients
                 .Where(c => c.CompanyId == companyId
                             && c.RegistrationType == "Unregistered"
@@ -185,12 +267,12 @@ namespace MyApp.Api.Services.Tax
                     CompanyId = companyId,
                     Name = DemoRegisteredName,
                     Address = realRegistered?.Address ?? "Karachi",
-                    // Real registered NTN — passes PRAL's STATL check.
-                    // Falls back to FBR's V1.12 §4 sample NTN if the
-                    // company has no real registered customers (operator
-                    // will need to update the NTN manually before the
-                    // demo bills can submit successfully to PRAL).
-                    NTN = realRegistered?.NTN ?? "1000000000000",
+                    // A PRAL-confirmed registered NTN: the company's own first
+                    // such client when it has one, else the known-good default.
+                    // Never the documented sample — STATL calls that
+                    // Unregistered, which is what made SN001 / SN008 fail on
+                    // every freshly seeded company.
+                    NTN = realRegistered?.NTN ?? DefaultRegisteredBuyerNtn,
                     STRN = realRegistered?.STRN,
                     RegistrationType = "Registered",
                     FbrProvinceCode = realRegistered?.FbrProvinceCode
@@ -199,15 +281,24 @@ namespace MyApp.Api.Services.Tax
                 _db.Clients.Add(registeredClient);
                 await _db.SaveChangesAsync();
             }
-            else if (registeredClient.NTN == "1000000000000" && realRegistered != null)
+            else if (registeredClient.NTN == LegacySampleRegisteredNtn
+                     || await IsPralRegisteredAsync(companyId, registeredClient.NTN) == false)
             {
-                // Self-heal: an earlier seed left a placeholder NTN on the
-                // demo client. Refresh from a real registered client so
-                // future submits clear PRAL's STATL gate.
-                registeredClient.NTN = realRegistered.NTN;
-                registeredClient.STRN = realRegistered.STRN;
-                registeredClient.Address = realRegistered.Address ?? registeredClient.Address;
-                registeredClient.FbrProvinceCode = realRegistered.FbrProvinceCode
+                // Self-heal: an earlier seed left the documented sample NTN on
+                // the demo client, or the number it picked is one PRAL does not
+                // treat as Registered. Either way SN001 / SN008 cannot pass, so
+                // move it to a confirmed number — the company's own registered
+                // client when it has one, else the known-good default. A brand
+                // new sandbox company has no real clients at all, which is
+                // exactly the case the old "realRegistered != null" guard
+                // skipped, leaving those two scenarios permanently failing.
+                //
+                // A null answer (PRAL unreachable) deliberately does NOT heal —
+                // an outage must not churn a working NTN.
+                registeredClient.NTN = realRegistered?.NTN ?? DefaultRegisteredBuyerNtn;
+                registeredClient.STRN = realRegistered?.STRN ?? registeredClient.STRN;
+                registeredClient.Address = realRegistered?.Address ?? registeredClient.Address;
+                registeredClient.FbrProvinceCode = realRegistered?.FbrProvinceCode
                                                    ?? registeredClient.FbrProvinceCode;
                 await _db.SaveChangesAsync();
             }

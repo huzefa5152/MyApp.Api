@@ -109,6 +109,9 @@ export const SAMPLE_DATA = {
     ],
   },
   Bill: {
+    printTemplateType: "Bill",
+    fbrStatus: null,
+    fbrIRN: null,
     companyBrandName: "SAMPLE COMPANY",
     companyLogoPath: "",
     companyAddress: "123 Business Street, City",
@@ -131,8 +134,8 @@ export const SAMPLE_DATA = {
     grandTotal: 177000,
     amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
     items: [
-      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
-      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },
+      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
+      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
     ],
   },
   TaxInvoice: {

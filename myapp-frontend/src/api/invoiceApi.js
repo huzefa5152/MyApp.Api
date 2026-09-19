@@ -149,3 +149,12 @@ export const getAwaitingPurchase = (companyId) =>
 // ItemType so 28 "Medicines" entries collapse to one procurement row.
 export const getPurchaseTemplate = (invoiceId) =>
   httpClient.get(`/invoices/${invoiceId}/purchase-template`);
+
+// Numbering for the bill-create forms: what an "Auto" bill would be numbered
+// right now, and — when `check` is given — whether that hand-typed number is
+// free. Advisory: the server re-resolves under the per-company allocation lock
+// when the bill is actually saved.
+export const getNextInvoiceNumber = (companyId, check) =>
+  httpClient.get(`/invoices/company/${companyId}/next-number`, {
+    params: check == null ? {} : { check },
+  });

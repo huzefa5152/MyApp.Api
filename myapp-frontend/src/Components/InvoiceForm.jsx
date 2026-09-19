@@ -9,6 +9,7 @@ import { getItemTypes } from "../api/itemTypeApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
+import { lineTotalFrom, unitPriceFrom } from "../utils/lineAmount";
 import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
@@ -16,6 +17,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import ClientForm from "./ClientForm";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import DocumentTaxFields from "./DocumentTaxFields";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
 // to /lookup/units. Replaces the plain text input on each row's UOM
@@ -105,6 +107,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [billableOrders, setBillableOrders] = useState([]);
   const [salesOrderId, setSalesOrderId] = useState("");
   const [itemPrices, setItemPrices] = useState({});
+  // Amounts the operator typed per line, keyed like itemPrices. Absent means
+  // "not stated" — the cell then shows quantity x rate, as it always did.
+  const [itemLineTotals, setItemLineTotals] = useState({});
   const [itemDescriptions, setItemDescriptions] = useState({});
   const [commonPoDate, setCommonPoDate] = useState("");
   // Optional bill-time PO number override (blank → the bill derives its PO from
@@ -164,6 +169,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [scenarioPickerOpen, setScenarioPickerOpen] = useState(false);
   const [buyerOpen, setBuyerOpen] = useState(true);
   const [billHeaderOpen, setBillHeaderOpen] = useState(true);
+  // Bill / Invoice number — same control and same contract as the no-challan
+  // form (StandaloneInvoiceForm). "auto" sends invoiceNumber null and the
+  // server allocates MAX + 1 under its per-company lock; "custom" sends the
+  // typed number verbatim and billNumberOk gates Save on the field's own
+  // availability check.
+  const [billNumberMode, setBillNumberMode] = useState("auto");
+  const [billNumber, setBillNumber] = useState("");
+  const [billNumberOk, setBillNumberOk] = useState(true);
 
   // Bulk-apply mode — drives the "Apply same Item Type to: [All / Only empty]"
   // selector above the items grid. Saves 20+ catalog picks when every line on
@@ -540,7 +553,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
   const subtotal = allItems.reduce((sum, item) => {
     const price = parseFloat(itemPrices[item.id]) || 0;
-    return sum + item.quantity * price;
+    const typed = parseFloat(itemLineTotals[item.id]);
+    return sum + (Number.isFinite(typed) ? typed : lineTotalFrom(item.quantity, price));
   }, 0);
   const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
   // Preview only — the server resolves further tax from its own subtotal. A
@@ -569,6 +583,27 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
+    // The typed rate owns the line now; drop any amount the operator had
+    // entered, so the two can never disagree on screen.
+    setItemLineTotals((prev) => {
+      if (prev[itemId] == null) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+  };
+
+  // The operator states what the line must COME TO and the rate is derived
+  // from it and the challan's quantity — which is fixed here, so this is the
+  // only derivation that applies on this form. The rate carries up to 12
+  // decimals (InvoiceItem.UnitPrice), so the server's own
+  // `LineTotal = Quantity x UnitPrice` reproduces the typed figure rather than
+  // landing a few paisa away: 220,000 over 196 units is 1122.448979591837,
+  // where a 2dp rate would have billed 220,000.20.
+  const handleLineTotalChange = (itemId, value, quantity) => {
+    setItemLineTotals((prev) => ({ ...prev, [itemId]: value }));
+    const derived = unitPriceFrom(value, quantity);
+    if (derived != null) setItemPrices((prev) => ({ ...prev, [itemId]: String(derived) }));
   };
 
   const handleDescriptionChange = (itemId, value) => {
@@ -594,6 +629,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (selectedIds.length === 0) return setError("Select at least one challan.");
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting invoice number has not been set for this company. Please set it in the Companies page first.");
+
+    if (billNumberMode === "custom" && !billNumberOk)
+      return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
 
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
@@ -629,6 +667,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         companyId,
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
+        // null = Auto (server allocates the next number in sequence).
+        invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         // null, not 0 — "not selected" and "selected at zero" are different
         // things, and only null means the server charges nothing.
         furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
@@ -975,11 +1015,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               Starting bill number not set for this company. Please configure it in the Companies page.
                             </div>
                           )}
-                          {company && company.startingInvoiceNumber > 0 && (
-                            <span style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", display: "block" }}>
-                              Next bill #: {company.currentInvoiceNumber > 0 ? company.currentInvoiceNumber + 1 : company.startingInvoiceNumber}
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1001,6 +1036,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         <span style={styles.stepNum}>3</span>
                         <span style={styles.scenarioCollapseTitle}>Bill Details</span>
                         <span style={styles.scenarioCollapseSummary}>
+                          <span>{billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}</span>
+                          <span>·</span>
                           <span>{invoiceDate || "—"}</span>
                           <span>·</span>
                           <span>{gstRate}% GST</span>
@@ -1019,6 +1056,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       {billHeaderOpen && (
                         <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
                           <div style={styles.row}>
+                            <div style={{ flex: 1, minWidth: 180 }}>
+                              <BillNumberField
+                                companyId={companyId}
+                                mode={billNumberMode}
+                                onModeChange={setBillNumberMode}
+                                number={billNumber}
+                                onNumberChange={setBillNumber}
+                                onValidityChange={setBillNumberOk}
+                                disabled={saving}
+                              />
+                            </div>
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
@@ -1391,7 +1439,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       )}
                                     </div>
                                   )}
-                                  <div style={styles.mamt}><span>Line Total</span><b>{(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                                  <div style={styles.mamt}>
+                                    <span style={styles.mlabel}>Line Total</span>
+                                    <input
+                                      type="number" min={0} step={0.01}
+                                      style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
+                                      value={itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "")}
+                                      onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
+                                      placeholder="0.00"
+                                      title="Type the amount this line must come to — the unit price is derived from it and the challan quantity."
+                                    />
+                                  </div>
                                 </div>
                               );
                             })}
@@ -1535,7 +1593,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       )}
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
-                                      {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                      <input
+                                        type="number" min={0} step={0.01}
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
+                                        value={itemLineTotals[item.id] ?? (price > 0 ? String(lineTotalFrom(item.quantity, price)) : "")}
+                                        onChange={(e) => handleLineTotalChange(item.id, e.target.value, item.quantity)}
+                                        placeholder="0.00"
+                                        title="Type the amount this line must come to — the unit price is derived from it and the challan quantity."
+                                      />
                                     </td>
                                     {!billsMode && (
                                       <td
@@ -1668,10 +1733,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </span>
             )}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+            {billNumberMode === "custom" && !billNumberOk && (
+              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
+                Enter a bill number that isn&apos;t already in use, or switch back to Auto.
+              </span>
+            )}
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid}
+              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid || !billNumberOk ? 0.6 : 1 }}
+              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allPricesValid || !allItemTypesValid || !billNumberOk}
             >
               {saving ? "Creating..." : "Create Bill"}
             </button>

@@ -17,11 +17,14 @@ Usage:
   python scripts/test_item_type_composite_unique.py
 """
 from __future__ import annotations
-import json, sys, urllib.request, urllib.error
+import json
+import os, sys, urllib.request, urllib.error
 from datetime import datetime, timezone
 from typing import Any
 
-BASE = "http://localhost:5134"
+# Override with MYAPP_BASE when this branch's backend runs on a second port
+# (the default keeps the historic behaviour for anyone who never sets it).
+BASE = os.environ.get("MYAPP_BASE", "http://localhost:5134")
 PASS = "PASS"
 results: list[tuple[str, str, str]] = []
 
