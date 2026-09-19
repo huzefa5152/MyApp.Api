@@ -179,6 +179,17 @@ namespace MyApp.Api.DTOs
 
     public class PrintTaxItemDto
     {
+        // Independent display choices within this loop's existing group.
+        public decimal BillQuantity { get; set; }
+        public decimal InvoiceQuantity { get; set; }
+        public string BillItemTypeName { get; set; } = "";
+        public string InvoiceItemTypeName { get; set; } = "";
+        public string BillUom { get; set; } = "";
+        public string InvoiceUom { get; set; } = "";
+        public decimal InvoiceUnitPrice { get; set; }
+        public decimal InvoiceValueExclTax { get; set; }
+        public decimal InvoiceGstAmount { get; set; }
+        public decimal InvoiceTotalInclTax { get; set; }
         public string ItemTypeName { get; set; } = "";
         public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";

@@ -10,7 +10,7 @@ import {
   getTemplatesByCompany, setDefaultTemplate,
 } from "../api/printTemplateApi";
 import { useCompany } from "../contexts/CompanyContext";
-import { mergeTemplate } from "../utils/templateEngine";
+import { mergeTemplate, MERGE_FIELDS } from "../utils/templateEngine";
 import {
   TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, SAMPLE_DATA, DEFAULT_TEMPLATES,
 } from "../utils/templateSampleData";
@@ -108,11 +108,17 @@ export default function TemplateEditorPage() {
     (async () => {
       try {
         const { data } = await getMergeFields(templateType);
-        setFields(data.map(f => ({
+        const catalog = data.map(f => ({
           field: f.fieldExpression,
           label: f.label,
           category: f.category,
-        })));
+        }));
+        if (templateType === "TaxInvoice") {
+          for (const field of MERGE_FIELDS.TaxInvoice) {
+            if (!catalog.some(f => f.field === field.field)) catalog.push({ ...field, category: "TaxInvoice" });
+          }
+        }
+        setFields(catalog);
       } catch {
         setFields([]);
       }
