@@ -11,6 +11,7 @@ import { getSalesQuotesForPicker } from "../api/salesQuoteApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 
+import { todayYmd } from "../utils/dateInput";
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
@@ -24,7 +25,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const canCreateItemType = has("itemtypes.manage.create");
   const isEdit = !!order;
   const [client, setClient] = useState(order ? { id: order.clientId, label: order.clientName } : null);
-  const [orderDate, setOrderDate] = useState(order?.orderDate ? order.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
+  const [orderDate, setOrderDate] = useState(order?.orderDate ? order.orderDate.slice(0, 10) : todayYmd());
   const [requiredDate, setRequiredDate] = useState(order?.requiredDate ? order.requiredDate.slice(0, 10) : "");
   const [poNumber, setPoNumber] = useState(order?.customerPoNumber || "");
   const [poDate, setPoDate] = useState(order?.customerPoDate ? order.customerPoDate.slice(0, 10) : "");

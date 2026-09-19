@@ -236,6 +236,16 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
 | Grouped quantity spread — no bill line left at zero (offline) | `node scripts/test_group_quantity_split.mjs` | `21 passed, 0 failed` |
+| Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `69/69 checks` |
+| Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `142 passed, 0 failed` |
+| Product editions — Sales vs Complete, proven end to end | `python scripts/test_edition_roles.py` | `65/65 checks` |
+| Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
+| Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
+| Accounting — further tax + withholding on documents | `python scripts/test_document_taxes.py` (add `--db "<conn>"` for the credit-note suite) | `67/67 checks` (62 without `--db`) |
+| Accounting — posting from documents | `python scripts/test_accounting_posting.py` (add `--db "<conn>"` for the note + demo-bill suites) | `82/82 checks` (72 without `--db`) |
+| Accounting — reports | `python scripts/test_accounting_reports.py` | `55/55 checks` |
+| Customer portal — the only anonymous surface (IDOR suite) | `python scripts/test_customer_portal.py` | `73/73 checks` |
+| Accounting — one-shot GL back-post | `python scripts/test_gl_backfill.py --db "<conn>"` | `46/46 checks` |
 | Deleting an item type that still holds stock is refused | `python scripts/test_item_type_delete_guard.py` | `5/5 checks passed` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `47/47 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
@@ -386,6 +396,105 @@ because the challans stayed `Invoiced` against a bill reversed to nothing.
   withdrawn bill cannot appear in either.
 - Suite: `scripts/test_fbr_cancellation.py` (26 checks). It needs `--db` to fake
   the filing, because none of these paths is reachable on an unfiled bill.
+
+## The accounting module and the two editions (2026-09-19)
+
+The Trader line carries a full double-entry accounting module — chart of
+accounts, general ledger, journal entries, accounting reports and a public
+customer portal — on top of the sales product. It is **sold two ways**, so the
+boundary between them is a thing the code has to keep, not a sales promise.
+
+### The editions
+
+`Helpers/EditionCatalog.cs` is the definition, and `Data/RbacSeeder.cs` keeps
+two **system roles** in step with it on every start:
+
+- **Sales Edition** — the whole sales, purchase, inventory and FBR product,
+  including receipts and payments. No general ledger.
+- **Complete Edition** — the above plus the accounting module.
+
+Three things about that split are deliberate and easy to undo by accident:
+
+- **It is by key PREFIX, not by the catalog's `Module` column.**
+  `accounting.receipts.*`, `accounting.payments.*` and
+  `accounting.paymentstatus.*` share the `accounting.` namespace but predate the
+  module and need no ledger. Splitting on `Module == "Accounting"` strands them
+  in Complete and a Sales tenant cannot take a payment.
+- **Neither edition carries `rbac.*`, `users.*`, `tenantaccess.*` or
+  `auditlogs.*`.** This is load bearing, not tidiness: `RolesController` accepts
+  any catalog key when a role is edited, so a tenant holding
+  `rbac.roles.update` could add the accounting keys to their own role and walk
+  through the boundary. Administration of the software stays with whoever
+  operates it. If tenant self-administration is ever wanted, add the
+  "may only grant what you hold" rule to `RolesController` and
+  `UserRolesController` FIRST.
+- **They are system roles**, so `RolesController` refuses update and delete on
+  them and an edition cannot drift. A variation is a CLONE, not an edit.
+
+A permission added to `PermissionCatalog` lands in the right edition on its own.
+Adding one that must NOT reach a Sales tenant means adding its prefix to
+`AccountingModulePrefixes`. `scripts/test_edition_roles.py` derives the expected
+sets from the live catalog and proves the boundary end to end — a Sales user
+getting 403 on every accounting screen while still reaching invoices, challans,
+receipts and payments.
+
+### Every screen is behind a permission
+
+`config/routePermissions.js` maps every route to the key that opens it and
+`Components/RequirePermission.jsx` enforces it before the page mounts. Hiding a
+sidebar link was never access control — the URL still worked, and a page that
+mounts without its permissions just fills with 403s, which reads as a broken
+product rather than a closed door. **The guard fails closed**: a path with no
+entry is refused. The server is still the authority; this makes the refusal
+legible and names the key the operator needs.
+
+Add a screen → add its route entry. `node scripts/test_route_permissions.mjs`
+fails if the router and the map disagree, or if a mapped key is not in
+`PermissionCatalog`.
+
+### Accounting rules that cost something to learn
+
+- **Further tax is INSIDE `GrandTotal`.** The sale is
+  `GrandTotal − GSTAmount − FurtherTaxAmount`. Miss the subtraction and the tax
+  posts to Sales as revenue — the books still balance and the income statement
+  is quietly wrong, which is the worst shape a bug can take here. It posts to
+  its own liability account, `FurtherTaxPayable`.
+- **Withholding is deducted by the buyer, not added.** It never moves
+  `GrandTotal`; it changes what is collectible. Both taxes default to None and
+  are charged only on an explicit, complete selection, and the resolved rate is
+  stored on the document so it keeps the rate it was issued at.
+- **The GL is always on.** It is enabled at company creation, is absent from
+  every DTO so no request can write it, and there is no toggle in API, service
+  or UI.
+- **`GeneralLedgerService.WriteEntryAsync` is the ONE place an entry is
+  written**, which is what gives the balanced-entry invariant a single home.
+  `PostingService` composes legs; it does not write.
+- **A rebuild must respect the period lock.** `RebuildAsync` once cleared
+  system entries with `ExecuteDeleteAsync` — raw SQL, invisible to the lock
+  check — and then re-posted through the writer, which does see it. On a company
+  with a lock date that DELETED the closed period and refused to write it back.
+  It now leaves closed-period entries alone, skips the documents behind them,
+  and runs the whole rebuild in one transaction.
+- **The customer portal is the only anonymous surface in the repo.** No tenant
+  guard works there (every guard takes a userId and the seed admin is granted
+  everything) — **never synthesise a user id**; scope comes from the resolved
+  token and every query filters on BOTH CompanyId and ClientId. No public method
+  takes a company, client or invoice id from the caller: the route carries the
+  document NUMBER, resolved inside the portal's scope. **One generic 404 for
+  every token failure** — unknown, malformed, disabled, revoked — because
+  `GlobalExceptionMiddleware` echoes 4xx messages verbatim and distinct wording
+  is an enumeration oracle. The token is a bearer secret: redacted, masked from
+  Serilog, masked in audit rows, never logged.
+- **Per-item-type GL accounts are deliberately not built.** Which account a sale
+  posts to comes from `Company.DefaultSalesAccountId` /
+  `DefaultPurchaseAccountId`. If per-item-type mapping is wanted, build a
+  trader-native `(CompanyId, ItemTypeId, SaleAccountId, PurchaseAccountId)`
+  table and teach `PostingService.ResolveSalesAsync` / `ResolvePurchasesAsync`
+  about it — nothing else has to change. Do NOT port the importer's
+  `CompanyItemTypeSetting`: it carries that line's inventory redesign and a
+  division scope, and the stock-reflow gate depends on this line's behaviour.
+
+---
 
 ## Never name production in a tracked file
 

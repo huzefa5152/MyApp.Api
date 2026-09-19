@@ -10,6 +10,7 @@ import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 
+import { todayYmd } from "../utils/dateInput";
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
 
 /**
@@ -31,7 +32,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   const docLabel = isReceipt ? "Invoice" : "Bill";
   const dir = isReceipt ? "receipts" : "payments";
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayYmd();
   const [date, setDate] = useState(editPayment?.date ? editPayment.date.slice(0, 10) : today);
   const [method, setMethod] = useState(editPayment?.method || "Cash");
   // Bank/cash destination — free text (no Chart of Accounts in master).

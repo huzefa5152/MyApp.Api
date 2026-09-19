@@ -21,6 +21,7 @@ namespace MyApp.Api.Data
         {
             await UpsertPermissionsAsync(db);
             await EnsureAdministratorRoleAsync(db, seedAdminUserId);
+            await EnsureEditionRolesAsync(db, seedAdminUserId);
             await BootstrapExistingAdminUsersAsync(db);
         }
 
@@ -103,6 +104,78 @@ namespace MyApp.Api.Data
             });
 
             await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Keeps the two product editions (<see cref="EditionCatalog"/>) in the
+        /// Roles table as system roles, with their permission sets synced to the
+        /// catalog on every start.
+        ///
+        /// They are SYSTEM roles on purpose. A tenant is put on an edition by
+        /// being assigned one role, and <c>RolesController</c> refuses update and
+        /// delete on a system role — so the tier stays what the catalog says it
+        /// is. An operator who wants a variation clones it into a role of their
+        /// own; the edition itself does not drift, which is the whole point of
+        /// being able to say "this tenant is on Sales".
+        ///
+        /// Sync is one-directional and total: whatever the code says, the role
+        /// holds. A key added to the catalog therefore reaches the editions that
+        /// should have it without anyone remembering to go and tick it.
+        /// </summary>
+        private static async Task EnsureEditionRolesAsync(AppDbContext db, int seedAdminUserId)
+        {
+            var permissionIdByKey = await db.Permissions
+                .ToDictionaryAsync(p => p.Key, p => p.Id, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (name, description, keys) in EditionCatalog.All)
+            {
+                var role = await db.Roles
+                    .Include(r => r.RolePermissions)
+                    .FirstOrDefaultAsync(r => r.Name == name);
+
+                if (role == null)
+                {
+                    role = new Role
+                    {
+                        Name = name,
+                        Description = description,
+                        IsSystemRole = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedByUserId = seedAdminUserId
+                    };
+                    db.Roles.Add(role);
+                    await db.SaveChangesAsync();
+                }
+                else
+                {
+                    var changed = false;
+                    // An edition that somehow lost its system flag would become
+                    // editable, and then it is no longer an edition.
+                    if (!role.IsSystemRole) { role.IsSystemRole = true; changed = true; }
+                    if (role.Description != description) { role.Description = description; changed = true; }
+                    if (changed) await db.SaveChangesAsync();
+                }
+
+                // Keys the catalog no longer defines simply do not resolve; the
+                // stale-permission sweep in UpsertPermissionsAsync has already
+                // removed the rows behind them.
+                var targetIds = keys
+                    .Where(permissionIdByKey.ContainsKey)
+                    .Select(k => permissionIdByKey[k])
+                    .ToHashSet();
+
+                var currentIds = role.RolePermissions.Select(rp => rp.PermissionId).ToHashSet();
+                var toAdd = targetIds.Except(currentIds).ToList();
+                var toRemove = role.RolePermissions.Where(rp => !targetIds.Contains(rp.PermissionId)).ToList();
+
+                foreach (var pid in toAdd)
+                    db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = pid });
+                if (toRemove.Count > 0)
+                    db.RolePermissions.RemoveRange(toRemove);
+
+                if (toAdd.Count > 0 || toRemove.Count > 0)
+                    await db.SaveChangesAsync();
+            }
         }
 
         private static async Task UpsertPermissionsAsync(AppDbContext db)
