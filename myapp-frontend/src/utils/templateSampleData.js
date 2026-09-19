@@ -348,6 +348,28 @@ export const SAMPLE_DATA = {
   },
 };
 
+// Paired sample sources demonstrate independent choices without relying on
+// matching positions between separately grouped production collections.
+for (const [index, row] of SAMPLE_DATA.TaxInvoice.items.entries()) {
+  Object.assign(row, {
+    billQuantity: index === 0 ? 3 : 4, invoiceQuantity: row.quantity,
+    billItemTypeName: index === 0 ? "Valve Assembly" : "Fitting Set",
+    invoiceItemTypeName: row.itemTypeName, billUom: "Pcs", invoiceUom: row.uom,
+    invoiceUnitPrice: row.unitPrice, invoiceValueExclTax: row.valueExclTax,
+    invoiceGstAmount: row.gstAmount, invoiceTotalInclTax: row.totalInclTax,
+  });
+}
+for (const [index, row] of SAMPLE_DATA.TaxInvoice.billItems.entries()) {
+  const invoice = SAMPLE_DATA.TaxInvoice.items[index];
+  Object.assign(row, {
+    billQuantity: row.quantity, invoiceQuantity: invoice.quantity,
+    billItemTypeName: row.itemTypeName, invoiceItemTypeName: invoice.itemTypeName,
+    billUom: row.uom, invoiceUom: invoice.uom,
+    invoiceUnitPrice: invoice.unitPrice, invoiceValueExclTax: invoice.valueExclTax,
+    invoiceGstAmount: invoice.gstAmount, invoiceTotalInclTax: invoice.totalInclTax,
+  });
+}
+
 export const DEFAULT_TEMPLATES = {
   Challan: defaultChallanTemplate,
   Bill: defaultBillTemplate,

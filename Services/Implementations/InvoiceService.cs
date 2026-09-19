@@ -223,6 +223,13 @@ namespace MyApp.Api.Services.Implementations
             return ii.LineTotal;
         }
 
+        private static PrintTaxItemDto AddPrintChoices(PrintTaxItemDto row, IEnumerable<InvoiceItem> lines, decimal gstRate)
+            => PrintItemChoices.Apply(row, lines.Select(ii => new PrintItemSource(
+                ii.Quantity, ii.Adjustment?.AdjustedQuantity ?? ii.Quantity,
+                ii.ItemTypeName, ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
+                ii.UOM, ii.Adjustment?.AdjustedUOM ?? ii.UOM,
+                EffectivePrintLineTotal(ii))), gstRate);
+
         private InvoiceDto ToDto(Invoice inv)
         {
             var missing = ComputeFbrMissing(inv);
@@ -3573,7 +3580,7 @@ namespace MyApp.Api.Services.Implementations
                                 ii.Adjustment?.AdjustedQuantity ?? ii.Quantity);
                             var totalValue = g.Sum(EffectivePrintLineTotal);
                             var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
-                            return new PrintTaxItemDto
+                            return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = g.Key,
                                 Quantity = totalQty,
@@ -3592,14 +3599,14 @@ namespace MyApp.Api.Services.Implementations
                                 // defensively in case a legacy row was blank.
                                 HSCode = g.Select(x => x.Adjustment?.AdjustedHSCode ?? x.HSCode)
                                           .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-                            };
+                            }, g, inv.GSTRate);
                         }).ToList()
                     : inv.Items.Select(ii =>
                         {
                             var lineTotal = EffectivePrintLineTotal(ii);
                             var qty       = ii.Adjustment?.AdjustedQuantity  ?? ii.Quantity;
                             var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
-                            return new PrintTaxItemDto
+                            return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                                 Quantity = qty,
@@ -3611,7 +3618,7 @@ namespace MyApp.Api.Services.Implementations
                                 GSTAmount = gstAmt,
                                 TotalInclTax = lineTotal + gstAmt,
                                 HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode
-                            };
+                            }, new[] { ii }, inv.GSTRate);
                         }).ToList(),
 
                 // The BILL's own view of the same invoice (2026-09-16), for a
@@ -3634,7 +3641,7 @@ namespace MyApp.Api.Services.Implementations
                             var totalQty = g.Sum(ii => ii.Quantity);
                             var totalValue = g.Sum(ii => ii.LineTotal);
                             var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
-                            return new PrintTaxItemDto
+                            return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = g.Key,
                                 Quantity = totalQty,
@@ -3650,12 +3657,12 @@ namespace MyApp.Api.Services.Implementations
                                 GSTAmount = gstAmt,
                                 TotalInclTax = totalValue + gstAmt,
                                 HSCode = g.Select(x => x.HSCode).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-                            };
+                            }, g, inv.GSTRate);
                         }).ToList()
                     : inv.Items.Select(ii =>
                         {
                             var gstAmt = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2);
-                            return new PrintTaxItemDto
+                            return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = ii.ItemTypeName,
                                 Quantity = ii.Quantity,
@@ -3667,7 +3674,7 @@ namespace MyApp.Api.Services.Implementations
                                 GSTAmount = gstAmt,
                                 TotalInclTax = ii.LineTotal + gstAmt,
                                 HSCode = ii.HSCode
-                            };
+                            }, new[] { ii }, inv.GSTRate);
                         }).ToList()
             };
         }

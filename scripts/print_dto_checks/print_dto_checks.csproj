@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../DTOs/PrintDtos.cs" Link="PrintDtos.cs" />
     <Compile Include="../../Helpers/FbrLogoAsset.cs" Link="FbrLogoAsset.cs" />
+    <Compile Include="../../Helpers/PrintItemChoices.cs" Link="PrintItemChoices.cs" />
   </ItemGroup>
 </Project>
