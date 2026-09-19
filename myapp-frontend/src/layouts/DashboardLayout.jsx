@@ -36,6 +36,10 @@ import {
   MdFactCheck,
   MdAccountBalanceWallet,
   MdReceiptLong,
+  MdAccountTree,
+  MdMenuBook,
+  MdSpaceDashboard,
+  MdPublic,
   MdPayments,
   MdFolder,
   MdSupervisorAccount,
@@ -163,6 +167,7 @@ export default function DashboardLayout() {
     "folders.list.view",
     "fbr.config.update",
     "fbr.sandbox.view",
+    "customerportals.manage.view",
   ];
   const salesKeys = [
     // Sales tab visible if the user has any of: see-bills (Bills + Invoices
@@ -182,6 +187,9 @@ export default function DashboardLayout() {
     "fbrimport.purchase.preview",
   ];
   const accountingKeys = [
+    "accounting.reports.view",
+    "accounting.coa.view",
+    "accounting.journal.view",
     "accounting.receipts.view",
     "accounting.payments.view",
   ];
@@ -242,11 +250,11 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments")) return "accounting";
+    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
-      || p.startsWith("/templates") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "configuration";
+      || p.startsWith("/templates") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor") || p.startsWith("/customer-portals")) return "configuration";
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")) return "administration";
     return "main";
   }, [location.pathname]);
@@ -453,10 +461,34 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "accounting"}
               isChildActive={activeSection === "accounting"}
             >
+              <Can permission="accounting.reports.view">
+                <NavLink to="/accounting/overview" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdSpaceDashboard className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Overview</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.coa.view">
+                <NavLink to="/chart-of-accounts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountTree className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Chart of Accounts</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.journal.view">
+                <NavLink to="/journal-entries" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Journal Entries</span>
+                </NavLink>
+              </Can>
               <Can permission="accounting.receipts.view">
                 <NavLink to="/receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdReceiptLong className="dl-subitem__icon" aria-hidden="true" />
                   <span>Receipts</span>
+                </NavLink>
+              </Can>
+              <Can permission="accounting.reports.view">
+                <NavLink to="/accounting/reports" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Reports</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.payments.view">
@@ -553,6 +585,12 @@ export default function DashboardLayout() {
                 <NavLink to="/configuration/navigation-menu" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdFolder className="dl-subitem__icon" aria-hidden="true" />
                   <span>Navigation Menu</span>
+                </NavLink>
+              </Can>
+              <Can permission="customerportals.manage.view">
+                <NavLink to="/customer-portals" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdPublic className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Customer Portals</span>
                 </NavLink>
               </Can>
               <Can permission="fbr.config.update">
@@ -733,6 +771,11 @@ function getBreadcrumb(pathname) {
     "/Suppliers/list": "Configuration / Suppliers List",
     "/purchase-bills": "Purchases / Purchase Bills",
     "/goods-receipts": "Purchases / Goods Receipts",
+    "/chart-of-accounts": "Accounting / Chart of Accounts",
+    "/journal-entries": "Accounting / Journal Entries",
+    "/accounting/overview": "Accounting / Overview",
+    "/accounting/reports": "Accounting / Reports",
+    "/customer-portals": "Configuration / Customer Portals",
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",

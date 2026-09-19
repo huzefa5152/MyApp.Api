@@ -721,12 +721,14 @@ namespace MyApp.Api.Services.Implementations
             int sn = 0;
             foreach (var inv in invoices)
             {
-                var balance = PaymentStatusCalculator.BalanceDue(inv.GrandTotal, inv.AmountPaid);
+                // The collectible, not the grand total — see InvoiceService.Collectible.
+                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+                var balance = PaymentStatusCalculator.BalanceDue(collectible, inv.AmountPaid);
                 var isPaid = balance <= 0m;
                 if (status == "unpaid" && isPaid) continue;
                 if (status == "paid" && !isPaid) continue;
 
-                var st = PaymentStatusCalculator.Status(inv.GrandTotal, inv.AmountPaid, inv.DueDate);
+                var st = PaymentStatusCalculator.Status(collectible, inv.AmountPaid, inv.DueDate);
                 var challans = inv.DeliveryChallans ?? new List<DeliveryChallan>();
                 var dc = string.Join("/", challans.Select(c => c.ChallanNumber).Where(n => n > 0).Distinct().OrderBy(n => n));
                 DateTime? delivery = challans.Where(c => c.DeliveryDate.HasValue)

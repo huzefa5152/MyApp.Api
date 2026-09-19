@@ -19,11 +19,12 @@ namespace MyApp.Api.Models.Accounting
     /// receipts/payments are purely internal AR/AP, so this module has zero
     /// coupling to the FBR submit flow.
     ///
-    /// This is the master (Division-free, GL-free) port: there is no Chart of
-    /// Accounts here, so <see cref="BankAccountId"/> and
-    /// <see cref="PaymentAllocation.AccountId"/> are kept as plain columns with no
-    /// FK — the operator picks a bank/cash destination via the free-text
-    /// <see cref="BankAccountName"/> + <see cref="Method"/>.
+    /// <see cref="BankAccountId"/> and <see cref="PaymentAllocation.AccountId"/>
+    /// are still plain columns with NO foreign key to <c>Accounts</c>, even now
+    /// that a Chart of Accounts exists: nothing writes them yet, and the
+    /// operator picks a bank/cash destination through the free-text
+    /// <see cref="BankAccountName"/> + <see cref="Method"/>. The FK lands with
+    /// the posting engine, which is what first makes the value mean something.
     /// </summary>
     public class Payment
     {

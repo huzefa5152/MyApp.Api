@@ -11,6 +11,7 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 
+import { todayYmd } from "../utils/dateInput";
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
@@ -24,7 +25,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const canCreateItemType = has("itemtypes.manage.create");
   const isEdit = !!quote;
   const [client, setClient] = useState(quote ? { id: quote.clientId, label: quote.clientName } : null);
-  const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : todayYmd());
   // "Valid for N days" drives expiry: ValidUntil = issue date + N days. Blank =
   // no expiry (quote stays Active until accepted). On edit, derive the day count
   // back from the stored dates.

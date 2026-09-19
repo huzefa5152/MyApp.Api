@@ -82,12 +82,30 @@ namespace MyApp.Api.Data
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
-        // ── Payments / Receipts (AR/AP subledger, GL-free) ──
+        // ── Chart of Accounts ──
+        // The account tree every posting lands on: groups carry the statement
+        // and the nesting, accounts carry the type, the opening balance and
+        // (for subledger-backed ones) the control role.
+        public DbSet<MyApp.Api.Models.Accounting.AccountGroup> AccountGroups { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.Account> Accounts { get; set; }
+
+        // ── General ledger ──
+        // Balanced double-entry: one JournalEntry header per document (or per
+        // manual journal) and its Dr/Cr JournalLines.
+        public DbSet<MyApp.Api.Models.Accounting.JournalEntry> JournalEntries { get; set; }
+        public DbSet<MyApp.Api.Models.Accounting.JournalLine> JournalLines { get; set; }
+
+        // ── Payments / Receipts (AR/AP subledger) ──
         // Receipt (money in) + Payment (money out) documents and their
         // allocation lines, which settle invoices/bills and drive balance-due +
-        // payment status. No Chart of Accounts / posting engine in master.
+        // payment status.
         public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
         public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
+
+        // ── Customer Portal ──
+        // A public, token-scoped window onto one client's invoices. The token
+        // column is a bearer secret; see Models/CustomerPortal.
+        public DbSet<CustomerPortal> CustomerPortals { get; set; }
 
         // ── Unified attachments + document folders ──
         // One Attachment entity serves both the folder document-library and
@@ -434,6 +452,14 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
+            // Document taxes. Rates are (5,2) like GSTRate — a percentage, not
+            // money; the amounts are (18,2) money like every other total.
+            modelBuilder.Entity<Invoice>().Property(i => i.FurtherTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.FurtherTaxAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(b => b.WithholdingTaxRate).HasPrecision(5, 2);
+            modelBuilder.Entity<PurchaseBill>().Property(b => b.WithholdingTaxAmount).HasPrecision(18, 2);
             // (28,12): see AdjustedUnitPrice above. LineTotal stays (18,2) -
             // it is money and 2dp is correct; only the RATE needs the extra
             // scale so Quantity x UnitPrice can land on an exact line total.
@@ -1203,7 +1229,144 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
 
-            // ── Payments / Receipts (AR/AP subledger, GL-free) ─────────────────
+            // ── Chart of Accounts ──────────────────────────────────────────────
+            // Group → Company and Group → parent Group, both Restrict: a chart
+            // is not something a cascade should ever quietly erase, and the
+            // self-reference would otherwise create a multiple-cascade-path that
+            // SQL Server refuses outright.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasOne(g => g.Company).WithMany()
+                .HasForeignKey(g => g.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasOne(g => g.ParentGroup).WithMany()
+                .HasForeignKey(g => g.ParentGroupId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .Property(g => g.Name).HasMaxLength(150).IsRequired();
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .Property(g => g.ExternalRef).HasMaxLength(60);
+            // The tree renders in (statement, position) order per company.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.AccountGroup>()
+                .HasIndex(g => new { g.CompanyId, g.Statement, g.Position });
+
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasOne(a => a.Company).WithMany()
+                .HasForeignKey(a => a.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasOne(a => a.AccountGroup).WithMany()
+                .HasForeignKey(a => a.AccountGroupId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.Name).HasMaxLength(150).IsRequired();
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.Code).HasMaxLength(40);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.ExternalRef).HasMaxLength(60);
+            // (19,4) rather than the documents' (18,2): an opening balance can
+            // be a converted or apportioned figure, and rounding it on the way
+            // in is a rounding the books can never recover.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .Property(a => a.OpeningBalance).HasPrecision(19, 4);
+            // Codes are OPTIONAL but unique per company when present — a
+            // filtered index, so any number of accounts may have no code.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Account>()
+                .HasIndex(a => new { a.CompanyId, a.Code })
+                .IsUnique()
+                .HasFilter("[Code] IS NOT NULL");
+
+            // Company.DefaultSalesAccountId / DefaultPurchaseAccountId are
+            // deliberately PLAIN COLUMNS with no foreign key. Two account FKs
+            // from Companies would give SQL Server a second cascade path and it
+            // refuses that outright (1785); and a dangling id is harmless here
+            // because the posting engine checks the pinned account is still in
+            // the company's active list before using it, and re-pins when it is
+            // not. Nothing is lost by leaving the constraint off.
+
+            // ── General ledger ─────────────────────────────────────────────────
+            // Entry → Company is Restrict (a company's ledger is not something a
+            // cascade should erase); Line → Entry is Cascade, because a line has
+            // no meaning without its entry and removing an entry must take its
+            // lines or the ledger stops balancing.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasOne(e => e.Company).WithMany()
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .Property(e => e.Narration).HasMaxLength(500);
+            // JE-#### per company, allocated max+1 under NumberAllocationRetry;
+            // this index is what makes the loser of a race retry instead of
+            // duplicating a number.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.EntryNo }).IsUnique();
+            // At most ONE entry per source document. Filtered, so manual
+            // journals (SourceDocId null) are exempt and an operator may write
+            // as many as they like. This index is the idempotency guarantee that
+            // stops an edited document being posted twice.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.SourceDocType, e.SourceDocId })
+                .IsUnique()
+                .HasFilter("[SourceDocId] IS NOT NULL");
+            // Every report filters by date within a company.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalEntry>()
+                .HasIndex(e => new { e.CompanyId, e.Date });
+
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.JournalEntry).WithMany(e => e.Lines)
+                .HasForeignKey(l => l.JournalEntryId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Line → Account is Restrict: an account with ledger history must
+            // not be deletable, and AccountService says so in words first.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasOne(l => l.Account).WithMany()
+                .HasForeignKey(l => l.AccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // (19,4) to match the chart's opening balances: a ledger line is
+            // where an apportioned or converted figure lands, and rounding it to
+            // paisa on the way in is a rounding the books never recover.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Debit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Credit).HasPrecision(19, 4);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.PartyType).HasMaxLength(20);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .Property(l => l.Description).HasMaxLength(500);
+            // The account-ledger drill-down and every balance read key on this.
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.JournalLine>()
+                .HasIndex(l => l.AccountId);
+
+            // ── Customer Portal ────────────────────────────────────────────────
+            // Both FKs Restrict: a portal is a live public link, and neither
+            // deleting a company nor a client should silently leave one
+            // resolving — or take one away without the operator noticing.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasOne(p => p.Company).WithMany()
+                .HasForeignKey(p => p.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CustomerPortal>()
+                .HasOne(p => p.Client).WithMany()
+                .HasForeignKey(p => p.ClientId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<CustomerPortal>()
+                .Property(p => p.PublicToken).HasMaxLength(64).IsRequired();
+            modelBuilder.Entity<CustomerPortal>()
+                .Property(p => p.DocumentType).HasMaxLength(20);
+            // The token is the lookup key on every public request, and it must
+            // be unique or two portals could answer to one link.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasIndex(p => p.PublicToken).IsUnique();
+            // At most ONE ACTIVE portal per (company, client). Filtered, so a
+            // client may accumulate disabled portals in their history without
+            // ever having two live links in circulation.
+            modelBuilder.Entity<CustomerPortal>()
+                .HasIndex(p => new { p.CompanyId, p.ClientId })
+                .IsUnique()
+                .HasFilter("[IsActive] = 1");
+
+            // ── Payments / Receipts (AR/AP subledger) ──────────────────────────
             // Payment header → Company (Restrict: a company's payment history
             // can't be cascade-wiped). Direction + ChequeStatus persist as int.
             // No Chart of Accounts here, so BankAccountId / allocation AccountId

@@ -181,6 +181,12 @@ namespace MyApp.Api.Services.Implementations
                 StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber > 0 ? dto.StartingSalesQuoteNumber : 1,
                 StartingSalesOrderNumber = dto.StartingSalesOrderNumber > 0 ? dto.StartingSalesOrderNumber : 1,
                 IsTenantIsolated = dto.IsTenantIsolated,
+                // Every new company keeps books from its first document. This is
+                // NOT read from the DTO and there is no endpoint that clears it:
+                // a company that has posted cannot stop posting without its
+                // ledger drifting away from its documents, so the choice is made
+                // once, here.
+                GlPostingEnabled = true,
             };
 
             var created = await _repository.AddAsync(company);
@@ -331,10 +337,31 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // 0. Customer portals FIRST. Both their FKs are Restrict on
+                //    purpose — a live public link must never vanish by accident
+                //    — so a portal left in place blocks step 4's client delete
+                //    with a raw constraint error. Deleting the company is the
+                //    operator saying its links go too.
+                await _context.CustomerPortals.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
+
                 // 1. Unlink challans from invoices
                 await _context.DeliveryChallans
                     .Where(dc => dc.CompanyId == id && dc.InvoiceId != null)
                     .ExecuteUpdateAsync(s => s.SetProperty(dc => dc.InvoiceId, (int?)null));
+
+                // 1b. Receipts / payments and their allocation lines. These
+                //     MUST go before the invoices and purchase bills below:
+                //     PaymentAllocation -> Invoice / PurchaseBill is Restrict,
+                //     so an allocation still pointing at an invoice makes the
+                //     invoice delete fail and rolls the whole thing back.
+                var paymentIds = await _context.Payments
+                    .Where(p => p.CompanyId == id).Select(p => p.Id).ToListAsync();
+                if (paymentIds.Count > 0)
+                {
+                    await _context.PaymentAllocations
+                        .Where(a => paymentIds.Contains(a.PaymentId)).ExecuteDeleteAsync();
+                    await _context.Payments.Where(p => p.CompanyId == id).ExecuteDeleteAsync();
+                }
 
                 // 2. Delete invoice items, then invoices
                 var invoiceIds = await _context.Invoices.Where(i => i.CompanyId == id).Select(i => i.Id).ToListAsync();
@@ -406,6 +433,25 @@ namespace MyApp.Api.Services.Implementations
                 //    becomes undeleteable.
                 await _context.FbrCommunicationLogs.Where(l => l.CompanyId == id).ExecuteDeleteAsync();
                 await _context.UserCompanies.Where(uc => uc.CompanyId == id).ExecuteDeleteAsync();
+
+                // 7b. General ledger, then the chart of accounts. Order is
+                //     forced by the FKs: JournalLine -> Account is Restrict, so
+                //     the ledger goes first; Accounts -> AccountGroup and both
+                //     -> Company are Restrict, so the chart goes before the
+                //     company row. Lines cascade from their entries.
+                var entryIds = await _context.JournalEntries
+                    .Where(e => e.CompanyId == id).Select(e => e.Id).ToListAsync();
+                if (entryIds.Count > 0)
+                {
+                    await _context.JournalLines
+                        .Where(l => entryIds.Contains(l.JournalEntryId)).ExecuteDeleteAsync();
+                    await _context.JournalEntries.Where(e => e.CompanyId == id).ExecuteDeleteAsync();
+                }
+                // Accounts first, then the groups; the groups' self-reference
+                // (ParentGroupId) is satisfied because one DELETE removes the
+                // whole tree in a single statement.
+                await _context.Accounts.Where(a => a.CompanyId == id).ExecuteDeleteAsync();
+                await _context.AccountGroups.Where(g => g.CompanyId == id).ExecuteDeleteAsync();
 
                 // 8. Delete the company
                 await _repository.DeleteAsync(company);

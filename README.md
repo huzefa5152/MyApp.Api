@@ -290,6 +290,62 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-19 — Accounting, the customer portal, and two editions to sell them in
+
+**Double-entry accounting.** A chart of accounts per company (seeded from a
+wholesale preset), a general ledger, manual journal entries with period close,
+posting from every document that moves money, and the reports that read out of
+it: balance sheet, profit and loss, party ledgers, aged receivables and
+payables, cash book, expenses and a tax control sheet.
+
+The ledger is **always on** — enabled at company creation, absent from every
+DTO, with no toggle in the API or the UI, so there is no state in which a
+document posts for one company and not another. `WriteEntryAsync` is the single
+place an entry is written, which is what lets debits-equal-credits be an
+invariant rather than a convention. Companies that predate the module are
+brought up to date by a one-shot back-post marked in an audit row, so a rerun
+is a no-op.
+
+Two taxes came with it, both defaulting to **None** and charged only on an
+explicit selection, with the resolved rate stored on the document so it keeps
+the rate it was issued at. **Further tax** sits INSIDE the grand total, so the
+sale has to be derived as `GrandTotal − GST − FurtherTax` and the tax posts to
+its own liability account; get that wrong and it lands in Sales as revenue,
+where the books still balance and the income statement is quietly wrong.
+**Withholding** is deducted by the buyer — it never moves the grand total, it
+changes what is collectible.
+
+**Customer portal.** A customer gets a link that shows their own invoices and
+nothing else. It is the only anonymous surface in the product and is treated
+that way: scope comes from the token rather than from anything the caller
+sends, every query filters on both company and client, the route carries a
+document number resolved inside that scope, and every token failure — unknown,
+malformed, disabled, revoked — returns one identical 404, because distinct
+wording is an enumeration oracle.
+
+**Two editions.** The build is sold as **Sales Edition** — the whole sales,
+purchase, inventory and FBR product including receipts and payments — and
+**Complete Edition**, which adds the accounting module. Both are seeded as
+built-in system roles, so putting a tenant on an edition is assigning one role,
+and neither can be edited or deleted into something else. Software
+administration (users, roles, tenant access, audit logs) is in neither: role
+editing accepts any permission key, so a tenant who could edit roles could add
+the accounting keys to their own and walk straight through the boundary.
+
+**Every screen is now behind a permission.** The sidebar already hid links an
+operator could not use, but the URL still worked — typing the address of a
+screen you had no rights to mounted the page and filled it with failed
+requests, which reads as a broken product rather than a closed door. Each route
+now names the permission that opens it, in one place, and the guard refuses
+before the page mounts and names the key to ask for. It fails closed: a screen
+added without that decision is refused, not allowed.
+
+Suites: `test_accounting_chart.py` (103), `test_accounting_gl.py` (93),
+`test_document_taxes.py` (67), `test_accounting_posting.py` (82),
+`test_accounting_reports.py` (55), `test_customer_portal.py` (73),
+`test_gl_backfill.py` (46), `test_edition_roles.py` (65) and
+`node scripts/test_route_permissions.mjs` (142, offline).
+
 ### 2026-09-19 — Adjusting an invoice is now: pick the item type, type the quantity
 
 The Invoices-tab edit opens with **Exact Line Total** already selected on every

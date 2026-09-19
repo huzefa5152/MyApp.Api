@@ -49,6 +49,10 @@ builder.Host.UseSerilog((ctx, services, lc) => lc
     .ReadFrom.Services(services)
     .Enrich.FromLogContext()
     .Enrich.WithProperty("Application", "MyApp.Api")
+    // The Customer Portal token travels in the URL path, which request logging
+    // records verbatim on every request. This rewrites it to *** before the
+    // event reaches any sink — see Helpers/PortalTokenLogMasker.
+    .Enrich.With(new MyApp.Api.Helpers.PortalTokenLogMasker())
     .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
     // Defaults if config doesn't override — durable rolling file in
     // logs/ next to the binary, 30-day retention, 50 MB cap per file.
@@ -295,6 +299,22 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         }));
 
+    // Public Customer Portal. Partitioned on the TOKEN, not the IP: behind the
+    // host's proxy the remote IP is not reliably the caller's
+    // (ForwardedHeaders:KnownProxies is still unset — audit C-12), so an
+    // IP-partitioned limit would either throttle every customer together or
+    // nobody. Nothing about secrecy rests on this — at 256 bits of entropy the
+    // token cannot be guessed — it is here to stop noise and accidental loops.
+    options.AddPolicy("portal", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Request.RouteValues["token"]?.ToString() ?? "anonymous-portal",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
     // Audit H-6: password change. BCrypt verify + hash = ~200 ms CPU
     // each. 5/hour/user is plenty for legitimate change flows.
     options.AddPolicy("passwordChange", httpContext =>
@@ -320,6 +340,7 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IFolderRepository, FolderRepository>();
 builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 
@@ -347,9 +368,25 @@ builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 // IDeliveryChallanService (create-challan-from-order). No true DI cycle.
 builder.Services.AddScoped<ISalesQuoteService, SalesQuoteService>();
 builder.Services.AddScoped<ISalesOrderService, SalesOrderService>();
-// Receipts (money in) + Payments (money out) — AR/AP subledger. GL-free port:
-// no IPostingService dependency (master has no Chart of Accounts).
+// Receipts (money in) + Payments (money out) — AR/AP subledger.
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+// Chart of Accounts: the account tree plus the sector preset that makes a new
+// company's chart usable without hand-building it.
+builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<ICoaPresetSeeder, CoaPresetSeeder>();
+// The general ledger: the one place an entry is written, plus the balance
+// primitives every screen and report reads instead of summing lines itself.
+builder.Services.AddScoped<IGeneralLedgerService, GeneralLedgerService>();
+builder.Services.AddScoped<IJournalEntryService, JournalEntryService>();
+// The posting engine decides a document's legs; the ledger service above is
+// what actually writes them, so the balance invariant has one home.
+builder.Services.AddScoped<IPostingService, PostingService>();
+// The accounting reports. They read the ledger and reuse its primitives —
+// nothing here recomputes a balance of its own.
+builder.Services.AddScoped<IAccountingReportService, AccountingReportService>();
+// Customer Portal: management for internal users, plus the only anonymous
+// surface in the app. See PublicCustomerPortalController for why.
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
 // Unified attachments + document folders. AttachmentStorage is stateless
 // (just resolves paths under data/attachments) so it registers as a singleton.
 builder.Services.AddScoped<IFolderService, FolderService>();
@@ -743,6 +780,18 @@ using (var scope = app.Services.CreateScope())
     await MyApp.Api.Data.SalesMergeFieldSeeder.SeedAsync(db);          // SalesQuote / SalesOrder
     await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db); // Credit/Debit Note, PurchaseBill, GoodsReceipt
     await MyApp.Api.Data.TaxInvoiceBillItemsMergeFieldSeeder.SeedAsync(db); // TaxInvoice {{#each billItems}}
+
+    // ── GL back-post ────────────────────────────────────────────────────
+    // Companies created from now on keep books from their first document.
+    // A company that existed BEFORE the ledger did has documents and no
+    // entries, so this brings it up to date once. Guarded by its own
+    // audit-log marker; see Data/GlBackfill for why it cannot double-post
+    // and why one company failing does not stop the rest — or the app.
+    await MyApp.Api.Data.GlBackfill.RunAsync(
+        db,
+        scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.ICoaPresetSeeder>(),
+        scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPostingService>(),
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("GlBackfill"));
 
     // Demo-environment data seeder. Runs ONLY when ASPNETCORE_ENVIRONMENT
     // is "Demo" (set by scripts/run-demo.ps1 which also points the
@@ -2050,6 +2099,13 @@ app.MapControllers(); // 👈 maps your controllers (like CompaniesController)
 // matches /admin/assets/*.js, and StaticFileMiddleware skips any request
 // that already matched an endpoint — serving HTML for every asset.
 app.MapFallbackToFile("admin/{*path:nonfile}", "admin/index.html");
+
+// The PUBLIC customer portal. The link a customer is sent is /portal/<token>,
+// which is NOT under /admin — so without this it would fall through to the
+// landing page below. It serves the same SPA shell: the shell's asset URLs are
+// absolute (/admin/assets/...), so they still resolve, and main.jsx detects the
+// path and renders the portal outside the router and the auth providers.
+app.MapFallbackToFile("portal/{*path:nonfile}", "admin/index.html");
 
 // Everything else — including "/" — serves the public landing page.
 app.MapFallbackToFile("index.html");

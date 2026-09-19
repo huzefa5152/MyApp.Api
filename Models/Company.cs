@@ -101,6 +101,30 @@ namespace MyApp.Api.Models
         public int StartingSalesOrderNumber { get; set; }
         public int CurrentSalesOrderNumber { get; set; }
 
+        // ── General ledger ──
+        //
+        // GL posting is NOT an operator setting. Every company created from now
+        // on has it on, and there is no endpoint, service method or UI control
+        // that turns it off — a company whose documents have been posted cannot
+        // stop posting without the ledger silently going out of step with the
+        // documents. The column exists because companies that predate the
+        // accounting module still have to be back-posted before their new
+        // documents may post, and this is what records that that has happened.
+        public bool GlPostingEnabled { get; set; }
+
+        // Period close. Nothing may be posted, edited or deleted with a date on
+        // or before this day — that is what makes a filed period stay filed.
+        // Null = no period has been closed yet.
+        public DateTime? GlLockDate { get; set; }
+
+        // Where a sale's revenue and a purchase's cost land when nothing more
+        // specific says otherwise. Pinned on the company so the posting engine
+        // resolves them by id rather than guessing from account names on every
+        // document. Null until the chart is built, at which point the engine
+        // adopts the seeded Sales / Cost-of-goods-sold accounts.
+        public int? DefaultSalesAccountId { get; set; }
+        public int? DefaultPurchaseAccountId { get; set; }
+
         // ── Tenant isolation ──
         // When false (default), any authenticated user with the right
         // RBAC permission can access this company's data — preserves

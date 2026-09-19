@@ -253,11 +253,50 @@ namespace MyApp.Api.Helpers
             new("salesorders.manage.delete", "SalesOrders", "Manage", "Delete", "Delete a sales order"),
             new("salesorders.print.view",    "SalesOrders", "Print",  "View",   "Print or download a sales order"),
 
+            // ── Accounting — Chart of Accounts ──────────────────────────────
+            // Two keys, not four: reading the chart is harmless, but every write
+            // (new group, new account, rename, deactivate, reclassify, seed the
+            // preset) reshapes where money lands, so they share one key rather
+            // than letting a role hold "create account" without "edit account".
+            new("accounting.coa.view",        "Accounting", "Chart of Accounts", "View",   "View the chart of accounts and account balances"),
+            new("accounting.coa.manage",      "Accounting", "Chart of Accounts", "Manage", "Create, edit, deactivate or delete accounts and groups, and seed the sector preset"),
+
+            // ── Accounting — General ledger ─────────────────────────────────
+            // There is no "enable GL" key: posting is on for every company and
+            // cannot be turned off, so there is no such capability to grant.
+            // accounting.gl.manage gates the PERIOD CLOSE, which is the one
+            // ledger-wide setting an operator can change — and closing a period
+            // freezes everyone's figures, so it is deliberately separate from
+            // reading the ledger.
+            new("accounting.gl.view",         "Accounting", "General Ledger", "View",   "View ledger status, account ledgers and the trial balance"),
+            new("accounting.gl.manage",       "Accounting", "General Ledger", "Manage", "Close or reopen an accounting period (lock date)"),
+            new("accounting.journal.view",    "Accounting", "Journal Entries", "View",   "View journal entries, both system-posted and manual"),
+            new("accounting.journal.create",  "Accounting", "Journal Entries", "Create", "Write a manual journal entry"),
+            new("accounting.journal.update",  "Accounting", "Journal Entries", "Update", "Edit a manual journal entry"),
+            new("accounting.journal.delete",  "Accounting", "Journal Entries", "Delete", "Delete a manual journal entry"),
+
+            // One key for the whole reporting suite. They are all views of the
+            // same ledger, so a role that may read the trial balance can already
+            // work out the balance sheet — splitting them would suggest a
+            // privacy boundary that does not exist.
+            new("accounting.reports.view",    "Accounting", "Reports", "View",   "View the accounting reports: statements, party ledgers, aging, cash book, expenses, tax control and the dashboard"),
+
+            // ── Customer Portal ─────────────────────────────────────────────
+            // Issuing a portal publishes a client's invoices to anyone holding
+            // the link, and the management response CARRIES that link — so
+            // create, update and delete are split from view, and .view is
+            // already enough to walk away with every live token. Grant it the
+            // way you would grant a key cabinet.
+            new("customerportals.manage.view",   "CustomerPortals", "Manage", "View",   "View customer portals and their public links"),
+            new("customerportals.manage.create", "CustomerPortals", "Manage", "Create", "Issue a public portal link for a customer"),
+            new("customerportals.manage.update", "CustomerPortals", "Manage", "Update", "Enable, disable, or change the document a portal serves"),
+            new("customerportals.manage.delete", "CustomerPortals", "Manage", "Delete", "Revoke a portal for good — the link stops working permanently"),
+
             // ── Accounting — Receipts & Payments (AR/AP subledger) ──────────
             // Receipts (money in, settle sales invoices) and Payments (money
             // out, settle purchase bills) are split into separate keys for
             // separation of duties: a cashier may record receipts without being
-            // able to pay money out. GL-free — no Chart of Accounts in master.
+            // able to pay money out.
             new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
             new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
             new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),

@@ -22,6 +22,41 @@ namespace MyApp.Api.Models
         public decimal AmountPaid { get; set; }
         public DateTime? DueDate { get; set; }
 
+        // ── Further tax (Sales Tax Act s.3(1A)) ──
+        // Charged on a supply — typically to a buyer with no sales-tax
+        // registration — and owed to FBR alongside the output tax.
+        //
+        // This one IS part of the supply's tax: same base as sales tax (the net
+        // value of supply), on the sales-tax invoice, and INSIDE the grand
+        // total:
+        //     GrandTotal = Subtotal + GSTAmount + FurtherTaxAmount
+        // It posts to its own liability account (ControlType.FurtherTaxPayable)
+        // rather than into Output Sales Tax, so that account keeps reconciling
+        // to GST on sales for the tax reports.
+        //
+        // DEFAULT IS NONE. A null rate means the operator did not select further
+        // tax, which is how every document written before this existed reads and
+        // how every new one starts — nothing is charged on a guess. Resolved by
+        // Helpers/FurtherTaxCalculator, and the RESOLVED rate is stored so a
+        // document keeps the rate it was actually issued at.
+        public decimal? FurtherTaxRate { get; set; }
+        public decimal FurtherTaxAmount { get; set; }
+
+        // ── Withholding income tax (s.153) ──
+        // Tax the CUSTOMER withholds at source when paying this invoice and
+        // remits to FBR on our behalf. It sits on top of sales tax and is NOT on
+        // the FBR sales-tax invoice — GrandTotal, GSTAmount and the PRAL payload
+        // are unchanged. It only reduces what the customer pays:
+        //     Collectible = GrandTotal − WithholdingTaxAmount
+        // and posts Dr "WHT receivable", because the withheld slice is
+        // reclaimable from FBR rather than lost.
+        //
+        // DEFAULT IS NONE, on the same reasoning as further tax. Mode is
+        // implicit: a rate means rate mode, a null rate with an amount means
+        // fixed-amount mode. See Helpers/WithholdingTaxCalculator.
+        public decimal? WithholdingTaxRate { get; set; }
+        public decimal WithholdingTaxAmount { get; set; }
+
         // FBR Digital Invoicing
         public int? DocumentType { get; set; }
         public string? PaymentMode { get; set; }

@@ -18,6 +18,7 @@ import ClientForm from "./ClientForm";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
+import DocumentTaxFields from "./DocumentTaxFields";
 // 2026-05-08: Same UOM autocomplete the ChallanForm uses, hooked up
 // to /lookup/units. Replaces the plain text input on each row's UOM
 // cell so operators get the saved-units suggestions instead of having
@@ -116,6 +117,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [poNumber, setPoNumber] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
+  // Both optional document taxes start as NONE — nothing is charged or withheld
+  // unless the operator adds it. See Components/DocumentTaxFields.
+  const [furtherTaxRate, setFurtherTaxRate] = useState(null);
+  const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
+  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [paymentTerms, setPaymentTerms] = useState("");
   // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
   // slice rolled the calendar day back by one for PKT operators billing
@@ -551,7 +557,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     return sum + (Number.isFinite(typed) ? typed : lineTotalFrom(item.quantity, price));
   }, 0);
   const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
-  const grandTotal = subtotal + gstAmount;
+  // Preview only — the server resolves further tax from its own subtotal. A
+  // null rate contributes 0, so this is the same number it has always been.
+  const furtherTaxAmount = furtherTaxRate === null || furtherTaxRate === ""
+    ? 0
+    : Math.round(subtotal * (Number(furtherTaxRate) || 0) / 100 * 100) / 100;
+  const grandTotal = subtotal + gstAmount + furtherTaxAmount;
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
   // Item Type is required on every line so the invoice can always group by
@@ -658,6 +669,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         gstRate: parseFloat(gstRate),
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
+        // null, not 0 — "not selected" and "selected at zero" are different
+        // things, and only null means the server charges nothing.
+        furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
+        withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
+        withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
         paymentTerms: paymentTermsToSave,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
@@ -1674,10 +1690,26 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         <div style={styles.totalsBox}>
                           <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                          {furtherTaxAmount > 0 && (
+                            <div style={styles.totalRow}><span>Further tax ({furtherTaxRate}%):</span><span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                          )}
                           <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
                             <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
+
+                        <DocumentTaxFields
+                          subtotal={subtotal}
+                          gstAmount={gstAmount}
+                          furtherTaxRate={furtherTaxRate}
+                          onFurtherTaxRateChange={setFurtherTaxRate}
+                          withholdingTaxRate={withholdingTaxRate}
+                          withholdingTaxAmount={withholdingTaxAmount}
+                          onWithholdingChange={({ rate, amount }) => {
+                            setWithholdingTaxRate(rate);
+                            setWithholdingTaxAmount(amount);
+                          }}
+                        />
                       </div>
                     )}
                   </>

@@ -19,13 +19,15 @@ namespace MyApp.Api.Services.Implementations
     {
         private readonly IPaymentRepository _repo;
         private readonly AppDbContext _context;
+        private readonly IPostingService _posting;
         private readonly ILogger<PaymentService> _logger;
 
         public PaymentService(IPaymentRepository repo, AppDbContext context,
-            ILogger<PaymentService> logger)
+            IPostingService posting, ILogger<PaymentService> logger)
         {
             _repo = repo;
             _context = context;
+            _posting = posting;
             _logger = logger;
         }
 
@@ -204,6 +206,10 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var id in billIds.Distinct()) await RecomputePurchaseBillAsync(id);
                 await _context.SaveChangesAsync();
 
+                // Post from the same place the paid totals reflow — that is
+                // where the money moved. A no-op while the ledger is not live.
+                await _posting.PostPaymentAsync(payment);
+
                 await tx.CommitAsync();
             }
             catch
@@ -323,6 +329,8 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var bid in oldBillIds.Union(billIds).Distinct()) await RecomputePurchaseBillAsync(bid);
                 await _context.SaveChangesAsync();
 
+                await _posting.PostPaymentAsync(payment);
+
                 await tx.CommitAsync();
             }
             catch
@@ -351,6 +359,12 @@ namespace MyApp.Api.Services.Implementations
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
+                // The ledger entry first: it references the payment by
+                // SourceDocId, which is not a foreign key, so nothing cascades
+                // it away when the row goes.
+                await _posting.RemoveForSourceAsync(
+                    payment.CompanyId, MyApp.Api.Models.Accounting.SourceDocType.Payment, payment.Id);
+
                 _context.Payments.Remove(payment); // allocations cascade
                 await _context.SaveChangesAsync();
 

@@ -4,6 +4,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 
+import { todayYmd } from "../utils/dateInput";
 const colors = {
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b", blue: "#0d47a1",
@@ -13,7 +14,7 @@ const colors = {
 // quantity with what's still remaining; the operator can deliver less (partial)
 // or more (over-delivery is allowed and flagged on the order afterwards).
 export default function CreateChallanFromOrderModal({ order, companyId, onClose, onCreated }) {
-  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().slice(0, 10));
+  const [deliveryDate, setDeliveryDate] = useState(todayYmd());
   const [site, setSite] = useState(order?.site || "");
   const [qtys, setQtys] = useState(() => {
     const m = {};

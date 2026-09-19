@@ -7,6 +7,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClaimSummary } from "../api/taxClaimApi";
 import QuantityInput from "./QuantityInput";
+import DocumentTaxFields from "./DocumentTaxFields";
 import { isDecimalUnit } from "../utils/formatQuantity";
 import { splitGroupQuantity } from "../utils/groupQuantitySplit";
 
@@ -162,6 +163,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // (decimal allowed for KG/Liter/etc., integer-only for Pcs/SET/etc.).
   const [units, setUnits] = useState([]);
   const [gstRate, setGstRate] = useState(18);
+  // Optional document taxes, both NONE until added. Only editable in the full
+  // bill edit — the Invoices-tab narrow edit must not change what was charged.
+  const [furtherTaxRate, setFurtherTaxRate] = useState(null);
+  const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
+  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [billDate, setBillDate] = useState("");
   // The bill number is editable here, but only while nothing has gone to
   // FBR under it (see billNumberLock below). Held as text so the box can be
@@ -298,6 +304,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setUnits(unitsRes.data || []);
         setClientId(data.clientId ? String(data.clientId) : "");
         setGstRate(data.gstRate ?? 18);
+        setFurtherTaxRate(data.furtherTaxRate ?? null);
+        setWithholdingTaxRate(data.withholdingTaxRate ?? null);
+        setWithholdingTaxAmount(
+          data.withholdingTaxRate == null && data.withholdingTaxAmount > 0 ? data.withholdingTaxAmount : null);
         // Date arrives as ISO string; the <input type="date"> control wants
         // YYYY-MM-DD in LOCAL time. Pre-fix (.toISOString().slice(0,10))
         // converted to UTC first, which rolled the calendar day forward in
@@ -1208,7 +1218,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
-  const grandTotal = subtotal + gstAmount;
+  // Preview only — the server re-derives further tax from its own subtotal.
+  const furtherTaxAmount = furtherTaxRate === null || furtherTaxRate === ""
+    ? 0
+    : Math.round(subtotal * (Number(furtherTaxRate) || 0) / 100 * 100) / 100;
+  const grandTotal = subtotal + gstAmount + furtherTaxAmount;
 
   // Field-level gating booleans, derived once for clarity:
   //   • lockNonItemType — locks every BILL-level field outside the
@@ -1478,6 +1492,10 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         await updateInvoice(invoiceId, {
           date: billDate || null,
           gstRate: parseFloat(gstRate),
+          // null, not 0 — only null clears the tax.
+          furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
+          withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
+          withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
           paymentTerms: ptToSave,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
@@ -2405,11 +2423,36 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                     <span>GST ({gstRate}%):</span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
+                  {furtherTaxAmount > 0 && (
+                    <div style={styles.totalsRow}>
+                      <span>Further tax ({furtherTaxRate}%):</span>
+                      <strong>Rs. {furtherTaxAmount.toLocaleString()}</strong>
+                    </div>
+                  )}
                   <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
                     <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
                   </div>
                 </div>
+
+                {/* Only in the full bill edit. The Invoices-tab narrow edit
+                    re-classifies and re-prices lines under a total-preservation
+                    guard; letting it change WHICH taxes a filed bill carried
+                    would defeat that guard entirely. */}
+                {billsMode && !lockNonItemType && (
+                  <DocumentTaxFields
+                    subtotal={subtotal}
+                    gstAmount={gstAmount}
+                    furtherTaxRate={furtherTaxRate}
+                    onFurtherTaxRateChange={setFurtherTaxRate}
+                    withholdingTaxRate={withholdingTaxRate}
+                    withholdingTaxAmount={withholdingTaxAmount}
+                    onWithholdingChange={({ rate, amount }) => {
+                      setWithholdingTaxRate(rate);
+                      setWithholdingTaxAmount(amount);
+                    }}
+                  />
+                )}
 
                 {/* Total-preservation guard — only shown in itemType+qty
                     (+price) mode. Lets the operator see in real time
@@ -3924,8 +3967,7 @@ const styles = {
   table: { width: "100%", borderCollapse: "collapse", minWidth: 1100, tableLayout: "fixed" },
   thead: { backgroundColor: "#f5f7fa" },
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
-  td: {
-    verticalAlign: "top", padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+  td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
   narrowPermissionBanner: {
     display: "flex", alignItems: "flex-start", gap: "0.5rem",

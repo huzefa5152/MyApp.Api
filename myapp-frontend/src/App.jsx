@@ -10,6 +10,11 @@ import InvoicePage from "./pages/InvoicePage";
 import SalesQuotePage from "./pages/SalesQuotePage";
 import SalesOrderPage from "./pages/SalesOrderPage";
 import PaymentsPage from "./pages/PaymentsPage";
+import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
+import JournalEntriesPage from "./pages/JournalEntriesPage";
+import AccountingDashboardPage from "./pages/AccountingDashboardPage";
+import AccountingReportsPage from "./pages/AccountingReportsPage";
+import CustomerPortalsPage from "./pages/CustomerPortalsPage";
 import NavigationMenuPage from "./pages/NavigationMenuPage";
 import CreditDebitNotePage from "./pages/CreditDebitNotePage";
 import ItemRateHistoryPage from "./pages/ItemRateHistoryPage";
@@ -39,6 +44,7 @@ import FbrMonitorPage from "./pages/FbrMonitorPage";
 import LoginPage from "./pages/public/LoginPage";
 import LandingPage from "./pages/public/LandingPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
+import RequirePermission from "./Components/RequirePermission";
 import "./App.css";
 
 export default function App() {
@@ -63,67 +69,84 @@ export default function App() {
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
 
+      {/* NOTE: the PUBLIC customer portal at /portal/<token> is NOT routed
+          here. It renders in main.jsx, before and outside this router — the
+          router's basename is "/admin" so the path could never match, and the
+          portal must stay outside the auth providers. */}
+
       {/* Protected app routes – auth guard + DashboardLayout */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/companies/*" element={<CompanyPage />} />
-          <Route path="/Clients/*" element={<ClientsPage />} />
-          <Route path="/Suppliers/*" element={<SuppliersPage />} />
-          <Route path="/item-types" element={<ItemTypesPage />} />
-          <Route path="/units" element={<UnitsPage />} />
-          <Route path="/po-formats" element={<POFormatsPage />} />
-          <Route path="/challans" element={<ChallansPage />} />
-          <Route path="/challans/import" element={<ImportChallansPage />} />
-          <Route path="/sales-quotes" element={<SalesQuotePage />} />
-          <Route path="/sales-orders" element={<SalesOrderPage />} />
-          {/* Receipts (money in) / Payments (money out) — one component,
-              mounted twice with distinct keys so filter/search state doesn't
-              leak when switching between the two. */}
-          <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
-          <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
-          {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
-              bulk actions, but shows a per-row "Submitted to FBR" badge so
-              the operator knows which bills are locked. */}
-          {/* Distinct keys force a fresh mount when switching tabs so
-              filter state (search, client, dates) doesn't leak between
-              modes — and so the ?search= deep-link from a Bill card's
-              "Open in Invoices" button always re-seeds the search box. */}
-          <Route path="/bills" element={<InvoicePage key="bills" mode="bills" />} />
-          {/* Invoices tab — FBR classification & submission. Item-type
-              editing + Validate All / Submit All bulk actions live here. */}
-          <Route path="/invoices" element={<InvoicePage key="invoices" mode="invoices" />} />
-          {/* Credit Notes (returns/reversals) and Debit Notes (upward
-              adjustments) — each tab lists ONLY its type, in its own
-              numbering sequence. Never mixed with Bills or Invoices.
-              The create screen lives at /credit-debit-notes?type=credit|debit. */}
-          <Route path="/credit-notes" element={<InvoicePage key="creditnotes" mode="creditnotes" />} />
-          <Route path="/debit-notes" element={<InvoicePage key="debitnotes" mode="debitnotes" />} />
-          <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
-          <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
-          <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
-          <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
-          <Route path="/stock" element={<StockDashboardPage />} />
-          {/* FBR Annexure-A purchase ledger import — Phase 1 preview only */}
-          <Route path="/fbr-import/purchase" element={<FbrPurchaseImportPage />} />
-          {/* Reports */}
-          <Route path="/reports/sales" element={<SalesReportPage />} />
-          <Route path="/reports/tax-sheet" element={<TaxSheetPage />} />
-          <Route path="/reports/outstanding" element={<OutstandingLedgerPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/roles" element={<RolesPage />} />
-          <Route path="/tenant-access" element={<TenantAccessPage />} />
-          <Route path="/administrators" element={<AdministratorsPage />} />
-          <Route path="/templates" element={<PrintTemplatesPage />} />
-          <Route path="/templates/edit" element={<TemplateEditorPage />} />
-          {/* Configuration → Navigation Menu: the folder document library +
-              uploaded attachments (create folders, upload/preview/download). */}
-          <Route path="/configuration/navigation-menu" element={<NavigationMenuPage />} />
-          <Route path="/fbr-settings" element={<FbrSettingsPage />} />
-          <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />
-          <Route path="/fbr-monitor" element={<FbrMonitorPage />} />
-          <Route path="/audit-logs" element={<AuditLogsPage />} />
+          {/* Every screen below is gated on the permission
+              `config/routePermissions.js` records for its path. Hiding the
+              sidebar link was never enough — the URL still worked, and a
+              page that mounts without its permissions just fills up with
+              403s. Fails closed: a path with no entry is refused. */}
+          <Route element={<RequirePermission />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/companies/*" element={<CompanyPage />} />
+            <Route path="/Clients/*" element={<ClientsPage />} />
+            <Route path="/Suppliers/*" element={<SuppliersPage />} />
+            <Route path="/item-types" element={<ItemTypesPage />} />
+            <Route path="/units" element={<UnitsPage />} />
+            <Route path="/po-formats" element={<POFormatsPage />} />
+            <Route path="/challans" element={<ChallansPage />} />
+            <Route path="/challans/import" element={<ImportChallansPage />} />
+            <Route path="/sales-quotes" element={<SalesQuotePage />} />
+            <Route path="/sales-orders" element={<SalesOrderPage />} />
+            {/* Receipts (money in) / Payments (money out) — one component,
+                mounted twice with distinct keys so filter/search state doesn't
+                leak when switching between the two. */}
+            <Route path="/receipts" element={<PaymentsPage key="receipts" mode="receipts" />} />
+            <Route path="/payments" element={<PaymentsPage key="payments" mode="payments" />} />
+            <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+            <Route path="/journal-entries" element={<JournalEntriesPage />} />
+            <Route path="/accounting/overview" element={<AccountingDashboardPage />} />
+            <Route path="/accounting/reports" element={<AccountingReportsPage />} />
+            <Route path="/customer-portals" element={<CustomerPortalsPage />} />
+            {/* Bills tab — pre-FBR data entry. No item-type column, no FBR
+                bulk actions, but shows a per-row "Submitted to FBR" badge so
+                the operator knows which bills are locked. */}
+            {/* Distinct keys force a fresh mount when switching tabs so
+                filter state (search, client, dates) doesn't leak between
+                modes — and so the ?search= deep-link from a Bill card's
+                "Open in Invoices" button always re-seeds the search box. */}
+            <Route path="/bills" element={<InvoicePage key="bills" mode="bills" />} />
+            {/* Invoices tab — FBR classification & submission. Item-type
+                editing + Validate All / Submit All bulk actions live here. */}
+            <Route path="/invoices" element={<InvoicePage key="invoices" mode="invoices" />} />
+            {/* Credit Notes (returns/reversals) and Debit Notes (upward
+                adjustments) — each tab lists ONLY its type, in its own
+                numbering sequence. Never mixed with Bills or Invoices.
+                The create screen lives at /credit-debit-notes?type=credit|debit. */}
+            <Route path="/credit-notes" element={<InvoicePage key="creditnotes" mode="creditnotes" />} />
+            <Route path="/debit-notes" element={<InvoicePage key="debitnotes" mode="debitnotes" />} />
+            <Route path="/credit-debit-notes" element={<CreditDebitNotePage />} />
+            <Route path="/item-rate-history" element={<ItemRateHistoryPage />} />
+            <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
+            <Route path="/goods-receipts" element={<GoodsReceiptsPage />} />
+            <Route path="/stock" element={<StockDashboardPage />} />
+            {/* FBR Annexure-A purchase ledger import — Phase 1 preview only */}
+            <Route path="/fbr-import/purchase" element={<FbrPurchaseImportPage />} />
+            {/* Reports */}
+            <Route path="/reports/sales" element={<SalesReportPage />} />
+            <Route path="/reports/tax-sheet" element={<TaxSheetPage />} />
+            <Route path="/reports/outstanding" element={<OutstandingLedgerPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/roles" element={<RolesPage />} />
+            <Route path="/tenant-access" element={<TenantAccessPage />} />
+            <Route path="/administrators" element={<AdministratorsPage />} />
+            <Route path="/templates" element={<PrintTemplatesPage />} />
+            <Route path="/templates/edit" element={<TemplateEditorPage />} />
+            {/* Configuration → Navigation Menu: the folder document library +
+                uploaded attachments (create folders, upload/preview/download). */}
+            <Route path="/configuration/navigation-menu" element={<NavigationMenuPage />} />
+            <Route path="/fbr-settings" element={<FbrSettingsPage />} />
+            <Route path="/fbr-sandbox" element={<FbrSandboxPage />} />
+            <Route path="/fbr-monitor" element={<FbrMonitorPage />} />
+            <Route path="/audit-logs" element={<AuditLogsPage />} />
+          </Route>
         </Route>
       </Route>
 
