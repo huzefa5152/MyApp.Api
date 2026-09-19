@@ -290,6 +290,32 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-19 — A grouped quantity no longer leaves bill lines at zero
+
+On the Invoices tab the edit form shows every line sharing an Item Type as
+**one row with a summed quantity** — the shape FBR receives. Retyping that sum
+spreads it back across the underlying lines, proportionally to their bill
+quantities. For whole-unit items the spread floored each share and handed the
+remainder out largest-fraction-first, which on a 37-line medicines bill of 137
+units retyped to **61** left every 1-unit line at 0.45 → **0** — ten of them —
+and Save refused with "Quantity must be greater than 0" about lines the grouped
+view never shows. (INV-3932; the group's unit was `Bot`, which the units
+catalog does not know, so the whole-number path ran.)
+
+- The spread now finishes with a repair pass: any line left at zero takes one
+  unit from the largest line, so **no line ends at zero while there are at
+  least as many units as lines**. Retyping the same total still reproduces the
+  original lines exactly, and proportions are disturbed by one unit at most per
+  repaired line. Both grouped methods — *Qty & Unit Price* and *Exact Line
+  Total* — share the one split.
+- A total the group genuinely cannot hold (fewer units than lines) is called
+  out where it happens — **"needs at least 28 — one per line"** under the
+  quantity — and Save explains it in the grouped row's own terms, naming the
+  item and the smallest total that works, instead of the blind per-line error.
+
+Suite: `node scripts/test_group_quantity_split.mjs` (21 checks, offline — no
+backend or database) pins the split against INV-3932's actual 37 quantities.
+
 ### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
 
 **Exact Line Total.** The Invoices tab lets a restricted role re-classify lines
