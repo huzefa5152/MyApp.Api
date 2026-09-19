@@ -290,6 +290,28 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-19 — Type the amount a line must come to, and the rate follows
+
+**Both bill-creation screens take a Line Total.** Enter quantity and unit price
+and the total computes, as before; or enter quantity and the **amount the line
+must come to** and the unit price is derived from it. On the from-a-challan
+screen the quantity is the challan's and cannot move, so there it is the total
+that drives the rate. Whichever box was just typed is never rewritten under the
+operator, and the bill subtotal adds up the amounts actually stated.
+
+The rate is derived at the twelve decimals `InvoiceItem.UnitPrice` stores, which
+is what makes the arithmetic honest: the server recomputes
+`LineTotal = Quantity × UnitPrice`, so a two-decimal rate silently bills a
+different figure than the one typed. 220,000 over 196 units at 1122.45 comes to
+**220,000.20**; at 1122.448979591837 it comes to 220,000.00. That 20-paisa gap
+was visible on a real Sales Tax Invoice, with the line and the total disagreeing
+on the printed page.
+
+Suite: `node scripts/test_line_amount.mjs` (23 checks, offline — no backend or
+database), which pins the round trip rather than the formatting: every
+total-over-quantity split it tries must reproduce the typed total exactly once
+stored at two decimals.
+
 ### 2026-09-19 — Adjusting an invoice is now: pick the item type, type the quantity
 
 The Invoices-tab edit opens with **Exact Line Total** already selected on every

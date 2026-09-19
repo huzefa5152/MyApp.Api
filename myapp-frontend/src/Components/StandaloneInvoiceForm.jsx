@@ -7,6 +7,7 @@ import { getClientsByCompany } from "../api/clientApi";
 import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { formStyles, modalSizes } from "../theme";
+import { recalcLine, lineTotalFrom } from "../utils/lineAmount";
 import { todayYmd } from "../utils/dateInput";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -97,6 +98,8 @@ const blankRow = () => ({
   saleType: "",           // overridden by scenario at save time, kept for display only
   quantity: "",
   unitPrice: "",
+  // Typing this derives the unit price; typing the price derives this.
+  lineTotal: "",
   // Scenario-specific extras
   // MRP scenarios (SN008 / SN027) — operator types the per-unit MRP
   // (the printed retail price). The MRP × Qty total column is computed
@@ -186,6 +189,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         uom: l.unit || "",
         quantity: l.quantity != null ? String(l.quantity) : "",
         unitPrice: l.unitPrice != null ? String(l.unitPrice) : "",
+        // Seed the line total too, or a prefilled row would show an empty
+        // amount box beside a quantity and a rate it already has.
+        lineTotal: l.quantity != null && l.unitPrice != null
+          ? String(lineTotalFrom(l.quantity, l.unitPrice))
+          : "",
       }));
       setRows(mapped.length ? mapped : [blankRow()]);
     } catch { /* leave the form as-is on prefill failure */ }
@@ -327,6 +335,21 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Per-row helpers
   const updateRow = (localId, patch) =>
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
+
+  // Quantity / unit price / line total move together, and the box just typed
+  // is never rewritten under the operator — see utils/lineAmount. Typing a
+  // line total derives the rate at the 12 decimals UnitPrice stores, so the
+  // server's own `LineTotal = Quantity x UnitPrice` lands back on the figure
+  // that was typed instead of a few paisa away from it.
+  const setRowAmount = (localId, field, value) =>
+    setRows((prev) => prev.map((r) => {
+      if (r.localId !== localId) return r;
+      const next = recalcLine(
+        { quantity: r.quantity, unitPrice: r.unitPrice, lineTotal: r.lineTotal, [field]: value },
+        field,
+      );
+      return { ...r, ...next };
+    }));
   const addRow = () => setRows((prev) => [...prev, blankRow()]);
   const removeRow = (localId) =>
     setRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.localId !== localId)));
@@ -421,10 +444,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Totals — see comment in CreateStandaloneAsync about MRP scenarios:
   // backend backs tax out of MRP at FBR submit, but the bill subtotal
   // here stays qty × unitPrice (price stored separately from MRP).
+  // The line total is what the operator sees and what the server stores, so
+  // it is what the subtotal adds up — falling back to qty x rate for a line
+  // where only those two are filled in.
   const subtotal = rows.reduce((sum, r) => {
     const q = parseFloat(r.quantity) || 0;
     const p = parseFloat(r.unitPrice) || 0;
-    return sum + q * p;
+    const t = parseFloat(r.lineTotal);
+    return sum + (Number.isFinite(t) ? t : lineTotalFrom(q, p));
   }, 0);
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
@@ -991,7 +1018,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 <div style={styles.mgrid3}>
                                   <div>
                                     <label style={styles.mlabel}>Qty *</label>
-                                    <input type="number" min={0} step="any" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.quantity} onChange={(e) => updateRow(r.localId, { quantity: e.target.value })} placeholder="0" />
+                                    <input type="number" min={0} step="any" style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.quantity} onChange={(e) => setRowAmount(r.localId, "quantity", e.target.value)} placeholder="0" />
                                   </div>
                                   <div>
                                     <label style={styles.mlabel}>UOM</label>
@@ -1003,7 +1030,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   </div>
                                   <div>
                                     <label style={styles.mlabel}>Unit Price *</label>
-                                    <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.unitPrice} onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value })} placeholder="0.00" />
+                                    <input type="number" min={0} step={0.01} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right" }} value={r.unitPrice} onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)} placeholder="0.00" />
                                   </div>
                                 </div>
                                 {!billsMode && (
@@ -1036,7 +1063,17 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </div>
                                   </div>
                                 )}
-                                <div style={styles.mamt}><span>Line Total</span><b>{(q * p).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                                <div style={styles.mamt}>
+                                  <span style={styles.mlabel}>Line Total</span>
+                                  <input
+                                    type="number" min={0} step={0.01}
+                                    style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", textAlign: "right", fontWeight: 700, maxWidth: 150 }}
+                                    value={r.lineTotal}
+                                    onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
+                                    placeholder={(q * p) > 0 ? lineTotalFrom(q, p).toFixed(2) : "0.00"}
+                                    title="Type the amount this line must come to — the unit price is derived from it and the quantity."
+                                  />
+                                </div>
                               </div>
                             );
                           })}
@@ -1110,7 +1147,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       type="number" min={0} step="any"
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                       value={r.quantity}
-                                      onChange={(e) => updateRow(r.localId, { quantity: e.target.value })}
+                                      onChange={(e) => setRowAmount(r.localId, "quantity", e.target.value)}
                                       placeholder="0"
                                     />
                                   </td>
@@ -1152,12 +1189,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       type="number" min={0} step={0.01}
                                       style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
                                       value={r.unitPrice}
-                                      onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value })}
+                                      onChange={(e) => setRowAmount(r.localId, "unitPrice", e.target.value)}
                                       placeholder="0.00"
+                                      title="Type this and the line total follows; type the line total and this is derived."
                                     />
                                   </td>
-                                  <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
-                                    {(q * p).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                  <td style={styles.unifiedTd}>
+                                    <input
+                                      type="number" min={0} step={0.01}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right", fontWeight: 600 }}
+                                      value={r.lineTotal}
+                                      onChange={(e) => setRowAmount(r.localId, "lineTotal", e.target.value)}
+                                      placeholder={(q * p) > 0 ? lineTotalFrom(q, p).toFixed(2) : "0.00"}
+                                      title="Type the amount this line must come to — the unit price is derived from it and the quantity."
+                                    />
                                   </td>
                                   {!billsMode && (
                                     <td

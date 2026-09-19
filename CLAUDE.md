@@ -235,6 +235,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
 | Grouped quantity spread — no bill line left at zero (offline) | `node scripts/test_group_quantity_split.mjs` | `21 passed, 0 failed` |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `161/161`) |
