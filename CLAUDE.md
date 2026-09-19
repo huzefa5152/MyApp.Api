@@ -239,6 +239,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `69/69 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `142 passed, 0 failed` |
 | Product editions — Sales vs Complete, proven end to end | `python scripts/test_edition_roles.py` | `65/65 checks` |
+| Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
 | Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
 | Accounting — further tax + withholding on documents | `python scripts/test_document_taxes.py` (add `--db "<conn>"` for the credit-note suite) | `67/67 checks` (62 without `--db`) |
