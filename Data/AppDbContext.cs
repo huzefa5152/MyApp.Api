@@ -236,10 +236,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<ClientGroup>()
                 .HasIndex(g => g.NormalizedName);
 
-            // ── POFormat → ClientGroup ──
-            // Group-bound formats — applies to every member of the group
-            // regardless of which tenant the PDF arrived from. Nullable
-            // because legacy formats use POFormat.ClientId only.
+            // ClientGroup is metadata only. Formats are private to each company/client.
+            modelBuilder.Entity<POFormat>()
+                .HasIndex(f => new { f.CompanyId, f.ClientId })
+                .IsUnique().HasFilter("[CompanyId] IS NOT NULL AND [ClientId] IS NOT NULL");
             modelBuilder.Entity<POFormat>()
                 .HasOne(f => f.ClientGroup)
                 .WithMany(g => g.POFormats)

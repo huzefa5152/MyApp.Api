@@ -12,7 +12,7 @@ namespace MyApp.Api.Models
         public string Name { get; set; } = "";
 
         // Company scope. POFormats are always owned by one of our companies
-        // (the buyer's side). Required in the new onboarding UI.
+        // Nullable only to preserve quarantined legacy rows; required for new writes.
         public int? CompanyId { get; set; }
         public Company? Company { get; set; }
 
@@ -22,13 +22,7 @@ namespace MyApp.Api.Models
         public int? ClientId { get; set; }
         public Client? Client { get; set; }
 
-        // Common Client (group) scope — preferred over ClientId for new
-        // formats. When a PO is configured against a group, the SAME
-        // template applies to that legal entity in EVERY tenant that has
-        // them as a client. Nullable + alongside ClientId for backward
-        // compat: legacy formats keep working via ClientId; new formats
-        // save ClientGroupId; on import the matcher prefers group-based
-        // resolution and falls back to ClientId.
+        // Informational grouping only; never grants cross-company access or matching.
         public int? ClientGroupId { get; set; }
         public ClientGroup? ClientGroup { get; set; }
 

@@ -55,20 +55,36 @@ namespace MyApp.Api.Controllers
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
 
-        /// <summary>
-        /// Best-effort tenant guard for a Client referenced by a PO
-        /// format DTO. Looks up the client's CompanyId and asserts the
-        /// caller has access. Audit H-4 (2026-05-13).
-        /// </summary>
-        private async Task AssertClientAccessAsync(int? clientId)
+        private async Task AssertOwnerAsync(POFormat format)
         {
-            if (!clientId.HasValue) return;
-            var companyId = await _db.Clients
-                .Where(c => c.Id == clientId.Value)
-                .Select(c => (int?)c.CompanyId)
-                .FirstOrDefaultAsync();
-            if (companyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            if (format.CompanyId is not int companyId || format.ClientId is not int clientId)
+                throw new KeyNotFoundException("PO format not found.");
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            if (!await _db.Clients.AnyAsync(c => c.Id == clientId && c.CompanyId == companyId))
+                throw new KeyNotFoundException("PO format not found.");
+        }
+
+        private async Task<Client> ValidateClientAsync(int? companyId, int? clientId, int? exceptId = null)
+        {
+            if (companyId is not > 0 || clientId is not > 0)
+                throw new InvalidOperationException("Choose a company and one of its clients.");
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            var client = await _db.Clients.FirstOrDefaultAsync(c => c.Id == clientId && c.CompanyId == companyId);
+            if (client == null)
+                throw new InvalidOperationException("The client does not belong to the selected company.");
+            if (await _db.POFormats.AnyAsync(f => f.CompanyId == companyId && f.ClientId == clientId && f.Id != exceptId))
+                throw new InvalidOperationException("A PO format already exists for this client in this company.");
+            return client;
+        }
+
+        // Minimal picker data uses PO-format permissions, not client administration access.
+        [HttpGet("clients")]
+        [HasAnyPermission("poformats.manage.create", "poformats.manage.update")]
+        public async Task<IActionResult> Clients([FromQuery] int companyId)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            return Ok(await _db.Clients.AsNoTracking().Where(c => c.CompanyId == companyId)
+                .OrderBy(c => c.Name).Select(c => new { c.Id, c.Name }).ToListAsync());
         }
 
         // List formats, optionally filtered by companyId and/or clientId.
@@ -76,30 +92,14 @@ namespace MyApp.Api.Controllers
         [HasPermission("poformats.manage.view")]
         public async Task<ActionResult<List<POFormatListItemDto>>> List([FromQuery] int? companyId, [FromQuery] int? clientId)
         {
-            // 2026-09-21: this listed across EVERY tenant when companyId was
-            // omitted, and believed the parameter when it was supplied - while
-            // the row it returns carries CompanyName and ClientName. So the
-            // cheapest possible request handed over other tenants' company and
-            // customer names. Scope comes from the caller now: a named company
-            // must be one they can reach, and no name means their own set.
             var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
             if (companyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-
-            var q = _db.POFormats
-                .AsNoTracking()
-                .Include(f => f.Company)
-                .Include(f => f.Client)
-                .Include(f => f.ClientGroup)
-                .AsQueryable();
-
-            if (companyId.HasValue)
-                q = q.Where(f => f.CompanyId == companyId.Value || f.CompanyId == null);
-            else
-                // A format with no CompanyId is a shared layout, visible to all.
-                q = q.Where(f => f.CompanyId == null || accessible.Contains(f.CompanyId.Value));
-            if (clientId.HasValue)
-                q = q.Where(f => f.ClientId == clientId.Value);
+            var q = _db.POFormats.AsNoTracking().Include(f => f.Company).Include(f => f.Client)
+                .Where(f => f.CompanyId != null && accessible.Contains(f.CompanyId.Value)
+                    && f.Client != null && f.Client.CompanyId == f.CompanyId);
+            if (companyId.HasValue) q = q.Where(f => f.CompanyId == companyId);
+            if (clientId.HasValue) q = q.Where(f => f.ClientId == clientId);
 
             var formats = await q.OrderByDescending(f => f.UpdatedAt).ToListAsync();
             return Ok(formats.Select(ToListItemDto).ToList());
@@ -113,14 +113,9 @@ namespace MyApp.Api.Controllers
                 .AsNoTracking()
                 .Include(x => x.Company)
                 .Include(x => x.Client)
-                .Include(x => x.ClientGroup)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (f == null) return NotFound();
-            // The id in the URL says nothing about who may read it: assert
-            // against the format's OWN company. A null CompanyId is a shared
-            // layout and belongs to everyone.
-            if (f.CompanyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, f.CompanyId.Value);
+            await AssertOwnerAsync(f);
             return Ok(ToDto(f));
         }
 
@@ -129,12 +124,13 @@ namespace MyApp.Api.Controllers
         // onboarding to show "this layout is already saved as X" before the
         // operator creates a duplicate.
         [HttpPost("fingerprint-pdf")]
-        [HasPermission("poformats.manage.create")]
+        [HasAnyPermission("poformats.manage.create", "poformats.manage.update")]
         [RequestSizeLimit(10 * 1024 * 1024)]
         public async Task<ActionResult<FingerprintPdfResponseDto>> FingerprintPdf(IFormFile file, [FromQuery] int? companyId)
         {
-            if (companyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            if (companyId is not > 0)
+                return BadRequest(new { error = "Choose a company before uploading a sample." });
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 
@@ -169,10 +165,8 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(dto.Name))
                 return BadRequest(new { error = "name is required." });
 
-            // Tenant guard — audit H-4 (2026-05-13).
-            if (dto.CompanyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
-            await AssertClientAccessAsync(dto.ClientId);
+            var client = await ValidateClientAsync(dto.CompanyId, dto.ClientId);
+            dto.ClientGroupId = client.ClientGroupId;
 
             var createdBy = User?.Identity?.Name;
             var format = await _registry.CreateAsync(dto, createdBy);
@@ -196,36 +190,8 @@ namespace MyApp.Api.Controllers
                 || string.IsNullOrWhiteSpace(dto.QuantityHeader))
                 return BadRequest(new { error = "descriptionHeader and quantityHeader are required." });
 
-            // Tenant guard — audit H-4 (2026-05-13).
-            if (dto.CompanyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, dto.CompanyId.Value);
-            await AssertClientAccessAsync(dto.ClientId);
-
-            // Dedup — one format per Common Client GROUP, not per
-            // (company, client) pair. Common Clients machinery ensures
-            // every Client has a ClientGroupId (single-company clients
-            // get a 1-member group). So configuring a format for any
-            // tenant's Lotte automatically covers every other tenant's
-            // Lotte too — that's the whole point of Phase 3.
-            int? newClientGroupId = null;
-            if (dto.ClientId.HasValue)
-            {
-                newClientGroupId = await _db.Clients
-                    .Where(c => c.Id == dto.ClientId.Value)
-                    .Select(c => c.ClientGroupId)
-                    .FirstOrDefaultAsync();
-
-                // Dedup check — prefer ClientGroupId equality so we
-                // catch cross-tenant duplicates (Hakimi has a Lotte
-                // format, operator on Roshan tries to add another one).
-                // Falls back to ClientId equality only when the legacy
-                // client somehow doesn't have a group yet.
-                var existing = newClientGroupId.HasValue
-                    ? await _db.POFormats.FirstOrDefaultAsync(f => f.ClientGroupId == newClientGroupId.Value)
-                    : await _db.POFormats.FirstOrDefaultAsync(f => f.CompanyId == dto.CompanyId && f.ClientId == dto.ClientId);
-                if (existing != null)
-                    return Conflict(new { error = $"A PO format already exists for this client ('{existing.Name}'). Edit it instead of creating a duplicate — every tenant that has this client will use the same format.", existingId = existing.Id });
-            }
+            var client = await ValidateClientAsync(dto.CompanyId, dto.ClientId);
+            var newClientGroupId = client.ClientGroupId;
 
             var ruleSet = BuildSimpleRuleSet(dto);
             var ruleSetJson = JsonSerializer.Serialize(ruleSet, JsonOpts);
@@ -260,41 +226,9 @@ namespace MyApp.Api.Controllers
                 || string.IsNullOrWhiteSpace(dto.QuantityHeader))
                 return BadRequest(new { error = "descriptionHeader and quantityHeader are required." });
 
-            // Tenant guard — audit H-4 (2026-05-13). Authorize against
-            // the existing row's company first (body fields can't smuggle
-            // the format into a tenant the caller doesn't own), then
-            // against the new client if it's being reassigned.
-            if (format.CompanyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, format.CompanyId.Value);
-            await AssertClientAccessAsync(dto.ClientId);
-
-            // Dedup on edit — same group-aware check as Create. If the
-            // operator re-assigns this format to a client that already
-            // has a format saved at the GROUP level (could be in a
-            // different tenant), surface a clear conflict.
-            int? newClientGroupId = null;
-            if (dto.ClientId.HasValue && dto.ClientId != format.ClientId)
-            {
-                newClientGroupId = await _db.Clients
-                    .Where(c => c.Id == dto.ClientId.Value)
-                    .Select(c => c.ClientGroupId)
-                    .FirstOrDefaultAsync();
-
-                var dupe = newClientGroupId.HasValue
-                    ? await _db.POFormats.FirstOrDefaultAsync(f => f.Id != id && f.ClientGroupId == newClientGroupId.Value)
-                    : await _db.POFormats.FirstOrDefaultAsync(f => f.Id != id && f.CompanyId == format.CompanyId && f.ClientId == dto.ClientId);
-                if (dupe != null)
-                    return Conflict(new { error = $"Another PO format already exists for that client ('{dupe.Name}').", existingId = dupe.Id });
-            }
-            else if (dto.ClientId.HasValue)
-            {
-                // ClientId unchanged — refresh the group anyway so a
-                // newly-grouped client still gets its FK propagated.
-                newClientGroupId = await _db.Clients
-                    .Where(c => c.Id == dto.ClientId.Value)
-                    .Select(c => c.ClientGroupId)
-                    .FirstOrDefaultAsync();
-            }
+            await AssertOwnerAsync(format);
+            var client = await ValidateClientAsync(format.CompanyId, dto.ClientId, id);
+            var newClientGroupId = client.ClientGroupId;
 
             format.Name = dto.Name?.Trim() ?? format.Name;
             format.IsActive = dto.IsActive;
@@ -338,7 +272,6 @@ namespace MyApp.Api.Controllers
                 .AsNoTracking()
                 .Include(f => f.Company)
                 .Include(f => f.Client)
-                .Include(f => f.ClientGroup)
                 .FirstAsync(f => f.Id == id);
             return Ok(ToDto(reloaded));
         }
@@ -352,9 +285,7 @@ namespace MyApp.Api.Controllers
             var format = await _db.POFormats.FirstOrDefaultAsync(f => f.Id == id);
             if (format == null) return NotFound();
 
-            // Tenant guard — audit H-4 (2026-05-13).
-            if (format.CompanyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, format.CompanyId.Value);
+            await AssertOwnerAsync(format);
 
             _db.POFormats.Remove(format);
             await _db.SaveChangesAsync();
@@ -382,8 +313,8 @@ namespace MyApp.Api.Controllers
             CompanyName = f.Company?.Name,
             ClientId = f.ClientId,
             ClientName = f.Client?.Name,
-            ClientGroupId = f.ClientGroupId,
-            ClientGroupName = f.ClientGroup?.DisplayName,
+            ClientGroupId = null,
+            ClientGroupName = null,
             SignatureHash = f.SignatureHash,
             KeywordSignature = f.KeywordSignature,
             RuleSetJson = f.RuleSetJson,
@@ -402,8 +333,8 @@ namespace MyApp.Api.Controllers
             CompanyName = f.Company?.Name,
             ClientId = f.ClientId,
             ClientName = f.Client?.Name,
-            ClientGroupId = f.ClientGroupId,
-            ClientGroupName = f.ClientGroup?.DisplayName,
+            ClientGroupId = null,
+            ClientGroupName = null,
             CurrentVersion = f.CurrentVersion,
             IsActive = f.IsActive,
             UpdatedAt = f.UpdatedAt,

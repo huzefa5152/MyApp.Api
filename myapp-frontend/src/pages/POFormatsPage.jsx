@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning, MdInfoOutline, MdBusiness } from "react-icons/md";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { MdAdd, MdEdit, MdDelete, MdDescription, MdWarning } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
+import { useCompany } from "../contexts/CompanyContext";
 import POFormatForm from "../Components/POFormatForm";
 
 const colors = {
@@ -23,34 +24,47 @@ const colors = {
 };
 
 export default function POFormatsPage() {
+  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  return <>
+    <div style={{ ...styles.companyRow, padding: "1rem 1.5rem 0", maxWidth: 1200, margin: "0 auto" }}>
+      <label htmlFor="po-format-company">Company</label>
+      <select id="po-format-company" style={{ padding: "0.5rem 0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, background: "white", maxWidth: "100%" }} value={selectedCompany?.id ?? ""}
+        onChange={e => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)) || null)}>
+        {!selectedCompany && <option value="">Select company</option>}
+        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+    </div>
+    {selectedCompany ? <CompanyPOFormats key={selectedCompany.id} company={selectedCompany} />
+      : <p style={styles.page}>No company access is configured for your account.</p>}
+  </>;
+}
+
+function CompanyPOFormats({ company }) {
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canCreate = has("poformats.manage.create");
   const canUpdate = has("poformats.manage.update");
   const canDelete = has("poformats.manage.delete");
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [formats, setFormats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
 
-  // PO Formats are now keyed off the Common Client GROUP, not the
-  // selling tenant. One format per legal entity, applies in every
-  // company that has that client. So the company dropdown that used
-  // to scope this page is gone — we list ALL formats regardless of
-  // CompanyId / ClientId, and the form picks a Common Client.
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await listPoFormats({});
-      setFormats(res.data);
+      const res = await listPoFormats({ companyId: company.id });
+      if (mounted.current) setFormats(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to load PO formats.");
+      setError(err.response?.data?.error || err.response?.data?.message || "Failed to load PO formats.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [company.id]);
 
   useEffect(() => {
     load();
@@ -68,7 +82,7 @@ export default function POFormatsPage() {
       await deletePoFormat(format.id);
       load();
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to delete.");
+      setError(err.response?.data?.error || err.response?.data?.message || "Failed to delete.");
     }
   };
 
@@ -78,10 +92,11 @@ export default function POFormatsPage() {
     // 5 label/header strings from the stored rule-set.
     try {
       const { data } = await getPoFormat(format.id);
+      if (!mounted.current) return;
       setEditing(data);
       setShowForm(true);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to load format.");
+      setError(err.response?.data?.error || err.response?.data?.message || "Failed to load format.");
     }
   };
 
@@ -102,7 +117,7 @@ export default function POFormatsPage() {
         <div className="pof-header__title-block">
           <h1 className="pof-header__title">PO Formats</h1>
           <p className="pof-header__subtitle">
-            One PO format per client (across ALL companies). Configure once and the same layout parses automatically whenever any tenant receives a PO from that client.
+            One PO format per client in {company.name}. Formats and PDF matching are private to this company.
           </p>
         </div>
         {canCreate && (
@@ -155,13 +170,7 @@ export default function POFormatsPage() {
                       <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
                     </td>
                     <td style={styles.td}>
-                      {/* Prefer the ClientGroup display name — that's the
-                          canonical "client" the format applies to (across
-                          every tenant). Fallback to per-tenant ClientName
-                          for legacy formats not yet group-bound. */}
-                      {f.clientGroupName ? (
-                        <span style={styles.chip}>{f.clientGroupName}</span>
-                      ) : f.clientName ? (
+                      {f.clientName ? (
                         <span style={styles.chip}>{f.clientName}</span>
                       ) : (
                         <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
@@ -194,7 +203,7 @@ export default function POFormatsPage() {
           {/* Mobile — stacked cards */}
           <div className="pof-cards">
             {formats.map((f) => {
-              const clientLabel = f.clientGroupName || f.clientName;
+              const clientLabel = f.clientName;
               return (
                 <div key={f.id} className="pof-card">
                   <div className="pof-card__top">
@@ -250,6 +259,8 @@ export default function POFormatsPage() {
       {showForm && (
         <POFormatForm
           format={editing}
+          companyId={company.id}
+          companyName={company.name}
           onClose={() => { setShowForm(false); setEditing(null); }}
           onSaved={handleSaved}
         />

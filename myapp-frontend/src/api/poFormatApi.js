@@ -27,3 +27,5 @@ export const updatePoFormatSimple = (id, payload) =>
   http.put(`/poformats/${id}/simple`, payload);
 
 export const deletePoFormat = (id) => http.delete(`/poformats/${id}`);
+
+export const getPoFormatClients = (companyId) => http.get("/poformats/clients", { params: { companyId } });

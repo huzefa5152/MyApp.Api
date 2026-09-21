@@ -86,8 +86,9 @@ namespace MyApp.Api.Controllers
         {
             // The company chooses which saved PO formats the parser matches
             // against, so an unchecked id reads another tenant's layouts.
-            if (companyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
+            if (companyId is not > 0)
+                return BadRequest(new { error = "Choose a company before importing a PO." });
+            await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 
@@ -159,8 +160,9 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request, [FromQuery] int? companyId)
         {
             // Same as ParsePdf: the company selects whose saved formats match.
-            if (companyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
+            if (companyId is not > 0)
+                return BadRequest(new { error = "Choose a company before importing a PO." });
+            await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
 
@@ -205,80 +207,12 @@ namespace MyApp.Api.Controllers
                 }), new ParseOutcomeInfo { Outcome = "no-format" });
             }
 
-            // Resolve the per-tenant Client row that this format should
-            // pre-select on the import review screen. Two-step lookup:
-            //
-            //  1. PREFERRED — POFormat.ClientGroupId. The Common Clients
-            //     grouping means a Lotte-format saved by Hakimi automatically
-            //     applies in Roshan and FBR-Test-Co too, because all three
-            //     tenants' Lotte rows share the same ClientGroupId. We pick
-            //     whichever client in the IMPORTING company belongs to that
-            //     group.
-            //  2. FALLBACK — POFormat.ClientId. Legacy formats (or formats
-            //     where the linked client doesn't have a group yet) keep
-            //     working via the original direct-FK match.
-            //
-            // Either way, we ALWAYS filter by the importing companyId so
-            // we never leak another tenant's client into this tenant's UI.
-            int? matchedClientId = null;
-            string? matchedClientName = null;
-            if (match.Format.ClientGroupId.HasValue && companyId.HasValue)
-            {
-                var clientRow = await _context.Clients
-                    .Where(c => c.ClientGroupId == match.Format.ClientGroupId.Value
-                             && c.CompanyId == companyId.Value)
-                    .Select(c => new { c.Id, c.Name })
-                    .FirstOrDefaultAsync();
-                if (clientRow != null)
-                {
-                    matchedClientId = clientRow.Id;
-                    matchedClientName = clientRow.Name;
-                }
-            }
-            // Fallback A — POFormat.ClientId points to the importing
-            // tenant's client directly.
-            if (matchedClientId == null && match.Format.ClientId.HasValue)
-            {
-                var clientRow = await _context.Clients
-                    .Where(c => c.Id == match.Format.ClientId.Value
-                             && (companyId == null || c.CompanyId == companyId.Value))
-                    .Select(c => new { c.Id, c.Name })
-                    .FirstOrDefaultAsync();
-                if (clientRow != null)
-                {
-                    matchedClientId = clientRow.Id;
-                    matchedClientName = clientRow.Name;
-                }
-            }
-
-            // Fallback B — POFormat is bound to ClientId in another
-            // tenant, but that other-tenant client is part of a Common
-            // Client group that ALSO has a member in the importing
-            // tenant. Hop through Clients to find the right group.
-            // Handles data drift where the format's stored ClientGroupId
-            // is stale (e.g. the linked client was re-grouped after the
-            // format was saved). companyId is required so we only ever
-            // resolve to a client owned by the importing tenant.
-            if (matchedClientId == null && match.Format.ClientId.HasValue && companyId.HasValue)
-            {
-                var ownerGroupId = await _context.Clients
-                    .Where(c => c.Id == match.Format.ClientId.Value)
-                    .Select(c => c.ClientGroupId)
-                    .FirstOrDefaultAsync();
-                if (ownerGroupId.HasValue)
-                {
-                    var clientRow = await _context.Clients
-                        .Where(c => c.ClientGroupId == ownerGroupId.Value
-                                 && c.CompanyId == companyId.Value)
-                        .Select(c => new { c.Id, c.Name })
-                        .FirstOrDefaultAsync();
-                    if (clientRow != null)
-                    {
-                        matchedClientId = clientRow.Id;
-                        matchedClientName = clientRow.Name;
-                    }
-                }
-            }
+            // A matched format belongs to this exact company/client pair.
+            var clientRow = await _context.Clients.AsNoTracking()
+                .Where(c => c.Id == match.Format.ClientId && c.CompanyId == companyId)
+                .Select(c => new { c.Id, c.Name }).SingleOrDefaultAsync();
+            int? matchedClientId = clientRow?.Id;
+            string? matchedClientName = clientRow?.Name;
 
             var ruleResult = _ruleParser.Parse(rawText, match.Format);
             if (ruleResult.Items.Count == 0 && string.IsNullOrEmpty(ruleResult.PONumber))

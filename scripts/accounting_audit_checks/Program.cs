@@ -25,7 +25,7 @@ void Check(bool ok, string name) { if (!ok) throw new Exception(name); passed++;
 try
 {
     await db.GetService<IMigrator>().MigrateAsync("20260916192004_AddCustomerPortal");
-    Check((await db.Database.GetPendingMigrationsAsync()).Count()==1, "accounting baseline has one pending catalog migration");
+    Check((await db.Database.GetPendingMigrationsAsync()).Count()==2, "accounting baseline has pending catalog and PO format migrations");
     var legacyA = new Company { Name = "Legacy A" }; var legacyB = new Company { Name = "Legacy B" };
     db.Companies.AddRange(legacyA, legacyB); await db.SaveChangesAsync();
     await db.Database.ExecuteSqlRawAsync("INSERT ItemTypes (Name,CreatedAt,IsFavorite,UsageCount,IsHsCodePartial,IsDeleted) VALUES ('Legacy shared item',GETUTCDATE(),1,0,0,0),('Unused legacy item',GETUTCDATE(),1,0,0,0)");
@@ -38,8 +38,52 @@ try
     db.SalesQuotes.Add(legacyQuote); await db.SaveChangesAsync();
     await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE SalesQuoteItems SET ItemTypeId={oldItemId} WHERE SalesQuoteId={legacyQuote.Id}");
     await db.Database.ExecuteSqlRawAsync("INSERT ItemDescriptions (Name,IsFavorite,UsageCount) VALUES ('Used private description',1,99),('Unused private description',1,99); INSERT Units (Name,AllowsDecimalQuantity) VALUES ('Custom Measure',1),('Unused Measure',0)");
+    var poClientB = new Client { CompanyId=legacyB.Id, Name="Same PO buyer" };
+    var poLegacyOnly = new Client { CompanyId=legacyA.Id, Name="Unambiguous legacy buyer" };
+    db.Clients.AddRange(poClientB,poLegacyOnly); await db.SaveChangesAsync();
+    await db.Database.ExecuteSqlInterpolatedAsync($"""
+        INSERT POFormats (Name,CompanyId,ClientId,SignatureHash,KeywordSignature,RuleSetJson,CurrentVersion,IsActive,CreatedAt,UpdatedAt)
+        VALUES ('Legacy global',{(int?)null},{legacyClient.Id},'hash','words',{"{}"},1,1,GETUTCDATE(),'2026-01-01'),
+        ('Newer owned',{legacyA.Id},{legacyClient.Id},'hash','words',{"{}"},1,1,GETUTCDATE(),'2026-02-01'),
+        ('Mismatched legacy',{legacyB.Id},{legacyClient.Id},'hash','words',{"{}"},1,1,GETUTCDATE(),'2026-03-01'),
+        ('Unambiguous global',{(int?)null},{poLegacyOnly.Id},'hash','words',{"{}"},1,1,GETUTCDATE(),'2026-04-01'),
+        ('Unassigned legacy',{(int?)null},{(int?)null},'hash','words',{"{}"},1,1,GETUTCDATE(),'2026-04-01')
+        """);
     await db.Database.MigrateAsync();
     Check(!(await db.Database.GetPendingMigrationsAsync()).Any(), "all migrations including private catalogs apply");
+    Check(await db.POFormats.CountAsync()==5, "PO migration retains every legacy format");
+    Check(await db.POFormats.CountAsync(f=>f.CompanyId!=null)==2, "PO migration quarantines ambiguous and duplicate ownership");
+    Check(await db.POFormats.AnyAsync(f=>f.CompanyId==legacyA.Id && f.Name=="Newer owned"), "PO migration keeps latest owned client format");
+    Check(await db.POFormats.AnyAsync(f=>f.Name=="Unambiguous global" && f.CompanyId==legacyA.Id), "legacy global format assigned only to its linked client's company");
+    var fingerprint = new POFormatFingerprintService();
+    var registry = new POFormatRegistry(db, fingerprint, null!, NullLogger<POFormatRegistry>.Instance);
+    const string sample = "Purchase Order Supplier Description Quantity Unit Delivery Address";
+    var createdPO = await registry.CreateAsync(new MyApp.Api.DTOs.POFormatCreateDto {
+        CompanyId=legacyB.Id,ClientId=poClientB.Id,Name="Private B",RawText=sample }, "test");
+    Check((await registry.FindMatchAsync(sample,legacyB.Id))?.Format.Id==createdPO.Id, "PO matcher finds own exact format");
+    Check(await registry.FindMatchAsync(sample,legacyA.Id)==null, "PO matcher never crosses company");
+    Check(await registry.FindMatchAsync(sample,null)==null, "PO matcher refuses missing company");
+    Check((await registry.ListAsync(null)).Count==0, "PO registry never lists global formats");
+    Check((await registry.ListAsync(legacyA.Id)).Count==2, "PO registry excludes quarantined rows");
+    await using (var writes = new AppDbContext(options))
+    {
+        writes.POFormats.Add(new POFormat { CompanyId=legacyB.Id,ClientId=poClientB.Id,Name="Duplicate" });
+        try { await writes.SaveChangesAsync(); Check(false,"duplicate PO blocked"); }
+        catch(InvalidOperationException) { Check(true,"database enforces unique company/client PO"); }
+        writes.ChangeTracker.Clear();
+        writes.POFormats.Add(new POFormat { CompanyId=legacyA.Id,ClientId=poClientB.Id,Name="Foreign client" });
+        try { await writes.SaveChangesAsync(); Check(false,"foreign PO client blocked"); }
+        catch(InvalidOperationException) { Check(true,"PO write validation rejects foreign client"); }
+        writes.ChangeTracker.Clear();
+        writes.POFormats.Add(new POFormat { ClientId=poClientB.Id,Name="Global" });
+        try { await writes.SaveChangesAsync(); Check(false,"global PO blocked"); }
+        catch(InvalidOperationException) { Check(true,"PO write validation rejects unowned format"); }
+        writes.ChangeTracker.Clear();
+        var moving=await writes.POFormats.SingleAsync(f=>f.Id==createdPO.Id);
+        moving.CompanyId=legacyA.Id; moving.ClientId=legacyClient.Id;
+        try { await writes.SaveChangesAsync(); Check(false,"PO transfer blocked"); }
+        catch(InvalidOperationException) { Check(true,"PO ownership is immutable"); }
+    }
     var privateItems = await db.ItemTypes.Where(x=>x.CompanyId!=null).ToListAsync();
     Check(privateItems.Count==2 && privateItems.Select(x=>x.CompanyId).Distinct().Count()==2, "shared item copied only to companies with usage");
     Check(await db.ItemTypes.CountAsync(x=>x.CompanyId==null)==2, "unowned originals retained in quarantine");
@@ -140,6 +184,7 @@ try
     Check(portalLogs.Count==2 && portalLogs.All(x=>!x.RequestPath.Contains(token)),"both audit error paths redact portal tokens");
     Check(portalLogs.Single(x=>x.RequestPath.EndsWith("/throw")).CompanyId==null,"query parameter cannot forge audit tenant ownership");
     Check(portalLogs.Single(x=>x.RequestPath.EndsWith("/status")).CompanyId==b.Id,"verified tenant wins over supplied query");
+    await PoFormatAccessChecks.Run(db, Check);
     Console.WriteLine($"{passed}/{passed} regression checks passed");
     if (args.Contains("--keep-local-fixture"))
     {

@@ -15,8 +15,17 @@ public partial class AppDbContext
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
+        await ValidatePOFormatWritesAsync(cancellationToken);
         await ValidateCatalogWritesAsync(cancellationToken);
-        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.Entries.Any(e => e.Entity is POFormat)
+            && ex.InnerException is Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
+        {
+            throw new InvalidOperationException("A PO format already exists for this client in this company.", ex);
+        }
     }
 
     private async Task ValidateCatalogWritesAsync(CancellationToken ct)

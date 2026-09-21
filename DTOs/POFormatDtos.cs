@@ -8,8 +8,7 @@ namespace MyApp.Api.DTOs
         public string? CompanyName { get; set; }
         public int? ClientId { get; set; }
         public string? ClientName { get; set; }
-        // Surfaced to the form so it can pre-select the right Common
-        // Client on edit without falling back to a clientId-based hop.
+        // Legacy response fields retained for compatibility; private APIs return null.
         public int? ClientGroupId { get; set; }
         public string? ClientGroupName { get; set; }
         public string SignatureHash { get; set; } = "";
@@ -31,9 +30,7 @@ namespace MyApp.Api.DTOs
         public int? ClientId { get; set; }
         public string? ClientName { get; set; }
         public int? ClientGroupId { get; set; }
-        // ClientGroup display name — when the format is bound to a
-        // Common Client this is what the operator should see in the
-        // table column ("LOTTE Kolson", not Hakimi's per-tenant row).
+        // Legacy metadata is not exposed across company boundaries.
         public string? ClientGroupName { get; set; }
         public int CurrentVersion { get; set; }
         public bool IsActive { get; set; }
@@ -45,11 +42,7 @@ namespace MyApp.Api.DTOs
         public string Name { get; set; } = "";
         public int? CompanyId { get; set; }
         public int? ClientId { get; set; }
-        // ClientGroupId — the Common Clients grouping FK. Auto-populated
-        // by the controller from the linked Client's group so the saved
-        // format applies in every tenant that has that client (uncommon
-        // single-company clients still have a 1-member group, so the
-        // semantics are identical to the legacy ClientId-only flow).
+        // Derived from the selected company client; never trusted from the caller.
         public int? ClientGroupId { get; set; }
         public string RawText { get; set; } = "";     // the sample PDF's raw text — we derive the fingerprint server-side
         public string? RuleSetJson { get; set; }      // optional (defaults to empty {}) — power users can paste a full anchored-v1 ruleset

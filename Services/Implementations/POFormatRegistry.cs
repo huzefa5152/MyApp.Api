@@ -32,13 +32,15 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<POFormatMatchResult?> FindMatchAsync(string rawText, int? companyId)
         {
+            if (companyId is not > 0) return null;
             var fp = _fingerprint.Compute(rawText);
             if (string.IsNullOrEmpty(fp.Hash)) return null;
 
-            // Active formats only: company-scoped first, then globals
+            // Never match another company or an unowned legacy format.
             var candidates = await _db.POFormats
                 .AsNoTracking()
-                .Where(f => f.IsActive && (f.CompanyId == companyId || f.CompanyId == null))
+                .Where(f => f.IsActive && f.CompanyId == companyId && f.Client != null && f.Client.CompanyId == companyId)
+                .OrderBy(f => f.Id)
                 .ToListAsync();
 
             if (candidates.Count == 0) return null;
@@ -77,10 +79,9 @@ namespace MyApp.Api.Services.Implementations
 
         public Task<List<POFormat>> ListAsync(int? companyId)
         {
-            var q = _db.POFormats.AsNoTracking().OrderByDescending(f => f.UpdatedAt).AsQueryable();
-            if (companyId.HasValue)
-                q = q.Where(f => f.CompanyId == companyId || f.CompanyId == null);
-            return q.ToListAsync();
+            return _db.POFormats.AsNoTracking()
+                .Where(f => companyId != null && f.CompanyId == companyId && f.Client != null && f.Client.CompanyId == companyId)
+                .OrderByDescending(f => f.UpdatedAt).ToListAsync();
         }
 
         public Task<POFormat?> GetAsync(int id) =>
@@ -102,11 +103,7 @@ namespace MyApp.Api.Services.Implementations
                 Name = dto.Name?.Trim() ?? "",
                 CompanyId = dto.CompanyId,
                 ClientId = dto.ClientId,
-                // ClientGroupId is the source of truth for "which client
-                // does this format apply to" in the multi-tenant Common
-                // Clients model — the matcher resolves the per-tenant
-                // client row off this. ClientId is kept alongside it
-                // for backward compatibility with legacy callers.
+                // Metadata only; ownership and matching use CompanyId and ClientId.
                 ClientGroupId = dto.ClientGroupId,
                 SignatureHash = fp.Hash,
                 KeywordSignature = fp.Signature,
@@ -118,11 +115,9 @@ namespace MyApp.Api.Services.Implementations
                 UpdatedAt = DateTime.UtcNow,
             };
             _db.POFormats.Add(format);
-            await _db.SaveChangesAsync();
-
             _db.POFormatVersions.Add(new POFormatVersion
             {
-                POFormatId = format.Id,
+                POFormat = format,
                 Version = 1,
                 RuleSetJson = ruleSet,
                 ChangeNote = "Initial version",
