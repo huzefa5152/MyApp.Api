@@ -218,6 +218,12 @@ export const MERGE_FIELDS = {
     { field: "{{this.gstRate}}", label: "Item GST Rate (in loop)" },
     { field: "{{fmt this.gstAmount}}", label: "Item GST Amount (in loop)" },
     { field: "{{fmt this.totalInclTax}}", label: "Item Value Including Tax (in loop)" },
+    // The HS code the tax consultant chose on the Invoices tab. The Bills tab
+    // has no item-type picker, so this is normally the only code that exists
+    // for the line - and it is the one field on the Bill fed by that overlay.
+    // Empty until someone classifies, so guard it:
+    //   {{#if this.hsCode}}{{this.hsCode}}{{/if}}
+    { field: "{{this.hsCode}}", label: "Item HS Code (in loop)" },
     { field: "{{fbrIRN}}", label: "FBR Invoice Reference Number (IRN)" },
     { field: "{{fbrStatus}}", label: "FBR Status" },
     { field: "{{fmtDate fbrSubmittedAt}}", label: "FBR Submission Date" },
@@ -289,6 +295,9 @@ export const MERGE_FIELDS = {
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
     { field: "{{this.uom}}", label: "Item UOM (in loop)" },
+    // HS code of the grouped, effective item type - the consultant's
+    // reclassification when there is one, else the bill row's own.
+    { field: "{{this.hsCode}}", label: "Item HS Code (in loop)" },
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
     { field: "{{fmtDec this.valueExclTax}}", label: "Value Excl Tax (in loop)" },
     { field: "{{this.gstRate}}", label: "GST Rate % (in loop)" },
