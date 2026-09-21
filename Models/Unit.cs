@@ -3,6 +3,8 @@ namespace MyApp.Api.Models
     public class Unit
     {
         public int Id { get; set; }
+        // Null only for quarantined legacy catalog rows with no provable owner.
+        public int? CompanyId { get; set; }
         public string Name { get; set; } = "";
 
         /// <summary>

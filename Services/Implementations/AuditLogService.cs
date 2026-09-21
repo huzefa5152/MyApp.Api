@@ -81,10 +81,9 @@ namespace MyApp.Api.Services.Implementations
         {
             try
             {
-                // Compute the dedup fingerprint if the caller didn't supply one.
+                // Recompute the tenant-bound, versioned fingerprint for every new event.
                 // SHA1 is plenty for in-app dedup keys (not cryptographic).
-                if (string.IsNullOrEmpty(log.Fingerprint))
-                    log.Fingerprint = ComputeFingerprint(log);
+                log.Fingerprint = ComputeFingerprint(log);
 
                 if (log.FirstOccurrence == null) log.FirstOccurrence = log.Timestamp;
                 if (log.LastOccurrence == null) log.LastOccurrence = log.Timestamp;
@@ -101,7 +100,8 @@ namespace MyApp.Api.Services.Implementations
                 {
                     var since = log.Timestamp - DedupWindow;
                     var existing = await _db.AuditLogs
-                        .Where(a => a.Fingerprint == log.Fingerprint && a.LastOccurrence >= since)
+                        .Where(a => a.Fingerprint == log.Fingerprint && a.CompanyId == log.CompanyId
+                            && a.LastOccurrence >= since)
                         .OrderByDescending(a => a.Id)
                         .FirstOrDefaultAsync();
 
@@ -139,10 +139,10 @@ namespace MyApp.Api.Services.Implementations
         {
             var msgNormalised = System.Text.RegularExpressions.Regex.Replace(
                 log.Message ?? "", @"\d+", "#");
-            var raw = $"{log.Level}|{log.ExceptionType}|{msgNormalised}|{log.RequestPath}|{log.StatusCode}";
+            var raw = $"{log.CompanyId}|{log.Level}|{log.ExceptionType}|{msgNormalised}|{log.RequestPath}|{log.StatusCode}";
             using var sha = SHA1.Create();
             var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
-            return Convert.ToHexString(bytes).ToLowerInvariant()[..40];
+            return AuditLog.TrustedScopePrefix + Convert.ToHexString(bytes).ToLowerInvariant()[..37];
         }
 
         public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null,
@@ -167,7 +167,8 @@ namespace MyApp.Api.Services.Implementations
             // row gives) rather than a distinct refusal, so the endpoint cannot
             // be used to probe which ids exist.
             if (companyScope != null &&
-                (log.CompanyId == null || !companyScope.Contains(log.CompanyId.Value)))
+                (log.CompanyId == null || !companyScope.Contains(log.CompanyId.Value)
+                 || log.Fingerprint == null || !log.Fingerprint.StartsWith(AuditLog.TrustedScopePrefix, StringComparison.Ordinal)))
                 return null;
             return ToDetailDto(log);
         }

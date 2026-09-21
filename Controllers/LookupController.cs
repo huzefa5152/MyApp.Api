@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -11,6 +11,7 @@ using MyApp.Api.Models;
 namespace MyApp.Api.Controllers
 {
     [Authorize]
+    [CatalogCompany]
     [Route("api/[controller]")]
     [ApiController]
     public class LookupController : ControllerBase
@@ -25,13 +26,7 @@ namespace MyApp.Api.Controllers
         // Search item descriptions (now returns FBR defaults so the caller can auto-fill
         // HS Code / Sale Type / UOM when a known item is picked).
         // Results are ordered: favorites first, then by usage count, then alphabetically.
-        // These three catalogs are INSTALL-WIDE: ItemDescription, Unit and
-        // ItemType carry no CompanyId, so one tenant's saved descriptions and
-        // units are offered to another's autocomplete by design. That is a
-        // schema decision, not something a gate changes - recorded here so the
-        // next reader knows it was seen and not missed. What the gate does add
-        // is least privilege: they feed document forms, so they answer to
-        // whoever fills one, not to every authenticated session.
+        // CatalogCompany selects a verified company; EF filters every lookup.
         [HttpGet("items")]
         [HasAnyPermission(
             "config.itemdescriptions.manage", "config.units.manage",
@@ -86,9 +81,7 @@ namespace MyApp.Api.Controllers
         }
 
         // Toggle favorite flag on an item description (by id).
-        // Audit H-5 (2026-05-13): mutates global lookup state — gate
-        // behind the dedicated lookup-management permission so
-        // read-only roles can't reshuffle every tenant's favorites.
+        // Catalog mutations also require the lookup-management permission.
         [HttpPut("items/{id}/favorite")]
         [HasPermission("config.itemdescriptions.manage")]
         public async Task<IActionResult> ToggleFavorite(int id, [FromBody] ToggleFavoriteDto dto)
@@ -122,7 +115,7 @@ namespace MyApp.Api.Controllers
         }
 
         // Add new item description
-        // Audit H-5 (2026-05-13): global lookup mutation — gated.
+        // Catalog mutation — gated by management permission.
         [HttpPost("items")]
         [HasPermission("config.itemdescriptions.manage")]
         public async Task<IActionResult> AddItem([FromBody] CreateItemDto dto)
@@ -144,7 +137,7 @@ namespace MyApp.Api.Controllers
 
         // Save/update FBR defaults for an item description (by name — upserts the row).
         // Called automatically when the user picks FBR fields for an item in the bill form.
-        // Audit H-5 (2026-05-13): global lookup mutation — gated.
+        // Catalog mutation — gated by management permission.
         [HttpPost("items/fbr-defaults")]
         [HasPermission("config.itemdescriptions.manage")]
         public async Task<IActionResult> SaveFbrDefaults([FromBody] SaveItemFbrDefaultsDto dto)

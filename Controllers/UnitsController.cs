@@ -21,6 +21,7 @@ namespace MyApp.Api.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
+    [CatalogCompany]
     public class UnitsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -33,10 +34,18 @@ namespace MyApp.Api.Controllers
         /// <summary>
         /// Full units list with the AllowsDecimalQuantity flag. Used by
         /// the admin grid and by every form that needs to know which UOMs
-        /// permit fractional quantities. Read-only — no permission gate
-        /// because the flag drives basic input behaviour everywhere.
+        /// permit fractional quantities. Restricted to roles that use these forms.
         /// </summary>
         [HttpGet]
+        [HasAnyPermission("config.units.manage", "itemtypes.manage.view",
+            "challans.list.view", "challans.manage.create", "challans.manage.update",
+            "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",
+            "bills.list.view", "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
+            "invoices.list.view", "invoices.manage.update.itemtype", "invoices.note.create",
+            "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "stock.dashboard.view")]
         public async Task<ActionResult<List<UnitDto>>> GetAll()
         {
             var units = await _context.Units

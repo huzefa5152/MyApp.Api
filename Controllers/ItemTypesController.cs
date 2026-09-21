@@ -13,6 +13,7 @@ namespace MyApp.Api.Controllers
     // so READ endpoints are open to any authenticated user. WRITE endpoints
     // (catalog management) require explicit itemtypes.manage.* permissions.
     [Authorize]
+    [CatalogCompany]
     [ApiController]
     [Route("api/[controller]")]
     public class ItemTypesController : ControllerBase
@@ -110,7 +111,7 @@ namespace MyApp.Api.Controllers
         /// The item catalog behind every line-item picker. Gated on the picker
         /// audience, not on itemtypes.manage.view - that key opens the Item
         /// Types SCREEN, and a role built to raise bills needs the list without
-        /// it. The catalog itself is global (ItemType has no CompanyId), but the
+        /// it. The catalog is company-private, and the
         /// OPTIONAL companyId decorates each row with that company's on-hand
         /// quantity, so it is a tenant fact and is guarded as one.
         /// </summary>
@@ -129,40 +130,8 @@ namespace MyApp.Api.Controllers
             "stock.dashboard.view")]
         public async Task<ActionResult<List<ItemTypeDto>>> GetAll([FromQuery] int? companyId = null)
         {
-            // Optional companyId (2026-05-12) — when present AND the
-            // company has inventory tracking enabled, each DTO carries
-            // an AvailableQty and the list is sorted by available stock
-            // descending. Sales-side dropdowns (EditBillForm, etc.)
-            // pass it so operators see "what can I sell" up top.
-            //
-            // Without companyId (2026-05-20): the Item Catalog admin page
-            // wants ONE on-hand number per item summed across every
-            // company the caller can reach — items are common across all
-            // tenants of the user, so a per-company filter would zero out
-            // legitimate stock that lives under a different company. We
-            // aggregate across the caller's accessible-company set
-            // (filtered to tracking-enabled by the stock service).
-            List<ItemTypeDto> items;
-            if (companyId.HasValue)
-            {
-                // 2026-09-21: this branch used to take the query parameter on
-                // trust. AvailableQty is that company's stock on hand, so
-                // passing someone else's id read their inventory - and with no
-                // permission attribute at all, any authenticated user of any
-                // tenant could do it. The id is a claim by the caller, never a
-                // fact; the else-branch below was already right to derive the
-                // set from the caller instead of believing them.
-                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
-                items = await _service.GetAllAsync(companyId);
-            }
-            else
-            {
-                var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
-                items = await _service.GetAllAsync(
-                    companyId: null,
-                    aggregateAcrossCompanyIds: accessible);
-            }
-            return Ok(items);
+            // CatalogCompany has resolved and authorized the company already.
+            return Ok(await _service.GetAllAsync(companyId));
         }
 
         /// <summary>
@@ -199,7 +168,7 @@ namespace MyApp.Api.Controllers
 
         // Optional ?companyId= triggers the tax engine to back-fill UOM from
         // FBR's HS_UOM endpoint when the operator left UOM blank. The company
-        // is just the source of the FBR token — ItemTypes are global.
+        // selects the private catalog and the company's FBR token.
         [HttpPost]
         [HasPermission("itemtypes.manage.create")]
         public async Task<ActionResult<ItemTypeDto>> Create(

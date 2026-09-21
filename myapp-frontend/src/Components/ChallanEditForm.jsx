@@ -91,7 +91,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     if (challan.companyId) {
       getClientsByCompany(challan.companyId).then(({ data }) => setClients(data)).catch(() => {});
     }
-    getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
+    getAllUnits(challan.companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, [challan.companyId]);
 
   // Derive the site options from the selected client's semicolon-separated list.
@@ -126,6 +126,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 
     if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
       saveItemFbrDefaults({
+        companyId: challan.companyId,
         name: picked.name,
         hsCode: picked.hsCode || null,
         saleType: picked.saleType || null,
@@ -344,7 +345,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             </div>
 
             {/* ── Items ── */}
-            <LineItemsEditor
+            <LineItemsEditor companyId={challan.companyId}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={() => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" })}

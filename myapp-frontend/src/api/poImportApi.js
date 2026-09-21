@@ -16,5 +16,5 @@ export const parsePdf = (file, companyId) => {
 export const parseText = (text, companyId) =>
   httpClient.post(`/poimport/parse-text${companyId ? `?companyId=${companyId}` : ""}`, { text });
 
-export const ensureLookups = (descriptions, units) =>
-  httpClient.post("/poimport/ensure-lookups", { descriptions, units });
+export const ensureLookups = (descriptions, units, companyId) =>
+  httpClient.post("/poimport/ensure-lookups", { descriptions, units }, { params: { companyId } });

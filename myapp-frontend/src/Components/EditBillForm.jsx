@@ -219,19 +219,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   useEffect(() => {
     const load = async () => {
       try {
-        // Parallel fan-out + companyId-aware refire (#5 — 2026-05-12).
-        // Round 1: fire invoice / units / item-types together (item-types
-        // without companyId for fast first paint — uses legacy alpha
-        // sort). Round 2 (kicked off non-blocking after invoice resolves):
-        // refetch item-types WITH companyId so the dropdown gets the
-        // per-company on-hand sort + AvailableQty chips. Operators in
-        // a slow connection see a usable dropdown immediately;
-        // everyone else only sees a brief flash before the sorted
-        // version replaces it.
-        const [{ data }, typesRes, unitsRes] = await Promise.all([
-          getInvoiceById(invoiceId),
-          getItemTypes().catch(() => ({ data: [] })),
-          getAllUnits().catch(() => ({ data: [] })),
+        // Load catalogs only after resolving the document's owning company.
+        const { data } = await getInvoiceById(invoiceId);
+        const [typesRes, unitsRes] = await Promise.all([
+          getItemTypes(data.companyId),
+          getAllUnits(data.companyId),
         ]);
         setInvoice(data);
         setAnyOverlay((data.items || []).some((it) => it.adjustment));
@@ -337,13 +329,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getClientsByCompany(data.companyId)
             .then((res) => setClients(res.data || []))
             .catch(() => setClients([]));
-          // Round-2 refire: re-fetch item types WITH companyId so the
-          // dropdown gets per-company AvailableQty + on-hand sort. This
-          // is non-blocking; the legacy-sort list from Round 1 above is
-          // already on screen and gets seamlessly replaced.
-          getItemTypes(data.companyId)
-            .then((r) => setItemTypes(r.data || []))
-            .catch(() => { /* keep round-1 list */ });
+
         }
       } catch {
         setError("Failed to load bill.");
@@ -2009,7 +1995,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                             {lockNonItemType ? (
                               <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
                             ) : (
-                              <LookupAutocomplete
+                              <LookupAutocomplete companyId={invoice?.companyId}
                                 label="Description"
                                 endpoint="/lookup/items"
                                 value={item.description || ""}
@@ -2307,7 +2293,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                               {lockNonItemType ? (
                                 <div style={styles.readOnlyText}>{item.description || <span style={styles.muted}>—</span>}</div>
                               ) : (
-                                <LookupAutocomplete
+                                <LookupAutocomplete companyId={invoice?.companyId}
                                   label="Description"
                                   endpoint="/lookup/items"
                                   value={item.description || ""}

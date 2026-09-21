@@ -30,6 +30,7 @@ import QuantityInput from "./QuantityInput";
  *   - getRate                   → last-billed-rate auto-fill on the price (Quote/Bill)
  */
 export default function LineItemsEditor({
+  companyId,
   items,
   onItemsChange,
   makeBlankItem,
@@ -347,7 +348,7 @@ export default function LineItemsEditor({
                     <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                   )}
                 </div>
-                <LookupAutocomplete
+                <LookupAutocomplete companyId={companyId}
                   label="Item description"
                   endpoint="/lookup/items"
                   value={item.description}
@@ -365,7 +366,7 @@ export default function LineItemsEditor({
                   </div>
                   <div>
                     <label style={s.mlabel}>Unit</label>
-                    <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
+                    <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
                   </div>
                   {showUnitPrice && (
                     <div>
@@ -409,7 +410,7 @@ export default function LineItemsEditor({
                       </td>
                     )}
                     <td style={{ ...s.td, verticalAlign: "top" }}>
-                      <LookupAutocomplete
+                      <LookupAutocomplete companyId={companyId}
                         label="Item description"
                         endpoint="/lookup/items"
                         value={item.description}
@@ -425,7 +426,7 @@ export default function LineItemsEditor({
                       <QuantityInput value={item.quantity} onChange={(v) => setItem(idx, { quantity: v })} unit={item.unit} units={units} min={getRowMin ? getRowMin(item) : undefined} style={{ ...s.cellInput, textAlign: "right" }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitAndAdvance(idx); } }} />
                     </td>
                     <td style={s.td}>
-                      <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
+                      <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(v) => setItem(idx, { unit: v })} inputStyle={s.cellInput} onEnterKey={() => commitAndAdvance(idx)} />
                     </td>
                     {showUnitPrice && <td style={s.td}>{priceInput(item, idx)}</td>}
                     {showUnitPrice && (

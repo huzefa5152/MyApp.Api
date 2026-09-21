@@ -444,6 +444,8 @@ scripts/*.txt
 # Local-only agent/editor scaffolding and operator helper scripts — not
 # project code, kept out of the repo per maintainer preference.
 .codex/
+.codex-audit/
+.codex-audit-*.log
 AGENTS.md
 scripts/*.ps1
 

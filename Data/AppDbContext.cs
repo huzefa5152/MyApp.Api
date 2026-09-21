@@ -4,7 +4,7 @@ using MyApp.Api.Models;
 
 namespace MyApp.Api.Data
 {
-    public class AppDbContext : DbContext
+    public partial class AppDbContext : DbContext
     {
         private readonly IFbrTokenProtector? _fbrTokenProtector;
 
@@ -16,10 +16,11 @@ namespace MyApp.Api.Data
         // value converter wired up in OnModelCreating. Falls back to the
         // parameterless constructor (plaintext) when called from tooling
         // (migrations / design-time) that doesn't have the protector.
-        public AppDbContext(DbContextOptions<AppDbContext> options, IFbrTokenProtector fbrTokenProtector)
+        public AppDbContext(DbContextOptions<AppDbContext> options, IFbrTokenProtector fbrTokenProtector, IHttpContextAccessor http)
             : base(options)
         {
             _fbrTokenProtector = fbrTokenProtector;
+            _catalogHttp = http;
         }
 
         public DbSet<Company> Companies { get; set; }
@@ -472,13 +473,23 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<DeliveryItem>().Property(di => di.Quantity).HasPrecision(18, 4);
 
+            modelBuilder.Entity<ItemType>().HasQueryFilter(x => CatalogSystemContext ||
+                (CatalogCompanyId != null ? x.CompanyId == CatalogCompanyId : x.CompanyId != null && CatalogAllowedIds.Contains(x.CompanyId.Value)));
+            modelBuilder.Entity<ItemDescription>().HasQueryFilter(x => CatalogSystemContext ||
+                (CatalogCompanyId != null ? x.CompanyId == CatalogCompanyId : x.CompanyId != null && CatalogAllowedIds.Contains(x.CompanyId.Value)));
+            modelBuilder.Entity<Unit>().HasQueryFilter(x => CatalogSystemContext ||
+                (CatalogCompanyId != null ? x.CompanyId == CatalogCompanyId : x.CompanyId != null && CatalogAllowedIds.Contains(x.CompanyId.Value)));
+            modelBuilder.Entity<ItemType>().HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<ItemDescription>().HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Unit>().HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
+
             // Optional: make ItemDescription.Name and Unit.Name unique
             modelBuilder.Entity<ItemDescription>()
-                .HasIndex(i => i.Name)
+                .HasIndex(i => new { i.CompanyId, i.Name })
                 .IsUnique();
 
             modelBuilder.Entity<Unit>()
-                .HasIndex(u => u.Name)
+                .HasIndex(u => new { u.CompanyId, u.Name })
                 .IsUnique();
 
             // Composite uniqueness on (Name, HSCode) — operators legitimately
@@ -492,7 +503,7 @@ namespace MyApp.Api.Data
             // Filtered to IsDeleted = 0 so a soft-deleted ItemType never
             // blocks re-creating the same (Name, HSCode) pair later.
             modelBuilder.Entity<ItemType>()
-                .HasIndex(it => new { it.Name, it.HSCode })
+                .HasIndex(it => new { it.CompanyId, it.Name, it.HSCode })
                 .IsUnique()
                 .HasFilter("[IsDeleted] = 0");
 

@@ -6,7 +6,7 @@ import httpClient from "./httpClient";
 //
 // Server returns:
 //   [ { id, name, allowsDecimalQuantity }, ... ]
-export const getAllUnits = () => httpClient.get("/units");
+export const getAllUnits = (companyId) => httpClient.get("/units", { params: { companyId } });
 
 // Toggle the AllowsDecimalQuantity flag for one unit. Gated by the
 // existing config.units.manage permission server-side.

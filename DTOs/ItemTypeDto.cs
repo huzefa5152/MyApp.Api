@@ -3,6 +3,7 @@ namespace MyApp.Api.DTOs
     public class ItemTypeDto
     {
         public int Id { get; set; }
+        public int? CompanyId { get; set; }
         public string Name { get; set; } = "";
 
         // FBR Digital Invoicing metadata. A bill's line items inherit these

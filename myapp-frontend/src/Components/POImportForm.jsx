@@ -141,7 +141,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
       try {
         const [clientRes, unitsRes, quoteItems] = await Promise.all([
           getClientsByCompany(companyId),
-          getAllUnits().catch(() => ({ data: [] })),
+          getAllUnits(companyId).catch(() => ({ data: [] })),
           // Quote-link picker is order-only — skip the (paged) fetch otherwise.
           cfg.showQuoteLink
             ? getSalesQuotesForPicker(companyId).catch(() => [])
@@ -307,7 +307,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
       // Auto-create missing lookup entries
       const descriptions = items.map((i) => i.description.trim()).filter(Boolean);
       const unitNames = items.map((i) => i.unit.trim()).filter(Boolean);
-      await ensureLookups(descriptions, unitNames);
+      await ensureLookups(descriptions, unitNames, companyId);
 
       // Preserve fractional quantities (KG, Litre).
       const qty = (i) => (typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1));
@@ -601,7 +601,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                           </div>
                           <div style={{ marginBottom: "0.4rem" }}>
                             <label style={styles.mLabel}>Description *</label>
-                            <LookupAutocomplete label="Description" endpoint="/lookup/items" value={item.description} onChange={(val) => handleItemChange(idx, "description", val)} inputClassName="" inputStyle={{ ...styles.input, padding: "0.5rem 0.6rem", fontSize: "0.9rem" }} multiline />
+                            <LookupAutocomplete companyId={companyId} label="Description" endpoint="/lookup/items" value={item.description} onChange={(val) => handleItemChange(idx, "description", val)} inputClassName="" inputStyle={{ ...styles.input, padding: "0.5rem 0.6rem", fontSize: "0.9rem" }} multiline />
                           </div>
                           <div style={{ display: "grid", gridTemplateColumns: cfg.showPrice ? "1fr 1fr 1fr" : "1fr 1fr", gap: "0.5rem" }}>
                             <div>
@@ -610,7 +610,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                             </div>
                             <div>
                               <label style={styles.mLabel}>Unit</label>
-                              <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(val) => handleItemChange(idx, "unit", val)} inputClassName="" inputStyle={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem" }} />
+                              <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={item.unit} onChange={(val) => handleItemChange(idx, "unit", val)} inputClassName="" inputStyle={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem" }} />
                             </div>
                             {cfg.showPrice && (
                               <div>
@@ -636,7 +636,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                       <div key={item.id} style={styles.itemRow}>
                         <span style={{ flex: 0.5, fontSize: "0.8rem", color: colors.textSecondary, paddingTop: 6 }}>{idx + 1}</span>
                         <div style={{ flex: 2.5 }}>
-                          <LookupAutocomplete
+                          <LookupAutocomplete companyId={companyId}
                             label="Description"
                             endpoint="/lookup/items"
                             value={item.description}
@@ -656,7 +656,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                           />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <LookupAutocomplete
+                          <LookupAutocomplete companyId={companyId}
                             label="Unit"
                             endpoint="/lookup/units"
                             value={item.unit}

@@ -41,6 +41,7 @@ namespace MyApp.Api.Services.Implementations
         private static ItemTypeDto ToDto(ItemType it) => new()
         {
             Id = it.Id,
+            CompanyId = it.CompanyId,
             Name = it.Name,
             HSCode = it.HSCode,
             UOM = it.UOM,

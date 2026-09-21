@@ -23,11 +23,14 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly IMemoryCache _cache;
         private readonly int _seedAdminUserId;
+        private readonly IHttpContextAccessor _http;
 
-        public CompanyAccessGuard(AppDbContext context, IMemoryCache cache, IConfiguration configuration)
+        public CompanyAccessGuard(AppDbContext context, IMemoryCache cache, IConfiguration configuration,
+            IHttpContextAccessor http)
         {
             _context = context;
             _cache = cache;
+            _http = http;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
@@ -56,6 +59,8 @@ namespace MyApp.Api.Services.Implementations
                 throw new UnauthorizedAccessException(
                     $"You do not have access to company {companyId}.");
             }
+            if (_http.HttpContext is { } context)
+                context.Items["currentCompanyId"] = companyId;
         }
 
         public async Task<HashSet<int>> GetAccessibleCompanyIdsAsync(int userId)

@@ -141,7 +141,7 @@ export default function ItemTypeForm({
   // The silent flag suppresses the hintLoading toggle so the UOM
   // label keeps showing the persistent "🔒 HS-locked" state.
   // Re-run when editItem OR companyId becomes available — not just once on
-  // mount. The Item Catalog is a global page where selectedCompany can
+  // mount. The company selection can
   // resolve a tick AFTER this form mounts; a mount-only ([]) effect captured
   // companyId=undefined and never retried, so editing a saved item showed
   // its HS code but never fetched the UOM / sale-type suggestion. (Bug fix.)
@@ -487,7 +487,7 @@ export default function ItemTypeForm({
                     title="UOM is driven by the HS code. Clear the HS code to edit it manually."
                   />
                 ) : (
-                  <LookupAutocomplete
+                  <LookupAutocomplete companyId={companyId}
                     endpoint="/lookup/units"
                     label="type to pick from your units"
                     value={uom}

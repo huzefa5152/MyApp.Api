@@ -120,14 +120,9 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<ItemTypeLookup> LoadItemTypesAsync(int companyId)
         {
-            // ItemType is shared across all companies in the current
-            // schema (no CompanyId on ItemType). Phase 2 may need to
-            // tenant-scope this, but for Phase 1 preview we surface
-            // matches against the global catalog. Soft-deleted rows are
-            // excluded so a deleted catalog entry no longer surfaces as
-            // a preview match.
+            // Match only this company's private catalog.
             var rows = await _context.ItemTypes
-                .Where(it => !it.IsDeleted)
+                .Where(it => it.CompanyId == companyId && !it.IsDeleted)
                 .Select(it => new { it.Id, it.Name, it.HSCode })
                 .ToListAsync();
 

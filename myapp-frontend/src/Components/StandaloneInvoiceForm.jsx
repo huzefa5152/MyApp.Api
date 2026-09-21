@@ -232,7 +232,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     return data || [];
   };
   const refreshItemTypes = async () => {
-    const { data } = await getItemTypes();
+    const { data } = await getItemTypes(companyId);
     setItemTypes(data || []);
     return data || [];
   };
@@ -1023,7 +1023,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 <div style={{ marginBottom: "0.4rem" }}>
                                   <label style={styles.mlabel}>Description{billsMode ? " *" : ""}</label>
                                   {billsMode ? (
-                                    <LookupAutocomplete
+                                    <LookupAutocomplete companyId={companyId}
                                       label="Description"
                                       endpoint="/lookup/items"
                                       value={r.description || ""}
@@ -1044,7 +1044,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <div>
                                     <label style={styles.mlabel}>UOM</label>
                                     {billsMode ? (
-                                      <LookupAutocomplete label="Unit" endpoint="/lookup/units" value={r.uom || ""} onChange={(val) => updateRow(r.localId, { uom: val })} inputStyle={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem" }} />
+                                      <LookupAutocomplete companyId={companyId} label="Unit" endpoint="/lookup/units" value={r.uom || ""} onChange={(val) => updateRow(r.localId, { uom: val })} inputStyle={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem" }} />
                                     ) : (
                                       <input type="text" readOnly={!!r.itemTypeId} style={{ ...styles.input, padding: "0.5rem 0.55rem", fontSize: "0.9rem", backgroundColor: r.itemTypeId ? "#eef5ff" : colors.inputBg, cursor: r.itemTypeId ? "not-allowed" : "text" }} value={r.uom} onChange={(e) => updateRow(r.localId, { uom: e.target.value })} placeholder="auto" title={r.itemTypeId ? "Inherited from the picked item type" : ""} />
                                     )}
@@ -1150,7 +1150,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       free-text. Item-type pick still seeds the value. */}
                                   {billsMode ? (
                                     <td style={styles.unifiedTd}>
-                                      <LookupAutocomplete
+                                      <LookupAutocomplete companyId={companyId}
                                         label="Description"
                                         endpoint="/lookup/items"
                                         value={r.description || ""}
@@ -1182,7 +1182,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         itemTypeId input because UOM there is
                                         derived from the picked Item Type. */}
                                     {billsMode ? (
-                                      <LookupAutocomplete
+                                      <LookupAutocomplete companyId={companyId}
                                         label="Unit"
                                         endpoint="/lookup/units"
                                         value={r.uom || ""}

@@ -54,7 +54,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const attachmentRef = useRef(null);
 
   useEffect(() => {
-    getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
+    getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([]));
   }, []);
 
   // Client list for the searchable picker (replaces the old fetch-inside-
@@ -107,6 +107,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     // Remember FBR defaults for this description so future bills auto-fill
     if (picked.name && (picked.hsCode || picked.saleType || picked.fbrUOMId)) {
       saveItemFbrDefaults({
+        companyId: companyId,
         name: picked.name,
         hsCode: picked.hsCode || null,
         saleType: picked.saleType || null,
@@ -289,7 +290,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             </div>
 
             <div style={{ marginTop: "0.25rem" }}>
-              <LineItemsEditor
+              <LineItemsEditor companyId={companyId}
                 items={items}
                 onItemsChange={setItems}
                 makeBlankItem={() => ({ description: "", quantity: 1, unit: "" })}

@@ -90,7 +90,7 @@ namespace MyApp.Api.Middleware
                 Level = statusCode >= 500 ? "Error" : "Warning",
                 UserName = context.User.Identity?.Name,
                 HttpMethod = context.Request.Method,
-                RequestPath = context.Request.Path.ToString(),
+                RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
                 QueryString = context.Request.QueryString.ToString(),
                 StatusCode = statusCode,
                 ExceptionType = "",
@@ -127,20 +127,16 @@ namespace MyApp.Api.Middleware
         }
 
         /// <summary>
-        /// Best-effort tenant tagging for AuditLog rows. Sources, in order:
-        ///   1. HttpContext.Items["currentCompanyId"] — set by AuthorizeCompany
-        ///      attribute when the route is tenant-scoped.
-        ///   2. Route value {companyId} — fallback for endpoints that bypass
-        ///      AuthorizeCompany (e.g. POST /api/companies/{companyId}/...)
-        ///   3. Query string ?companyId=N
+        /// Tenant tagging uses only a company verified by an access guard or
+        /// resolved portal. Unverified request parameters cannot label a log.
         /// Returns null when nothing matches; CompanyId is nullable on the
         /// AuditLog row so this is fine.
         /// </summary>
         private static int? ResolveCompanyId(HttpContext context)
         {
             if (context.Items.TryGetValue("currentCompanyId", out var v) && v is int cid && cid > 0) return cid;
-            if (context.Request.RouteValues.TryGetValue("companyId", out var rv) && int.TryParse(rv?.ToString(), out var rcid) && rcid > 0) return rcid;
-            if (context.Request.Query.TryGetValue("companyId", out var qv) && int.TryParse(qv.ToString(), out var qcid) && qcid > 0) return qcid;
+            // Caller-supplied route/query values are not audit ownership evidence.
+            // Only a successful tenant guard or resolved portal may tag the row.
             return null;
         }
 
@@ -223,7 +219,7 @@ namespace MyApp.Api.Middleware
                 Level = statusCode >= 500 ? "Error" : "Warning",
                 UserName = context.User.Identity?.Name,
                 HttpMethod = context.Request.Method,
-                RequestPath = context.Request.Path.ToString(),
+                RequestPath = PortalTokenLogMasker.Mask(context.Request.Path.ToString()),
                 QueryString = context.Request.QueryString.ToString(),
                 StatusCode = statusCode,
                 ExceptionType = ex.GetType().Name,

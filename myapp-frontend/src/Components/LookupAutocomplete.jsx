@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
 
-export default function LookupAutocomplete({ label, endpoint, value, onChange, inputClassName, inputStyle, inputRef, autoFocus, onEnterKey }) {
+export default function LookupAutocomplete({ companyId, label, endpoint, value, onChange, inputClassName, inputStyle, inputRef, autoFocus, onEnterKey }) {
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [inputValue, setInputValue] = useState(value || "");
@@ -64,7 +64,7 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
 
             setLoading(true);
             try {
-                const response = await httpClient.get(endpoint, { params: { query: trimmedQuery } });
+                const response = await httpClient.get(endpoint, { params: { query: trimmedQuery, companyId } });
                 setSuggestions(response.data || []);
             } catch (err) {
                 console.error("Lookup fetch error:", err);
@@ -77,7 +77,7 @@ export default function LookupAutocomplete({ label, endpoint, value, onChange, i
 
     const createEntry = async (val) => {
         try {
-            const response = await httpClient.post(endpoint, { name: val });
+            const response = await httpClient.post(endpoint, { name: val }, { params: { companyId } });
             // Refresh suggestions with the newly created entry
             fetchSuggestions(val);
             return response.data.name || val;

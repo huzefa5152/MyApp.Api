@@ -190,6 +190,7 @@ namespace MyApp.Api.Services.Implementations
             };
 
             var created = await _repository.AddAsync(company);
+            await MyApp.Api.Data.CompanyCatalogSeeder.SeedUnitsAsync(_context, created.Id);
             return ToDto(created);
         }
 
@@ -381,6 +382,15 @@ namespace MyApp.Api.Services.Implementations
                     await _context.DeliveryChallans.Where(dc => dc.CompanyId == id).ExecuteDeleteAsync();
                 }
 
+                // Quotes and orders also restrict client/catalog deletion. Break
+                // their conversion cycle after dependent bills/challans are gone.
+                await _context.SalesQuotes.Where(q => q.CompanyId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(q => q.ConvertedToSalesOrderId, (int?)null));
+                await _context.SalesOrders.Where(o => o.CompanyId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.SalesQuoteId, (int?)null));
+                await _context.SalesOrders.Where(o => o.CompanyId == id).ExecuteDeleteAsync();
+                await _context.SalesQuotes.Where(q => q.CompanyId == id).ExecuteDeleteAsync();
+
                 // 4. Delete clients
                 await _context.Clients.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
 
@@ -456,6 +466,7 @@ namespace MyApp.Api.Services.Implementations
                 await _context.AccountGroups.Where(g => g.CompanyId == id).ExecuteDeleteAsync();
 
                 // 8. Delete the company
+                await _context.ItemTypes.IgnoreQueryFilters().Where(x => x.CompanyId == id).ExecuteDeleteAsync();
                 await _repository.DeleteAsync(company);
 
                 // After the row is gone, invalidate the cached accessible-set

@@ -1,8 +1,10 @@
-﻿namespace MyApp.Api.Models
+namespace MyApp.Api.Models
 {
     public class ItemDescription
     {
         public int Id { get; set; }
+        // Null only for quarantined legacy catalog rows with no provable owner.
+        public int? CompanyId { get; set; }
         public string Name { get; set; } = "";
 
         // FBR digital-invoicing defaults. These are remembered per item name so users

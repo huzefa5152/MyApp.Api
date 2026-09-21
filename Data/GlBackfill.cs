@@ -60,6 +60,7 @@ namespace MyApp.Api.Data
 
             foreach (var c in companies.Where(c => !c.GlPostingEnabled))
             {
+                await using var tx = await db.Database.BeginTransactionAsync();
                 try
                 {
                     // A chart first — nothing can post without accounts to post
@@ -77,6 +78,7 @@ namespace MyApp.Api.Data
                     await db.SaveChangesAsync();
 
                     var result = await posting.RebuildAsync(c.Id);
+                    await tx.CommitAsync();
                     posted++;
                     details.Add(
                         $"{c.Name}: {result.PostedInvoices} invoices, " +
@@ -87,6 +89,11 @@ namespace MyApp.Api.Data
                 }
                 catch (Exception ex)
                 {
+                    await tx.RollbackAsync();
+                    // SaveChanges accepts tracked values even inside a transaction.
+                    // Discard them after rollback so a later company's save cannot
+                    // reapply this company's failed enablement or journal lines.
+                    db.ChangeTracker.Clear();
                     failed++;
                     // One company's data problem must not stop the others, and
                     // must not stop the app booting. It stays un-posted — which
@@ -98,8 +105,8 @@ namespace MyApp.Api.Data
             if (failed > 0)
             {
                 // No marker. Leaving it off means the next boot tries again —
-                // and because posting is replace-on-edit, retrying the ones that
-                // already succeeded costs time and changes nothing.
+                // successful companies remain enabled and are skipped; failed
+                // companies remain disabled and are retried in full.
                 logger.LogWarning(
                     "GL backfill: {Failed} of {Total} companies failed; not marking complete so the next start retries.",
                     failed, failed + posted);

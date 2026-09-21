@@ -36,14 +36,16 @@ namespace MyApp.Api.Helpers
 
         public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
         {
-            if (!logEvent.Properties.TryGetValue(PropertyName, out var value)) return;
-            if (value is not ScalarValue { Value: string path }) return;
-            // Cheap reject: most requests have nothing to do with the portal.
-            if (path.IndexOf("portal", StringComparison.OrdinalIgnoreCase) < 0) return;
-
-            var masked = Mask(path);
-            if (!ReferenceEquals(masked, path))
-                logEvent.AddOrUpdateProperty(new LogEventProperty(PropertyName, new ScalarValue(masked)));
+            // ASP.NET and exception logging also use Path (and sometimes a full
+            // URI), so restricting this to RequestPath misses error events.
+            foreach (var property in logEvent.Properties.ToList())
+            {
+                if (property.Value is not ScalarValue { Value: string path }) continue;
+                if (path.IndexOf("portal", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var masked = Mask(path);
+                if (!string.Equals(masked, path, StringComparison.Ordinal))
+                    logEvent.AddOrUpdateProperty(new LogEventProperty(property.Key, new ScalarValue(masked)));
+            }
         }
 
         /// <summary>Replaces the token segment with <c>***</c>. Public so the

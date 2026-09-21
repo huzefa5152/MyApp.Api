@@ -251,7 +251,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         const [challanRes, clientRes, typesRes, scenarioRes] = await Promise.all([
           getPendingChallansByCompany(companyId),
           getClientsByCompany(companyId),
-          getItemTypes().catch(() => ({ data: [] })),
+          getItemTypes(companyId).catch(() => ({ data: [] })),
           getFbrApplicableScenarios(companyId).catch(() => ({ data: { scenarios: [] } })),
         ]);
         setAllChallans(challanRes.data);
@@ -723,6 +723,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           const name = (itemDescriptions[item.id] || item.description)?.trim();
           if (!name) return Promise.resolve();
           return saveItemFbrDefaults({
+        companyId: companyId,
             name,
             hsCode: itemHsCodes[item.id]?.trim() || null,
             // Same scenario-wins precedence as the submit payload above.
@@ -778,7 +779,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     return data || [];
   };
   const refreshItemTypes = async () => {
-    const { data } = await getItemTypes();
+    const { data } = await getItemTypes(companyId);
     setItemTypes(data || []);
     return data || [];
   };
@@ -1382,7 +1383,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     </div>
                                     <div>
                                       <label style={styles.mlabel}>UOM</label>
-                                      <LookupAutocomplete endpoint="/lookup/units" value={displayUom || ""} onChange={(val) => setItemUoms((p) => ({ ...p, [item.id]: val }))} />
+                                      <LookupAutocomplete companyId={companyId} endpoint="/lookup/units" value={displayUom || ""} onChange={(val) => setItemUoms((p) => ({ ...p, [item.id]: val }))} />
                                     </div>
                                     <div>
                                       <label style={styles.mlabel}>Unit Price *</label>
@@ -1554,7 +1555,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                           text input — operators had to retype
                                           "Pcs" / "KG" each row instead of picking
                                           from the saved-units list. */}
-                                      <LookupAutocomplete
+                                      <LookupAutocomplete companyId={companyId}
                                         endpoint="/lookup/units"
                                         value={displayUom || ""}
                                         onChange={(val) => setItemUoms((p) => ({ ...p, [item.id]: val }))}

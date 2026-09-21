@@ -89,14 +89,14 @@ export default function JournalEntriesPage() {
   useEffect(() => {
     if (!companyId) { setAccounts([]); setGlStatus(null); return; }
     let cancelled = false;
-    getAccountsFlat(companyId)
+    if (canCreate || canUpdate) getAccountsFlat(companyId)
       .then(({ data }) => { if (!cancelled) setAccounts((data || []).filter((a) => a.isActive)); })
       .catch(() => { if (!cancelled) setAccounts([]); });
     getGlStatus(companyId)
       .then(({ data }) => { if (!cancelled) setGlStatus(data); })
       .catch(() => { if (!cancelled) setGlStatus(null); });
     return () => { cancelled = true; };
-  }, [companyId]);
+  }, [companyId, canCreate, canUpdate]);
 
   const handleDelete = async (e) => {
     const ok = await confirm({

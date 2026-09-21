@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo, MdBusiness } from "react-icons/md";
+import { MdCategory, MdAdd, MdEdit, MdDelete, MdSearch, MdStar, MdStarBorder, MdInfo } from "react-icons/md";
 import { getItemTypes, updateItemType, deleteItemType } from "../api/itemTypeApi";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -60,7 +60,7 @@ const SALE_TYPES = [
  */
 export default function ItemTypesPage() {
   const confirm = useConfirm();
-  const { companies, selectedCompany } = useCompany();
+  const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const { has } = usePermissions();
   const canCreate = has("itemtypes.manage.create");
   const canUpdate = has("itemtypes.manage.update");
@@ -74,14 +74,7 @@ export default function ItemTypesPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      // Item Types are common across the operator's tenants — the catalog
-      // is one shared list, not one-per-company. Skip the companyId arg
-      // so the backend AGGREGATES on-hand stock across every company the
-      // caller can reach (filtered to tracking-enabled). Without this,
-      // selecting "Roshan" in the header would zero out stock that lives
-      // under "Hakimi" for the same item, even though the operator owns
-      // both.
-      const { data } = await getItemTypes();
+      const { data } = await getItemTypes(selectedCompany?.id);
       setItemTypes(data);
     } catch {
       notify("Failed to load item types.", "error");
@@ -90,9 +83,10 @@ export default function ItemTypesPage() {
     }
   };
 
-  // Catalog is global — don't reload on global-company change. Refresh
-  // only happens after a create / update / favorite / delete action.
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    if (selectedCompany?.id) fetchAll();
+    else setItemTypes([]);
+  }, [selectedCompany?.id]);
 
   const openAdd = () => {
     setEditItem(null);
@@ -165,18 +159,19 @@ export default function ItemTypesPage() {
         )}
       </div>
 
-      {!selectedCompany && companies?.length > 0 && (
-        <div style={styles.infoBox}>
-          <MdBusiness size={16} style={{ flexShrink: 0 }} />
-          <div>Select a company on the dashboard first — HS-code lookups need an FBR-enabled company to query the catalog.</div>
-        </div>
-      )}
+      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+        Company
+        <select aria-label="Catalog company" value={selectedCompany?.id || ""}
+          onChange={(e) => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)))}
+          style={{ padding: "0.6rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, maxWidth: "100%" }}>
+          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </label>
 
       <div style={styles.infoBox}>
         <MdInfo size={16} style={{ flexShrink: 0 }} />
         <div>
-          All items must come from <b>FBR's official catalog</b> — each has a valid HS Code, UOM, and Sale Type so bills pass FBR validation automatically.
-          &nbsp;The app seeded 19 common categories for pneumatic / hardware / general-order-supply on first run; add more by picking from the FBR HS Code search.</div>
+          These items belong to <b>{selectedCompany?.name}</b>. Configure their HS Code, UOM, and Sale Type for FBR invoicing.</div>
       </div>
 
       {itemTypes.length > 5 && (
@@ -360,10 +355,7 @@ export default function ItemTypesPage() {
       {showForm && (
         <ItemTypeForm
           editItem={editItem}
-          /* The catalog is global; fall back to any accessible company so
-             HS-code UOM / sale-type lookups still work when the operator
-             hasn't picked a company in the header. */
-          companyId={selectedCompany?.id || companies?.[0]?.id}
+          companyId={selectedCompany?.id}
           showFavoriteToggle
           showRichHints
           existingHsCodes={itemTypes

@@ -33,7 +33,8 @@ namespace MyApp.Api.Repositories.Implementations
             // other caller sees rows belonging to a company they can reach, and
             // never the CompanyId-less platform rows.
             if (companyScope != null)
-                query = query.Where(a => a.CompanyId != null && companyScope.Contains(a.CompanyId.Value));
+                query = query.Where(a => a.CompanyId != null && companyScope.Contains(a.CompanyId.Value)
+                    && a.Fingerprint != null && a.Fingerprint.StartsWith(AuditLog.TrustedScopePrefix));
 
             if (!string.IsNullOrWhiteSpace(level))
                 query = query.Where(a => a.Level == level);
@@ -72,7 +73,8 @@ namespace MyApp.Api.Repositories.Implementations
             // Same scope as the listing, or the summary tile would report a
             // count the caller cannot open a single row of.
             if (companyScope != null)
-                query = query.Where(a => a.CompanyId != null && companyScope.Contains(a.CompanyId.Value));
+                query = query.Where(a => a.CompanyId != null && companyScope.Contains(a.CompanyId.Value)
+                    && a.Fingerprint != null && a.Fingerprint.StartsWith(AuditLog.TrustedScopePrefix));
             return await query.CountAsync();
         }
     }

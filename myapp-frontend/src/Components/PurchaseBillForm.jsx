@@ -84,8 +84,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       try {
         const [sRes, tRes, uRes] = await Promise.all([
           getSuppliersByCompany(companyId),
-          getItemTypes(),
-          getAllUnits(),
+          getItemTypes(companyId),
+          getAllUnits(companyId),
         ]);
         setSuppliers(sRes.data || []);
         setItemTypes(tRes.data || []);

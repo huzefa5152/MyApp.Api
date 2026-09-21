@@ -80,7 +80,7 @@ export default function SmartItemAutocomplete({
       setLoading(true);
       try {
         const [localRes, fbrRes] = await Promise.allSettled([
-          searchItemDescriptions(term),
+          searchItemDescriptions(term, companyId),
           companyId ? getFbrHSCodes(companyId, term) : Promise.resolve({ data: [] }),
         ]);
         setLocalResults(localRes.status === "fulfilled" ? localRes.value.data : []);

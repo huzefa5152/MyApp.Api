@@ -33,7 +33,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpGet("gl/company/{companyId}/status")]
-        [HasAnyPermission("accounting.gl.view", "accounting.coa.view")]
+        [HasAnyPermission("accounting.gl.view", "accounting.coa.view", "accounting.journal.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<GlStatusDto>> GetStatus(int companyId)
         {

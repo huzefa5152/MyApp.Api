@@ -89,6 +89,10 @@ namespace MyApp.Api.Middleware
                     StatusCode = StatusCodes.Status403Forbidden
                 };
             }
+            else
+            {
+                context.HttpContext.Items["currentCompanyId"] = companyId;
+            }
         }
     }
 }

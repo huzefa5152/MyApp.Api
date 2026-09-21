@@ -93,7 +93,7 @@ def audit() -> tuple[list[str], int]:
         controller = path.stem
         raw = path.read_text(encoding="utf-8")
         src = strip_comments(raw)
-        class_has_guard = "[AuthorizeCompany" in src.split("public class", 1)[0]
+        class_has_guard = any(attr in src.split("public class", 1)[0] for attr in ("[AuthorizeCompany", "[CatalogCompany"))
 
         for m in HTTP_ATTR.finditer(src):
             route = m.group(2) or ""
@@ -117,7 +117,7 @@ def audit() -> tuple[list[str], int]:
                (controller, "*") in ALLOWED_UNSCOPED:
                 continue
 
-            has_attr = "[AuthorizeCompany" in attrs or class_has_guard
+            has_attr = "[AuthorizeCompany" in attrs or "[CatalogCompany" in attrs or class_has_guard
 
             body_start = src.find("{", m.start() + sig.end("params"))
             arrow = src.find("=>", m.start() + sig.end("params"))

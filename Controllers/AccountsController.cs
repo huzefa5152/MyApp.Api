@@ -28,17 +28,20 @@ namespace MyApp.Api.Controllers
         private readonly IGeneralLedgerService _gl;
         private readonly IPostingService _posting;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
         private readonly ILogger<AccountsController> _logger;
 
         public AccountsController(
             IAccountService service, ICoaPresetSeeder seeder, IGeneralLedgerService gl,
-            IPostingService posting, ICompanyAccessGuard access, ILogger<AccountsController> logger)
+            IPostingService posting, ICompanyAccessGuard access, IPermissionService permissions,
+            ILogger<AccountsController> logger)
         {
             _service = service;
             _seeder = seeder;
             _gl = gl;
             _posting = posting;
             _access = access;
+            _permissions = permissions;
             _logger = logger;
         }
 
@@ -61,12 +64,13 @@ namespace MyApp.Api.Controllers
         /// granted the Chart of Accounts screen.</summary>
         [HttpGet("company/{companyId}/flat")]
         [HasAnyPermission("accounting.coa.view",
+            "accounting.journal.create", "accounting.journal.update",
             "accounting.receipts.create", "accounting.payments.create",
-            "bills.manage.create", "bills.manage.update",
+            "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
             "purchasebills.manage.create", "purchasebills.manage.update")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AccountDto>>> GetFlat(int companyId)
-            => Ok(await _service.GetAccountsFlatAsync(companyId));
+            => Ok(await ScopePickerBalancesAsync(await _service.GetAccountsFlatAsync(companyId)));
 
         /// <summary>Bank/cash accounts for the receipt/payment "Received in /
         /// Paid from" picker. Gated so anyone who can record or read a
@@ -77,7 +81,23 @@ namespace MyApp.Api.Controllers
             "accounting.payments.view", "accounting.payments.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<List<AccountDto>>> GetBankCash(int companyId, [FromQuery] bool includeInactive = false)
-            => Ok(await _service.GetBankCashAccountsAsync(companyId, includeInactive));
+            => Ok(await ScopePickerBalancesAsync(await _service.GetBankCashAccountsAsync(companyId, includeInactive)));
+
+        private async Task<List<AccountDto>> ScopePickerBalancesAsync(List<AccountDto> accounts)
+        {
+            if (await _permissions.HasPermissionAsync(CurrentUserId, "accounting.coa.view"))
+                return accounts;
+            // Document permissions allow selecting accounts, not reading the
+            // ledger. Null distinguishes an undisclosed balance from zero.
+            foreach (var account in accounts)
+            {
+                account.Balance = null;
+                account.OpeningBalance = null;
+                account.OpeningBalanceIsDebit = false;
+                account.HasActivity = null;
+            }
+            return accounts;
+        }
 
         /// <summary>Account ledger drill-down: the journal lines that hit this
         /// account, with a running balance, newest window paged. Tenant access

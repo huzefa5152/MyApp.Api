@@ -4,6 +4,8 @@ import { getAllUnits, updateUnit } from "../api/unitsApi";
 import { notify } from "../utils/notify";
 import { usePermissions } from "../contexts/PermissionsContext";
 
+import { useCompany } from "../contexts/CompanyContext";
+
 const colors = {
   blue: "#0d47a1",
   teal: "#00897b",
@@ -36,6 +38,7 @@ const colors = {
  */
 export default function UnitsPage() {
   const { has } = usePermissions();
+  const { companies, selectedCompany, setSelectedCompany } = useCompany();
   const canManage = has("config.units.manage");
 
   const [units, setUnits] = useState([]);
@@ -44,13 +47,14 @@ export default function UnitsPage() {
   const [pendingId, setPendingId] = useState(null); // id currently saving
 
   useEffect(() => {
-    loadUnits();
-  }, []);
+    if (selectedCompany?.id) loadUnits();
+    else setUnits([]);
+  }, [selectedCompany?.id]);
 
   const loadUnits = async () => {
     setLoading(true);
     try {
-      const { data } = await getAllUnits();
+      const { data } = await getAllUnits(selectedCompany?.id);
       setUnits(data);
     } catch {
       notify("Failed to load units", "error");
@@ -107,6 +111,15 @@ export default function UnitsPage() {
           </div>
         </div>
       </div>
+
+      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+        Company
+        <select aria-label="Catalog company" value={selectedCompany?.id || ""}
+          onChange={(e) => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)))}
+          style={{ padding: "0.6rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, maxWidth: "100%" }}>
+          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </label>
 
       {/* Info banner */}
       <div style={styles.infoBanner}>

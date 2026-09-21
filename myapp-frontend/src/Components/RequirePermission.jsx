@@ -2,6 +2,7 @@ import { Outlet, useLocation, Link } from "react-router-dom";
 import { MdLock } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { permissionForPath } from "../config/routePermissions";
+import { useCompany } from "../contexts/CompanyContext";
 import { colors } from "../theme";
 
 /**
@@ -26,22 +27,24 @@ import { colors } from "../theme";
  */
 export default function RequirePermission() {
   const { pathname } = useLocation();
+  const { selectedCompany, loading: companyLoading } = useCompany();
   const { has, loading, reload } = usePermissions();
 
   const required = permissionForPath(pathname);
 
   // Still fetching /permissions/me — deny nothing yet, or every screen would
   // flash its denial on a hard refresh.
-  if (loading) return null;
+  if (loading || companyLoading) return null;
 
   // null = open to every signed-in user (e.g. the operator's own profile).
-  if (required === null) return <Outlet />;
-  if (required !== undefined && has(required)) return <Outlet />;
+  if (required === null) return <Outlet key={selectedCompany?.id || "none"} />;
+  if (required !== undefined && has(required)) return <Outlet key={selectedCompany?.id || "none"} />;
 
   return <NoAccess permission={required} pathname={pathname} onRetry={reload} />;
 }
 
 function NoAccess({ permission, pathname, onRetry }) {
+  const { has } = usePermissions();
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
@@ -62,7 +65,9 @@ function NoAccess({ permission, pathname, onRetry }) {
           onto a role that already has it.
         </p>
         <div style={styles.actions}>
-          <Link to="/dashboard" style={styles.primary}>Go to the dashboard</Link>
+          <Link to={has("dashboard.view") ? "/dashboard" : "/profile"} style={styles.primary}>
+            {has("dashboard.view") ? "Go to the dashboard" : "Go to my profile"}
+          </Link>
           {/* /permissions/me failing leaves the set empty, which looks exactly
               like holding nothing. Rather than guess which it was, offer the
               re-read — a transient failure clears in one click, and a genuine

@@ -42,7 +42,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       try {
         const [sRes, tRes, bRes] = await Promise.all([
           getSuppliersByCompany(companyId),
-          getItemTypes(),
+          getItemTypes(companyId),
           getPurchaseBillsByCompanyPaged(companyId, { page: 1, pageSize: 100 }),
         ]);
         setSuppliers(sRes.data || []);

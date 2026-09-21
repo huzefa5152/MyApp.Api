@@ -55,7 +55,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
 
-  useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
+  useEffect(() => { getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, [companyId]);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
   useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
   // A quote is a pre-sale document (never sent to FBR), so — like Bill mode —
@@ -189,7 +189,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               </div>
             </div>
 
-            <LineItemsEditor
+            <LineItemsEditor companyId={companyId}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}

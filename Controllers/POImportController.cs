@@ -323,6 +323,7 @@ namespace MyApp.Api.Controllers
         }
 
         [HttpPost("ensure-lookups")]
+        [CatalogCompany]
         [HasPermission("poformats.import.create")]
         public async Task<IActionResult> EnsureLookups([FromBody] EnsureLookupsRequest request)
         {

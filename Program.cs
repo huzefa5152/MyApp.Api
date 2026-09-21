@@ -768,9 +768,10 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
-    // Seed the starter catalog of FBR-mapped item types (idempotent — skips
-    // any HS code / name already present, so it's safe to run on every boot)
-    await MyApp.Api.Data.ItemTypeSeeder.SeedAsync(db);
+    // Seed public unit names independently for every company. Private item
+    // catalogs are populated by their owners and by the ownership migration.
+    foreach (var catalogCompanyId in await db.Companies.Select(c => c.Id).ToListAsync())
+        await MyApp.Api.Data.CompanyCatalogSeeder.SeedUnitsAsync(db, catalogCompanyId);
 
     // Print-template merge-field catalogs for the newer document types (the
     // field-picker shown in the Template Editor sidebar). Idempotent — keyed on
@@ -2053,6 +2054,7 @@ app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<CatalogAccessMiddleware>();
 
 // Serve React frontend static files from wwwroot
 app.UseDefaultFiles();

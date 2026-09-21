@@ -2,6 +2,9 @@ namespace MyApp.Api.Models
 {
     public class AuditLog
     {
+        // Old rows used caller-controlled query parameters as tenant labels.
+        // Only the platform administrator may inspect that legacy history.
+        public const string TrustedScopePrefix = "v2:";
         public int Id { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
         public string Level { get; set; } = "Error"; // Error, Warning, Info

@@ -27,6 +27,8 @@ const httpClient = axios.create({
 httpClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
+    const companyId = localStorage.getItem("selectedCompanyId");
+    if (companyId) config.headers["X-Company-Id"] = companyId;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

@@ -1,8 +1,9 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { getCompanies } from "../api/companyApi";
 import { getCompanyStamps } from "../api/stampApi";
 import { setActiveStamps } from "../utils/templateEngine";
 import { useAuth } from "./AuthContext";
+import { usePermissions } from "./PermissionsContext";
 
 const CompanyContext = createContext(null);
 
@@ -10,6 +11,8 @@ const STORAGE_KEY = "selectedCompanyId";
 
 export function CompanyProvider({ children }) {
   const { isAuthenticated } = useAuth();
+  const { has } = usePermissions();
+  const canViewStamps = has("printtemplates.stamps.view");
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompanyState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,19 +21,25 @@ export function CompanyProvider({ children }) {
   // {{stamps.<slug>}} resolves in every print/preview.
   const [companyStamps, setCompanyStamps] = useState([]);
 
+  const stampRequest = useRef(0);
+
   const loadStamps = useCallback(async (companyId) => {
-    if (!companyId) { setCompanyStamps([]); setActiveStamps({}); return; }
+    const request = ++stampRequest.current;
+    setCompanyStamps([]); setActiveStamps({});
+    if (!companyId || !canViewStamps) { setCompanyStamps([]); setActiveStamps({}); return; }
     try {
       const { data } = await getCompanyStamps(companyId);
+      if (request !== stampRequest.current) return;
       const list = data || [];
       setCompanyStamps(list);
       setActiveStamps(Object.fromEntries(list.map((s) => [s.slug, s.url])));
     } catch {
+      if (request !== stampRequest.current) return;
       // No view permission or transient error — clear rather than leave stale.
       setCompanyStamps([]);
       setActiveStamps({});
     }
-  }, []);
+  }, [canViewStamps]);
 
   const fetchCompanies = useCallback(async () => {
     try {
@@ -40,7 +49,10 @@ export function CompanyProvider({ children }) {
 
       const savedId = parseInt(localStorage.getItem(STORAGE_KEY));
       const saved = savedId ? list.find((c) => c.id === savedId) : null;
-      setSelectedCompanyState(saved || list[0] || null);
+      const selected = saved || list[0] || null;
+      if (selected) localStorage.setItem(STORAGE_KEY, selected.id);
+      else localStorage.removeItem(STORAGE_KEY);
+      setSelectedCompanyState(selected);
     } catch {
       setCompanies([]);
       setSelectedCompanyState(null);
@@ -59,6 +71,8 @@ export function CompanyProvider({ children }) {
   }, [isAuthenticated, fetchCompanies]);
 
   const setSelectedCompany = useCallback((company) => {
+    ++stampRequest.current;
+    setCompanyStamps([]); setActiveStamps({});
     setSelectedCompanyState(company);
     if (company?.id) localStorage.setItem(STORAGE_KEY, company.id);
     else localStorage.removeItem(STORAGE_KEY);

@@ -21,7 +21,7 @@ namespace MyApp.Api.DTOs
         public string AccountType { get; set; } = "Asset";
         public string Statement { get; set; } = "BalanceSheet";  // derived from the type
         public string? CashFlowClass { get; set; }
-        public decimal OpeningBalance { get; set; }
+        public decimal? OpeningBalance { get; set; }
         public bool OpeningBalanceIsDebit { get; set; }
         public string? DefaultLineDescription { get; set; }
         public int? DefaultTaxRateId { get; set; }
@@ -35,7 +35,7 @@ namespace MyApp.Api.DTOs
         /// opening balance; once the general ledger posts it becomes opening +
         /// SUM(journal debits - credits), and every caller reading this field
         /// picks the change up without a shape change.</summary>
-        public decimal Balance { get; set; }
+        public decimal? Balance { get; set; }
 
         /// <summary>True when the account is referenced by anything — i.e. it
         /// can't be hard-deleted and the operator should deactivate instead.

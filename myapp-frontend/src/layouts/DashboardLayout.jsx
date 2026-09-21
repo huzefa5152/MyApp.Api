@@ -327,8 +327,7 @@ export default function DashboardLayout() {
 
         {/* Nav */}
         <nav className="dl-nav" role="navigation">
-          {/* MAIN — Dashboard is always visible, no group header to keep
-              the most-used route one tap away. */}
+          {has("dashboard.view") && <>
           <span className="dl-nav__section-label">Main</span>
           <NavLink
             to="/dashboard"
@@ -337,6 +336,7 @@ export default function DashboardLayout() {
             <MdDashboard className="dl-item__icon" aria-hidden="true" />
             <span className="dl-item__label">Dashboard</span>
           </NavLink>
+          </>}
 
           {canSeeSales && (
             <NavGroup

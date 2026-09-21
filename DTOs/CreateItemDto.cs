@@ -1,7 +1,8 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class CreateItemDto
     {
+        public int? CompanyId { get; set; }
         public string Name { get; set; } = "";
     }
 
@@ -11,6 +12,7 @@
     /// </summary>
     public class SaveItemFbrDefaultsDto
     {
+        public int? CompanyId { get; set; }
         public string Name { get; set; } = "";
         public string? HSCode { get; set; }
         public string? SaleType { get; set; }

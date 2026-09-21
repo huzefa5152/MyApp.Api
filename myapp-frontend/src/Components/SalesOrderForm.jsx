@@ -48,7 +48,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
   const [quoteLoadedMsg, setQuoteLoadedMsg] = useState("");
   const attachmentRef = useRef(null);
 
-  useEffect(() => { getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, []);
+  useEffect(() => { getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, [companyId]);
   useEffect(() => { getItemTypes(companyId).then(({ data }) => setItemTypes(data || [])).catch(() => setItemTypes([])); }, [companyId]);
   useEffect(() => { getClientsByCompany(companyId).then(({ data }) => setClients(data || [])).catch(() => setClients([])); }, [companyId]);
 
@@ -209,7 +209,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
               </div>
             </div>
 
-            <LineItemsEditor
+            <LineItemsEditor companyId={companyId}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}

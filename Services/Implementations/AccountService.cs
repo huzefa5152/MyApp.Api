@@ -69,10 +69,10 @@ namespace MyApp.Api.Services.Implementations
                 };
                 // Subtotal = own accounts (debit-positive) + children's subtotals.
                 node.OpeningBalanceTotal =
-                    node.Accounts.Sum(a => a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance)
+                    node.Accounts.Sum(a => (a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance) ?? 0m)
                     + node.Children.Sum(c => c.OpeningBalanceTotal);
                 node.BalanceTotal =
-                    node.Accounts.Sum(a => a.Balance)
+                    node.Accounts.Sum(a => a.Balance ?? 0m)
                     + node.Children.Sum(c => c.BalanceTotal);
                 return node;
             }

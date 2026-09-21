@@ -261,6 +261,21 @@ def main() -> int:
         if not sales_token or not complete_token:
             return 1
 
+        # Picker access must not smuggle ledger balances across the edition
+        # boundary. Seed real accounts so an empty list cannot pass vacuously.
+        s, d = http("POST", f"/api/accounts/company/{cid}/seed-wholesale", base, token=seed)
+        check("6", "seed chart for picker confidentiality", s == 200, str(d))
+        for suffix in ("flat", "bank-cash", "bank-cash?includeInactive=true"):
+            path = f"/api/accounts/company/{cid}/{suffix}"
+            s, rows = http("GET", path, base, token=sales_token)
+            check("6", f"Sales picker {suffix} hides balances", s == 200 and bool(rows)
+                  and all(r.get("balance") is None and r.get("openingBalance") is None
+                          and r.get("hasActivity") is None for r in rows), str(rows)[:200])
+            s, rows = http("GET", path, base, token=complete_token)
+            check("6", f"Complete picker {suffix} keeps balances", s == 200 and bool(rows)
+                  and all(r.get("balance") is not None and r.get("openingBalance") is not None
+                          for r in rows), str(rows)[:200])
+
         # The accounting module, one endpoint per screen the edition gates.
         accounting_probes = [
             ("chart of accounts", f"/api/accounts/company/{cid}/tree"),
@@ -290,6 +305,30 @@ def main() -> int:
             check("7", f"Complete tenant reaches {label}", s == 200, f"got {s} {err_text(d7)}")
 
         print("\n--- 8. no edition can administer users or roles ---")
+        s, journal_role = http("POST", "/api/roles", base, token=seed, body={
+            "name": "tempEditionJournalClerk", "permissionKeys": [
+                "accounting.journal.view", "accounting.journal.create", "accounting.journal.update"]})
+        if check("7", "journal-only role created", s in (200, 201), str(journal_role)):
+            made_roles.append(journal_role)
+            clerk = make_user("tempEditionJournalClerk", journal_role)
+            if clerk:
+                s, status = http("GET", f"/api/accounting/gl/company/{cid}/status", base, token=clerk)
+                check("7", "journal clerk can read ledger status", s == 200, str(status))
+                s, accounts = http("GET", f"/api/accounts/company/{cid}/flat", base, token=clerk)
+                check("7", "journal clerk can choose accounts without balances", s == 200 and bool(accounts)
+                      and all(a.get("balance") is None for a in accounts), str(accounts)[:150])
+                if s == 200:
+                    choices = [a for a in accounts if a["accountType"] in ("Income", "Expense")]
+                    payload = {"date": "2026-09-21", "narration": "Journal clerk regression", "lines": [
+                        {"accountId": choices[0]["id"], "debit": 10, "credit": 0},
+                        {"accountId": choices[1]["id"], "debit": 0, "credit": 10}]}
+                    s, entry = http("POST", f"/api/journal-entries/company/{cid}", base, token=clerk, body=payload)
+                    if check("7", "journal clerk can save a balanced entry", s == 200, str(entry)[:150]):
+                        s, d = http("PUT", f"/api/journal-entries/{entry['id']}", base, token=clerk, body=payload)
+                        check("7", "journal clerk can update its entry", s == 200, str(d)[:150])
+                        s, d = http("DELETE", f"/api/journal-entries/{entry['id']}", base, token=clerk)
+                        check("7", "journal clerk cannot delete without permission", s == 403, str(d))
+
         for who, tok in (("Sales", sales_token), ("Complete", complete_token)):
             for label, path in (("roles", "/api/roles"), ("users", "/api/users"),
                                 ("audit logs", "/api/auditlogs?page=1&pageSize=5")):

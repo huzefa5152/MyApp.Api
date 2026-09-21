@@ -508,7 +508,7 @@ def main() -> int:
             check("cleanup", "throwaway company deleted", status in (200, 204), f"got {status}")
         if type_id:
             status, _ = http("DELETE", f"/api/itemtypes/{type_id}", base, token=token)
-            check("cleanup", "throwaway item type deleted", status in (200, 204), f"got {status}")
+            check("cleanup", "throwaway item type removed with company", status in (200, 204, 404), f"got {status}")
 
     print()
     print("=" * 78)
