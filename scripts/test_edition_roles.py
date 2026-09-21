@@ -324,6 +324,21 @@ def main() -> int:
                 if check("9", "the administrator signed in", s9 == 200, f"{s9}"):
                     atok = t9["token"]
 
+                    # A role it can never assign must not be OFFERED either.
+                    # The server refuses it on save, but a checkbox that always
+                    # fails is a trap, and for a tenant admin it advertises the
+                    # edition they did not buy.
+                    s9, mine = http("GET", "/api/roles", base, token=atok)
+                    names = {r["name"] for r in (mine or [])} if s9 == 200 else set()
+                    check("9", "it sees the edition it is on", SALES_EDITION in names,
+                          f"{s9} {sorted(names)}")
+                    check("9", "it sees Tenant Administrator, to delegate",
+                          "Tenant Administrator" in names, f"{sorted(names)}")
+                    check("9", "it is NOT offered Complete Edition",
+                          COMPLETE_EDITION not in names, f"{sorted(names)}")
+                    check("9", "it is NOT offered Administrator",
+                          "Administrator" not in names, f"{sorted(names)}")
+
                     # It can do its job: build a role out of its own keys.
                     s9, ok_role = http("POST", "/api/roles", base, token=atok, body={
                         "name": "_temp_admin_made_role", "description": "temp",

@@ -102,7 +102,7 @@ namespace MyApp.Api.Controllers
                 // Only roles the caller can see may be handed out: system
                 // roles, legacy rows, and custom roles from the caller's own
                 // chain. A sibling Administrator's role id is "invalid" here.
-                var visible = await RolesController.VisibleRoleIdsAsync(_context, _scope, CurrentUserId() ?? 0);
+                var visible = await RolesController.VisibleRoleIdsAsync(_context, _scope, _permissions, CurrentUserId() ?? 0);
                 if (targetRoleIds.Any(id => !visible.Contains(id)))
                     return BadRequest(new { message = "One or more role IDs are invalid" });
 
@@ -143,7 +143,7 @@ namespace MyApp.Api.Controllers
             var hiddenExisting = new HashSet<int>();
             if (!_scope.IsSeedAdmin(CurrentUserId() ?? 0))
             {
-                var visibleNow = await RolesController.VisibleRoleIdsAsync(_context, _scope, CurrentUserId() ?? 0);
+                var visibleNow = await RolesController.VisibleRoleIdsAsync(_context, _scope, _permissions, CurrentUserId() ?? 0);
                 hiddenExisting = (await _context.UserRoles
                         .Where(ur => ur.UserId == userId && !visibleNow.Contains(ur.RoleId))
                         .Select(ur => ur.RoleId)

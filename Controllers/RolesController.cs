@@ -43,8 +43,31 @@ namespace MyApp.Api.Controllers
             return set;
         }
 
+        /// <summary>
+        /// Whose TREE the role belongs to. Necessary but not sufficient — see
+        /// <see cref="RoleGrantableBy"/>: every system role passes this test for
+        /// everyone, which is what lets a tenant administrator hand out the
+        /// edition they are on, and would otherwise also show them the editions
+        /// they are not.
+        /// </summary>
         private static bool RoleVisibleTo(Role r, HashSet<int> creators) =>
             r.IsSystemRole || r.CreatedByUserId == null || creators.Contains(r.CreatedByUserId.Value);
+
+        /// <summary>
+        /// Can this caller actually hand this role out? Only when everything it
+        /// grants is something they hold themselves.
+        ///
+        /// Listing is filtered on this and not only on the tree, because a role
+        /// the caller can never assign is a checkbox that always fails on save —
+        /// and for a tenant administrator it also advertises the edition they
+        /// did not buy. An administrator on Sales Edition therefore sees Sales
+        /// Edition and Tenant Administrator, and neither Administrator nor
+        /// Complete Edition. The seed admin sees everything.
+        /// </summary>
+        private static bool RoleGrantableBy(Role r, HashSet<string> grantable) =>
+            r.RolePermissions
+                .Where(rp => rp.Permission != null)
+                .All(rp => grantable.Contains(rp.Permission!.Key));
 
         private async Task<bool> CanEditRoleAsync(Role r, int userId)
         {
@@ -55,7 +78,8 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>Ids of the roles the caller may see or assign (seed: all).</summary>
-        internal static async Task<HashSet<int>> VisibleRoleIdsAsync(AppDbContext db, IManagementScopeService scope, int userId)
+        internal static async Task<HashSet<int>> VisibleRoleIdsAsync(
+            AppDbContext db, IManagementScopeService scope, IPermissionService permissions, int userId)
         {
             if (scope.IsSeedAdmin(userId))
                 return (await db.Roles.Select(r => r.Id).ToListAsync()).ToHashSet();
@@ -63,10 +87,17 @@ namespace MyApp.Api.Controllers
             creators.Add(userId);
             foreach (var a in await scope.GetAncestorUserIdsAsync(userId)) creators.Add(a);
             var rows = await db.Roles
+                .Include(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
                 .Where(r => r.IsSystemRole || r.CreatedByUserId == null || creators.Contains(r.CreatedByUserId.Value))
-                .Select(r => r.Id)
                 .ToListAsync();
-            return rows.ToHashSet();
+            // Same cut as the listing: in the caller's tree AND within what they
+            // could grant. Assignment already refused the rest; this stops it
+            // being offered. It also means UserRolesController's "roles the
+            // target already holds that the caller cannot see stay untouched"
+            // now protects a higher-granted edition from being stripped by an
+            // administrator editing the part of the set they can see.
+            var grantable = await GrantableKeysAsync(permissions, userId);
+            return rows.Where(r => RoleGrantableBy(r, grantable)).Select(r => r.Id).ToHashSet();
         }
 
         /// <summary>
@@ -125,7 +156,10 @@ namespace MyApp.Api.Controllers
             if (!_scope.IsSeedAdmin(me))
             {
                 var creators = await VisibleCreatorIdsAsync(me);
-                roles = roles.Where(r => RoleVisibleTo(r, creators)).ToList();
+                var grantable = await GrantableKeysAsync(_permissions, me);
+                roles = roles
+                    .Where(r => RoleVisibleTo(r, creators) && RoleGrantableBy(r, grantable))
+                    .ToList();
             }
             // UserCount counts only users the caller can see, so a shared
             // role never reveals how many accounts exist in other trees.
