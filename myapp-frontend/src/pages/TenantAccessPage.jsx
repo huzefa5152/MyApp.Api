@@ -6,7 +6,6 @@ import {
   MdClose,
   MdSave,
   MdLock,
-  MdLockOpen,
   MdPerson,
   MdCheckBox,
   MdCheckBoxOutlineBlank,
@@ -135,9 +134,9 @@ export default function TenantAccessPage() {
           <div>
             <h1 style={pageStyles.title}>Tenant Access</h1>
             <p style={pageStyles.subtitle}>
-              Decide which companies each user can reach. Only takes effect on
-              companies marked <strong>Tenant Isolated</strong> — open
-              companies stay visible to anyone with the right RBAC permission.
+              Decide which companies each user can reach. This is the whole
+              answer: a user reaches the companies ticked here and no others.
+              No ticks, no access. Only the primary admin bypasses it.
             </p>
           </div>
         </div>
@@ -175,16 +174,17 @@ export default function TenantAccessPage() {
                 <tr>
                   <th style={pageStyles.th}>User</th>
                   <th style={pageStyles.th}>Username</th>
-                  <th style={pageStyles.th}>Explicit Grants</th>
-                  <th style={pageStyles.th}>Isolated Companies</th>
+                  <th style={pageStyles.th}>Companies Granted</th>
                   <th style={{ ...pageStyles.th, textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => {
+                  // The grant is the whole story: CompanyAccessGuard is
+                  // fail-closed, so a user reaches exactly these and nothing
+                  // else. The old "isolated" split implied the rest were open,
+                  // which has not been true since the guard changed.
                   const grants = row.companies.filter((c) => c.hasExplicitGrant);
-                  const isolated = row.companies.filter((c) => c.isTenantIsolated);
-                  const reachableIsolated = isolated.filter((c) => c.hasExplicitGrant);
                   return (
                     <tr key={row.userId} style={pageStyles.tr}>
                       <td style={pageStyles.td}>
@@ -200,21 +200,6 @@ export default function TenantAccessPage() {
                       <td style={pageStyles.td}>{row.username}</td>
                       <td style={pageStyles.td}>
                         <span style={pageStyles.pill}>{grants.length} / {row.companies.length}</span>
-                      </td>
-                      <td style={pageStyles.td}>
-                        {isolated.length === 0 ? (
-                          <span style={pageStyles.muted}>none isolated</span>
-                        ) : (
-                          <span style={
-                            reachableIsolated.length === isolated.length
-                              ? pageStyles.pillSuccess
-                              : reachableIsolated.length === 0
-                              ? pageStyles.pillDanger
-                              : pageStyles.pillWarn
-                          }>
-                            {reachableIsolated.length} / {isolated.length}
-                          </span>
-                        )}
                       </td>
                       <td style={{ ...pageStyles.td, textAlign: "right" }}>
                         <button
@@ -240,18 +225,6 @@ export default function TenantAccessPage() {
           <div className="tenant-cards">
             {filtered.map((row) => {
               const grants = row.companies.filter((c) => c.hasExplicitGrant);
-              const isolated = row.companies.filter((c) => c.isTenantIsolated);
-              const reachableIsolated = isolated.filter((c) => c.hasExplicitGrant);
-              const isolatedPillClass =
-                isolated.length === 0
-                  ? "tenant-card__pill tenant-card__pill--muted"
-                  : reachableIsolated.length === isolated.length
-                  ? "tenant-card__pill tenant-card__pill--success"
-                  : reachableIsolated.length === 0
-                  ? "tenant-card__pill tenant-card__pill--danger"
-                  : "tenant-card__pill tenant-card__pill--warn";
-              const isolatedPillText =
-                isolated.length === 0 ? "none isolated" : `${reachableIsolated.length} / ${isolated.length}`;
               return (
                 <div key={row.userId} className="tenant-card">
                   <div className="tenant-card__head">
@@ -266,14 +239,10 @@ export default function TenantAccessPage() {
 
                   <div className="tenant-card__stats">
                     <div className="tenant-card__stat">
-                      <span className="tenant-card__stat-label">Explicit Grants</span>
+                      <span className="tenant-card__stat-label">Companies Granted</span>
                       <span className="tenant-card__pill">
                         {grants.length} / {row.companies.length}
                       </span>
-                    </div>
-                    <div className="tenant-card__stat">
-                      <span className="tenant-card__stat-label">Isolated</span>
-                      <span className={isolatedPillClass}>{isolatedPillText}</span>
                     </div>
                   </div>
 
@@ -325,16 +294,11 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
         </div>
         <div style={formStyles.body}>
           <p style={pageStyles.helpText}>
-            Tick a company to grant explicit access. Companies marked{" "}
-            <span style={pageStyles.badgeIsolated}>
-              <MdLock size={12} /> Isolated
-            </span>{" "}
-            require the tick; companies marked{" "}
-            <span style={pageStyles.badgeOpen}>
-              <MdLockOpen size={12} /> Open
-            </span>{" "}
-            stay reachable for any authenticated user — your tick is stored as
-            a forward-looking grant in case the company is later isolated.
+            Tick a company to grant access to it. Every company requires the
+            tick — there is no company this user reaches without one, and
+            removing a tick takes the access away within a minute (the access
+            cache holds for 60 seconds). RBAC decides what they may DO once
+            inside; this decides where.
           </p>
           <div style={pageStyles.companyList}>
             {user.companies.map((c) => {
@@ -361,15 +325,6 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
                     <MdCheckBoxOutlineBlank size={20} color={colors.textSecondary} />
                   )}
                   <span style={pageStyles.companyName}>{c.companyName}</span>
-                  {c.isTenantIsolated ? (
-                    <span style={pageStyles.badgeIsolated}>
-                      <MdLock size={12} /> Isolated
-                    </span>
-                  ) : (
-                    <span style={pageStyles.badgeOpen}>
-                      <MdLockOpen size={12} /> Open
-                    </span>
-                  )}
                 </label>
               );
             })}
@@ -432,6 +387,4 @@ const pageStyles = {
   companyList: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "60vh", overflowY: "auto" },
   companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 0.9rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s ease" },
   companyName: { flex: 1, fontWeight: 500, color: colors.textPrimary },
-  badgeIsolated: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.15rem 0.5rem", borderRadius: 999, background: colors.warnLight, color: colors.warn, fontSize: "0.75rem", fontWeight: 600 },
-  badgeOpen: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.15rem 0.5rem", borderRadius: 999, background: colors.inputBg, color: colors.textSecondary, fontSize: "0.75rem", fontWeight: 600, border: `1px solid ${colors.cardBorder}` },
 };

@@ -228,10 +228,12 @@ namespace MyApp.Api.Services.Implementations
             company.FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered;
             company.FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered;
 
-            // Tenant isolation flag — freely toggleable. Flipping it true
-            // immediately requires a UserCompanies row for non-admins; the
-            // CompanyAccessGuard cache TTL is 60s so propagation is bounded.
-            company.IsTenantIsolated = dto.IsTenantIsolated;
+            // Tenant isolation flag — operator intent, not an access decision
+            // (CompanyAccessGuard is fail-closed either way). Null means the
+            // request did not carry the field, so leave the stored value alone;
+            // the controller has already reverted a flip the caller may not make.
+            if (dto.IsTenantIsolated.HasValue)
+                company.IsTenantIsolated = dto.IsTenantIsolated.Value;
 
             // Inventory module — flag is freely toggleable; starting numbers
             // only apply if no purchase docs exist yet (same rule as the

@@ -82,7 +82,6 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         // flipped true, only users with a UserCompanies row pass the
         // CompanyAccessGuard. Manage assignments via Configuration → Tenant
         // Access.
-        isTenantIsolated: false,
     });
     const [logoFile, setLogoFile] = useState(null);
     const [error, setError] = useState("");
@@ -156,7 +155,6 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 startingGoodsReceiptNumber: freshCompany.startingGoodsReceiptNumber || 0,
                 startingSalesQuoteNumber: freshCompany.startingSalesQuoteNumber || 1,
                 startingSalesOrderNumber: freshCompany.startingSalesOrderNumber || 1,
-                isTenantIsolated: !!freshCompany.isTenantIsolated,
             });
         }
     }, [freshCompany]);
@@ -267,6 +265,11 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultUOM: form.fbrDefaultUOM || null,
                 fbrDefaultPaymentModeRegistered: form.fbrDefaultPaymentModeRegistered || null,
                 fbrDefaultPaymentModeUnregistered: form.fbrDefaultPaymentModeUnregistered || null,
+                // The form no longer edits tenant isolation, so it does not
+                // claim a value for it. null is "leave it alone" on the server;
+                // sending the prefilled value would work too but would mean
+                // this screen re-asserts a setting it does not show.
+                isTenantIsolated: null,
             };
 
             let savedCompany;
@@ -692,25 +695,14 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 </label>
                             </div>
 
-                            {/* Tenant Isolation */}
-                            <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #b26a0030", backgroundColor: "#fff4e0" }}>
-                                <p style={{ margin: "0 0 0.6rem", fontWeight: 700, fontSize: "0.85rem", color: "#b26a00" }}>Tenant Isolation</p>
-                                <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.5rem", borderRadius: 8, backgroundColor: "#fff", border: "1px solid #ffd699", cursor: "pointer" }}>
-                                    <input
-                                        type="checkbox"
-                                        name="isTenantIsolated"
-                                        checked={!!form.isTenantIsolated}
-                                        onChange={handleChange}
-                                        style={{ marginTop: "0.15rem", flexShrink: 0 }}
-                                    />
-                                    <span style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.35 }}>
-                                        <strong style={{ display: "block" }}>Restrict to assigned users only</strong>
-                                        <span style={hintText}>
-                                            OFF (default) — any authenticated user with the right RBAC permission can reach this company. ON — only users with an explicit grant in <em>Configuration → Tenant Access</em> see this company in dropdowns and can read/write its data. The seed admin always bypasses.
-                                        </span>
-                                    </span>
-                                </label>
-                            </div>
+                            {/* The Tenant Isolation switch was retired here on 2026-09-21.
+                                It decided no access - CompanyAccessGuard is fail-closed, so a
+                                non-seed user reaches exactly their UserCompanies rows whatever
+                                the flag said - and a control that implies a protection it does
+                                not provide is worse than no control. The column, the
+                                tenantaccess.manage.update key and the API field all remain;
+                                the field is nullable so this form omitting it means
+                                "leave it alone" rather than "set it false". */}
                         </div>
                     </div>
 

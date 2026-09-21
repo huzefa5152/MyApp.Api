@@ -290,6 +290,23 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-21 — The tenant-isolation switch decided nothing, and said otherwise
+
+`CompanyAccessGuard` has been fail-closed for some time: a user reaches exactly
+the companies granted to them in Tenant Access and no others. `IsTenantIsolated`
+plays no part in that. Three places still described the older behaviour, and the
+worst was the Tenant Access screen's own help text — "only takes effect on
+companies marked Tenant Isolated; open companies stay visible to anyone with the
+right RBAC permission". Read that while auditing production and you conclude
+there is a leak. There is not.
+
+The switch is **retired from the company form** and the Isolated/Open badges are
+gone from Tenant Access, which now says the true thing: tick a company to grant
+it, no ticks means no access, only the primary admin bypasses. The column, the
+permission key and the API field remain — the flag is the historical record the
+one-time access backfill keyed on. The update field is now nullable so a form
+that no longer sends it means "leave it alone" rather than "set it false".
+
 ### 2026-09-21 — Four tenant leaks closed, and dropdowns stop asking for screens
 
 **Four places trusted a company id the caller supplied.** The worst was the item

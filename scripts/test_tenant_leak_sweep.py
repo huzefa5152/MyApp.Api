@@ -189,6 +189,18 @@ def main() -> int:
             "address": "B street", "ntn": "7654321"})
         check("0", "company B has a buyer to leak", s in (200, 201), f"{s} {err(b_client)}")
 
+        # The company form stopped offering the tenant-isolation switch, so it
+        # sends no value for it. UpdateCompanyDto.IsTenantIsolated is nullable
+        # precisely so that means "leave it alone" - bind it as a plain bool
+        # and an absent field reads as false, silently clearing the flag on
+        # every save by anyone holding tenantaccess.manage.update.
+        s, _ = http("PUT", f"/api/companies/{b_id}", base, token=seed,
+                    body={**company_payload(co_b["name"]), "isTenantIsolated": None})
+        s, after = http("GET", f"/api/companies/{b_id}", base, token=seed)
+        check("0", "an edit that omits tenant isolation leaves the flag alone",
+              s == 200 and after.get("isTenantIsolated") is True,
+              f"got {after.get('isTenantIsolated') if isinstance(after, dict) else after}")
+
         def make_user(username: str, role: dict) -> str | None:
             s, u = http("POST", "/api/users", base, token=seed, body={
                 "username": username, "fullName": username,

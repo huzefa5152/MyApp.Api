@@ -60,6 +60,9 @@ namespace MyApp.Api.DTOs
         // permission can reach this company (legacy/open).
         // true → only users with a UserCompanies row pass the access
         // guard. The seed admin always bypasses.
+        /// <summary>Operator intent only - it decides no access. CompanyAccessGuard
+        /// is fail-closed: a non-seed user reaches exactly their UserCompanies rows
+        /// whatever this says.</summary>
         public bool IsTenantIsolated { get; set; }
     }
 }

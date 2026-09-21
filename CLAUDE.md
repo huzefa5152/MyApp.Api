@@ -582,6 +582,35 @@ three of its paths were wrong on the first run.
 
 ---
 
+### `IsTenantIsolated` decides nothing (2026-09-21)
+
+`CompanyAccessGuard` is **fail-closed**: a non-seed user reaches exactly the
+companies listed in `UserCompanies`, and nothing else. `IsTenantIsolated` is
+never consulted in that decision. It mattered under the older "open mode falls
+through" semantics, where an un-isolated company was reachable by any
+authenticated user and the join table only bound the isolated ones.
+
+Three places still described the old behaviour, and the worst of them was the
+operator-facing copy on the Tenant Access screen itself — "only takes effect on
+companies marked Tenant Isolated; open companies stay visible to anyone with the
+right RBAC permission". A reader checking production against that sentence
+concludes there is a leak. All three are corrected, and the switch is **retired
+from the UI**: a control that implies a protection it does not provide is worse
+than no control.
+
+What remains, deliberately: the column, the `tenantaccess.manage.update`
+permission key, and the API field — the flag is the historical record the
+one-time `RBAC_USERCOMPANIES_BACKFILL_V1` keyed on (existing users were granted
+the *open* companies so they would not go dark on the upgrade).
+
+**`UpdateCompanyDto.IsTenantIsolated` is `bool?` and null means "leave it
+alone".** That is load bearing now that no form sends it: bound as a plain
+`bool`, an absent field reads as `false` and every company save by anyone
+holding `tenantaccess.manage.update` would silently clear the flag. Pinned by
+`test_tenant_leak_sweep.py`.
+
+---
+
 ## Never name production in a tracked file
 
 **This repository is PUBLIC.** The production databases sit on a public host

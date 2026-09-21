@@ -189,7 +189,11 @@ namespace MyApp.Api.Controllers
             if (existing == null) return NotFound();
 
             // Tenant-isolation flip — only the dedicated perm OR seed admin.
-            if (dto.IsTenantIsolated != existing.IsTenantIsolated
+            // null means the caller did not send the field at all (the company
+            // form no longer offers it), which is "leave it as it is" and needs
+            // no permission. Only a real, different value is a flip.
+            if (dto.IsTenantIsolated.HasValue
+                && dto.IsTenantIsolated.Value != existing.IsTenantIsolated
                 && !await _permissions.HasPermissionAsync(CurrentUserId, "tenantaccess.manage.update"))
             {
                 dto.IsTenantIsolated = existing.IsTenantIsolated;

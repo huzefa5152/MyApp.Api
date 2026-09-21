@@ -46,6 +46,13 @@ namespace MyApp.Api.DTOs
         public int StartingSalesOrderNumber { get; set; } = 1;
 
         // Tenant isolation flag. See CompanyDto for semantics.
-        public bool IsTenantIsolated { get; set; }
+        /// <summary>
+        /// NULL means "not supplied, leave it alone" - the same contract
+        /// FbrToken uses on this DTO. The company form stopped offering the
+        /// switch on 2026-09-21 (it decides no access; CompanyAccessGuard is
+        /// fail-closed), and without a nullable the absent field would bind
+        /// false and silently clear the flag on every save.
+        /// </summary>
+        public bool? IsTenantIsolated { get; set; }
     }
 }
