@@ -143,8 +143,12 @@ def teardown(base: str, token: str, company: dict, keep: bool) -> None:
 # ── Helper: pick a fully-FBR-classified ItemType so challans land in
 # Pending (billable) status rather than Setup Required. The seeded
 # starter catalog always contains at least one row with an HSCode set.
-def pick_classified_item_type(base: str, token: str) -> dict | None:
-    status, items = http("GET", "/api/itemtypes", base, token=token)
+def pick_classified_item_type(base: str, token: str, company_id: int | None = None) -> dict | None:
+    # 2026-09-21: catalogs are company-private, and the seed admin reaches
+    # every company - so the filter's "exactly one accessible company"
+    # fallback cannot resolve it and an unqualified read 400s.
+    path = f"/api/itemtypes?companyId={company_id}" if company_id else "/api/itemtypes"
+    status, items = http("GET", path, base, token=token)
     if status != 200 or not isinstance(items, list):
         return None
     for it in items:
@@ -155,11 +159,13 @@ def pick_classified_item_type(base: str, token: str) -> dict | None:
     return None
 
 
-def pick_second_classified(base: str, token: str, first: dict | None) -> dict | None:
+def pick_second_classified(base: str, token: str, first: dict | None,
+                           company_id: int | None = None) -> dict | None:
     """A second fully-classified ItemType, distinct from `first` — used by
     Suite 7 to prove the operator's bill-form pick overrides the challan's
     own type. Returns None when the seed catalog has fewer than two."""
-    status, items = http("GET", "/api/itemtypes", base, token=token)
+    path = f"/api/itemtypes?companyId={company_id}" if company_id else "/api/itemtypes"
+    status, items = http("GET", path, base, token=token)
     if status != 200 or not isinstance(items, list):
         return None
     for it in items:
@@ -564,7 +570,17 @@ def main() -> int:
     token, company, client = setup(args.base, args.admin_user, args.admin_pw)
 
     # Pick one fully-FBR-classified ItemType so the challan lands billable.
-    classified = pick_classified_item_type(args.base, token)
+    classified = pick_classified_item_type(args.base, token, company["id"])
+    # A brand-new company now starts with an EMPTY private catalog (2026-09-21),
+    # so "find a classified row in the seeded catalog" no longer holds. Create
+    # what the suite needs instead of skipping the checks that depend on it.
+    if not classified:
+        for nm, hs in (("BF_Classified_A", "8481.8090"), ("BF_Classified_B", "8412.2100")):
+            http("POST", f"/api/itemtypes?companyId={company['id']}", args.base, token=token,
+                 body={"name": f"{nm}_{datetime.now().strftime('%H%M%S%f')[:10]}",
+                       "companyId": company["id"], "hsCode": hs, "uom": "Pcs",
+                       "saleType": "Goods at standard rate (default)", "isFavorite": True})
+        classified = pick_classified_item_type(args.base, token, company["id"])
     if classified:
         print(f"\n=== Picked classified ItemType id={classified['id']} name='{classified['name']}' "
               f"hsCode='{classified.get('hsCode')}' saleType='{classified.get('saleType')}' ===")
@@ -587,7 +603,7 @@ def main() -> int:
         test_tax_calculations(args.base, token, company, client)
         # Regression: operator's bill-form Item Type pick must override the
         # challan's own type (needs a second distinct classified type).
-        second_classified = pick_second_classified(args.base, token, classified)
+        second_classified = pick_second_classified(args.base, token, classified, company["id"])
         test_billform_itemtype_override(args.base, token, company, client,
                                         classified, second_classified)
     finally:

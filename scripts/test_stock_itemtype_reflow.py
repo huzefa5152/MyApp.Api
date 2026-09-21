@@ -49,6 +49,11 @@ from typing import Any
 PASS = "PASS"
 results: list[tuple[str, str, str]] = []  # (suite, name, status)
 _created_item_type_ids: list[int] = []
+# 2026-09-21: item types became company-PRIVATE ([CatalogCompany]), so every
+# catalog call must name the company or the API answers 400 "Choose a company
+# before using its catalog." The suite has one ephemeral company, so it is held
+# here rather than threaded through 29 make_item_type call sites.
+_catalog_company_id: int | None = None
 # Pool of real PRAL HS codes harvested from the live catalog at setup.
 # Each test ItemType gets a DISTINCT code so the catalog's near-duplicate
 # guard (similar name + same HS) never fires between our test items.
@@ -156,6 +161,10 @@ def setup(base: str, admin_user: str, admin_pw: str):
         print(f"FATAL: create company failed ({status} {company})")
         sys.exit(2)
     cid = company["id"]
+    # Every catalog call from here on names this company - see
+    # _catalog_company_id above.
+    global _catalog_company_id
+    _catalog_company_id = cid
     print(f"  company id={cid}")
 
     status, client = http("POST", "/api/clients", base, token=token, body={
@@ -193,7 +202,9 @@ def teardown(base: str, token: str, company: dict, keep: bool) -> None:
         return
     print(f"\n=== Teardown ===")
     for it_id in _created_item_type_ids:
-        http("DELETE", f"/api/itemtypes/{it_id}", base, token=token)
+        http("DELETE", f"/api/itemtypes/{it_id}"
+             + (f"?companyId={_catalog_company_id}" if _catalog_company_id else ""),
+             base, token=token)
     status, _ = http("DELETE", f"/api/companies/{company['id']}", base, token=token)
     print(f"  delete company returned {status}")
 
@@ -206,7 +217,11 @@ def make_item_type(base, token, name, hs=None, uom="Pcs",
     body = {"name": name, "uom": uom, "saleType": sale_type, "isFavorite": True}
     if hs:
         body["hsCode"] = hs
-    status, it = http("POST", "/api/itemtypes", base, token=token, body=body)
+    path = "/api/itemtypes"
+    if _catalog_company_id is not None:
+        body["companyId"] = _catalog_company_id
+        path = f"/api/itemtypes?companyId={_catalog_company_id}"
+    status, it = http("POST", path, base, token=token, body=body)
     if status not in (200, 201):
         print(f"  ! make_item_type({name}) failed: {status} {it}")
         return None
