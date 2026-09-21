@@ -124,13 +124,20 @@ namespace MyApp.Api.Services.Implementations
         /// controller) on a missing or wrong-length value; returns the trimmed
         /// value to persist.
         /// </summary>
-        private static string ValidateFbrSellerRegistrationNo(string? raw)
+        private static string? ValidateFbrSellerRegistrationNo(string? raw)
         {
             var trimmed = (raw ?? "").Trim();
             var digits = new string(trimmed.Where(char.IsDigit).ToArray());
+            // 2026-09-22: no longer required to SAVE. A company can be created
+            // with a name and filled in later — the FBR tab is onboarding
+            // detail, not identity, and demanding it up front blocked someone
+            // who simply wanted the company on file. Nothing can be filed
+            // without it regardless: DeliveryChallanService.IsFbrReady returns
+            // false while it is blank, so challans sit in "Setup Required" and
+            // no invoice reaches PRAL. The format is still enforced the moment
+            // a value IS entered, because a wrong one fails at FBR, not here.
             if (digits.Length == 0)
-                throw new InvalidOperationException(
-                    "Seller NTN / CNIC for FBR is required — enter the 7-digit NTN or 13-digit CNIC you file under.");
+                return null;
             if (digits.Length != 7 && digits.Length != 13)
                 throw new InvalidOperationException(
                     $"Seller NTN / CNIC for FBR must be a 7-digit NTN or a 13-digit CNIC (you entered {digits.Length} digits).");
@@ -180,7 +187,7 @@ namespace MyApp.Api.Services.Implementations
                 CurrentGoodsReceiptNumber = 0,
                 StartingSalesQuoteNumber = dto.StartingSalesQuoteNumber > 0 ? dto.StartingSalesQuoteNumber : 1,
                 StartingSalesOrderNumber = dto.StartingSalesOrderNumber > 0 ? dto.StartingSalesOrderNumber : 1,
-                IsTenantIsolated = dto.IsTenantIsolated,
+                IsTenantIsolated = dto.IsTenantIsolated ?? false,
                 // Every new company keeps books from its first document. This is
                 // NOT read from the DTO and there is no endpoint that clears it:
                 // a company that has posted cannot stop posting without its

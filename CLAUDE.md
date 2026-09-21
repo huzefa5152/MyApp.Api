@@ -241,6 +241,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
+| A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |
 | Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
@@ -669,6 +670,28 @@ and asks only for HS code, sale type, UOM and a positive unit price — **quanti
 is never consulted**. A consultant who picks the item type and decides no
 adjustment is needed has given a complete answer, and the ORIGINAL quantity is
 what gets filed. Do not add "an adjustment must exist" to the readiness rule.
+
+---
+
+### Creating a company asks for a name (2026-09-22)
+
+The FBR tab is onboarding detail, not identity. A company saves with a name and
+nothing else, and `FbrSellerRegistrationNo` is filled in later — demanding it up
+front blocked someone who simply wanted the company on file. **Nothing can be
+filed while it is blank**: `DeliveryChallanService.IsFbrReady` returns false, so
+challans sit in "Setup Required" and no invoice reaches PRAL. The pressure to
+complete it comes from the workflow, not the form. The FORMAT is still enforced
+the moment a value is entered, because a wrong one fails at FBR rather than here.
+
+**A nullable flag has to be nullable on BOTH DTOs.** Retiring the
+tenant-isolation switch left the form sending `isTenantIsolated: null` on every
+save. `UpdateCompanyDto` was made nullable for it; `CreateCompanyDto` was not —
+so an explicit null could not deserialize into its `bool`, which failed the
+whole DTO with "The JSON value could not be converted to System.Boolean" and
+broke New Company outright. It reached production. When a form stops sending a
+field, check every DTO that field binds to, and prefer OMITTING the key to
+sending an explicit null: a screen that does not show a setting should say
+nothing about it. Pinned by `test_company_create_minimal.py`.
 
 ---
 

@@ -51,6 +51,15 @@ namespace MyApp.Api.DTOs
 
         // Tenant isolation flag. See CompanyDto for semantics. Defaults to
         // false on a newly created company so existing flows keep working.
-        public bool IsTenantIsolated { get; set; }
+        /// <summary>
+        /// Nullable for the same reason as UpdateCompanyDto's: the company form
+        /// stopped offering the switch (it decides no access; CompanyAccessGuard
+        /// is fail-closed), so it sends no value. A non-nullable bool made an
+        /// explicit null a DESERIALIZATION failure — "The JSON value could not
+        /// be converted to System.Boolean" — which failed the whole DTO and
+        /// broke company creation outright on 2026-09-21. Null means false here;
+        /// on update it means "leave it alone".
+        /// </summary>
+        public bool? IsTenantIsolated { get; set; }
     }
 }

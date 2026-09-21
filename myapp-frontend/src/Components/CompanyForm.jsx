@@ -223,12 +223,14 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         if (cnicDigits && cnicDigits.length !== 13)
             errs.push({ tab: "general", msg: `Display CNIC must be 13 digits if entered (current: ${cnicDigits.length}). Leave blank if not used.` });
 
-        // The FBR seller registration number is REQUIRED and must be a 7-digit
-        // NTN or a 13-digit CNIC.
+        // The FBR seller registration number is OPTIONAL to save (2026-09-22):
+        // a company can be created with just a name and have its FBR details
+        // filled in later. Nothing can be filed until it is set — challans stay
+        // in "Setup Required" while it is blank — so the pressure to complete
+        // it comes from the workflow rather than from this form. The format is
+        // still enforced the moment something IS entered.
         const sellerDigits = (form.fbrSellerRegistrationNo || "").replace(/\D/g, "");
-        if (!sellerDigits)
-            errs.push({ tab: "fbr", msg: "Seller NTN / CNIC for FBR is required — enter the 7-digit NTN or 13-digit CNIC you file under." });
-        else if (sellerDigits.length !== 7 && sellerDigits.length !== 13)
+        if (sellerDigits && sellerDigits.length !== 7 && sellerDigits.length !== 13)
             errs.push({ tab: "fbr", msg: `Seller NTN / CNIC for FBR must be a 7-digit NTN or a 13-digit CNIC — you entered ${sellerDigits.length} digits.` });
 
         if (form.startingChallanNumber < 0)
@@ -266,10 +268,12 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 fbrDefaultPaymentModeRegistered: form.fbrDefaultPaymentModeRegistered || null,
                 fbrDefaultPaymentModeUnregistered: form.fbrDefaultPaymentModeUnregistered || null,
                 // The form no longer edits tenant isolation, so it does not
-                // claim a value for it. null is "leave it alone" on the server;
-                // sending the prefilled value would work too but would mean
-                // this screen re-asserts a setting it does not show.
-                isTenantIsolated: null,
+                // claim a value for it AT ALL. It used to send an explicit
+                // null, which the update path read as "leave it alone" but the
+                // CREATE path could not deserialize into its non-nullable bool
+                // — that broke New Company outright. Omitting the key is the
+                // honest shape: a screen that does not show a setting should
+                // say nothing about it. Both DTOs now accept its absence.
             };
 
             let savedCompany;
@@ -417,7 +421,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                             <div style={{ marginBottom: "1rem", padding: "0.85rem", borderRadius: 10, border: "1px solid #0d47a155", backgroundColor: "#e8f0fe" }}>
                                 <div style={formGroup}>
                                     <label style={label}>
-                                        Seller NTN / CNIC for FBR <span style={{ color: "#e53935" }}>*</span>
+                                        Seller NTN / CNIC for FBR
                                     </label>
                                     <input
                                         type="text"
@@ -432,7 +436,11 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                     <span style={{ fontSize: "0.76rem", color: "#334e68", marginTop: "0.3rem", display: "block", lineHeight: 1.4 }}>
                                         Transmitted to FBR on every submission as <strong>SellerNTNCNIC</strong>.
                                         Enter it here yourself — it is <strong>not</strong> taken from the display
-                                        NTN/CNIC on the General tab. Must be either a 7-character NTN or a 13-digit CNIC.
+                                        NTN/CNIC on the General tab. A 7-digit NTN or a 13-digit CNIC.
+                                        <br />
+                                        You can save the company without this and come back to it. Until it is
+                                        set, delivery challans stay in <strong>Setup Required</strong> and nothing
+                                        is sent to FBR.
                                     </span>
                                 </div>
                             </div>

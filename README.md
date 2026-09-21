@@ -290,6 +290,24 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-22 — A company saves with a name, and New Company works again
+
+**Fixed a break we shipped.** Retiring the tenant-isolation switch left the
+company form sending `isTenantIsolated: null` on every save. The update path was
+made to accept that; the create path was not, so the value could not be read
+into its boolean and the whole request failed — New Company was broken in
+production with "The JSON value could not be converted to System.Boolean". Both
+paths now accept the field's absence, and the form no longer claims a value for
+a setting it does not show.
+
+**Creating a company now asks for a name and nothing else.** The FBR seller
+registration number was required to save, which blocked anyone who just wanted
+the company on file and meant to do the FBR onboarding afterwards. It is
+optional now — and still format-checked the moment something is typed, because a
+wrong number fails at FBR rather than here. Nothing can be filed while it is
+blank: delivery challans stay in **Setup Required** and no invoice reaches PRAL,
+so the reminder comes from the workflow instead of a form that refuses to save.
+
 ### 2026-09-21 — The HS code reaches the bill, not just the tax invoice
 
 The Bills tab has no item-type picker, so a bill line usually carries no HS code
