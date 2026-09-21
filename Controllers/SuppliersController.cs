@@ -192,8 +192,24 @@ namespace MyApp.Api.Controllers
             return Ok(all.Count(r => allowed.Contains(r.CompanyId)));
         }
 
+        /// <summary>
+        /// The supplier list behind every "choose a supplier" picker: purchase
+        /// bills, goods receipts, payments and the FBR purchase import.
+        ///
+        /// Same reasoning as <c>ClientsController.GetClientsByCompany</c>:
+        /// <c>suppliers.manage.view</c> opens the Suppliers SCREEN, and requiring
+        /// it to fill a dropdown left a purchase-entry role staring at a 403
+        /// where the supplier name belongs. The tenant guard is what bounds this;
+        /// the permission only decides whether the caller works with documents
+        /// that name a supplier at all.
+        /// </summary>
         [HttpGet("company/{companyId}")]
-        [HasPermission("suppliers.manage.view")]
+        [HasAnyPermission(
+            "suppliers.manage.view",
+            "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "accounting.payments.view", "accounting.payments.create",
+            "fbrimport.purchase.preview")]
         [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<SupplierDto>>> GetByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));

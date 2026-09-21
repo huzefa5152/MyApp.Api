@@ -84,6 +84,10 @@ namespace MyApp.Api.Controllers
         [EnableRateLimiting("import")]
         public async Task<IActionResult> ParsePdf(IFormFile file, [FromQuery] int? companyId)
         {
+            // The company chooses which saved PO formats the parser matches
+            // against, so an unchecked id reads another tenant's layouts.
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 
@@ -154,6 +158,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("poformats.import.create")]
         public async Task<IActionResult> ParseText([FromBody] ParseTextRequest request, [FromQuery] int? companyId)
         {
+            // Same as ParsePdf: the company selects whose saved formats match.
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
             if (string.IsNullOrWhiteSpace(request.Text))
                 return BadRequest(new { error = "No text provided." });
 

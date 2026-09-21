@@ -25,7 +25,24 @@ namespace MyApp.Api.Controllers
         // Search item descriptions (now returns FBR defaults so the caller can auto-fill
         // HS Code / Sale Type / UOM when a known item is picked).
         // Results are ordered: favorites first, then by usage count, then alphabetically.
+        // These three catalogs are INSTALL-WIDE: ItemDescription, Unit and
+        // ItemType carry no CompanyId, so one tenant's saved descriptions and
+        // units are offered to another's autocomplete by design. That is a
+        // schema decision, not something a gate changes - recorded here so the
+        // next reader knows it was seen and not missed. What the gate does add
+        // is least privilege: they feed document forms, so they answer to
+        // whoever fills one, not to every authenticated session.
         [HttpGet("items")]
+        [HasAnyPermission(
+            "config.itemdescriptions.manage", "config.units.manage",
+            "itemtypes.manage.view",
+            "challans.manage.create", "challans.manage.update",
+            "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.manage.create", "salesorders.manage.update",
+            "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
+            "invoices.manage.update.itemtype", "invoices.note.create",
+            "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.manage.create", "goodsreceipts.manage.update")]
         public async Task<IActionResult> GetItems([FromQuery] string query)
         {
             var items = await _context.ItemDescriptions
@@ -42,6 +59,16 @@ namespace MyApp.Api.Controllers
         // The SmartItemAutocomplete uses this to pre-populate its dropdown on focus,
         // giving users a short curated list instead of an empty starting state.
         [HttpGet("items/top")]
+        [HasAnyPermission(
+            "config.itemdescriptions.manage", "config.units.manage",
+            "itemtypes.manage.view",
+            "challans.manage.create", "challans.manage.update",
+            "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.manage.create", "salesorders.manage.update",
+            "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
+            "invoices.manage.update.itemtype", "invoices.note.create",
+            "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.manage.create", "goodsreceipts.manage.update")]
         public async Task<IActionResult> GetTopItems([FromQuery] int take = 15)
         {
             if (take <= 0) take = 15;
@@ -75,6 +102,16 @@ namespace MyApp.Api.Controllers
 
         // Exact-name lookup — used to fetch saved FBR defaults for a description
         [HttpGet("items/by-name")]
+        [HasAnyPermission(
+            "config.itemdescriptions.manage", "config.units.manage",
+            "itemtypes.manage.view",
+            "challans.manage.create", "challans.manage.update",
+            "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.manage.create", "salesorders.manage.update",
+            "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
+            "invoices.manage.update.itemtype", "invoices.note.create",
+            "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.manage.create", "goodsreceipts.manage.update")]
         public async Task<IActionResult> GetItemByName([FromQuery] string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return NotFound();
@@ -143,6 +180,16 @@ namespace MyApp.Api.Controllers
         // autocomplete-driven quantity inputs can react the moment the
         // operator picks a UOM (no second round-trip needed).
         [HttpGet("units")]
+        [HasAnyPermission(
+            "config.itemdescriptions.manage", "config.units.manage",
+            "itemtypes.manage.view",
+            "challans.manage.create", "challans.manage.update",
+            "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.manage.create", "salesorders.manage.update",
+            "bills.manage.create", "bills.manage.create.standalone", "bills.manage.update",
+            "invoices.manage.update.itemtype", "invoices.note.create",
+            "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.manage.create", "goodsreceipts.manage.update")]
         public async Task<IActionResult> GetUnits([FromQuery] string query)
         {
             var q = (query ?? "").Trim();

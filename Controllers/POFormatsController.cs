@@ -76,6 +76,16 @@ namespace MyApp.Api.Controllers
         [HasPermission("poformats.manage.view")]
         public async Task<ActionResult<List<POFormatListItemDto>>> List([FromQuery] int? companyId, [FromQuery] int? clientId)
         {
+            // 2026-09-21: this listed across EVERY tenant when companyId was
+            // omitted, and believed the parameter when it was supplied - while
+            // the row it returns carries CompanyName and ClientName. So the
+            // cheapest possible request handed over other tenants' company and
+            // customer names. Scope comes from the caller now: a named company
+            // must be one they can reach, and no name means their own set.
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+
             var q = _db.POFormats
                 .AsNoTracking()
                 .Include(f => f.Company)
@@ -85,6 +95,9 @@ namespace MyApp.Api.Controllers
 
             if (companyId.HasValue)
                 q = q.Where(f => f.CompanyId == companyId.Value || f.CompanyId == null);
+            else
+                // A format with no CompanyId is a shared layout, visible to all.
+                q = q.Where(f => f.CompanyId == null || accessible.Contains(f.CompanyId.Value));
             if (clientId.HasValue)
                 q = q.Where(f => f.ClientId == clientId.Value);
 
@@ -103,6 +116,11 @@ namespace MyApp.Api.Controllers
                 .Include(x => x.ClientGroup)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (f == null) return NotFound();
+            // The id in the URL says nothing about who may read it: assert
+            // against the format's OWN company. A null CompanyId is a shared
+            // layout and belongs to everyone.
+            if (f.CompanyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, f.CompanyId.Value);
             return Ok(ToDto(f));
         }
 
@@ -115,6 +133,8 @@ namespace MyApp.Api.Controllers
         [RequestSizeLimit(10 * 1024 * 1024)]
         public async Task<ActionResult<FingerprintPdfResponseDto>> FingerprintPdf(IFormFile file, [FromQuery] int? companyId)
         {
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 

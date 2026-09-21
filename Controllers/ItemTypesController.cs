@@ -44,6 +44,18 @@ namespace MyApp.Api.Controllers
         /// the source.
         /// </summary>
         [HttpGet("uoms-for-hs")]
+        [HasAnyPermission(
+            "itemtypes.manage.view",
+            "challans.list.view", "challans.manage.create", "challans.manage.update",
+            "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",
+            "bills.list.view", "bills.manage.create", "bills.manage.create.standalone",
+            "bills.manage.update",
+            "invoices.list.view", "invoices.manage.update.itemtype",
+            "invoices.manage.update.itemtype.qty", "invoices.note.create",
+            "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "stock.dashboard.view")]
         public async Task<ActionResult<List<FbrUOMDto>>> GetUomsForHs(
             [FromQuery] int companyId, [FromQuery] string hsCode)
         {
@@ -68,6 +80,18 @@ namespace MyApp.Api.Controllers
         /// operator never wonders "is 18 % right for this HS code?".
         /// </summary>
         [HttpGet("fbr-hints")]
+        [HasAnyPermission(
+            "itemtypes.manage.view",
+            "challans.list.view", "challans.manage.create", "challans.manage.update",
+            "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",
+            "bills.list.view", "bills.manage.create", "bills.manage.create.standalone",
+            "bills.manage.update",
+            "invoices.list.view", "invoices.manage.update.itemtype",
+            "invoices.manage.update.itemtype.qty", "invoices.note.create",
+            "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "stock.dashboard.view")]
         public async Task<IActionResult> GetFbrHints(
             [FromQuery] int companyId, [FromQuery] string hsCode)
         {
@@ -82,7 +106,27 @@ namespace MyApp.Api.Controllers
             return Ok(hints);
         }
 
+        /// <summary>
+        /// The item catalog behind every line-item picker. Gated on the picker
+        /// audience, not on itemtypes.manage.view - that key opens the Item
+        /// Types SCREEN, and a role built to raise bills needs the list without
+        /// it. The catalog itself is global (ItemType has no CompanyId), but the
+        /// OPTIONAL companyId decorates each row with that company's on-hand
+        /// quantity, so it is a tenant fact and is guarded as one.
+        /// </summary>
         [HttpGet]
+        [HasAnyPermission(
+            "itemtypes.manage.view",
+            "challans.list.view", "challans.manage.create", "challans.manage.update",
+            "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",
+            "bills.list.view", "bills.manage.create", "bills.manage.create.standalone",
+            "bills.manage.update",
+            "invoices.list.view", "invoices.manage.update.itemtype",
+            "invoices.manage.update.itemtype.qty", "invoices.note.create",
+            "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "stock.dashboard.view")]
         public async Task<ActionResult<List<ItemTypeDto>>> GetAll([FromQuery] int? companyId = null)
         {
             // Optional companyId (2026-05-12) — when present AND the
@@ -101,6 +145,14 @@ namespace MyApp.Api.Controllers
             List<ItemTypeDto> items;
             if (companyId.HasValue)
             {
+                // 2026-09-21: this branch used to take the query parameter on
+                // trust. AvailableQty is that company's stock on hand, so
+                // passing someone else's id read their inventory - and with no
+                // permission attribute at all, any authenticated user of any
+                // tenant could do it. The id is a claim by the caller, never a
+                // fact; the else-branch below was already right to derive the
+                // set from the caller instead of believing them.
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
                 items = await _service.GetAllAsync(companyId);
             }
             else
@@ -119,12 +171,25 @@ namespace MyApp.Api.Controllers
         /// catalog search, so users only see codes they haven't mapped yet.
         /// </summary>
         [HttpGet("saved-hscodes")]
+        [HasPermission("itemtypes.manage.view")]
         public async Task<ActionResult<List<string>>> GetSavedHsCodes()
         {
             return Ok(await _service.GetSavedHsCodesAsync());
         }
 
         [HttpGet("{id}")]
+        [HasAnyPermission(
+            "itemtypes.manage.view",
+            "challans.list.view", "challans.manage.create", "challans.manage.update",
+            "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",
+            "bills.list.view", "bills.manage.create", "bills.manage.create.standalone",
+            "bills.manage.update",
+            "invoices.list.view", "invoices.manage.update.itemtype",
+            "invoices.manage.update.itemtype.qty", "invoices.note.create",
+            "purchasebills.list.view", "purchasebills.manage.create", "purchasebills.manage.update",
+            "goodsreceipts.list.view", "goodsreceipts.manage.create", "goodsreceipts.manage.update",
+            "stock.dashboard.view")]
         public async Task<ActionResult<ItemTypeDto>> GetById(int id)
         {
             var item = await _service.GetByIdAsync(id);
@@ -140,6 +205,11 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<ItemTypeDto>> Create(
             [FromBody] ItemTypeDto dto, [FromQuery] int? companyId = null)
         {
+            // companyId here only says whose FBR token fetches the UOM list, so
+            // an unchecked id would spend another tenant's PRAL quota on their
+            // bearer - see CLAUDE.md, "Never bleed one tenant's token".
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             try
             {
                 var created = await _service.CreateAsync(dto, companyId);
@@ -156,6 +226,9 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<ItemTypeDto>> Update(
             int id, [FromBody] ItemTypeDto dto, [FromQuery] int? companyId = null)
         {
+            // Same as Create: the companyId chooses whose FBR token is used.
+            if (companyId.HasValue)
+                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
             try
             {
                 var updated = await _service.UpdateAsync(id, dto, companyId);

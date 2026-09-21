@@ -155,8 +155,35 @@ namespace MyApp.Api.Controllers
             return Ok(all.Count(r => allowed.Contains(r.CompanyId)));
         }
 
+        /// <summary>
+        /// The buyer list behind every "choose a buyer" picker: challans, sales
+        /// quotes and orders, both bill-create forms, credit/debit notes,
+        /// receipts, the PO import, the outstanding ledger and customer portals.
+        ///
+        /// It is NOT gated on <c>clients.manage.view</c> alone. That key opens the
+        /// Clients SCREEN, and requiring it to fill a dropdown meant a role built
+        /// to raise bills — and nothing else — got a 403 where the buyer name
+        /// should be, on a form it is fully entitled to use. Anyone who may work
+        /// on a document that names a buyer may read the buyers of a company they
+        /// already reach; the tenant guard below is what actually bounds this.
+        ///
+        /// Grant it knowing the payload is the full record, tax identity
+        /// included (NTN, STRN, CNIC, address) — the bill forms need exactly
+        /// those to build the FBR invoice, which is why the picker reads them.
+        /// </summary>
         [HttpGet("company/{companyId}")]
-        [HasPermission("clients.manage.view")]
+        [HasAnyPermission(
+            "clients.manage.view",
+            "challans.list.view", "challans.manage.create", "challans.manage.update",
+            "challans.import.create",
+            "salesquotes.list.view", "salesquotes.manage.create", "salesquotes.manage.update",
+            "salesorders.list.view", "salesorders.manage.create", "salesorders.manage.update",
+            "bills.list.view", "bills.manage.create", "bills.manage.create.standalone",
+            "bills.manage.update",
+            "invoices.list.view", "invoices.note.create",
+            "accounting.receipts.view", "accounting.receipts.create",
+            "itemratehistory.view", "reports.outstanding.view",
+            "customerportals.manage.view", "customerportals.manage.create")]
         [AuthorizeCompany]
         public async Task<ActionResult<IEnumerable<ClientDto>>> GetClientsByCompany(int companyId)
             => Ok(await _service.GetByCompanyAsync(companyId));
