@@ -55,7 +55,8 @@ namespace MyApp.Api.Services.Implementations
             Message = a.Message,
             StackTrace = null,
             RequestBody = a.RequestBody,
-            QueryString = a.QueryString
+            QueryString = a.QueryString,
+            CompanyId = a.CompanyId
         };
 
         // Detail-shape DTO keeps StackTrace for the per-row drill-through.
@@ -72,7 +73,8 @@ namespace MyApp.Api.Services.Implementations
             Message = a.Message,
             StackTrace = a.StackTrace,
             RequestBody = a.RequestBody,
-            QueryString = a.QueryString
+            QueryString = a.QueryString,
+            CompanyId = a.CompanyId
         };
 
         public async Task LogAsync(AuditLog log)
@@ -143,9 +145,10 @@ namespace MyApp.Api.Services.Implementations
             return Convert.ToHexString(bytes).ToLowerInvariant()[..40];
         }
 
-        public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null)
+        public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null,
+            string? search = null, IReadOnlyCollection<int>? companyScope = null)
         {
-            var result = await _repository.GetPagedAsync(page, pageSize, level, search);
+            var result = await _repository.GetPagedAsync(page, pageSize, level, search, companyScope);
             return new PagedResult<AuditLogDto>
             {
                 Items = result.Items.Select(ToListDto).ToList(),
@@ -155,18 +158,26 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<AuditLogDto?> GetByIdAsync(int id)
+        public async Task<AuditLogDto?> GetByIdAsync(int id, IReadOnlyCollection<int>? companyScope = null)
         {
             var log = await _repository.GetByIdAsync(id);
-            return log == null ? null : ToDetailDto(log);
+            if (log == null) return null;
+            // The id says nothing about who may read the row. A scoped caller
+            // gets null (the controller turns that into the same 404 a missing
+            // row gives) rather than a distinct refusal, so the endpoint cannot
+            // be used to probe which ids exist.
+            if (companyScope != null &&
+                (log.CompanyId == null || !companyScope.Contains(log.CompanyId.Value)))
+                return null;
+            return ToDetailDto(log);
         }
 
-        public async Task<AuditSummaryDto> GetSummaryAsync()
+        public async Task<AuditSummaryDto> GetSummaryAsync(IReadOnlyCollection<int>? companyScope = null)
         {
             return new AuditSummaryDto
             {
-                ErrorsLast24h = await _repository.GetCountByLevelAsync("Error", 24),
-                WarningsLast24h = await _repository.GetCountByLevelAsync("Warning", 24)
+                ErrorsLast24h = await _repository.GetCountByLevelAsync("Error", 24, companyScope),
+                WarningsLast24h = await _repository.GetCountByLevelAsync("Warning", 24, companyScope)
             };
         }
     }

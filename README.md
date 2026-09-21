@@ -290,6 +290,26 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-21 — The audit log is scoped to the tenant, and administrators only see roles they can grant
+
+**The audit log was one unscoped table.** A single permission, `auditlogs.view`,
+read every tenant's activity — contained only because no tenant role carried it.
+`AuditLog` already had a company column, so scoping took no migration: a caller
+now sees rows for the companies they can reach, and the primary admin sees
+everything including the company-less platform rows (login failures, startup).
+A tenant's log is therefore honestly partial rather than misleadingly complete,
+and **Tenant Administrator** can now hold the key at all — which is why it was
+held back before.
+
+**A role you cannot grant is no longer offered.** Every built-in role was visible
+to everyone, which is what lets a tenant administrator hand out the edition they
+are on — and also showed them the ones they are not. An administrator on Sales
+Edition saw Administrator and Complete Edition in Manage Roles, ticked one, and
+got a refusal on save. Visibility now means grantability: in your tree, and
+everything it grants is something you hold. It also means a staff account put on
+a higher edition by someone above keeps it when a lower administrator edits the
+part of the set they can see.
+
 ### 2026-09-21 — The tenant-isolation switch decided nothing, and said otherwise
 
 `CompanyAccessGuard` has been fail-closed for some time: a user reaches exactly

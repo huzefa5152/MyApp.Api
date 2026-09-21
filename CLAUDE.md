@@ -238,9 +238,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Grouped quantity spread — no bill line left at zero (offline) | `node scripts/test_group_quantity_split.mjs` | `21 passed, 0 failed` |
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `69/69 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `142 passed, 0 failed` |
-| Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `75/75 checks` |
+| Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
-| Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `97/97 checks` |
+| Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
 | Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
@@ -441,11 +441,22 @@ and no product features: create staff accounts, build roles for them, grant them
 companies. It is assigned ALONGSIDE an edition — "Sales Edition + Tenant
 Administrator" is the Sales admin — so a new edition costs no new admin role.
 
-Two keys are deliberately absent from it. `auditlogs.view`, because the audit log
-is **not company-scoped** and would show one tenant every other tenant's
-activity. And `tenantaccess.manage.update`, because that toggles
-`Company.IsTenantIsolated`, which decides who can see a company at all — a
-platform decision, not a tenant one.
+One key is deliberately absent from it: `tenantaccess.manage.update`, because
+that toggles `Company.IsTenantIsolated`, which decides who can see a company at
+all — a platform decision, not a tenant one.
+
+`auditlogs.view` IS in it, but only since the audit log was **scoped by company**
+(2026-09-21). It was one unscoped table: that single key read every tenant's
+activity, and it was safe only because no tenant role carried it. `AuditLog`
+already had a nullable `CompanyId`, so scoping needed no migration —
+`AuditLogsController` now passes the caller's accessible companies down to the
+repository, and the seed admin passes null for "everything".
+
+**A scoped caller does not see the CompanyId-less rows**, and that is the point
+rather than an oversight: login failures, startup and anything raised outside a
+company context are platform events. It means a tenant's log is honestly partial
+— locally 33 of 327 rows carry a company — rather than misleadingly complete. If
+the log is ever un-scoped again, take `auditlogs.view` back out of the role.
 
 **What actually bounds an administrator is `RolesController.GrantableKeysAsync`:
 nobody may put a key into a role, or assign a role carrying one, unless they hold

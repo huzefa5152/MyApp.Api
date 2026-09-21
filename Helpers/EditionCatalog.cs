@@ -46,9 +46,10 @@ namespace MyApp.Api.Helpers
             "clone it to vary it.";
 
         public const string TenantAdminDescription =
-            "Tenant Administrator — may create staff accounts, build roles for them " +
-            "and grant them companies. Holds NO product features of its own: assign it " +
-            "ALONGSIDE an edition, and the edition is what bounds it. Built-in.";
+            "Tenant Administrator — may create staff accounts, build roles for them, " +
+            "grant them companies and read the audit log for those companies. Holds NO " +
+            "product features of its own: assign it ALONGSIDE an edition, and the " +
+            "edition is what bounds it. Built-in.";
 
         /// <summary>
         /// Administration of a tenant's OWN people, and nothing else. It is a
@@ -65,10 +66,16 @@ namespace MyApp.Api.Helpers
         /// including by assigning the Complete edition, which is visible to
         /// them (every system role is) but not grantable.
         ///
-        /// Two keys are deliberately NOT here:
+        /// <c>auditlogs.view</c> IS here, but only since 2026-09-21, when the
+        /// audit log was scoped by company. Before that it was a single
+        /// unscoped table and the key handed one tenant every other tenant's
+        /// activity. A scoped administrator now sees rows belonging to their own
+        /// companies and never the CompanyId-less platform rows (login failures,
+        /// startup), so their log is honestly partial rather than misleadingly
+        /// complete. If the log is ever un-scoped again, take this key back out.
+        ///
+        /// One key is still deliberately absent:
         /// <list type="bullet">
-        /// <item><c>auditlogs.view</c> — the audit log is not company-scoped, so
-        /// it would show one tenant every other tenant's activity.</item>
         /// <item><c>tenantaccess.manage.update</c> — that toggles
         /// <c>Company.IsTenantIsolated</c>, which decides who can see a company
         /// at all. That is a platform decision, not a tenant one.</item>
@@ -83,6 +90,7 @@ namespace MyApp.Api.Helpers
             "rbac.roles.view", "rbac.roles.create", "rbac.roles.update", "rbac.roles.delete",
             "rbac.permissions.view", "rbac.userroles.view", "rbac.userroles.assign",
             "tenantaccess.manage.view", "tenantaccess.manage.assign",
+            "auditlogs.view",
         };
 
         public const string CompleteEditionDescription =

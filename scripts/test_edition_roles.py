@@ -356,11 +356,25 @@ def main() -> int:
                     if s9 in (200, 201) and isinstance(bad, dict) and bad.get("id"):
                         made_roles.append(bad)
 
-                    # Nor grant itself the audit log, which is not tenant-scoped.
+                    # It CAN grant the audit log now - the log became
+                    # company-scoped on 2026-09-21, so Tenant Administrator
+                    # carries the key and a scoped admin sees only their own
+                    # companies' rows. Before that it was vendor-only.
+                    s9, ok2 = http("POST", "/api/roles", base, token=atok, body={
+                        "name": "_temp_admin_audit_role", "description": "temp",
+                        "permissionKeys": ["auditlogs.view"]})
+                    check("9", "it can grant the now-scoped audit log",
+                          s9 in (200, 201), f"got {s9} {err_text(ok2)}")
+                    if s9 in (200, 201) and isinstance(ok2, dict) and ok2.get("id"):
+                        made_roles.append(ok2)
+
+                    # But not the platform-level key it does not hold: flipping
+                    # Company.IsTenantIsolated decides who can see a company at
+                    # all, and stays with whoever runs the software.
                     s9, bad2 = http("POST", "/api/roles", base, token=atok, body={
                         "name": "_temp_escalation2", "description": "temp",
-                        "permissionKeys": ["auditlogs.view"]})
-                    check("9", "it cannot grant the cross-tenant audit log",
+                        "permissionKeys": ["tenantaccess.manage.update"]})
+                    check("9", "it cannot grant the platform isolation key",
                           s9 == 400, f"got {s9} {err_text(bad2)}")
                     if s9 in (200, 201) and isinstance(bad2, dict) and bad2.get("id"):
                         made_roles.append(bad2)

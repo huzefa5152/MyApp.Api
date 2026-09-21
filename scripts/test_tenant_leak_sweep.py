@@ -373,6 +373,46 @@ def main() -> int:
                       st == 403, f"got {st} {err(body)}")
             made_roles.append(narrow)
 
+        # -- 6. the audit log is scoped too ------------------------------------
+        # It was one unscoped table until 2026-09-21: a single key, and you read
+        # every tenant's activity. Now a scoped caller sees only rows carrying a
+        # company they can reach, and never the CompanyId-less platform rows.
+        print(NL + "--- 6. the audit log only shows the caller's own companies ---")
+        s, ta = http("GET", "/api/roles", base, token=seed)
+        tenant_admin = next((r for r in (ta or []) if r["name"] == "Tenant Administrator"), None)
+        if check("6", "Tenant Administrator is seeded", tenant_admin is not None):
+            check("6", "it may now read the audit log",
+                  "auditlogs.view" in (tenant_admin.get("permissionKeys") or []),
+                  "the key is absent - was the log un-scoped again?")
+            tok_admin = make_user("leakAuditAdmin", tenant_admin)
+            if tok_admin:
+                st, body = http("GET", "/api/auditlogs?page=1&pageSize=200", base, token=tok_admin)
+                st2, everything = http("GET", "/api/auditlogs?page=1&pageSize=200", base, token=seed)
+                if check("6", "a scoped admin can open the audit log", st == 200,
+                         f"got {st} {err(body)}"):
+                    rows = (body or {}).get("items") or []
+                    foreign = [r for r in rows if r.get("companyId") != a_id]
+                    check("6", "every row it sees belongs to its own company",
+                          not foreign,
+                          f"{len(foreign)} foreign/unscoped row(s), e.g. companyId="
+                          f"{foreign[0].get('companyId') if foreign else None}")
+                    # Non-vacuous: a brand-new company has almost no audit rows,
+                    # so "saw nothing foreign" would pass on an empty list. The
+                    # filter has to be shown REMOVING something the seed admin
+                    # can see, or this suite proves nothing at all.
+                    mine_total = (body or {}).get("totalCount") or 0
+                    all_total = (everything or {}).get("totalCount") or 0
+                    check("6", "the scope actually removes rows the seed admin sees",
+                          st2 == 200 and all_total > mine_total,
+                          f"seed sees {all_total}, scoped admin sees {mine_total}"
+                          " - the filter is not biting")
+                # The seed admin still sees the platform rows a tenant must not.
+                st, all_rows = http("GET", "/api/auditlogs?page=1&pageSize=200", base, token=seed)
+                if st == 200:
+                    platform = [r for r in (all_rows.get("items") or []) if r.get("companyId") is None]
+                    check("6", "the seed admin still sees the platform rows",
+                          len(platform) > 0, "none found - scope may be over-applied")
+
     finally:
         print("\n--- cleanup ---")
         for u in made_users:
