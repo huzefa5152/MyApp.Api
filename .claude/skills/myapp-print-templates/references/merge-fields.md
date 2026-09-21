@@ -165,7 +165,9 @@ These are C# property names from `DTOs/PrintDtos.cs`, retained exactly to avoid 
 
 ### PrintBillItemDto
 
-`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `UOM` (string), `UnitPrice` (decimal), `LineTotal` (decimal), `ValueExclTax` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal), `TotalInclTax` (decimal)
+`SNo` (int), `ItemTypeName` (string), `Description` (string), `Quantity` (decimal), `UOM` (string), `UnitPrice` (decimal), `LineTotal` (decimal), `ValueExclTax` (decimal), `GSTRate` (decimal), `GSTAmount` (decimal), `TotalInclTax` (decimal), `HSCode` (string?)
+
+`HSCode` is the EFFECTIVE code — the consultant's Invoices-tab reclassification when one exists, else the bill row's own (added 2026-09-21). It is the only field on this DTO that reads the adjustment overlay: quantity, rate and line total stay the commercial bill's, because the Bill is the delivery document. The Bills tab has no item-type picker, so a bill row's own HSCode is usually empty and the consultant's is the only code there is.
 
 
 ### BatchPrintRequestDto

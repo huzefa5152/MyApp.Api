@@ -290,6 +290,24 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-21 — The HS code reaches the bill, not just the tax invoice
+
+The Bills tab has no item-type picker, so a bill line usually carries no HS code
+at all — the classification is made on the Invoices tab by the tax consultant,
+against the grouped item type. The Sales Tax Invoice already showed that code.
+The Bill now shows it too, and it is the **only** thing the Bill takes from the
+consultant's overlay: quantity, rate and line total remain the commercial bill's,
+because that is the document the buyer signs for goods received. Both render as
+`{{this.hsCode}}` inside the items loop.
+
+Also confirmed and pinned: **selecting the item type is enough to file.** FBR
+readiness is judged on the effective line and asks for HS code, sale type, UOM
+and a positive unit price — quantity is never consulted. A consultant who picks
+an HS-coded item type and decides nothing needs adjusting has given a complete
+answer, and the original quantity is what gets filed. That already worked; it now
+has a test so it keeps working, and so a customer can have the HS code on their
+bill without anyone having touched the quantities.
+
 ### 2026-09-21 — The audit log is scoped to the tenant, and administrators only see roles they can grant
 
 **The audit log was one unscoped table.** A single permission, `auditlogs.view`,

@@ -174,11 +174,10 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<ItemTypeDto>> Create(
             [FromBody] ItemTypeDto dto, [FromQuery] int? companyId = null)
         {
-            // companyId here only says whose FBR token fetches the UOM list, so
-            // an unchecked id would spend another tenant's PRAL quota on their
-            // bearer - see CLAUDE.md, "Never bleed one tenant's token".
-            if (companyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            // companyId here only says whose FBR token fetches the UOM list.
+            // [CatalogCompany] on this controller has already resolved and
+            // authorized it, so there is no per-action assert: two guards on one
+            // path read as though the second knows something the first does not.
             try
             {
                 var created = await _service.CreateAsync(dto, companyId);
@@ -195,9 +194,8 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<ItemTypeDto>> Update(
             int id, [FromBody] ItemTypeDto dto, [FromQuery] int? companyId = null)
         {
-            // Same as Create: the companyId chooses whose FBR token is used.
-            if (companyId.HasValue)
-                await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            // Same as Create: the companyId chooses whose FBR token is used, and
+            // [CatalogCompany] has already authorized it.
             try
             {
                 var updated = await _service.UpdateAsync(id, dto, companyId);

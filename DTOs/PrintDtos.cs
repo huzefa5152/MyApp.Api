@@ -77,6 +77,23 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount => Math.Round(LineTotal * GSTRate / 100m, 2);
         public decimal TotalInclTax => LineTotal + GSTAmount;
+        /// <summary>
+        /// The EFFECTIVE HS Code — the tax consultant's reclassification from
+        /// the Invoices tab when one exists, else the bill row's own.
+        /// Rendered as {{this.hsCode}}.
+        ///
+        /// Note what this does and does not break. The Bill is the commercial
+        /// delivery document and every OTHER field here stays the bill's own:
+        /// quantity, rate and line total are untouched by the overlay, exactly
+        /// as before. Only the code is taken from the overlay, because the
+        /// Bills tab has no item-type picker at all — the classification is
+        /// only ever made on the Invoices tab, so the bill row's own HSCode is
+        /// usually empty and the consultant's is the only one there is.
+        ///
+        /// Empty until someone classifies the line. Guard it:
+        /// {{#if this.hsCode}}{{this.hsCode}}{{/if}}
+        /// </summary>
+        public string? HSCode { get; set; }
     }
 
     // Data for printing a Sales Tax Invoice

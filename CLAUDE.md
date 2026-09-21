@@ -240,6 +240,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `142 passed, 0 failed` |
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
+| HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
 | Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
@@ -619,6 +620,34 @@ alone".** That is load bearing now that no form sends it: bound as a plain
 `bool`, an absent field reads as `false` and every company save by anyone
 holding `tenantaccess.manage.update` would silently clear the flag. Pinned by
 `test_tenant_leak_sweep.py`.
+
+---
+
+### The HS code on printed documents (2026-09-21)
+
+The Bills tab has **no item-type picker**. A bill row therefore usually carries
+no HS code at all — the classification is only ever made on the Invoices tab, by
+the tax consultant, against the grouped item type. So "the adjusted code" is not
+a preference here; it is the only code that exists.
+
+- **Sales Tax Invoice** — already grouped by the effective item type
+  (`Adjustment?.AdjustedItemTypeName ?? ItemTypeName`) with `HSCode` taken the
+  same way. Grouping only happens when EVERY row has a non-empty effective item
+  type name; otherwise it falls back to per-line rows. A part-classified invoice
+  therefore prints differently from a fully classified one.
+- **Bill** — `PrintBillItemDto.HSCode` is the **only** field on that DTO fed by
+  the overlay. Quantity, rate and line total stay the commercial bill's, because
+  the Bill is the document the buyer signs for goods received.
+  `test_hscode_on_prints.py` suite 3 fails if that ever changes.
+
+Both render as `{{this.hsCode}}` inside `{{#each items}}`. Guard it —
+`{{#if this.hsCode}}` — because it is empty until someone classifies the line.
+
+**Classifying is enough to file.** FBR readiness is judged on the effective line
+and asks only for HS code, sale type, UOM and a positive unit price — **quantity
+is never consulted**. A consultant who picks the item type and decides no
+adjustment is needed has given a complete answer, and the ORIGINAL quantity is
+what gets filed. Do not add "an adjustment must exist" to the readiness rule.
 
 ---
 

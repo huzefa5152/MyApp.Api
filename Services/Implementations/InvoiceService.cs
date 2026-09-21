@@ -3580,7 +3580,15 @@ namespace MyApp.Api.Services.Implementations
                     UOM = ii.UOM,
                     UnitPrice = ii.UnitPrice,
                     LineTotal = ii.LineTotal,
-                    GSTRate = inv.GSTRate
+                    GSTRate = inv.GSTRate,
+                    // The ONLY field on this document that reads the overlay.
+                    // The Bills tab has no item-type picker, so a bill row's own
+                    // HSCode is usually empty and the consultant's Invoices-tab
+                    // classification is the only code that exists. Quantity,
+                    // rate and line total deliberately stay the bill's own: this
+                    // is the delivery document the buyer signs for goods
+                    // received, and it must keep matching what shipped.
+                    HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode
                 }).ToList()
             };
         }
