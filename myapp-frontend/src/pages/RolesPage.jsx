@@ -51,9 +51,31 @@ const colors = {
 };
 
 
+/**
+ * The permission tree, cut down to the keys `myKeys` actually holds.
+ *
+ * `module -> pages -> permissions` in, same shape out, with empty pages and
+ * empty modules dropped so the editor does not render a heading over nothing.
+ * The seed admin is passed through untouched.
+ */
+function grantableTree(tree, myKeys, isSeedAdmin) {
+  if (isSeedAdmin || !myKeys || myKeys.size === 0) return tree || [];
+  return (tree || [])
+    .map((mod) => ({
+      ...mod,
+      pages: (mod.pages || [])
+        .map((pg) => ({
+          ...pg,
+          permissions: (pg.permissions || []).filter((p) => myKeys.has(p.key)),
+        }))
+        .filter((pg) => pg.permissions.length > 0),
+    }))
+    .filter((mod) => mod.pages.length > 0);
+}
+
 export default function RolesPage() {
   const { user: currentUser } = useAuth();
-  const { has } = usePermissions();
+  const { has, permissions: myKeys, isSeedAdmin } = usePermissions();
   const canView = has("rbac.roles.view");
   const canCreate = has("rbac.roles.create");
   const canUpdate = has("rbac.roles.update");
@@ -78,7 +100,13 @@ export default function RolesPage() {
     try {
       const [rolesRes, treeRes] = await Promise.all([getRoles(), getPermissionTree()]);
       setRoles(rolesRes.data);
-      setTree(treeRes.data);
+      // Show only what THIS operator could actually hand out. The server
+      // enforces it either way -- a role may not grant a key its author does
+      // not hold -- but offering a checkbox that always fails on save is a
+      // trap, and for a tenant administrator on an edition it would also
+      // advertise the module they did not buy. The seed admin holds
+      // everything, so nothing is filtered for them.
+      setTree(grantableTree(treeRes.data, myKeys, isSeedAdmin));
     } catch {
       notify("Failed to load roles and permissions", "error");
     } finally {
@@ -86,7 +114,8 @@ export default function RolesPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  // Re-filter once the caller's own permission set has loaded.
+  useEffect(() => { fetchAll(); }, [isSeedAdmin, myKeys]);
 
   // ── Modal helpers ────────────────────────────────────────────────────────
   // Start with EVERY module collapsed so the operator sees a tidy stack of

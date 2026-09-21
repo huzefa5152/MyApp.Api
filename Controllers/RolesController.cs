@@ -69,6 +69,40 @@ namespace MyApp.Api.Controllers
             return rows.ToHashSet();
         }
 
+        /// <summary>
+        /// The permission keys this caller is allowed to hand out. Seed admin:
+        /// the whole catalog. Anyone else: exactly what they hold themselves.
+        ///
+        /// This is what makes an edition mean something once tenant admins
+        /// exist. Role editing accepts any key in the catalog, so without this
+        /// an Administrator on the Sales edition could write the accounting
+        /// keys into a role and assign it - to their users or to themselves -
+        /// and the tier they were sold would be a suggestion. "You may delegate
+        /// what you have" is the whole rule; it needs no new permission key and
+        /// it cannot be escaped by going up the tree, because an ancestor's
+        /// keys are not the caller's.
+        /// </summary>
+        internal static async Task<HashSet<string>> GrantableKeysAsync(
+            IPermissionService permissions, int userId)
+        {
+            var mine = await permissions.GetUserPermissionsAsync(userId);
+            return new HashSet<string>(mine, StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Keys in <paramref name="requested"/> the caller may not grant, in a
+        /// stable order so the message reads the same twice.
+        /// </summary>
+        internal static List<string> UngrantableKeys(
+            IEnumerable<string>? requested, HashSet<string> grantable) =>
+            (requested ?? Enumerable.Empty<string>())
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .Select(k => k.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(k => !grantable.Contains(k))
+                .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
         private int? CurrentUserId()
         {
             var sub = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
@@ -156,8 +190,21 @@ namespace MyApp.Api.Controllers
             if (await _context.Roles.AnyAsync(r => r.Name == name))
                 return Conflict(new { message = "A role with this name already exists" });
 
-            // Only permission keys that exist in the catalog are accepted.
+            // Only permission keys that exist in the catalog are accepted...
             var validPermIds = await ResolvePermissionIdsAsync(dto.PermissionKeys);
+
+            // ...and only keys the caller holds themselves. Without this an
+            // Administrator on one edition could write another edition's keys
+            // into a new role and assign it, which would make the tier they
+            // were sold a suggestion rather than a boundary.
+            var grantable = await GrantableKeysAsync(_permissions, CurrentUserId() ?? 0);
+            var refused = UngrantableKeys(dto.PermissionKeys, grantable);
+            if (refused.Count > 0)
+                return BadRequest(new
+                {
+                    message = "A role cannot grant more than you hold yourself. "
+                            + $"You do not have: {string.Join(", ", refused)}"
+                });
 
             var role = new Role
             {
@@ -221,6 +268,16 @@ namespace MyApp.Api.Controllers
 
             if (dto.PermissionKeys != null)
             {
+                // Same rule as Create: you may only delegate what you hold.
+                var grantable = await GrantableKeysAsync(_permissions, CurrentUserId() ?? 0);
+                var refused = UngrantableKeys(dto.PermissionKeys, grantable);
+                if (refused.Count > 0)
+                    return BadRequest(new
+                    {
+                        message = "A role cannot grant more than you hold yourself. "
+                                + $"You do not have: {string.Join(", ", refused)}"
+                    });
+
                 var targetIds = await ResolvePermissionIdsAsync(dto.PermissionKeys);
                 var currentIds = role.RolePermissions.Select(rp => rp.PermissionId).ToHashSet();
 

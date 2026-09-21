@@ -105,6 +105,37 @@ namespace MyApp.Api.Controllers
                 var visible = await RolesController.VisibleRoleIdsAsync(_context, _scope, CurrentUserId() ?? 0);
                 if (targetRoleIds.Any(id => !visible.Contains(id)))
                     return BadRequest(new { message = "One or more role IDs are invalid" });
+
+                // Visible is not the same as grantable, and the difference is
+                // the whole edition boundary. Every SYSTEM role is visible to
+                // everyone - that is what lets an Administrator hand out the
+                // edition they were put on - so without this an Administrator
+                // on Sales Edition could assign Complete Edition to their own
+                // users and sell themselves an upgrade. A role may be assigned
+                // only when everything it grants is something the caller holds.
+                var grantable = await RolesController.GrantableKeysAsync(_permissions, CurrentUserId() ?? 0);
+                var overreaching = await _context.Roles
+                    .Where(r => targetRoleIds.Contains(r.Id))
+                    .Select(r => new
+                    {
+                        r.Name,
+                        Keys = r.RolePermissions
+                            .Where(rp => rp.Permission != null)
+                            .Select(rp => rp.Permission!.Key)
+                            .ToList()
+                    })
+                    .ToListAsync();
+                foreach (var r in overreaching)
+                {
+                    var refused = RolesController.UngrantableKeys(r.Keys, grantable);
+                    if (refused.Count > 0)
+                        return BadRequest(new
+                        {
+                            message = $"You cannot assign \"{r.Name}\" - it grants more than you "
+                                    + $"hold yourself. Missing: {string.Join(", ", refused.Take(6))}"
+                                    + (refused.Count > 6 ? $" (+{refused.Count - 6} more)" : "")
+                        });
+                }
             }
 
             // Roles the target already holds that the caller cannot see stay

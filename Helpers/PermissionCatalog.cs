@@ -292,23 +292,34 @@ namespace MyApp.Api.Helpers
             new("customerportals.manage.update", "CustomerPortals", "Manage", "Update", "Enable, disable, or change the document a portal serves"),
             new("customerportals.manage.delete", "CustomerPortals", "Manage", "Delete", "Revoke a portal for good — the link stops working permanently"),
 
-            // ── Accounting — Receipts & Payments (AR/AP subledger) ──────────
+            // ── Receipts & Payments (AR/AP subledger) ───────────────────────
             // Receipts (money in, settle sales invoices) and Payments (money
             // out, settle purchase bills) are split into separate keys for
             // separation of duties: a cashier may record receipts without being
             // able to pay money out.
-            new("accounting.receipts.view",   "Accounting", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
-            new("accounting.receipts.create", "Accounting", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
-            new("accounting.receipts.delete", "Accounting", "Receipts", "Delete", "Delete a receipt"),
-            new("accounting.receipts.print",  "Accounting", "Receipts", "Print",  "Print or download a receipt voucher"),
-            new("accounting.payments.view",   "Accounting", "Payments", "View",   "View payments (money out) and a bill's settled payments"),
-            new("accounting.payments.create", "Accounting", "Payments", "Create", "Record a payment against one or more purchase bills"),
-            new("accounting.payments.delete", "Accounting", "Payments", "Delete", "Delete a payment"),
-            new("accounting.payments.print",  "Accounting", "Payments", "Print",  "Print or download a payment voucher"),
+            //
+            // The Module is "Receipts & Payments", NOT "Accounting", even though
+            // the keys keep the accounting.* namespace they were born with.
+            // These predate the ledger and need none of it — recording that a
+            // customer paid is a sales activity — so they are in the SALES
+            // edition while everything under Module "Accounting" is the Complete
+            // edition. Filing them under one module made the role editor show a
+            // single "Accounting" block that straddled the boundary, which is
+            // exactly the decision an operator needs to see. The keys are
+            // unchanged: EditionCatalog splits on key PREFIX, so the module name
+            // is free to say what the editor should show.
+            new("accounting.receipts.view",   "Receipts & Payments", "Receipts", "View",   "View receipts (money in) and an invoice's settled payments"),
+            new("accounting.receipts.create", "Receipts & Payments", "Receipts", "Create", "Record a receipt against one or more sales invoices"),
+            new("accounting.receipts.delete", "Receipts & Payments", "Receipts", "Delete", "Delete a receipt"),
+            new("accounting.receipts.print",  "Receipts & Payments", "Receipts", "Print",  "Print or download a receipt voucher"),
+            new("accounting.payments.view",   "Receipts & Payments", "Payments", "View",   "View payments (money out) and a bill's settled payments"),
+            new("accounting.payments.create", "Receipts & Payments", "Payments", "Create", "Record a payment against one or more purchase bills"),
+            new("accounting.payments.delete", "Receipts & Payments", "Payments", "Delete", "Delete a payment"),
+            new("accounting.payments.print",  "Receipts & Payments", "Payments", "Print",  "Print or download a payment voucher"),
             // Gates VISIBILITY of the payment-status badge (Paid / Partially Paid /
             // Overdue / Unpaid + balance due) on the Invoice/Bill and Purchase Bill
             // list screens. A user without this key sees no payment-status badge.
-            new("accounting.paymentstatus.view", "Accounting", "Payment Status", "View", "See the payment-status badge (paid / partial / overdue / balance due) on invoices and bills"),
+            new("accounting.paymentstatus.view", "Receipts & Payments", "Payment Status", "View", "See the payment-status badge (paid / partial / overdue / balance due) on invoices and bills"),
 
             // ── Document folders + attachments (unified attachment system) ───
             // Folders group library documents; attachments also link to business

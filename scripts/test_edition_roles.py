@@ -59,6 +59,7 @@ ACCOUNTING_PREFIXES = (
 )
 
 PW = "Passw0rd!23"
+NL = chr(10)
 
 
 def check(suite: str, name: str, ok: bool, detail: str = "") -> bool:
@@ -126,6 +127,7 @@ def main() -> int:
 
     company = None
     made_users: list[dict] = []
+    made_roles: list[dict] = []
 
     try:
         # -- 1. the editions exist and are system roles ----------------------
@@ -294,10 +296,82 @@ def main() -> int:
                 s, d8 = http("GET", path, base, token=tok)
                 check("8", f"{who} tenant is refused {label}", s == 403, f"got {s} {err_text(d8)}")
 
+        # -- 9. an administrator cannot grant past their own edition ----------
+        # The reason this exists: every SYSTEM role is visible to everyone, so
+        # "visible" was never the same as "grantable". An Administrator put on
+        # Sales Edition could see Complete Edition in the picker and assign it
+        # - to their staff or, via a role of their own making, to themselves.
+        # The rule now is that you may only delegate what you hold.
+        print(NL + "--- 9. an admin cannot grant beyond the edition they are on ---")
+        tenant_admin = by_name.get("Tenant Administrator")
+        if check("9", "Tenant Administrator is seeded", tenant_admin is not None):
+            check("9", "it carries no product features of its own",
+                  not (set(tenant_admin.get("permissionKeys") or []) & accounting_keys),
+                  "it holds accounting keys")
+
+            s9, admin_u = http("POST", "/api/users", base, token=seed, body={
+                "username": "tempSalesAdmin", "fullName": "Sales edition admin",
+                "password": PW, "role": "User"})
+            if check("9", "a Sales-edition administrator was created",
+                     s9 in (200, 201), f"{s9} {err_text(admin_u)}"):
+                made_users.append(admin_u)
+                http("PUT", f"/api/users/{admin_u['id']}/roles", base, token=seed,
+                     body={"roleIds": [sales["id"], tenant_admin["id"]]})
+                http("PUT", f"/api/usercompanies/user/{admin_u['id']}", base, token=seed,
+                     body={"companyIds": [cid]})
+                s9, t9 = http("POST", "/api/auth/login", base,
+                              body={"username": "tempSalesAdmin", "password": PW})
+                if check("9", "the administrator signed in", s9 == 200, f"{s9}"):
+                    atok = t9["token"]
+
+                    # It can do its job: build a role out of its own keys.
+                    s9, ok_role = http("POST", "/api/roles", base, token=atok, body={
+                        "name": "_temp_admin_made_role", "description": "temp",
+                        "permissionKeys": ["bills.list.view", "accounting.receipts.view"]})
+                    if check("9", "it can build a role from keys it holds",
+                             s9 in (200, 201), f"{s9} {err_text(ok_role)}"):
+                        made_roles.append(ok_role)
+
+                    # It cannot write a key it does not hold into a role.
+                    s9, bad = http("POST", "/api/roles", base, token=atok, body={
+                        "name": "_temp_escalation", "description": "temp",
+                        "permissionKeys": ["bills.list.view", "accounting.coa.view"]})
+                    check("9", "it cannot put an accounting key in a role",
+                          s9 == 400, f"got {s9} {err_text(bad)}")
+                    if s9 in (200, 201) and isinstance(bad, dict) and bad.get("id"):
+                        made_roles.append(bad)
+
+                    # Nor grant itself the audit log, which is not tenant-scoped.
+                    s9, bad2 = http("POST", "/api/roles", base, token=atok, body={
+                        "name": "_temp_escalation2", "description": "temp",
+                        "permissionKeys": ["auditlogs.view"]})
+                    check("9", "it cannot grant the cross-tenant audit log",
+                          s9 == 400, f"got {s9} {err_text(bad2)}")
+                    if s9 in (200, 201) and isinstance(bad2, dict) and bad2.get("id"):
+                        made_roles.append(bad2)
+
+                    # And cannot assign the other edition to anyone.
+                    s9, staff = http("POST", "/api/users", base, token=atok, body={
+                        "username": "tempAdminStaff", "fullName": "staff",
+                        "password": PW, "role": "User"})
+                    if check("9", "it can create a staff account",
+                             s9 in (200, 201), f"{s9} {err_text(staff)}"):
+                        made_users.append(staff)
+                        s9, d9 = http("PUT", f"/api/users/{staff['id']}/roles", base,
+                                      token=atok, body={"roleIds": [complete["id"]]})
+                        check("9", "it cannot assign Complete Edition to staff",
+                              s9 == 400, f"got {s9} {err_text(d9)}")
+                        s9, d9 = http("PUT", f"/api/users/{staff['id']}/roles", base,
+                                      token=atok, body={"roleIds": [sales["id"]]})
+                        check("9", "it CAN assign its own edition to staff",
+                              s9 == 200, f"got {s9} {err_text(d9)}")
+
     finally:
         print("\n--- cleanup ---")
         for u in made_users:
             http("DELETE", f"/api/users/{u['id']}", base, token=seed)
+        for r in made_roles:
+            http("DELETE", f"/api/roles/{r['id']}", base, token=seed)
         if company:
             http("DELETE", f"/api/companies/{company['id']}", base, token=seed)
         print("  temp users and company removed")

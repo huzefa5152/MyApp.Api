@@ -43,7 +43,7 @@ export const PERMISSION_SECTIONS = [
       // the same underlying bill data. Each has its own permission namespace
       // so a bookkeeper role can hold bills.* without invoices.fbr.*, and
       // an FBR officer role can hold invoices.* without bills.manage.*.
-      { key: "Bills", label: "Bill" },
+      { key: "Bills" },
       { key: "Invoices" },
       { key: "Item Rate History" },
     ],
@@ -61,23 +61,25 @@ export const PERMISSION_SECTIONS = [
     ],
   },
   {
+    // Mirrors the sidebar's Accounting group, and in the order the two things
+    // are SOLD. "Receipts & Payments" is part of the Sales edition — money in
+    // and money out predate the ledger and need none of it. Everything in
+    // "Ledger & Reports" is the Complete edition. They used to share one module
+    // called "Accounting", which put a single block in the editor straddling
+    // the edition boundary — the one decision an operator most needs to see.
     section: "Accounting",
     modules: [
-      // Module string in PermissionCatalog.cs is "Accounting" — the chart of
-      // accounts, the general ledger, journal entries, the reports, and the
-      // Receipts / Payments subledger.
-      { key: "Accounting" },
-      // The public customer-portal links. Kept its own module because the keys
-      // govern publishing a customer's invoices to an unauthenticated URL,
-      // which is a different kind of decision from the rest of Accounting.
-      { key: "CustomerPortals", label: "Customer Portals" },
+      { key: "Receipts & Payments" },
+      { key: "Accounting", label: "Ledger & Reports" },
     ],
   },
   {
     section: "Reports",
     modules: [
-      // Module string in PermissionCatalog.cs is "Reports".
-      { key: "Reports", label: "Sales Report" },
+      // Module string in PermissionCatalog.cs is "Reports" — the Sales report,
+      // the Tax Sheet and the Outstanding Ledger. It was labelled "Sales
+      // Report", which named one of its three pages and hid the other two.
+      { key: "Reports" },
     ],
   },
   {
@@ -95,6 +97,12 @@ export const PERMISSION_SECTIONS = [
       // the uploaded attachments they hold (also linked to documents).
       { key: "Folders", label: "Navigation Menu (Folders)" },
       { key: "Attachments" },
+      // The public customer-portal links. The sidebar puts this under
+      // Configuration, so the editor does too — it was filed under Accounting,
+      // which is the one place an operator would not go looking for it. The
+      // keys govern publishing a customer's invoices to an unauthenticated URL,
+      // so grant them the way you would grant a key cabinet.
+      { key: "CustomerPortals", label: "Customer Portals" },
       { key: "FBR" },
     ],
   },

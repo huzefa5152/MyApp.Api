@@ -238,7 +238,9 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Grouped quantity spread — no bill line left at zero (offline) | `node scripts/test_group_quantity_split.mjs` | `21 passed, 0 failed` |
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `69/69 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `142 passed, 0 failed` |
-| Product editions — Sales vs Complete, proven end to end | `python scripts/test_edition_roles.py` | `65/65 checks` |
+| Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `75/75 checks` |
+| Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
+| Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `97/97 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
 | Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
@@ -432,6 +434,35 @@ Three things about that split are deliberate and easy to undo by accident:
 - **They are system roles**, so `RolesController` refuses update and delete on
   them and an edition cannot drift. A variation is a CLONE, not an edit.
 
+### Tenant administrators, and the rule that bounds them
+
+A third system role, **Tenant Administrator**, carries the administration keys
+and no product features: create staff accounts, build roles for them, grant them
+companies. It is assigned ALONGSIDE an edition — "Sales Edition + Tenant
+Administrator" is the Sales admin — so a new edition costs no new admin role.
+
+Two keys are deliberately absent from it. `auditlogs.view`, because the audit log
+is **not company-scoped** and would show one tenant every other tenant's
+activity. And `tenantaccess.manage.update`, because that toggles
+`Company.IsTenantIsolated`, which decides who can see a company at all — a
+platform decision, not a tenant one.
+
+**What actually bounds an administrator is `RolesController.GrantableKeysAsync`:
+nobody may put a key into a role, or assign a role carrying one, unless they hold
+it themselves.** Without it the editions were decoration once tenant admins
+existed — every SYSTEM role is visible to everyone (that is what lets an admin
+hand out the edition they are on), so an administrator on Sales Edition could
+see Complete Edition in the picker and assign it, to their staff or to
+themselves. **Visible is not grantable**, and that distinction is the boundary.
+It needs no new permission key, and it cannot be walked around through the
+management tree, because an ancestor's keys are not the caller's.
+
+The role editor filters itself to the caller's own keys for the same reason a
+button the operator cannot use is not rendered: offering a checkbox that always
+fails on save is a trap, and for a tenant administrator it would advertise the
+module they did not buy. The server enforces it regardless — the filter is
+courtesy, not the control.
+
 A permission added to `PermissionCatalog` lands in the right edition on its own.
 Adding one that must NOT reach a Sales tenant means adding its prefix to
 `AccountingModulePrefixes`. `scripts/test_edition_roles.py` derives the expected
@@ -494,6 +525,60 @@ fails if the router and the map disagree, or if a mapped key is not in
   about it — nothing else has to change. Do NOT port the importer's
   `CompanyItemTypeSetting`: it carries that line's inventory redesign and a
   division scope, and the stock-reflow gate depends on this line's behaviour.
+
+---
+
+### Pickers are not screens (2026-09-21)
+
+A dropdown on a form is not the screen that manages the thing it lists.
+`clients.manage.view` opens the **Clients page**; requiring it to fill the buyer
+dropdown meant a role built to raise bills — and entitled to that form — got a
+403 where the buyer name belongs. The rule: gate a picker on the audience that
+**uses the document**, with `[HasAnyPermission]`, not on the management screen's
+own key. `AccountsController.GetFlat` set the precedent; `ClientsController`,
+`SuppliersController` and `ItemTypesController` follow it.
+
+The tenant guard, not the permission, is what bounds a picker. Widening the
+permission does NOT widen the company: every one of these still asserts the
+companyId. `scripts/test_tenant_leak_sweep.py` suite 5 holds both halves — a
+bills-only role fills every picker for its own company and is refused all of
+them for another.
+
+### Tenant leaks found on 2026-09-21, and the shape they share
+
+All four trusted something the caller said. None of them looked wrong in review.
+
+- **`GET /api/itemtypes?companyId=`** returned that company's **on-hand stock**
+  per item, with no `[HasPermission]` at all — any authenticated user of any
+  tenant. The branch beside it derived the caller's accessible set correctly,
+  which is exactly why it survived: the file looked like it did the right thing.
+- **`GET /api/poformats`** with no companyId listed **every tenant's** formats,
+  and the row carries `CompanyName` and `ClientName`. The cheapest possible
+  request handed over other tenants' company and customer names.
+- **`GET /api/poformats/{id}`** resolved any id for anyone — the id-in-the-path
+  shape of the same bug, which no amount of companyId guarding on the list
+  endpoint helps with.
+- **`ItemTypes` create/update** took a companyId that chooses **whose FBR token**
+  calls PRAL, unchecked — one tenant's bearer spending another's quota.
+
+**Known and accepted: three catalogs are install-wide.** `ItemType`,
+`ItemDescription` and `Unit` carry no `CompanyId`, so one tenant's saved item
+descriptions and units appear in another tenant's autocomplete. This is the
+schema as designed — item types are deliberately common across a user's tenants,
+and `ItemTypesController.GetAll` aggregates on-hand across the caller's whole
+accessible set for exactly that reason. It was reviewed on 2026-09-21 and left
+alone. Scoping them per company means a migration, a rule for who owns the
+existing rows, and a change to every picker; do not "fix" it in passing.
+
+Two scripts now stand watch, and they are complementary:
+`verify_tenant_scope.py` reads every controller action that names a companyId
+and fails unless it asserts it — **deriving a set from the caller on another
+branch does not count**, because that is a different question. And
+`test_tenant_leak_sweep.py` puts real users of both editions in front of a
+company they were never given and tries every read. It proves each probe path
+answers 200 for the seed admin FIRST: a probe that 404s because the URL is wrong
+would otherwise "pass" while testing nothing, which is worse than no test — and
+three of its paths were wrong on the first run.
 
 ---
 

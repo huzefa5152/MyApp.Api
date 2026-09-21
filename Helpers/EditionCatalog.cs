@@ -38,11 +38,52 @@ namespace MyApp.Api.Helpers
     {
         public const string SalesEditionRoleName = "Sales Edition";
         public const string CompleteEditionRoleName = "Complete Edition";
+        public const string TenantAdminRoleName = "Tenant Administrator";
 
         public const string SalesEditionDescription =
             "Sales edition — the full sales, purchase, inventory and FBR product, " +
             "including receipts and payments. No general ledger. Built-in: assign it, " +
             "clone it to vary it.";
+
+        public const string TenantAdminDescription =
+            "Tenant Administrator — may create staff accounts, build roles for them " +
+            "and grant them companies. Holds NO product features of its own: assign it " +
+            "ALONGSIDE an edition, and the edition is what bounds it. Built-in.";
+
+        /// <summary>
+        /// Administration of a tenant's OWN people, and nothing else. It is a
+        /// separate role rather than a second pair of editions on purpose:
+        /// "Sales Edition + Tenant Administrator" and "Complete Edition +
+        /// Tenant Administrator" are the two admins, composed rather than
+        /// duplicated, and adding a third edition later costs nothing.
+        ///
+        /// What bounds such an admin is not this list but the rule in
+        /// <c>RolesController.GrantableKeysAsync</c>: nobody may put a key into
+        /// a role, or assign a role carrying one, unless they hold it
+        /// themselves. So an admin on the Sales edition can build any role they
+        /// like out of Sales keys and can never reach the accounting ones —
+        /// including by assigning the Complete edition, which is visible to
+        /// them (every system role is) but not grantable.
+        ///
+        /// Two keys are deliberately NOT here:
+        /// <list type="bullet">
+        /// <item><c>auditlogs.view</c> — the audit log is not company-scoped, so
+        /// it would show one tenant every other tenant's activity.</item>
+        /// <item><c>tenantaccess.manage.update</c> — that toggles
+        /// <c>Company.IsTenantIsolated</c>, which decides who can see a company
+        /// at all. That is a platform decision, not a tenant one.</item>
+        /// </list>
+        /// Company grants ARE included, and are already bounded elsewhere:
+        /// <c>IManagementScopeService.GetAssignableCompanyIdsAsync</c> lets an
+        /// administrator hand out only companies it holds itself.
+        /// </summary>
+        private static readonly string[] TenantAdminKeys =
+        {
+            "users.manage.view", "users.manage.create", "users.manage.update", "users.manage.delete",
+            "rbac.roles.view", "rbac.roles.create", "rbac.roles.update", "rbac.roles.delete",
+            "rbac.permissions.view", "rbac.userroles.view", "rbac.userroles.assign",
+            "tenantaccess.manage.view", "tenantaccess.manage.assign",
+        };
 
         public const string CompleteEditionDescription =
             "Complete edition — everything in the Sales edition plus the accounting " +
@@ -91,12 +132,21 @@ namespace MyApp.Api.Helpers
                 .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-        /// <summary>The seeded editions, in the order they should be listed.</summary>
+        /// <summary>Administration keys that really exist in the catalog.</summary>
+        public static IReadOnlyList<string> TenantAdminEffectiveKeys { get; } =
+            PermissionCatalog.All
+                .Where(d => TenantAdminKeys.Contains(d.Key, StringComparer.OrdinalIgnoreCase))
+                .Select(d => d.Key)
+                .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+        /// <summary>The seeded roles, in the order they should be listed.</summary>
         public static IReadOnlyList<(string Name, string Description, IReadOnlyList<string> Keys)> All { get; } =
             new List<(string, string, IReadOnlyList<string>)>
             {
                 (SalesEditionRoleName,    SalesEditionDescription,    SalesEditionKeys),
                 (CompleteEditionRoleName, CompleteEditionDescription, CompleteEditionKeys),
+                (TenantAdminRoleName,     TenantAdminDescription,     TenantAdminEffectiveKeys),
             };
     }
 }

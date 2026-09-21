@@ -290,6 +290,55 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-21 — Four tenant leaks closed, and dropdowns stop asking for screens
+
+**Four places trusted a company id the caller supplied.** The worst was the item
+catalog: `GET /api/itemtypes?companyId=` decorated each row with that company's
+**on-hand stock**, carried no permission requirement at all, and never checked
+that the caller could reach the company — so any signed-in user of any tenant
+could read another tenant's inventory. The PO-format list returned **every**
+tenant's formats when no company was named, and the row carries the company and
+client names. Fetching a PO format by id worked for anyone. And creating or
+editing an item type took a company id that decides **whose FBR token** calls
+PRAL, unchecked.
+
+All four are closed, and two scripts now stand watch.
+`verify_tenant_scope.py` reads every controller action that names a company id
+and fails unless it asserts it — deriving a set from the caller on some other
+branch does not count, which is precisely the shape that hid the item-catalog
+bug. `test_tenant_leak_sweep.py` puts real users of **both editions** in front of
+a company they were never granted and tries every company-scoped read, plus the
+id-in-the-path variety. It proves each probe answers for the seed admin first,
+so a mistyped URL cannot pass as a refusal — three of its paths were wrong on
+the first run and were silently "passing" until that check existed.
+
+**A dropdown is not the screen that manages what it lists.** Filling the buyer
+picker required `clients.manage.view`, the key that opens the Clients *page* — so
+a role built to raise bills, fully entitled to the bill form, hit a permission
+error where the buyer name belongs. Buyers, suppliers and item types now answer
+to whoever works with a document that names them, the way the GL account picker
+already did. The company check is untouched: a narrow role fills every picker for
+its own company and is refused every one of them for another.
+
+**Tenant administrators, bounded by their edition.** A third built-in role,
+**Tenant Administrator**, carries the administration keys and no product
+features — create staff, build roles, grant companies — and is assigned
+alongside an edition. What keeps it honest is a new rule: nobody may put a
+permission into a role, or assign a role carrying one, unless they hold it
+themselves. Every built-in role is visible to everyone, so without that an
+administrator on the Sales edition could see Complete Edition in the picker and
+assign it — to their staff, or to themselves. Visible is not grantable. The role
+editor also now shows an administrator only the permissions they could actually
+hand out, so a Sales administrator sees 142 of the 157 and no accounting at all.
+
+**The role editor groups the way the product is sold.** Receipts and Payments
+were filed under one "Accounting" block together with the ledger, straddling the
+line between the Sales and Complete editions — the one decision an operator most
+needs to see. They are now their own group. Customer Portals moved to
+Configuration, where the sidebar has always kept it; the Reports group no longer
+calls itself "Sales Report" while holding the Tax Sheet and the Outstanding
+Ledger; and "Bill" is "Bills".
+
 ### 2026-09-19 — Accounting, the customer portal, and two editions to sell them in
 
 **Double-entry accounting.** A chart of accounts per company (seeded from a
