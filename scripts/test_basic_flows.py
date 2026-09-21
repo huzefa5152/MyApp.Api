@@ -517,6 +517,16 @@ def test_billform_itemtype_override(base: str, token: str, company: dict,
           status == 200 and len(titems) == 1,
           f"status={status} rows={[t.get('itemTypeName') for t in titems]}")
     if titems:
+        for collection in ("items", "billItems"):
+            printed = tax[collection][0]
+            check(suite, f"{collection}: original and invoice quantity choices",
+                  printed.get("billQuantity") == 15 and printed.get("invoiceQuantity") == 15)
+            check(suite, f"{collection}: independent type names",
+                  printed.get("billItemTypeName") == type_b["name"]
+                  and printed.get("invoiceItemTypeName") == type_b["name"])
+            check(suite, f"{collection}: invoice financial choices",
+                  printed.get("invoiceValueExclTax") == 1500
+                  and printed.get("invoiceGstAmount") == printed.get("gstAmount"))
         check(suite, "grouped row named after B",
               (titems[0].get("itemTypeName") or "") == type_b["name"],
               f"name={titems[0].get('itemTypeName')}")

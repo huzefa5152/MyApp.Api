@@ -174,4 +174,3 @@ sealed class FailingPosting(AppDbContext db,int failId):IPostingService
     public Task PostPaymentAsync(Payment p)=>throw new NotSupportedException();
     public Task RemoveForSourceAsync(int c,SourceDocType t,int d)=>throw new NotSupportedException();
 }
-

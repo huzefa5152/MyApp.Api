@@ -135,11 +135,11 @@ export default function TemplateEditorPage() {
           label: f.label,
           category: f.category,
         }));
-        // These additive Bill fields ship with the print DTO; expose them even
+        // These additive print fields ship with the print DTO; expose them even
         // when the production merge-field catalog predates this release.
-        if (templateType === "Bill") {
-          for (const field of MERGE_FIELDS.Bill) {
-            if (!catalog.some(f => f.field === field.field)) catalog.push({ ...field, category: /fbr/i.test(field.field) ? "FBR" : "Bill" });
+        if (templateType === "Bill" || templateType === "TaxInvoice") {
+          for (const field of MERGE_FIELDS[templateType]) {
+            if (!catalog.some(f => f.field === field.field)) catalog.push({ ...field, category: /fbr/i.test(field.field) ? "FBR" : templateType });
           }
         }
         setFields(catalog);
