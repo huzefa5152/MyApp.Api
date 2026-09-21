@@ -268,6 +268,27 @@ green, and add corpus cases for the new behaviour. Full runbook (parser
 internals, feedback system, cross-branch cherry-pick, prod-check setup) is in
 `PO_IMPORT_PARSER_GUIDE.md`.
 
+**A new print-template field is not done until the editor offers it — MANDATORY.**
+Adding a property to a `Print*Dto` puts the value in the payload; it does NOT put
+it in front of the operator. The template editor's sidebar reads a **separate**
+catalog in `myapp-frontend/src/utils/templateEngine.js`, keyed by document type
+(`Challan`, `Bill`, `TaxInvoice`, `Receipt`, …). Miss it and the field exists,
+renders correctly, and nobody can find it.
+
+That is not hypothetical: `PrintTaxItemDto.HSCode` shipped and worked for months
+while no document type listed it, so the only way to use it was to already know
+the token. Every DTO field addition therefore lands in **three** places:
+
+1. the `Print*Dto` property and its service projection;
+2. `utils/templateEngine.js` — an entry under **every** document type that
+   serves it, with a label an operator can read ("Item HS Code (in loop)");
+3. `utils/templateSampleData.js` — so the editor's Preview shows the field
+   instead of a blank, which is how the operator lays it out before saving.
+
+Then update `.claude/skills/myapp-*-print-templates/references/merge-fields.md`
+for that branch. Those inventories are snapshots, not proof — but a stale one
+sends the next agent looking for a field that is already there.
+
 **Print/PDF export changes.** Any change to `myapp-frontend/src/utils/exportUtils.js`,
 `printDocument.js`, or a tax-invoice template must keep
 `python scripts/test_pdf_pagination.py` green. It drives the real `exportToPdf()`

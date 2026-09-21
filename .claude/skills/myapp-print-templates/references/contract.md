@@ -74,3 +74,15 @@ dotnet run --project scripts/print_dto_checks/print_dto_checks.csproj
 ```
 
 For DTO/service edits run backend build and local basic-flow/tenant checks; do not point mutation-based tests at production. Frontend builds for Trader use `VITE_BASE_PATH=/admin/`. The production workflow is `.github/workflows/deploy-trader.yml`; verify its run and live API readiness before applying saved templates that need new fields. Built-in defaults are supplied by the frontend; seeding defaults deliberately leaves existing saved document types unchanged.
+
+## A field the editor does not list does not exist
+
+The print DTOs and the editor's merge-field sidebar are two separate lists. The
+sidebar reads `myapp-frontend/src/utils/templateEngine.js`, keyed by document
+type. Adding a property to a `Print*Dto` does not add it there.
+
+`PrintTaxItemDto.HSCode` shipped and rendered correctly for months while no
+document type listed it — usable only by someone who already knew the token. So
+a DTO field addition is finished only when it also appears in
+`templateEngine.js` under every document type that serves it, with an
+operator-readable label, and in `templateSampleData.js` so the Preview shows it.
