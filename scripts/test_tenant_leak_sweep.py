@@ -174,8 +174,10 @@ def main() -> int:
             return 1
         a_id, b_id = co_a["id"], co_b["id"]
 
-        # Isolation only bites on a tenant-isolated company; otherwise every
-        # authenticated user may reach it by design.
+        # Set for tidiness, not for the test to mean anything: under the
+        # fail-closed rule in CompanyAccessGuard, access comes from explicit
+        # UserCompanies rows and IsTenantIsolated is informational. A user with
+        # no grant for company B is refused whatever the flag says.
         for co in (co_a, co_b):
             s, _ = http("PUT", f"/api/companies/{co['id']}", base, token=seed,
                         body={**company_payload(co["name"]), "isTenantIsolated": True})

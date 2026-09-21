@@ -48,12 +48,17 @@ namespace MyApp.Api.Controllers
                 out var id) ? id : 0;
 
         // GET: api/companies
-        // Returns only the companies the caller has tenant access to. Today
-        // most companies are IsTenantIsolated=false → CompanyAccessGuard
-        // returns "everything", preserving legacy behaviour. Once a company
-        // is flipped isolated, only users with a UserCompanies row see it
-        // here — which means every company-picker dropdown in the SPA gets
-        // filtered automatically without per-page changes.
+        // Returns only the companies the caller has tenant access to, which
+        // means every company-picker dropdown in the SPA is filtered without
+        // per-page changes.
+        //
+        // 2026-09-21: this comment used to say an IsTenantIsolated=false
+        // company "falls through" so the guard returns everything. That has not
+        // been true since CompanyAccessGuard went fail-closed: access is the
+        // explicit UserCompanies rows and nothing else, seed admin aside, and
+        // the flag is informational. The stale wording reads as "un-isolated
+        // means visible to everyone", which is alarming and wrong — it sent one
+        // reader looking for a leak that is not there.
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CompanyDto>>> GetCompanies()
         {
