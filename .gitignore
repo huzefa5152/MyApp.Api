@@ -436,10 +436,11 @@ scripts/*.txt
 .claude_run.log
 .claude_run.log.err
 
-# Local-only agent/editor scaffolding and operator helper scripts — not
-# project code, kept out of the repo per maintainer preference.
+# Local-only editor scaffolding and operator helper scripts — not project
+# code, kept out of the repo per maintainer preference. AGENTS.md is NOT
+# here: it carries the rules every coding agent has to follow, so it is
+# tracked alongside CLAUDE.md.
 .codex/
-AGENTS.md
 scripts/*.ps1
 
 # Built frontend output — CI builds wwwroot from source on every deploy;
