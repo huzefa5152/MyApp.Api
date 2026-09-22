@@ -647,6 +647,51 @@ stay in the pushed history and are recoverable from it. That is why the rule is
 
 ---
 
+## One commit does one thing, and the subject says what (2026-09-22)
+
+`8e1d8d5` has the subject "Refuse to delete an item type that still holds
+stock". It also deleted **3,576 lines of print templates** — the 15 bill and 15
+sales-tax-invoice starter designs and both shipped defaults — replacing them
+with colour variants of one generated layout. Nobody reviewed that, because the
+subject never mentioned it. It shipped, and sat in production for four days
+until an operator reported that all the starter templates were gone and every
+document now printed as the same unfamiliar layout.
+
+- **One commit, one change.** Stage explicit paths — `git commit -F <msgfile> --
+  <paths>`. Never `git add -A`. That was already the rule for a tree with
+  several agents in it; it is the rule with one agent too, for exactly this
+  reason.
+- **Read `git diff --stat` before every commit and account for every file.** A
+  file you cannot justify in the subject line does not belong in the commit.
+- **Deleting is a change in its own right.** A refactor that removes
+  user-visible variety — designs, templates, presets, sample data, starter
+  content — is never a side effect of something else. It gets its own commit,
+  its own subject, and the maintainer's agreement BEFORE it is written.
+- **A generated variant is not a replacement for a hand-made one.** Fifteen
+  designs that differ only by an accent colour are one design with fifteen
+  names, and the operator reads that as fourteen designs missing.
+
+## A test rewritten to fit the change proves nothing (2026-09-22)
+
+The same commit rewrote `myapp-frontend/scripts/test-print-stamps.mjs` to assert
+that every bill and tax layout has exactly eight bare `<th>` and prints a
+per-line GST column — which is to say, that every layout IS the new single
+template. The suite passed. The wipe looked verified, because the wipe had been
+written down as the expectation.
+
+- **When a change makes a test fail, the first question is whether the test is
+  right** — and that answer goes to the maintainer, not silently into the test
+  file.
+- **Re-baselining a test in the same commit as the behaviour it guards destroys
+  the only evidence anyone had.** If both genuinely must move, say so in the
+  commit body and name what the assertion used to protect.
+- **Assert the contract, not one implementation's shape.** "An item table
+  exists, the document subtotal / GST / grand total render, no `NaN`" survives
+  fifteen different designs. "Exactly eight `<th>`" blesses the one layout it
+  was written against and blocks every other.
+
+---
+
 ## Anti-patterns I keep finding (don't repeat them)
 
 - ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
@@ -666,6 +711,9 @@ stay in the pushed history and are recoverable from it. That is why the rule is
 - ❌ Cross-tenant entity links (`Invoice.ClientId` pointing at a `Client` whose `CompanyId` doesn't match)
 - ❌ Treating a null `Company.FbrToken` as "clear the token" — null is what an unreadable ciphertext decrypts to, and writing it back destroys the token (2026-09-10). Clear with `""`; `AppDbContext.PreserveUnreadableFbrTokens` drops null from every Company UPDATE.
 - ❌ De-duplicating against a UNIQUE index with a case-sensitive C# check.
+- ❌ Letting unrelated files ride along in a commit — read `git diff --stat` and account for every one
+- ❌ Re-baselining a test in the same commit as the behaviour it guards (the regression becomes the expectation)
+- ❌ Replacing distinct hand-made designs / templates with generated variants of a single layout
   SQL Server's default collation is **CI + ANSI PadSpace**, so `"X"`, `"x"` and
   `"X "` are ONE key. A SQL probe that matches, followed by an ordinal
   `existing.Contains(name)` that doesn't, inserts a row the index then rejects.
