@@ -220,7 +220,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 > `master`** (a direct push, or a merge/PR that lands on it), you MUST:
 > 1. have a backend running against a schema-current DB, and
 > 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
->    passed`** (currently **166/166**).
+>    passed`** (currently **183/183**).
 >
 > If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
 > in/out flow must never reach master — ever. Run it even when the change looks
@@ -255,7 +255,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `47/47 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
-| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `166/166`) |
+| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `183/183`) |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (230 cases) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
@@ -559,6 +559,50 @@ fails if the router and the map disagree, or if a mapped key is not in
   about it — nothing else has to change. Do NOT port the importer's
   `CompanyItemTypeSetting`: it carries that line's inventory redesign and a
   division scope, and the stock-reflow gate depends on this line's behaviour.
+
+---
+
+### A sale relieves inventory (2026-09-23)
+
+A purchase debits **Inventory on hand** in a stock-tracking company — stock is
+an asset, not yet an expense. Until 2026-09-23 nothing ever credited it back, so
+the control account only went UP: the balance sheet overstated stock by
+everything ever sold, Cost of goods sold had never received a single entry, and
+every stock-tracking company reported revenue with no matched cost. Found on
+production, where five companies held debit-only Inventory balances and COGS was
+empty on all of them.
+
+`PostingService.AddInventoryReliefAsync` now adds the cost side to the sale's
+own entry: **Dr Cost of goods sold / Cr Inventory on hand**, reversed for a
+credit note. Four things about it are load bearing.
+
+- **Quantity comes from the STOCK LEDGER, not from the invoice lines.**
+  `StockService.SyncInvoiceStockMovementsAsync` has already decided what left the
+  building — the FBR-adjusted quantity and the FBR-adjusted item type when the
+  dual-book overlay reclassified a line, classified (HS) items only, demo bills
+  never. Re-deriving any of that in the posting engine would be a second opinion
+  that drifts from the first. Every caller syncs stock BEFORE it posts, and a
+  rebuild runs over movements already on file.
+- **Cost is the weighted average of PURCHASES up to the document's date** — the
+  same basis `DashboardService.ComputeInventoryAsync` reports as stock value, so
+  the dashboard and the ledger cannot disagree. It is NOT the sale price, and
+  NOT the overlay's adjusted unit price: that is what the goods were sold FOR,
+  and relieving stock at it credits the asset with more than was ever paid.
+- **Tenant scope is on the BILL, not the item.** `AverageCostsAsync` filters
+  `pi.PurchaseBill.CompanyId`, never the item type alone. Pinned by suite 15,
+  which also asserts the catalog refusal itself ("An item type does not belong to
+  this document's company") so the guard is proven, not assumed.
+- **A challan edit re-posts the bill.** `DeliveryChallanService` changes what left
+  the building without touching the invoice, so it now calls
+  `PostInvoiceAsync` after the stock re-sync. Without it the revenue legs stay
+  right while the cost side silently keeps the old quantity.
+
+Companies that have sold more than they ever purchased end up with a NEGATIVE
+Inventory on hand, and that is deliberate: it is an honest signal that stock left
+without a purchase behind it, not something to cap away.
+
+There is no startup backfill. Existing books were corrected once by a reviewed
+SQL back-post; from that point the posting engine keeps them right on its own.
 
 ---
 

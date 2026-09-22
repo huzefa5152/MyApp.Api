@@ -1289,6 +1289,187 @@ def print_report() -> int:
     return 0 if fail == 0 else 1
 
 
+# ── Suite 15 — GL inventory relief (the cost side of a sale) ──────
+def ledger(base, token, cid) -> dict[str, dict]:
+    """Trial-balance rows keyed by account name. Closing is debit-positive, so
+    Inventory on hand reads as what the books say is still on the shelf and Cost
+    of goods sold as what has been charged against profit."""
+    st, tb = http("GET", f"/api/accounting/reports/company/{cid}/trial-balance", base, token=token)
+    if st != 200 or not isinstance(tb, dict):
+        return {}
+    return {r["name"]: r for r in tb.get("rows", [])}
+
+
+def inv_cogs(base, token, cid) -> tuple[float, float]:
+    rows = ledger(base, token, cid)
+    inv = float(rows.get("Inventory on hand", {}).get("closing", 0) or 0)
+    cogs = float(rows.get("Cost of goods sold", {}).get("closing", 0) or 0)
+    return inv, cogs
+
+
+def suite_gl_inventory_relief(base, token, cid, client, supplier, suffix):
+    """A purchase has always debited Inventory on hand; nothing ever credited it,
+    so the control account only went up and Cost of goods sold stayed empty. The
+    relief is derived from THIS invoice's stock movements, so it follows the
+    FBR-adjusted quantity and item type exactly as the stock ledger does, and it
+    is valued at the weighted-average PURCHASE cost — never the sale price."""
+    S = "15. GL inventory relief"
+    print(f"\n=== {S} ===")
+
+    # A new company is created with its ledger ON but with NO chart of accounts —
+    # the preset is seeded on demand. Without it there is no Inventory on hand to
+    # credit and no Cost of goods sold to charge, so seed it first, exactly as the
+    # operator does on the Chart of Accounts screen.
+    st, seeded = http("POST", f"/api/accounts/company/{cid}/seed-wholesale", base, token=token)
+    check(S, "chart of accounts seeded", st == 200, f"{st} {seeded}")
+
+    # Classified (HS) item types — an unclassified one records no stock movement,
+    # so there would be nothing to relieve and the suite would prove nothing.
+    a = make_item_type(base, token, f"GLRelief A {suffix}", hs=next_hs())
+    b = make_item_type(base, token, f"GLRelief B {suffix}", hs=next_hs())
+    if not a or not b:
+        check(S, "item types created", False, "could not create item types")
+        return
+
+    inv0, cogs0 = inv_cogs(base, token, cid)
+
+    # 100 @ 50 = 5,000 of A; 20 @ 200 = 4,000 of B.
+    st, _ = create_pb(base, token, cid, supplier["id"], [
+        {"itemTypeId": a["id"], "description": a["name"], "quantity": 100, "unitPrice": 50},
+        {"itemTypeId": b["id"], "description": b["name"], "quantity": 20, "unitPrice": 200},
+    ])
+    inv1, cogs1 = inv_cogs(base, token, cid)
+    check(S, "purchase debits Inventory by its net", st in (200, 201) and approx(inv1 - inv0, 9000, 0.01),
+          f"inventory moved {inv1 - inv0:.2f}, expected 9000.00")
+    check(S, "a purchase charges nothing to Cost of goods sold", approx(cogs1 - cogs0, 0, 0.01),
+          f"cogs moved {cogs1 - cogs0:.2f}")
+
+    # Sell 10 of A. Cost basis is the weighted average of A's purchases: 50.00.
+    st, invoice = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": a["id"], "description": a["name"], "quantity": 10, "unitPrice": 999},
+    ])
+    if st not in (200, 201):
+        check(S, "sale created", False, f"{st} {invoice}")
+        return
+    iid = invoice["id"]
+    inv2, cogs2 = inv_cogs(base, token, cid)
+    check(S, "sale relieves Inventory at cost", approx(inv2 - inv1, -500, 0.01),
+          f"inventory moved {inv2 - inv1:.2f}, expected -500.00")
+    check(S, "sale charges Cost of goods sold at cost, not at the sale price",
+          approx(cogs2 - cogs1, 500, 0.01),
+          f"cogs moved {cogs2 - cogs1:.2f}, expected 500.00 (sale price would be 9,990)")
+
+    # The consultant's overlay reclassifies the line to B and files 4 units. The
+    # adjusted line must still re-sum to the bill (4 x 2,497.50 = 9,990), which is
+    # the dual-book invariant the overlay endpoint enforces. Stock follows the
+    # overlay, so the cost must follow it too — and at B's PURCHASE cost of 200,
+    # not at the filed unit price of 2,497.50: 4 x 200 = 800.
+    st, adj_resp = adjust(base, token, iid, [
+        {"id": line_of(invoice, a["name"]), "itemTypeId": b["id"],
+         "quantity": 4, "unitPrice": 2497.5},
+    ])
+    check(S, "overlay accepted", st == 200, f"{st} {adj_resp}")
+    inv3, cogs3 = inv_cogs(base, token, cid)
+    check(S, "overlay moves the cost to the FBR-adjusted item type and quantity",
+          st == 200 and approx(cogs3 - cogs1, 800, 0.01),
+          f"cogs is {cogs3 - cogs1:.2f} above the pre-sale figure, expected 800.00")
+    check(S, "inventory relief matches the overlay too", approx(inv3 - inv1, -800, 0.01),
+          f"inventory moved {inv3 - inv1:.2f}, expected -800.00")
+
+    # From here on the comparison is taken ACROSS a rebuild on both sides. A
+    # rebuild re-posts every document this company has accumulated in the suites
+    # above, several of which were first posted before the chart of accounts
+    # existed and landed on Suspense, so the absolute balances jump once and then
+    # settle. Snapshot after that settling and the deltas mean what they say.
+    http("POST", f"/api/accounting/gl/company/{cid}/rebuild", base, token=token)
+    inv_r, cogs_r = inv_cogs(base, token, cid)
+
+    # TENANT SCOPE. Cost is resolved from purchase bills, and the only way another
+    # company's money could reach this company's Cost of goods sold is through
+    # that lookup. Two separate guards have to hold, so both are asserted.
+    st, other = http("POST", "/api/companies", base, token=token, body={
+        "name": f"_test_glrelief_other {suffix}",
+        "fullAddress": "Other HQ", "phone": "+92-21-00000001",
+        "startingInvoiceNumber": 1, "startingPurchaseBillNumber": 1,
+        "inventoryTrackingEnabled": True, "stockGuardHardBlock": False,
+    })
+    if st in (200, 201):
+        other_id = other["id"]
+        http("POST", f"/api/accounts/company/{other_id}/seed-wholesale", base, token=token)
+        st_s, other_sup = http("POST", "/api/suppliers", base, token=token, body={
+            "name": f"Other Supplier {suffix}", "companyId": other_id,
+            "ntn": "7654321", "registrationType": "Registered", "fbrProvinceCode": 8,
+        })
+
+        # 1. The catalog itself is company-private, so the other company cannot
+        #    even buy THIS company's item type. That refusal is the first guard.
+        st_x, x_resp = create_pb(base, token, other_id, other_sup["id"], [
+            {"itemTypeId": b["id"], "description": b["name"],
+             "quantity": 5, "unitPrice": 100000},
+        ])
+        check(S, "another company cannot transact on this company's item type",
+              st_x == 400 and "does not belong" in str(x_resp),
+              f"expected a 400 refusal, got {st_x} {x_resp}")
+
+        # 2. And with its OWN item type of the same name bought at a wild price,
+        #    this company's cost still does not move \u2014 the average is taken over
+        #    purchase bills filtered by company, not by item name.
+        global _catalog_company_id
+        keep_catalog = _catalog_company_id
+        _catalog_company_id = other_id
+        other_item = make_item_type(base, token, f"GLRelief B {suffix} (other)", hs=next_hs())
+        _catalog_company_id = keep_catalog
+        bought = False
+        if other_item and st_s in (200, 201):
+            st_b, _ = create_pb(base, token, other_id, other_sup["id"], [
+                {"itemTypeId": other_item["id"], "description": other_item["name"],
+                 "quantity": 5, "unitPrice": 100000},
+            ])
+            bought = st_b in (200, 201)
+        check(S, "the other tenant really did buy at 100,000 a unit", bought,
+              "could not create the other company's purchase bill")
+
+        http("POST", f"/api/accounting/gl/company/{cid}/rebuild", base, token=token)
+        inv_x, cogs_x = inv_cogs(base, token, cid)
+        check(S, "another tenant's purchase price never costs this company's sale",
+              approx(cogs_x, cogs_r, 0.01),
+              f"cogs went {cogs_r:.2f} -> {cogs_x:.2f} while another company bought at 100,000")
+        check(S, "and this company's inventory value is untouched by the other tenant",
+              approx(inv_x, inv_r, 0.01),
+              f"inventory went {inv_r:.2f} -> {inv_x:.2f}")
+
+        # The other company's own books DID take the 500,000, so the isolation is
+        # not simply "the second company posted nothing".
+        other_inv, other_cogs = inv_cogs(base, token, other_id)
+        check(S, "the other tenant's own inventory carries its own cost",
+              approx(other_inv, 500000, 0.01),
+              f"other company inventory {other_inv:.2f}, expected 500000.00")
+        check(S, "and its cost of goods sold is nil \u2014 it has sold nothing",
+              approx(other_cogs, 0, 0.01), f"other company cogs {other_cogs:.2f}")
+
+        http("DELETE", f"/api/companies/{other_id}", base, token=token)
+    else:
+        check(S, "second company created for the leak check", False, f"{st} {other}")
+
+    # A rebuild replaces each document's entry rather than appending to it.
+    http("POST", f"/api/accounting/gl/company/{cid}/rebuild", base, token=token)
+    inv_y, cogs_y = inv_cogs(base, token, cid)
+    check(S, "a rebuild converges rather than doubling the relief",
+          approx(cogs_y, cogs_r, 0.01) and approx(inv_y, inv_r, 0.01),
+          f"cogs {cogs_r:.2f} -> {cogs_y:.2f}, inventory {inv_r:.2f} -> {inv_y:.2f} across a rebuild")
+
+    # Deleting the sale takes its cost back out with it: the 800 charged to cost
+    # returns to stock value.
+    st, _ = http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    inv_z, cogs_z = inv_cogs(base, token, cid)
+    check(S, "deleting the sale releases its cost",
+          st == 200 and approx(cogs_r - cogs_z, 800, 0.01),
+          f"cogs {cogs_r:.2f} -> {cogs_z:.2f} after delete, expected a fall of 800.00")
+    check(S, "and hands the stock value back",
+          approx(inv_z - inv_r, 800, 0.01),
+          f"inventory {inv_r:.2f} -> {inv_z:.2f} after delete, expected a rise of 800.00")
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--base", default="http://localhost:5134")
@@ -1321,6 +1502,7 @@ def main() -> int:
         suite_multiline_overlays(args.base, token, cid, client, supplier, suffix)
         suite_challan_overlay(args.base, token, cid, client, supplier, suffix)
         suite_oversell_guard(args.base, token, cid, client, supplier, suffix)
+        suite_gl_inventory_relief(args.base, token, cid, client, supplier, suffix)
     finally:
         teardown(args.base, token, company, args.keep)
 

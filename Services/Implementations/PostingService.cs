@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.Models;
 using MyApp.Api.Models.Accounting;
@@ -124,10 +124,165 @@ namespace MyApp.Api.Services.Implementations
                     credit: isCreditNote ? wht : 0m, label);
             }
 
+            // The cost side of the same sale. Kept last so the revenue legs above
+            // read as one thought, and so a company that tracks no stock reaches
+            // WriteAsync with exactly the entry it got before this existed.
+            await AddInventoryReliefAsync(invoice, accounts, lines, label);
+
             await WriteAsync(invoice.CompanyId, SourceDocType.Invoice, invoice.Id, invoice.Date, label, lines);
         }
 
         // ── Purchase bills ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Dr Cost of goods sold / Cr Inventory on hand for what this document
+        /// actually moved — the missing half of a sale in a stock-tracking company.
+        ///
+        /// A purchase debits Inventory (see <see cref="ResolvePurchasesAsync"/>)
+        /// because stock is an asset, not yet an expense. Nothing turned it back
+        /// into an expense, so the control account only ever went UP: the balance
+        /// sheet overstated stock by everything ever sold, and the income statement
+        /// showed revenue with no matched cost.
+        ///
+        /// QUANTITY COMES FROM THE STOCK LEDGER, NOT FROM THE INVOICE LINES, and
+        /// that is the whole point. <c>StockService.SyncInvoiceStockMovementsAsync</c>
+        /// has already decided what left the building — the FBR-adjusted quantity
+        /// and the FBR-adjusted item type when the dual-book overlay reclassified a
+        /// line, classified items only, demo bills never. Re-deriving any of that
+        /// here would be a second opinion that drifts from the first. Every caller
+        /// syncs stock before it posts, and a rebuild runs over movements already on
+        /// file, so the rows are in place by the time this reads them.
+        ///
+        /// COST IS THE WEIGHTED AVERAGE OF PURCHASES UP TO THE DOCUMENT'S DATE —
+        /// the same basis <c>DashboardService.ComputeInventoryAsync</c> reports as
+        /// stock value, so the dashboard and the ledger cannot disagree. It is NOT
+        /// the sale price, and not the overlay's adjusted unit price: that figure is
+        /// what the goods were sold FOR, and relieving stock at it would credit the
+        /// asset with more than was ever paid for the goods.
+        ///
+        /// A credit note brings goods back, so its movements are IN and the entry is
+        /// the same one reversed.
+        /// </summary>
+        private async Task AddInventoryReliefAsync(
+            Invoice invoice, List<Account> accounts, List<JournalLine> lines, string label)
+        {
+            var tracksStock = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == invoice.CompanyId)
+                .Select(c => c.InventoryTrackingEnabled)
+                .FirstOrDefaultAsync();
+            if (!tracksStock) return;
+
+            var inventory = accounts
+                .Where(a => a.ControlType == ControlType.Inventory)
+                .OrderBy(a => a.Id)
+                .FirstOrDefault();
+            if (inventory == null) return;
+
+            var moved = await _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId  == invoice.CompanyId
+                         && m.SourceType == StockMovementSourceType.Invoice
+                         && m.SourceId   == invoice.Id)
+                .GroupBy(m => new { m.ItemTypeId, m.Direction })
+                .Select(g => new { g.Key.ItemTypeId, g.Key.Direction, Qty = g.Sum(m => m.Quantity) })
+                .ToListAsync();
+            if (moved.Count == 0) return;
+
+            var costs = await AverageCostsAsync(
+                invoice.CompanyId, invoice.Date, moved.Select(m => m.ItemTypeId).Distinct().ToList());
+
+            decimal relieved = 0m;   // goods out — the cost of the sale
+            decimal returned = 0m;   // goods back in — a credit note
+            foreach (var m in moved)
+            {
+                if (!costs.TryGetValue(m.ItemTypeId, out var unitCost) || unitCost <= 0m) continue;
+                var value = Math.Round(m.Qty * unitCost, 2, MidpointRounding.AwayFromZero);
+                if (value <= 0m) continue;
+                if (m.Direction == StockMovementDirection.Out) relieved += value;
+                else returned += value;
+            }
+            if (relieved == 0m && returned == 0m) return;
+
+            var cogs = ResolveCogs(accounts);
+            if (cogs == null)
+            {
+                // Deliberately NOT falling back to "any expense account". A cost
+                // posted to the wrong line of the income statement is harder to find
+                // than a cost that was never posted, and the preset seeder gives
+                // every company this account.
+                _logger.LogWarning(
+                    "Company {CompanyId} has no Cost of goods sold account — invoice {InvoiceId} posted without inventory relief.",
+                    invoice.CompanyId, invoice.Id);
+                return;
+            }
+
+            if (relieved != 0m)
+            {
+                AddLine(lines, cogs.Id, debit: relieved, credit: 0m, label);
+                AddLine(lines, inventory.Id, debit: 0m, credit: relieved, label);
+            }
+            if (returned != 0m)
+            {
+                AddLine(lines, inventory.Id, debit: returned, credit: 0m, label);
+                AddLine(lines, cogs.Id, debit: 0m, credit: returned, label);
+            }
+        }
+
+        /// <summary>Weighted-average purchase cost per item type, as at
+        /// <paramref name="asOf"/>: Σ line total ÷ Σ quantity over the company's purchase
+        /// bills. <c>PurchaseItem.LineTotal</c> is net of tax — it sums to the bill's
+        /// Subtotal, which is exactly the figure the purchase debited to Inventory —
+        /// so cost out is on the same basis as cost in.
+        ///
+        /// A sale dated BEFORE the item was ever purchased still has to be costed at
+        /// something, and that item's own earliest purchases are the only honest
+        /// answer available. The alternative is a zero-cost sale, which relieves
+        /// nothing and would leave the bug in place for exactly the rows most likely
+        /// to be back-dated data entry.
+        ///
+        /// TENANT SCOPE — the one subtle leak this could have had. <c>ItemType</c>
+        /// carries NO CompanyId: the catalog is install-wide by design (see
+        /// CLAUDE.md), so the same item type id is shared by every tenant, and an
+        /// item-type filter alone would let one company's purchase price cost
+        /// another company's sale. The company filter is therefore on the BILL
+        /// (<c>pi.PurchaseBill.CompanyId</c>), not on the item, and the ids handed
+        /// in come from this company's own stock movements. Cost never crosses a
+        /// tenant boundary.</summary>
+        private async Task<Dictionary<int, decimal>> AverageCostsAsync(
+            int companyId, DateTime asOf, List<int> itemTypeIds)
+        {
+            if (itemTypeIds.Count == 0) return new Dictionary<int, decimal>();
+
+            var rows = await _context.PurchaseItems.AsNoTracking()
+                .Where(pi => pi.PurchaseBill.CompanyId == companyId
+                          && pi.ItemTypeId.HasValue
+                          && itemTypeIds.Contains(pi.ItemTypeId.Value)
+                          && pi.Quantity > 0m)
+                .Select(pi => new
+                {
+                    ItemTypeId = pi.ItemTypeId!.Value,
+                    pi.Quantity,
+                    pi.LineTotal,
+                    Date = pi.PurchaseBill.Date,
+                })
+                .ToListAsync();
+
+            var costs = new Dictionary<int, decimal>();
+            foreach (var group in rows.GroupBy(r => r.ItemTypeId))
+            {
+                var upToDate = group.Where(r => r.Date.Date <= asOf.Date).ToList();
+                var basis = upToDate.Count > 0 ? upToDate : group.ToList();
+                var qty = basis.Sum(r => r.Quantity);
+                if (qty > 0m) costs[group.Key] = basis.Sum(r => r.LineTotal) / qty;
+            }
+            return costs;
+        }
+
+        /// <summary>The company's Cost of goods sold account — the seeded one, or one
+        /// the operator named for it. Null when neither exists.</summary>
+        private static Account? ResolveCogs(List<Account> accounts) =>
+            accounts.FirstOrDefault(a => a.ExternalRef == "seed:cogs")
+            ?? accounts.FirstOrDefault(a => a.AccountType == AccountType.Expense
+                   && a.Name.Contains("cost of goods", StringComparison.OrdinalIgnoreCase));
 
         public async Task PostPurchaseBillAsync(PurchaseBill bill)
         {

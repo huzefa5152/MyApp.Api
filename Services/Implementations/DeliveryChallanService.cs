@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -14,10 +14,12 @@ namespace MyApp.Api.Services.Implementations
         private readonly IDeliveryChallanRepository _repository;
         private readonly AppDbContext _context;
         private readonly IStockService _stock;
+        private readonly IPostingService _posting;
         private readonly ILogger<DeliveryChallanService> _logger;
 
-        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, ILogger<DeliveryChallanService> logger)
+        public DeliveryChallanService(IDeliveryChallanRepository repository, AppDbContext context, IStockService stock, IPostingService posting, ILogger<DeliveryChallanService> logger)
         {
+            _posting = posting;
             _repository = repository;
             _context = context;
             _stock = stock;
@@ -616,6 +618,13 @@ namespace MyApp.Api.Services.Implementations
             // so removals, qty changes, and additions all reflow. No-op
             // when inventory tracking is off or the bill is a demo.
             await _stock.SyncInvoiceStockMovementsAsync(invoice);
+
+            // And re-post the bill, because its cost of goods sold is derived from
+            // exactly those movements (PostingService.AddInventoryReliefAsync). A
+            // challan edit is the one path that changes what left the building
+            // without touching the invoice itself, so without this the revenue
+            // legs stay right while the cost side silently keeps the old quantity.
+            await _posting.PostInvoiceAsync(invoice);
         }
 
         public async Task<bool> CancelAsync(int challanId)
