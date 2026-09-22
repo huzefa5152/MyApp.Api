@@ -49,7 +49,7 @@ namespace MyApp.Api.Services.Interfaces
         ///       (Item Type + Quantity, with decimal validation)
         /// </summary>
         Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false, string? actorUserName = null);
-        Task<bool> DeleteAsync(int id);
+        Task<bool> DeleteAsync(int id, string? actorUserName = null);
         /// <summary>
         /// Void (cancel) a bill that has NOT been submitted to FBR. The bill
         /// keeps its InvoiceNumber (so the sequence stays gap-free), is

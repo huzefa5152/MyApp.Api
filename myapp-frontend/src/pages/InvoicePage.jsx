@@ -552,8 +552,10 @@ export default function InvoicePage({ mode = "invoices" }) {
       return;
     }
     const ok = await confirm({
-      title: `Delete Bill #${inv.invoiceNumber}?`,
-      message: "Linked delivery challans will revert back to Pending and become billable again.",
+      title: inv.isCancelled ? `Delete voided Bill #${inv.invoiceNumber}?` : `Delete Bill #${inv.invoiceNumber}?`,
+      message: inv.isCancelled
+        ? "This bill was already voided, so its challans are billable already. Deleting removes the row entirely and rolls the bill number back."
+        : "Linked delivery challans will revert back to Pending and become billable again.",
       variant: "danger",
       confirmText: "Delete bill",
     });
@@ -1445,12 +1447,18 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     {/* Delete: Bills tab only, last-created bill only,
-                        not FBR-submitted. Same gates as before plus Bills mode. */}
-                    {(isBillsMode || isNotesMode) && canDelete && inv.fbrStatus !== "Submitted" && !inv.isCancelled && inv.isLatest && (
+                        not FBR-submitted. A CANCELLED bill still shows Delete
+                        while it is the latest — the server has always allowed
+                        it, and hiding the button stranded a voided trailing
+                        bill with no way to remove it once the bill above it
+                        was gone. */}
+                    {(isBillsMode || isNotesMode) && canDelete && inv.fbrStatus !== "Submitted" && inv.isLatest && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
                         onClick={() => handleDeleteInvoice(inv)}
-                        title="Delete this document entirely — latest in its sequence only. Use Void to cancel an earlier one without leaving a gap."
+                        title={inv.isCancelled
+                          ? "Delete this voided document entirely — it is the latest in its sequence, so removing it rolls the number back."
+                          : "Delete this document entirely — latest in its sequence only. Use Void to cancel an earlier one without leaving a gap."}
                       >
                         <MdDelete size={14} /> Delete
                       </button>

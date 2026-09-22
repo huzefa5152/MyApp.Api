@@ -446,8 +446,10 @@ export default function InvoiceTable({
             <MdUndo size={14} />
           </button>
         )}
-        {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && !inv.isCancelled && inv.isLatest && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — only the latest document in its sequence, removes the row entirely.">
+        {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && inv.isLatest && (
+          <button style={btn.delete} onClick={() => onDelete?.(inv)} title={inv.isCancelled
+            ? "Delete this voided document — it is the latest in its sequence, so removing it rolls the number back."
+            : "Delete — only the latest document in its sequence, removes the row entirely."}>
             <MdDelete size={14} />
           </button>
         )}

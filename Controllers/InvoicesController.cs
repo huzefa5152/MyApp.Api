@@ -412,7 +412,7 @@ namespace MyApp.Api.Controllers
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             try
             {
-                var deleted = await _service.DeleteAsync(id);
+                var deleted = await _service.DeleteAsync(id, User.Identity?.Name);
                 if (!deleted) return NotFound(new { error = "Bill not found." });
                 return Ok(new { message = "Bill deleted and challans reverted." });
             }

@@ -2745,14 +2745,43 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(invoice);
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<bool> DeleteAsync(int id, string? actorUserName = null)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return false;
 
+            // A refused delete leaves no trace: the controller catches the
+            // InvalidOperationException and returns 400, and GlobalException-
+            // Middleware audits only 5xx. The operator then reports "I cannot
+            // delete this bill" and the log has nothing to say. Record the
+            // refusal so the next complaint is answerable from the audit trail
+            // rather than a database dig.
+            async Task RefuseAsync(string reason)
+            {
+                try
+                {
+                    await _auditLog.LogAsync(new AuditLog
+                    {
+                        Level         = "Info",
+                        UserName      = actorUserName,
+                        HttpMethod    = "DELETE",
+                        RequestPath   = $"/invoices/{invoice.Id}",
+                        StatusCode    = 400,
+                        CompanyId     = invoice.CompanyId,
+                        ExceptionType = "Invoice.DeleteRefused",
+                        Message       = $"Delete of bill #{invoice.InvoiceNumber} refused: {reason}",
+                    });
+                }
+                catch { /* audit must never break the operation */ }
+            }
+
             // Cannot delete FBR-submitted invoices
             if (invoice.FbrStatus == "Submitted")
-                throw new InvalidOperationException("Cannot delete a bill that has been submitted to FBR.");
+            {
+                const string filedReason = "Cannot delete a bill that has been submitted to FBR.";
+                await RefuseAsync(filedReason);
+                throw new InvalidOperationException(filedReason);
+            }
 
             // Only the LAST bill (highest invoice number) can be deleted so
             // numbering stays gap-free. Earlier bills must be edited in place.
@@ -2778,10 +2807,14 @@ namespace MyApp.Api.Services.Implementations
                                  && i.DocumentType != 9 && i.DocumentType != 10)
                         .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
             if (invoice.InvoiceNumber != maxNumber)
-                throw new InvalidOperationException(
+            {
+                var notLatestReason =
                     $"Only the latest bill can be deleted (currently #{maxNumber}). " +
                     $"To change bill #{invoice.InvoiceNumber}, edit it instead — " +
-                    "deleting earlier bills would leave gaps in the numbering.");
+                    "deleting earlier bills would leave gaps in the numbering.";
+                await RefuseAsync(notLatestReason);
+                throw new InvalidOperationException(notLatestReason);
+            }
 
             var companyId = invoice.CompanyId;
 
