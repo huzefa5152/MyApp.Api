@@ -27,10 +27,16 @@ for(const tpl of layouts){
   assert.ok(mergeTemplate(materializeStamp(moved.html,url),SAMPLE_DATA[tpl.type]).includes(url));
  }
  if(['Bill','TaxInvoice'].includes(tpl.type)){
-  assert.equal((tpl.html.match(/<th>/g)||[]).length,8);
-  assert.ok(rendered.includes('80,000'));
-  assert.ok(rendered.includes('14,400'));
-  assert.ok(!rendered.includes('NaN'));
+  // Column count and which tax columns appear are DESIGN choices — the gallery
+  // ships 15 distinct bill and 15 distinct tax layouts on purpose, and a
+  // commercial Bill carries the document GST total rather than a per-line tax
+  // column. Assert an item table and the document money, not one fixed layout.
+  const d=SAMPLE_DATA[tpl.type];
+  assert.ok((tpl.html.match(/<th[\s>]/g)||[]).length>=4,`${tpl.id}: no item-table header`);
+  assert.ok(rendered.includes('80,000'),`${tpl.id}: first line total missing`);
+  for(const amount of [d.subtotal,d.gstAmount,d.grandTotal])
+   assert.ok(rendered.includes(amount.toLocaleString('en-US')),`${tpl.id}: ${amount} missing`);
+  assert.ok(!rendered.includes('NaN'),`${tpl.id}: NaN in rendered output`);
  }
 }
 const legacy='<div>{{#if stamp}}<img src="{{stamp}}">{{#if title}}title{{/if}}{{/if}}</div>';
@@ -43,4 +49,4 @@ for(const label of ['Verified By','Authorized Signatory']){
  assert.ok(added.indexOf('{{stamp}}')>added.indexOf('Prepared By'));
  assert.ok(added.indexOf('{{stamp}}')<added.indexOf(label));
 }
-console.log(`PASS: ${layouts.length} starter/default layouts: signed, unsigned, positioning, repeat rendering; eight-column invoice data and legacy conditionals.`);
+console.log(`PASS: ${layouts.length} starter/default layouts: signed, unsigned, positioning, repeat rendering; item table, document money and legacy conditionals.`);
