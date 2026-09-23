@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -13,6 +13,7 @@ import BulkFbrResultsDialog from "../Components/BulkFbrResultsDialog";
 import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
+import LinkChallanModal from "../Components/LinkChallanModal";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -116,6 +117,12 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Void is its own permission (bills.manage.void), distinct from delete, so a
   // role can be allowed to void bills without also gaining hard-delete rights.
   const canVoid = has("bills.manage.void");
+  // Giving a standalone bill a delivery challan edits the bill's linkage, so it
+  // rides on the bill's own update right. Raising a NEW challan additionally
+  // brings a challan into existence, so it also needs the challan create right —
+  // the server requires both and the button follows it.
+  const canLinkChallan = canUpdate;
+  const canCreateChallanFromBill = canUpdate && has("challans.manage.create");
   // Reverse an FBR-submitted bill by generating a Credit/Debit Note. Its own
   // permission so the right to reverse a filed document is granted separately.
   const canReverse = has("invoices.note.create");
@@ -222,6 +229,8 @@ export default function InvoicePage({ mode = "invoices" }) {
   const [showStandaloneForm, setShowStandaloneForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [viewingId, setViewingId] = useState(null);
+  // The standalone bill whose delivery challan the operator is sorting out.
+  const [linkingChallanFor, setLinkingChallanFor] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   const navigate = useNavigate();
@@ -1000,6 +1009,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                 canFbrExclude,
                 canDelete,
                 canVoid,
+                canLinkChallan,
                 canRecordReceipt,
                 canViewReceipts,
                 canReverse,
@@ -1016,6 +1026,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               fbrValidated={fbrValidated}
               fbrLoading={fbrLoading}
               exportingId={exportingId}
+              onLinkChallan={(inv) => setLinkingChallanFor(inv)}
               onView={(inv) => setViewingId(inv.id)}
               onRecordReceipt={(inv) => setReceiptPreset({ contactId: inv.clientId, documentId: inv.id, divisionId: inv.divisionId })}
               onShowPayments={(inv) => setPaymentHistoryDoc(inv)}
@@ -1085,7 +1096,10 @@ export default function InvoicePage({ mode = "invoices" }) {
                       </button>
                     )}
                     <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
-                      DC#{inv.challanNumbers?.join(", #")} | {inv.items?.length} items
+                      {inv.challanNumbers?.length > 0
+                        ? `DC#${inv.challanNumbers.join(", #")}`
+                        : <em style={{ color: "#78909c" }}>Standalone · no delivery challan</em>}
+                      {" | "}{inv.items?.length} items
                     </p>
                     {/* FBR status row — shows current status OR 'Setup Incomplete' when fields are missing.
                         In Bills mode we keep only the binary "Submitted to FBR" / "Pending FBR submission"
@@ -1417,6 +1431,18 @@ export default function InvoicePage({ mode = "invoices" }) {
                         (not just the latest). Keeps the bill number so the
                         sequence stays gap-free, marks the bill Cancelled, and
                         reverts its delivery challan(s) to Pending for re-billing. */}
+                    {/* Link DC: a standalone bill has no delivery note behind it.
+                        Attach an existing unbilled challan for this buyer, or
+                        raise one from the bill's own lines. */}
+                    {isBillsMode && canLinkChallan && !(inv.challanNumbers?.length > 0) && !inv.isCancelled && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#eceff1", color: "#546e7a", border: "1px solid #b0bec5" }}
+                        onClick={() => setLinkingChallanFor(inv)}
+                        title="No delivery challan behind this bill — attach an existing unbilled challan for this buyer, or raise one from the bill's own lines."
+                      >
+                        <MdAddLink size={14} /> Link DC
+                      </button>
+                    )}
                     {(isBillsMode || isNotesMode) && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
@@ -1611,6 +1637,22 @@ export default function InvoicePage({ mode = "invoices" }) {
               next.delete(editingId);
               return next;
             });
+          }}
+        />
+      )}
+
+      {linkingChallanFor && (
+        <LinkChallanModal
+          invoice={linkingChallanFor}
+          canCreateChallan={canCreateChallanFromBill}
+          onClose={() => setLinkingChallanFor(null)}
+          onDone={(updated) => {
+            const dcs = updated?.challanNumbers || [];
+            notify(dcs.length
+              ? `Bill #${updated.invoiceNumber} is now on DC #${dcs.join(", #")}.`
+              : `Bill #${linkingChallanFor.invoiceNumber} updated.`, "success");
+            setLinkingChallanFor(null);
+            if (selectedCompany) fetchInvoices(selectedCompany.id, page);
           }}
         />
       )}

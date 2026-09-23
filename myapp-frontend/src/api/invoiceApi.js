@@ -154,3 +154,16 @@ export const getNextInvoiceNumber = (companyId, { divisionId, check } = {}) =>
       ...(check == null ? {} : { check }),
     },
   });
+
+// ── Standalone bills and their delivery challans ─────────────────────────────
+// A bill raised without a challan can be joined to one afterwards, either way
+// round. Both are refused server-side for another company, another buyer, a
+// challan already billed, or a bill that already has one.
+
+/** Attach an existing, unbilled delivery challan to a standalone bill. */
+export const linkChallanToInvoice = (invoiceId, challanId) =>
+  httpClient.post(`/invoices/${invoiceId}/link-challan/${challanId}`);
+
+/** Raise a delivery challan FROM a standalone bill, mirroring its lines. */
+export const createChallanForInvoice = (invoiceId) =>
+  httpClient.post(`/invoices/${invoiceId}/create-challan`);

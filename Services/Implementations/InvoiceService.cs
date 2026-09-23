@@ -2352,6 +2352,124 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(invoice);
         }
 
+        // ── Standalone bills and their delivery challans ──────────────────────
+        // A bill raised standalone has no delivery note behind it. Both paths below
+        // give it one: attach a challan that already exists, or raise one from the
+        // bill's own lines. Either way the two documents end up joined exactly as
+        // they would have been had the bill been raised from the challan.
+
+        /// <summary>True when no challan is attached to this bill yet.</summary>
+        private static bool IsStandalone(Invoice invoice) =>
+            invoice.DeliveryChallans == null || invoice.DeliveryChallans.Count == 0;
+
+        public async Task<InvoiceDto?> LinkChallanAsync(int invoiceId, int challanId)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.DeliveryChallans)
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+            if (invoice == null) return null;
+
+            if (invoice.IsCancelled)
+                throw new InvalidOperationException("A cancelled bill cannot be linked to a delivery challan.");
+            if (!IsStandalone(invoice))
+                throw new InvalidOperationException(
+                    "This bill was already raised from a delivery challan.");
+
+            var challan = await _context.DeliveryChallans
+                .FirstOrDefaultAsync(c => c.Id == challanId);
+            if (challan == null)
+                throw new KeyNotFoundException("Delivery challan not found.");
+
+            // Cross-tenant and cross-buyer guards: a challan may only be attached to
+            // a bill of its own company AND its own buyer, or the two documents would
+            // claim goods went to someone they did not.
+            if (challan.CompanyId != invoice.CompanyId)
+                throw new InvalidOperationException("That delivery challan belongs to another company.");
+            if (challan.ClientId != invoice.ClientId)
+                throw new InvalidOperationException(
+                    "That delivery challan was delivered to a different buyer.");
+            if (challan.InvoiceId != null)
+                throw new InvalidOperationException(
+                    $"Challan #{challan.ChallanNumber} is already billed.");
+            if (challan.Status == "Cancelled")
+                throw new InvalidOperationException($"Challan #{challan.ChallanNumber} is cancelled.");
+
+            challan.InvoiceId = invoice.Id;
+            challan.Status = "Invoiced";
+            await _context.SaveChangesAsync();
+
+            var reloaded = await _invoiceRepo.GetByIdAsync(invoice.Id);
+            return reloaded == null ? null : ToDto(reloaded);
+        }
+
+        public async Task<InvoiceDto?> CreateChallanForStandaloneAsync(int invoiceId)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.DeliveryChallans)
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+            if (invoice == null) return null;
+
+            if (invoice.IsCancelled)
+                throw new InvalidOperationException("A cancelled bill cannot raise a delivery challan.");
+            if (!IsStandalone(invoice))
+                throw new InvalidOperationException(
+                    "This bill already has a delivery challan.");
+            if (invoice.Items.Count == 0)
+                throw new InvalidOperationException("This bill has no lines to deliver.");
+
+            var challan = new DeliveryChallan
+            {
+                CompanyId = invoice.CompanyId,
+                ClientId = invoice.ClientId,
+                DivisionId = invoice.DivisionId,
+                PoNumber = invoice.PoNumber ?? "",
+                PoDate = invoice.PoDate,
+                DeliveryDate = invoice.Date,
+                // Billed the moment it is created: it exists to record the delivery
+                // behind a bill that has already been raised, so it is never billable
+                // again on its own.
+                Status = "Invoiced",
+                InvoiceId = invoice.Id,
+                IsDemo = invoice.IsDemo,
+                Items = invoice.Items.Select(ii => new DeliveryItem
+                {
+                    ItemTypeId = ii.ItemTypeId,
+                    NonInventoryItemId = ii.NonInventoryItemId,
+                    Description = ii.Description,
+                    Quantity = ii.Quantity,
+                    Unit = ii.UOM ?? "",
+                }).ToList(),
+            };
+
+            // The repository owns challan numbering (per company, per division, demo
+            // range excluded), so the generated note takes the next number exactly as
+            // a hand-entered one would.
+            var created = await _challanRepo.CreateDeliveryChallanAsync(challan);
+
+            // Join the lines, not just the documents: each bill line now points at the
+            // delivery line it came from, which is what every challan-linked bill has
+            // and what keeps later edits flowing between the two.
+            var deliveryByDescription = created.Items
+                .GroupBy(di => di.Description ?? "")
+                .ToDictionary(g => g.Key, g => g.ToList());
+            foreach (var line in invoice.Items)
+            {
+                if (line.DeliveryItemId != null) continue;
+                if (!deliveryByDescription.TryGetValue(line.Description ?? "", out var candidates)) continue;
+                var match = candidates.FirstOrDefault(di => di.Quantity == line.Quantity)
+                            ?? candidates.FirstOrDefault();
+                if (match == null) continue;
+                line.DeliveryItemId = match.Id;
+                candidates.Remove(match);
+            }
+            await _context.SaveChangesAsync();
+
+            var reloaded = await _invoiceRepo.GetByIdAsync(invoice.Id);
+            return reloaded == null ? null : ToDto(reloaded);
+        }
+
         /// <summary>
         /// Put back what was physically delivered on a challan being released.
         ///

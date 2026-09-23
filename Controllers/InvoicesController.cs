@@ -481,6 +481,71 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Attach an EXISTING, unbilled delivery challan to a bill that was
+        /// raised standalone — the operator billed first and the delivery note
+        /// was raised separately, or found afterwards.
+        ///
+        /// Gated by `bills.manage.update`: this edits the bill's own linkage,
+        /// and the challan's move to Invoiced is a consequence of that, exactly
+        /// as it is when a challan-linked bill is created under
+        /// `bills.manage.create`. The service refuses a challan of another
+        /// company, another buyer, one already billed, or a cancelled one.
+        /// </summary>
+        [HttpPost("{id}/link-challan/{challanId}")]
+        [HasPermission("bills.manage.update")]
+        public async Task<ActionResult<InvoiceDto>> LinkChallan(int id, int challanId)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var updated = await _service.LinkChallanAsync(id, challanId);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Raise a delivery challan FROM a standalone bill, mirroring its lines
+        /// and joining the two line by line. For the operator who billed first
+        /// and needs the delivery note afterwards.
+        ///
+        /// Needs BOTH `bills.manage.update` and `challans.manage.create`: it
+        /// edits the bill AND brings a new challan into existence, and a role
+        /// that may not create challans may not create one this way either.
+        /// </summary>
+        [HttpPost("{id}/create-challan")]
+        [HasPermission("bills.manage.update")]
+        [HasPermission("challans.manage.create")]
+        public async Task<ActionResult<InvoiceDto>> CreateChallanForStandalone(int id)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var updated = await _service.CreateChallanForStandaloneAsync(id);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Reverse an FBR-SUBMITTED invoice by auto-generating the correct
         /// adjustment note (Credit Note for a return/reversal — the default —
         /// or Debit Note for an upward correction). The note is created

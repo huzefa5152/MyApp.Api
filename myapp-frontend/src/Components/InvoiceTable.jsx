@@ -3,10 +3,16 @@ import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
   MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd, MdCopyAll,
+  MdAddLink,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import { isFutureDocDate } from "../utils/dateInput";
+
+// A bill raised without a delivery challan. Worth distinguishing from one
+// whose challans simply did not load: the operator can attach a challan to
+// the first and cannot to the second.
+const isStandaloneBill = (inv) => !(inv.challanNumbers && inv.challanNumbers.length > 0);
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
@@ -97,6 +103,7 @@ export default function InvoiceTable({
   onVoid,
   onReverse,
   onCorrect,
+  onLinkChallan,
 }) {
   const navigate = useNavigate();
 
@@ -189,10 +196,17 @@ export default function InvoiceTable({
       key: "challanNumbers",
       header: "DC #",
       width: 120,
-      accessor: (i) => (i.challanNumbers || []).join(","),
-      render: (i) => (i.challanNumbers && i.challanNumbers.length > 0
-        ? `#${i.challanNumbers.join(", #")}`
-        : "—"),
+      accessor: (i) => (isStandaloneBill(i) ? "Standalone" : (i.challanNumbers || []).join(",")),
+      render: (i) => (isStandaloneBill(i)
+        ? (
+          <span
+            style={{ fontSize: "0.7rem", color: "#78909c", fontStyle: "italic" }}
+            title="Raised without a delivery challan. Use Link DC to attach one, or to raise one from this bill."
+          >
+            Standalone
+          </span>
+        )
+        : `#${i.challanNumbers.join(", #")}`),
     },
     {
       key: "date",
@@ -406,6 +420,16 @@ export default function InvoiceTable({
         {perms.canDelete && !isSubmitted && !inv.isCancelled && (
           <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — removes the row entirely, reverts its GL + inventory impact and frees its challans (leaves a numbering gap). Use Void to keep the number.">
             <MdDelete size={14} />
+          </button>
+        )}
+        {isBillsMode && perms.canLinkChallan && isStandaloneBill(inv) && !inv.isCancelled &&
+         inv.documentType !== 9 && inv.documentType !== 10 && (
+          <button
+            style={btn.neutral}
+            onClick={() => onLinkChallan?.(inv)}
+            title="No delivery challan behind this bill — attach an existing unbilled challan for this buyer, or raise one from the bill's own lines."
+          >
+            <MdAddLink size={14} />
           </button>
         )}
         {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (

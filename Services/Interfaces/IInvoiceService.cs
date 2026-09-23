@@ -54,6 +54,16 @@ namespace MyApp.Api.Services.Interfaces
         ///       (Item Type + Quantity, with decimal validation)
         /// </summary>
         Task<InvoiceDto?> UpdateItemTypesAsync(int id, UpdateInvoiceItemTypesDto dto, bool allowQuantityEdit = false, string? actorUserName = null);
+        /// <summary>Attach an existing, unbilled delivery challan to a bill that
+        /// was raised standalone. Same company and same buyer only; the challan is
+        /// marked billed against this bill so it cannot also be billed elsewhere.</summary>
+        Task<InvoiceDto?> LinkChallanAsync(int invoiceId, int challanId);
+
+        /// <summary>Raise a delivery challan FROM a standalone bill, mirroring its
+        /// lines, and link the two. For the operator who billed first and needs the
+        /// delivery note afterwards.</summary>
+        Task<InvoiceDto?> CreateChallanForStandaloneAsync(int invoiceId);
+
         Task<bool> DeleteAsync(int id);
         /// <summary>
         /// Void (cancel) a bill that has NOT been submitted to FBR. The bill
