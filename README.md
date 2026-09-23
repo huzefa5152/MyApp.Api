@@ -300,6 +300,47 @@ Publish output optimized from 79 MB to 37 MB via:
 
 
 
+### 2026-09-23 — One row per item, and a bill that can find its delivery challan
+
+**An item delivered several times is one line on the bill.** The same product
+across three delivery challans used to be three rows to price and classify
+three times. It is now a single row carrying every DC number behind it and the
+total delivered quantity — and that quantity is editable, so the operator bills
+what was agreed rather than what each challan happens to say. Rows merge only
+when the item AND the unit price agree; a different rate is still a different
+line.
+
+Reducing the quantity spreads the change back over the deliveries by a rule the
+form shows before anything is saved: **every selected challan keeps at least
+one unit, and the reduction comes off the newest delivery first**, reaching an
+older one only once every later one is down to its minimum. So 50 / 5 / 1
+billed as 52 becomes 50 / 1 / 1 — the oldest challan is left exactly as it was
+signed for — and only at 51 does it finally move, to 49 / 1 / 1. A quantity
+below the number of selected challans is refused, naming the minimum, rather
+than silently billing one of them as nothing.
+
+**A challan now shows which bill it went onto**, and a bill raised without a
+challan says so instead of showing an empty "DC #".
+
+**A standalone bill can be given a delivery challan afterwards.** Either attach
+one that already exists, or raise one from the bill's own lines — the two are
+joined line by line, exactly as they would be had the bill been raised from the
+challan. The picker offers only challans that can actually be used: this
+buyer's, not already billed, not cancelled, ranked by how much of the bill each
+one accounts for ("3 of 3 items match"). Searching reaches further on purpose
+and says why something cannot be attached, rather than showing an empty list.
+
+**Fixed: billing less than was delivered is now reversible.** The delivery line
+follows the bill, and deleting or voiding that bill puts the delivered quantity
+back. Previously the original was overwritten and lost — a delivery of 50
+billed as 2 returned to the billable list as 2, and the remaining 48 units
+could never be billed by anyone.
+
+**Fixed: pricing a merged row no longer splits it.** Unit price is part of what
+makes deliveries one row, so typing a price applied it to the lead delivery
+only and the row broke apart on the first keystroke. Price, description and UOM
+now apply to the whole row.
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New
