@@ -245,6 +245,18 @@
     {
         public int DeliveryItemId { get; set; }
         public decimal UnitPrice { get; set; }
+        /// <summary>
+        /// Quantity to bill for this delivery line. Null — the usual case —
+        /// bills exactly what was delivered.
+        ///
+        /// Set only when the operator edited the quantity on the bill form,
+        /// which the grouped view allows once an item delivered across several
+        /// challans is shown as a single row. The delivery line is then updated
+        /// to match, so the challan and the bill continue to agree: the challan
+        /// is what the buyer signed for, and a bill that quietly disagreed with
+        /// it would be the more dangerous of the two documents.
+        /// </summary>
+        public decimal? Quantity { get; set; }
         public string? Description { get; set; }
         /// <summary>
         /// Optional ItemType (FBR catalog) link picked at bill time. Takes

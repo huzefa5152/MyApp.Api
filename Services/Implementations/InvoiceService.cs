@@ -649,7 +649,22 @@ namespace MyApp.Api.Services.Implementations
                 var description = !string.IsNullOrWhiteSpace(itemDto.Description)
                     ? itemDto.Description
                     : deliveryItem.Description;
-                var lineTotal = deliveryItem.Quantity * itemDto.UnitPrice;
+                // What to bill for this delivery line. Null means "bill what was
+                // delivered", which is every bill raised before the grouped view
+                // let a quantity be edited.
+                var billedQty = itemDto.Quantity ?? deliveryItem.Quantity;
+                if (billedQty <= 0m)
+                    throw new InvalidOperationException(
+                        $"Line \"{(!string.IsNullOrWhiteSpace(itemDto.Description) ? itemDto.Description : deliveryItem.Description)}\": " +
+                        "billed quantity must be greater than zero. Remove the delivery from this bill instead.");
+
+                // The challan follows the bill. Editing the bill's quantity is the
+                // operator saying the delivery line was wrong, so the delivery line
+                // is corrected rather than left to disagree with what was invoiced.
+                if (billedQty != deliveryItem.Quantity)
+                    deliveryItem.Quantity = billedQty;
+
+                var lineTotal = billedQty * itemDto.UnitPrice;
 
                 // ── Inherit FBR fields from the ItemType (user's catalog) if not
                 //    explicitly supplied on this line. This is the whole point of
@@ -731,7 +746,7 @@ namespace MyApp.Api.Services.Implementations
                     NonInventoryItemId = nonInvId,
                     AccountId = Coerce(itemDto.AccountId, validAccountIds),
                     Description = description,
-                    Quantity = deliveryItem.Quantity,
+                    Quantity = billedQty,
                     UOM = effectiveUOM,
                     UnitPrice = itemDto.UnitPrice,
                     LineTotal = lineTotal,
