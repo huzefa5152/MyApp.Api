@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -1663,6 +1663,44 @@ namespace MyApp.Api.Services.Implementations
             // Normalising into row.UnitPrice deliberately keeps every path below
             // untouched: the overlay writer, the bill writer and the subtotal
             // recompute all continue to read Quantity x UnitPrice.
+            // Which unit each row will END UP on, and whether that unit carries
+            // fractions. Needed by the exact-line-total rule below: a quantity
+            // like 1.61 KG is a real thing to file, and refusing every fraction
+            // outright stopped a consultant filing one against a 1,565 line even
+            // though KG is configured decimal-allowed (INV-3922, 2026-09-23).
+            var exactTypeIds = dto.Items.Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            var exactTypeUoms = exactTypeIds.Count == 0
+                ? new Dictionary<int, string>()
+                : (await _context.ItemTypes
+                    .Where(t => exactTypeIds.Contains(t.Id))
+                    .Select(t => new { t.Id, t.UOM })
+                    .ToListAsync())
+                  .ToDictionary(t => t.Id, t => t.UOM ?? "");
+
+            string RowUom(UpdateInvoiceItemTypeRow r)
+            {
+                if (r.ItemTypeId.HasValue && exactTypeUoms.TryGetValue(r.ItemTypeId.Value, out var u))
+                    return u;
+                return invoice.Items.FirstOrDefault(ii => ii.Id == r.Id)?.UOM ?? "";
+            }
+
+            var exactUnitNames = dto.Items.Select(RowUom)
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var exactDecimalUnits = exactUnitNames.Count == 0
+                ? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+                : (await _context.Units
+                    .Where(u => exactUnitNames.Contains(u.Name))
+                    .Select(u => new { u.Name, u.AllowsDecimalQuantity })
+                    .ToListAsync())
+                  .ToDictionary(u => u.Name, u => u.AllowsDecimalQuantity, StringComparer.OrdinalIgnoreCase);
+
+            bool UnitAllowsDecimal(string unit) =>
+                !string.IsNullOrWhiteSpace(unit)
+                && exactDecimalUnits.TryGetValue(unit, out var allows) && allows;
+
             if (allowQuantityEdit)
             {
                 var existingById = invoice.Items.ToDictionary(ii => ii.Id);
@@ -1689,9 +1727,14 @@ namespace MyApp.Api.Services.Implementations
                     if (qty <= 0m)
                         throw new InvalidOperationException(
                             $"Exact line total for bill item id {row.Id} needs a quantity greater than zero.");
-                    if (qty != decimal.Truncate(qty))
+                    // The reproduction check just below is the real guard \u2014 it proves
+                    // the derived rate divides back into the target at the stored
+                    // precision. A fraction only has to be refused when the UNIT
+                    // itself does not carry one.
+                    if (qty != decimal.Truncate(qty) && !UnitAllowsDecimal(RowUom(row)))
                         throw new InvalidOperationException(
-                            $"Exact line total for bill item id {row.Id} needs a whole-number quantity (got {qty}).");
+                            $"Exact line total for bill item id {row.Id} needs a whole-number quantity (got {qty}). " +
+                            $"Enable decimal quantity for unit '{RowUom(row)}' on the Units admin page if fractions are allowed.");
 
                     // 12dp is the column's scale, so this is the most precise
                     // rate that survives the round trip.

@@ -75,7 +75,34 @@ console.log("\n=== 6. Decimal units ===");
   check("zero total is infeasible", z.infeasible === true);
 }
 
-console.log("\n=== 7. Bad input ===");
+console.log("\n=== 7. Per-line decimal capability (decimalOk) ===");
+{
+  // One Item Type can cover lines on different units, so the question "may this
+  // carry a fraction?" belongs to the line, not the group. INV-3922 (2026-09-23):
+  // a consultant filing 1.61 against a two-line Chemical group was rounded to 2.
+  const both = splitGroupQuantity(1.61, [1, 1], { decimalOk: [true, true] });
+  check("1.61 over two decimal lines re-sums exactly",
+    Math.abs(sum(both.shares) - 1.61) < 1e-9 && both.shares.every((q) => q > 0), both.shares.join(","));
+
+  const mixed = splitGroupQuantity(1.61, [1, 1], { decimalOk: [false, true] });
+  check("the integer-only line keeps a whole number", Number.isInteger(mixed.shares[0]), mixed.shares.join(","));
+  check("and the decimal line carries the fraction",
+    Math.abs(sum(mixed.shares) - 1.61) < 1e-9 && mixed.shares[1] > 0, mixed.shares.join(","));
+
+  const mixed2 = splitGroupQuantity(5.5, [2, 3], { decimalOk: [false, true] });
+  check("mixed split re-sums exactly at a larger total",
+    Math.abs(sum(mixed2.shares) - 5.5) < 1e-9 && Number.isInteger(mixed2.shares[0]), mixed2.shares.join(","));
+
+  // Capability is permission, not instruction: a whole total splits whole.
+  const whole = splitGroupQuantity(58, [1, 100], { decimalOk: [true, true] });
+  check("a whole total still splits into whole lines", whole.shares.join(",") === "1,57", whole.shares.join(","));
+
+  // And a fraction typed where nothing can hold one is rounded, not invented.
+  const none = splitGroupQuantity(1.61, [1, 1], { decimalOk: [false, false] });
+  check("no decimal line → whole shares only", none.shares.every(Number.isInteger), none.shares.join(","));
+}
+
+console.log("\n=== 8. Bad input ===");
 {
   check("NaN total → zeros, infeasible", splitGroupQuantity(NaN, [1, 2]).infeasible === true);
   check("empty group → empty shares", splitGroupQuantity(5, []).shares.length === 0);
