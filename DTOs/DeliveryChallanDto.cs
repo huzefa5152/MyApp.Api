@@ -23,6 +23,10 @@
         public string? Site { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
+        /// <summary>Number of the bill this challan was billed on, so the
+        /// challan can say where it went. Null until it is billed. The link
+        /// itself is InvoiceId; this is what the operator actually reads.</summary>
+        public int? InvoiceNumber { get; set; }
         public string? InvoiceFbrStatus { get; set; }
         public bool IsEditable { get; set; }
         /// <summary>

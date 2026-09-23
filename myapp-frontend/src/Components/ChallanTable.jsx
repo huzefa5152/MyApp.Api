@@ -122,7 +122,17 @@ export default function ChallanTable({
       width: 130,
       accessor: (c) => c.status,
       render: (c) => (
-        <StatusBadge tone={toneForStatus(c.status)} status={c.status === "Invoiced" ? "Billed" : c.status} />
+        <>
+          <StatusBadge tone={toneForStatus(c.status)} status={c.status === "Invoiced" ? "Billed" : c.status} />
+          {/* Which bill it went onto. "Billed" alone left the operator with no
+              way back to the document that billed it — the link was in the data
+              (InvoiceId) but never on the screen. */}
+          {c.invoiceNumber != null && (
+            <div style={{ fontSize: "0.72rem", color: "#5f6d7e", marginTop: 2, whiteSpace: "nowrap" }}>
+              Bill #{c.invoiceNumber}
+            </div>
+          )}
+        </>
       ),
     },
   ];

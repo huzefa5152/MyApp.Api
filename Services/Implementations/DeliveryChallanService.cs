@@ -134,6 +134,7 @@ namespace MyApp.Api.Services.Implementations
                 Site = dc.Site,
                 Status = dc.Status,
                 InvoiceId = dc.InvoiceId,
+                InvoiceNumber = dc.Invoice?.InvoiceNumber,
                 InvoiceFbrStatus = dc.Invoice?.FbrStatus,
                 IsEditable = IsEditable(dc),
                 IsImported = dc.IsImported,
