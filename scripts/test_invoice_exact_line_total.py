@@ -495,7 +495,15 @@ def main() -> int:
             check("cleanup", "throwaway company deleted", status in (200, 204), f"got {status}")
         if type_id:
             status, _ = http("DELETE", f"/api/itemtypes/{type_id}", base, token=token)
-            check("cleanup", "throwaway item type deleted", status in (200, 204), f"got {status}")
+            # 404 is success on a line whose catalog is company-private: the item
+            # type is owned by the throwaway company and went with it on the line
+            # above, so there is nothing left to address. Addressing it by id
+            # needs an owner the caller can still reach (CatalogCompanyFilter),
+            # and that owner no longer exists. On a line whose catalog is
+            # install-wide the row outlives the company and really is deleted
+            # here, so both outcomes are accepted and neither is silent.
+            check("cleanup", "throwaway item type deleted or gone with its company",
+                  status in (200, 204, 404), f"got {status}")
 
     print()
     print("=" * 78)
