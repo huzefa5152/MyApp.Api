@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Models;
 
 namespace MyApp.Api.Data
@@ -110,7 +110,7 @@ namespace MyApp.Api.Data
                 BrandName = "DEMO TRADING",
                 FullAddress = "Plot 14, Sector 7-B, Korangi Industrial Area\nKarachi 74900, Pakistan",
                 Phone = "+92-21-35067788",
-                // Hakimi's sandbox-registered seller NTN. PRAL's sandbox
+                // A sandbox-registered seller NTN. PRAL's sandbox
                 // FBR token (set via Company Settings → FBR Token) is bound
                 // to this NTN, so a synthetic NTN like "9999999-9" would
                 // trip auth (0401). Display name still reads "Demo Trading
@@ -135,7 +135,7 @@ namespace MyApp.Api.Data
                 // Supplies" doesn't match the (Activity × Sector) matrix
                 // and every bill's scenario picker comes up empty —
                 // operators then can't validate or submit on the demo.
-                // Matches Hakimi's production setup verbatim.
+                // Matches a real production setup verbatim.
                 FbrBusinessActivity = "Wholesaler",
                 FbrSector = "Wholesale / Retails",
                 FbrEnvironment = "sandbox",

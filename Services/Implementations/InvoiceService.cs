@@ -3304,8 +3304,8 @@ namespace MyApp.Api.Services.Implementations
                     // business again and must return to the billable pool —
                     // otherwise the goods can never be re-billed on a fresh
                     // number and the challans sit "Invoiced" against a bill that
-                    // has been reversed to nothing. (Found on Hakimi bills 3912
-                    // and 3913: three challans stranded that way.)
+                    // has been reversed to nothing. (Found in production on two
+                    // consecutive bills: three challans stranded that way.)
                     //
                     // Only a FULL credit note, and only a credit note: a partial
                     // reversal still leaves part of the bill standing, and a

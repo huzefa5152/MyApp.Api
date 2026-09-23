@@ -41,7 +41,7 @@ export default function FbrSandboxPage() {
   // Pull the company list from the global context (already loaded for
   // every authenticated user), but DO NOT bind to the global "selected
   // company" — the sandbox tab keeps its own dropdown state. That way
-  // running scenario tests for "Hakimi Test Clean" doesn't require the
+  // running scenario tests for a sandbox company doesn't require the
   // operator to switch the global selection (which would impact every
   // other page they navigate to afterwards).
   const { companies, selectedCompany: globalCompany } = useCompany();

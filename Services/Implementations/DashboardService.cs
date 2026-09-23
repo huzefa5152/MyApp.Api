@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
@@ -318,10 +318,10 @@ namespace MyApp.Api.Services.Implementations
             // 2026-05-13: roll up by ClientGroupId so two Client rows
             // representing the same legal entity (e.g. one per tenant
             // in the Common Clients group) collapse into one dashboard
-            // row. Pre-fix, Roshan Traders' dashboard showed "MEKO
-            // DENIM MILLS (Pvt) Ltd." twice — once for ClientId=8
-            // (Roshan's own row) and once for ClientId=5 (Hakimi's row,
-            // reachable via a cross-tenant invoice link); both rows
+            // row. Pre-fix, a tenant's dashboard showed the same buyer
+            // twice — once for its own client row and once for another
+            // tenant's row for the same legal entity, reachable via a
+            // cross-tenant invoice link; both rows
             // share ClientGroupId=8, so the group key is the right
             // identity.
             //

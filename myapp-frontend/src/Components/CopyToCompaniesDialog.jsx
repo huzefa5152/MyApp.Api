@@ -8,7 +8,7 @@ import { MdContentCopy, MdClose, MdBusiness, MdCheckCircle } from "react-icons/m
 // Props:
 //   open           — boolean
 //   title          — heading text, e.g. "Copy client to other companies"
-//   subjectLabel   — what is being copied, e.g. "MEKO DENIM MILLS"
+//   subjectLabel   — what is being copied, e.g. a client name
 //   companies      — full list of accessible companies (id, name, brandName)
 //   excludeIds     — company ids to hide / disable (e.g. source's own company,
 //                    plus any companies the record is already in)

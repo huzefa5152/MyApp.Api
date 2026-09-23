@@ -103,7 +103,7 @@ export default function FbrPurchaseImportPage() {
 
   // Auto-clear the preview when the operator switches company. Dedup
   // and the supplier/ItemType matches are scoped to a single company,
-  // so a Hakimi-scoped preview is misleading the moment Roshan is
+  // so a preview scoped to one tenant is misleading the moment another is
   // selected. Drop the result + collapse state but keep the picked
   // file so a one-click re-run is still possible.
   useEffect(() => {

@@ -1,4 +1,4 @@
-// src/theme.js — Blue/Teal color scheme matching Hakimi Traders dashboard
+// src/theme.js — Blue/Teal color scheme matching the admin dashboard
 
 // Exported so screens can reference raw palette values directly (e.g. the
 // Payments/Receipts cards). Existing screens use the higher-level style objects

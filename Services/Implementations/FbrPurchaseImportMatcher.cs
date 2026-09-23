@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 
@@ -28,16 +28,16 @@ namespace MyApp.Api.Services.Implementations
         /// Pre-loads supplier NTN → SupplierId map for the company, so
         /// the orchestrator can look up suppliers in O(1) without a
         /// query per invoice. Also returns "supplier groups" (Common
-        /// Suppliers feature) so a Lotte-NTN supplier saved on Hakimi
-        /// auto-resolves on Roshan.
+        /// Suppliers feature) so a supplier saved by NTN on one tenant
+        /// auto-resolves on another.
         /// </summary>
         Task<SupplierLookup> LoadSuppliersAsync(int companyId);
 
         /// <summary>
         /// Pre-loads ItemType lookups for the company. Two indexes:
         /// HS Code → ItemType (primary match) and lower-cased Name →
-        /// ItemType (fallback). Both scoped to companyId so a Hakimi
-        /// import never cross-matches a Roshan ItemType.
+        /// ItemType (fallback). Both scoped to companyId so one tenant's
+        /// import never cross-matches another tenant's ItemType.
         /// </summary>
         Task<ItemTypeLookup> LoadItemTypesAsync(int companyId);
 

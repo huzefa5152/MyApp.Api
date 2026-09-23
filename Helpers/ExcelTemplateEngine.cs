@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 
@@ -519,8 +519,8 @@ namespace MyApp.Api.Helpers
                         // on collapsed conditional output so the text sits
                         // on the first row of the cell.
                         val = val.Trim();
-                        // If the conditional collapsed the whole cell (Lotte
-                        // / Afroze case with rich-text spanning all three
+                        // If the conditional collapsed the whole cell (the
+                        // rich-text case spanning all three
                         // runs), write the resolved string back NOW so
                         // ClosedXML replaces the multi-run string storage
                         // with a simple string. If we leave it until after

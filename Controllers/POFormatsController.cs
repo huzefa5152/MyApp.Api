@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -153,8 +153,8 @@ namespace MyApp.Api.Controllers
         }
 
         // Power-user path: full ruleset JSON. Exposed for the rare case where
-        // simple-headers-v1 can't handle a layout (e.g. Lotte Kolson PDFs
-        // with a delivery-date column between description and qty). 99% of
+        // simple-headers-v1 can't handle a layout (e.g. a PDF with a
+        // delivery-date column between description and qty). 99% of
         // clients should use /simple instead.
         [HttpPost]
         [HasPermission("poformats.manage.create")]

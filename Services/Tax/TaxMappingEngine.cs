@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
@@ -41,7 +41,7 @@ namespace MyApp.Api.Services.Tax
         private static readonly int[] HsUomBackoffMs = new[] { 0, 250, 600 };
 
         // FBR's SaleTypeToRate endpoint requires a transaction-type id.
-        // 18 = "Goods sale" (the only one Hakimi uses). Reserved for future
+        // 18 = "Goods sale" (the only one in use today). Reserved for future
         // override when other sectors come online (services, exports).
         private const int DefaultTransactionTypeId = 18;
 

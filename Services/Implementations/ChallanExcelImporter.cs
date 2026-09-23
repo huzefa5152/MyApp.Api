@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -10,7 +10,7 @@ namespace MyApp.Api.Services.Implementations
     public class ChallanExcelImporter : IChallanExcelImporter
     {
         private readonly AppDbContext _context;
-        // Filename fallback for challan number: "DC # 1073 MEKO DENIM.xls"
+        // Filename fallback for challan number: "DC # 1073 <client>.xls"
         private static readonly Regex FilenameNumberRegex = new(@"(?:DC|CHALLAN)\s*#?\s*(\d+)",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -194,7 +194,7 @@ namespace MyApp.Api.Services.Implementations
                     return parsed2;
                 }
             }
-            // Fallback: parse from filename ("DC # 1073 MEKO DENIM.xls")
+            // Fallback: parse from filename ("DC # 1073 <client>.xls")
             var fnMatch = FilenameNumberRegex.Match(fileName);
             if (fnMatch.Success && int.TryParse(fnMatch.Groups[1].Value, out var fnNum)) return fnNum;
 

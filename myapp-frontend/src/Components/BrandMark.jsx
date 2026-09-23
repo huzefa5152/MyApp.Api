@@ -1,5 +1,5 @@
 // src/Components/BrandMark.jsx
-// Hakimi Traders logomark — a machined hex nut with a center bore.
+// Product logomark — a machined hex nut with a center bore.
 // Pure inline SVG so it scales crisply anywhere (navbar, footer, hero).
 export default function BrandMark({ size = 32, ...props }) {
   return (

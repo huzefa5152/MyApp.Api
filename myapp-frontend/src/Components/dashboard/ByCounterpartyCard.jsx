@@ -146,8 +146,8 @@ export default function ByCounterpartyCard({
                   fontWeight: 600,
                   color: "#1a2332",
                   // Bug 2026-05-13: nowrap + ellipsis collapsed names
-                  // like "MEKO FABRICS (Pvt) Ltd." and "MEKO DENIM MILLS
-                  // (Pvt) Ltd." to identical-looking "MEKO ..." on the
+                  // like "NORTHSIDE FABRICS (Pvt) Ltd." and "NORTHSIDE DENIM
+                  // MILLS (Pvt) Ltd." to identical-looking "NORTHSIDE ..." on the
                   // narrow list column, making distinct clients look
                   // like duplicates. Allow up to 2 lines so the
                   // disambiguating word stays visible without forcing

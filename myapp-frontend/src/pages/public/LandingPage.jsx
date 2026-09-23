@@ -1,5 +1,5 @@
 // src/pages/public/LandingPage.jsx
-// Hakimi Traders public site — "precision industrial" redesign.
+// Public marketing site — "precision industrial" redesign.
 // All motion is hand-rolled (IntersectionObserver reveals, CSS keyframes,
 // rAF parallax) — transform/opacity only, so it stays at 60fps on phones.
 import { useEffect, useRef, useState } from "react";

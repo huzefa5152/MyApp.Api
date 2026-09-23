@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 
@@ -626,7 +626,7 @@ namespace MyApp.Api.Data
             // NOT prune their historical parse failures, that's the whole
             // point of the audit). Indexed for the common triage queries:
             //   "show me everything that didn't parse last week"
-            //   "show me Hakimi's failures grouped by format"
+            //   "show me this company's failures grouped by format"
             modelBuilder.Entity<PoImportArchive>()
                 .Property(x => x.OriginalFileName).HasMaxLength(255);
             modelBuilder.Entity<PoImportArchive>()
