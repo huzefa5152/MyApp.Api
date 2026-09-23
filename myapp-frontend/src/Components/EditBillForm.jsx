@@ -1063,11 +1063,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     });
   };
 
-  // Grouped view is offered only on the Invoices tab (Item Type column
-  // visible) and only when grouping actually collapses lines.
-  // Print-grouping selector: shown whenever there are items (even a single line —
-  // it sets the saved print preference that drives the Bill / Tax Invoice print).
-  const showGroupToggle = items.length >= 1;
+  // Grouped view is offered only on the Invoices tab, where it switches the
+  // EDITING table: a quantity typed against an item-type group spreads across
+  // that group's lines and one unit price sets the whole group.
+  //
+  // It is never offered on the Bills tab. There it could only ever set a saved
+  // print preference — the table below stayed individual either way — so the
+  // operator was given a switch that visibly did nothing. Existing bills keep
+  // whatever PrintGroupBillByItemType they were saved with; nothing reads it
+  // from this form any more.
+  const showGroupToggle = !billsMode && items.length >= 1;
   // Grouped EDIT table (retotal-able summed rows) only in FBR-on invoice mode when
   // grouping actually collapses lines; never in the read-only grouping-only view
   // or bill mode (there the selector is a pure print preference).
@@ -1713,14 +1718,6 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     controls how the <b>Tax Invoice</b> prints.
                   </p>
                 )}
-                {showGroupToggle && billsMode && (
-                  <p style={styles.gridHint}>
-                    Sets how the printed <b>Bill</b> lays out lines that share an Item Type — <b>Grouped</b> merges
-                    them into one row (summed qty + value, weighted-average price); <b>Individual lines</b> prints
-                    every line. Saved on this bill; affects the printout only (the lines below stay individual for editing).
-                  </p>
-                )}
-
                 <div style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
