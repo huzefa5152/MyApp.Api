@@ -98,7 +98,7 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>IRN (from the FBR portal)</label>
               <input style={formStyles.input} value={irn} onChange={(e) => setIrn(e.target.value)}
-                placeholder="e.g. 4230193299489DI…" disabled={busy} />
+                placeholder="e.g. 1234567890123DI000001" disabled={busy} />
             </div>
           )}
 

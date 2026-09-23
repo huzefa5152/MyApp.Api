@@ -212,7 +212,7 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
                 style={styles.input}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Lotte Kolson PO"
+                placeholder="e.g. Standard PO layout"
               />
             </div>
           </div>

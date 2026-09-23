@@ -69,7 +69,7 @@ export default function BankCashSelect({
         style={formStyles.input}
         value={name || ""}
         onChange={(e) => onChange?.(null, e.target.value)}
-        placeholder="e.g. Meezan A/C 1234, Cash"
+        placeholder="e.g. Bank current account, Cash"
       />
       {loaded && (
         <span style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, display: "block" }}>

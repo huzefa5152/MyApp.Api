@@ -127,6 +127,72 @@ def tracked_files():
         yield rel
 
 
+
+# ── UI placeholders (2026-09-23) ────────────────────────────────────────────
+# Placeholder text ships in the bundle, so it is scoped to nobody: whatever it
+# names is shown to every operator of every tenant. The PO Format dialog read
+# "e.g. Lotte Kolson PO" — one tenant's customer, displayed to a different
+# company — and the Company form greeted everyone with tenant #1's own name.
+#
+# There is no list of real customer names to match against (writing one into
+# this file would be the very disclosure it is meant to prevent), so the check
+# is on SHAPE: a placeholder that looks like a company or a tax identifier has
+# to be justified here rather than guessed at in review.
+PLACEHOLDER_PATTERNS = [
+    re.compile(r'placeholder\s*=\s*"([^"]*)"'),
+    re.compile(r'placeholder\s*=\s*\{`([^`]*)`\}'),
+]
+
+IDENTITY_SHAPES = [
+    ("looks like a CNIC / STRN", re.compile(r"\b\d{13}\b")),
+    ("looks like an NTN", re.compile(r"\b\d{7}-\d\b")),
+    ("names a company", re.compile(
+        r"\b(?:\(Pvt\)|Pvt\.?|Ltd\.?|Limited|Traders|Trading|Mills|Industries|"
+        r"Enterprises|Corporation|Textiles|Fabrics|Foods|Sons)\b", re.I)),
+]
+
+# Each entry says why the string is safe. A placeholder that has to look like an
+# identifier must be VISIBLY invented — 1234567 and 1234567890123 read as dummy
+# at a glance, a number copied off a real document does not.
+PLACEHOLDER_ALLOW = {
+    "3520112345678":
+        "CNIC-shaped example whose body is literally 1234567 — visibly invented.",
+    "e.g. 1234567890123DI000001":
+        "IRN-shaped example built from 1234567890123 — visibly invented. Replaced "
+        "a placeholder carrying a real-looking registration number.",
+}
+
+UI_SUFFIXES = {".jsx", ".js", ".tsx", ".ts"}
+
+
+def check_ui_placeholders():
+    """Placeholders that name a real company or carry a real-looking identifier."""
+    findings = []
+    for rel in tracked_files():
+        if Path(rel).suffix not in UI_SUFFIXES:
+            continue
+        if not rel.startswith("myapp-frontend/src/"):
+            continue
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for pattern in PLACEHOLDER_PATTERNS:
+                for match in pattern.finditer(line):
+                    value = match.group(1).strip()
+                    if value in PLACEHOLDER_ALLOW:
+                        continue
+                    for label, shape in IDENTITY_SHAPES:
+                        if shape.search(value):
+                            findings.append((rel, lineno, label, value))
+                            break
+    return findings
+
+
 def main():
     findings = []
     scanned = 0
@@ -173,8 +239,23 @@ def main():
         print("GitHub Actions secret. See docs/ENVIRONMENTS.md.")
         return 1
 
+    ui = check_ui_placeholders()
+    if ui:
+        print("")
+        print("FAIL — %d UI placeholder(s) naming something real:" % len(ui))
+        for rel, lineno, label, value in ui:
+            print("  %s:%d" % (rel, lineno))
+            print("      %s -> %s" % (label, value))
+        print("")
+        print("A placeholder is shown to every tenant. Describe the shape, or invent")
+        print("an example that is visibly fake. If it is genuinely safe, add it to")
+        print("PLACEHOLDER_ALLOW with the reason. See CLAUDE.md, \"A placeholder is")
+        print("seen by every tenant\".")
+        return 1
+
     print("")
     print("=== no production identifiers in tracked files ===")
+    print("=== no UI placeholder names anything real ===")
     return 0
 
 

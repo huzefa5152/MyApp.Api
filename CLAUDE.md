@@ -236,7 +236,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
 | Grouped quantity spread — no bill line left at zero, fractions only where the unit allows (offline) | `node scripts/test_group_quantity_split.mjs` | `27 passed, 0 failed` |
-| Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `73/73 checks` (1 pre-existing cleanup failure on this branch — the suite deletes its item type company-less, which this line's private catalog refuses) |
+| Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `73/73 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `142 passed, 0 failed` |
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
@@ -739,6 +739,38 @@ nothing about it. Pinned by `test_company_create_minimal.py`.
 
 ---
 
+## A placeholder is seen by every tenant (2026-09-23)
+
+**Never put a real company, client, supplier, person, bank or tax identifier
+into a placeholder, hint, sample or default anywhere in the UI.** Placeholder
+text is shipped in the bundle, so it is not scoped to anything: whatever it
+names is shown to every operator of every tenant, on a screen that has nothing
+to do with that name.
+
+Found live on the PO Format dialog, where the Format name field read
+`e.g. Lotte Kolson PO` — one tenant's customer, displayed to a different
+company while it created its own format. The Company form did the same with
+`e.g. HAKIMI TRADERS`, so tenant #1's name greeted every other tenant.
+
+- **Describe the shape, or invent one.** `e.g. Standard PO layout`,
+  `Your trading name, as it should print`. If an example must look like an
+  identifier, make it visibly fake — `1234567890123DI000001`, not a number
+  copied from a real document.
+- **This covers more than `placeholder=`**: helper text under a field, a
+  `title=` tooltip, an empty-state line, a seeded default, and the print-template
+  editor's preview fixtures (`utils/templateSampleData.js` — keep it on
+  "SAMPLE COMPANY" / "Sample Client Pvt Ltd").
+- **A real bank name is a leak too.** `e.g. Meezan A/C 1234` tells every tenant
+  where somebody banks; `e.g. Bank current account, Cash` says the same thing
+  and tells nobody anything.
+- **The repo is PUBLIC, so this is also a disclosure rule, not only a tenancy
+  one.** A customer's name in a placeholder is committed, pushed and searchable.
+
+When adding a field, read the placeholder back and ask who it names. If the
+answer is anyone real, it does not ship.
+
+---
+
 ## Never name production in a tracked file
 
 **This repository is PUBLIC.** The production databases sit on a public host
@@ -833,6 +865,7 @@ written down as the expectation.
 - ❌ Letting unrelated files ride along in a commit — read `git diff --stat` and account for every one
 - ❌ Re-baselining a test in the same commit as the behaviour it guards (the regression becomes the expectation)
 - ❌ Replacing distinct hand-made designs / templates with generated variants of a single layout
+- ❌ A real company / client / bank / tax number in a placeholder, hint or sample — it ships in the bundle and every tenant sees it
 
 ---
 

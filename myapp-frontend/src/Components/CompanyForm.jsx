@@ -358,7 +358,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
 
                             <div style={formGroup}>
                                 <label style={label}>Brand Name (for print header)</label>
-                                <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="e.g. HAKIMI TRADERS" />
+                                <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="Name as it should print on documents" />
                             </div>
 
                             <div style={formGroup}>
