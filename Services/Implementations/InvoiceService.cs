@@ -661,8 +661,19 @@ namespace MyApp.Api.Services.Implementations
                 // The challan follows the bill. Editing the bill's quantity is the
                 // operator saying the delivery line was wrong, so the delivery line
                 // is corrected rather than left to disagree with what was invoiced.
+                //
+                // What was actually delivered is kept first. Overwriting it outright
+                // made the correction IRREVERSIBLE: deleting or voiding the bill
+                // handed the challan back to the billable pool carrying the reduced
+                // quantity, and the rest of the delivery — 48 of 50 units in the case
+                // that found this — could never be billed by anyone. Set once, so a
+                // second edit does not overwrite the original with the first edit's
+                // value, and cleared when the challan is released.
                 if (billedQty != deliveryItem.Quantity)
+                {
+                    deliveryItem.DeliveredQuantity ??= deliveryItem.Quantity;
                     deliveryItem.Quantity = billedQty;
+                }
 
                 var lineTotal = billedQty * itemDto.UnitPrice;
 
@@ -2341,6 +2352,25 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(invoice);
         }
 
+        /// <summary>
+        /// Put back what was physically delivered on a challan being released.
+        ///
+        /// A bill may have written a smaller billed quantity over the delivery
+        /// line. Releasing the challan without undoing that returns it to the
+        /// billable pool short of the goods it actually carried, and the
+        /// difference is lost for good — there is nowhere else it is recorded.
+        /// No-op for the ordinary line, whose quantity was never overwritten.
+        /// </summary>
+        private static void RestoreDeliveredQuantities(DeliveryChallan dc)
+        {
+            foreach (var di in dc.Items ?? Enumerable.Empty<DeliveryItem>())
+            {
+                if (di.DeliveredQuantity is null) continue;
+                di.Quantity = di.DeliveredQuantity.Value;
+                di.DeliveredQuantity = null;
+            }
+        }
+
         public async Task<bool> DeleteAsync(int id)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
@@ -2380,6 +2410,7 @@ namespace MyApp.Api.Services.Implementations
                     var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
                     dc.Status = hasPo ? (dc.IsImported ? "Imported" : "Pending") : "No PO";
                     dc.InvoiceId = null;
+                    RestoreDeliveredQuantities(dc);
                     _context.DeliveryChallans.Update(dc);
                 }
 
@@ -2441,6 +2472,10 @@ namespace MyApp.Api.Services.Implementations
             // changes + challan reverts are picked up by SaveChanges.
             var invoice = await _context.Invoices
                 .Include(i => i.DeliveryChallans)
+                    // The challan LINES too: releasing a challan puts back the
+                    // delivered quantity a smaller billed quantity overwrote, and
+                    // without the lines loaded that restore silently does nothing.
+                    .ThenInclude(dc => dc.Items)
                 .FirstOrDefaultAsync(i => i.Id == id);
             if (invoice == null) return null;
 
@@ -2470,6 +2505,7 @@ namespace MyApp.Api.Services.Implementations
                     var hasPo = !string.IsNullOrWhiteSpace(dc.PoNumber);
                     dc.Status = hasPo ? (dc.IsImported ? "Imported" : "Pending") : "No PO";
                     dc.InvoiceId = null;
+                    RestoreDeliveredQuantities(dc);
                     _context.DeliveryChallans.Update(dc);
                     revertedChallans.Add(dc.ChallanNumber);
                 }

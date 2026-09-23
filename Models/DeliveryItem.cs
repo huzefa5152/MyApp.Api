@@ -27,6 +27,20 @@
         /// server-side via the unit's AllowsDecimalQuantity flag.
         /// </summary>
         public decimal Quantity { get; set; }
+
+        /// <summary>
+        /// What was PHYSICALLY delivered, kept when the bill writes a smaller
+        /// billed quantity back over <see cref="Quantity"/>.
+        ///
+        /// Null on every line whose quantity has never been overwritten, which
+        /// is the normal case — the delivered amount is then Quantity itself.
+        /// It is set once, on the first write-back, and cleared when the challan
+        /// is released; without it the original was unrecoverable, so deleting a
+        /// bill returned the challan to the billable pool carrying the REDUCED
+        /// quantity and the rest of the delivery could never be billed.
+        /// </summary>
+        public decimal? DeliveredQuantity { get; set; }
+
         public string Unit { get; set; } = "";
 
         // Navigation

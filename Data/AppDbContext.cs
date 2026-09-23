@@ -573,6 +573,9 @@ namespace MyApp.Api.Data
             // 2 extra so e.g. 0.0004 Carat survives the round-trip.
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.Quantity).HasPrecision(28, 12);
             modelBuilder.Entity<DeliveryItem>().Property(di => di.Quantity).HasPrecision(28, 12);
+            // Same precision as the quantity it preserves — a delivered amount
+            // that cannot round-trip its own column is worse than not keeping it.
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.DeliveredQuantity).HasPrecision(28, 12);
 
             // Optional: make ItemDescription.Name and Unit.Name unique
             modelBuilder.Entity<ItemDescription>()
