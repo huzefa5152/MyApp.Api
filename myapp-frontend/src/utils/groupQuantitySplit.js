@@ -26,13 +26,97 @@
 //     being handed zeros.
 //   • Decimal mode (KG, Liter, …): 4-decimal shares with the last line
 //     absorbing the rounding, so the lines always re-sum to the typed total.
+//   • Mixed mode (`decimalOk`): the group's lines do not share a unit — the
+//     common shape is one Item Type covering a Kg line and a Nos line. Decimal
+//     capability is a property of the UNIT, so it is applied per line: the
+//     integer-only lines take whole shares first, and whatever fraction is left
+//     is carried entirely by the lines whose unit allows it. A fraction is
+//     never forced onto a Pcs line just because something else in the group
+//     could hold one.
 //
 // Returns { shares, infeasible, minimum }. `shares` is always an array (in
 // whole mode it may still hold zeros when infeasible, so a half-typed value
 // keeps echoing back into the input); `minimum` is the smallest total that
 // gives every line a unit.
 
-export function splitGroupQuantity(total, weights, { allowDecimal = false } = {}) {
+export function splitGroupQuantity(total, weights, { allowDecimal = false, decimalOk = null } = {}) {
+  // Per-line capability wins over the group-wide flag when it is supplied, and
+  // collapses to one of the two simple modes when every line agrees.
+  if (Array.isArray(decimalOk) && Array.isArray(weights) && decimalOk.length === weights.length
+      && weights.length > 0) {
+    const anyDecimal = decimalOk.some(Boolean);
+    const allDecimal = decimalOk.every(Boolean);
+    // A WHOLE total still splits into whole lines, whatever the units allow.
+    // Capability is permission, not instruction: a group retyped as 58 keeps
+    // the 1 + 57 it has always produced rather than becoming 0.5743 + 57.4257
+    // just because both units happen to be decimal-capable.
+    if (!anyDecimal) {
+      // No line in this group can hold a fraction, so a fractional total is not
+      // a thing that can be split — round it the way the integer-only input
+      // would, rather than handing back shares the server will refuse.
+      const whole = Math.round(Number(total) || 0);
+      return splitPlain(whole, weights, { allowDecimal: false });
+    }
+    if (Number.isInteger(Number(total))) {
+      return splitPlain(total, weights, { allowDecimal: false });
+    }
+    if (allDecimal) return splitPlain(total, weights, { allowDecimal: true });
+    return splitMixed(total, weights, decimalOk);
+  }
+  return splitPlain(total, weights, { allowDecimal });
+}
+
+// Whole shares for the integer-only lines, the remainder — fraction included —
+// spread across the lines whose unit allows decimals.
+function splitMixed(total, weights, decimalOk) {
+  const n = weights.length;
+  const target = Number(total);
+  const intIdx = [];
+  const decIdx = [];
+  for (let k = 0; k < n; k++) (decimalOk[k] ? decIdx : intIdx).push(k);
+
+  const minimum = intIdx.length + decIdx.length * 0.0001;
+  if (!Number.isFinite(target) || target <= 0) {
+    return { shares: weights.map(() => 0), infeasible: true, minimum };
+  }
+
+  const w = weights.map((x) => (Number(x) > 0 ? Number(x) : 0));
+  const wTotal = w.reduce((a, b) => a + b, 0) || n;
+  const weightOf = (k) => (w[k] > 0 ? w[k] : (wTotal === n ? 1 : 0));
+
+  // The integer lines take their proportional share, floored, but never zero —
+  // a line at zero is the failure this module exists to prevent.
+  const shares = new Array(n).fill(0);
+  let used = 0;
+  for (const k of intIdx) {
+    const want = Math.floor((target * weightOf(k)) / wTotal);
+    const give = Math.max(1, want);
+    shares[k] = give;
+    used += give;
+  }
+
+  // Everything left goes to the decimal lines, proportionally, with the last
+  // absorbing the rounding so the group re-sums to exactly what was typed.
+  let remaining = Math.round((target - used) * 10000) / 10000;
+  if (remaining <= 0) {
+    return { shares, infeasible: true, minimum };
+  }
+  const decWeightTotal = decIdx.reduce((a, k) => a + weightOf(k), 0) || decIdx.length;
+  let handedOut = 0;
+  decIdx.forEach((k, j) => {
+    if (j === decIdx.length - 1) {
+      shares[k] = Math.round(Math.max(0, remaining - handedOut) * 10000) / 10000;
+    } else {
+      const q = Math.round((remaining * weightOf(k)) / decWeightTotal * 10000) / 10000;
+      shares[k] = q;
+      handedOut += q;
+    }
+  });
+
+  return { shares, infeasible: shares.some((q) => q <= 0), minimum };
+}
+
+function splitPlain(total, weights, { allowDecimal = false } = {}) {
   const n = Array.isArray(weights) ? weights.length : 0;
   const target = Number(total);
   if (n === 0) return { shares: [], infeasible: !(target > 0), minimum: 0 };

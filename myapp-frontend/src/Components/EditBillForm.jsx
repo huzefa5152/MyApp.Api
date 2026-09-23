@@ -922,6 +922,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Qty editor below, and pinned by scripts/test_group_quantity_split.mjs).
   const splitWholeQty = (total, weights) => splitGroupQuantity(total, weights).shares;
 
+  // Which of a group's lines may carry a fraction. One Item Type can cover a KG
+  // line and a Nos line, and the answer belongs to the unit rather than to the
+  // group, so it is asked per line and the split honours it (2026-09-23).
+  const groupDecimalOk = (group) =>
+    group.lineIndices.map((i) => isDecimalUnit(items[i]?.uom || group.uom, units));
+  const groupAllowsDecimal = (group) => groupDecimalOk(group).some(Boolean);
+
   // Write the group's lines from an exact target and a set of whole quantities.
   // Both come from the operator; only the RATE is derived.
   const writeExact = (next, group, targetPaisa, qtys) => {
@@ -959,7 +966,13 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // quantity, then re-allocate the same target over it. Both in ONE pass, or the
   // two functional updates would race and the rate would follow a stale qty.
   const setGroupExactQty = (group, rawQty) => {
-    const qty = Math.round(Number(rawQty) || 0);
+    // Round to a whole number ONLY when no line in the group can hold a
+    // fraction. A consultant filing 1.61 KG against an exact 1,565 line was
+    // silently rounded to 2 here before anything else could see the value
+    // (INV-3922, 2026-09-23).
+    const decimalOk = groupDecimalOk(group);
+    const raw = Number(rawQty) || 0;
+    const qty = decimalOk.some(Boolean) ? Math.round(raw * 10000) / 10000 : Math.round(raw);
     const targetPaisa = toPaisa(exactTotals[group.key]);
     if (qty <= 0 || !Number.isFinite(targetPaisa) || targetPaisa <= 0) return;
     setItems((prev) => {
@@ -967,7 +980,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       const weights = group.lineIndices.map(
         (i) => parseFloat(originalItemsRef.current[i]?.quantity) || 1,
       );
-      return writeExact(next, group, targetPaisa, splitWholeQty(qty, weights));
+      const { shares } = splitGroupQuantity(qty, weights, { decimalOk });
+      return writeExact(next, group, targetPaisa, shares);
     });
   };
 
@@ -1126,8 +1140,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       const next = [...prev];
       const idxs = group.lineIndices;
       const weights = idxs.map((i) => parseFloat(originalItemsRef.current[i]?.quantity) || 0);
-      const allowDecimal = isDecimalUnit(group.uom, units);
-      const { shares } = splitGroupQuantity(target, weights, { allowDecimal });
+      const { shares } = splitGroupQuantity(target, weights, { decimalOk: groupDecimalOk(group) });
 
       idxs.forEach((i, k) => {
         const price = parseFloat(next[i].unitPrice) || 0;
@@ -2121,7 +2134,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                                 units={units}
                                 disabled={lockQty}
                                 readOnly={lockQty}
-                                integerOnly
+                                integerOnly={!groupAllowsDecimal(group)}
                                 style={{ ...styles.tableInput, ...(lockQty ? styles.readOnlyInput : {}), textAlign: "right" }}
                               />
                               {invoice?.fbrAdjustmentStale && Math.abs(group.billQty - group.totalQty) > 0.0001 && (

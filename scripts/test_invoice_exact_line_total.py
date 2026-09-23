@@ -317,10 +317,53 @@ def main() -> int:
         check("4", "  ... and names the 2dp rule", "2 decimal" in err_text(resp).lower(),
               err_text(resp)[:120])
 
-        status, resp = patch_first({"quantity": 3.5, "exactLineTotal": 1000})
-        check("4", "fractional quantity refused under an exact total", status >= 400, f"got {status}")
+        # Fractional quantity under an exact total: allowed or refused by the
+        # UNIT, not by the path (2026-09-23, INV-3922 / INV-3949). A consultant
+        # filing 1.61 KG or 142.59 Nos against an exact line total was refused
+        # outright before this, even though both units are decimal-allowed.
+        # The reproduction check below is what actually guards the arithmetic.
+        #
+        # This item type is on KG, which allows decimals, so the fraction is
+        # accepted and the line still has to come to its stated total.
+        # The line keeps its OWN total, so the bill subtotal does not move and
+        # the only thing under test is the fractional quantity itself.
+        first_total = float(Decimal(str(first["lineTotal"])))
+        frac_qty = float(first["quantity"]) + 0.5
+        status, resp = patch_first({"quantity": frac_qty, "exactLineTotal": first_total})
+        frac_ok = status in (200, 201)
+        check("4", "fractional quantity ACCEPTED on a decimal-allowed unit", frac_ok,
+              f"got {status} {err_text(resp)[:140]}")
+        if frac_ok:
+            line = next((l for l in resp.get("items", []) if l["id"] == first["id"]), None)
+            check("4", "  ... and the line still comes to its exact total",
+                  line is not None and abs(float(line["lineTotal"]) - first_total) < 0.005,
+                  f"line total {line and line.get('lineTotal')} vs {first_total}")
+            check("4", "  ... and the fraction was stored, not rounded away",
+                  line is not None and abs(float(line["quantity"]) - frac_qty) < 1e-6,
+                  f"quantity {line and line.get('quantity')} vs {frac_qty}")
+
+        # Same request on an integer-only unit is still refused, and still says
+        # so in the operator's words.
+        status, _ = http("PUT", f"/api/itemtypes/{type_id}", base, token=token, body={
+            "name": f"[TEMP] Exact Total Pipe Fitting {stamp}", "uom": "Bag",
+            "companyId": company_id,
+        })
+        check("4", "item type flipped to an integer-only unit", status in (200, 204),
+              f"got {status}")
+        status, resp = patch_first({"quantity": 3.5, "exactLineTotal": 1000,
+                                    "itemTypeId": type_id})
+        check("4", "fractional quantity refused on an integer-only unit", status >= 400,
+              f"got {status}")
         check("4", "  ... and says whole-number", "whole" in err_text(resp).lower(),
-              err_text(resp)[:120])
+              err_text(resp)[:140])
+        http("PUT", f"/api/itemtypes/{type_id}", base, token=token, body={
+            "name": f"[TEMP] Exact Total Pipe Fitting {stamp}", "uom": "KG",
+            "companyId": company_id,
+        })
+
+        # Put the line back the way the rest of this section expects it.
+        patch_first({"quantity": int(float(first["quantity"])),
+                     "exactLineTotal": float(Decimal(str(first["lineTotal"])))})
 
         status, resp = patch_first({"unitPrice": 219.4965878431991234})
         check("4", "rate beyond 12dp refused", status >= 400, f"got {status}")
@@ -452,7 +495,7 @@ def main() -> int:
             check("cleanup", "throwaway company deleted", status in (200, 204), f"got {status}")
         if type_id:
             status, _ = http("DELETE", f"/api/itemtypes/{type_id}", base, token=token)
-            check("cleanup", "throwaway item type removed with company", status in (200, 204, 404), f"got {status}")
+            check("cleanup", "throwaway item type deleted", status in (200, 204), f"got {status}")
 
     print()
     print("=" * 78)
