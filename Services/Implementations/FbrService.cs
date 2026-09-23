@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -272,6 +272,37 @@ namespace MyApp.Api.Services.Implementations
                 SroItemSerialNo = ii.SroItemSerialNo,
                 ItemType        = ii.ItemType,
             };
+        }
+
+        /// <summary>
+        /// Reads a WSO2 gateway fault out of an FBR error body, or null when the
+        /// body is not one. FBR's gateway answers with XML like
+        /// <c>&lt;am:fault&gt;&lt;am:code&gt;303001&lt;/am:code&gt;
+        /// &lt;am:description&gt;... [ State : SUSPENDED ]&lt;/am:description&gt;&lt;/am:fault&gt;</c>
+        /// when it cannot pass the call through to the invoicing service. The
+        /// distinction matters: a fault from the GATEWAY means the request never
+        /// arrived, so nothing can have been recorded.
+        /// </summary>
+        private static string? GatewayFault(string? body)
+        {
+            if (string.IsNullOrWhiteSpace(body) || body.IndexOf("am:fault", StringComparison.OrdinalIgnoreCase) < 0)
+                return null;
+            var description = Between(body, "<am:description>", "</am:description>");
+            var code = Between(body, "<am:code>", "</am:code>");
+            var suspended = body.IndexOf("SUSPENDED", StringComparison.OrdinalIgnoreCase) >= 0;
+            var what = suspended
+                ? "their endpoint is currently suspended"
+                : (string.IsNullOrWhiteSpace(description) ? "the gateway reported a runtime error" : description!.Trim());
+            return string.IsNullOrWhiteSpace(code) ? $"{what}." : $"{what} (gateway code {code}).";
+        }
+
+        private static string? Between(string source, string open, string close)
+        {
+            var a = source.IndexOf(open, StringComparison.OrdinalIgnoreCase);
+            if (a < 0) return null;
+            a += open.Length;
+            var b = source.IndexOf(close, a, StringComparison.OrdinalIgnoreCase);
+            return b < 0 ? null : source[a..b];
         }
 
         private static string SanitizeForFbr(string? value)
@@ -1264,11 +1295,42 @@ namespace MyApp.Api.Services.Implementations
                     // "Uncertain" and must be reconciled at FBR, never blindly retried.
                     var httpOutcome = FbrSubmissionStatus.OutcomeFor(statusCode, requestSent: true);
 
+                    // FBR fronts its DI service with a WSO2 gateway, and when that
+                    // gateway cannot pass the call on it answers 5xx with its own
+                    // XML fault instead of anything from the DI service:
+                    //   <am:fault><am:code>303001</am:code>
+                    //     <am:description>... [ Name : DI_DATA--vv1_APIsandboxEndpoint ]
+                    //     [ State : SUSPENDED ]</am:description></am:fault>
+                    // The request never reached the invoice service, so NOTHING was
+                    // recorded and it is safe to try again — the opposite of what a
+                    // genuine 5xx from the service itself means. Treating the two
+                    // alike told an operator six times over that their outcome was
+                    // UNCONFIRMED and they must not resubmit, when FBR's sandbox was
+                    // simply suspended (2026-09-23).
+                    var gatewayFault = GatewayFault(responseBody);
+                    if (gatewayFault != null)
+                    {
+                        var gwMsg = $"FBR's API gateway could not reach their invoicing service, so nothing was sent " +
+                                    $"and nothing was recorded — {gatewayFault} This is on FBR's side; try again shortly.";
+                        await AuditFbr("Error", action, invoice.Id, url, json, responseBody, statusCode, gwMsg);
+                        // Not sent = definitively not committed, so the bill stays
+                        // re-submittable rather than being parked for reconciliation.
+                        if (isSubmit) await PersistStatus(invoice, FbrSubmissionStatus.Failed, null, gwMsg);
+                        return Fail(gwMsg);
+                    }
+
                     string errorMsg = statusCode switch
                     {
                         401 => $"FBR authentication failed (0401) — the token is not authorized for seller NTN '{sellerNtnCnic}'. Please verify on IRIS portal that Digital Invoicing is enabled for this NTN and the token is active.{fbrDetail}",
                         403 => $"FBR access denied — your token may not have the required permissions.{fbrDetail}",
                         429 => "FBR rate limit exceeded. Please wait a moment and try again.",
+                        // Validate never commits anything at FBR, so the
+                        // "it may already be recorded" warning belongs to submit
+                        // alone — on a validate it frightens the operator away
+                        // from simply trying again.
+                        >= 500 when !isSubmit =>
+                            $"FBR returned a server error (HTTP {statusCode}) while checking this bill. Nothing was filed — " +
+                            $"validation records nothing at FBR. Try again shortly.{fbrDetail}",
                         >= 500 => $"FBR returned a server error (HTTP {statusCode}), so this submission's outcome is UNCONFIRMED. " +
                                   "Do NOT submit again — FBR may already have recorded this invoice. An administrator must verify it " +
                                   $"at FBR and, only if it is not there, reset it for resubmission.{fbrDetail}",
@@ -1489,10 +1551,20 @@ namespace MyApp.Api.Services.Implementations
                 _logger.LogError(ex, "FBR {Action} failed unexpectedly for invoice {InvoiceId}", action, invoice.Id);
                 // If the POST already went out, the outcome is unknown → Uncertain
                 // (block auto-retry). If it threw before sending, it's safe to retry.
+                // The resilience pipeline opens a circuit after repeated FBR
+                // failures and then short-circuits every following call in
+                // milliseconds. That is WHY one FBR outage reads as a whole batch
+                // failing, and "an unexpected error" told the operator none of it.
+                var brokenCircuit = ex.GetType().Name.Contains("BrokenCircuit", StringComparison.OrdinalIgnoreCase)
+                    || (ex.InnerException?.GetType().Name.Contains("BrokenCircuit", StringComparison.OrdinalIgnoreCase) ?? false);
                 var msg = posted
                     ? "An unexpected error occurred after contacting FBR, so this submission's outcome is " +
                       "UNCONFIRMED. Do NOT submit again — an administrator must verify it at FBR and reset it."
-                    : "An unexpected error occurred before the request reached FBR. See the FBR monitor / server logs for details.";
+                    : brokenCircuit
+                        ? "FBR stopped responding, so further attempts are paused for a few seconds to let their service " +
+                          "recover. Nothing was sent and nothing was recorded — try again in a moment."
+                        : "An unexpected error occurred before the request reached FBR. Nothing was sent. " +
+                          "See the FBR monitor for details.";
                 await AuditFbr("Error", action, invoice.Id, url, json, null, 0, msg);
                 if (isSubmit) await PersistStatus(invoice, posted ? FbrSubmissionStatus.Uncertain : FbrSubmissionStatus.Failed, null, msg);
                 return Fail(msg);
