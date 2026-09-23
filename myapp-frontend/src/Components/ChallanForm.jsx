@@ -6,6 +6,9 @@ import { saveItemFbrDefaults } from "../api/lookupApi";
 import { getAllUnits } from "../api/unitsApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getOpenSalesOrdersByCompany } from "../api/salesOrderApi";
+import { MdPersonAdd } from "react-icons/md";
+import ClientForm from "./ClientForm";
+import PermissionLackedHint from "./PermissionLackedHint";
 import { usePermissions } from "../contexts/PermissionsContext";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
@@ -28,6 +31,8 @@ const colors = {
 export default function ChallanForm({ onClose, onSaved, companyId }) {
   const { has } = usePermissions();
   const canUseOrders = has("salesorders.list.view");
+  const canCreateClient = has("clients.manage.create");
+  const [showAddClient, setShowAddClient] = useState(false);
   const [client, setClient] = useState(null);
   const [site, setSite] = useState("");
   const [poNumber, setPoNumber] = useState("");
@@ -228,6 +233,18 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                   onChange={(id, item) => { setClient(item); setSite(""); }}
                   placeholder="— Select Client —"
                 />
+                {canCreateClient ? (
+                  <button
+                    type="button"
+                    style={{ ...styles.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
+                    onClick={() => setShowAddClient(true)}
+                    title="Create a new client without leaving this form"
+                  >
+                    <MdPersonAdd size={14} /> New Client
+                  </button>
+                ) : (
+                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
+                )}
               </div>
               <div style={{ flex: 1.5, minWidth: 180 }}>
                 <label style={styles.label}>Site / Department</label>
@@ -310,11 +327,32 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
           </div>
         </form>
       </div>
+
+      {/* Inline Add Client — the same ClientForm the Clients page uses,
+          pinned to this company (companies=[] collapses the multi-company
+          picker). On save the list reloads and the new client is selected,
+          so the operator carries on without losing what they have typed. */}
+      {showAddClient && (
+        <ClientForm
+          client={null}
+          companyId={companyId}
+          companies={[]}
+          onClose={() => setShowAddClient(false)}
+          onSaved={async (created) => {
+            setShowAddClient(false);
+            const { data } = await getClientsByCompany(companyId).catch(() => ({ data: [] }));
+            setClients(data || []);
+            if (created?.id) setClient((data || []).find((c) => String(c.id) === String(created.id))
+              || { id: created.id, label: created.name });
+          }}
+        />
+      )}
     </div>
   );
 }
 
 const styles = {
+  inlineAddBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
   label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
   input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", transition: "border-color 0.25s", boxSizing: "border-box" },

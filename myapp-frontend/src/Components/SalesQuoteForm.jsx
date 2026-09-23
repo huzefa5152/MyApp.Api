@@ -2,6 +2,9 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import LineItemsEditor from "./LineItemsEditor";
+import { MdPersonAdd } from "react-icons/md";
+import ClientForm from "./ClientForm";
+import PermissionLackedHint from "./PermissionLackedHint";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -23,6 +26,8 @@ const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1
 export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const { has } = usePermissions();
   const canCreateItemType = has("itemtypes.manage.create");
+  const canCreateClient = has("clients.manage.create");
+  const [showAddClient, setShowAddClient] = useState(false);
   const isEdit = !!quote;
   const [client, setClient] = useState(quote ? { id: quote.clientId, label: quote.clientName } : null);
   const [date, setDate] = useState(quote?.date ? quote.date.slice(0, 10) : todayYmd());
@@ -152,6 +157,19 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
                   onChange={(id, item) => setClient(item)}
                   placeholder="— Select Client —"
                 />
+                {canCreateClient ? (
+                  <button
+                    type="button"
+                    style={{ ...s.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
+                    onClick={() => setShowAddClient(true)}
+                    title="Create a new client without leaving this form"
+                  >
+                    <MdPersonAdd size={14} /> New Client
+                  </button>
+                ) : (
+                  <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
+                )}
+
               </div>
               <div style={{ flex: 1, minWidth: 140 }}>
                 <label style={s.label}>Issue Date</label>
@@ -225,6 +243,26 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           </div>
         </form>
       </div>
+
+      {/* Inline Add Client — the same ClientForm the Clients page uses, pinned
+          to this company (companies=[] collapses the multi-company picker).
+          On save the list reloads and the new client is selected, so the
+          operator carries on without losing what they have typed here. */}
+      {showAddClient && (
+        <ClientForm
+          client={null}
+          companyId={companyId}
+          companies={[]}
+          onClose={() => setShowAddClient(false)}
+          onSaved={async (created) => {
+            setShowAddClient(false);
+            const { data } = await getClientsByCompany(companyId).catch(() => ({ data: [] }));
+            setClients(data || []);
+            if (created?.id) setClient((data || []).find((c) => String(c.id) === String(created.id))
+              || { id: created.id, label: created.name });
+          }}
+        />
+      )}
 
       {showAddItemType && (
         <ItemTypeForm
