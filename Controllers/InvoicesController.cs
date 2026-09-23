@@ -516,6 +516,40 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// Detach a delivery challan that was ATTACHED to a standalone bill —
+        /// the operator picked the wrong one — returning it to the billable pool
+        /// so it can go onto the right bill.
+        ///
+        /// Same permission as attaching: it edits the bill's own linkage. The
+        /// service refuses a bill raised FROM the challan (its lines reference
+        /// the delivery, so the link is structural) and any bill already filed
+        /// with FBR.
+        /// </summary>
+        [HttpPost("{id}/unlink-challan/{challanId}")]
+        [HasPermission("bills.manage.update")]
+        public async Task<ActionResult<InvoiceDto>> UnlinkChallan(int id, int challanId)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var updated = await _service.UnlinkChallanAsync(id, challanId);
+                if (updated == null) return NotFound(new { error = "Bill not found." });
+                return Ok(updated);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Raise a delivery challan FROM a standalone bill, mirroring its lines
         /// and joining the two line by line. For the operator who billed first
         /// and needs the delivery note afterwards.

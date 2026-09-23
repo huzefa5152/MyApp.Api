@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formStyles, modalSizes, colors } from "../theme";
 import { getPendingChallansByCompany } from "../api/challanApi";
-import { linkChallanToInvoice, createChallanForInvoice } from "../api/invoiceApi";
+import { linkChallanToInvoice, createChallanForInvoice, unlinkChallanFromInvoice } from "../api/invoiceApi";
 
 /** Compare descriptions the way an operator would: case and spacing are noise. */
 const norm = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -55,6 +55,14 @@ export default function LinkChallanModal({ invoice, onClose, onDone, canCreateCh
     })();
     return () => { alive = false; };
   }, [invoice.companyId]);
+
+  // What is on the bill right now. Numbers and ids come as parallel lists, and
+  // the id is what identifies a challan — a ChallanNumber is deliberately not
+  // unique.
+  const attachedChallans = (invoice.challanIds || []).map((id, k) => ({
+    id,
+    challanNumber: (invoice.challanNumbers || [])[k],
+  }));
 
   const q = search.trim().toLowerCase();
 
@@ -165,6 +173,46 @@ export default function LinkChallanModal({ invoice, onClose, onDone, canCreateCh
         <div style={formStyles.body}>
           {error && <div style={{ ...formStyles.error, marginBottom: "0.9rem" }}>{error}</div>}
 
+          {attachedChallans.length > 0 ? (
+            <>
+              <p style={{ marginTop: 0, fontSize: "0.85rem", color: colors.textSecondary }}>
+                This bill is on the delivery challan below. Detaching it returns the
+                challan to the pending list so it can go onto the right bill — the
+                bill itself is not changed.
+              </p>
+              <div style={{ display: "grid", gap: "0.5rem" }}>
+                {attachedChallans.map((c) => (
+                  <div
+                    key={c.id}
+                    style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      gap: "0.75rem", flexWrap: "wrap",
+                      padding: "0.6rem 0.8rem", borderRadius: 10,
+                      border: `1px solid ${colors.cardBorder}`, background: colors.cardBg,
+                    }}
+                  >
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem" }}>DC #{c.challanNumber}</span>
+                    <button
+                      disabled={busy}
+                      onClick={() => run(
+                        () => unlinkChallanFromInvoice(invoice.id, c.id),
+                        `Could not detach challan #${c.challanNumber} from this bill.`)}
+                      style={{
+                        minHeight: 44, padding: "0.5rem 1rem",
+                        border: "1px solid #ef9a9a", borderRadius: 8,
+                        background: "#ffebee", color: "#b71c1c",
+                        fontWeight: 600, fontSize: "0.8rem", boxShadow: "none",
+                        cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+                      }}
+                    >
+                      Detach
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
           <p style={{ marginTop: 0, fontSize: "0.85rem", color: colors.textSecondary }}>
             This bill was raised without a delivery challan. Attach one that already
             exists for <strong>{invoice.clientName}</strong>, or raise a new one from
@@ -251,6 +299,8 @@ export default function LinkChallanModal({ invoice, onClose, onDone, canCreateCh
                   </div>
                 ))}
               </div>
+            </>
+          )}
             </>
           )}
         </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink, MdLinkOff } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
@@ -1443,6 +1443,19 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdAddLink size={14} /> Link DC
                       </button>
                     )}
+                    {/* Detach: only a challan that was ATTACHED can be taken off.
+                        One the bill was raised FROM is referenced by the bill's
+                        own lines, so that bill is voided or deleted instead. */}
+                    {isBillsMode && canLinkChallan && inv.challanNumbers?.length > 0 && !inv.isCancelled &&
+                     inv.fbrStatus !== "Submitted" && (inv.items || []).every((i) => !i.deliveryItemId) && (
+                      <button
+                        style={{ ...styles.printBtn, backgroundColor: "#eceff1", color: "#546e7a", border: "1px solid #b0bec5" }}
+                        onClick={() => setLinkingChallanFor(inv)}
+                        title="Detach the delivery challan attached to this bill — it goes back to the pending list so it can be billed correctly. The bill itself is unchanged."
+                      >
+                        <MdLinkOff size={14} /> Unlink DC
+                      </button>
+                    )}
                     {(isBillsMode || isNotesMode) && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
@@ -1650,7 +1663,8 @@ export default function InvoicePage({ mode = "invoices" }) {
             const dcs = updated?.challanNumbers || [];
             notify(dcs.length
               ? `Bill #${updated.invoiceNumber} is now on DC #${dcs.join(", #")}.`
-              : `Bill #${linkingChallanFor.invoiceNumber} updated.`, "success");
+              : `Bill #${linkingChallanFor.invoiceNumber} has no delivery challan — the challan is back in the pending list.`,
+              "success");
             setLinkingChallanFor(null);
             if (selectedCompany) fetchInvoices(selectedCompany.id, page);
           }}

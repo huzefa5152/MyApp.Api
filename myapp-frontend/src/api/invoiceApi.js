@@ -167,3 +167,7 @@ export const linkChallanToInvoice = (invoiceId, challanId) =>
 /** Raise a delivery challan FROM a standalone bill, mirroring its lines. */
 export const createChallanForInvoice = (invoiceId) =>
   httpClient.post(`/invoices/${invoiceId}/create-challan`);
+
+/** Detach a challan that was attached to a standalone bill, freeing it to be billed elsewhere. */
+export const unlinkChallanFromInvoice = (invoiceId, challanId) =>
+  httpClient.post(`/invoices/${invoiceId}/unlink-challan/${challanId}`);

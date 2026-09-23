@@ -3,7 +3,7 @@ import {
   MdVisibility, MdPrint, MdPictureAsPdf, MdGridOn, MdDescription,
   MdCloudUpload, MdCheckCircle, MdHourglassEmpty, MdError, MdBlock, MdRestore,
   MdEdit, MdDelete, MdOpenInNew, MdCancel, MdPayments, MdUndo, MdPostAdd, MdCopyAll,
-  MdAddLink,
+  MdAddLink, MdLinkOff,
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
@@ -13,6 +13,13 @@ import { isFutureDocDate } from "../utils/dateInput";
 // whose challans simply did not load: the operator can attach a challan to
 // the first and cannot to the second.
 const isStandaloneBill = (inv) => !(inv.challanNumbers && inv.challanNumbers.length > 0);
+
+// A challan that was ATTACHED to a standalone bill can be detached again; one
+// the bill was RAISED FROM cannot, because the bill's lines reference its
+// delivery lines. The difference is visible in the data the row already
+// carries, so the action is only offered where the server will allow it.
+const hasDetachableChallan = (inv) =>
+  !isStandaloneBill(inv) && (inv.items || []).every((i) => !i.deliveryItemId);
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode, fbrEnabled = true) {
@@ -420,6 +427,16 @@ export default function InvoiceTable({
         {perms.canDelete && !isSubmitted && !inv.isCancelled && (
           <button style={btn.delete} onClick={() => onDelete?.(inv)} title="Delete — removes the row entirely, reverts its GL + inventory impact and frees its challans (leaves a numbering gap). Use Void to keep the number.">
             <MdDelete size={14} />
+          </button>
+        )}
+        {isBillsMode && perms.canLinkChallan && hasDetachableChallan(inv) && !inv.isCancelled &&
+         inv.fbrStatus !== "Submitted" && inv.documentType !== 9 && inv.documentType !== 10 && (
+          <button
+            style={btn.neutral}
+            onClick={() => onLinkChallan?.(inv)}
+            title="Detach the delivery challan attached to this bill — it goes back to the pending list so it can be billed correctly. The bill itself is unchanged."
+          >
+            <MdLinkOff size={14} />
           </button>
         )}
         {isBillsMode && perms.canLinkChallan && isStandaloneBill(inv) && !inv.isCancelled &&

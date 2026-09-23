@@ -64,6 +64,11 @@ namespace MyApp.Api.Services.Interfaces
         /// delivery note afterwards.</summary>
         Task<InvoiceDto?> CreateChallanForStandaloneAsync(int invoiceId);
 
+        /// <summary>Detach a challan that was ATTACHED to a standalone bill,
+        /// returning it to the billable pool. Refused for a bill raised FROM the
+        /// challan (its lines reference the delivery) and for a filed bill.</summary>
+        Task<InvoiceDto?> UnlinkChallanAsync(int invoiceId, int challanId);
+
         Task<bool> DeleteAsync(int id);
         /// <summary>
         /// Void (cancel) a bill that has NOT been submitted to FBR. The bill

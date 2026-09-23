@@ -312,6 +312,83 @@ def main() -> int:
             check("the bill voids", False, f"could not create it: {st} {err_of(vbill)}")
             check("voiding the bill puts the DELIVERED quantity back", False, "skipped")
 
+        # ══ Suite 7 — detaching a challan attached by mistake ═══════════════
+        print("\n-- Suite 7: detach a challan attached to the wrong bill --")
+        wrong_bill = mk_standalone_bill(cid, buyer, qty=2)
+        dc_wrong = mk_challan(cid, buyer, 9)
+        st, _ = api("POST", f"/api/invoices/{wrong_bill['id']}/link-challan/{dc_wrong['id']}")
+        check("a challan can be attached to the wrong bill", st == 200, str(st))
+
+        st, after = api("POST", f"/api/invoices/{wrong_bill['id']}/unlink-challan/{dc_wrong['id']}")
+        check("detaching it succeeds", st == 200,
+              str(st) if st == 200 else f"{st} {err_of(after)}")
+        check("the bill carries no challan again",
+              isinstance(after, dict) and not after.get("challanNumbers"),
+              str(after.get("challanNumbers") if isinstance(after, dict) else after))
+
+        st, dcv = api("GET", f"/api/deliverychallans/{dc_wrong['id']}")
+        check("the challan is billable again",
+              st == 200 and dcv.get("invoiceId") is None
+              and dcv.get("status") in ("Pending", "Imported", "No PO"),
+              f"status={dcv.get('status')} invoiceId={dcv.get('invoiceId')}")
+        check("its delivery quantity is untouched",
+              st == 200 and float((dcv.get("items") or [{}])[0].get("quantity", -1)) == 9.0,
+              str((dcv.get("items") or [{}])[0].get("quantity")))
+
+        st, reread = api("GET", f"/api/invoices/{wrong_bill['id']}")
+        check("the bill itself is unchanged",
+              st == 200 and len(reread.get("items") or []) == 1
+              and float((reread["items"][0]).get("quantity", 0)) == 2.0,
+              f"{len(reread.get('items') or [])} line(s)")
+
+        # It really is free — it can now go onto the right bill.
+        right_bill = mk_standalone_bill(cid, buyer, qty=1)
+        st, _ = api("POST", f"/api/invoices/{right_bill['id']}/link-challan/{dc_wrong['id']}")
+        check("the freed challan attaches to the right bill", st == 200, str(st))
+        api("POST", f"/api/invoices/{right_bill['id']}/unlink-challan/{dc_wrong['id']}")
+
+        print("\n-- Suite 8: what may not be detached --")
+        # A bill RAISED FROM a challan references its delivery lines, so cutting
+        # the link would leave the bill billing goods the challan is free to be
+        # sold again. Refused — the bill is voided or deleted instead.
+        dc_src = mk_challan(cid, buyer, 6)
+        st, from_challan = api("POST", "/api/invoices", {
+            "companyId": cid, "clientId": buyer, "date": today(), "gstRate": 18,
+            "challanIds": [dc_src["id"]],
+            "items": [{"deliveryItemId": dc_src["items"][0]["id"], "unitPrice": 100,
+                       "description": ITEM, "itemTypeId": item_type_id}],
+        })
+        check("a bill can be raised from a challan", st in (200, 201),
+              str(st) if st in (200, 201) else f"{st} {err_of(from_challan)}")
+        if st in (200, 201):
+            st, resp = api("POST", f"/api/invoices/{from_challan['id']}/unlink-challan/{dc_src['id']}")
+            check("a bill raised FROM the challan refuses to detach it", st == 400,
+                  f"{st} {err_of(resp)}")
+            check("...and points at delete or void",
+                  "delete" in err_of(resp).lower() or "void" in err_of(resp).lower(),
+                  err_of(resp))
+            api("DELETE", f"/api/invoices/{from_challan['id']}")
+
+        lone = mk_standalone_bill(cid, buyer)
+        dc_elsewhere = mk_challan(cid, buyer, 3)
+        st, resp = api("POST", f"/api/invoices/{lone['id']}/unlink-challan/{dc_elsewhere['id']}")
+        check("detaching a challan that is not on the bill is 404", st == 404,
+              f"{st} {err_of(resp)}")
+
+        # The read DTO must carry the challan ids, because that is what the UI
+        # needs to detach one — a ChallanNumber is deliberately not unique.
+        idbill = mk_standalone_bill(cid, buyer)
+        dc_id = mk_challan(cid, buyer, 4)
+        st, linked_dto = api("POST", f"/api/invoices/{idbill['id']}/link-challan/{dc_id['id']}")
+        check("the bill exposes the linked challan's id", st == 200
+              and (linked_dto.get("challanIds") or []) == [dc_id["id"]],
+              str(linked_dto.get("challanIds") if st == 200 else st))
+        check("ids and numbers line up", st == 200
+              and len(linked_dto.get("challanIds") or []) == len(linked_dto.get("challanNumbers") or []),
+              f"ids={linked_dto.get('challanIds')} numbers={linked_dto.get('challanNumbers')}")
+        api("POST", f"/api/invoices/{idbill['id']}/unlink-challan/{dc_id['id']}")
+
+
         print("\n-- Suite 6: an untouched delivery is left alone --")
         dc_plain = mk_challan(cid, buyer, 8)
         dp_item = dc_plain["items"][0]["id"]

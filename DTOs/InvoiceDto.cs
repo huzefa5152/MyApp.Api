@@ -118,6 +118,12 @@
 
         public List<InvoiceItemDto> Items { get; set; } = new();
         public List<int> ChallanNumbers { get; set; } = new();
+
+        /// <summary>Row ids of the linked challans, in the same order as
+        /// <see cref="ChallanNumbers"/>. Needed because a ChallanNumber is NOT
+        /// unique — the Duplicate Challan flow emits same-numbered rows on
+        /// purpose — so anything acting on one challan must name its id.</summary>
+        public List<int> ChallanIds { get; set; } = new();
         // Header link to the source Sales Order (null = not order-linked). Lets the
         // bill-edit UI distinguish "SO-linked" from "plain standalone" for item add/remove.
         public int? SalesOrderId { get; set; }

@@ -289,6 +289,7 @@ namespace MyApp.Api.Services.Implementations
                 },
             }).ToList(),
             ChallanNumbers = inv.DeliveryChallans.Select(dc => dc.ChallanNumber).ToList(),
+            ChallanIds = inv.DeliveryChallans.Select(dc => dc.Id).ToList(),
             // Aggregate Site / IndentNo / PoNumber from linked challans
             // — joined with "; " when distinct values exist (covers
             // multi-challan bills rolling up two different POs / sites).
@@ -2397,6 +2398,51 @@ namespace MyApp.Api.Services.Implementations
 
             challan.InvoiceId = invoice.Id;
             challan.Status = "Invoiced";
+            await _context.SaveChangesAsync();
+
+            var reloaded = await _invoiceRepo.GetByIdAsync(invoice.Id);
+            return reloaded == null ? null : ToDto(reloaded);
+        }
+
+        public async Task<InvoiceDto?> UnlinkChallanAsync(int invoiceId, int challanId)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.DeliveryChallans)
+                    .ThenInclude(dc => dc.Items)
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+            if (invoice == null) return null;
+
+            // A filed bill keeps its challans. Cutting the link locally would
+            // leave us claiming a different delivery history from the one behind
+            // the document FBR already recorded — the same reason a filed bill
+            // cannot be voided.
+            if (invoice.FbrSubmittedAt != null || !string.IsNullOrWhiteSpace(invoice.FbrIRN))
+                throw new InvalidOperationException(
+                    "This bill has been submitted to FBR — its delivery challan cannot be detached.");
+
+            var challan = invoice.DeliveryChallans.FirstOrDefault(c => c.Id == challanId);
+            if (challan == null)
+                throw new KeyNotFoundException("That delivery challan is not on this bill.");
+
+            // If the bill was RAISED FROM this challan, its lines point at the
+            // challan's delivery lines and the link is structural: cutting it
+            // would leave the bill billing goods from a challan that is free to
+            // be billed again. Only an attached challan can be detached.
+            var deliveryItemIds = challan.Items.Select(di => di.Id).ToHashSet();
+            if (invoice.Items.Any(ii => ii.DeliveryItemId != null && deliveryItemIds.Contains(ii.DeliveryItemId.Value)))
+                throw new InvalidOperationException(
+                    $"Bill #{invoice.InvoiceNumber} was raised from challan #{challan.ChallanNumber}, so it cannot " +
+                    "just be detached. Delete or void the bill instead, which frees the challan properly.");
+
+            // Same release the delete and void paths perform: put back anything a
+            // smaller billed quantity overwrote, then return the challan to its
+            // own billable state.
+            RestoreDeliveredQuantities(challan);
+            var hasPo = !string.IsNullOrWhiteSpace(challan.PoNumber);
+            challan.Status = hasPo ? (challan.IsImported ? "Imported" : "Pending") : "No PO";
+            challan.InvoiceId = null;
+            _context.DeliveryChallans.Update(challan);
             await _context.SaveChangesAsync();
 
             var reloaded = await _invoiceRepo.GetByIdAsync(invoice.Id);
