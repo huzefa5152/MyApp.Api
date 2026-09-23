@@ -300,6 +300,29 @@ Publish output optimized from 79 MB to 37 MB via:
 
 
 
+### 2026-09-24 — Detach a delivery challan from the wrong bill
+
+Attaching a challan to a bill was a one-way door: pick the wrong one and the
+only way back was a database fix. A bill that has an attached challan now
+carries an **Unlink DC** action — the challan goes back to the pending list and
+can be billed correctly, while the bill itself is untouched.
+
+Only an *attached* challan can be detached. A bill **raised from** a challan
+references that challan's delivery lines, so cutting the link would leave the
+bill billing goods the challan is free to sell again; that is refused, naming
+delete or void as the way to free it properly. A bill already filed with FBR is
+refused too — the same reason a filed bill cannot be voided. Detaching restores
+any delivered quantity a smaller billed quantity had written over it, exactly as
+delete and void do.
+
+**Removed: the Grouped by Item Type / Individual lines switch on the Bills tab.**
+There it could only ever set a saved print preference — the lines below stayed
+individual either way — so it read as a control that did nothing. Bills keep
+whatever setting they were saved with; nothing reads it from that form any more.
+The switch is unchanged on the **Invoices** tab, where it does drive the editing
+table: a quantity typed against an item-type group spreads across that group's
+lines and one unit price sets the whole group.
+
 ### 2026-09-23 — One row per item, and a bill that can find its delivery challan
 
 **An item delivered several times is one line on the bill.** The same product
