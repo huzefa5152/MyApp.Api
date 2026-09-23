@@ -323,7 +323,7 @@ const styles = {
     fontSize: "0.88rem",
     color: colors.textSecondary,
   },
-  addBtn: {
+  addBtn: { minHeight: 44,
     display: "inline-flex",
     alignItems: "center",
     gap: "0.4rem",

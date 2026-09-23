@@ -41,7 +41,7 @@ const styles = {
     color: "#5f6d7e",
     margin: 0,
   },
-  addBtn: {
+  addBtn: { minHeight: 44,
     display: "inline-flex",
     alignItems: "center",
     gap: "0.4rem",

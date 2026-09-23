@@ -3303,7 +3303,7 @@ const styles = {
     flexWrap: "wrap",
     margin: "1rem 0 0.5rem",
   },
-  inlineAddBtn: {
+  inlineAddBtn: { minHeight: 44,
     display: "inline-flex", alignItems: "center", gap: "0.3rem",
     padding: "0.35rem 0.7rem",
     border: `1px solid ${colors.blue}`,

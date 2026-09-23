@@ -92,6 +92,7 @@ export const cardStyles = {
     borderTop: `1px solid ${colors.cardBorder}`,
   },
   button: {
+    minHeight: 44,
     padding: "0.45rem 1rem",
     fontSize: "0.82rem",
     fontWeight: "600",
@@ -295,6 +296,7 @@ export const formStyles = {
     flexShrink: 0, // footer always visible (buttons like Save/Cancel)
   },
   button: {
+    minHeight: 44,
     padding: "0.5rem 1.25rem",
     fontSize: "0.9rem",
     fontWeight: "600",

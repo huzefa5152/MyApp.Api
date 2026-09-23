@@ -275,7 +275,7 @@ const styles = {
   title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
   companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
   subtitle: { margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.9rem", maxWidth: 720 },
-  addBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", borderRadius: 8, border: "none", backgroundColor: colors.primary, color: "white", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
+  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", borderRadius: 8, border: "none", backgroundColor: colors.primary, color: "white", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
   // Card wraps the PO formats table; overflowX makes the 5-column
   // grid (Name / Client / Status / Last updated / Actions) scroll
   // horizontally on mobile instead of getting cut off.

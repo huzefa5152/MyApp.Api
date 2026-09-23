@@ -493,7 +493,7 @@ const styles = {
     color: colors.danger,
     cursor: "pointer",
   },
-  addItemBtn: {
+  addItemBtn: { minHeight: 44,
     display: "inline-flex",
     alignItems: "center",
     gap: "0.3rem",

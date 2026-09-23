@@ -680,7 +680,7 @@ const styles = {
   },
   headerTitle: { margin: 0, fontSize: "1.4rem", fontWeight: 700, color: colors.textPrimary },
   headerSub: { margin: "0.2rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: {
+  addBtn: { minHeight: 44,
     display: "flex",
     alignItems: "center",
     gap: "0.4rem",
