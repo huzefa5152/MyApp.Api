@@ -4,11 +4,33 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- This description is what a chat app or search engine shows when the
+         link is shared, and it is served as static HTML to everyone who opens
+         the site — no tenant is logged in at that point. It must therefore
+         describe the PRODUCT and never a customer: it previously carried one
+         company's marketing copy, so sharing the link advertised that company
+         to whoever received it. -->
     <meta
       name="description"
-      content="Hakimi Traders — Karachi-based specialist supplier of pneumatic, hydraulic and industrial equipment. Genuine components from 20+ global brands since 2009."
+      content="FBR Digital Invoicing ERP — digital invoicing and inventory for Pakistani traders and wholesalers. Delivery challans, sales tax invoices, purchases, stock and accounts in one place, filed straight to FBR."
     />
     <title>FBR Digital Invoicing ERP</title>
+
+    <!-- Link preview (WhatsApp, Slack, search). Kept in step with the
+         description above; both are product-level, never tenant-level. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FBR Digital Invoicing ERP" />
+    <meta property="og:title" content="FBR Digital Invoicing ERP" />
+    <meta
+      property="og:description"
+      content="Digital invoicing and inventory for Pakistani traders and wholesalers — challans, sales tax invoices, purchases, stock and accounts, filed straight to FBR."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="FBR Digital Invoicing ERP" />
+    <meta
+      name="twitter:description"
+      content="Digital invoicing and inventory for Pakistani traders and wholesalers — challans, sales tax invoices, purchases, stock and accounts, filed straight to FBR."
+    />
 
     <!-- Typography: Space Grotesk (display) / Inter (body) / IBM Plex Mono (labels) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
