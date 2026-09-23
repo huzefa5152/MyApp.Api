@@ -104,6 +104,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [clients, setClients] = useState([]);
   // Inline create modals — same affordances StandaloneInvoiceForm has
   const [showAddClient, setShowAddClient] = useState(false);
+  // Quantity the operator typed for a merged row, keyed by the row's lead
+  // delivery item. Absent = bill exactly what was delivered.
+  const [rowQtys, setRowQtys] = useState({});
   const [showAddItemType, setShowAddItemType] = useState(false);
   const [pendingItemTypeRowId, setPendingItemTypeRowId] = useState(null);
   const [allChallans, setAllChallans] = useState([]);
@@ -641,6 +644,63 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
   );
 
+  // ── One row per item, however many times it was delivered ─────────────────
+  // The same product delivered on three challans used to be three rows the
+  // operator had to price and classify three times. They are now one row
+  // carrying the summed quantity and every DC number behind it.
+  //
+  // Rows merge only when the item AND the unit price agree — a different rate
+  // is a different line, and blending them would move the bill total. The
+  // FIRST delivery of a group leads it: the row's item type, description,
+  // price and FBR fields are the lead's, and every delivery in the group
+  // inherits them when the bill is written.
+  const rowKeyOf = (item) => [
+    (itemDescriptions[item.id] ?? item.description ?? "").trim().toLowerCase(),
+    (itemUoms[item.id] ?? item.unit ?? "").trim().toLowerCase(),
+    String(parseFloat(itemPrices[item.id]) || 0),
+  ].join("|");
+
+  const billRows = (() => {
+    const groups = new Map();
+    for (const item of allItems) {
+      const key = rowKeyOf(item);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+    return [...groups.values()].map((members) => {
+      // Oldest delivery first — the challan list is newest-first, and the
+      // quantity split below fills the oldest before touching later ones.
+      const ordered = [...members].sort((a, b) => a.challanNumber - b.challanNumber);
+      const lead = ordered[0];
+      const delivered = ordered.reduce((sum, m) => sum + (Number(m.quantity) || 0), 0);
+      const typed = rowQtys[lead.id];
+      const quantity = typed === undefined || typed === "" ? delivered : (Number(typed) || 0);
+      return { ...lead, members: ordered, delivered, quantity, isMerged: ordered.length > 1 };
+    });
+  })();
+
+  // Spread a row's quantity back over its deliveries, oldest first: a reduction
+  // therefore comes off the most recent delivery and the earlier ones stay
+  // exactly as they were signed for. Anything above what was delivered lands on
+  // the newest, which is the only line that can honestly carry it.
+  const splitAcrossDeliveries = (row) => {
+    let left = Number(row.quantity) || 0;
+    const shares = row.members.map((m) => {
+      const give = Math.min(Number(m.quantity) || 0, left);
+      left -= give;
+      return { item: m, qty: give };
+    });
+    if (left > 0 && shares.length > 0) shares[shares.length - 1].qty += left;
+    return shares;
+  };
+
+  // A delivery that would be billed as nothing is a mistake worth catching
+  // before it is written: the challan would be marked billed while none of its
+  // goods were invoiced. The operator is told which one to take off the bill.
+  const zeroedRows = billRows
+    .map((row) => ({ row, zeroed: splitAcrossDeliveries(row).filter((s) => s.qty <= 0) }))
+    .filter((x) => x.zeroed.length > 0);
+
   // Prefill the bill PO from the selected challans (they carry the order's PO)
   // when the operator hasn't set one yet — covers the "Generate Bill from order"
   // path where challans are preselected without calling handleSalesOrderPick.
@@ -709,9 +769,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, itemTypes, allChallans]);
 
-  const subtotal = allItems.reduce((sum, item) => {
-    const price = parseFloat(itemPrices[item.id]) || 0;
-    return sum + item.quantity * price;
+  const subtotal = billRows.reduce((sum, row) => {
+    const price = parseFloat(itemPrices[row.id]) || 0;
+    return sum + row.quantity * price;
   }, 0);
   const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
@@ -792,6 +852,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
     const missingPrices = allItems.filter((i) => !itemPrices[i.id] || parseFloat(itemPrices[i.id]) <= 0);
     if (missingPrices.length > 0) return setError("Enter unit price for all items.");
+    // Billing a delivery as nothing would mark its challan billed while none of
+    // its goods were invoiced, and the goods would never be billable again.
+    // Naming the challan is what makes this fixable — the operator unticks it.
+    if (zeroedRows.length > 0) {
+      const dcs = [...new Set(zeroedRows.flatMap((z) => z.zeroed.map((x) => x.item.challanNumber)))];
+      return setError(
+        `The quantity you entered leaves DC #${dcs.join(", #")} with nothing to bill. ` +
+        `Raise the quantity, or untick ${dcs.length > 1 ? "those challans" : "that challan"} so it stays billable later.`);
+    }
 
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
     const missingPick = allItems.filter((i) => !itemTypeIds[i.id] && !itemNonInvIds[i.id]);
@@ -834,8 +903,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         challanIds: selectedIds,
-        items: allItems.map((item) => ({
-          deliveryItemId: item.id,
+        items: billRows.flatMap((row) => {
+          const item = row;   // classification/price come from the row the operator edited
+          return splitAcrossDeliveries(row).map(({ item: member, qty }) => ({
+          deliveryItemId: member.id,
+          // The row's quantity, split back over its deliveries oldest-first.
+          quantity: qty,
           unitPrice: parseFloat(itemPrices[item.id]),
           description: itemDescriptions[item.id] || item.description,
           // ItemType link (new) — when set, backend re-derives HS/UOM/SaleType from catalog
@@ -856,7 +929,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           saleType: chosenScenario
             ? chosenScenario.saleType
             : (itemSaleTypes[item.id]?.trim() || null),
-        })),
+          }));
+        }),
         poDateUpdates,
         poNumber: billPoNumber.trim() || null,
         poDate: billPoDate ? new Date(billPoDate).toISOString() : null,
@@ -1534,13 +1608,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </tr>
                             </thead>
                             <tbody>
-                              {allItems.map((item) => {
+                              {billRows.map((item) => {
                                 const price = parseFloat(itemPrices[item.id]) || 0;
                                 const displayUom = itemUoms[item.id] ?? item.unit;
                                 return (
                                   <tr key={item.id} style={styles.unifiedRow}>
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
-                                      {item.challanNumber}
+                                      {item.isMerged
+                                        ? item.members.map((m) => m.challanNumber).join(", ")
+                                        : item.challanNumber}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Picking an ItemType auto-fills HS Code, UOM, SaleType,
@@ -1606,9 +1682,25 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       />
                                     </td>
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontSize: "0.82rem", paddingRight: "0.5rem" }}>
-                                      {/* Strip trailing zeros so 1.0000 → "1",
-                                          12.5000 → "12.5", 0.0004 → "0.0004". */}
-                                      {parseFloat(Number(item.quantity || 0).toFixed(12)).toString()}
+                                      {/* Editable: an item delivered several times is
+                                          billed as one quantity, and the split back
+                                          over the deliveries happens on save. */}
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        value={rowQtys[item.id] ?? parseFloat(Number(item.quantity || 0).toFixed(12))}
+                                        onChange={(e) => setRowQtys((p) => ({ ...p, [item.id]: e.target.value }))}
+                                        style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right" }}
+                                        title={item.isMerged
+                                          ? `Delivered ${item.delivered} across DC ${item.members.map((m) => m.challanNumber).join(", ")}`
+                                          : "Quantity to bill"}
+                                      />
+                                      {item.isMerged && (
+                                        <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2 }}>
+                                          delivered {parseFloat(Number(item.delivered).toFixed(12)).toString()}
+                                        </div>
+                                      )}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* UOM autocomplete (same backing endpoint
