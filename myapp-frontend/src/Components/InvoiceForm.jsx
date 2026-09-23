@@ -11,6 +11,7 @@ import { getFbrApplicableScenarios } from "../api/fbrApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
 import { formStyles, modalSizes } from "../theme";
 import { todayYmd } from "../utils/dateInput";
+import { splitDeliveryQuantities, isUnderFloor, rowFloor } from "../utils/deliverySplit";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
@@ -679,27 +680,18 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     });
   })();
 
-  // Spread a row's quantity back over its deliveries, oldest first: a reduction
-  // therefore comes off the most recent delivery and the earlier ones stay
-  // exactly as they were signed for. Anything above what was delivered lands on
-  // the newest, which is the only line that can honestly carry it.
-  const splitAcrossDeliveries = (row) => {
-    let left = Number(row.quantity) || 0;
-    const shares = row.members.map((m) => {
-      const give = Math.min(Number(m.quantity) || 0, left);
-      left -= give;
-      return { item: m, qty: give };
-    });
-    if (left > 0 && shares.length > 0) shares[shares.length - 1].qty += left;
-    return shares;
-  };
+  // Quantities print without float dust: 2.9 - 0.5 must read 2.4, not 2.4000000000000004.
+  const num = (v) => parseFloat(Number(v || 0).toFixed(12)).toString();
 
-  // A delivery that would be billed as nothing is a mistake worth catching
-  // before it is written: the challan would be marked billed while none of its
-  // goods were invoiced. The operator is told which one to take off the bill.
-  const zeroedRows = billRows
-    .map((row) => ({ row, zeroed: splitAcrossDeliveries(row).filter((s) => s.qty <= 0) }))
-    .filter((x) => x.zeroed.length > 0);
+  // Splitting a merged row back over its deliveries is a rule in its own right —
+  // see utils/deliverySplit.js, pinned by scripts/test_delivery_split.mjs.
+  const splitAcrossDeliveries = (row) =>
+    splitDeliveryQuantities(row.quantity, row.members)
+      .map((qty, k) => ({ item: row.members[k], qty }));
+
+  // A row billed below its floor would mark a challan billed with none of its
+  // goods on the bill, and it could never be billed again. Caught before saving.
+  const underFloorRows = billRows.filter((row) => isUnderFloor(row.quantity, row.members));
 
   // Prefill the bill PO from the selected challans (they carry the order's PO)
   // when the operator hasn't set one yet — covers the "Generate Bill from order"
@@ -795,21 +787,34 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     return hasPick && desc.length > 0 && qty > 0 && price > 0;
   });
 
-  const handlePriceChange = (itemId, value) => {
-    setItemPrices((prev) => ({ ...prev, [itemId]: value }));
+  // A merged row is ONE line to the operator, so an edit to the fields that
+  // DEFINE the row — description, UOM, unit price — has to reach every delivery
+  // behind it. Writing only the lead changes the lead's group key, and the row
+  // splits apart on the first keystroke: pricing a three-delivery row would
+  // leave the operator looking at two rows, one of them priced.
+  const idsInRowOf = (itemId) => {
+    const row = billRows.find((r) => r.members.some((m) => m.id === itemId));
+    return row ? row.members.map((m) => m.id) : [itemId];
   };
 
-  const handleDescriptionChange = (itemId, value) => {
-    setItemDescriptions((prev) => ({ ...prev, [itemId]: value }));
-  };
+  const setForRow = (setter, itemId, value) =>
+    setter((prev) => {
+      const next = { ...prev };
+      for (const id of idsInRowOf(itemId)) next[id] = value;
+      return next;
+    });
+
+  const handlePriceChange = (itemId, value) => setForRow(setItemPrices, itemId, value);
+
+  const handleDescriptionChange = (itemId, value) => setForRow(setItemDescriptions, itemId, value);
 
   // Fires when user picks an item from SmartItemAutocomplete dropdown.
   // `picked` has { name, hsCode, uom, fbrUOMId, saleType, source }.
   // Auto-fills HS Code / UOM / Sale Type in one shot.
   const handleItemPick = (itemId, picked) => {
-    setItemDescriptions((p) => ({ ...p, [itemId]: picked.name || p[itemId] }));
+    if (picked.name) setForRow(setItemDescriptions, itemId, picked.name);
     if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [itemId]: picked.hsCode }));
-    if (picked.uom) setItemUoms((p) => ({ ...p, [itemId]: picked.uom }));
+    if (picked.uom) setForRow(setItemUoms, itemId, picked.uom);
     if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [itemId]: picked.fbrUOMId }));
     if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [itemId]: picked.saleType }));
   };
@@ -830,11 +835,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     setItemSaleTypes((p) => ({ ...p, [id]: "" }));
     setItemFbrUomIds((p) => ({ ...p, [id]: null }));
     const curDesc = (itemDescriptions[id] ?? item.description) || "";
-    if (!curDesc.trim()) setItemDescriptions((p) => ({ ...p, [id]: n.defaultLineDescription || n.name || "" }));
+    if (!curDesc.trim()) setForRow(setItemDescriptions, id, n.defaultLineDescription || n.name || "");
     const curUom = (itemUoms[id] ?? item.unit) || "";
-    if (!curUom.trim()) setItemUoms((p) => ({ ...p, [id]: n.unitName || "" }));
+    if (!curUom.trim()) setForRow(setItemUoms, id, n.unitName || "");
     if ((!itemPrices[id] || Number(itemPrices[id]) === 0) && n.defaultSalePrice != null) {
-      setItemPrices((p) => ({ ...p, [id]: String(n.defaultSalePrice) }));
+      setForRow(setItemPrices, id, String(n.defaultSalePrice));
     }
   };
 
@@ -855,11 +860,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // Billing a delivery as nothing would mark its challan billed while none of
     // its goods were invoiced, and the goods would never be billable again.
     // Naming the challan is what makes this fixable — the operator unticks it.
-    if (zeroedRows.length > 0) {
-      const dcs = [...new Set(zeroedRows.flatMap((z) => z.zeroed.map((x) => x.item.challanNumber)))];
+    if (underFloorRows.length > 0) {
+      const row = underFloorRows[0];
+      const floor = rowFloor(row.members);
+      const n = row.members.length;
       return setError(
-        `The quantity you entered leaves DC #${dcs.join(", #")} with nothing to bill. ` +
-        `Raise the quantity, or untick ${dcs.length > 1 ? "those challans" : "that challan"} so it stays billable later.`);
+        `"${itemDescriptions[row.id] || row.description}": the quantity you entered is lower than the minimum ` +
+        `for ${n} selected delivery challan${n > 1 ? "s" : ""}. Enter at least ${parseFloat(floor.toFixed(4))}, ` +
+        `or remove ${n > 1 ? "one or more challans" : "that challan"} from this bill.`);
     }
 
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
@@ -1643,7 +1651,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             // own product text (editable via SmartItemAutocomplete).
                                             if (picked.hsCode) setItemHsCodes((p) => ({ ...p, [item.id]: picked.hsCode }));
                                             if (picked.saleType) setItemSaleTypes((p) => ({ ...p, [item.id]: picked.saleType }));
-                                            if (picked.uom) setItemUoms((p) => ({ ...p, [item.id]: picked.uom }));
+                                            if (picked.uom) setForRow(setItemUoms, item.id, picked.uom);
                                             if (picked.fbrUOMId) setItemFbrUomIds((p) => ({ ...p, [item.id]: picked.fbrUOMId }));
                                           } else {
                                             // Clearing the ItemType also clears the bound HS Code,
@@ -1655,7 +1663,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                             // editing or clear via SmartItemAutocomplete.
                                             setItemHsCodes((p) => ({ ...p, [item.id]: "" }));
                                             setItemSaleTypes((p) => ({ ...p, [item.id]: "" }));
-                                            setItemUoms((p) => ({ ...p, [item.id]: "" }));
+                                            setForRow(setItemUoms, item.id, "");
                                             setItemFbrUomIds((p) => ({ ...p, [item.id]: null }));
                                             setItemAccountIds((p) => ({ ...p, [item.id]: null }));
                                           }
@@ -1689,18 +1697,50 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         type="number"
                                         min="0"
                                         step="any"
-                                        value={rowQtys[item.id] ?? parseFloat(Number(item.quantity || 0).toFixed(12))}
+                                        value={rowQtys[item.id] ?? num(item.quantity)}
                                         onChange={(e) => setRowQtys((p) => ({ ...p, [item.id]: e.target.value }))}
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "right" }}
                                         title={item.isMerged
                                           ? `Delivered ${item.delivered} across DC ${item.members.map((m) => m.challanNumber).join(", ")}`
                                           : "Quantity to bill"}
                                       />
-                                      {item.isMerged && (
-                                        <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2 }}>
-                                          delivered {parseFloat(Number(item.delivered).toFixed(12)).toString()}
-                                        </div>
-                                      )}
+                                      {item.isMerged && (() => {
+                                        // Show the operator WHERE the quantity lands before they
+                                        // save it. Reducing 56 to 52 takes the 4 off DC 2778 and
+                                        // leaves DC 2770 alone — which is impossible to guess from
+                                        // a single number, and is the whole point of the rule.
+                                        const floor = rowFloor(item.members);
+                                        if (isUnderFloor(item.quantity, item.members)) {
+                                          return (
+                                            <div style={{ fontSize: "0.68rem", color: colors.danger, marginTop: 2 }}>
+                                              min {num(floor)} for {item.members.length} challans
+                                            </div>
+                                          );
+                                        }
+                                        const parts = splitAcrossDeliveries(item);
+                                        const changed = parts.some(({ item: m, qty }) => qty !== m.quantity);
+                                        if (!changed) {
+                                          return (
+                                            <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2 }}>
+                                              delivered {num(item.delivered)}
+                                            </div>
+                                          );
+                                        }
+                                        return (
+                                          <div style={{ fontSize: "0.68rem", color: colors.textSecondary, marginTop: 2, lineHeight: 1.35 }}>
+                                            {parts.map(({ item: m, qty }, k) => (
+                                              <span key={m.id}>
+                                                {k > 0 && " · "}
+                                                <span style={qty !== m.quantity
+                                                  ? { color: colors.danger, fontWeight: 600 }
+                                                  : undefined}>
+                                                  {m.challanNumber}: {num(qty)}
+                                                </span>
+                                              </span>
+                                            ))}
+                                          </div>
+                                        );
+                                      })()}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* UOM autocomplete (same backing endpoint
@@ -1711,7 +1751,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                       <LookupAutocomplete
                                         endpoint="/lookup/units"
                                         value={displayUom || ""}
-                                        onChange={(val) => setItemUoms((p) => ({ ...p, [item.id]: val }))}
+                                        onChange={(val) => setForRow(setItemUoms, item.id, val)}
                                       />
                                     </td>
                                     <td style={styles.unifiedTd}>
