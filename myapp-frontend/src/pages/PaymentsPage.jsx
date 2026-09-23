@@ -539,5 +539,5 @@ const vd = {
   v: { color: colors.textPrimary, fontWeight: 600, textAlign: "right" },
   allocRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.25rem 0.5rem", background: colors.inputBg, borderRadius: 6, marginBottom: 4, fontSize: "0.82rem" },
   footer: { display: "flex", justifyContent: "flex-end", padding: "0.75rem 1.1rem", borderTop: `1px solid ${colors.cardBorder}` },
-  closeBtn: { padding: "0.5rem 1rem", minHeight: 40, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textPrimary, fontWeight: 700, cursor: "pointer" },
+  closeBtn: { padding: "0.5rem 1rem", minHeight: 44, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textPrimary, fontWeight: 700, cursor: "pointer" },
 };

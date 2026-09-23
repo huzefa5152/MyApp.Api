@@ -231,7 +231,7 @@ const s = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1.1rem 1.25rem 0.75rem", borderBottom: "1px solid #eef1f6" },
   title: { margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#1a2332" },
   subtitle: { margin: "0.2rem 0 0", fontSize: "0.82rem", color: "#5f6d7e" },
-  closeBtn: { border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, borderRadius: 8, display: "inline-flex" },
+  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center", border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, borderRadius: 8, display: "inline-flex" },
   toolbar: { display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid #eef1f6" },
   searchWrap: { display: "flex", alignItems: "center", gap: "0.4rem", flex: "1 1 220px", minWidth: 0, border: "1px solid #d0d7e2", borderRadius: 9, padding: "0.35rem 0.6rem", background: "#fff" },
   searchInput: { flex: 1, minWidth: 0, border: "none", outline: "none", fontSize: "0.86rem", background: "transparent" },

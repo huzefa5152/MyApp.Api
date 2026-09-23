@@ -924,5 +924,5 @@ const st = {
   copyTypeBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 0.75rem", borderRadius: 9, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", textAlign: "left", minHeight: 44, boxShadow: "none" },
   copyTypeBtnSame: { gridColumn: "1 / -1", borderColor: colors.teal, color: "#00695c", background: "#e0f2f1" },
   previewHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", padding: "0.7rem 1rem", background: "#fff", borderBottom: `1px solid ${colors.cardBorder}` },
-  closeBtn: { border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, display: "inline-flex", boxShadow: "none" },
+  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center", border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, display: "inline-flex", boxShadow: "none" },
 };

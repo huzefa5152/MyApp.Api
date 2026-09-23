@@ -207,7 +207,7 @@ const styles = {
   title: { margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#fff" },
   closeBtn: {
     background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
-    cursor: "pointer", width: 32, height: 32, minWidth: 32, padding: 0,
+    cursor: "pointer", width: 44, height: 44, minWidth: 32, padding: 0,
     borderRadius: 8, boxShadow: "none",
     display: "inline-flex", alignItems: "center", justifyContent: "center",
   },

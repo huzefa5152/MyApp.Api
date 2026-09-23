@@ -127,7 +127,7 @@ const s = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1rem 1.25rem 0.75rem", borderBottom: "1px solid #eef1f6" },
   title: { margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#1a2332", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   subtitle: { margin: "0.2rem 0 0", fontSize: "0.82rem", color: "#5f6d7e" },
-  closeBtn: { border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, borderRadius: 8, display: "inline-flex", flexShrink: 0 },
+  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center", border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, borderRadius: 8, display: "inline-flex", flexShrink: 0 },
   modes: { display: "grid", gap: "0.6rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", padding: "0.9rem 1.25rem" },
   mode: { display: "flex", gap: "0.6rem", alignItems: "flex-start", border: "1px solid #d8dee8", borderRadius: 10, padding: "0.7rem 0.85rem", cursor: "pointer", background: "#fff" },
   modeActive: { borderColor: "#0d47a1", background: "#f3f7ff", boxShadow: "0 0 0 1px #0d47a1 inset" },

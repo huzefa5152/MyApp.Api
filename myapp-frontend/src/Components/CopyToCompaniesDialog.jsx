@@ -194,7 +194,7 @@ const styles = {
   title: { margin: 0, flex: 1, fontSize: "1.02rem", fontWeight: 700, color: "#fff" },
   closeBtn: {
     background: "rgba(255,255,255,0.18)", border: "none", color: "#fff",
-    cursor: "pointer", width: 28, height: 28, borderRadius: 6,
+    cursor: "pointer", width: 44, height: 44, borderRadius: 6,
     display: "inline-flex", alignItems: "center", justifyContent: "center",
   },
   body: { padding: "1rem 1.25rem 0.5rem", overflowY: "auto", flex: 1 },

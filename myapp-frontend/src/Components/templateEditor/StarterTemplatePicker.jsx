@@ -77,7 +77,7 @@ const s = {
   title: {
     margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "#1a2332",
   },
-  closeBtn: {
+  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center",
     border: "none", background: "transparent", cursor: "pointer",
     color: "#888", padding: 4, borderRadius: 6,
   },
