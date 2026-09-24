@@ -22,7 +22,10 @@ import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBook
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
 import { billFormShell, billFormBody } from "./bill/billTheme";
-import TaxRateBlockHint from "./TaxRateBlockHint";
+import BillStep from "./bill/BillStep";
+import BillChecklist from "./bill/BillChecklist";
+import BillTotals from "./bill/BillTotals";
+import { BILL_ANCHORS, rateBlockText, billChecklist } from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
@@ -1607,15 +1610,62 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     }
   };
 
+  // The shared bill layout (Components/bill, utils/billEntry), in the same
+  // order as the create screens. The totals keep THIS screen's meaning:
+  // balance due is the grand total less withholding plus advance income tax.
+  const hasScenarioStep = fbrEnabled && scenarios.length > 0;
+  const stepNo = (k) => k - (hasScenarioStep ? 0 : 1);
+  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const totalsOff = showTotalsGuard && !totalsMatch;
+  const editTotalsRows = [
+    { key: "subtotal", label: "Subtotal", amount: subtotal, note: "Value of the lines, before tax" },
+    {
+      key: "gst", label: `GST (${gstRate}%)`, amount: gstAmount,
+      note: chosenScenario ? `Rate of scenario ${chosenScenario.code}` : "Rate charged on this bill",
+    },
+    ...(furtherTaxAmount > 0 ? [{
+      key: "further", label: `Further Tax (${furtherTaxRate || Number(invoice?.furtherTaxRate) || 0}%)`,
+      amount: furtherTaxAmount, note: "s.3(1A), on the value before tax",
+    }] : []),
+    { key: "grand", label: "Grand Total", amount: grandTotal, strong: true, note: "Value plus sales tax: the invoice total" },
+    ...(whtResolved > 0 ? [{
+      key: "wht", label: `Withholding tax${whtMode === "rate" ? ` (${whtRate}%)` : ""}`,
+      amount: whtResolved, sign: "−", note: "Deducted by the buyer (s.153)",
+    }] : []),
+    ...(advTaxPreview > 0 ? [{
+      key: "advance", label: `Advanced Income Tax ${advTaxOption.section.replace("236", "236-")} (${advTaxOption.rate}%)`,
+      amount: advTaxPreview, sign: "+", note: "Collected on top, outside the FBR invoice",
+    }] : []),
+    ...(whtResolved > 0 || advTaxPreview > 0 ? [{
+      key: "balance", label: "Balance due", amount: balanceDue, strong: true, note: "What the buyer pays you",
+    }] : []),
+  ];
+  const editChecklist = billChecklist({
+    billNumberOk,
+    rateBlock: rateBlocked ? rateBlockText({ suggestion: rateSuggestion, splitNeeded: rateSplitNeeded }) : null,
+    extra: totalsOff ? [{
+      key: "totals",
+      label: `Bill total is Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off: adjust quantities or prices`,
+      target: BILL_ANCHORS.items,
+    }] : [],
+  });
+
   // Backdrop click is a no-op — protects in-progress edits. Dismiss
   // via the X in the header or the Cancel button.
   return (
     <div style={formStyles.backdrop}>
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
-          <h5 style={formStyles.title}>
-            {readOnly ? "View Bill" : "Edit Bill"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
-          </h5>
+          <div style={{ minWidth: 0 }}>
+            <h5 style={formStyles.title}>
+              {readOnly ? "View Bill" : "Edit Bill"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
+            </h5>
+            <div style={styles.headerSub}>
+              {readOnly
+                ? "What this bill says, in the same steps it was written in. Nothing here can be changed."
+                : "Change what this bill says. Saving checks stock and the rate the goods came in at again."}
+            </div>
+          </div>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSave} style={billFormShell}>
@@ -1773,6 +1823,24 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     paymentTerms, so the [SNxxx] tag only updates on the
                     full-edit save path. */}
                 {fbrEnabled && scenarios.length > 0 && (
+                  <BillStep
+                    id={BILL_ANCHORS.scenario}
+                    n={1}
+                    title="FBR Scenario"
+                    status={readOnly ? "view" : rateBlocked ? "warn" : "done"}
+                    help={readOnly ? null : "The scenario narrows the item types offered below to its sale type. The GST rate is set in Buyer & Bill Details."}
+                    summary={chosenScenario ? (
+                      <>
+                        <span style={{ fontWeight: 700, color: colors.blue, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{chosenScenario.code}</span>
+                        <span>·</span>
+                        <span>{chosenScenario.saleType}</span>
+                        <span>·</span>
+                        <span>{chosenScenario.defaultRate}% GST</span>
+                      </>
+                    ) : (
+                      <span style={{ fontStyle: "italic", color: colors.textSecondary }}>Auto-detect from items</span>
+                    )}
+                  >
                   <div style={styles.row}>
                     <div style={{ flex: 1, minWidth: 280 }}>
                       <label style={styles.label}>
@@ -1801,9 +1869,24 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                       )}
                     </div>
                   </div>
+                  </BillStep>
                 )}
 
-                {/* Bill-level fields */}
+                {/* ── Buyer & bill details ─────────────── */}
+                <BillStep
+                  id={BILL_ANCHORS.details}
+                  n={stepNo(2)}
+                  title="Buyer & Bill Details"
+                  status={readOnly ? "view" : billNumberOk ? "done" : "warn"}
+                  help={readOnly ? null : "The buyer, number, dates and taxes of this bill. A greyed field is set by a linked challan or by your role."}
+                  summary={(
+                    <>
+                      <span style={{ fontWeight: 600 }}>{invoice?.clientName}</span>
+                      <span>·</span>
+                      <span>{invoice?.date ? new Date(invoice.date).toLocaleDateString() : "—"}</span>
+                    </>
+                  )}
+                >
                 <div style={styles.fieldGrid}>
                   <div style={{ minWidth: 180 }}>
                     <BillNumberField
@@ -2018,10 +2101,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     </select>
                   </div>
                 </div>
+                </BillStep>
 
+                {/* ── Items ─────────────── */}
+                <BillStep
+                  id={BILL_ANCHORS.items}
+                  n={stepNo(3)}
+                  title="Items"
+                  status={readOnly ? "view" : rateBlocked || totalsOff ? "warn" : "done"}
+                  help={readOnly ? null : "Change item types, quantities and prices here. A line marked in red came in at a different sales tax rate."}
+                  summary={<span>{items.length} line{items.length === 1 ? "" : "s"} · {money(subtotal)} before tax</span>}
+                >
                 {/* Items table — no add/remove; only field edits */}
                 <div style={styles.sectionHeadingRow}>
-                  <h6 style={{ ...styles.sectionHeading, margin: 0 }}>Items ({items.length})</h6>
+                  <span style={styles.itemsCount}>{items.length} line{items.length === 1 ? "" : "s"}</span>
                   {/* "+ New Item Type" fallback — single-item bills don't
                       render the bulk-apply bar, so the button lives here
                       for that case. Multi-item bills get the button
@@ -2448,53 +2541,6 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   </button>
                 )}
 
-                {/* Totals */}
-                <div style={styles.totalsBox}>
-                  <div style={styles.totalsRow}>
-                    <span>Subtotal:</span>
-                    <strong>Rs. {subtotal.toLocaleString()}</strong>
-                  </div>
-                  <div style={styles.totalsRow}>
-                    <span>GST ({gstRate}%):</span>
-                    <strong>Rs. {gstAmount.toLocaleString()}</strong>
-                  </div>
-                  {/* Shown on the read-only view as well as the edit form --
-                      this block serves both. */}
-                  {furtherTaxAmount > 0 && (
-                    <div style={styles.totalsRow}>
-                      <span>Further Tax ({furtherTaxRate || Number(invoice?.furtherTaxRate) || 0}%):</span>
-                      <strong>Rs. {furtherTaxAmount.toLocaleString()}</strong>
-                    </div>
-                  )}
-                  <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
-                    <span style={{ fontWeight: 700 }}>Grand Total:</span>
-                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
-                  </div>
-                  {/* Collectible = grand total - tax withheld + advance tax.
-                      Advance tax alone used to show nothing here, because this
-                      whole block hung off the withholding amount. */}
-                  {(whtResolved > 0 || advTaxPreview > 0) && (
-                    <>
-                      {whtResolved > 0 && (
-                        <div style={styles.totalsRow}>
-                          <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
-                          <strong>- Rs. {whtResolved.toLocaleString()}</strong>
-                        </div>
-                      )}
-                      {advTaxPreview > 0 && (
-                        <div style={styles.totalsRow}>
-                          <span>Advanced Income Tax {advTaxOption.section.replace("236", "236-")} ({advTaxOption.rate}%):</span>
-                          <strong>+ Rs. {advTaxPreview.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                        </div>
-                      )}
-                      <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
-                        <span style={{ fontWeight: 700 }}>Balance due:</span>
-                        <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {balanceDue.toLocaleString()}</strong>
-                      </div>
-                    </>
-                  )}
-                </div>
-
                 {/* Total-preservation guard — only shown in itemType+qty
                     (+price) mode. Lets the operator see in real time
                     whether their qty/price edits balance back to the
@@ -2543,16 +2589,31 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   </div>
                 )}
 
-                <TaxRateNotice
-                  enforced={rateCheck.enforced}
-                  advisory={rateCheck.advisory}
-                  billRate={gstRate}
-                  suggestion={rateSuggestion}
-                  splitNeeded={rateSplitNeeded}
-                  reason={rateReason}
-                  onReasonChange={setRateReason}
-                  readOnly={readOnly}
-                />
+                <div id={BILL_ANCHORS.rate}>
+                  <TaxRateNotice
+                    enforced={rateCheck.enforced}
+                    advisory={rateCheck.advisory}
+                    billRate={gstRate}
+                    suggestion={rateSuggestion}
+                    splitNeeded={rateSplitNeeded}
+                    reason={rateReason}
+                    onReasonChange={setRateReason}
+                    readOnly={readOnly}
+                  />
+                </div>
+                </BillStep>
+
+                {/* ── Total ─────────────── */}
+                <BillStep
+                  id={BILL_ANCHORS.taxes}
+                  n={stepNo(4)}
+                  title="Total"
+                  status={readOnly ? "view" : "done"}
+                  help={readOnly ? null : "Worked out from the lines and the taxes set in Buyer & Bill Details."}
+                  summary={<span>Grand total <strong>{money(grandTotal)}</strong></span>}
+                >
+                  <BillTotals rows={editTotalsRows} />
+                </BillStep>
 
                 {/* Attachments — the bill exists, so uploads bind immediately.
                     Rendered in every tier (read-only view and the narrow
@@ -2560,17 +2621,24 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     its own upload / delete buttons. View tier renders
                     mode="view" (no drop-zone / folder affordances) to match
                     the other modules' view modals. */}
-                <AttachmentManager
-                  companyId={invoice.companyId}
-                  entityType="Invoice"
-                  entityId={invoice.id}
-                  mode={readOnly ? "view" : "edit"}
-                />
+                <BillStep
+                  id={BILL_ANCHORS.attachments}
+                  n={stepNo(5)}
+                  title="Attachments"
+                  status={readOnly ? "view" : "optional"}
+                >
+                  <AttachmentManager
+                    companyId={invoice.companyId}
+                    entityType="Invoice"
+                    entityId={invoice.id}
+                    mode={readOnly ? "view" : "edit"}
+                  />
+                </BillStep>
               </>
             )}
           </div>
           <div style={formStyles.footer}>
-            {rateBlocked && <TaxRateBlockHint suggestion={rateSuggestion} splitNeeded={rateSplitNeeded} />}
+            {!readOnly && invoice?.isEditable && <BillChecklist items={editChecklist} />}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               {readOnly ? "Close" : "Cancel"}
             </button>
@@ -3315,6 +3383,8 @@ function RowStat({ label, qty, value, extra, fmtMoney, fmtQty, highlight = false
 }
 
 const styles = {
+  headerSub: { marginTop: 2, fontSize: "0.78rem", lineHeight: 1.35, color: "rgba(255,255,255,0.88)" },
+  itemsCount: { fontSize: "0.8rem", fontWeight: 600, color: colors.textSecondary },
   errorAlert: { padding: "0.7rem 1rem", backgroundColor: colors.dangerLight, color: colors.danger, borderRadius: 6, marginBottom: "1rem", fontSize: "0.85rem" },
   warnNote: { padding: "0.7rem 1rem", backgroundColor: colors.warnBg, color: colors.warn, borderRadius: 6, marginTop: "1rem", fontSize: "0.82rem", border: `1px solid ${colors.warnBorder}` },
   infoBox: {

@@ -6,7 +6,8 @@ const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFr
  * The bill's totals, the same panel on create, edit and view. Rows come from
  * utils/billEntry.billTotalsRows with the amounts the screen already worked
  * out; each row says where its figure comes from, so "GST (25%)" is never a
- * mystery number to the person typing the bill.
+ * mystery number to the person typing the bill. A row may carry `sign`
+ * ("−" / "+") where the screen shows a deduction or an addition.
  */
 export default function BillTotals({ rows = [] }) {
   return (
@@ -48,7 +49,7 @@ export default function BillTotals({ rows = [] }) {
               color: billColors.textPrimary,
             }}
           >
-            {money(r.amount)}
+            {r.sign ? `${r.sign} ` : ""}{money(r.amount)}
           </span>
         </div>
       ))}
