@@ -301,6 +301,12 @@ Publish output optimized from 79 MB to 37 MB via:
 
 
 
+### 2026-09-25 — Searchable challan pickers and document notes
+
+- Delivery challans now have searchable per-line supplier selection and a one-step way to apply a supplier or Item Type across lines; the Sales Order picker when linking deliveries to a bill is searchable.
+- Quotes, challans, bills and tax invoices, purchase bills, goods receipts, payments, and receipts accept formatted notes on create and edit, show them in document views, and expose an optional Notes merge field for print templates. Existing templates remain unchanged.
+- Added nullable note storage for documents that did not previously have it.
+
 ### 2026-09-25 — Document lines and multi-delivery linking
 
 - Added a date-filtered Document Lines view for sales quotes, orders, delivery challans, bills, tax invoices, credit/debit notes, purchase bills, purchase debit notes, and goods receipts. Each document has a direct Lines shortcut; operators can choose columns, copy rows into Excel, or download the matching lines.

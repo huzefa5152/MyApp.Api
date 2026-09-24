@@ -3,6 +3,7 @@ namespace MyApp.Api.DTOs
     // Data for printing a Delivery Challan
     public class PrintChallanDto
     {
+        public string? Notes { get; set; }
         // The document's division (null = company-level). Carried so the Excel
         // export can resolve a division-scoped template, falling back to company.
         public int? DivisionId { get; set; }
@@ -31,6 +32,7 @@ namespace MyApp.Api.DTOs
     // Data for printing a Bill (Invoice)
     public class PrintBillDto
     {
+        public string? Notes { get; set; }
         // See PrintChallanDto.DivisionId — drives division-aware Excel export.
         public int? DivisionId { get; set; }
         public string CompanyBrandName { get; set; } = "";
@@ -78,6 +80,7 @@ namespace MyApp.Api.DTOs
     // Data for printing a Sales Tax Invoice
     public class PrintTaxInvoiceDto
     {
+        public string? Notes { get; set; }
         // See PrintChallanDto.DivisionId — drives division-aware Excel export.
         public int? DivisionId { get; set; }
         // Supplier (company) details
@@ -309,6 +312,7 @@ namespace MyApp.Api.DTOs
     // BUYER; supplier* fields carry the vendor party, company* the tenant)
     public class PrintPurchaseBillDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -365,6 +369,7 @@ namespace MyApp.Api.DTOs
     // PrintChallanDto on the purchase side)
     public class PrintGoodsReceiptDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }

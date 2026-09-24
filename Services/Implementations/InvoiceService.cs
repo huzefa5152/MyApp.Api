@@ -211,6 +211,7 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = inv.GrandTotal,
             AmountInWords = inv.AmountInWords,
             PaymentTerms = inv.PaymentTerms,
+            Notes = inv.Notes,
             WithholdingTaxRate = inv.WithholdingTaxRate,
             WithholdingTaxAmount = inv.WithholdingTaxAmount,
             DueDate = inv.DueDate,
@@ -890,6 +891,7 @@ namespace MyApp.Api.Services.Implementations
                     WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = dto.PaymentTerms,
+                    Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
                     PrintGroupBillByItemType = dto.PrintGroupBillByItemType,
@@ -1243,6 +1245,7 @@ namespace MyApp.Api.Services.Implementations
                     WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms = finalPaymentTerms,
+                    Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                     DocumentType = effectiveDocType,
                     PaymentMode = effectivePaymentMode,
                     PrintGroupBillByItemType = dto.PrintGroupBillByItemType,
@@ -1501,6 +1504,7 @@ namespace MyApp.Api.Services.Implementations
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
                 invoice.PaymentTerms = dto.PaymentTerms;
+                invoice.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
 
@@ -3435,6 +3439,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintBillDto
             {
+                Notes = inv.Notes,
                 DivisionId = inv.DivisionId,
                 CompanyBrandName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 CompanyLogoPath = inv.Company?.LogoPath,
@@ -3525,6 +3530,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintTaxInvoiceDto
             {
+                Notes = inv.Notes,
                 DivisionId = inv.DivisionId,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 SupplierAddress = inv.Company?.FullAddress,

@@ -21,6 +21,7 @@
         public string? IndentNo { get; set; }
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }
+        public string? Notes { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
         /// <summary>Number of the bill this challan was billed on, so the

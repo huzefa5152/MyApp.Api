@@ -21,6 +21,7 @@
 
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }
+        public string? Notes { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
 

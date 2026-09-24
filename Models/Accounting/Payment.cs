@@ -78,6 +78,7 @@ namespace MyApp.Api.Models.Accounting
         public string Method { get; set; } = "Cash";
 
         public string? Description { get; set; }
+        public string? Notes { get; set; }
 
         /// <summary>Total amount of the document = Σ allocation amounts.
         /// decimal(18,2) to match Invoice/PurchaseBill money precision so paid

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
 import RichText from "./RichText";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
 import LineItemsEditor from "./LineItemsEditor";
@@ -36,6 +37,7 @@ const blankItem = () => ({ description: "", quantity: 1, unit: "", itemTypeId: n
 export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisionId }) {
   const [client, setClient] = useState(null);
   const [site, setSite] = useState("");
+  const [notes, setNotes] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
   const [indentNo, setIndentNo] = useState("");
@@ -156,6 +158,16 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     setOrderItemTypes((p) => ({ ...p, [itemId]: { itemTypeId: newId ? parseInt(newId) : null, nonInventoryItemId: null } }));
   const setOrderNonInv = (itemId, n) =>
     setOrderItemTypes((p) => ({ ...p, [itemId]: { itemTypeId: null, nonInventoryItemId: n ? n.id : null } }));
+  const applyOrderItemType = (newId) => setOrderItemTypes((previous) => {
+    const next = { ...previous };
+    deliverableItems.forEach((item) => { next[item.id] = { itemTypeId: newId ? Number(newId) : null, nonInventoryItemId: null }; });
+    return next;
+  });
+  const applyOrderSupplier = (id) => setOrderPrivate((previous) => {
+    const next = { ...previous };
+    deliverableItems.forEach((item) => { next[item.id] = { ...next[item.id], supplierId: id ? Number(id) : null }; });
+    return next;
+  });
 
   const setOrderQty = (itemId, remaining, raw) => {
     // Clamp to [0, remaining] — you can't deliver more than what's left.
@@ -208,6 +220,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           salesOrderId: order.id,
           deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
           site: site.trim() || null,
+          notes: notes.trim() || null,
           lines,
         });
         try { if (saved?.id) await attachmentRef.current?.flush(saved.id); } catch { /* best-effort */ }
@@ -244,6 +257,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
         divisionId: divisionId ? parseInt(divisionId) : null,
         clientName: client.label,
         site: site || null,
+        notes: notes.trim() || null,
         poNumber: poNumber.trim(),
         poDate: poDate ? new Date(poDate).toISOString() : null,
         indentNo: indentNo.trim() || null,
@@ -417,6 +431,10 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                     <button type="button" style={{ ...styles.soQuickBtn, color: colors.textSecondary, borderColor: colors.cardBorder, background: "#fff" }} onClick={clearAllQtys}>Clear all</button>
                   </div>
                 </div>
+                {deliverableItems.length > 1 && <div style={{ maxWidth: 340, marginBottom: 10, fontSize: 12, fontWeight: 700 }}>
+                  Apply Item Type to all lines
+                  <SearchableItemTypeSelect divisionId={divisionId} items={itemTypes} value="" onChange={applyOrderItemType} placeholder="Search item type to apply" />
+                </div>}
                 <div style={{ overflowX: "auto" }}>
                   <table style={styles.soTable}>
                     <thead>
@@ -472,6 +490,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
               </div>
             )}
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             {!fromOrder && (
             <div style={{ marginTop: "0.25rem" }}>
               <LineItemsEditor
@@ -490,6 +509,10 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
             {fromOrder && <section style={{ padding: 14, border: "1px solid #dce7e4", borderRadius: 12, background: "#f7fbfa", marginTop: 12 }}>
               <strong style={{ color: "#00695c" }}>Private supplier and cost details</strong>
+              {deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0).length > 1 && <div style={{ maxWidth: 340, marginTop: 10, fontSize: 12, fontWeight: 700 }}>
+                Apply supplier to all delivered lines
+                <SearchableSelect items={suppliers} value="" onChange={applyOrderSupplier} placeholder="Search supplier to apply" />
+              </div>}
               {deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0).map((item) => <div key={item.id} style={{ padding: 10, marginTop: 10, background: "#fff", borderRadius: 8 }}>
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>{item.description}</div>
                 <PrivateCostFields item={orderPrivate[item.id] || {}} suppliers={suppliers} onChange={(patch) => setOrderPrivate((prev) => ({ ...prev, [item.id]: { ...prev[item.id], ...patch } }))} />

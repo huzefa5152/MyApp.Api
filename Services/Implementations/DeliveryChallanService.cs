@@ -152,6 +152,7 @@ namespace MyApp.Api.Services.Implementations
                 IndentNo = dc.IndentNo,
                 DeliveryDate = dc.DeliveryDate,
                 Site = dc.Site,
+                Notes = dc.Notes,
                 Status = dc.Status,
                 InvoiceId = dc.InvoiceId,
                 InvoiceNumber = dc.Invoice?.InvoiceNumber,
@@ -400,6 +401,7 @@ namespace MyApp.Api.Services.Implementations
                 DivisionId = dto.DivisionId,
                 ClientId = dto.ClientId,
                 Site = dto.Site,
+                Notes = dto.Notes,
                 PoNumber = dto.PoNumber?.Trim() ?? "",
                 PoDate = hasPo ? dto.PoDate : null,
                 IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim(),
@@ -939,6 +941,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Site: null or empty string clears it
             dc.Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim();
+            dc.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
 
             // PO: empty/whitespace = operator wants to clear the PO (→ No PO status)
             var poNumber = (dto.PoNumber ?? "").Trim();
@@ -1062,6 +1065,7 @@ namespace MyApp.Api.Services.Implementations
                 ClientName = dc.Client?.Name ?? "",
                 ClientAddress = dc.Client?.Address,
                 ClientSite = dc.Site,
+                Notes = dc.Notes,
                 PoNumber = dc.PoNumber,
                 PoDate = dc.PoDate,
                 IndentNo = dc.IndentNo,

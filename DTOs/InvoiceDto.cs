@@ -2,6 +2,7 @@
 {
     public class InvoiceDto
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
@@ -209,6 +210,7 @@
 
     public class CreateInvoiceDto
     {
+        public string? Notes { get; set; }
         /// <summary>Optional Bill-print grouping for the new bill (true = grouped
         /// by item type; null/false = individual, the default). The Tax Invoice
         /// grouping is independent and set later on the Invoices tab.</summary>
@@ -300,6 +302,7 @@
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        public string? Notes { get; set; }
         /// <summary>Optional Bill-print grouping for the new bill (true = grouped
         /// by item type; null/false = individual, the default). The Tax Invoice
         /// grouping is independent and set later on the Invoices tab.</summary>
@@ -545,6 +548,7 @@
 
     public class UpdateInvoiceDto
     {
+        public string? Notes { get; set; }
         /// <summary>
         /// Optional new bill date. When null, the existing date is preserved.
         /// Future dates are accepted (a bill may be raised ahead of its billing

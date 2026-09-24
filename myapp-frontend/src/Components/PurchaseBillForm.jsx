@@ -14,6 +14,7 @@ import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import SearchableSelect from "./SearchableSelect";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 import SupplierForm from "./SupplierForm";
 import DivisionSelect from "./DivisionSelect";
 import AccountSelect from "./AccountSelect";
@@ -67,6 +68,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
   const [whtRate, setWhtRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
   const [error, setError] = useState("");
@@ -154,6 +156,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
           setWhtMode("none");
         }
         setPaymentTerms(data.paymentTerms || "");
+        setNotes(data.notes || "");
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
           id: i.id, itemTypeId: i.itemTypeId, nonInventoryItemId: i.nonInventoryItemId ?? null,
@@ -353,6 +356,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
         paymentTerms: paymentTerms || null,
+        notes: notes.trim() || null,
         paymentMode: paymentMode || null,
         items: items.map(i => ({
           id: i.id || 0,
@@ -535,6 +539,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
               </div>
             </div>
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={readOnly} />
             <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.inputBg }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>

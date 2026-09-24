@@ -723,6 +723,7 @@ namespace MyApp.Api.Services.Implementations
                 DivisionId = order.DivisionId,
                 DeliveryDate = dto.DeliveryDate ?? DateTime.UtcNow.Date,
                 Site = string.IsNullOrWhiteSpace(dto.Site) ? order.Site : dto.Site,
+                Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                 PoNumber = order.CustomerPoNumber ?? "",
                 PoDate = order.CustomerPoDate,
                 SalesOrderId = order.Id,

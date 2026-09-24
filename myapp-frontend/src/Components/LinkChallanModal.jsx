@@ -4,6 +4,7 @@ import { getPendingChallansByCompany } from "../api/challanApi";
 import { linkDeliveriesToInvoice, linkSalesOrderToInvoice, createChallanForInvoice, unlinkChallanFromInvoice } from "../api/invoiceApi";
 import { getSalesOrdersByCompany, getSalesOrderChallans } from "../api/salesOrderApi";
 import { usePermissions } from "../contexts/PermissionsContext";
+import SearchableSelect from "./SearchableSelect";
 
 /** Compare descriptions the way an operator would: case and spacing are noise. */
 const norm = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -349,11 +350,15 @@ export default function LinkChallanModal({ invoice, onClose, onDone, canCreateCh
           )}
           </> : <>
             <p style={{ fontSize: "0.85rem", color: colors.textSecondary }}>Choose an order to link all of its current challans. Later deliveries are not added automatically.</p>
-            <select value={orderId} onChange={(e) => { setOrderChallans([]); setOrderId(e.target.value); }} aria-label="Sales Order"
-              style={{ minHeight: 44, width: "100%", padding: 8 }}>
-              <option value="">Select Sales Order</option>
-              {eligibleOrders.map((o) => <option key={o.id} value={o.id}>SO #{o.salesOrderNumber} — {o.clientName}{o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}</option>)}
-            </select>
+            <SearchableSelect
+              items={eligibleOrders.map((o) => ({ ...o, label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}` }))}
+              value={orderId}
+              onChange={(id) => { setOrderChallans([]); setOrderId(id || ""); }}
+              labelKey="label"
+              searchKeys={["label", "salesOrderNumber", "clientName", "customerPoNumber"]}
+              placeholder="Search Sales Order, client, or PO"
+              style={{ minHeight: 44, width: "100%" }}
+            />
             {selectedOrder && <div style={{ marginTop: 12 }}>
               <strong>{activeOrderChallans.length} active challan{activeOrderChallans.length === 1 ? "" : "s"}</strong>
               {orderChallans.map((c) => <div key={c.id} style={{ padding: "5px 0" }}>DC #{c.challanNumber}{c.status === "Cancelled" ? " · cancelled (excluded)" : c.invoiceId === invoice.id ? " · already on this bill" : c.invoiceId ? " · billed elsewhere" : " · ready"}</div>)}

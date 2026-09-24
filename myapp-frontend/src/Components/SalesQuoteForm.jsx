@@ -8,6 +8,7 @@ import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { getQuoteItemRate, uploadQuoteLineImage } from "../api/salesQuoteApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 import useScrollToError from "../hooks/useScrollToError";
 
 const colors = {
@@ -199,6 +200,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
               <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span>Rs {grandTotal.toLocaleString()}</span></div>
             </div>
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             <AttachmentManager
               ref={attachmentRef}
               companyId={companyId}

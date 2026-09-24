@@ -21,6 +21,7 @@ import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
 import SearchableSelect from "./SearchableSelect";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
@@ -129,6 +130,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [whtRate, setWhtRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
   // slice rolled the calendar day back by one for PKT operators billing
   // before 5am.
@@ -908,6 +910,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
         paymentTerms: paymentTermsToSave,
+        notes: notes.trim() || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         challanIds: selectedIds,
@@ -1911,6 +1914,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
                 {/* Attachments — staged client-side until the bill is created,
                     then flushed against the new id (see handleSubmit). */}
+                <DocumentNotesEditor value={notes} onChange={setNotes} />
                 <AttachmentManager
                   ref={attachmentRef}
                   companyId={companyId}

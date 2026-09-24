@@ -12,6 +12,7 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
 import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";
+import RichText from "../Components/RichText";
 import AttachmentManager from "../Components/AttachmentManager";
 import { getPagedPayments, deletePayment, getPaymentPrintData } from "../api/paymentApi";
 import { mergeTemplate } from "../utils/templateEngine";
@@ -435,6 +436,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           {p.chequeNumber && <Row label="Cheque #" value={`${p.chequeNumber}${p.chequeDate ? ` · ${fmtDate(p.chequeDate)}` : ""}`} />}
           <Row label="Status" value={p.isCancelled ? "Cancelled" : (p.chequeStatus && p.chequeStatus !== "None" ? p.chequeStatus : "Active")} />
           {p.description && <Row label="Description" value={p.description} />}
+          {p.notes && <div style={{ marginTop: 12 }}><div style={vd.k}>Notes</div><div style={{ marginTop: 5, padding: 10, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={p.notes} /></div></div>}
           {allocs.length > 0 && (
             <div style={{ marginTop: "0.6rem" }}>
               <div style={vd.k}>{docNoun}s settled</div>

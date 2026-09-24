@@ -19,6 +19,7 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import ClientForm from "./ClientForm";
 import DivisionSelect from "./DivisionSelect";
 import SearchableSelect from "./SearchableSelect";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
@@ -160,6 +161,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [whtRate, setWhtRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
   // Credit Note (10) and Debit Note (9) get their own dedicated screens
   // — see InvoiceForm.jsx for the same rationale.
@@ -697,6 +699,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
         paymentTerms: paymentTerms || null,
+        notes: notes.trim() || null,
         scenarioId: scenarioCode || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
@@ -1453,6 +1456,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
 
                 {/* Attachments — staged client-side until the bill is created,
                     then flushed against the new id (see handleSubmit). */}
+                <DocumentNotesEditor value={notes} onChange={setNotes} />
                 <AttachmentManager
                   ref={attachmentRef}
                   companyId={companyId}

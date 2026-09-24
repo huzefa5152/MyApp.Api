@@ -187,6 +187,7 @@ export function mergeTemplate(htmlTemplate, data) {
  */
 export const MERGE_FIELDS = {
   Challan: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
@@ -207,6 +208,7 @@ export const MERGE_FIELDS = {
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
@@ -240,6 +242,7 @@ export const MERGE_FIELDS = {
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
   ],
   TaxInvoice: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{supplierName}}", label: "Supplier Name" },
     { field: "{{{nl2br supplierAddress}}}", label: "Supplier Address (with line breaks)" },
     { field: "{{{nl2br supplierPhone}}}", label: "Supplier Phone (with line breaks)" },
@@ -278,6 +281,7 @@ export const MERGE_FIELDS = {
     { field: "{{fbrLogoUrl}}", label: "FBR Logo URL" },
   ],
   Receipt: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
@@ -305,6 +309,7 @@ export const MERGE_FIELDS = {
     { field: "{{fmt this.amount}}", label: "Settled Amount (in loop)" },
   ],
   Payment: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },

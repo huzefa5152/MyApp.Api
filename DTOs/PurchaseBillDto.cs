@@ -2,6 +2,7 @@ namespace MyApp.Api.DTOs
 {
     public class PurchaseBillDto
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int PurchaseBillNumber { get; set; }
         public DateTime Date { get; set; }
@@ -95,6 +96,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreatePurchaseBillDto
     {
+        public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int? DivisionId { get; set; }
@@ -145,6 +147,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdatePurchaseBillDto
     {
+        public string? Notes { get; set; }
         public DateTime? Date { get; set; }
         public string? SupplierBillNumber { get; set; }
         public string? SupplierIRN { get; set; }

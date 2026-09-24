@@ -98,6 +98,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateChallanFromOrderDto
     {
+        public string? Notes { get; set; }
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }
         public List<DeliverLineDto> Lines { get; set; } = new();

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
 import LineItemsEditor from "./LineItemsEditor";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
 import { useConfirm } from "./ConfirmDialog";
@@ -59,6 +60,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Header fields ──
   const [clientId, setClientId] = useState(challan.clientId || "");
   const [site, setSite] = useState(challan.site || "");
+  const [notes, setNotes] = useState(challan.notes || "");
   const [deliveryDate, setDeliveryDate] = useState(
     challan.deliveryDate ? challan.deliveryDate.substring(0, 10) : ""
   );
@@ -168,6 +170,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         companyId: challan.companyId,
         clientId: parseInt(clientId),
         site: site || null,
+        notes: notes.trim() || null,
         // Empty string = operator wants to clear PO → "No PO" status.
         // Backend re-evaluates status based on FBR readiness.
         poNumber: poNumber.trim(),
@@ -379,6 +382,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               </div>
             </div>
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             {/* ── Items ── */}
             <LineItemsEditor
               items={items}

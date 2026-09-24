@@ -16,6 +16,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { matchesScenarioSaleType } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
@@ -173,6 +174,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const [billNumber, setBillNumber] = useState("");
   const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
   const [loading, setLoading] = useState(true);
@@ -297,6 +299,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         setBillNumber(data.invoiceNumber != null ? String(data.invoiceNumber) : "");
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
+        setNotes(data.notes || "");
         setPaymentMode(data.paymentMode ?? "");
         setDocumentType(data.documentType ?? 4);
 
@@ -1251,6 +1254,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
           withholdingTaxAmount: whtResolved,
           paymentTerms: ptToSave,
+          notes: notes.trim() || null,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
           ...divisionPayload,
@@ -2007,6 +2011,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     its own upload / delete buttons. View tier renders
                     mode="view" (no drop-zone / folder affordances) to match
                     the other modules' view modals. */}
+                <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={readOnly} />
                 <AttachmentManager
                   companyId={invoice.companyId}
                   entityType="Invoice"

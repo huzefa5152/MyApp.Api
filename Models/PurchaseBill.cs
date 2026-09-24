@@ -44,6 +44,7 @@ namespace MyApp.Api.Models
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
+        public string? Notes { get; set; }
 
         // ── Payments / Receipts (AP subledger — design §11.5) ──
         // Mirror of Invoice: DueDate drives Overdue/Coming-due; AmountPaid is the

@@ -16,6 +16,7 @@ namespace MyApp.Api.Models
         public decimal GrandTotal { get; set; }
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
+        public string? Notes { get; set; }
 
         // ── Payments / Receipts (AR subledger — design §11.5) ──
         // DueDate drives the Overdue/Coming-due status; null = no terms set.

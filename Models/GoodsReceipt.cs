@@ -28,6 +28,7 @@ namespace MyApp.Api.Models
         /// </summary>
         public string? SupplierChallanNumber { get; set; }
         public string? Site { get; set; }
+        public string? Notes { get; set; }
 
         /// <summary>
         /// Pending / Cancelled — same lifecycle states as DeliveryChallan

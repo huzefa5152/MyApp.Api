@@ -29,6 +29,7 @@ namespace MyApp.Api.DTOs
     /// tells the template which it is.</summary>
     public class PrintPaymentVoucherDto : PrintBrandingDto
     {
+        public string? Notes { get; set; }
         public string Direction { get; set; } = "";          // "Receipt" | "Payment"
         public string Reference { get; set; } = "";
         public DateTime Date { get; set; }
