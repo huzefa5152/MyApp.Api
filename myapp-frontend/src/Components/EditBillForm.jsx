@@ -1631,7 +1631,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // balance due is the grand total less withholding plus advance income tax.
   const hasScenarioStep = fbrEnabled && scenarios.length > 0;
   const stepNo = (k) => k - (hasScenarioStep ? 0 : 1);
-  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const totalsOff = showTotalsGuard && !totalsMatch;
   const onRetail = !isMigrated && Math.abs(taxBase - computedSubtotal) >= 0.005;
   const editTotalsRows = [

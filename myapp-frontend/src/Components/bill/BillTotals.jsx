@@ -1,6 +1,6 @@
 import { billColors } from "./billTheme";
 
-const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
  * The bill's totals, the same panel on create, edit and view. Rows come from

@@ -1160,7 +1160,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   });
   // Without FBR there is no scenario step, so every later step moves up one.
   const stepNo = (k) => k - (fbrEnabled ? 0 : 1);
-  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Backdrop click is a no-op — bills can hold a lot of typed data and
   // a stray click shouldn't wipe it. Dismiss via X or Cancel.

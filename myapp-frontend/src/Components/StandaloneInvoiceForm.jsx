@@ -1295,7 +1295,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   });
   // Without FBR there is no scenario step, so every later step moves up one.
   const stepNo = (k) => k - (fbrEnabled ? 0 : 1);
-  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div style={formStyles.backdrop}>
