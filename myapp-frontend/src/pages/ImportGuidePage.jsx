@@ -24,9 +24,10 @@ const GLOSSARY = [
   ["Actual cost", "Assessed value plus the duties above. Sales tax, additional sales tax and income tax at import are NOT included — they are recoverable, so they are not part of what the stock cost."],
   ["Selling value", "The value the sheet works out this stock should be sold at, once its input tax has been absorbed. Shown next to Actual cost so margin can be compared."],
   ["Margin", "Selling value minus Actual cost. It can be negative — that is a real number, not an error."],
-  ["“cost-only”", "This line matched existing stock and only its cost was written. The good, ordinary case."],
-  ["“not matched”", "No stock is on the books yet for this line's GD and HS code. Nothing is written for it in this release."],
-  ["“ambiguous”", "The line's HS code matches more than one item already on the books. The system will not guess — it is left for a person to resolve."],
+  ["“Adds to …”", "This line matched an item on the books. On a monthly GD its quantity, cost and selling value are added to that item."],
+  ["“New item”", "Nothing is on the books under this line's HS code, so it becomes a new item with its own opening stock — unless you leave the line out."],
+  ["“Choose the item”", "Several items on the books share the line's HS code and none carries the line's own name. The system will not guess: you pick the item, or leave the line out."],
+  ["“Left out”", "Recorded with the GD, so its record is complete, but nothing is written to stock for it."],
 ];
 
 const st = {
@@ -195,14 +196,16 @@ export default function ImportGuidePage() {
       <section id="import-modes" style={st.section}>
         <h2 style={st.h2}><span style={st.sectionNum}>3</span> Choosing the import mode</h2>
         <p style={st.p}>
-          Next to the file picker is a choice of two modes, and it is the single most
-          important setting on the screen — it decides what a matching line actually does.
+          The first step asks what this GD is. It is the single most important setting on
+          the screen — it decides what a matching line actually does — and it opens on the
+          monthly case. The one-off Backfill sits behind its own button so it is never
+          picked by accident.
         </p>
 
         <div style={st.modesGrid}>
           <div style={st.modeCard}>
-            <span style={st.modeBadge}>Default</span>
-            <p style={st.modeTitle}>"These goods are already on the books"</p>
+            <span style={st.modeBadge}>One-off</span>
+            <p style={st.modeTitle}>"One-off: these goods are already on the books"</p>
             <p style={st.modeText}>
               A matched line <strong>sets</strong> the actual cost to the GD's unit cost
               multiplied by the quantity already on the books. Quantity is not changed.
@@ -210,7 +213,8 @@ export default function ImportGuidePage() {
             <p style={st.modeUse}>Use for the one-off backfill of history.</p>
           </div>
           <div style={st.modeCard}>
-            <p style={st.modeTitle}>"These are new arrivals"</p>
+            <span style={st.modeBadge}>Default</span>
+            <p style={st.modeTitle}>"New goods arrived on this GD"</p>
             <p style={st.modeText}>
               A matched line <strong>adds</strong> its quantity, actual cost and selling value
               to what is on the books, so the cost per unit becomes a weighted average across
@@ -231,12 +235,14 @@ export default function ImportGuidePage() {
         </div>
 
         <p style={st.p}>
-          A line that matches nothing at all is a separate choice again: ticking{" "}
-          <strong>"bring the unmatched lines in as new stock"</strong> creates an item type
-          from the sheet's own name and HS code, then an opening balance for it. An item type
-          already on the books is reused only when its <strong>HS code and its name both
+          A line that matches nothing becomes a <strong>new item</strong>: an item type named
+          after the line, under its HS code and unit, then an opening balance for it. On a
+          monthly GD that happens by default and every line has a <strong>Leave out</strong>{" "}
+          button; on a Backfill such lines are left out until you bring them in. An item type
+          already in the catalog is reused only when its <strong>HS code and its name both
           match</strong> — one HS code can genuinely cover several different products, so the
-          name is what tells them apart.
+          name is what tells them apart. A new item's HS code has to be a real code from the
+          Pakistan customs tariff.
         </p>
       </section>
 
@@ -244,17 +250,26 @@ export default function ImportGuidePage() {
         <h2 style={st.h2}><span style={st.sectionNum}>4</span> Step by step</h2>
         <PathPill>Purchases &#9656; Import Costing</PathPill>
         <ol style={st.ol}>
-          <li style={st.li}>Pick the company at the top of the page.</li>
-          <li style={st.li}>Choose the workbook and press <strong>Preview</strong>.</li>
-          <li style={st.li}>Read the summary bar and any warnings underneath it.</li>
+          <li style={st.li}>Pick the company and say what the GD is — almost always new goods.</li>
+          <li style={st.li}>Choose the workbook (or type the GD) and press <strong>Check</strong>.</li>
           <li style={st.li}>
-            Check the table, especially any line marked <em>not matched</em> or <em>ambiguous</em>.
+            Read what each line will do to your stock. Fix anything in red with{" "}
+            <strong>Fix this line</strong>, choose the item where several share a code, or
+            leave a line out.
           </li>
-          <li style={st.li}>Press <strong>Commit</strong>.</li>
+          <li style={st.li}>
+            When the bar at the bottom says <strong>Ready to bring in</strong>, press its green
+            button. Until then it lists what is left, and each item jumps to its line.
+          </li>
         </ol>
         <div style={st.note}>
-          <strong>Nothing is written until you press Commit.</strong> Preview never changes
-          anything — read it, check it, and only then commit.
+          <strong>Every line needs</strong> its GD number and GD date, the item name, the HS
+          code, a quantity, the unit (the one the item is kept in) and an assessed value above
+          zero. A line missing one is shown to fix; it cannot come in until it is.
+        </div>
+        <div style={st.note}>
+          <strong>Nothing is written until you press the green button.</strong> Check never
+          changes anything — read it, fix it, and only then bring it in.
         </div>
       </section>
 
@@ -276,15 +291,15 @@ export default function ImportGuidePage() {
         <h2 style={st.h2}><span style={st.sectionNum}>6</span> What the warnings mean</h2>
 
         <p style={st.p}>
-          The preview can flag three things. <strong>None of them stops you importing</strong> —
-          each one shows its figures so you can decide. Read them before pressing Commit.
+          The check can flag three things. <strong>None of them stops you importing</strong> —
+          each one shows its figures so you can decide. Read them before bringing the GD in.
         </p>
 
         <h3 style={st.h3}>"This balance already carries an actual cost"</h3>
         <p style={st.p}>
           An earlier GD already priced this item, and a backfill would <strong>replace</strong>{" "}
           that figure. If these are additional goods rather than a correction, switch to{" "}
-          <strong>"These are new arrivals"</strong>.
+          <strong>"New goods arrived on this GD"</strong>.
         </p>
 
         <h3 style={st.h3}>"This would cost X more than its selling value implies"</h3>
@@ -341,21 +356,21 @@ export default function ImportGuidePage() {
         </div>
 
         <h3 style={st.h3}>Enter a GD by hand, with all its lines</h3>
-        <PathPill>Purchases &#9656; Import Costing &#9656; Enter a line by hand</PathPill>
+        <PathPill>Purchases &#9656; Import Costing &#9656; Type the GD</PathPill>
         <p style={st.p}>
           For a declaration you have no workbook for. A real GD carries several HS codes, so
           this takes as many lines as you need:
         </p>
         <ol style={st.ol}>
           <li style={st.li}>Type the <strong>GD number and date once</strong> — they belong to the whole consignment.</li>
-          <li style={st.li}>Fill in a line and press <strong>Add line</strong>. The GD header, the unit and the three rates carry over to the next one; the product fields clear.</li>
-          <li style={st.li}>Repeat for each line. Edit or remove any of them before previewing.</li>
-          <li style={st.li}>Press <strong>Preview</strong>. It checks them all together.</li>
+          <li style={st.li}>Fill in a line and press <strong>Add line and type the next</strong>. The GD header, the unit and the three rates carry over to the next one; the product fields clear. A box you have used says in red what it still needs.</li>
+          <li style={st.li}>Repeat for each line. Edit or remove any of them before checking.</li>
+          <li style={st.li}>Press <strong>Check</strong>. It checks them all together.</li>
         </ol>
         <p style={st.p}>
           Together is the point: two lines landing on the same item have to be combined into
           one cost per unit, and checking them one at a time would treat each as if it were
-          the only one. For a single-line GD you can skip Add and just press Preview.
+          the only one. For a single-line GD you can skip Add and just press Check.
         </p>
         <div style={st.warn}>
           <strong>You cannot add a line to a GD you have already committed.</strong> A GD number
@@ -402,7 +417,7 @@ export default function ImportGuidePage() {
 
         <h3 style={st.h3}>New Arrivals — one entry per GD</h3>
         <p style={st.p}>
-          Committing a New Arrivals import writes <strong>one balanced journal entry per GD,
+          Bringing in a New Arrivals GD writes <strong>one balanced journal entry per GD,
           dated the GD's own date</strong>. You do not have to do anything for this to
           happen, and you must <strong>not</strong> record the same liability again by hand.
         </p>
@@ -601,13 +616,13 @@ export default function ImportGuidePage() {
         <h2 style={st.h2}><span style={st.sectionNum}>12</span> Common questions</h2>
 
         <div style={st.qa}>
-          <p style={st.q}>Why is a line "not matched"?</p>
-          <p style={st.a}>There is no stock on the books yet for that line's GD number and HS code.</p>
+          <p style={st.q}>Why does a line say "New item"?</p>
+          <p style={st.a}>Nothing is on the books under that line's HS code. It comes in as a new item unless you leave it out.</p>
         </div>
 
         <div style={st.qa}>
-          <p style={st.q}>Why is a line "ambiguous"?</p>
-          <p style={st.a}>Its HS code matches more than one item already on the books, and the system will not guess which one — it is left for a person to sort out.</p>
+          <p style={st.q}>Why must I choose the item?</p>
+          <p style={st.a}>Several items on your books share that HS code and none carries the line's own name, so the system will not guess. Pick the item in the line's list, or leave the line out.</p>
         </div>
 
         <div style={st.qa}>

@@ -203,7 +203,9 @@ COSTING_GUIDE = [
     "  2. A row with no GD Number is skipped.",
     "  3. A totals row (labelled Total, with no selling value) is skipped and",
     "     reported in the preview.",
-    "  4. A row with no HS code still imports - it is just not classified.",
+    "  4. Every row needs its GD Date, HS Code, Unit and an Assessed Value above",
+    "     zero, and its Unit must be the one the item is kept in. A row missing",
+    "     one is shown in the preview to fix; it cannot come in until it is.",
     "  5. Headings live on row 1 and data starts on row 3. Do not delete row 2.",
 ]
 
