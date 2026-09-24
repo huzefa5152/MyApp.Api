@@ -222,6 +222,91 @@ namespace MyApp.Api.Controllers
         }
 
         /// <summary>
+        /// The items this company imported UNAMBIGUOUSLY at <paramref name="rate"/>
+        /// — every record agrees, and no GD line under the item carries another HS
+        /// code. The bill forms use it to widen the item picker under a
+        /// non-standard scenario: under SN024 the picker keeps only items whose
+        /// sale type IS the SRO 297 sale type, and the goods that came in at 25%
+        /// carry none, so the scenario an operator must use offered nothing to bill.
+        /// </summary>
+        [HttpGet("company/{companyId}/imported-tax-rates/items")]
+        [HasAnyPermission("bills.manage.create", "bills.manage.update",
+            "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<int>>> GetItemsImportedAt(int companyId, [FromQuery] decimal rate)
+        {
+            if (rate <= 0m) return Ok(new List<int>());
+            var verdicts = await _stock.GetImportedTaxRatesAsync(companyId, null);
+            return Ok(verdicts.Values
+                .Where(v => v.IsUnambiguous && v.Rate == rate)
+                .Select(v => v.ItemTypeId)
+                .OrderBy(id => id)
+                .ToList());
+        }
+
+        /// <summary>
+        /// What this company's own GD lines, opening stock and stock received
+        /// say each item's sales tax rate is — measured against the rate the bill
+        /// form is about to charge (<paramref name="billRate"/>), so the form can
+        /// warn, offer the matching scenario, or ask for a reason BEFORE saving.
+        /// The rule and its wording are <see cref="ImportedTaxRate"/>, the same one
+        /// the create / edit guard enforces, so what warns here is what refuses on
+        /// save.
+        ///
+        /// Company-scoped by construction: another company's GD is never
+        /// evidence, and an item this company holds no record of comes back with
+        /// no rate. Open to whoever can raise or edit a bill, including the
+        /// Invoices tab's classification roles, because each of those screens
+        /// sets the item a line carries.
+        /// </summary>
+        [HttpGet("company/{companyId}/imported-tax-rates")]
+        [HasAnyPermission("bills.manage.create", "bills.manage.update",
+            "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<ImportedTaxRateDto>>> GetImportedTaxRates(
+            int companyId, [FromQuery] string? itemTypeIds, [FromQuery] decimal? billRate)
+        {
+            var ids = (itemTypeIds ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => int.TryParse(x, out var v) ? v : 0)
+                .Where(x => x > 0)
+                .Distinct()
+                .Take(200)
+                .ToList();
+            if (ids.Count == 0)
+                return Ok(new List<ImportedTaxRateDto>());
+
+            var verdicts = await _stock.GetImportedTaxRatesAsync(companyId, ids);
+            var names = await _context.ItemTypes.AsNoTracking()
+                .Where(it => ids.Contains(it.Id))
+                .Select(it => new { it.Id, it.Name })
+                .ToDictionaryAsync(x => x.Id, x => x.Name);
+
+            return Ok(ids.Where(verdicts.ContainsKey).Select(id =>
+            {
+                var v = verdicts[id];
+                var finding = billRate is { } rate
+                    ? ImportedTaxRate.Check(v, names.GetValueOrDefault(id) ?? "", rate)
+                    : null;
+                return new ImportedTaxRateDto
+                {
+                    ItemTypeId = id,
+                    Rate = v.Rate,
+                    Rates = v.Rates.ToList(),
+                    Mixed = v.Mixed,
+                    Source = v.Source,
+                    HsConflict = v.HsConflict,
+                    Warning = finding == null ? null : new TaxRateWarningDto
+                    {
+                        ItemTypeId = id,
+                        Enforce = finding.Enforce,
+                        Message = finding.Message,
+                    },
+                };
+            }).ToList());
+        }
+
+        /// <summary>
         /// What the chosen items' stock is worth, so the bill form can turn a
         /// line TOTAL into a quantity: the operator knows the amount they are
         /// billing, not the number of units it works out to.

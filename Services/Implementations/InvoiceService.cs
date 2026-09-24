@@ -340,6 +340,7 @@ namespace MyApp.Api.Services.Implementations
             CancelReason = inv.CancelReason,
             FbrCancelledAt = inv.FbrCancelledAt,
             FbrCancelledReason = inv.FbrCancelledReason,
+            TaxRateOverrideReason = inv.TaxRateOverrideReason,
             // IsFullyReversed is filled by AttachReversalInfoAsync, which
             // already fetches this bill's notes in one batched query.
             OriginalInvoiceId = inv.OriginalInvoiceId,
@@ -432,6 +433,7 @@ namespace MyApp.Api.Services.Implementations
             var invoices = await _invoiceRepo.GetByCompanyAsync(companyId, allowedDivisionIds);
             var dtos = invoices.Select(ToDto).ToList();
             await AttachReversalInfoAsync(dtos);
+            await AttachTaxRateWarningsAsync(dtos);
             return dtos;
         }
 
@@ -441,6 +443,68 @@ namespace MyApp.Api.Services.Implementations
         /// shows "Reversed by CN #N") and the Debit Note (upward adjustment).
         /// One round-trip for the whole page.
         /// </summary>
+        /// <summary>
+        /// Fill <see cref="InvoiceDto.TaxRateWarnings"/> for a page of bills: each
+        /// line whose rate disagrees with what the company's own records say the
+        /// goods came in at. One evidence load per company on the page, whatever
+        /// its size. Sale documents only — a note follows the bill it adjusts —
+        /// and never a cancelled or migrated one, which cannot be acted on.
+        ///
+        /// The same rule the save guard enforces, so the bill list shows exactly
+        /// the bills an edit would refuse, plus the contradictory-evidence ones
+        /// to review. A bill saved with a reason still lists its findings; the
+        /// reason beside them says why it was allowed.
+        /// </summary>
+        /// <summary>The DTO a create or edit hands back, with the same rate findings
+        /// the list and detail views carry — so an API client reading the response
+        /// sees what the guard saw, not an empty list.</summary>
+        private async Task<InvoiceDto> ToDtoWithRateWarningsAsync(Invoice invoice)
+        {
+            var dto = ToDto(invoice);
+            await AttachTaxRateWarningsAsync(new List<InvoiceDto> { dto });
+            return dto;
+        }
+
+        private async Task AttachTaxRateWarningsAsync(List<InvoiceDto> dtos)
+        {
+            var candidates = dtos
+                .Where(d => d.DocumentType != 9 && d.DocumentType != 10 && !d.IsCancelled && !d.IsMigrated)
+                .ToList();
+            foreach (var group in candidates.GroupBy(d => d.CompanyId))
+            {
+                var ids = group
+                    .SelectMany(d => d.Items)
+                    .Select(i => i.Adjustment?.AdjustedItemTypeId ?? i.ItemTypeId)
+                    .Where(i => i is > 0)
+                    .Select(i => i!.Value)
+                    .Distinct()
+                    .ToList();
+                if (ids.Count == 0) continue;
+
+                var verdicts = await _stock.GetImportedTaxRatesAsync(group.Key, ids);
+                foreach (var dto in group)
+                {
+                    var seen = new HashSet<int>();
+                    foreach (var line in dto.Items)
+                    {
+                        var itemId = line.Adjustment?.AdjustedItemTypeId ?? line.ItemTypeId;
+                        if (itemId is not > 0 || !seen.Add(itemId.Value)) continue;
+                        var name = !string.IsNullOrWhiteSpace(line.Adjustment?.AdjustedItemTypeName)
+                            ? line.Adjustment!.AdjustedItemTypeName!
+                            : !string.IsNullOrWhiteSpace(line.ItemTypeName) ? line.ItemTypeName : line.Description;
+                        var finding = ImportedTaxRate.Check(verdicts.GetValueOrDefault(itemId.Value), name, dto.GSTRate);
+                        if (finding != null)
+                            dto.TaxRateWarnings.Add(new TaxRateWarningDto
+                            {
+                                ItemTypeId = itemId,
+                                Enforce = finding.Enforce,
+                                Message = finding.Message,
+                            });
+                    }
+                }
+            }
+        }
+
         private async Task AttachReversalInfoAsync(List<InvoiceDto> dtos)
         {
             var ids = dtos
@@ -511,6 +575,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var d in dtos)
                 d.IsLatest = d.InvoiceNumber == maxNumber;
             await AttachReversalInfoAsync(dtos);
+            await AttachTaxRateWarningsAsync(dtos);
             await AttachChallanRemainingAsync(dtos);
             await AttachHsBreakdownAsync(dtos);
 
@@ -529,6 +594,7 @@ namespace MyApp.Api.Services.Implementations
             if (inv == null) return null;
             var dto = ToDto(inv);
             await AttachReversalInfoAsync(new List<InvoiceDto> { dto });
+            await AttachTaxRateWarningsAsync(new List<InvoiceDto> { dto });
             return dto;
         }
 
@@ -681,6 +747,97 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private static string FormatInvoiceNumber(string? prefix, int number) =>
             string.IsNullOrEmpty(prefix) ? number.ToString() : $"{prefix}{number}";
+
+        // ── Sales tax rate vs. the rate the goods came in at (2026-09-24) ─────
+        // An importer's goods carry the rate customs charged on the GD, and SRO
+        // 297(I)/2023 goods are 25% on every later supply. The bill forms open on
+        // the standard-rate scenario, so 25% goods were billed and filed at 18%
+        // with nothing to say otherwise. Helpers/ImportedTaxRate owns the rule;
+        // these two apply it on every create and edit.
+        private const string TaxRateOverrideAudit = "TAX_RATE_OVERRIDE_V1";
+
+        /// <summary>
+        /// Refuse a bill that charges a sales tax rate this company's own GD /
+        /// opening-stock records contradict for one of its items, unless the
+        /// operator has written down why.
+        ///
+        /// Only UNAMBIGUOUS evidence refuses; contradictory records are left to the
+        /// warning the bill list shows. On success
+        /// <see cref="Invoice.TaxRateOverrideReason"/> holds the reason when one
+        /// was needed and is cleared when it was not, so a stored reason always
+        /// describes an override still in force.
+        /// </summary>
+        /// <returns>The findings the reason overrode — empty when none.</returns>
+        private async Task<List<ImportedTaxRate.Finding>> GuardImportedTaxRatesAsync(Invoice invoice, string? reason)
+        {
+            // The EFFECTIVE item, as FbrService files it.
+            var lines = invoice.Items
+                .Select(ii => new
+                {
+                    ItemTypeId = ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId,
+                    Name = !string.IsNullOrWhiteSpace(ii.Adjustment?.AdjustedItemTypeName)
+                        ? ii.Adjustment!.AdjustedItemTypeName!
+                        : !string.IsNullOrWhiteSpace(ii.ItemTypeName) ? ii.ItemTypeName : ii.Description,
+                })
+                .Where(l => l.ItemTypeId is > 0)
+                .GroupBy(l => l.ItemTypeId!.Value)
+                .Select(g => g.First())
+                .ToList();
+
+            var enforced = new List<ImportedTaxRate.Finding>();
+            if (lines.Count > 0)
+            {
+                var verdicts = await _stock.GetImportedTaxRatesAsync(
+                    invoice.CompanyId, lines.Select(l => l.ItemTypeId!.Value));
+                foreach (var l in lines)
+                {
+                    var finding = ImportedTaxRate.Check(
+                        verdicts.GetValueOrDefault(l.ItemTypeId!.Value), l.Name, invoice.GSTRate);
+                    if (finding is { Enforce: true }) enforced.Add(finding);
+                }
+            }
+
+            var given = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+            if (given is { Length: > 500 }) given = given[..500];
+
+            if (enforced.Count > 0 && given == null)
+                throw new InvalidOperationException(
+                    string.Join(" ", enforced.Select(f => f.Message)) +
+                    " Choose the scenario that matches the rate the goods came in at, or give a reason for " +
+                    "charging this rate.");
+
+            invoice.TaxRateOverrideReason = enforced.Count > 0 ? given : null;
+            return enforced;
+        }
+
+        /// <summary>Record who charged a rate the records contradict, and why.
+        /// Written after the bill has saved, so it never describes a bill that
+        /// does not exist; a failure here never undoes the save.</summary>
+        private async Task AuditTaxRateOverrideAsync(Invoice invoice, List<ImportedTaxRate.Finding> overridden, bool isCreate)
+        {
+            if (overridden.Count == 0) return;
+            try
+            {
+                await _auditLog.LogAsync(new AuditLog
+                {
+                    Level = "Info",
+                    HttpMethod = isCreate ? "POST" : "PUT",
+                    RequestPath = $"/api/invoices/{invoice.Id}",
+                    StatusCode = 200,
+                    ExceptionType = TaxRateOverrideAudit,
+                    CompanyId = invoice.CompanyId,
+                    Message = $"Bill #{invoice.InvoiceNumber} saved at " +
+                              $"{invoice.GSTRate.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}% " +
+                              "against the company's own records. " +
+                              string.Join(" ", overridden.Select(f => f.Message)) +
+                              $" Reason given: {invoice.TaxRateOverrideReason}",
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not audit the tax rate override on invoice {InvoiceId}", invoice.Id);
+            }
+        }
 
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
         {
@@ -1004,6 +1161,10 @@ namespace MyApp.Api.Services.Implementations
                 // the operator's choice on the bill form.
                 ApplyAdvanceTax(invoice, dto.AdvanceTaxSection, dto.AdvanceTaxFilerActive);
 
+                // A rate the company's own GD / opening stock contradicts is refused
+                // here, before anything is written, unless a reason was given.
+                var rateOverrides = await GuardImportedTaxRatesAsync(invoice, dto.TaxRateOverrideReason);
+
                 // Wrap invoice creation + challan transitions + company update in a single transaction
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
@@ -1038,10 +1199,11 @@ namespace MyApp.Api.Services.Implementations
                     // GL posting (Dr AR / Cr Sales + Output tax) — same tx.
                     await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
+                    await AuditTaxRateOverrideAsync(created, rateOverrides, isCreate: true);
 
                     // Reload with includes
                     var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
-                    return ToDto(loaded!);
+                    return await ToDtoWithRateWarningsAsync(loaded!);
                 }
                 catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
                 {
@@ -1367,6 +1529,9 @@ namespace MyApp.Api.Services.Implementations
                 // the operator's choice on the bill form.
                 ApplyAdvanceTax(invoice, dto.AdvanceTaxSection, dto.AdvanceTaxFilerActive);
 
+                // Same guard as the challan path, before anything is written.
+                var rateOverrides = await GuardImportedTaxRatesAsync(invoice, dto.TaxRateOverrideReason);
+
                 await using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
@@ -1390,9 +1555,10 @@ namespace MyApp.Api.Services.Implementations
                     // GL posting (Dr AR / Cr Sales + Output tax) — same tx.
                     await _posting.PostInvoiceAsync(created);
                     await transaction.CommitAsync();
+                    await AuditTaxRateOverrideAsync(created, rateOverrides, isCreate: true);
 
                     var loaded = await _invoiceRepo.GetByIdAsync(created.Id);
-                    return ToDto(loaded!);
+                    return await ToDtoWithRateWarningsAsync(loaded!);
                 }
                 catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
                 {
@@ -1830,6 +1996,14 @@ namespace MyApp.Api.Services.Implementations
                 ApplyAdvanceTax(invoice, invoice.AdvanceTaxSection, invoice.AdvanceTaxFilerActive);
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
 
+                // The rate check, on the bill as edited. An absent reason keeps the
+                // one the bill already carries; "" clears it. Only a reason given
+                // on THIS save is audited — carrying an old one forward is not a
+                // new decision.
+                var newRateReason = dto.TaxRateOverrideReason;
+                var rateOverrides = await GuardImportedTaxRatesAsync(
+                    invoice, newRateReason ?? invoice.TaxRateOverrideReason);
+
                 // Any edit invalidates a previous validation
                 if (invoice.FbrStatus != "Submitted")
                 {
@@ -1848,9 +2022,11 @@ namespace MyApp.Api.Services.Implementations
                 // GL re-post: totals changed → replace the bill's journal entry.
                 await _posting.PostInvoiceAsync(invoice);
                 await transaction.CommitAsync();
+                if (!string.IsNullOrWhiteSpace(newRateReason))
+                    await AuditTaxRateOverrideAsync(invoice, rateOverrides, isCreate: false);
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
-                return reloaded == null ? null : ToDto(reloaded);
+                return reloaded == null ? null : await ToDtoWithRateWarningsAsync(reloaded);
             }
             catch (DbUpdateException dupEx)
                 when (dto.InvoiceNumber.HasValue && NumberAllocationRetry.IsUniqueViolation(dupEx))
@@ -2372,6 +2548,12 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
 
+                // A line reclassified onto an item whose own records contradict the
+                // bill's rate hits the same check as a full edit.
+                var newRateReason = dto.TaxRateOverrideReason;
+                var rateOverrides = await GuardImportedTaxRatesAsync(
+                    invoice, newRateReason ?? invoice.TaxRateOverrideReason);
+
                 // Any edit invalidates a previous validation. Don't touch
                 // FbrStatus when the bill was already submitted (PreValidate
                 // refuses re-edit anyway thanks to IsInvoiceEditable above).
@@ -2393,6 +2575,8 @@ namespace MyApp.Api.Services.Implementations
                 // GL re-post: qty edits change totals → replace the entry.
                 await _posting.PostInvoiceAsync(invoice);
                 await transaction.CommitAsync();
+                if (!string.IsNullOrWhiteSpace(newRateReason))
+                    await AuditTaxRateOverrideAsync(invoice, rateOverrides, isCreate: false);
 
                 // ── Audit log (after commit so we don't log a rolled-back op) ──
                 // Per-row before/after snapshot for the narrow-edit path.
@@ -2462,7 +2646,7 @@ namespace MyApp.Api.Services.Implementations
                 catch { /* audit must never break the save */ }
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
-                return reloaded == null ? null : ToDto(reloaded);
+                return reloaded == null ? null : await ToDtoWithRateWarningsAsync(reloaded);
             }
             catch (Exception ex)
             {

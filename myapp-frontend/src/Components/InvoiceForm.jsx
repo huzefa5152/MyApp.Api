@@ -16,7 +16,9 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
-import { matchesScenarioSaleType } from "../utils/saleType";
+import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
+import TaxRateNotice from "./TaxRateNotice";
+import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
@@ -462,22 +464,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // narrows it to item types with no HS code exactly as the standalone form
   // does -- the challan route must not be a way round the split.
   const overlayOn = !!company?.inventoryOverlayEnabled;
-  const filteredItemTypes = useMemo(() => {
-    const forBook = itemTypesForBook(itemTypes, overlayOn, BOOK_BILL);
-    // The scenario's sale-type filter belongs to the FILED book. It exists to
-    // stop a mixed-sale-type bill that FBR rejects with 0052 -- but under the
-    // overlay the bill is not what gets filed, and a commercial no-HS item
-    // carries no sale type at all, so applying both filters leaves the picker
-    // empty and the operator with nothing to choose.
-    if (overlayOn) return forBook;
-    if (!chosenScenario) return forBook;
-    // An item type with NO sale type counts as the standard-rate default
-    // (utils/saleType.js) -- otherwise the bill's own item vanished from
-    // this list and the picker rendered blank on edit.
-    return forBook.filter(
-      (it) => matchesScenarioSaleType(it, chosenScenario.saleType),
-    );
-  }, [itemTypes, chosenScenario, overlayOn]);
+  // filteredItemTypes is defined below the bill's lines (allItems), which it needs.
 
   // When operator picks a scenario, snap the GST Rate to that scenario's
   // canonical rate. Field is read-only while a scenario is locked — same
@@ -661,6 +648,63 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     c.items.map((item) => ({ ...item, challanNumber: c.challanNumber }))
   );
 
+  // ── The rate the goods came in at ─────────────────────────────────────────
+  // Same check the standalone form makes (Helpers/ImportedTaxRate on the
+  // server): an item this company imported at one rate, billed at another, is
+  // refused on save unless the scenario matches or a reason is written.
+  const [rateReason, setRateReason] = useState("");
+  const pickedItemKey = allItems.map((i) => itemTypeIds[i.id] || "").join(",");
+  const pickedItemIds = useMemo(
+    () => pickedItemKey.split(",").map(Number).filter((n) => n > 0),
+    [pickedItemKey],
+  );
+  const widenForRate = chosenScenario
+    && (chosenScenario.saleType || "").trim().toLowerCase() !== DEFAULT_SALE_TYPE.toLowerCase()
+    ? Number(chosenScenario.defaultRate) : null;
+  const rateCheck = useImportedTaxRates(companyId, pickedItemIds, gstRate, { widenForRate });
+
+  const filteredItemTypes = useMemo(() => {
+    const forBook = itemTypesForBook(itemTypes, overlayOn, BOOK_BILL);
+    // The scenario's sale-type filter belongs to the FILED book. It exists to
+    // stop a mixed-sale-type bill that FBR rejects with 0052 -- but under the
+    // overlay the bill is not what gets filed, and a commercial no-HS item
+    // carries no sale type at all, so applying both filters leaves the picker
+    // empty and the operator with nothing to choose.
+    if (overlayOn) return forBook;
+    if (!chosenScenario) return forBook;
+    // An item type with NO sale type counts as the standard-rate default
+    // (utils/saleType.js) -- otherwise the bill's own item vanished from
+    // this list and the picker rendered blank on edit. Two further
+    // exceptions keep the scenario an operator must use usable: an item already
+    // on the bill is never hidden, and goods this company imported at the
+    // scenario's rate are let in though they carry no sale type of their own.
+    const onBill = new Set(pickedItemIds);
+    return forBook.filter(
+      (it) => matchesScenarioSaleType(it, chosenScenario.saleType)
+        || onBill.has(Number(it.id))
+        || rateCheck.importedAtRate.has(Number(it.id)),
+    );
+  }, [itemTypes, chosenScenario, overlayOn, pickedItemIds, rateCheck.importedAtRate]);
+
+  // One click to the scenario whose rate the goods came in at. This form has no
+  // per-line SRO fields: the server fills the scenario's SRO schedule and serial
+  // when a line carries none, so switching the scenario is the whole fix.
+  const rateSplitNeeded = rateCheck.billRates.length > 1;
+  const rateSuggestion = useMemo(() => {
+    if (rateCheck.enforced.length === 0 || rateCheck.billRates.length !== 1) return null;
+    const target = rateCheck.billRates[0];
+    const matches = enrichedScenarios.filter((sc) => Number(sc.defaultRate) === target);
+    if (matches.length !== 1) return null;
+    const sc = matches[0];
+    return {
+      label: `Bill under ${sc.code} (${target}%)`,
+      hint: sc.defaultSroScheduleNo
+        ? `Files under SRO schedule ${sc.defaultSroScheduleNo} with FBR's catalog serial: confirm the serial for these goods before filing.`
+        : null,
+      onApply: () => setScenarioCode(sc.code),
+    };
+  }, [rateCheck.enforced.length, rateCheck.billRates, enrichedScenarios]);
+
   // Prefill the bill PO from the selected challans (they carry the order's PO)
   // when the operator hasn't set one yet — covers the "Generate Bill from order"
   // path where challans are preselected without calling handleSalesOrderPick.
@@ -825,6 +869,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
     const missingPick = allItems.filter((i) => !itemTypeIds[i.id] && !itemNonInvIds[i.id]);
     if (missingPick.length > 0) return setError("Every line must have an Item Type or Non-Inventory item selected.");
+    if (rateCheck.enforced.length > 0 && !rateReason.trim())
+      return setError(
+        `Some goods came in at a different sales tax rate than the ${gstRate}% this bill charges. ` +
+        "Switch to the matching scenario, or give a reason for charging this rate.");
 
     setSaving(true);
     try {
@@ -866,6 +914,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         challanIds: selectedIds,
+        // Sent only when the rates disagree; the server ignores it otherwise.
+        taxRateOverrideReason: rateCheck.enforced.length > 0 ? rateReason.trim() || null : null,
         items: allItems.map((item) => ({
           deliveryItemId: item.id,
           unitPrice: parseFloat(itemPrices[item.id]),
@@ -1644,6 +1694,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                         placeholder="— required —"
                                         style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                       />
+                                      {(() => {
+                                        const rc = itemTypeIds[item.id] ? rateCheck.checks[itemTypeIds[item.id]] : null;
+                                        if (!rc?.warning) return null;
+                                        return (
+                                          <div style={rc.warning.enforce ? styles.rateChipBad : styles.rateChipCheck}>
+                                            {rc.mixed
+                                              ? `Came in at ${rc.rates.map((x) => `${x}%`).join(" and ")}`
+                                              : `Imported at ${rc.rate}%${rc.source ? ` · ${rc.source}` : ""}`}
+                                          </div>
+                                        );
+                                      })()}
                                     </td>
                                     <td style={styles.unifiedTd}>
                                       {/* Description is ALWAYS editable and independent of the Item
@@ -1854,6 +1915,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                   </>
                 )}
 
+                <TaxRateNotice
+                  enforced={rateCheck.enforced}
+                  advisory={rateCheck.advisory}
+                  billRate={gstRate}
+                  suggestion={rateSuggestion}
+                  splitNeeded={rateSplitNeeded}
+                  reason={rateReason}
+                  onReasonChange={setRateReason}
+                />
+
                 {/* Attachments — staged client-side until the bill is created,
                     then flushed against the new id (see handleSubmit). */}
                 <AttachmentManager
@@ -1951,6 +2022,8 @@ const styles = {
   unifiedThead: { backgroundColor: "#eff3f8" },
   unifiedTh: { padding: "0.5rem 0.45rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   unifiedRow: { backgroundColor: "#fff" },
+  rateChipBad: { marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.danger, fontWeight: 600 },
+  rateChipCheck: { marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#b26a00", fontWeight: 600 },
   unifiedTd: { padding: "0.3rem 0.4rem", fontSize: "0.8rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
 
   // Scenario-locked GST + Sale Type affordances (same look as StandaloneInvoiceForm).

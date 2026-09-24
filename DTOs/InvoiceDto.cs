@@ -239,6 +239,19 @@
         /// Human-readable list of what's missing for FBR submission. Empty when FbrReady == true.
         /// </summary>
         public List<string> FbrMissing { get; set; } = new();
+
+        /// <summary>
+        /// Lines whose sales tax rate disagrees with the rate the company's own
+        /// records say the goods came in at (Helpers/ImportedTaxRate). Filled by
+        /// a batched pass on list and detail reads. <c>Enforce</c> marks
+        /// unambiguous evidence — the kind create and edit refuse without a
+        /// written reason; the rest is contradictory evidence to review.
+        /// </summary>
+        public List<TaxRateWarningDto> TaxRateWarnings { get; set; } = new();
+
+        /// <summary>The operator's reason for charging a rate the records
+        /// disagree with. Null when none was needed or given.</summary>
+        public string? TaxRateOverrideReason { get; set; }
         /// <summary>
         /// Inventory Overlay only. True when the filing book exists but no
         /// longer sums to the bill it was reconciled against — i.e. the bill
@@ -350,6 +363,12 @@
 
     public class CreateInvoiceDto
     {
+        /// <summary>
+        /// Why this bill charges a rate the company's own GD / opening stock
+        /// records disagree with. Required to save such a bill; ignored when the
+        /// rates agree. See Helpers/ImportedTaxRate.
+        /// </summary>
+        public string? TaxRateOverrideReason { get; set; }
         /// <summary>Optional Bill-print grouping for the new bill (true = grouped
         /// by item type; null/false = individual, the default). The Tax Invoice
         /// grouping is independent and set later on the Invoices tab.</summary>
@@ -440,6 +459,12 @@
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        /// <summary>
+        /// Why this bill charges a rate the company's own GD / opening stock
+        /// records disagree with. Required to save such a bill; ignored when the
+        /// rates agree. See Helpers/ImportedTaxRate.
+        /// </summary>
+        public string? TaxRateOverrideReason { get; set; }
         /// <summary>Optional Bill-print grouping for the new bill (true = grouped
         /// by item type; null/false = individual, the default). The Tax Invoice
         /// grouping is independent and set later on the Invoices tab.</summary>
@@ -694,6 +719,13 @@
     public class UpdateInvoiceDto
     {
         /// <summary>
+        /// Why this bill charges a rate the company's own GD / opening stock
+        /// records disagree with. <c>null</c> = not mentioned, so the bill keeps
+        /// the reason it already has; <c>""</c> = clear it. Required to save
+        /// when the rates disagree and the bill carries no reason.
+        /// </summary>
+        public string? TaxRateOverrideReason { get; set; }
+        /// <summary>
         /// Optional new bill date. When null, the existing date is preserved.
         /// Future dates are accepted (a bill may be raised ahead of its billing
         /// date); FBR rule [0043] still blocks SUBMITTING a future-dated bill —
@@ -805,6 +837,13 @@
     public class UpdateInvoiceItemTypesDto
     {
         public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
+
+        /// <summary>
+        /// Why this bill charges a rate the company's own GD / opening stock
+        /// records disagree with — needed when a reclassified line points at such
+        /// an item. <c>null</c> keeps the bill's existing reason; <c>""</c> clears it.
+        /// </summary>
+        public string? TaxRateOverrideReason { get; set; }
 
         /// <summary>Re-home the bill to a different division on the narrow
         /// (Invoices-tab) edit path too. Same semantics as
@@ -947,5 +986,34 @@
         /// can judge how trustworthy the suggested rate is.
         /// </summary>
         public string? MatchedBy { get; set; }
+    }
+
+    /// <summary>One line's rate disagreement, as the bill list and forms show it.</summary>
+    public class TaxRateWarningDto
+    {
+        public int? ItemTypeId { get; set; }
+        /// <summary>True for unambiguous evidence — refused without a reason.</summary>
+        public bool Enforce { get; set; }
+        public string Message { get; set; } = "";
+    }
+
+    /// <summary>
+    /// What the company's own records say about one item's sales tax rate,
+    /// measured against the rate the bill form is about to charge.
+    /// </summary>
+    public class ImportedTaxRateDto
+    {
+        public int ItemTypeId { get; set; }
+        /// <summary>The rate the goods came in at; null when nothing says.</summary>
+        public decimal? Rate { get; set; }
+        /// <summary>Every distinct rate the item's records carry.</summary>
+        public List<decimal> Rates { get; set; } = new();
+        public bool Mixed { get; set; }
+        /// <summary>Where <see cref="Rate"/> comes from, e.g. "GD XXXX-HC-0001 of 01-01-2026" (a fictitious example: this repository is public).</summary>
+        public string? Source { get; set; }
+        /// <summary>Set when a GD line under the item carries another HS code.</summary>
+        public string? HsConflict { get; set; }
+        /// <summary>The finding for the bill rate asked about; null when the rates agree.</summary>
+        public TaxRateWarningDto? Warning { get; set; }
     }
 }

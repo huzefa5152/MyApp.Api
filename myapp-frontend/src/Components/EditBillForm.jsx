@@ -19,7 +19,9 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import RichText from "./RichText";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
-import { matchesScenarioSaleType } from "../utils/saleType";
+import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
+import TaxRateNotice from "./TaxRateNotice";
+import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
@@ -408,6 +410,43 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     [scenarios, scenarioCode],
   );
 
+  // ── The rate the goods came in at ─────────────────────────────────────────
+  // Same check as the create forms (Helpers/ImportedTaxRate): an edit that
+  // leaves an item billed at a rate its GD / opening stock contradicts is
+  // refused unless the scenario matches or a reason is written. The bill's own
+  // stored reason is the starting value, so re-saving an overridden bill does
+  // not ask again.
+  const [rateReason, setRateReason] = useState("");
+  useEffect(() => {
+    if (invoice) setRateReason(invoice.taxRateOverrideReason || "");
+  }, [invoice?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickedItemKey = items.map((it) => it.itemTypeId || "").join(",");
+  const pickedItemIds = useMemo(
+    () => pickedItemKey.split(",").map(Number).filter((n) => n > 0),
+    [pickedItemKey],
+  );
+  const widenForRate = chosenScenario
+    && (chosenScenario.saleType || "").trim().toLowerCase() !== DEFAULT_SALE_TYPE.toLowerCase()
+    ? Number(chosenScenario.defaultRate) : null;
+  const rateCheck = useImportedTaxRates(invoice?.companyId, pickedItemIds, gstRate, { widenForRate });
+  const rateSplitNeeded = rateCheck.billRates.length > 1;
+  // On this form the GST rate is its own field and does not follow the
+  // scenario, so the one-click fix sets both.
+  const rateSuggestion = useMemo(() => {
+    if (rateCheck.enforced.length === 0 || rateCheck.billRates.length !== 1) return null;
+    const target = rateCheck.billRates[0];
+    const matches = scenarios.filter((sc) => Number(sc.defaultRate) === target);
+    if (matches.length !== 1) return null;
+    const sc = matches[0];
+    return {
+      label: `Bill under ${sc.code} (${target}%)`,
+      hint: sc.defaultSroScheduleNo
+        ? `Files under SRO schedule ${sc.defaultSroScheduleNo} with FBR's catalog serial: confirm the serial for these goods before filing.`
+        : null,
+      onApply: () => { setScenarioCode(sc.code); setGstRate(target); },
+    };
+  }, [rateCheck.enforced.length, rateCheck.billRates, scenarios]);
+
   // Item types compatible with the chosen scenario. Empty selection ("auto")
   // shows ALL item types — same fallback as the create form.
   // This one form serves both tabs, so the book follows the tab: the Bills
@@ -428,10 +467,16 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
     // An item type with NO sale type counts as the standard-rate default
     // (utils/saleType.js) -- otherwise the bill's own item vanished from
     // this list and the picker rendered blank on edit.
+    // Two exceptions keep the scenario an operator must use usable: an item
+    // already on the bill is never hidden, and goods this company imported at
+    // the scenario's rate are let in though they carry no sale type of their own.
+    const onBill = new Set(pickedItemIds);
     return forBook.filter(
-      (it) => matchesScenarioSaleType(it, chosenScenario.saleType),
+      (it) => matchesScenarioSaleType(it, chosenScenario.saleType)
+        || onBill.has(Number(it.id))
+        || rateCheck.importedAtRate.has(Number(it.id)),
     );
-  }, [itemTypes, chosenScenario, inventoryOverlay, billsMode]);
+  }, [itemTypes, chosenScenario, inventoryOverlay, billsMode, pickedItemIds, rateCheck.importedAtRate]);
 
   // ── HS Stock panel — derive unique HS codes + per-HS bill totals ────
   //
@@ -1397,11 +1442,24 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       );
     }
 
+    if (rateCheck.enforced.length > 0 && !rateReason.trim()) {
+      return setError(
+        `Some goods came in at a different sales tax rate than the ${gstRate}% this bill charges. ` +
+        "Switch to the matching scenario, or give a reason for charging this rate.");
+    }
+
     setSaving(true);
     // Division re-home (2026-07-14) — sent on every save path so the bill can
     // be moved on both the Bills and Invoices tabs. `updateDivision` opts in so
     // other callers that omit it never clobber the stored division.
-    const divisionPayload = { updateDivision: true, divisionId: divisionId ? parseInt(divisionId) : null };
+    const divisionPayload = {
+      updateDivision: true,
+      divisionId: divisionId ? parseInt(divisionId) : null,
+      // Merged into all three save paths. While the rates disagree it is the
+      // typed reason ("" = none, so the server refuses rather than keeping an
+      // old one the operator erased); otherwise null, and the server clears it.
+      taxRateOverrideReason: rateCheck.enforced.length > 0 ? rateReason.trim() : null,
+    };
     try {
       if (itemTypeOnlyMode) {
         // Narrow path — only re-classify lines by ItemType. Server enforces
@@ -2128,6 +2186,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                   style={styles.tableInput}
                                 />
                               )}
+                              {(() => {
+                                const rc = group.itemTypeId ? rateCheck.checks[group.itemTypeId] : null;
+                                if (!rc?.warning) return null;
+                                return (
+                                  <div style={rc.warning.enforce ? styles.rateChipBad : styles.rateChipCheck}>
+                                    {rc.mixed
+                                      ? `Came in at ${rc.rates.map((x) => `${x}%`).join(" and ")}`
+                                      : `Imported at ${rc.rate}%${rc.source ? ` · ${rc.source}` : ""}`}
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td style={styles.td}>
                               <div style={styles.readOnlyText}>{group.itemTypeName || group.description || <span style={styles.muted}>—</span>}</div>
@@ -2215,6 +2284,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                   style={styles.tableInput}
                                 />
                               )}
+                              {(() => {
+                                const rc = item.itemTypeId ? rateCheck.checks[item.itemTypeId] : null;
+                                if (!rc?.warning) return null;
+                                return (
+                                  <div style={rc.warning.enforce ? styles.rateChipBad : styles.rateChipCheck}>
+                                    {rc.mixed
+                                      ? `Came in at ${rc.rates.map((x) => `${x}%`).join(" and ")}`
+                                      : `Imported at ${rc.rate}%${rc.source ? ` · ${rc.source}` : ""}`}
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td style={styles.td}>
                               {lockNonItemType ? (
@@ -2455,6 +2535,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                     ⓘ Editing this bill will clear its FBR validation status. You'll need to re-validate before submitting to FBR.
                   </div>
                 )}
+
+                <TaxRateNotice
+                  enforced={rateCheck.enforced}
+                  advisory={rateCheck.advisory}
+                  billRate={gstRate}
+                  suggestion={rateSuggestion}
+                  splitNeeded={rateSplitNeeded}
+                  reason={rateReason}
+                  onReasonChange={setRateReason}
+                  readOnly={readOnly}
+                />
 
                 {/* Attachments — the bill exists, so uploads bind immediately.
                     Rendered in every tier (read-only view and the narrow
@@ -3919,6 +4010,8 @@ const styles = {
   thead: { backgroundColor: "#f5f7fa" },
   th: { padding: "0.6rem 0.5rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
   td: { padding: "0.4rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
+  rateChipBad: { marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.danger, fontWeight: 600 },
+  rateChipCheck: { marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#b26a00", fontWeight: 600 },
   tableInput: { width: "100%", padding: "0.35rem 0.5rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 4, fontSize: "0.8rem", backgroundColor: "#fff" },
   stockOverSoft: {
     marginTop: 3, fontSize: "0.66rem", lineHeight: 1.35, color: "#8d6e00",

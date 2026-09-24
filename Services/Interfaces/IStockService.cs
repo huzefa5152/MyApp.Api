@@ -105,6 +105,19 @@ namespace MyApp.Api.Services.Interfaces
             HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
+        /// The sales tax rate each item came IN at, from this company's own GD
+        /// lines, opening stock and stock received at a stated rate — weighed by
+        /// <see cref="MyApp.Api.Helpers.ImportedTaxRate"/>. Company-scoped by
+        /// construction: another company's GD is never evidence, and an item the
+        /// company holds no record of comes back with a null rate.
+        /// </summary>
+        /// <param name="itemTypeIds">The items to weigh; null for every item the
+        /// company holds a rate record for.</param>
+        Task<Dictionary<int, MyApp.Api.Helpers.ImportedTaxRate.Verdict>> GetImportedTaxRatesAsync(
+            int companyId,
+            IEnumerable<int>? itemTypeIds);
+
+        /// <summary>
         /// Current on-hand for one item under one company. Computed as
         /// opening balance + Σ In − Σ Out across all movements up to
         /// <paramref name="asOfDate"/> (default: now). Returns 0 when no

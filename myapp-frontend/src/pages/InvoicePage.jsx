@@ -5,6 +5,7 @@ import InvoiceForm from "../Components/InvoiceForm";
 import PaymentForm from "../Components/PaymentForm";
 import PaymentHistoryDialog from "../Components/PaymentHistoryDialog";
 import StatusBadge from "../Components/StatusBadge";
+import TaxRateBadge from "../Components/TaxRateBadge";
 import { isFbrInFlight } from "../utils/fbrStatus";
 import { documentReference } from "../utils/invoiceReference";
 import SearchableSelect from "../Components/SearchableSelect";
@@ -1185,6 +1186,8 @@ export default function InvoicePage({ mode = "invoices" }) {
                         previously rendered plain inline text so the
                         styling was inconsistent with the other status
                         pills (Ready / Validated / Failed / etc.). */}
+                    {/* Goods billed at a rate other than the one they came in at. */}
+                    <TaxRateBadge inv={inv} />
                     {inv.isCancelled && (
                       <div
                         style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.7rem", borderRadius: 8, background: "#ffebee", color: "#b71c1c", fontSize: "0.78rem", fontWeight: 700, border: "1px solid #ef9a9a" }}

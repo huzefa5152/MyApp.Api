@@ -230,6 +230,98 @@ namespace MyApp.Api.Services.Implementations
             return result;
         }
 
+        public async Task<Dictionary<int, ImportedTaxRate.Verdict>> GetImportedTaxRatesAsync(
+            int companyId,
+            IEnumerable<int>? itemTypeIds)
+        {
+            // Null asks for every item this company holds a rate record for.
+            var ids = itemTypeIds?.Where(i => i > 0).Distinct().ToList();
+            var result = new Dictionary<int, ImportedTaxRate.Verdict>();
+            if (ids is { Count: 0 }) return result;
+
+            var openingQ = _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId && o.SalesTaxRate > 0m);
+            // GD lines of THIS company's consignments only. An Ambiguous line matched
+            // more than one balance and no guess was made, so its item link is not
+            // evidence of anything.
+            var gdQ = _context.ImportConsignmentLines.AsNoTracking()
+                .Where(l => l.ItemTypeId != null
+                         && l.ImportConsignment.CompanyId == companyId
+                         && l.Disposition != GdCostingDisposition.Ambiguous
+                         && l.SalesTaxRate > 0m);
+            // Goods genuinely taken IN: purchases and goods receipts. Never the
+            // sale side — a credit note returning goods is an inward movement too,
+            // and counting it would let an item wrongly sold at 18% and then
+            // credited turn its own record "mixed", disarming the very check
+            // that should have stopped the sale. Adjustments are corrections, not
+            // intake; the GD costing import posts through opening balances.
+            var receivedQ = _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId
+                         && m.Direction == StockMovementDirection.In
+                         && (m.SourceType == StockMovementSourceType.PurchaseBill
+                             || m.SourceType == StockMovementSourceType.GoodsReceipt)
+                         && m.SalesTaxRate != null && m.SalesTaxRate > 0m);
+            if (ids != null)
+            {
+                openingQ = openingQ.Where(o => ids.Contains(o.ItemTypeId));
+                gdQ = gdQ.Where(l => ids.Contains(l.ItemTypeId!.Value));
+                receivedQ = receivedQ.Where(m => ids.Contains(m.ItemTypeId));
+            }
+
+            var openings = await openingQ
+                .Select(o => new { o.ItemTypeId, o.SalesTaxRate })
+                .Distinct()
+                .ToListAsync();
+            var gdLines = await gdQ
+                .Select(l => new
+                {
+                    ItemTypeId = l.ItemTypeId!.Value,
+                    l.SalesTaxRate,
+                    l.HsCode,
+                    l.ImportConsignment.GdNumber,
+                    l.ImportConsignment.GdDate,
+                })
+                .ToListAsync();
+            // A company that buys a lot has many receipts per item; only the
+            // distinct rates matter here.
+            var received = await receivedQ
+                .Select(m => new { m.ItemTypeId, Rate = m.SalesTaxRate!.Value })
+                .Distinct()
+                .ToListAsync();
+
+            var itemIds = ids ?? openings.Select(o => o.ItemTypeId)
+                .Concat(gdLines.Select(g => g.ItemTypeId))
+                .Concat(received.Select(r => r.ItemTypeId))
+                .Distinct()
+                .ToList();
+            if (itemIds.Count == 0) return result;
+
+            // The item's own code, to check each GD line against. Only the code is
+            // read, and nothing about the item is returned, so an id the caller
+            // cannot see discloses nothing: it simply has no records here.
+            var hsByItem = await _context.ItemTypes.AsNoTracking()
+                .Where(it => itemIds.Contains(it.Id))
+                .Select(it => new { it.Id, it.HSCode })
+                .ToDictionaryAsync(x => x.Id, x => x.HSCode);
+
+            var gdByItem = gdLines.ToLookup(g => g.ItemTypeId);
+            var openByItem = openings.ToLookup(o => o.ItemTypeId);
+            var recvByItem = received.ToLookup(r => r.ItemTypeId);
+            foreach (var id in itemIds)
+            {
+                var evidence = new List<ImportedTaxRate.Evidence>();
+                evidence.AddRange(gdByItem[id].Select(g =>
+                    new ImportedTaxRate.Evidence(ImportedTaxRate.EvidenceKind.Gd, g.SalesTaxRate,
+                        g.HsCode, g.GdNumber, g.GdDate)));
+                evidence.AddRange(openByItem[id].Select(o =>
+                    new ImportedTaxRate.Evidence(ImportedTaxRate.EvidenceKind.Opening, o.SalesTaxRate)));
+                evidence.AddRange(recvByItem[id].Select(r =>
+                    new ImportedTaxRate.Evidence(ImportedTaxRate.EvidenceKind.Received, r.Rate)));
+                result[id] = ImportedTaxRate.Resolve(id, hsByItem.GetValueOrDefault(id), evidence);
+            }
+            return result;
+        }
+
         public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null,
             HashSet<int>? allowedDivisionIds = null)
         {

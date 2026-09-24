@@ -7,6 +7,7 @@ import {
 } from "react-icons/md";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
+import TaxRateBadge from "./TaxRateBadge";
 import { isFutureDocDate } from "../utils/dateInput";
 import { isFbrInFlight } from "../utils/fbrStatus";
 import { documentReference } from "../utils/invoiceReference";
@@ -289,7 +290,14 @@ export default function InvoiceTable({
       header: isBillsMode ? "FBR" : "FBR Status",
       width: 140,
       accessor: (i) => i.fbrStatus || "",
-      render: (i) => fbrStatusBadge(i, isBillsMode, fbrEnabled),
+      // The rate check sits beside the filing status: a rate conflict is what
+      // the person about to file needs to see.
+      render: (i) => (
+        <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+          {fbrStatusBadge(i, isBillsMode, fbrEnabled)}
+          <TaxRateBadge inv={i} />
+        </span>
+      ),
     },
   ];
 

@@ -152,6 +152,25 @@ export const getStockPricing = (companyId, itemTypeIds) =>
     params: { itemTypeIds: Array.isArray(itemTypeIds) ? itemTypeIds.join(",") : itemTypeIds },
   });
 
+// What this company's own GD lines / opening stock say each item's sales tax
+// rate is, measured against the rate the bill is about to charge. The warning
+// text comes from the server's rule (Helpers/ImportedTaxRate) — the same one
+// the save guard enforces — so the form never words or decides it differently.
+export const getImportedTaxRates = (companyId, itemTypeIds, billRate) =>
+  httpClient.get(`/invoices/company/${companyId}/imported-tax-rates`, {
+    // One comma-separated string, for the reason getStockPricing gives above.
+    params: {
+      itemTypeIds: Array.isArray(itemTypeIds) ? itemTypeIds.join(",") : itemTypeIds,
+      ...(billRate == null || billRate === "" ? {} : { billRate }),
+    },
+  });
+
+// The items this company imported, unambiguously, at `rate`. Widens the item
+// picker under a non-standard scenario (SN024 at 25%), whose sale-type filter
+// otherwise hides every item that carries no sale type of its own.
+export const getItemsImportedAt = (companyId, rate) =>
+  httpClient.get(`/invoices/company/${companyId}/imported-tax-rates/items`, { params: { rate } });
+
 // A bill's lines with how much of each is still to be delivered, and the
 // challans already raised from it.
 export const getInvoiceChallanPlan = (invoiceId) =>

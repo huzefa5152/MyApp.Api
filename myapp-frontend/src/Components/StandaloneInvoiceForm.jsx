@@ -15,8 +15,10 @@ import { ADVANCE_TAX_OPTIONS, advanceTaxLabel, findAdvanceTax, advanceTaxAmount 
 import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import TaxRateNotice from "./TaxRateNotice";
+import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
-import { matchesScenarioSaleType } from "../utils/saleType";
+import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -444,6 +446,26 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     }
   }, [chosenScenario]);
 
+  // ── The rate the goods came in at ─────────────────────────────────────────
+  // The company's own GD / opening stock say what each item was imported at;
+  // a bill charging another rate is refused on save unless the scenario is
+  // changed or a reason is written (Helpers/ImportedTaxRate). This asks the
+  // server BEFORE saving, so the operator sees the refusal coming and the
+  // one-click fix beside it.
+  const [rateReason, setRateReason] = useState("");
+  const pickedItemKey = rows.map((r) => r.itemTypeId || "").join(",");
+  const pickedItemIds = useMemo(
+    () => pickedItemKey.split(",").map(Number).filter((n) => n > 0),
+    [pickedItemKey],
+  );
+  // Under a non-standard scenario the picker keeps only items whose sale type IS
+  // that scenario's; the goods imported at its rate carry none, so they are
+  // fetched and let back in.
+  const widenForRate = chosenScenario
+    && (chosenScenario.saleType || "").trim().toLowerCase() !== DEFAULT_SALE_TYPE.toLowerCase()
+    ? Number(chosenScenario.defaultRate) : null;
+  const rateCheck = useImportedTaxRates(companyId, pickedItemIds, gstRate, { widenForRate });
+
   // Buyer pool filter. The currently-selected buyer always stays visible
   // even when it doesn't match the scenario's buyer kind (e.g. seeded by
   // the Sales-Order prefill) — hiding it would make the pick look like it
@@ -674,10 +696,46 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // An item type with NO sale type counts as the standard-rate default
     // (utils/saleType.js) -- otherwise the bill's own item vanished from
     // this list and the picker rendered blank on edit.
+    // Two exceptions, both so the scenario an operator must use stays usable:
+    // an item already on the bill is never hidden (its own row's picker would
+    // go blank), and goods this company imported at the scenario's rate are let
+    // in even though they carry no sale type of their own.
+    const onBill = new Set(pickedItemIds);
     return forBook.filter(
-      (t) => matchesScenarioSaleType(t, chosenScenario.saleType),
+      (t) => matchesScenarioSaleType(t, chosenScenario.saleType)
+        || onBill.has(Number(t.id))
+        || rateCheck.importedAtRate.has(Number(t.id)),
     );
-  }, [itemTypes, chosenScenario, overlayOn]);
+  }, [itemTypes, chosenScenario, overlayOn, pickedItemIds, rateCheck.importedAtRate]);
+
+  // One click to the scenario whose rate the goods came in at -- offered only
+  // when every item with a record agrees on one rate AND exactly one scenario
+  // carries it (25% is SN024 alone). Goods of two rates cannot share a bill
+  // here, so that case is told to split instead.
+  const rateSplitNeeded = rateCheck.billRates.length > 1;
+  const rateSuggestion = useMemo(() => {
+    if (rateCheck.enforced.length === 0 || rateCheck.billRates.length !== 1) return null;
+    const target = rateCheck.billRates[0];
+    const matches = enrichedScenarios.filter((sc) => Number(sc.defaultRate) === target);
+    if (matches.length !== 1) return null;
+    const sc = matches[0];
+    return {
+      label: `Bill under ${sc.code} (${target}%)`,
+      hint: sc.meta?.needsSRO && sc.defaultSroScheduleNo
+        ? `Fills SRO schedule ${sc.defaultSroScheduleNo}. The serial is FBR's catalog default: confirm it for these goods.`
+        : null,
+      onApply: () => {
+        setScenarioCode(sc.code);
+        if (sc.meta?.needsSRO) {
+          setRows((prev) => prev.map((r) => ({
+            ...r,
+            sroScheduleNo: r.sroScheduleNo?.trim() ? r.sroScheduleNo : (sc.defaultSroScheduleNo || ""),
+            sroItemSerialNo: r.sroItemSerialNo?.trim() ? r.sroItemSerialNo : (sc.defaultSroItemSerialNo || ""),
+          })));
+        }
+      },
+    };
+  }, [rateCheck.enforced.length, rateCheck.billRates, enrichedScenarios]);
 
   // Effective sale type for a row — locked to scenario when one's picked.
   const effectiveSaleType = (r) => (chosenScenario ? chosenScenario.saleType : r.saleType || "");
@@ -956,6 +1014,10 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (!company || company.startingInvoiceNumber === 0)
       return setError("Starting bill number not set for this company. Configure it on the Companies page first.");
     if (fbrEnabled && !chosenScenario) return setError("Pick an FBR scenario first.");
+    if (rateCheck.enforced.length > 0 && !rateReason.trim())
+      return setError(
+        `Some goods came in at a different sales tax rate than the ${gstRate}% this bill charges. ` +
+        "Switch to the matching scenario, or give a reason for charging this rate.");
     if (billNumberMode === "custom" && !billNumberOk)
       return setError("Enter a bill number that isn't already in use, or switch back to Auto.");
     // Every line on a bill must be classified — an Item Type OR a Non-Inventory item.
@@ -1000,6 +1062,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         advanceTaxFilerActive: advTaxOption ? advTaxOption.filerActive : null,
         paymentTerms: paymentTerms || null,
         scenarioId: scenarioCode || null,
+        // Sent only when the rates disagree; the server ignores it otherwise.
+        taxRateOverrideReason: rateCheck.enforced.length > 0 ? rateReason.trim() || null : null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
@@ -1632,6 +1696,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       </div>
                                     )}
                                     {(() => {
+                                      // Which line the rate notice is about, right where
+                                      // the item was picked.
+                                      const rc = r.itemTypeId ? rateCheck.checks[r.itemTypeId] : null;
+                                      if (!rc?.warning) return null;
+                                      return (
+                                        <div style={rc.warning.enforce ? styles.rateChipBad : styles.rateChipCheck}>
+                                          {rc.mixed
+                                            ? `Came in at ${rc.rates.map((x) => `${x}%`).join(" and ")}`
+                                            : `Imported at ${rc.rate}%${rc.source ? ` · ${rc.source}` : ""}`}
+                                        </div>
+                                      );
+                                    })()}
+                                    {(() => {
                                       // States the two numbers the operator needs: what
                                       // they hold, and what this line would take. Saying
                                       // only "not enough stock" leaves them to work out
@@ -1991,6 +2068,16 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                   </>
                 )}
 
+                <TaxRateNotice
+                  enforced={rateCheck.enforced}
+                  advisory={rateCheck.advisory}
+                  billRate={gstRate}
+                  suggestion={rateSuggestion}
+                  splitNeeded={rateSplitNeeded}
+                  reason={rateReason}
+                  onReasonChange={setRateReason}
+                />
+
                 {/* Attachments — staged client-side until the bill is created,
                     then flushed against the new id (see handleSubmit). */}
                 <AttachmentManager
@@ -2073,6 +2160,14 @@ const styles = {
   },
   stockChipNone: {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#8d6e00",
+    fontWeight: 600,
+  },
+  rateChipBad: {
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: colors.danger,
+    fontWeight: 600,
+  },
+  rateChipCheck: {
+    marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#b26a00",
     fontWeight: 600,
   },
   stockChipWarn: {
