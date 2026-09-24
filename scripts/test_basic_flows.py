@@ -492,6 +492,63 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
             check(suite, "6e 3rd Schedule: quantity edit saves", False, f"got {status} {e}")
 
 
+# ── Suite 6f: 3rd Schedule partial notes ────────────────────────────
+def test_third_schedule_notes(base: str, token: str) -> None:
+    """A PARTIAL credit / debit note on a 3rd Schedule bill carries its share of
+    MRP x Qty and is taxed on it. Needs its OWN company with FBR off: on an FBR
+    company a note needs a filed original, and this suite files nothing. The
+    company is created and deleted here."""
+    suite = "6f. 3rd Schedule partial notes"
+    print(f"\n=== {suite} ===")
+    suffix = datetime.now().strftime("%Y%m%d%H%M%S")
+    status, co = http("POST", "/api/companies", base, token=token, body={
+        "name": f"_test_3rd_schedule_notes {suffix}", "fullAddress": "Test HQ", "phone": "+92-21-00000000",
+        "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+        "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
+        "fbrEnabled": False, "inventoryTrackingEnabled": False, "enableGl": False,
+    })
+    check(suite, "company (FBR off) created", status in (200, 201), f"got {status} {co}")
+    if status not in (200, 201):
+        return
+    try:
+        status, cl = http("POST", "/api/clients", base, token=token, body={
+            "name": f"Notes Client {suffix}", "address": "1 Test Road, Karachi", "phone": "021-1234567",
+            "companyId": co["id"], "registrationType": "Registered", "ntn": "1234567", "fbrProvinceCode": 8})
+        check(suite, "client created", status in (200, 201), f"got {status} {cl}")
+        if status not in (200, 201):
+            return
+        # 20 x 100 = 2000 sold, MRP 150 -> MRP x Qty 3000, GST 540.
+        status, b = http("POST", "/api/invoices/standalone", base, token=token, body={
+            "date": pkt_date_iso(), "companyId": co["id"], "clientId": cl["id"], "gstRate": 18,
+            "scenarioId": "SN008",
+            "items": [{"description": "3rd Schedule Good", "quantity": 20, "uom": "Pcs", "unitPrice": 100,
+                       "itemTypeId": first_item_type_id(base, token), "saleType": "3rd Schedule Goods",
+                       "fixedNotifiedValueOrRetailPrice": 3000}]})
+        check(suite, "3rd Schedule bill: GST 540 on MRP x Qty 3000", status in (200, 201)
+              and abs(float(b.get("gstAmount") or 0) - 540) < 0.01, f"got {status} {b if status >= 300 else b.get('gstAmount')}")
+        if status not in (200, 201):
+            return
+        line = b["items"][0]
+        # 5 of the 20 units -> value 500, retail 750, GST 18 % of 750 = 135.
+        for doc, name in ((10, "credit"), (9, "debit")):
+            status, note = http("POST", "/api/invoices/notes", base, token=token, body={
+                "originalInvoiceId": b["id"], "documentType": doc, "affectsStock": False,
+                "reason": "3rd Schedule partial note",
+                "lines": [{"invoiceItemId": line["id"], "quantity": 5}]})
+            check(suite, f"partial {name} note created", status in (200, 201), f"got {status} {note}")
+            if status in (200, 201):
+                nl = (note.get("items") or [{}])[0]
+                check(suite, f"the {name} note carries its share of the retail price (750)",
+                      abs(float(nl.get("fixedNotifiedValueOrRetailPrice") or 0) - 750) < 0.01,
+                      f"got {nl.get('fixedNotifiedValueOrRetailPrice')}")
+                check(suite, f"the {name} note is taxed on it (GST 135 on a value of 500)",
+                      abs(float(note.get("gstAmount") or 0) - 135) < 0.01
+                      and abs(float(note.get("subtotal") or 0) - 500) < 0.01,
+                      f"gst {note.get('gstAmount')} subtotal {note.get('subtotal')}")
+    finally:
+        http("DELETE", f"/api/companies/{co['id']}", base, token=token)
+
+
 # ── Suite 7: bill date handling (PKT today + future dates) ─────────
 def test_future_date_guard(base: str, token: str, company: dict, client: dict,
                            challan: dict | None) -> None:
@@ -907,6 +964,7 @@ def main() -> int:
         test_invoice_update(args.base, token, standalone)
         test_item_rate_history(args.base, token, company, classified)
         test_tax_calculations(args.base, token, company, client)
+        test_third_schedule_notes(args.base, token)
         test_future_date_guard(args.base, token, company, client, challan)
         test_withholding_tax_flow(args.base, token, company, client)
         test_item_description_casing(args.base, token, company, client)
