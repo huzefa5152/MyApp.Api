@@ -452,6 +452,45 @@ def test_tax_calculations(base: str, token: str, company: dict, client: dict) ->
               abs(float(b.get("gstAmount") or 0) - 175) < 0.01,
               f"got {b.get('gstAmount')}")
 
+    # 6e — 3rd Schedule (SN008). Sold at 10 x 100 = 1000, printed retail price
+    # 150 a unit, so MRP x Qty = 1500 and GST is 18 % of THAT: 270, grand 1270.
+    # The value FBR is sent (FbrLineTax) and the bill must be the same figure.
+    third_line = {"description": "3rd Schedule Good", "quantity": 10, "uom": "Pcs",
+                  "unitPrice": 100, "itemTypeId": it_id, "saleType": "3rd Schedule Goods",
+                  "fixedNotifiedValueOrRetailPrice": 1500}
+    status, b = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "date": today, "companyId": company["id"], "clientId": client["id"],
+        "gstRate": 18, "scenarioId": "SN008", "items": [third_line],
+    })
+    check(suite, "6e 3rd Schedule: created", status in (200, 201), f"got {status} {b}")
+    if status in (200, 201):
+        check(suite, "6e 3rd Schedule: GST is 18 % of MRP x Qty (270), not of the value",
+              abs(float(b.get("gstAmount") or 0) - 270) < 0.01, f"got {b.get('gstAmount')}")
+        check(suite, "6e 3rd Schedule: grand = 1270 (value + GST on retail)",
+              abs(float(b.get("grandTotal") or 0) - 1270) < 0.01, f"got {b.get('grandTotal')}")
+        # Edit Bill has no MRP box and never sends the retail price; saving
+        # must not strip the line of it (and with it the tax).
+        line = b["items"][0]
+        edit = {"gstRate": 18, "paymentTerms": b.get("paymentTerms"), "items": [{
+            "id": line["id"], "description": line.get("description"), "quantity": 10,
+            "uom": line.get("uom") or "Pcs", "unitPrice": 100, "itemTypeId": it_id}]}
+        status, e = http("PUT", f"/api/invoices/{b['id']}", base, token=token, body=edit)
+        check(suite, "6e 3rd Schedule: an edit without the retail price saves", status == 200, f"got {status} {e}")
+        if status == 200:
+            check(suite, "6e 3rd Schedule: ...and keeps GST on the retail price (270)",
+                  abs(float(e.get("gstAmount") or 0) - 270) < 0.01, f"got {e.get('gstAmount')}")
+        # Doubling the quantity doubles MRP x Qty: 20 x 150 = 3000, GST 540.
+        edit["items"][0]["quantity"] = 20
+        status, e = http("PUT", f"/api/invoices/{b['id']}", base, token=token, body=edit)
+        if status == 200:
+            check(suite, "6e 3rd Schedule: MRP x Qty follows the quantity (GST 540 on 20 units)",
+                  abs(float(e.get("gstAmount") or 0) - 540) < 0.01, f"got {e.get('gstAmount')}")
+            kept = (e.get("items") or [{}])[0].get("fixedNotifiedValueOrRetailPrice")
+            check(suite, "6e 3rd Schedule: the stored retail price is 3000",
+                  abs(float(kept or 0) - 3000) < 0.01, f"got {kept}")
+        else:
+            check(suite, "6e 3rd Schedule: quantity edit saves", False, f"got {status} {e}")
+
 
 # ── Suite 7: bill date handling (PKT today + future dates) ─────────
 def test_future_date_guard(base: str, token: str, company: dict, client: dict,

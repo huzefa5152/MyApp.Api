@@ -361,6 +361,18 @@ it is about, or says "Ready to save". View Bill shows the same steps read-only.
 The save button now stays on screen at phone width. Nothing that is saved or
 filed changes.
 
+**3rd Schedule goods are now charged sales tax on their retail price.** A 3rd
+Schedule line (SN008 / SN027) is taxed at 18% of MRP x Qty, not of the value it
+is sold at, on the bill itself -- before, the bill charged 18% of the sale value
+while FBR was sent 18% of the retail price (180 on the bill, 270 at FBR, for the
+same ten units). The totals show the retail value the tax is charged on. Editing
+a 3rd Schedule bill no longer strips its retail price (Edit Bill has no MRP box,
+and the value it never sent was saved as empty); a changed quantity moves MRP x
+Qty with it, and a partial credit or debit note carries its share of it.
+
+**Quantity and rate boxes on a bill line now show the whole figure.** A quantity
+of 187,691 read as "18769" with the last digit under the spinner.
+
 **Further tax now follows the buyer.** Further tax (s.3(1A)) applies to a supply
 to an unregistered buyer, but both create forms opened on 4% for every bill, so
 bills to registered buyers were going out with it. The field now starts at 4%

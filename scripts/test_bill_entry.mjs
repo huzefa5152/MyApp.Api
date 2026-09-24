@@ -12,7 +12,7 @@
  */
 import assert from "node:assert";
 
-const { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows } = await import(
+const { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows, salesTaxBase, isThirdScheduleSaleType } = await import(
   new URL("../myapp-frontend/src/utils/billEntry.js", import.meta.url).href
 );
 
@@ -95,6 +95,25 @@ check("advance income tax adds itself and the total", () => {
 });
 check("grand total is the strong row", () =>
   assert.deepStrictEqual(billTotalsRows(base).filter((r) => r.strong).map((r) => r.key), ["grand"]));
+
+console.log("\n=== 3rd Schedule tax base ===");
+check("a bill without 3rd Schedule goods is taxed on its subtotal", () =>
+  assert.strictEqual(salesTaxBase([{ value: 600 }, { value: 400, retail: 900, thirdSchedule: false }]), 1000));
+check("a 3rd Schedule line is taxed on MRP x Qty", () =>
+  assert.strictEqual(salesTaxBase([{ value: 1000, retail: 1500, thirdSchedule: true }]), 1500));
+check("a 3rd Schedule line with no retail price falls back to its value", () =>
+  assert.strictEqual(salesTaxBase([{ value: 1000, retail: 0, thirdSchedule: true }, { value: 200, thirdSchedule: true }]), 1200));
+check("mixed lines add each on its own base", () =>
+  assert.strictEqual(salesTaxBase([{ value: 1000, retail: 1500, thirdSchedule: true }, { value: 500 }]), 2000));
+check("the sale type test ignores case and padding", () =>
+  assert.ok(isThirdScheduleSaleType(" 3rd schedule goods ") && !isThirdScheduleSaleType("Goods at Standard Rate (default)")));
+check("taxed on retail: the totals show the retail value and say so", () => {
+  const rows = billTotalsRows({ subtotal: 1000, gstRate: 18, gstAmount: 270, taxBase: 1500, grandTotal: 1270, scenarioCode: "SN008" });
+  assert.deepStrictEqual(rows.map((r) => [r.key, r.amount]), [["subtotal", 1000], ["retail", 1500], ["gst", 270], ["grand", 1270]]);
+  assert.match(rows.find((r) => r.key === "gst").note, /retail value/);
+});
+check("taxed on value: no retail row", () =>
+  assert.ok(!billTotalsRows({ subtotal: 1000, gstRate: 18, gstAmount: 180, taxBase: 1000, grandTotal: 1180 }).some((r) => r.key === "retail")));
 
 console.log(`\n${pass}/${pass + failures.length} checks passed`);
 if (failures.length) process.exit(1);

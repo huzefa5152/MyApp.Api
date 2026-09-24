@@ -1085,7 +1085,10 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
-            var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
+            // 3rd Schedule lines are taxed on MRP x Qty (Helpers/SalesTaxBase);
+            // every other line on its value, so this is the subtotal otherwise.
+            var gstAmount = Math.Round(
+                SalesTaxBase.Of(invoiceItems, SalesTaxBase.ScenarioFrom(dto.PaymentTerms)) * dto.GSTRate / 100, 2);
             // Further tax (s.3(1A)) is part of the supply's tax, so it is charged
             // on the same net base as sales tax and lands INSIDE the grand total.
             var furtherTaxAmount = FurtherTaxCalculator.Resolve(dto.FurtherTaxRate, subtotal);
@@ -1444,7 +1447,11 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var subtotal = invoiceItems.Sum(i => i.LineTotal);
-            var gstAmount = Math.Round(subtotal * dto.GSTRate / 100, 2);
+            // 3rd Schedule lines are taxed on MRP x Qty (Helpers/SalesTaxBase);
+            // every other line on its value, so this is the subtotal otherwise.
+            var gstAmount = Math.Round(
+                SalesTaxBase.Of(invoiceItems, dto.ScenarioId ?? SalesTaxBase.ScenarioFrom(dto.PaymentTerms))
+                    * dto.GSTRate / 100, 2);
             // Further tax (s.3(1A)) is part of the supply's tax, so it is charged
             // on the same net base as sales tax and lands INSIDE the grand total.
             var furtherTaxAmount = FurtherTaxCalculator.Resolve(dto.FurtherTaxRate, subtotal);
@@ -1918,6 +1925,7 @@ namespace MyApp.Api.Services.Implementations
                     }
                     var existing = invoice.Items.First(ii => ii.Id == itemDto.Id);
                     var lineTotal = Math.Round(itemDto.Quantity * itemDto.UnitPrice, 2);
+                    var oldQuantity = existing.Quantity;
 
                     ItemType? pickedType = null;
                     if (itemDto.ItemTypeId.HasValue && typeMap.TryGetValue(itemDto.ItemTypeId.Value, out var t))
@@ -1934,7 +1942,16 @@ namespace MyApp.Api.Services.Implementations
                     // 3rd-schedule retail price is always edit-driven (never inherited
                     // from the ItemType catalog), so it's applied the same way in both
                     // branches below.
-                    existing.FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice;
+                    //
+                    // A retail price the edit does NOT send is kept, moved with the
+                    // quantity (2026-09-24): Edit Bill has no MRP box, so reading the
+                    // absent value as "clear" stripped every 3rd Schedule line of the
+                    // price its sales tax is charged on on the first save -- and FBR
+                    // refuses such a line without it [0090]. A value sent replaces
+                    // it; zero clears it.
+                    existing.FixedNotifiedValueOrRetailPrice = itemDto.FixedNotifiedValueOrRetailPrice.HasValue
+                        ? (itemDto.FixedNotifiedValueOrRetailPrice.Value > 0m ? itemDto.FixedNotifiedValueOrRetailPrice : null)
+                        : SalesTaxBase.Rescale(existing.FixedNotifiedValueOrRetailPrice, oldQuantity, itemDto.Quantity);
                     // SRO references — same: edit-driven, not catalog-inherited.
                     // Required for non-18 % rates (FBR rules 0077 / 0078).
                     if (itemDto.SroScheduleNo != null)
@@ -1986,7 +2003,8 @@ namespace MyApp.Api.Services.Implementations
                       + "It records a total from the imported books and carries no line items.");
 
                 invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
-                invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
+                invoice.GSTAmount = Math.Round(
+                    SalesTaxBase.Of(invoice.Items, SalesTaxBase.ScenarioFrom(invoice.PaymentTerms)) * invoice.GSTRate / 100, 2);
                 invoice.FurtherTaxAmount = FurtherTaxCalculator.Resolve(
                     invoice.FurtherTaxRate, invoice.Subtotal);
                 invoice.GrandTotal = FurtherTaxCalculator.GrandTotal(
@@ -2493,7 +2511,11 @@ namespace MyApp.Api.Services.Implementations
                     if (allowQuantityEdit)
                     {
                         if (row.Quantity.HasValue && row.Quantity.Value > 0)
+                        {
+                            existing.FixedNotifiedValueOrRetailPrice = SalesTaxBase.Rescale(
+                                existing.FixedNotifiedValueOrRetailPrice, existing.Quantity, row.Quantity.Value);
                             existing.Quantity = row.Quantity.Value;
+                        }
                         if (row.UnitPrice.HasValue && row.UnitPrice.Value >= 0)
                             existing.UnitPrice = row.UnitPrice.Value;
                         if (row.Quantity.HasValue || row.UnitPrice.HasValue)
@@ -2537,7 +2559,9 @@ namespace MyApp.Api.Services.Implementations
                     if (!asAdjustment)
                     {
                         invoice.Subtotal = newSubtotal;
-                        invoice.GSTAmount = Math.Round(newSubtotal * (invoice.GSTRate / 100m), 2, MidpointRounding.AwayFromZero);
+                        invoice.GSTAmount = Math.Round(
+                            SalesTaxBase.Of(invoice.Items, SalesTaxBase.ScenarioFrom(invoice.PaymentTerms)) * (invoice.GSTRate / 100m),
+                            2, MidpointRounding.AwayFromZero);
                         invoice.FurtherTaxAmount = FurtherTaxCalculator.Resolve(
                             invoice.FurtherTaxRate, newSubtotal);
                         invoice.GrandTotal = FurtherTaxCalculator.GrandTotal(
@@ -3291,7 +3315,9 @@ namespace MyApp.Api.Services.Implementations
                     FbrUOMId     = src.FbrUOMId,
                     SaleType     = ov?.AdjustedSaleType ?? src.SaleType,
                     RateId       = src.RateId,
-                    FixedNotifiedValueOrRetailPrice = src.FixedNotifiedValueOrRetailPrice,
+                    // Its SHARE of MRP x Qty: a partial note returning 3 of 10
+                    // carried the whole retail price, and FBR was told the full tax.
+                    FixedNotifiedValueOrRetailPrice = SalesTaxBase.Rescale(src.FixedNotifiedValueOrRetailPrice, EffQty(src), qty),
                     SroScheduleNo   = src.SroScheduleNo,
                     SroItemSerialNo = src.SroItemSerialNo,
                     DeliveryItemId  = null,   // a note isn't tied to challan lines
@@ -3361,7 +3387,8 @@ namespace MyApp.Api.Services.Implementations
             else
             {
                 subtotal   = noteItems.Sum(i => i.LineTotal);
-                gstAmount  = Math.Round(subtotal * gstRate / 100m, 2);
+                gstAmount  = Math.Round(
+                    SalesTaxBase.Of(noteItems, SalesTaxBase.ScenarioFrom(original.PaymentTerms)) * gstRate / 100m, 2);
                 grandTotal = subtotal + gstAmount;
             }
 
@@ -3988,6 +4015,8 @@ namespace MyApp.Api.Services.Implementations
 
             // This document is the FILED book when the company keeps two.
             var ovl = inv.Company?.InventoryOverlayEnabled == true;
+            // Each printed row's GST on the same base the bill was charged on (Helpers/SalesTaxBase).
+            var printScenario = SalesTaxBase.ScenarioFrom(inv.PaymentTerms);
 
             var dto = new PrintTaxInvoiceDto
             {
@@ -4113,7 +4142,10 @@ namespace MyApp.Api.Services.Implementations
                                 ii.Adjustment?.AdjustedQuantity ?? ii.Quantity);
                             var totalValue = g.Sum(ii =>
                                 ii.Adjustment?.AdjustedLineTotal ?? ii.LineTotal);
-                            var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
+                            var taxBase = g.Sum(ii => SalesTaxBase.Line(
+                                ii.Adjustment?.AdjustedLineTotal ?? ii.LineTotal, ii.FixedNotifiedValueOrRetailPrice,
+                                ii.Adjustment?.AdjustedSaleType ?? ii.SaleType, printScenario));
+                            var gstAmt = Math.Round(taxBase * inv.GSTRate / 100, 2);
                             return new PrintTaxItemDto
                             {
                                 ItemTypeName = g.Key,
@@ -4141,7 +4173,8 @@ namespace MyApp.Api.Services.Implementations
                         {
                             var lineTotal = ii.Adjustment?.AdjustedLineTotal ?? ii.LineTotal;
                             var qty       = ii.Adjustment?.AdjustedQuantity  ?? ii.Quantity;
-                            var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
+                            var gstAmt = Math.Round(SalesTaxBase.Line(lineTotal, ii.FixedNotifiedValueOrRetailPrice,
+                                ii.Adjustment?.AdjustedSaleType ?? ii.SaleType, printScenario) * inv.GSTRate / 100, 2);
                             return new PrintTaxItemDto
                             {
                                 ItemTypeName = (ovl ? ii.Adjustment?.AdjustedItemTypeName : null) ?? ii.ItemTypeName,

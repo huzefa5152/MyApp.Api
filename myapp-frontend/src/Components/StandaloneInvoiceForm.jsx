@@ -20,7 +20,7 @@ import { billFormShell, billFormBody } from "./bill/billTheme";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
 import BillTotals from "./bill/BillTotals";
-import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows } from "../utils/billEntry";
+import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows, salesTaxBase, isThirdScheduleSaleType } from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
@@ -827,7 +827,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     const p = parseFloat(r.unitPrice) || 0;
     return sum + q * p;
   }, 0);
-  const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
+  // 3rd Schedule goods are taxed on MRP x Qty, not the sale value -- the base
+  // the server charges and FBR is sent (Helpers/SalesTaxBase). The MRP is the
+  // per-unit figure on the line; the payload sends it times the quantity.
+  const taxBase = salesTaxBase(rows.map((r) => {
+    const q = parseFloat(r.quantity) || 0;
+    return {
+      value: q * (parseFloat(r.unitPrice) || 0),
+      retail: chosenScenario?.meta.needsMRP && r.mrp && q ? Math.round(parseFloat(r.mrp) * q * 100) / 100 : 0,
+      thirdSchedule: !!chosenScenario?.isThirdSchedule || isThirdScheduleSaleType(effectiveSaleType(r)),
+    };
+  }));
+  const gstAmount = Math.round(taxBase * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   // Charged on the NET value of supply -- the same base as sales tax, which is
   // what FbrLineTax uses per line, so the document and the FBR payload cannot
   // disagree. Rounded the way the server rounds it.
@@ -1276,7 +1287,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       : [],
   });
   const totalsRows = billTotalsRows({
-    subtotal, gstRate, gstAmount, scenarioCode: chosenScenario?.code || null,
+    subtotal, gstRate, gstAmount, taxBase, scenarioCode: chosenScenario?.code || null,
     furtherTaxRate, furtherTaxAmount, buyerRegistered, grandTotal,
     withholdingAmount: whtResolved, withholdingRate: whtMode === "rate" ? whtRate : null, balanceDue,
     advanceTaxAmount: advTaxResolved, advanceTaxSection: advTaxOption?.section,

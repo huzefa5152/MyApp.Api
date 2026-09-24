@@ -25,7 +25,7 @@ import { billFormShell, billFormBody } from "./bill/billTheme";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
 import BillTotals from "./bill/BillTotals";
-import { BILL_ANCHORS, rateBlockText, billChecklist } from "../utils/billEntry";
+import { BILL_ANCHORS, rateBlockText, billChecklist, salesTaxBase, isThirdScheduleSaleType } from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
@@ -1081,9 +1081,25 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // as data loss. Use what is stored.
   const computedSubtotal = items.reduce((s, i) => s + (parseFloat(i.lineTotal) || 0), 0);
   const subtotal = isMigrated ? Number(invoice?.subtotal || 0) : computedSubtotal;
+  // 3rd Schedule goods are taxed on MRP x Qty (Helpers/SalesTaxBase). This
+  // screen has no MRP box, so a line keeps the retail price it was saved with,
+  // moved with its quantity -- exactly what the server does on save.
+  const loadedItems = new Map((invoice?.items || []).map((x) => [x.id, x]));
+  const taxBase = salesTaxBase(items.map((i) => {
+    const saved = loadedItems.get(i.id);
+    const retail = Number(saved?.fixedNotifiedValueOrRetailPrice) || 0;
+    const oldQty = Number(saved?.quantity) || 0;
+    const qty = parseFloat(i.quantity) || 0;
+    return {
+      value: parseFloat(i.lineTotal) || 0,
+      retail: retail > 0 && oldQty > 0 ? Math.round(retail / oldQty * qty * 100) / 100 : 0,
+      thirdSchedule: !!chosenScenario?.isThirdSchedule
+        || isThirdScheduleSaleType(i.saleType) || isThirdScheduleSaleType(saved?.saleType),
+    };
+  }));
   const gstAmount = isMigrated
     ? Number(invoice?.gstAmount || 0)
-    : Math.round(computedSubtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
+    : Math.round(taxBase * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   // Charged on the NET value of supply, the same base as sales tax. A migrated
   // document keeps the total it was imported with -- it has no lines to
   // recompute from, and inventing one would restate the books.
@@ -1617,11 +1633,18 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const stepNo = (k) => k - (hasScenarioStep ? 0 : 1);
   const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const totalsOff = showTotalsGuard && !totalsMatch;
+  const onRetail = !isMigrated && Math.abs(taxBase - computedSubtotal) >= 0.005;
   const editTotalsRows = [
     { key: "subtotal", label: "Subtotal", amount: subtotal, note: "Value of the lines, before tax" },
+    ...(onRetail ? [{
+      key: "retail", label: "Retail value (MRP × Qty)", amount: taxBase,
+      note: "3rd Schedule goods: sales tax is charged on this",
+    }] : []),
     {
       key: "gst", label: `GST (${gstRate}%)`, amount: gstAmount,
-      note: chosenScenario ? `Rate of scenario ${chosenScenario.code}` : "Rate charged on this bill",
+      note: onRetail
+        ? `${gstRate}% of the retail value${chosenScenario ? `, scenario ${chosenScenario.code}` : ""}`
+        : chosenScenario ? `Rate of scenario ${chosenScenario.code}` : "Rate charged on this bill",
     },
     ...(furtherTaxAmount > 0 ? [{
       key: "further", label: `Further Tax (${furtherTaxRate || Number(invoice?.furtherTaxRate) || 0}%)`,

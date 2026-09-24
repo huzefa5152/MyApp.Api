@@ -1529,6 +1529,19 @@ them can be resolved from FBR.
   `scripts/test_fbr_sandbox_e2e.py:REGISTERED_SHAPES` with
   `filesInSuite=False` and promote it when the sandbox repeats. A suite that
   goes red on PRAL's mood teaches nobody anything.
+- **3rd Schedule lines are taxed on MRP x Qty on the BILL too (2026-09-24).**
+  `Helpers/SalesTaxBase` is the one rule for every path that works out
+  `GSTAmount` -- both creates, the full and the narrow edit, a partial note, the
+  challan re-sync and the tax-invoice print rows -- and `utils/billEntry.
+  salesTaxBase` is the screens' copy. A line is 3rd Schedule when its sale type
+  says so or the bill's scenario is (SN008 / SN027); it is then taxed on its
+  `FixedNotifiedValueOrRetailPrice`, else on its value, so a bill without such
+  lines is taxed exactly as before. It is the same test `FbrLineTax` applies, so
+  the bill and the filing agree. **A retail price an edit does not send is
+  KEPT**, scaled to the new quantity (`SalesTaxBase.Rescale`): Edit Bill has no
+  MRP box, and reading the absent value as "clear" stripped every 3rd Schedule
+  line on its first save. Zero clears it. A partial note's lines carry their
+  share of it. Pinned by `test_basic_flows.py` 6e.
 - **The bill's scenario decides every line's sale type at filing time
   (2026-09-24).** Validate / Submit refresh each line's HS code, UoM and sale
   type from the catalog; for the SALE TYPE that refresh yields to the scenario
@@ -1594,7 +1607,7 @@ them can be resolved from FBR.
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
-| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
+| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (83 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `53/53 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |

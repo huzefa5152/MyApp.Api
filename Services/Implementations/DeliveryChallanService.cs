@@ -623,7 +623,8 @@ namespace MyApp.Api.Services.Implementations
 
             // Recalculate totals
             invoice.Subtotal = invoice.Items.Sum(ii => ii.LineTotal);
-            invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
+            invoice.GSTAmount = Math.Round(
+                SalesTaxBase.Of(invoice.Items, SalesTaxBase.ScenarioFrom(invoice.PaymentTerms)) * invoice.GSTRate / 100, 2);
             invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
             invoice.AmountInWords = Helpers.NumberToWordsConverter.Convert(invoice.GrandTotal);
 

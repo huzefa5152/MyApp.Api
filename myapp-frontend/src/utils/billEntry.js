@@ -67,6 +67,24 @@ export function billChecklist({
 }
 
 /**
+ * The value a bill's sales tax is charged on -- the screens' copy of the
+ * server's rule (Helpers/SalesTaxBase). 3rd Schedule goods are taxed on their
+ * printed retail price, MRP x Qty, not on the value they are sold at; every
+ * other line, and a 3rd Schedule line with no retail price, on its value. So
+ * for a bill without 3rd Schedule goods this is simply the subtotal.
+ *
+ * lines: [{ value, retail, thirdSchedule }]
+ */
+export function salesTaxBase(lines = []) {
+  return lines.reduce(
+    (sum, l) => sum + (l.thirdSchedule && Number(l.retail) > 0 ? Number(l.retail) : Number(l.value) || 0), 0);
+}
+
+export const THIRD_SCHEDULE_SALE_TYPE = "3rd Schedule Goods";
+export const isThirdScheduleSaleType = (saleType) =>
+  (saleType || "").trim().toLowerCase() === THIRD_SCHEDULE_SALE_TYPE.toLowerCase();
+
+/**
  * The totals panel's rows -- the same rows, in the same order and with the
  * same amounts, that the bill forms printed before, each with a note saying
  * where the figure comes from.
@@ -75,6 +93,7 @@ export function billTotalsRows({
   subtotal,
   gstRate,
   gstAmount,
+  taxBase = null,
   scenarioCode = null,
   furtherTaxRate = 0,
   furtherTaxAmount = 0,
@@ -88,13 +107,20 @@ export function billTotalsRows({
   advanceTaxRate = null,
   totalWithAdvance = null,
 } = {}) {
+  // 3rd Schedule: the tax is charged on the retail value, so show that value
+  // and say so -- "GST 270 on a subtotal of 1,000" is otherwise a wrong-looking sum.
+  const onRetail = taxBase != null && Math.abs(Number(taxBase) - Number(subtotal)) >= 0.005;
   const rows = [
     { key: "subtotal", label: "Subtotal", amount: subtotal, note: "Value of the lines, before tax" },
-    {
-      key: "gst", label: `GST (${gstRate}%)`, amount: gstAmount,
-      note: scenarioCode ? `Rate set by scenario ${scenarioCode}` : "Rate charged on this bill",
-    },
   ];
+  if (onRetail)
+    rows.push({ key: "retail", label: "Retail value (MRP × Qty)", amount: taxBase, note: "3rd Schedule goods: sales tax is charged on this" });
+  rows.push({
+    key: "gst", label: `GST (${gstRate}%)`, amount: gstAmount,
+    note: onRetail
+      ? `${gstRate}% of the retail value${scenarioCode ? `, scenario ${scenarioCode}` : ""}`
+      : scenarioCode ? `Rate set by scenario ${scenarioCode}` : "Rate charged on this bill",
+  });
   if (furtherTaxAmount > 0)
     rows.push({
       key: "further", label: `Further Tax (${furtherTaxRate}%)`, amount: furtherTaxAmount,
