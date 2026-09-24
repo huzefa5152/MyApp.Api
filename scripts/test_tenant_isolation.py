@@ -1364,8 +1364,28 @@ else:
     # Beta, reusing the same workbook/mapping fixture Suite 16 already proved
     # previews correctly -- disposition doesn't matter here, only that a real
     # row with a real id exists to test the id-based routes against.
+    # Its own workbook, complete under the GD line rules (2026-09-25: every
+    # line needs a GD date, a unit and an assessed value above zero) -- Suite
+    # 16's shared sheet carries none of the three, which never mattered to the
+    # 403 probes above but would refuse a real commit here.
+    _gd_wb = io.BytesIO()
+    _gd_book = openpyxl.Workbook()
+    _gd_ws = _gd_book.active
+    for _col, _text in enumerate(["GD Number", "Items", "8 Digit Hs code", "Qty",
+                                  "Assessed Value", "GD Date", "Unit"], start=1):
+        _gd_ws.cell(1, _col, _text)
+    for _col, _val in enumerate(["LOT-1", "Isolation Probe Item", "8481.1000", 5,
+                                 1000, "01-07-2026", "Pcs"], start=1):
+        _gd_ws.cell(2, _col, _val)
+    _gd_book.save(_gd_wb)
+    gd_map19 = json.dumps({
+        "sheetSelect": {"mode": "byIndex", "index": 0},
+        "headerRow": 1, "firstDataRow": 2,
+        "columns": {"gdNumber": 1, "description": 2, "hsCode": 3, "quantity": 4,
+                    "assessedValue": 5, "gdDate": 6, "unit": 7},
+    })
     s_, prev19 = upload_file(f"/api/spreadsheet-import/gd-costing/preview?companyId={beta['id']}",
-                             admin, "iso19.xlsx", xlsx_bytes, XLSX_MIME, fields={"mappingJson": gd_map})
+                             admin, "iso19.xlsx", _gd_wb.getvalue(), XLSX_MIME, fields={"mappingJson": gd_map19})
     assert s_ == 200, f"seed beta GD costing preview: {s_} {prev19}"
     commit19 = dict(prev19)
     commit19["companyId"] = beta["id"]

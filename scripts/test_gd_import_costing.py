@@ -26,7 +26,7 @@ at the end. What it proves:
   * matching against opening stock: an exact-quantity hit, a balance holding
     more than the sheet covers (derives unitCost x balanceQuantity, not the
     GD's own cost), a balance holding less, an unmatched line (new stock,
-    deferred to a later release), several lines sharing one balance (same
+    not brought in unless new stock is asked for), several lines sharing one balance (same
     derived cost), a balance at zero quantity (derives zero), an ambiguous
     HS code (no cost written to any candidate), and a company with lots for
     some items and none for others in the same sheet
@@ -230,7 +230,8 @@ def make_line(source_row, gd, hs, disposition="cost-only", opening_balance_id=No
               item_type_id=None, description="Item", qty=1, unit="Pcs",
               assessed=0, duty=0, acd=0, regduty=0, others=0, st=0, ast=0, it=0, addon=0,
               cost_override=None, selling_override=None, sheet_selling=None,
-              match_note=None, matched_balance_qty=0, derived_cost=0):
+              match_note=None, matched_balance_qty=0, derived_cost=0,
+              gddate="2026-07-01T00:00:00"):
     """Builds a GdCostingLineDto-shaped dict by hand, for the commit calls
     that simulate a client request rather than echoing an honest preview.
     cost_override / selling_override let a test claim a figure that disagrees
@@ -238,7 +239,7 @@ def make_line(source_row, gd, hs, disposition="cost-only", opening_balance_id=No
     than trusting it."""
     c = compute_costing(assessed, duty, acd, regduty, others, st, ast, it, addon)
     return {
-        "sourceRow": source_row, "gdNumber": gd, "gdDate": None, "description": description,
+        "sourceRow": source_row, "gdNumber": gd, "gdDate": gddate, "description": description,
         "hsCode": hs, "quantity": qty, "unit": unit,
         "assessedValue": assessed, "customsDuty": duty, "acd": acd, "regulatoryDuty": regduty,
         "others": others, "salesTaxRate": st, "astRate": ast, "incomeTaxRate": it,
@@ -968,7 +969,7 @@ def main():
               f"totalCostExcludingTax={big_res.get('totalCostExcludingTax')} expected={expected_total_cost}")
 
         check("Item D's exact skip reason is in the response messages",
-              any("posting new stock arrives in a later release" in m.lower() for m in big_res.get("messages", [])),
+              any("new stock was not asked for" in m.lower() for m in big_res.get("messages", [])),
               f"messages={big_res.get('messages')}")
         check("the ambiguous count is surfaced in the response messages",
               any("matched more than one opening balance" in m for m in big_res.get("messages", [])),
@@ -1428,7 +1429,7 @@ def main():
         # A fresh item under its OWN HS code, with its own month-1/month-2
         # pair, this time committed in (default) backfill mode: quantity must
         # stay exactly what month 1 alone brought in.
-        bf_hs = "8517.6991"
+        bf_hs = "8517.6910"
         bf_desc = f"Two-Month Item BF {tag}"
         gd_bf_a = row_cells(BASE_COLS, "GD-BF-A", bf_hs, desc=bf_desc, qty=310,
                             assessed=100000, st=18, ast=3, it=6)
@@ -1625,7 +1626,7 @@ def main():
             # ---- Backfill posts NO journal entry at all -------------------
             gl_bf_gd = f"GD-GL-BF-{tag}"
             gl_bf_name = f"GL Backfill Item {tag}"
-            gl_bf_row = row_cells(BASE_COLS, gl_bf_gd, "8517.6991", desc=gl_bf_name,
+            gl_bf_row = row_cells(BASE_COLS, gl_bf_gd, "8517.6910", desc=gl_bf_name,
                                   qty=10, assessed=40000, st=18, ast=3, it=6, gddate="20-02-2026")
             r = gd_preview(api, h, gl_co, build_sheet(BASE_HEADINGS, [gl_bf_row]), GD_MAPPING,
                            mode="backfill")
@@ -1922,7 +1923,7 @@ def main():
             blk_gd = f"GD-DEL-BLK-{tag}"
             blk_desc = f"Del Blocked Item {tag}"
             # A wholly new HS code -- no existing balance for it anywhere.
-            blk_row = row_cells(BASE_COLS, blk_gd, "9991.0000", desc=blk_desc,
+            blk_row = row_cells(BASE_COLS, blk_gd, "8517.6920", desc=blk_desc,
                                 qty=10, assessed=8000, st=18, ast=3, it=6)
             r = gd_preview(api, h, blk_co, build_sheet(BASE_HEADINGS, [blk_row]), GD_MAPPING)
             blk_prev = r.json() if r.ok else {}
@@ -1983,7 +1984,7 @@ def main():
         try:
             shr_desc = f"Del Shared Item {tag}"
             shr_gd1 = f"GD-DEL-SHR1-{tag}"
-            shr_row1 = row_cells(BASE_COLS, shr_gd1, "9992.0000", desc=shr_desc,
+            shr_row1 = row_cells(BASE_COLS, shr_gd1, "8517.6230", desc=shr_desc,
                                  qty=20, assessed=10000, st=18, ast=3, it=6)
             r = gd_preview(api, h, shr_co, build_sheet(BASE_HEADINGS, [shr_row1]), GD_MAPPING)
             shr_prev1 = r.json() if r.ok else {}
@@ -2001,7 +2002,7 @@ def main():
                 CREATED_ITEM_TYPE_IDS.append(shr_balance["itemTypeId"])
 
             shr_gd2 = f"GD-DEL-SHR2-{tag}"
-            shr_row2 = row_cells(BASE_COLS, shr_gd2, "9992.0000", desc=shr_desc,
+            shr_row2 = row_cells(BASE_COLS, shr_gd2, "8517.6230", desc=shr_desc,
                                  qty=5, assessed=3000, st=18, ast=3, it=6)
             r = gd_preview(api, h, shr_co, build_sheet(BASE_HEADINGS, [shr_row2]), GD_MAPPING)
             shr_prev2 = r.json() if r.ok else {}
