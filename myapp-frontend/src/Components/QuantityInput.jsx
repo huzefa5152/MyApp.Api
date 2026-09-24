@@ -30,11 +30,6 @@ export default function QuantityInput({
   ...rest
 }) {
   const allowsDecimal = isDecimalUnit(unit, units);
-  // Wide enough for the whole figure. In a narrow table column a quantity of
-  // 187691 showed as "18769" with its last digit under the spinner, so the
-  // operator could not read what they were billing. Characters plus room for
-  // the spinner, capped so a pasted 20-digit figure cannot blow the row apart.
-  const fit = `calc(${Math.min(20, Math.max(4, String(value ?? "").length + 1))}ch + 2.4rem)`;
 
   return (
     <input
@@ -60,7 +55,7 @@ export default function QuantityInput({
             : `Whole numbers only for ${unit}`
           : undefined
       }
-      style={{ ...style, minWidth: fit }}
+      style={style}
       {...rest}
     />
   );
