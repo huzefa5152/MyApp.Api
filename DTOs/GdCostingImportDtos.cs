@@ -13,8 +13,9 @@ namespace MyApp.Api.DTOs
         public const string CostOnly = "cost-only";
 
         /// <summary>No existing balance under this HS code — this reads as new
-        /// stock. Round 1 cannot post it; commit downgrades it to
-        /// <see cref="Skipped"/> with a reason.</summary>
+        /// stock. Commit creates it (item type + opening balance) when the
+        /// request asks for new stock and the line is not left out; otherwise
+        /// it is recorded as <see cref="Skipped"/> with a reason.</summary>
         public const string StockPosted = "stock-posted";
 
         /// <summary>Read and recorded, but nothing was written.</summary>
@@ -224,6 +225,104 @@ namespace MyApp.Api.DTOs
         /// consignment is ever posted under New Arrivals.
         /// </summary>
         public string? RateWarning { get; set; }
+
+        // ── Entry rules and the operator's decisions (2026-09-25) ───────────
+
+        /// <summary>
+        /// Everything that stops this line's stock coming in: the
+        /// <c>Helpers.GdLineRules</c> checks plus the ones that need the books
+        /// (a unit that disagrees with the item, a new item's HS code missing
+        /// from the tariff, two lines creating one new item in different units).
+        /// Empty when the line is complete. Commit refuses while any line that
+        /// is NOT <see cref="LeaveOut"/> still has one — the server re-checks,
+        /// whatever this list said.
+        /// </summary>
+        public List<GdCostingLineProblemDto> Problems { get; set; } = new();
+
+        /// <summary>
+        /// The operator's "leave this line out": it is recorded on the
+        /// consignment (so the GD's record stays complete) and nothing is
+        /// written to stock for it. Only ever true because the caller said so —
+        /// the screen leaves a Backfill line with nothing to price out by
+        /// default and sends that back; the server never assumes it.
+        /// </summary>
+        public bool LeaveOut { get; set; }
+
+        /// <summary>
+        /// The operator's pick among <see cref="Candidates"/> when several items
+        /// share this line's HS code. Honoured only when it IS one of them —
+        /// checked again at commit, so a forged id resolves to nothing.
+        /// </summary>
+        public int? ChosenOpeningStockBalanceId { get; set; }
+
+        /// <summary>The balances this line's GD / HS code could mean, when there
+        /// is more than one — what the "choose the item" list offers. Empty
+        /// otherwise.</summary>
+        public List<GdCostingCandidateDto> Candidates { get; set; } = new();
+
+        /// <summary>The unit of the item this line matched, so the screen can say
+        /// "kept in Pcs" beside the line's own unit.</summary>
+        public string? MatchedItemUnit { get; set; }
+
+        /// <summary>
+        /// For a line that will become new stock: whether commit creates a new
+        /// item type, reuses a catalog item that already carries this HS code
+        /// AND name, or adopts such an HS-tariff placeholder — the same rule
+        /// <c>GdCostingImportService.CreateMissingStockAsync</c> applies, said
+        /// before Commit instead of after. One of
+        /// <see cref="GdCostingNewItemNames"/>; null for any other line.
+        /// </summary>
+        public string? NewItemResolution { get; set; }
+
+        /// <summary>The name the new stock will carry (the catalog item's own
+        /// name when one is reused).</summary>
+        public string? NewItemName { get; set; }
+
+        /// <summary>The unit the new stock will be kept in.</summary>
+        public string? NewItemUnit { get; set; }
+    }
+
+    /// <summary>One thing a line still needs. <c>Field</c> is the line editor's
+    /// field name (see <c>Helpers.GdLineRules.Fields</c>), so the message lands
+    /// under the box it is about.</summary>
+    public class GdCostingLineProblemDto
+    {
+        public string Field { get; set; } = "";
+        public string Message { get; set; } = "";
+    }
+
+    /// <summary>One balance an ambiguous line could mean.</summary>
+    public class GdCostingCandidateDto
+    {
+        public int OpeningStockBalanceId { get; set; }
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string? Unit { get; set; }
+        public decimal Quantity { get; set; }
+    }
+
+    /// <summary>Wire vocabulary for <see cref="GdCostingLineDto.NewItemResolution"/>.</summary>
+    public static class GdCostingNewItemNames
+    {
+        public const string Create = "create";
+        public const string Reuse = "reuse";
+        public const string Adopt = "adopt";
+    }
+
+    /// <summary>
+    /// Where a re-checked set of lines came from, when that was an uploaded
+    /// workbook. Editing a line in the review re-checks the set through the
+    /// hand-entry route; carrying this keeps the import recorded against the
+    /// FILE (its name, and the SHA-256 that stops the same file being imported
+    /// twice) rather than as a hand entry.
+    /// </summary>
+    public class GdCostingSourceDto
+    {
+        public string FileName { get; set; } = "";
+        public string FileSha256 { get; set; } = "";
+        public long FileSizeBytes { get; set; }
+        public int? ImportProfileId { get; set; }
+        public int? ProfileVersion { get; set; }
     }
 
     /// <summary>
@@ -260,10 +359,26 @@ namespace MyApp.Api.DTOs
     public class GdCostingManualEntryDto
     {
         public List<GdCostingManualLineDto> Lines { get; set; } = new();
+
+        /// <summary>Set when these lines are an uploaded workbook's, re-checked
+        /// after an edit in the review — see <see cref="GdCostingSourceDto"/>.
+        /// Null for a genuine hand entry.</summary>
+        public GdCostingSourceDto? Source { get; set; }
     }
 
     public class GdCostingManualLineDto
     {
+        /// <summary>The line's number on the sheet (or in the typed list), kept
+        /// through a re-check so every answer is about the same line. Null means
+        /// "number them in order".</summary>
+        public int? SourceRow { get; set; }
+
+        /// <summary>The operator's leave-out; null = the mode's default.</summary>
+        public bool? LeaveOut { get; set; }
+
+        /// <summary>The operator's pick for an ambiguous line.</summary>
+        public int? ChosenOpeningStockBalanceId { get; set; }
+
         public string GdNumber { get; set; } = "";
         public DateTime? GdDate { get; set; }
         public string Description { get; set; } = "";
@@ -335,6 +450,15 @@ namespace MyApp.Api.DTOs
         /// <see cref="GdCostingLineDto.RateWarning"/>.</summary>
         public int RateWarningCount { get; set; }
 
+        /// <summary>Lines NOT left out that still have a
+        /// <see cref="GdCostingLineDto.Problems"/> entry, counting a new-stock
+        /// line as if new stock is asked for (the screen always asks). Commit
+        /// refuses every such line that would write.</summary>
+        public int ProblemLineCount { get; set; }
+
+        /// <summary>Lines left out (by the operator, or by the mode's default).</summary>
+        public int LeftOutCount { get; set; }
+
         /// <summary>Lines read, before anything was blocked. Equal to
         /// <c>Lines.Count</c> here — GD costing rows are never grouped the way
         /// opening-stock lots are — kept for symmetry with
@@ -346,6 +470,10 @@ namespace MyApp.Api.DTOs
         public List<string> BlockingErrors { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
 
+        /// <summary>No blocking error and something to import. Line problems are
+        /// counted separately (<see cref="ProblemLineCount"/>): whether a
+        /// new-stock line's problems stop the commit depends on the commit's own
+        /// CreateMissingStock, which a preview cannot know.</summary>
         public bool CanCommit => BlockingErrors.Count == 0 && Lines.Count > 0;
     }
 

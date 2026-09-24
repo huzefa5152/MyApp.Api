@@ -55,13 +55,19 @@ namespace MyApp.Api.Services.Interfaces
         /// feeds straight into the existing <see cref="CommitAsync"/>,
         /// unchanged.
         ///
-        /// Throws <see cref="InvalidOperationException"/> with an
-        /// operator-facing message when the line is missing something it
-        /// cannot be previewed without (mirrors <c>GdCostingMapping.Parse</c>
-        /// rejecting a mapping that cannot drive an import).
+        /// A line that breaks a rule is NOT refused: it comes back with its
+        /// <see cref="GdCostingLineDto.Problems"/> filled, beside every other
+        /// line. Throws <see cref="InvalidOperationException"/> only when there
+        /// is nothing to preview (no lines, too many, a null line).
+        ///
+        /// <paramref name="source"/> is set when the lines are an uploaded
+        /// workbook's, re-checked after an edit in the review: the preview then
+        /// keeps that file's name and SHA-256, so the import is recorded against
+        /// the file and the file still cannot be imported twice.
         /// </summary>
         Task<GdCostingPreviewDto> PreviewManualAsync(
-            IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode);
+            IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode,
+            GdCostingSourceDto? source = null);
 
         /// <summary>
         /// Writes the reviewed lines in one transaction: the import run, one

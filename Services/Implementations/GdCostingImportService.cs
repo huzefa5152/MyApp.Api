@@ -28,6 +28,13 @@ namespace MyApp.Api.Services.Implementations
         /// mirrors <c>OpeningStockImportService.MaxSourceRows</c>.</summary>
         public const int MaxSourceRows = 5000;
 
+        /// <summary>The note on a line the operator left out.</summary>
+        private const string LeftOutNote = "Left out when importing: nothing was written for this line.";
+
+        /// <summary>The note on an unmatched line when the request did not ask
+        /// for new stock (an API caller that omits CreateMissingStock).</summary>
+        private const string NotAskedNote = "No stock on the books for this line, and new stock was not asked for.";
+
         public GdCostingImportService(
             AppDbContext db,
             IAccountService accounts,
@@ -93,20 +100,29 @@ namespace MyApp.Api.Services.Implementations
         /// canonical content, so it is not an arbitrary placeholder either.
         /// </remarks>
         public async Task<GdCostingPreviewDto> PreviewManualAsync(
-            IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode)
+            IReadOnlyList<GdCostingManualLineDto> lines, int companyId, string? mode,
+            GdCostingSourceDto? source = null)
         {
             if (lines == null || lines.Count == 0)
                 throw new InvalidOperationException("Add at least one line before previewing.");
             if (lines.Count > MaxSourceRows)
                 throw new InvalidOperationException(
                     $"A hand-entered consignment cannot carry more than {MaxSourceRows} lines.");
+            if (lines.Any(l => l == null))
+                throw new InvalidOperationException("Enter the consignment line's details.");
 
+            // A line that breaks a rule is NOT refused here any more: it comes
+            // back with its Problems filled (BuildPreviewAsync), beside every
+            // other line, so an operator fixes the whole set in one pass
+            // instead of meeting one refusal at a time (2026-09-25).
             var warnings = new List<string>();
             var rows = new List<GdCostingSheetRow>(lines.Count);
-            foreach (var line in lines)
+            var choices = new List<LineChoice>(lines.Count);
+            for (int i = 0; i < lines.Count; i++)
             {
-                ValidateManualLine(line);
-                rows.Add(BuildManualRow(line, warnings));
+                var line = lines[i];
+                rows.Add(BuildManualRow(line, line.SourceRow is > 0 ? line.SourceRow.Value : i + 1, warnings));
+                choices.Add(new LineChoice(line.LeaveOut, line.ChosenOpeningStockBalanceId));
             }
 
             // EVERY line goes through BuildPreviewAsync in ONE call, never one
@@ -115,6 +131,24 @@ namespace MyApp.Api.Services.Implementations
             // must pool into a single unit cost, and previewing them separately
             // would report each as if it were alone — the very extrapolation
             // error the cost-plausibility warning exists to catch.
+            //
+            // An uploaded workbook re-checked after an edit in the review keeps
+            // its OWN identity (name + SHA-256), so the import is recorded
+            // against the file and that file still cannot be imported twice.
+            if (source != null && !string.IsNullOrWhiteSpace(source.FileSha256))
+            {
+                return await BuildPreviewAsync(
+                    rows, warnings,
+                    fileName: Trim(source.FileName, 400),
+                    fileSha256: source.FileSha256.Trim().ToLowerInvariant(),
+                    fileSizeBytes: source.FileSizeBytes,
+                    companyId: companyId,
+                    profileId: source.ImportProfileId,
+                    profileVersion: source.ProfileVersion,
+                    mode: GdCostingImportModeNames.Normalize(mode),
+                    choices: choices);
+            }
+
             var (sha256, sizeBytes) = ManualEntryFingerprint(companyId, lines);
             var gdNumbers = rows
                 .Select(r => r.GdNumber.Trim())
@@ -125,16 +159,27 @@ namespace MyApp.Api.Services.Implementations
 
             return await BuildPreviewAsync(
                 rows, warnings,
-                fileName: gdNumbers.Count == 1
-                    ? $"Manual entry — GD {gdNumbers[0]}"
-                    : $"Manual entry — {rows.Count} lines across GD {string.Join(", ", gdNumbers)}",
+                fileName: gdNumbers.Count switch
+                {
+                    0 => $"Manual entry — {rows.Count} line(s)",
+                    1 => $"Manual entry — GD {gdNumbers[0]}",
+                    _ => $"Manual entry — {rows.Count} lines across GD {string.Join(", ", gdNumbers)}",
+                },
                 fileSha256: sha256,
                 fileSizeBytes: sizeBytes,
                 companyId: companyId,
                 profileId: null,
                 profileVersion: null,
-                mode: GdCostingImportModeNames.Normalize(mode));
+                mode: GdCostingImportModeNames.Normalize(mode),
+                choices: choices);
         }
+
+        /// <summary>
+        /// What the operator decided about one line in the review: leave it out
+        /// (null = the mode's default) and, for an ambiguous line, which of its
+        /// candidate balances it is. Aligned with the rows by index.
+        /// </summary>
+        private sealed record LineChoice(bool? LeaveOut, int? ChosenBalanceId);
 
         /// <summary>
         /// Everything a file-sourced preview does AFTER the workbook has been
@@ -148,7 +193,8 @@ namespace MyApp.Api.Services.Implementations
         private async Task<GdCostingPreviewDto> BuildPreviewAsync(
             List<GdCostingSheetRow> rows, List<string> warnings,
             string fileName, string fileSha256, long fileSizeBytes,
-            int companyId, int? profileId, int? profileVersion, string mode)
+            int companyId, int? profileId, int? profileVersion, string mode,
+            IReadOnlyList<LineChoice>? choices = null)
         {
             var preview = new GdCostingPreviewDto
             {
@@ -177,11 +223,83 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var index = await BuildMatchIndexAsync(companyId);
-            var outcomes = MatchAll(rows, index, mode);
+            var matches = rows.Select(r => Match(r.GdNumber, r.HsCode, r.Description, index)).ToList();
+
+            // The operator's decisions, resolved against THIS preview's own
+            // matches: a chosen balance counts only when it is one of the line's
+            // candidates. A line is never left out unless the caller says so --
+            // the screen decides its own defaults (it leaves a Backfill line with
+            // nothing to price out until the operator brings it in) and sends
+            // them back, while an API caller that echoes a preview into commit
+            // keeps exactly the behaviour CreateMissingStock always gave it.
+            var chosen = new int?[rows.Count];
+            var leaveOut = new bool[rows.Count];
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var choice = choices != null && i < choices.Count ? choices[i] : null;
+                chosen[i] = ValidChoice(matches[i], choice?.ChosenBalanceId);
+                leaveOut[i] = choice?.LeaveOut ?? false;
+            }
+
+            var outcomes = MatchAll(rows, index, mode, matches, chosen, leaveOut);
 
             preview.Lines = rows
                 .Select((row, i) => ToLineDto(row, outcomes[i]))
                 .ToList();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                var line = preview.Lines[i];
+                line.LeaveOut = leaveOut[i];
+                line.ChosenOpeningStockBalanceId = chosen[i];
+                if (matches[i].RawIds.Count > 1)
+                    line.Candidates = matches[i].RawIds
+                        .Select(id => index.Balances[id])
+                        .Select(b => new GdCostingCandidateDto
+                        {
+                            OpeningStockBalanceId = b.Id,
+                            ItemTypeId = b.ItemTypeId,
+                            ItemTypeName = b.ItemType?.Name ?? $"item #{b.ItemTypeId}",
+                            Unit = b.ItemType?.UOM,
+                            Quantity = b.Quantity,
+                        })
+                        .OrderBy(c => c.ItemTypeName, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                // Say HOW an ambiguous code was settled, so a wrong pick is
+                // visible before commit rather than after.
+                if (!leaveOut[i] && matches[i].RawIds.Count > 1)
+                {
+                    var hsShown = GdCostingMapping.CleanHsCode(rows[i].HsCode);
+                    var n = matches[i].RawIds.Count;
+                    if (chosen[i] is int c && index.Balances.TryGetValue(c, out var cb))
+                        line.MatchNote = JoinNotes(
+                            $"You chose {cb.ItemType?.Name ?? "this item"} among {n} items under HS code {hsShown}.", line.MatchNote);
+                    else if (matches[i].NarrowedByName)
+                        line.MatchNote = JoinNotes(
+                            $"Matched by name: {n} items share HS code {hsShown}.", line.MatchNote);
+                }
+            }
+
+            var lookups = await LoadNewItemLookupsAsync(preview.Lines.Select(l => l.HsCode));
+            var today = DateTime.UtcNow.Date;
+            foreach (var line in preview.Lines)
+            {
+                var matched = line.Disposition == GdCostingDispositionNames.CostOnly
+                              && line.OpeningStockBalanceId is int bid
+                              && index.Balances.TryGetValue(bid, out var b) ? b : null;
+                var isNew = line.Disposition == GdCostingDispositionNames.StockPosted;
+                line.Problems = LineProblems(line, matched, isNew, lookups, today, out var newItem);
+                line.MatchedItemUnit = matched?.ItemType?.UOM;
+                if (newItem != null)
+                {
+                    line.NewItemResolution = newItem.Resolution;
+                    line.NewItemName = newItem.Name;
+                    line.NewItemUnit = newItem.Unit;
+                }
+            }
+            AddSameNewItemUnitProblems(preview.Lines.Where(l =>
+                !l.LeaveOut && l.Disposition == GdCostingDispositionNames.StockPosted).ToList());
+
             preview.Consignments = BuildConsignmentTotals(preview.Lines);
             preview.DispositionCounts = preview.Lines
                 .GroupBy(l => l.Disposition)
@@ -189,6 +307,8 @@ namespace MyApp.Api.Services.Implementations
             preview.OverwriteWarningCount = preview.Lines.Count(l => l.OverwriteWarning != null);
             preview.CostPlausibilityWarningCount = preview.Lines.Count(l => l.CostPlausibilityWarning != null);
             preview.RateWarningCount = preview.Lines.Count(l => l.RateWarning != null);
+            preview.ProblemLineCount = preview.Lines.Count(l => !l.LeaveOut && l.Problems.Count > 0);
+            preview.LeftOutCount = preview.Lines.Count(l => l.LeaveOut);
 
             // A GD this company already has a consignment for has no upsert
             // path in this release (CLAUDE.md-style: create, not update) — say
@@ -217,12 +337,13 @@ namespace MyApp.Api.Services.Implementations
         /// <see cref="GdCostingSheetRow"/> shape <see cref="GdCostingSheetReader.Read"/>
         /// produces per sheet row — same HS-code cleaning
         /// (<see cref="GdCostingMapping.CleanHsCode"/>), same costing
-        /// calculator, same "no HS code" / "stated selling value differs"
-        /// warnings, reworded only to say "you" rather than "the sheet" since
-        /// there is no sheet. <paramref name="warnings"/> is appended to, not
-        /// replaced, so the caller supplies (and keeps) the list.
+        /// calculator, same "stated selling value differs" warning, reworded only
+        /// to say "you" rather than "the sheet" since there is no sheet. A missing
+        /// HS code is not a warning here: it is one of the line's Problems
+        /// (GdLineRules), shown on the line itself. <paramref name="warnings"/> is
+        /// appended to, not replaced, so the caller supplies (and keeps) the list.
         /// </summary>
-        private static GdCostingSheetRow BuildManualRow(GdCostingManualLineDto line, List<string> warnings)
+        private static GdCostingSheetRow BuildManualRow(GdCostingManualLineDto line, int sourceRow, List<string> warnings)
         {
             var gd = (line.GdNumber ?? "").Trim();
             var description = (line.Description ?? "").Trim();
@@ -245,9 +366,6 @@ namespace MyApp.Api.Services.Implementations
             // comment carries the formula).
             var computed = ImportCostingCalculator.Compute(input);
 
-            if (hsCode.Length == 0)
-                warnings.Add($"{gd} has no HS code. The line was imported without one.");
-
             // Mirrors GdCostingSheetReader's own override rule: a stated
             // selling value that disagrees with the computed one by more than
             // a paisa wins, and the preview says so.
@@ -260,30 +378,7 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return new GdCostingSheetRow(
-                1, gd, line.GdDate, description, hsCode, line.Quantity, unit, input, computed, line.SellingValue);
-        }
-
-        /// <summary>
-        /// Rejects with an operator-facing message before anything downstream
-        /// sees a half-filled line — mirrors <see cref="GdCostingMapping.Parse"/>
-        /// throwing for a mapping that cannot drive an import.
-        /// </summary>
-        private static void ValidateManualLine(GdCostingManualLineDto line)
-        {
-            if (line == null) throw new InvalidOperationException("Enter the consignment line's details.");
-            if (string.IsNullOrWhiteSpace(line.GdNumber))
-                throw new InvalidOperationException("Enter the GD number.");
-            if (string.IsNullOrWhiteSpace(line.Description))
-                throw new InvalidOperationException("Enter a description.");
-            if (line.Quantity <= 0)
-                throw new InvalidOperationException("Enter a quantity greater than zero.");
-            if (line.AssessedValue < 0 || line.CustomsDuty < 0 || line.Acd < 0
-                || line.RegulatoryDuty < 0 || line.Others < 0 || line.AddOnProfit < 0)
-                throw new InvalidOperationException("Cost figures cannot be negative.");
-            if (line.SalesTaxRate < 0 || line.AstRate < 0 || line.IncomeTaxRate < 0)
-                throw new InvalidOperationException("Tax rates cannot be negative.");
-            if (line.SellingValue is < 0)
-                throw new InvalidOperationException("The stated selling value cannot be negative.");
+                sourceRow, gd, line.GdDate, description, hsCode, line.Quantity, unit, input, computed, line.SellingValue);
         }
 
         /// <summary>
@@ -494,7 +589,49 @@ namespace MyApp.Api.Services.Implementations
         /// — re-deriving the match from server truth instead of trusting the
         /// line's claimed <c>OpeningStockBalanceId</c>.
         /// </summary>
-        private static List<int> Match(string? gdNumber, string? hsCode, MatchIndex index)
+        private static MatchResult Match(string? gdNumber, string? hsCode, string? description, MatchIndex index)
+        {
+            var raw = MatchByCode(gdNumber, hsCode, index);
+
+            // Several balances under one code is the normal shape once this
+            // import has created stock: new items are keyed by (HS code, name),
+            // so the second product under a code makes every later GD line for
+            // that code ambiguous -- and those goods never came in. When exactly
+            // ONE of the candidates carries the line's own name, it is the same
+            // item by the same rule CreateMissingStockAsync uses to reuse one, so
+            // it is taken. Anything short of exactly one stays ambiguous.
+            if (raw.Count > 1)
+            {
+                var name = NormalizeItemName(description);
+                if (name.Length > 0)
+                {
+                    var named = raw
+                        .Where(id => NormalizeItemName(index.Balances[id].ItemType?.Name) == name)
+                        .ToList();
+                    if (named.Count == 1) return new MatchResult(raw, named);
+                }
+            }
+            return new MatchResult(raw, raw);
+        }
+
+        /// <summary>A line's candidate balances: <see cref="RawIds"/> as the GD
+        /// number / HS code found them, <see cref="Ids"/> after the name
+        /// tie-break.</summary>
+        private sealed record MatchResult(List<int> RawIds, List<int> Ids)
+        {
+            public bool NarrowedByName => RawIds.Count > 1 && Ids.Count == 1;
+        }
+
+        /// <summary>The operator's pick, when it is genuinely one of the line's
+        /// candidates -- anything else (a stale id, an unrelated balance, a
+        /// forged one) resolves to no choice at all.</summary>
+        private static int? ValidChoice(MatchResult match, int? chosen) =>
+            chosen is int id && match.RawIds.Count > 1 && match.RawIds.Contains(id) ? id : null;
+
+        private static List<int> Effective(MatchResult match, int? chosen) =>
+            chosen is int id ? new List<int> { id } : match.Ids;
+
+        private static List<int> MatchByCode(string? gdNumber, string? hsCode, MatchIndex index)
         {
             var hsKey = GdCostingMapping.CleanHsCode(hsCode);
             if (hsKey.Length == 0) return new List<int>();
@@ -549,15 +686,20 @@ namespace MyApp.Api.Services.Implementations
         /// way. <see cref="GdCostingImportService.CommitAsync"/> mirrors this
         /// same branch when it actually writes the balance.
         /// </summary>
-        private static LineOutcome[] MatchAll(List<GdCostingSheetRow> rows, MatchIndex index, string mode)
+        private static LineOutcome[] MatchAll(
+            List<GdCostingSheetRow> rows, MatchIndex index, string mode,
+            IReadOnlyList<MatchResult> matchResults, int?[] chosen, bool[] leaveOut)
         {
-            var matches = rows.Select(r => Match(r.GdNumber, r.HsCode, index)).ToList();
+            var matches = rows.Select((_, i) => Effective(matchResults[i], chosen[i])).ToList();
             var outcomes = new LineOutcome?[rows.Count];
 
+            // A left-out line is never pooled: it writes nothing, so letting it
+            // into a balance's unit cost would describe a figure commit will not
+            // produce.
             var byBalance = new Dictionary<int, List<int>>();
             for (int i = 0; i < rows.Count; i++)
             {
-                if (matches[i].Count != 1) continue;
+                if (leaveOut[i] || matches[i].Count != 1) continue;
                 var balanceId = matches[i][0];
                 if (!byBalance.TryGetValue(balanceId, out var list)) byBalance[balanceId] = list = new List<int>();
                 list.Add(i);
@@ -638,6 +780,22 @@ namespace MyApp.Api.Services.Implementations
 
                 var row = rows[i];
                 var hsKey = GdCostingMapping.CleanHsCode(row.HsCode);
+
+                // Left out: say what it WOULD have landed on, so "Include" is an
+                // informed choice, but write nothing and pool nothing.
+                if (leaveOut[i])
+                {
+                    const string leftOut = "Left out: nothing will be written for this line.";
+                    if (matches[i].Count == 1 && index.Balances.TryGetValue(matches[i][0], out var lb))
+                        outcomes[i] = new LineOutcome(
+                            GdCostingDispositionNames.CostOnly, lb.Id, lb.ItemTypeId, lb.ItemType?.Name,
+                            lb.Quantity, 0m, leftOut);
+                    else
+                        outcomes[i] = new LineOutcome(
+                            matches[i].Count > 1 ? GdCostingDispositionNames.Ambiguous : GdCostingDispositionNames.StockPosted,
+                            null, null, null, 0m, 0m, leftOut);
+                    continue;
+                }
 
                 if (matches[i].Count > 1)
                 {
@@ -771,6 +929,168 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
         }
 
+        // ── Line rules that need the books (2026-09-25) ──────────────────────
+
+        /// <summary>The tariff codes and catalog items a batch's new-item lines
+        /// are checked against. <see cref="TariffCodes"/> is null while the HS
+        /// master is empty -- the same "no master yet, no master check" rule the
+        /// item-type form follows.</summary>
+        private sealed record NewItemLookups(HashSet<string>? TariffCodes, List<CatalogItem> Catalog);
+
+        private sealed record CatalogItem(int Id, string Name, string HsCode, string? Unit, bool IsAutoGenerated, bool IsFavorite);
+
+        /// <summary>What a new-stock line will become — see
+        /// <see cref="GdCostingLineDto.NewItemResolution"/>.</summary>
+        private sealed record NewItemPlan(string Resolution, string Name, string? Unit);
+
+        /// <summary>One round trip per batch: the tariff codes among the batch's
+        /// own HS codes, and the catalog items that carry them.</summary>
+        private async Task<NewItemLookups> LoadNewItemLookupsAsync(IEnumerable<string?> hsCodes)
+        {
+            var codes = hsCodes
+                .Select(GdCostingMapping.CleanHsCode)
+                .Where(c => c.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (codes.Count == 0) return new NewItemLookups(null, new List<CatalogItem>());
+
+            HashSet<string>? tariff = null;
+            if (await _db.HsCodes.AnyAsync())
+                tariff = (await _db.HsCodes.AsNoTracking()
+                        .Where(h => codes.Contains(h.Code))
+                        .Select(h => h.Code)
+                        .ToListAsync())
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var catalog = await _db.ItemTypes.AsNoTracking()
+                .Where(it => !it.IsDeleted && it.HSCode != null && codes.Contains(it.HSCode))
+                .Select(it => new CatalogItem(it.Id, it.Name, it.HSCode!, it.UOM, it.IsAutoGenerated, it.IsFavorite))
+                .ToListAsync();
+
+            return new NewItemLookups(tariff, catalog);
+        }
+
+        private static GdLineRules.Line ToRuleLine(GdCostingLineDto l) => new(
+            l.GdNumber, l.GdDate, l.Description, l.HsCode, l.Quantity, l.Unit,
+            l.AssessedValue, l.CustomsDuty, l.Acd, l.RegulatoryDuty, l.Others, l.AddOnProfit,
+            l.SalesTaxRate, l.AstRate, l.IncomeTaxRate, l.SheetSellingValue);
+
+        private static GdCostingLineProblemDto Problem(string field, string message) =>
+            new() { Field = field, Message = message };
+
+        /// <summary>
+        /// Everything that stops this line's stock coming in: the
+        /// <see cref="GdLineRules"/> checks, then what only the books can say.
+        /// <paramref name="matched"/> is the balance the line lands on (null when
+        /// it does not land on exactly one); <paramref name="isNew"/> means it
+        /// will become new stock. Used by preview AND commit, so the screen and
+        /// the refusal can never disagree.
+        /// </summary>
+        private static List<GdCostingLineProblemDto> LineProblems(
+            GdCostingLineDto line, OpeningStockBalance? matched, bool isNew,
+            NewItemLookups lookups, DateTime todayUtc, out NewItemPlan? newItem)
+        {
+            newItem = null;
+            var problems = GdLineRules.Check(ToRuleLine(line), todayUtc)
+                .Select(p => Problem(p.Field, p.Message))
+                .ToList();
+            var unit = (line.Unit ?? "").Trim();
+
+            if (matched != null)
+            {
+                // Adding Kg to a balance kept in Pcs would add the wrong number
+                // of units, and a Backfill unit cost would be per the wrong unit.
+                // FbrUomAliases is the one spelling rule: Pcs, Nos and "Numbers,
+                // pieces, units" are one unit.
+                var itemUnit = matched.ItemType?.UOM;
+                if (unit.Length > 0 && !string.IsNullOrWhiteSpace(itemUnit) && !FbrUomAliases.SameUnit(unit, itemUnit))
+                    problems.Add(Problem(GdLineRules.Fields.Unit,
+                        $"This GD says {unit}, but {matched.ItemType?.Name ?? "the item"} is kept in {itemUnit}. " +
+                        "Use the item's unit, or check the quantity."));
+                return problems;
+            }
+
+            if (!isNew) return problems;
+
+            var hs = GdCostingMapping.CleanHsCode(line.HsCode);
+            // A new item is only as good as its code: it is what FBR files the
+            // item under and what every later GD matches it by.
+            if (hs.Length > 0 && lookups.TariffCodes != null && !lookups.TariffCodes.Contains(hs))
+                problems.Add(Problem(GdLineRules.Fields.HsCode,
+                    $"{hs} is not in the Pakistan customs tariff. A new item needs a real HS code."));
+
+            // The same rule CreateMissingStockAsync applies: a catalog item with
+            // this HS code AND this name is reused (or, a tariff placeholder,
+            // adopted), never duplicated.
+            var name = NormalizeItemName(line.Description);
+            var existing = hs.Length > 0 && name.Length > 0
+                ? lookups.Catalog.FirstOrDefault(it =>
+                    string.Equals(it.HsCode, hs, StringComparison.OrdinalIgnoreCase)
+                    && NormalizeItemName(it.Name) == name)
+                : null;
+            if (existing == null)
+            {
+                newItem = new NewItemPlan(GdCostingNewItemNames.Create, Trim(line.Description, 300), unit.Length > 0 ? unit : null);
+                return problems;
+            }
+
+            newItem = new NewItemPlan(
+                existing.IsAutoGenerated && !existing.IsFavorite ? GdCostingNewItemNames.Adopt : GdCostingNewItemNames.Reuse,
+                existing.Name,
+                existing.Unit);
+            if (unit.Length > 0 && !string.IsNullOrWhiteSpace(existing.Unit) && !FbrUomAliases.SameUnit(unit, existing.Unit))
+                problems.Add(Problem(GdLineRules.Fields.Unit,
+                    $"This GD says {unit}, but the catalog item {existing.Name} is kept in {existing.Unit}."));
+            return problems;
+        }
+
+        /// <summary>
+        /// Lines that create the SAME new item (one HS code and name, which is
+        /// how CreateMissingStockAsync groups them) must agree on its unit: the
+        /// item gets one, and the quantities are added together.
+        /// </summary>
+        private static IEnumerable<(GdCostingLineDto Line, GdCostingLineProblemDto Problem)> SameNewItemUnitProblems(
+            IEnumerable<GdCostingLineDto> newLines)
+        {
+            var groups = newLines
+                .Where(l => GdCostingMapping.CleanHsCode(l.HsCode).Length > 0
+                         && NormalizeItemName(l.Description).Length > 0
+                         && !string.IsNullOrWhiteSpace(l.Unit))
+                .GroupBy(l => (GdCostingMapping.CleanHsCode(l.HsCode), NormalizeItemName(l.Description)));
+            foreach (var g in groups)
+            {
+                var units = g.Select(l => l.Unit!.Trim()).ToList();
+                if (units.All(u => FbrUomAliases.SameUnit(u, units[0]))) continue;
+                var shown = string.Join(", ", units.Distinct(StringComparer.OrdinalIgnoreCase));
+                var rowsText = string.Join(", ", g.Select(l => l.SourceRow));
+                foreach (var l in g)
+                    yield return (l, Problem(GdLineRules.Fields.Unit,
+                        $"Rows {rowsText} bring in the same new item in different units ({shown}). Give them one unit."));
+            }
+        }
+
+        private static void AddSameNewItemUnitProblems(IEnumerable<GdCostingLineDto> newLines)
+        {
+            foreach (var (line, problem) in SameNewItemUnitProblems(newLines).ToList())
+                line.Problems.Add(problem);
+        }
+
+        private static string JoinNotes(string first, string? rest) =>
+            string.IsNullOrWhiteSpace(rest) ? first : $"{first} {rest}";
+
+        /// <summary>The commit refusal: which rows, and the first few reasons in
+        /// the operator's own words.</summary>
+        private static string RefusalMessage(List<(int Row, string Message)> problems)
+        {
+            var rows = problems.Select(p => p.Row).Distinct().Count();
+            var shown = problems
+                .OrderBy(p => p.Row)
+                .Take(4)
+                .Select(p => $"Row {p.Row}: {p.Message}");
+            var more = problems.Count > 4 ? $" (and {problems.Count - 4} more)" : "";
+            return $"{rows} line(s) still need fixing, so nothing was imported. {string.Join(" ", shown)}{more}";
+        }
+
         // ── Commit ───────────────────────────────────────────────────────────
 
         public async Task<GdCostingCommitResultDto> CommitAsync(GdCostingCommitDto dto, int userId)
@@ -865,6 +1185,15 @@ namespace MyApp.Api.Services.Implementations
                 // Cost/SellingValue) has been built.
                 var newStockLines = new List<(ImportConsignmentLine Entity, NewStockGroupKey Key, GdCostingLineDto Line)>();
 
+                // Every line that will WRITE is re-checked here against the same
+                // rules the preview showed (GdLineRules + the book rules), whatever
+                // the request claims about them. Collected across the whole set
+                // and refused together, so the message names every row at once.
+                var lookups = await LoadNewItemLookupsAsync(lines.Select(l => l.HsCode));
+                var today = DateTime.UtcNow.Date;
+                var refused = new List<(int Row, string Message)>();
+                var newStockDtos = new List<GdCostingLineDto>();
+
                 foreach (var line in lines)
                 {
                     var consignment = consignmentsByGd[line.GdNumber.Trim()];
@@ -873,15 +1202,27 @@ namespace MyApp.Api.Services.Implementations
                     int? balanceIdToWrite = null;
                     NewStockGroupKey? newStockKey = null;
 
-                    if (disposition == GdCostingDisposition.StockPosted)
+                    // Server truth, including the name tie-break and a chosen
+                    // candidate -- a choice counts only if it is one of THIS
+                    // company's candidates for THIS line's own GD / HS code.
+                    var lineMatch = Match(line.GdNumber, line.HsCode, line.Description, index);
+                    var resolved = Effective(lineMatch, ValidChoice(lineMatch, line.ChosenOpeningStockBalanceId));
+
+                    if (line.LeaveOut)
+                    {
+                        // Recorded, so the GD's own record is complete, but it
+                        // touches nothing on the books.
+                        disposition = GdCostingDisposition.Skipped;
+                        dispositionNote = LeftOutNote;
+                    }
+                    else if (disposition == GdCostingDisposition.StockPosted)
                     {
                         if (!dto.CreateMissingStock)
                         {
-                            // Default (opted-out) behaviour: unchanged,
-                            // byte-for-byte, from before Task 15. Told, not
-                            // silently dropped.
+                            // A caller that did not ask for new stock: recorded,
+                            // told, and not silently dropped.
                             disposition = GdCostingDisposition.Skipped;
-                            dispositionNote = "Posting new stock arrives in a later release.";
+                            dispositionNote = NotAskedNote;
                         }
                         else
                         {
@@ -893,7 +1234,7 @@ namespace MyApp.Api.Services.Implementations
                             // anything; anything else is resolved exactly as
                             // a forged CostOnly claim already is, whatever
                             // the client's disposition said.
-                            var freshCandidates = Match(line.GdNumber, line.HsCode, index);
+                            var freshCandidates = resolved;
                             if (freshCandidates.Count == 0)
                             {
                                 // Genuinely new stock. Disposition stays
@@ -938,7 +1279,7 @@ namespace MyApp.Api.Services.Implementations
                         // whether that is a stale preview, an edited request,
                         // a deleted balance, or a line pointed at an unrelated
                         // item under a different HS code entirely.
-                        var candidates = Match(line.GdNumber, line.HsCode, index);
+                        var candidates = resolved;
 
                         if (candidates.Count == 1 && line.OpeningStockBalanceId == candidates[0])
                         {
@@ -959,6 +1300,14 @@ namespace MyApp.Api.Services.Implementations
                             disposition = GdCostingDisposition.Skipped;
                             dispositionNote = "The claimed opening balance does not match this line's own GD number and HS code, re-checked against this company's own records. Nothing was written for this line.";
                         }
+                    }
+                    else if (disposition == GdCostingDisposition.Ambiguous && resolved.Count == 1)
+                    {
+                        // Settled by the server itself -- the operator's valid
+                        // choice among the candidates, or the name tie-break -- so
+                        // it lands on that balance like any verified match.
+                        disposition = GdCostingDisposition.CostOnly;
+                        balanceIdToWrite = resolved[0];
                     }
                     else if (disposition == GdCostingDisposition.Ambiguous)
                     {
@@ -1046,7 +1395,25 @@ namespace MyApp.Api.Services.Implementations
 
                     if (newStockKey.HasValue)
                         newStockLines.Add((entity, newStockKey.Value, line));
+
+                    // Only a line that WRITES is held to the rules: a left-out,
+                    // unmatched-and-not-asked-for or ambiguous line is recorded
+                    // and changes nothing, so it cannot bring stock up wrong.
+                    var writes = (disposition == GdCostingDisposition.CostOnly && balanceIdToWrite.HasValue)
+                                 || newStockKey.HasValue;
+                    if (writes)
+                    {
+                        var matchedBalance = balanceIdToWrite.HasValue ? index.Balances[balanceIdToWrite.Value] : null;
+                        foreach (var p in LineProblems(line, matchedBalance, newStockKey.HasValue, lookups, today, out _))
+                            refused.Add((line.SourceRow, p.Message));
+                        if (newStockKey.HasValue) newStockDtos.Add(line);
+                    }
                 }
+
+                foreach (var (l, p) in SameNewItemUnitProblems(newStockDtos))
+                    refused.Add((l.SourceRow, p.Message));
+                if (refused.Count > 0)
+                    throw new InvalidOperationException(RefusalMessage(refused));
 
                 // Figures are derived here from the WRITTEN entities' own
                 // (server-recomputed, verified) Cost/Quantity/SellingValue —
@@ -1239,11 +1606,14 @@ namespace MyApp.Api.Services.Implementations
 
                 if (result.BalancesCosted > 0)
                     result.Messages.Add($"{result.BalancesCosted} opening balance(s) received an actual cost.");
-                var deferred = writtenLines.Count(l =>
-                    l.Disposition == GdCostingDisposition.Skipped
-                    && l.DispositionNote == "Posting new stock arrives in a later release.");
-                if (deferred > 0)
-                    result.Messages.Add($"{deferred} line(s) had no match on the books and were skipped — posting new stock arrives in a later release.");
+                var notAsked = writtenLines.Count(l =>
+                    l.Disposition == GdCostingDisposition.Skipped && l.DispositionNote == NotAskedNote);
+                if (notAsked > 0)
+                    result.Messages.Add($"{notAsked} line(s) had no stock on the books and were not brought in: new stock was not asked for.");
+                var leftOut = writtenLines.Count(l =>
+                    l.Disposition == GdCostingDisposition.Skipped && l.DispositionNote == LeftOutNote);
+                if (leftOut > 0)
+                    result.Messages.Add($"{leftOut} line(s) were left out as asked. Their goods did not come into stock.");
                 if (openingBalancesCreated > 0 || itemTypesCreated > 0 || itemTypesAdopted > 0)
                     result.Messages.Add(
                         $"{openingBalancesCreated} opening balance(s) created for unmatched lines ({itemTypesCreated} new item type(s) created, {itemTypesAdopted} adopted from the HS code master).");

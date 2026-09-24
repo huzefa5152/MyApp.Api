@@ -379,7 +379,7 @@ namespace MyApp.Api.Controllers
 
             try
             {
-                return Ok(await _gdCosting.PreviewManualAsync(dto.Lines, companyId, mode));
+                return Ok(await _gdCosting.PreviewManualAsync(dto.Lines, companyId, mode, dto.Source));
             }
             catch (InvalidOperationException ex)
             {

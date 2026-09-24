@@ -108,15 +108,13 @@ namespace MyApp.Api.Helpers.ExcelImport
                     continue;
                 }
 
-                // A row that reaches here is being imported as a genuine
-                // line. A blank HS code no longer holds it back — "not yet
-                // classified" is a real, ordinary state elsewhere in this
-                // system (CLAUDE.md 5b-2: an HS-import placeholder, an
-                // opening-stock row with no code) — but it is worth a named
-                // warning, since nothing later in this pipeline can classify
-                // the line against the HS master without one.
+                // A row that reaches here is kept as a genuine line, blank HS
+                // code or not, so the operator can see it and fix it in the
+                // review. It cannot COME IN without one (GdLineRules, 2026-09-25:
+                // a line with no code matches nothing and a new item without one
+                // cannot be billed to FBR), so the note says what to do.
                 if (hsCode.Length == 0)
-                    warnings.Add($"Row {r}: {gd} has no HS code. The line was imported without one.");
+                    warnings.Add($"Row {r}: {gd} has no HS code. Add it before this line can come in.");
 
                 var gdDate = cols.GdDate is > 0 ? wb.GetDate(sheet, r, cols.GdDate.Value) : null;
                 var quantity = wb.GetDecimal(sheet, r, cols.Quantity) ?? 0m;
