@@ -300,6 +300,11 @@ Publish output optimized from 79 MB to 37 MB via:
 
 
 
+### 2026-09-25 — Multi-line item descriptions everywhere
+
+- Editing a delivery challan now uses the same multi-line description box as creating one, so Enter adds a line instead of being ignored.
+- Print templates saved before the rich-text helper existed now print the description's line breaks and bold/italic/underline instead of one run-on line. The credit/debit note screen shows them too.
+
 ### 2026-09-24 — Detach a delivery challan from the wrong bill
 
 - **Customize customer invoices hide withholding income tax.** Bill and Sales
