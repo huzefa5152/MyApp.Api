@@ -70,8 +70,8 @@ export default function LineItemsEditor({
   // the stored relative URL; the row keeps it as `imagePath`.
   showImage = false,
   onUploadImage,
-  // Description field — multiline (rich text + line breaks) for Quote / Order /
-  // Challan; single-line for Challan edit (matches the current forms).
+  // Description field — multiline (rich text + line breaks) by default, so
+  // create and edit accept the same text. Pass false only for a single-line box.
   descriptionMultiline = true,
   // Row locking (e.g. an already-delivered Sales Order line): locked rows can't
   // be removed. `rowLockHint` returns an optional note shown under the row.

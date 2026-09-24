@@ -362,7 +362,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               itemTypes={itemTypes}
               nonInventoryItems={nonInvItems}
               divisionId={challan.divisionId || null}
-              descriptionMultiline={false}
               coerceEmptyQtyToOne
               itemsLabel="Items *"
             />
