@@ -13,7 +13,7 @@ import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
-import ChallanPrivateCosts, { PrivateCostFields, useChallanSuppliers } from "./ChallanPrivateCosts";
+import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -163,11 +163,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     deliverableItems.forEach((item) => { next[item.id] = { itemTypeId: newId ? Number(newId) : null, nonInventoryItemId: null }; });
     return next;
   });
-  const applyOrderSupplier = (id) => setOrderPrivate((previous) => {
-    const next = { ...previous };
-    deliveredItems.forEach((item) => { next[item.id] = { ...next[item.id], supplierId: id ? Number(id) : null }; });
-    return next;
-  });
+
 
   const setOrderQty = (itemId, remaining, raw) => {
     // Clamp to [0, remaining] — you can't deliver more than what's left.
@@ -179,8 +175,6 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const deliveredItems = deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0);
   const bulkOrderItemTypeId = deliverableItems.length && deliverableItems.every((item) => orderItemTypes[item.id]?.itemTypeId && orderItemTypes[item.id]?.itemTypeId === orderItemTypes[deliverableItems[0].id]?.itemTypeId)
     ? orderItemTypes[deliverableItems[0].id].itemTypeId : "";
-  const bulkOrderSupplierId = deliveredItems.length && deliveredItems.every((item) => orderPrivate[item.id]?.supplierId && orderPrivate[item.id]?.supplierId === orderPrivate[deliveredItems[0].id]?.supplierId)
-    ? orderPrivate[deliveredItems[0].id].supplierId : "";
   const anyOrderQty = Object.values(orderQtys).some((q) => Number(q) > 0);
   const setAllRemaining = () => {
     const m = {};
@@ -514,20 +508,15 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
             </div>
             )}
 
-            {fromOrder && <section style={{ padding: 14, border: "1px solid #dce7e4", borderRadius: 12, background: "#f7fbfa", marginTop: 12 }}>
-              <strong style={{ color: "#00695c" }}>Private supplier and cost details</strong>
-              {deliveredItems.length > 1 && <div style={{ maxWidth: 340, marginTop: 10, fontSize: 12, fontWeight: 700 }}>
-                Apply supplier to all delivered lines
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}><SearchableSelect items={suppliers} value={bulkOrderSupplierId} onChange={applyOrderSupplier} placeholder="Search supplier to apply" /></div>
-                  <button type="button" disabled={!deliveredItems.some((item) => orderPrivate[item.id]?.supplierId)} onClick={() => applyOrderSupplier("")}>Clear all</button>
-                </div>
-              </div>}
-              {deliveredItems.map((item) => <div key={item.id} style={{ padding: 10, marginTop: 10, background: "#fff", borderRadius: 8 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>{item.description}</div>
-                <PrivateCostFields item={orderPrivate[item.id] || {}} suppliers={suppliers} onChange={(patch) => setOrderPrivate((prev) => ({ ...prev, [item.id]: { ...prev[item.id], ...patch } }))} />
-              </div>)}
-            </section>}
+            {fromOrder && <ChallanPrivateCosts
+              items={deliveredItems.map((item) => ({ ...item, ...orderPrivate[item.id] }))}
+              suppliers={suppliers}
+              onItemsChange={(updated) => setOrderPrivate((previous) => {
+                const next = { ...previous };
+                updated.forEach((item) => { next[item.id] = { ...next[item.id], supplierId: item.supplierId, actualUnitCost: item.actualUnitCost }; });
+                return next;
+              })}
+            />}
 
             {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
               Challan saved. {purchaseError}

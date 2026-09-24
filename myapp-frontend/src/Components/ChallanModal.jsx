@@ -1,3 +1,4 @@
+import ChallanPrivateCosts from "./ChallanPrivateCosts";
 import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote, MdAccountTree } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
 import RichText from "./RichText";
@@ -140,6 +141,7 @@ export default function ChallanModal({ challan, onClose }) {
             </div>
           </div>
 
+          <ChallanPrivateCosts items={challan.items} readOnly />
           {challan.notes && <div style={{ marginTop: 16 }}><strong>Notes</strong><div style={{ marginTop: 6, padding: 10, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={challan.notes} /></div></div>}
           {/* Read-only attachment list (preview + download only). */}
           <AttachmentManager
