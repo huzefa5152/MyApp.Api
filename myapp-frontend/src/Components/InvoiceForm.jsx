@@ -20,6 +20,7 @@ import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
 import TaxRateBlockHint from "./TaxRateBlockHint";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
+import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
 import ClientForm from "./ClientForm";
@@ -698,6 +699,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (matches.length !== 1) return null;
     const sc = matches[0];
     return {
+      code: sc.code,
+      rate: target,
       label: `Bill under ${sc.code} (${target}%)`,
       hint: sc.defaultSroScheduleNo
         ? `Files under SRO schedule ${sc.defaultSroScheduleNo} with FBR's catalog serial: confirm the serial for these goods before filing.`
@@ -708,6 +711,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   // Saving is refused (here and on the server) until the scenario matches or a
   // reason is written, so the button says so instead of looking live.
   const rateBlocked = rateCheck.enforced.length > 0 && !rateReason.trim();
+  // Until the operator picks one, the scenario follows the goods: 25% goods
+  // move the bill to SN024 by themselves (hooks/useScenarioFollowsGoods).
+  const scenarioFollow = useScenarioFollowsGoods({
+    suggestion: rateSuggestion,
+    billRates: rateCheck.billRates,
+    scenarios: enrichedScenarios,
+    scenarioCode,
+    setScenarioCode,
+  });
 
   // Prefill the bill PO from the selected challans (they carry the order's PO)
   // when the operator hasn't set one yet — covers the "Generate Bill from order"
@@ -1145,6 +1157,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     </span>
                   </button>
 
+                  {/* Say so when the goods, not the operator, chose the
+                      scenario -- a GST rate that moves by itself with no
+                      explanation reads as a bug. */}
+                  {scenarioFollow.source === "goods" && chosenScenario && (
+                    <div style={styles.scenarioAutoNote}>
+                      <MdInfo size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>
+                        Set to <strong>{chosenScenario.code} ({chosenScenario.defaultRate}%)</strong> because these
+                        goods came in at {chosenScenario.defaultRate}%. Goods at another rate go on a separate
+                        bill. Press <strong>Change</strong> if this sale is different.
+                      </span>
+                    </div>
+                  )}
+
                   {scenarioPickerOpen && (
                     <div style={styles.scenarioCollapseBody}>
                       <p style={styles.stepHint}>
@@ -1166,6 +1192,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 type="button"
                                 key={s.code}
                                 onClick={() => {
+                                  scenarioFollow.markOperatorChoice();
                                   setScenarioCode(s.code);
                                   setScenarioPickerOpen(false);
                                 }}
@@ -2108,6 +2135,13 @@ const styles = {
   scenarioCollapseChevronLabel: {
     fontSize: "0.78rem",
     fontWeight: 600,
+  },
+  // The scenario was set from the goods' own records, not by the operator.
+  scenarioAutoNote: {
+    display: "flex", gap: "0.45rem", alignItems: "flex-start",
+    margin: "0.45rem 0 0", padding: "0.5rem 0.75rem",
+    border: `1px solid ${colors.blue}33`, background: "#e3f2fd", borderRadius: 8,
+    fontSize: "0.8rem", lineHeight: 1.4, color: colors.textPrimary,
   },
   scenarioCollapseBody: {
     marginTop: "0.65rem",

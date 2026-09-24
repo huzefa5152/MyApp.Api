@@ -1075,6 +1075,13 @@ what refuses.
   the scenario they need — offered nothing to bill. `imported-tax-rates/items`
   lets the company's own unambiguously-25% goods back in, and an item already on
   the bill is never hidden from its own row's picker.
+- **A NEW bill's scenario follows its goods until the operator picks one**
+  (`hooks/useScenarioFollowsGoods`, both create forms, never Edit). It acts only
+  on the notice's one-click suggestion -- i.e. an ENFORCED finding with exactly
+  one scenario at that rate -- so mixed records, HS conflicts and goods at two
+  rates never move it. A card click marks the choice as the operator's, and from
+  then on nothing changes it. Opening on SN001 and waiting for someone to notice
+  a red card is how 25% goods were billed at 18%.
 - **A save that will be refused must LOOK refused.** Each bill form disables its
   save button while an enforced finding has no reason, and `TaxRateBlockHint`
   says why beside the button ("Show" scrolls to the red card). An enabled button

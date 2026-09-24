@@ -344,6 +344,12 @@ example. Changing a line's item re-prices it at that item's stock cost and
 replaces the name the previous pick filled in; the 3rd Schedule hint now says
 what FBR is sent (18% of MRP x Qty).
 
+**A new bill's scenario follows its goods until you choose one.** Picking goods
+this company imported at 25% moves a new bill from SN001 to SN024 by itself --
+GST, sale type and SRO reference with it -- and a note says why; removing them
+puts it back. Once you pick a scenario yourself it stays yours, and a
+disagreement is the usual notice. Mixed or doubtful records never move it.
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New

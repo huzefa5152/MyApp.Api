@@ -18,6 +18,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import TaxRateNotice from "./TaxRateNotice";
 import TaxRateBlockHint from "./TaxRateBlockHint";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
+import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
@@ -737,6 +738,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     if (matches.length !== 1) return null;
     const sc = matches[0];
     return {
+      code: sc.code,
+      rate: target,
       label: `Bill under ${sc.code} (${target}%)`,
       hint: sc.meta?.needsSRO && sc.defaultSroScheduleNo
         ? `Fills SRO schedule ${sc.defaultSroScheduleNo}. The serial is FBR's catalog default: confirm it for these goods.`
@@ -748,6 +751,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   // Saving is refused (here and on the server) until the scenario matches or a
   // reason is written, so the button says so instead of looking live.
   const rateBlocked = rateCheck.enforced.length > 0 && !rateReason.trim();
+  // Until the operator picks one, the scenario follows the goods: 25% goods
+  // move the bill to SN024 by themselves (hooks/useScenarioFollowsGoods).
+  const scenarioFollow = useScenarioFollowsGoods({
+    suggestion: rateSuggestion,
+    billRates: rateCheck.billRates,
+    scenarios: enrichedScenarios,
+    scenarioCode,
+    setScenarioCode,
+  });
 
   // An SRO scenario carries FBR's own schedule string and a default serial.
   // Fill them into every line that has none, however the scenario was chosen --
@@ -1309,6 +1321,20 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                     </span>
                   </button>
 
+                  {/* Say so when the goods, not the operator, chose the
+                      scenario -- a GST rate that moves by itself with no
+                      explanation reads as a bug. */}
+                  {scenarioFollow.source === "goods" && chosenScenario && (
+                    <div style={styles.scenarioAutoNote}>
+                      <MdInfo size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>
+                        Set to <strong>{chosenScenario.code} ({chosenScenario.defaultRate}%)</strong> because these
+                        goods came in at {chosenScenario.defaultRate}%. Goods at another rate go on a separate
+                        bill. Press <strong>Change</strong> if this sale is different.
+                      </span>
+                    </div>
+                  )}
+
                   {scenarioPickerOpen && (
                     <div style={styles.scenarioCollapseBody}>
                       <p style={styles.stepHint}>
@@ -1330,6 +1356,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                 type="button"
                                 key={s.code}
                                 onClick={() => {
+                                  scenarioFollow.markOperatorChoice();
                                   setScenarioCode(s.code);
                                   // Auto-collapse on pick — operator made
                                   // their choice, hide the picker so the
@@ -2274,6 +2301,13 @@ const styles = {
   rateChipCheck: {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#b26a00",
     fontWeight: 600,
+  },
+  // The scenario was set from the goods' own records, not by the operator.
+  scenarioAutoNote: {
+    display: "flex", gap: "0.45rem", alignItems: "flex-start",
+    margin: "0.45rem 0 0", padding: "0.5rem 0.75rem",
+    border: `1px solid ${colors.blue}33`, background: "#e3f2fd", borderRadius: 8,
+    fontSize: "0.8rem", lineHeight: 1.4, color: colors.textPrimary,
   },
   // Qty / Unit Price worked out from the amount: visibly not a box to type in.
   derivedInput: {
