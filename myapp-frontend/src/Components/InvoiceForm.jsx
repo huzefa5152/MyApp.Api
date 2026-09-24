@@ -19,7 +19,10 @@ import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
 import { billFormShell, billFormBody } from "./bill/billTheme";
-import TaxRateBlockHint from "./TaxRateBlockHint";
+import BillStep from "./bill/BillStep";
+import BillChecklist from "./bill/BillChecklist";
+import BillTotals from "./bill/BillTotals";
+import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows } from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
 import BulkItemTypeBar from "./BulkItemTypeBar";
@@ -837,6 +840,16 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const price = parseFloat(itemPrices[i.id]) || 0;
     return hasPick && desc.length > 0 && qty > 0 && price > 0;
   });
+  // What a line still needs, in the words on screen -- the same test as
+  // allLinesComplete above, spelt out for the footer checklist.
+  const lineProblem = (i) => {
+    const parts = [];
+    if (!(itemTypeIds[i.id] || itemNonInvIds[i.id])) parts.push("pick an item type");
+    if (!(((itemDescriptions[i.id] ?? i.description) || "").trim())) parts.push("type a description");
+    if (!((Number(i.quantity) || 0) > 0)) parts.push("the challan quantity is zero");
+    if (!((parseFloat(itemPrices[i.id]) || 0) > 0)) parts.push("enter the Unit Price");
+    return parts.join(", ");
+  };
 
   const handlePriceChange = (itemId, value) => {
     setItemPrices((prev) => ({ ...prev, [itemId]: value }));
@@ -1091,13 +1104,52 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     return n?.saleAccountName ? `→ ${n.saleAccountName}` : "→ Suspense";
   };
 
+  // The shared bill layout (Components/bill, utils/billEntry): numbered steps,
+  // a totals panel that says where each figure comes from, and a footer that
+  // lists what is left -- each item a link to its step or line.
+  const selectedClient = clients.find((c) => String(c.id) === String(selectedClientId)) || null;
+  const buyerRegistered = selectedClient
+    ? (selectedClient.registrationType || "").toLowerCase() === "registered" : null;
+  const detailsVisible = (chosenScenario || !fbrEnabled) && !!selectedClientId && company?.startingInvoiceNumber > 0;
+  const checklist = billChecklist({
+    needsScenario: fbrEnabled,
+    hasScenario: !!chosenScenario,
+    hasBuyer: !!selectedClientId,
+    billNumberOk: !(billNumberMode === "custom" && !billNumberOk),
+    rateBlock: rateBlocked ? rateBlockText({ suggestion: rateSuggestion, splitNeeded: rateSplitNeeded }) : null,
+    lines: detailsVisible
+      ? allItems.map((it, i) => ({ key: it.id, n: i + 1, problem: lineProblem(it) })).filter((l) => l.problem)
+      : [],
+    extra: [
+      ...(company && company.startingInvoiceNumber === 0
+        ? [{ key: "startno", label: "Set this company's starting bill number (Companies page)", target: BILL_ANCHORS.buyer }] : []),
+      ...(detailsVisible && selectedIds.length === 0
+        ? [{ key: "challans", label: "Tick the challans to bill", target: BILL_ANCHORS.challans }] : []),
+    ],
+  });
+  const totalsRows = billTotalsRows({
+    subtotal, gstRate, gstAmount, scenarioCode: chosenScenario?.code || null,
+    furtherTaxRate, furtherTaxAmount, buyerRegistered, grandTotal,
+    withholdingAmount: whtResolved, withholdingRate: whtMode === "rate" ? whtRate : null, balanceDue,
+    advanceTaxAmount: advTaxResolved, advanceTaxSection: advTaxOption?.section,
+    advanceTaxRate: advTaxOption?.rate, totalWithAdvance: totalWithAdvTax,
+  });
+  // Without FBR there is no scenario step, so every later step moves up one.
+  const stepNo = (k) => k - (fbrEnabled ? 0 : 1);
+  const money = (n) => `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
   // Backdrop click is a no-op — bills can hold a lot of typed data and
   // a stray click shouldn't wipe it. Dismiss via X or Cancel.
   return (
     <div style={formStyles.backdrop}>
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
-          <h5 style={formStyles.title}>Create Bill</h5>
+          <div style={{ minWidth: 0 }}>
+            <h5 style={formStyles.title}>Create Bill</h5>
+            <div style={styles.headerSub}>
+              Bill goods already delivered: choose the buyer, tick their challans, then price each line. Each step turns green when it is complete.
+            </div>
+          </div>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <form onSubmit={handleSubmit} style={billFormShell}>
@@ -1139,16 +1191,26 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     pick so the form scrolls back into Buyer / Items.
                     Same UX as StandaloneInvoiceForm. */}
                 {fbrEnabled && (
-                <div style={{ marginBottom: "1rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => setScenarioPickerOpen((v) => !v)}
-                    style={styles.scenarioCollapseHeader}
-                  >
-                    <span style={styles.stepNum}>1</span>
-                    <span style={styles.scenarioCollapseTitle}>FBR Scenario</span>
-                    {chosenScenario ? (
-                      <span style={styles.scenarioCollapseSummary}>
+                  <BillStep
+                    id={BILL_ANCHORS.scenario}
+                    n={1}
+                    title="FBR Scenario"
+                    status={!chosenScenario ? "todo" : rateBlocked ? "warn" : "done"}
+                    open={scenarioPickerOpen}
+                    onToggle={() => setScenarioPickerOpen((v) => !v)}
+                    help="The scenario tells FBR what kind of sale this is, and fixes the sale type and GST rate of every line. Goods imported at 25% switch it to SN024 by themselves, so open this only to choose differently."
+                    notice={scenarioFollow.source === "goods" && chosenScenario ? (
+                      <div style={{ ...styles.scenarioAutoNote, margin: 0 }}>
+                        <MdInfo size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                        <span>
+                          Set to <strong>{chosenScenario.code} ({chosenScenario.defaultRate}%)</strong> because these
+                          goods came in at {chosenScenario.defaultRate}%. Goods at another rate go on a separate
+                          bill. Press <strong>Change</strong> if this sale is different.
+                        </span>
+                      </div>
+                    ) : null}
+                    summary={chosenScenario ? (
+                      <>
                         <span style={styles.scenarioCollapseCode}>{chosenScenario.code}</span>
                         <span>·</span>
                         <span>{chosenScenario.saleType}</span>
@@ -1157,36 +1219,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         {chosenScenario.meta.buyerKind === "b2b-registered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeBlue }}>Registered</span>}
                         {chosenScenario.meta.buyerKind === "b2b-unregistered" && <span style={{ ...styles.scenarioBadge, ...styles.badgeOrange }}>Unregistered</span>}
                         {chosenScenario.meta.buyerKind === "walk-in" && <span style={{ ...styles.scenarioBadge, ...styles.badgePurple }}>Walk-in</span>}
-                      </span>
+                      </>
                     ) : (
                       <span style={styles.scenarioCollapseSummaryMuted}>
                         Pick an FBR scenario to start
                       </span>
                     )}
-                    <span style={styles.scenarioCollapseChevron}>
-                      {scenarioPickerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                      <span style={styles.scenarioCollapseChevronLabel}>
-                        {scenarioPickerOpen ? "Hide" : "Change"}
-                      </span>
-                    </span>
-                  </button>
-
-                  {/* Say so when the goods, not the operator, chose the
-                      scenario -- a GST rate that moves by itself with no
-                      explanation reads as a bug. */}
-                  {scenarioFollow.source === "goods" && chosenScenario && (
-                    <div style={styles.scenarioAutoNote}>
-                      <MdInfo size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-                      <span>
-                        Set to <strong>{chosenScenario.code} ({chosenScenario.defaultRate}%)</strong> because these
-                        goods came in at {chosenScenario.defaultRate}%. Goods at another rate go on a separate
-                        bill. Press <strong>Change</strong> if this sale is different.
-                      </span>
-                    </div>
-                  )}
-
-                  {scenarioPickerOpen && (
-                    <div style={styles.scenarioCollapseBody}>
+                  >
+                    <div>
                       <p style={styles.stepHint}>
                         Each scenario locks the Sale Type, GST rate, and buyer type.
                         Only the scenarios applicable to your company's profile
@@ -1233,8 +1273,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </BillStep>
                 )}
 
                 {/* Step 2 — Pick a client. Collapsible — expanded by
@@ -1244,36 +1283,31 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                   const selectedBuyer = clientsForScenario.find((c) => String(c.id) === String(selectedClientId));
                   const pendingCount = selectedBuyer ? allChallans.filter((ch) => ch.clientId === selectedBuyer.id).length : 0;
                   return (
-                    <div style={{ marginBottom: "1.25rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setBuyerOpen((v) => !v)}
-                        style={styles.scenarioCollapseHeader}
-                      >
-                        <span style={styles.stepNum}>2</span>
-                        <span style={styles.scenarioCollapseTitle}>
-                          {chosenScenario?.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
-                        </span>
-                        {selectedBuyer ? (
-                          <span style={styles.scenarioCollapseSummary}>
-                            <span>{selectedBuyer.name}</span>
-                            <span style={styles.scenarioCollapseMeta}>· {pendingCount} pending DC{pendingCount !== 1 ? "s" : ""}</span>
-                          </span>
-                        ) : (
-                          <span style={styles.scenarioCollapseSummaryMuted}>
-                            Choose a buyer
-                          </span>
-                        )}
-                        <span style={styles.scenarioCollapseChevron}>
-                          {buyerOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                          <span style={styles.scenarioCollapseChevronLabel}>
-                            {buyerOpen ? "Hide" : "Change"}
-                          </span>
-                        </span>
-                      </button>
-
-                      {buyerOpen && (
-                        <div style={styles.scenarioCollapseBody}>
+                    <BillStep
+                      id={BILL_ANCHORS.buyer}
+                      n={stepNo(2)}
+                      title={chosenScenario?.meta.buyerKind === "walk-in" ? "Walk-in Buyer" : "Buyer"}
+                      status={selectedBuyer ? (company && company.startingInvoiceNumber === 0 ? "warn" : "done") : "todo"}
+                      open={buyerOpen}
+                      onToggle={() => setBuyerOpen((v) => !v)}
+                      help="Pick the customer. Only buyers with challans waiting to be billed, and that fit the scenario, are listed. An unregistered buyer is also charged 4% further tax."
+                      summary={selectedBuyer ? (
+                        <>
+                          <span style={{ fontWeight: 600 }}>{selectedBuyer.name}</span>
+                          <span style={styles.scenarioCollapseMeta}>· {pendingCount} pending DC{pendingCount !== 1 ? "s" : ""}</span>
+                          {selectedBuyer.registrationType && (
+                            <span style={{
+                              ...styles.scenarioBadge,
+                              ...((selectedBuyer.registrationType || "").toLowerCase() === "registered" ? styles.badgeBlue : styles.badgeOrange),
+                            }}>
+                              {selectedBuyer.registrationType}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span style={styles.scenarioCollapseSummaryMuted}>Choose a buyer</span>
+                      )}
+                    >
                           <div style={styles.inlineRow}>
                             {clientsForScenario.length === 0 ? (
                               <div style={{ ...styles.warnAlert, flex: 1 }}>
@@ -1318,11 +1352,24 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               Starting bill number not set for this company. Please configure it in the Companies page.
                             </div>
                           )}
-                        </div>
-                      )}
-                    </div>
+                    </BillStep>
                   );
                 })()}
+
+                {/* Steps 3-6 wait for the scenario and the buyer. They show,
+                    folded, so the operator can see the whole road ahead. */}
+                {!detailsVisible && [["details", 3, "Bill Details"], ["challans", 4, "Challans to Bill"], ["items", 5, "Items"], ["taxes", 6, "Taxes & Total"]].map(([k, n, t]) => (
+                  <BillStep
+                    key={k}
+                    id={BILL_ANCHORS[k]}
+                    n={stepNo(n)}
+                    title={t}
+                    status="todo"
+                    summary={<span style={styles.scenarioCollapseSummaryMuted}>
+                      {fbrEnabled && !chosenScenario ? "Opens once a scenario is chosen" : "Opens when the buyer is chosen"}
+                    </span>}
+                  />
+                ))}
 
                 {/* Step 3 — Bill details (collapsible inputs row) +
                     DC selection + items. Same UX as StandaloneInvoiceForm:
@@ -1330,15 +1377,17 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     operator can free vertical space for the items grid. */}
                 {(chosenScenario || !fbrEnabled) && selectedClientId && company?.startingInvoiceNumber > 0 && (
                   <>
-                    <div style={{ marginBottom: "0.75rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setBillHeaderOpen((v) => !v)}
-                        style={styles.scenarioCollapseHeader}
-                      >
-                        <span style={styles.stepNum}>3</span>
-                        <span style={styles.scenarioCollapseTitle}>Bill Details</span>
-                        <span style={styles.scenarioCollapseSummary}>
+                    <BillStep
+                      id={BILL_ANCHORS.details}
+                      n={stepNo(3)}
+                      title="Bill Details"
+                      status={billNumberMode === "custom" && !billNumberOk ? "warn" : "done"}
+                      open={billHeaderOpen}
+                      onToggle={() => setBillHeaderOpen((v) => !v)}
+                      toggleLabel={billHeaderOpen ? "Hide" : "Edit"}
+                      help="The next bill number and today's date are already filled in. Change them only when this bill needs something different."
+                      summary={(
+                        <>
                           <span>{billNumberMode === "custom" ? `#${billNumber || "—"}` : "Auto #"}</span>
                           <span>·</span>
                           <span>{invoiceDate || "—"}</span>
@@ -1347,17 +1396,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           <span>·</span>
                           <span>{documentType === 4 ? "Sale Invoice" : documentType === 9 ? "Debit Note" : documentType === 10 ? "Credit Note" : "—"}</span>
                           {paymentMode && <><span>·</span><span>{paymentMode}</span></>}
-                        </span>
-                        <span style={styles.scenarioCollapseChevron}>
-                          {billHeaderOpen ? <MdExpandLess size={20} /> : <MdExpandMore size={20} />}
-                          <span style={styles.scenarioCollapseChevronLabel}>
-                            {billHeaderOpen ? "Hide" : "Edit"}
-                          </span>
-                        </span>
-                      </button>
-
-                      {billHeaderOpen && (
-                        <div style={{ ...styles.scenarioCollapseBody, marginBottom: 0 }}>
+                        </>
+                      )}
+                    >
                           <div style={styles.fieldGrid}>
                             <div style={{ flex: 1, minWidth: 180 }}>
                               <BillNumberField
@@ -1376,81 +1417,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               <label style={styles.label}>Bill Date</label>
                               <input type="date" style={styles.input} value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 100 }}>
-                              <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
-                                GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
-                              </label>
-                              <input
-                                type="number"
-                                style={{
-                                  ...styles.input,
-                                  backgroundColor: chosenScenario ? "#eef5ff" : colors.inputBg,
-                                  cursor: chosenScenario ? "not-allowed" : "text",
-                                }}
-                                value={gstRate}
-                                onChange={(e) => setGstRate(e.target.value)}
-                                readOnly={!!chosenScenario}
-                                title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : ""}
-                                min={0} max={100} step={0.5}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={styles.label}>Withholding Tax</label>
-                              <select style={styles.input} value={whtMode} onChange={(e) => setWhtMode(e.target.value)} title="Income tax withheld on top of GST — reduces the balance due, not the invoice total">
-                                <option value="none">None</option>
-                                <option value="rate">Rate %</option>
-                                <option value="amount">Fixed amount</option>
-                              </select>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 190 }}>
-                              <label style={styles.label}>Advance Income Tax</label>
-                              <select
-                                style={styles.input}
-                                value={advTaxKey}
-                                onChange={(e) => setAdvTaxKey(e.target.value)}
-                                title="Advance income tax collected from the buyer under s.236G / s.236H. Charged on the amount including sales tax and added to the total. Leave as None to charge nothing."
-                              >
-                                <option value="">None</option>
-                                {ADVANCE_TAX_OPTIONS.map((o) => (
-                                  <option key={o.key} value={o.key}>{advanceTaxLabel(o)}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 120 }}>
-                              <label style={styles.label}>Further Tax (%)</label>
-                              <input
-                                type="number" min={0} step={0.01}
-                                style={styles.input}
-                                value={furtherTaxRate}
-                                onChange={(e) => setFurtherTaxRate(e.target.value)}
-                                placeholder="0"
-                                title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total. 4% when the buyer is unregistered, none when registered; change it if this sale differs."
-                              />
-                            </div>
-                            {whtMode === "rate" && (
-                              <div style={{ flex: 1, minWidth: 120 }}>
-                                <label style={styles.label}>WHT Rate (%)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  style={styles.input}
-                                  value={whtRate}
-                                  onChange={(e) => setWhtRate(e.target.value)}
-                                  placeholder="e.g. 5.5"
-                                />
-                              </div>
-                            )}
-                            {whtMode === "amount" && (
-                              <div style={{ flex: 1, minWidth: 120 }}>
-                                <label style={styles.label}>WHT Amount (Rs.)</label>
-                                <input
-                                  type="number" min={0} step={0.01}
-                                  style={styles.input}
-                                  value={whtAmount}
-                                  onChange={(e) => setWhtAmount(e.target.value)}
-                                  placeholder="0.00"
-                                />
-                              </div>
-                            )}
                             <div style={{ flex: 1, minWidth: 140 }}>
                               <label style={styles.label}>Payment Terms</label>
                               <input type="text" style={styles.input} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Optional" />
@@ -1485,12 +1451,20 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                               </select>
                             </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                    </BillStep>
 
-                    {/* Challan selection */}
-                    <div style={{ marginBottom: "1rem" }}>
+                    {/* ── Step 4: Challans to bill ─────────────── */}
+                    <BillStep
+                      id={BILL_ANCHORS.challans}
+                      n={stepNo(4)}
+                      title="Challans to Bill"
+                      status={selectedIds.length > 0 ? "done" : "todo"}
+                      summary={selectedIds.length > 0
+                        ? <span>{selectedIds.length} challan{selectedIds.length === 1 ? "" : "s"} ticked · {allItems.length} line{allItems.length === 1 ? "" : "s"}</span>
+                        : <span style={styles.scenarioCollapseSummaryMuted}>Tick the challans to bill</span>}
+                      help="Tick every delivery challan this bill covers. Their lines load below with the quantities delivered."
+                    >
+                    <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem", flexWrap: "wrap", gap: "0.35rem" }}>
                         <label style={{ ...styles.label, marginBottom: 0 }}>
                           Pending Challans ({dcSearch ? `${filteredChallans.length} / ${clientChallans.length}` : clientChallans.length})
@@ -1575,7 +1549,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         </>
                       )}
                     </div>
+                    </BillStep>
 
+                    {/* ── Step 5: Items ─────────────── */}
+                    <BillStep
+                      id={BILL_ANCHORS.items}
+                      n={stepNo(5)}
+                      title="Items"
+                      status={allItems.length === 0 || !allLinesComplete ? "todo" : rateBlocked ? "warn" : "done"}
+                      summary={allItems.length > 0
+                        ? <span>{allItems.length} line{allItems.length === 1 ? "" : "s"} · {money(subtotal)} before tax</span>
+                        : <span style={styles.scenarioCollapseSummaryMuted}>Lines appear when a challan is ticked</span>}
+                      help="Give every line an item type and a unit price. The quantity comes from the challan. A line marked in red came in at a different sales tax rate."
+                    >
                     {/* Scenario-locked Sale Type banner — same affordance
                         as StandaloneInvoiceForm so the operator can see at
                         a glance which sale type every item line will end
@@ -1595,9 +1581,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                     {allItems.length > 0 && (
                       <div>
                         <div style={styles.itemsHeaderBar}>
-                          <label style={{ ...styles.label, margin: 0 }}>
-                            Items ({allItems.length})
-                          </label>
+                          <span style={styles.itemsCount}>{allItems.length} line{allItems.length === 1 ? "" : "s"}</span>
                           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                             {/* 2026-05-13: previously hidden when billsMode
                                 was true (Bills tab). Operators asked for
@@ -1690,7 +1674,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 const price = parseFloat(itemPrices[item.id]) || 0;
                                 const displayUom = itemUoms[item.id] ?? item.unit;
                                 return (
-                                  <tr key={item.id} style={styles.unifiedRow}>
+                                  <tr key={item.id} id={lineAnchor(item.id)} style={styles.unifiedRow}>
                                     <td style={{ ...styles.unifiedTd, fontSize: "0.76rem", color: colors.textSecondary }}>
                                       {item.challanNumber}
                                     </td>
@@ -1916,84 +1900,135 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           )}
                         </p>
 
-                        {/* Totals */}
-                        <div style={styles.totalsBox}>
-                          <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                          <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                          {furtherTaxAmount > 0 && (
-                            <div style={styles.totalRow}>
-                              <span>Further Tax ({furtherTaxRate}%):</span>
-                              <span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                            </div>
-                          )}
-                          <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                            <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                          </div>
-                          {whtResolved > 0 && (
-                            <>
-                              <div style={styles.totalRow}>
-                                <span>Withholding tax{whtMode === "rate" ? ` (${whtRate}%)` : ""}:</span>
-                                <span>Rs. {whtResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                              </div>
-                              <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                                <span>Balance due:</span><span>Rs. {balanceDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                              </div>
-                            </>
-                          )}
-                          {advTaxResolved > 0 && (
-                            <>
-                              <div style={styles.totalRow}>
-                                <span>
-                                  Advance income tax {advTaxOption.section} ({advTaxOption.rate}%):
-                                </span>
-                                <span>Rs. {advTaxResolved.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                              </div>
-                              <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                                <span>Total:</span>
-                                <span>Rs. {totalWithAdvTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
                       </div>
                     )}
+                    <div id={BILL_ANCHORS.rate}>
+                      <TaxRateNotice
+                        enforced={rateCheck.enforced}
+                        advisory={rateCheck.advisory}
+                        billRate={gstRate}
+                        suggestion={rateSuggestion}
+                        splitNeeded={rateSplitNeeded}
+                        reason={rateReason}
+                        onReasonChange={setRateReason}
+                      />
+                    </div>
+                    </BillStep>
+
+                    {/* ── Step 6: Taxes & total ─────────────── */}
+                    <BillStep
+                      id={BILL_ANCHORS.taxes}
+                      n={stepNo(6)}
+                      title="Taxes & Total"
+                      status="done"
+                      summary={<span>Grand total <strong>{money(grandTotal)}</strong></span>}
+                      help="GST follows the scenario. Further tax is added for an unregistered buyer. Withholding is what the buyer deducts from your payment; advance income tax (236G / 236H) is collected on top of the bill."
+                    >
+                      <div style={styles.taxGrid}>
+                            <div style={{ flex: 1, minWidth: 100 }}>
+                              <label style={{ ...styles.label, whiteSpace: "nowrap" }}>
+                                GST Rate (%){chosenScenario && <span style={styles.lockedTag} title={`Locked by ${chosenScenario.code}`}>🔒 locked</span>}
+                              </label>
+                              <input
+                                type="number"
+                                style={{
+                                  ...styles.input,
+                                  backgroundColor: chosenScenario ? "#eef5ff" : colors.inputBg,
+                                  cursor: chosenScenario ? "not-allowed" : "text",
+                                }}
+                                value={gstRate}
+                                onChange={(e) => setGstRate(e.target.value)}
+                                readOnly={!!chosenScenario}
+                                title={chosenScenario ? `Locked by ${chosenScenario.code}. Switch scenario to change.` : ""}
+                                min={0} max={100} step={0.5}
+                              />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 140 }}>
+                              <label style={styles.label}>Withholding Tax</label>
+                              <select style={styles.input} value={whtMode} onChange={(e) => setWhtMode(e.target.value)} title="Income tax withheld on top of GST — reduces the balance due, not the invoice total">
+                                <option value="none">None</option>
+                                <option value="rate">Rate %</option>
+                                <option value="amount">Fixed amount</option>
+                              </select>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 190 }}>
+                              <label style={styles.label}>Advance Income Tax</label>
+                              <select
+                                style={styles.input}
+                                value={advTaxKey}
+                                onChange={(e) => setAdvTaxKey(e.target.value)}
+                                title="Advance income tax collected from the buyer under s.236G / s.236H. Charged on the amount including sales tax and added to the total. Leave as None to charge nothing."
+                              >
+                                <option value="">None</option>
+                                {ADVANCE_TAX_OPTIONS.map((o) => (
+                                  <option key={o.key} value={o.key}>{advanceTaxLabel(o)}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 120 }}>
+                              <label style={styles.label}>Further Tax (%)</label>
+                              <input
+                                type="number" min={0} step={0.01}
+                                style={styles.input}
+                                value={furtherTaxRate}
+                                onChange={(e) => setFurtherTaxRate(e.target.value)}
+                                placeholder="0"
+                                title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total. 4% when the buyer is unregistered, none when registered; change it if this sale differs."
+                              />
+                            </div>
+                            {whtMode === "rate" && (
+                              <div style={{ flex: 1, minWidth: 120 }}>
+                                <label style={styles.label}>WHT Rate (%)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  style={styles.input}
+                                  value={whtRate}
+                                  onChange={(e) => setWhtRate(e.target.value)}
+                                  placeholder="e.g. 5.5"
+                                />
+                              </div>
+                            )}
+                            {whtMode === "amount" && (
+                              <div style={{ flex: 1, minWidth: 120 }}>
+                                <label style={styles.label}>WHT Amount (Rs.)</label>
+                                <input
+                                  type="number" min={0} step={0.01}
+                                  style={styles.input}
+                                  value={whtAmount}
+                                  onChange={(e) => setWhtAmount(e.target.value)}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            )}
+                      </div>
+                      <BillTotals rows={totalsRows} />
+                    </BillStep>
                   </>
                 )}
 
-                <TaxRateNotice
-                  enforced={rateCheck.enforced}
-                  advisory={rateCheck.advisory}
-                  billRate={gstRate}
-                  suggestion={rateSuggestion}
-                  splitNeeded={rateSplitNeeded}
-                  reason={rateReason}
-                  onReasonChange={setRateReason}
-                />
-
                 {/* Attachments — staged client-side until the bill is created,
-                    then flushed against the new id (see handleSubmit). */}
-                <AttachmentManager
-                  ref={attachmentRef}
-                  companyId={companyId}
-                  entityType="Invoice"
-                  entityId={null}
-                  mode="edit"
-                />
+                    then flushed against the new id (see handleSubmit). Never
+                    folded away: a staged file must still be mounted to upload. */}
+                <BillStep
+                  id={BILL_ANCHORS.attachments}
+                  n={stepNo(7)}
+                  title="Attachments"
+                  status="optional"
+                  help="Optional: the customer's PO, the signed challan, anything to keep with this bill."
+                >
+                  <AttachmentManager
+                    ref={attachmentRef}
+                    companyId={companyId}
+                    entityType="Invoice"
+                    entityId={null}
+                    mode="edit"
+                  />
+                </BillStep>
               </>
             )}
           </div>
           <div style={formStyles.footer}>
-            {billNumberMode === "custom" && !billNumberOk ? (
-              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
-                Enter a bill number that isn&apos;t already in use, or switch back to Auto.
-              </span>
-            ) : rateBlocked ? (
-              <TaxRateBlockHint suggestion={rateSuggestion} splitNeeded={rateSplitNeeded} />
-            ) : allItems.length > 0 && !allLinesComplete ? (
-              <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
-                Every line needs an Item Type (or Non-Inventory item), a description, quantity &gt; 0 and unit price &gt; 0.
-              </span>
-            ) : null}
+            <BillChecklist items={checklist} />
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
@@ -2045,6 +2080,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 }
 
 const styles = {
+  headerSub: { marginTop: 2, fontSize: "0.78rem", lineHeight: 1.35, color: "rgba(255,255,255,0.88)" },
+  itemsCount: { fontSize: "0.8rem", fontWeight: 600, color: colors.textSecondary },
+  // The tax inputs sit above the totals they change.
+  taxGrid: {
+    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(170px, 100%), 1fr))",
+    gap: "0.65rem", marginBottom: "0.85rem",
+  },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
   // Even, responsive field grid for the bill-detail fields — equal columns
   // that wrap cleanly (no lone last field stretching full width). Collapses to
