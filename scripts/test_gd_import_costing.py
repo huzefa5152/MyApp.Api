@@ -445,14 +445,34 @@ def account_by_control(api, h, company_id, control_type):
     return next((a for a in rows if a.get("isActive")), rows[0] if rows else None)
 
 
-def gd_preview_manual(api, h, company_id, lines, mode=None):
+def gd_preview_manual(api, h, company_id, lines, mode=None, source=None):
     """Hand entry (Task 18, multi-line since 2026-09-14). ALL lines in ONE
-    call -- matching and per-balance pooling reason over the set."""
+    call -- matching and per-balance pooling reason over the set. `source`
+    (2026-09-25) re-checks an uploaded workbook's lines under that file's own
+    name and SHA-256."""
     params = {"companyId": company_id}
     if mode:
         params["mode"] = mode
+    body = {"lines": lines}
+    if source:
+        body["source"] = source
     return requests.post(f"{api}/spreadsheet-import/gd-costing/preview-manual",
-                         headers=h, timeout=60, params=params, json={"lines": lines})
+                         headers=h, timeout=60, params=params, json=body)
+
+
+def problem_fields(line):
+    return sorted(p.get("field") for p in (line or {}).get("problems") or [])
+
+
+def commit_preview(api, h, company_id, prev, mode, create=True, file_name=None):
+    """Commit a preview exactly as the screen does: every reviewed line back,
+    new stock asked for, the preview's own identity."""
+    return gd_commit(api, h, {
+        "companyId": company_id, "fileSha256": prev.get("fileSha256"),
+        "fileName": file_name or prev.get("fileName"), "fileSizeBytes": prev.get("fileSizeBytes"),
+        "importProfileId": prev.get("importProfileId"), "profileVersion": prev.get("profileVersion"),
+        "lines": prev.get("lines", []), "createMissingStock": create, "mode": mode,
+    })
 
 
 def manual_line(gd, hs, desc, qty=1, assessed=0, duty=0, acd=0, regduty=0, others=0,
@@ -3455,6 +3475,214 @@ def main():
               and close(inventory_opening() or 0, steady or 0),
               f"posted={cost_res.get('inventoryOpeningPosted')} "
               f"opening now={inventory_opening()} expected unchanged {steady}")
+
+        # ── Section 29: every line complete before its stock comes in ────────
+        # (2026-09-25, maintainer's decision) GD date, HS code, unit and an
+        # assessed value above zero are required on every line; a unit must
+        # match the item it adds to; a new item needs a real tariff code. The
+        # preview reports problems PER LINE (it used to refuse the first bad
+        # hand-typed line outright), and commit re-checks every line that
+        # writes. Half of these are positive checks: a guard that refused
+        # everything would pass the negative ones just as well.
+        print("\n-- 29: entry rules --")
+        rules_co = make_company(api, h, f"GD Costing Rules {tag}")
+        created_companies.append(rules_co)
+        pump = make_item(api, h, rules_co, f"Rules Pump {tag}", hs="8481.2000")
+        twin_a = make_item(api, h, rules_co, f"Rules Twin A {tag}", hs="8536.1010")
+        twin_b = make_item(api, h, rules_co, f"Rules Twin B {tag}", hs="8536.1010")
+        for iid, q in ((pump, 100), (twin_a, 40), (twin_b, 60)):
+            r = set_opening(api, h, rules_co, iid, q, q * 1000, cost=q * 800)
+            check(f"29: opening for item {iid}", r.ok, f"http {r.status_code} {r.text[:150]}")
+
+        def qty_of(item_id):
+            o = opening_of(get_openings(api, h, rules_co), item_id)
+            return float((o or {}).get("quantity") or 0)
+
+        # 29a -- a bad line is reported, not refused: all three come back.
+        good = manual_line("GD-R-1", "8481.2000", f"Rules Pump {tag}", qty=10, assessed=9000)
+        no_unit_date = manual_line("GD-R-1", "8481.2000", f"Rules Pump {tag}", qty=5, assessed=4000,
+                                   unit="", gddate=None)
+        zero_cost = manual_line("GD-R-1", "8481.2000", f"Rules Pump {tag}", qty=5, assessed=0)
+        r = gd_preview_manual(api, h, rules_co, [good, no_unit_date, zero_cost], mode="new-arrivals")
+        p = r.json() if r.ok else {}
+        lines = p.get("lines", [])
+        check("29a: a preview with bad lines answers 200, every line present",
+              r.ok and len(lines) == 3, f"http {r.status_code} lines={len(lines)} {r.text[:200]}")
+        check("29a: the complete line has no problems",
+              len(lines) == 3 and problem_fields(lines[0]) == [], f"{lines[0].get('problems') if lines else None}")
+        check("29a: the second line names BOTH its missing GD date and unit",
+              len(lines) == 3 and problem_fields(lines[1]) == ["gdDate", "unit"],
+              f"{lines[1].get('problems') if len(lines) > 1 else None}")
+        check("29a: the third line names its zero assessed value",
+              len(lines) == 3 and problem_fields(lines[2]) == ["assessedValue"],
+              f"{lines[2].get('problems') if len(lines) > 2 else None}")
+        check("29a: lines are numbered 1..3 in the order typed",
+              [l.get("sourceRow") for l in lines] == [1, 2, 3], f"{[l.get('sourceRow') for l in lines]}")
+        check("29a: problemLineCount counts the two incomplete lines",
+              p.get("problemLineCount") == 2, f"problemLineCount={p.get('problemLineCount')}")
+
+        # 29b -- commit re-checks, whatever the request claims, and names rows.
+        before = qty_of(pump)
+        r = commit_preview(api, h, rules_co, p, "new-arrivals")
+        msg = (r.json() or {}).get("message", "") if r.headers.get("content-type", "").startswith("application/json") else r.text
+        check("29b: commit with incomplete lines is refused (400)", r.status_code == 400, f"http {r.status_code}")
+        check("29b: the refusal names rows 2 and 3",
+              "Row 2" in msg and "Row 3" in msg and "nothing was imported" in msg, msg[:300])
+        check("29b: nothing reached the stock", close(qty_of(pump), before), f"qty={qty_of(pump)} before={before}")
+        check("29b: no consignment was recorded", find_consignment_id(api, h, rules_co, "GD-R-1") is None, "")
+
+        # 29c -- leave the two out: they are recorded, only the good line lands.
+        left = [dict(good), dict(no_unit_date, leaveOut=True), dict(zero_cost, leaveOut=True)]
+        r = gd_preview_manual(api, h, rules_co, left, mode="new-arrivals")
+        p = r.json() if r.ok else {}
+        check("29c: left-out lines are flagged and no longer count as problems",
+              p.get("leftOutCount") == 2 and p.get("problemLineCount") == 0
+              and [l.get("leaveOut") for l in p.get("lines", [])] == [False, True, True],
+              f"leftOut={p.get('leftOutCount')} problems={p.get('problemLineCount')}")
+        r = commit_preview(api, h, rules_co, p, "new-arrivals")
+        res = r.json() if r.ok else {}
+        check("29c: the commit goes through once they are left out",
+              r.ok and res.get("linesWritten") == 3 and res.get("linesSkipped") == 2,
+              f"http {r.status_code} {str(res)[:250]}")
+        check("29c: only the complete line's 10 units came in",
+              close(qty_of(pump), before + 10), f"qty={qty_of(pump)} expected={before + 10}")
+        check("29c: the result says lines were left out",
+              any("left out as asked" in m for m in res.get("messages", [])), f"{res.get('messages')}")
+
+        # 29d -- the unit must be the item's: Kg onto Pcs is stopped, Nos is Pcs.
+        r = gd_preview_manual(api, h, rules_co, [
+            manual_line("GD-R-2", "8481.2000", f"Rules Pump {tag}", qty=3, assessed=2700, unit="Kg"),
+            manual_line("GD-R-2", "8481.2000", f"Rules Pump {tag}", qty=3, assessed=2700, unit="Nos"),
+        ], mode="new-arrivals")
+        lines = (r.json() or {}).get("lines", []) if r.ok else []
+        check("29d: Kg onto an item kept in Pcs is a unit problem that names both",
+              len(lines) == 2 and problem_fields(lines[0]) == ["unit"]
+              and "kept in Pcs" in lines[0]["problems"][0]["message"],
+              f"{lines[0].get('problems') if lines else r.text[:200]}")
+        check("29d: Nos is the same unit as Pcs (one spelling rule)",
+              len(lines) == 2 and problem_fields(lines[1]) == [] and lines[1].get("matchedItemUnit") == "Pcs",
+              f"{lines[1] if len(lines) > 1 else None}")
+
+        # 29e -- a new item needs a real tariff code; a real one is planned.
+        r = gd_preview_manual(api, h, rules_co, [
+            manual_line("GD-R-3", "8517.6991", f"Rules Invented {tag}", qty=2, assessed=500),
+            manual_line("GD-R-3", "8517.6250", f"Rules Brand New {tag}", qty=2, assessed=500),
+        ], mode="new-arrivals")
+        lines = (r.json() or {}).get("lines", []) if r.ok else []
+        check("29e: an HS code missing from the tariff is a problem on a new item",
+              len(lines) == 2 and lines[0].get("disposition") == "stock-posted"
+              and problem_fields(lines[0]) == ["hsCode"],
+              f"{lines[0] if lines else r.text[:200]}")
+        check("29e: a real code on a new item is planned as a create, no problem",
+              len(lines) == 2 and problem_fields(lines[1]) == []
+              and lines[1].get("newItemResolution") == "create"
+              and lines[1].get("newItemName") == f"Rules Brand New {tag}"
+              and lines[1].get("newItemUnit") == "Pcs",
+              f"{lines[1] if len(lines) > 1 else None}")
+
+        # 29f -- two lines creating ONE new item must agree on its unit.
+        r = gd_preview_manual(api, h, rules_co, [
+            manual_line("GD-R-4", "8517.6240", f"Rules Split Unit {tag}", qty=2, assessed=500, unit="Pcs"),
+            manual_line("GD-R-4", "8517.6240", f"Rules Split Unit {tag}", qty=2, assessed=500, unit="Kg"),
+        ], mode="new-arrivals")
+        lines = (r.json() or {}).get("lines", []) if r.ok else []
+        check("29f: both lines carry the different-units problem",
+              len(lines) == 2 and all(problem_fields(l) == ["unit"] for l in lines)
+              and "different units" in lines[0]["problems"][0]["message"],
+              f"{[l.get('problems') for l in lines]}")
+
+        # 29g -- the name settles a shared code; another name stays ambiguous.
+        r = gd_preview_manual(api, h, rules_co, [
+            manual_line("GD-R-5", "8536.1010", f"Rules Twin A {tag}", qty=4, assessed=3200),
+            manual_line("GD-R-5", "8536.1010", f"Rules Mystery {tag}", qty=6, assessed=4800),
+        ], mode="new-arrivals")
+        p = r.json() if r.ok else {}
+        lines = p.get("lines", [])
+        a_line = lines[0] if lines else {}
+        m_line = lines[1] if len(lines) > 1 else {}
+        check("29g: a line named like one of two items lands on that item",
+              a_line.get("disposition") == "cost-only" and a_line.get("itemTypeId") == twin_a
+              and "Matched by name" in (a_line.get("matchNote") or ""),
+              f"{a_line.get('disposition')} item={a_line.get('itemTypeId')} note={a_line.get('matchNote')}")
+        check("29g: a line named like neither stays ambiguous, offering both",
+              m_line.get("disposition") == "ambiguous"
+              and sorted(c.get("itemTypeId") for c in m_line.get("candidates", [])) == sorted([twin_a, twin_b]),
+              f"{m_line.get('disposition')} candidates={m_line.get('candidates')}")
+
+        # 29h -- a chosen candidate commits onto that item; a forged one cannot.
+        cand_b = next((c for c in m_line.get("candidates", []) if c.get("itemTypeId") == twin_b), {})
+        chosen = [manual_line("GD-R-5", "8536.1010", f"Rules Twin A {tag}", qty=4, assessed=3200),
+                  dict(manual_line("GD-R-5", "8536.1010", f"Rules Mystery {tag}", qty=6, assessed=4800),
+                       chosenOpeningStockBalanceId=cand_b.get("openingStockBalanceId"))]
+        r = gd_preview_manual(api, h, rules_co, chosen, mode="new-arrivals")
+        p = r.json() if r.ok else {}
+        lines = p.get("lines", [])
+        check("29h: the chosen item is honoured and said so",
+              len(lines) == 2 and lines[1].get("disposition") == "cost-only"
+              and lines[1].get("itemTypeId") == twin_b and "You chose" in (lines[1].get("matchNote") or ""),
+              f"{lines[1] if len(lines) > 1 else r.text[:200]}")
+        a_before, b_before = qty_of(twin_a), qty_of(twin_b)
+        r = commit_preview(api, h, rules_co, p, "new-arrivals")
+        check("29h: commit lands 4 on Twin A and 6 on the chosen Twin B",
+              r.ok and close(qty_of(twin_a), a_before + 4) and close(qty_of(twin_b), b_before + 6),
+              f"http {r.status_code} a={qty_of(twin_a)} b={qty_of(twin_b)} {r.text[:200]}")
+
+        pump_bal_id = (opening_of(get_openings(api, h, rules_co), pump) or {}).get("id")
+        forged = make_line(1, "GD-R-6", "8536.1010", disposition="ambiguous",
+                           description=f"Rules Mystery {tag}", qty=6, assessed=4800)
+        forged["chosenOpeningStockBalanceId"] = pump_bal_id
+        a_before, b_before, p_before = qty_of(twin_a), qty_of(twin_b), qty_of(pump)
+        r = gd_commit(api, h, {"companyId": rules_co, "fileSha256": fresh_hash(), "fileName": "forged-choice",
+                               "fileSizeBytes": 1, "lines": [forged], "createMissingStock": True,
+                               "mode": "new-arrivals"})
+        res = r.json() if r.ok else {}
+        check("29h: a 'choice' that is not a candidate is not honoured -- the line stays ambiguous",
+              r.ok and res.get("linesAmbiguous") == 1 and res.get("balancesCosted") == 0,
+              f"http {r.status_code} {str(res)[:200]}")
+        check("29h: and no item moved", close(qty_of(twin_a), a_before) and close(qty_of(twin_b), b_before)
+              and close(qty_of(pump), p_before), f"a={qty_of(twin_a)} b={qty_of(twin_b)} pump={qty_of(pump)}")
+
+        # 29i -- an uploaded file fixed in the review keeps its own identity.
+        sheet = build_sheet(BASE_HEADINGS, [
+            row_cells(BASE_COLS, "GD-R-7", "8481.2000", desc=f"Rules Pump {tag}", qty=7, assessed=6300,
+                      unit="", gddate=""),
+        ])
+        r = gd_preview(api, h, rules_co, sheet, GD_MAPPING, mode="new-arrivals")
+        up = r.json() if r.ok else {}
+        up_line = (up.get("lines") or [{}])[0]
+        check("29i: an uploaded row missing its date and unit is kept, with both problems",
+              r.ok and problem_fields(up_line) == ["gdDate", "unit"] and not up.get("blockingErrors"),
+              f"http {r.status_code} {up_line.get('problems')} {up.get('blockingErrors')}")
+        fixed = dict(manual_line("GD-R-7", "8481.2000", f"Rules Pump {tag}", qty=7, assessed=6300),
+                     sourceRow=up_line.get("sourceRow"))
+        src = {"fileName": "rules-sheet.xlsx", "fileSha256": up.get("fileSha256"),
+               "fileSizeBytes": up.get("fileSizeBytes")}
+        r = gd_preview_manual(api, h, rules_co, [fixed], mode="new-arrivals", source=src)
+        rechk = r.json() if r.ok else {}
+        check("29i: the re-check keeps the file's SHA-256, name and row number",
+              r.ok and rechk.get("fileSha256") == up.get("fileSha256") and rechk.get("fileName") == "rules-sheet.xlsx"
+              and (rechk.get("lines") or [{}])[0].get("sourceRow") == up_line.get("sourceRow")
+              and problem_fields((rechk.get("lines") or [{}])[0]) == [],
+              f"http {r.status_code} sha={rechk.get('fileSha256')} name={rechk.get('fileName')}")
+        p_before = qty_of(pump)
+        r = commit_preview(api, h, rules_co, rechk, "new-arrivals")
+        check("29i: the fixed line commits and its 7 units come in",
+              r.ok and close(qty_of(pump), p_before + 7), f"http {r.status_code} qty={qty_of(pump)} {r.text[:200]}")
+        r = gd_preview(api, h, rules_co, sheet, GD_MAPPING, mode="new-arrivals")
+        again = r.json() if r.ok else {}
+        check("29i: uploading the same file again is still refused as already imported",
+              any("already imported" in e for e in again.get("blockingErrors", [])),
+              f"{again.get('blockingErrors')}")
+
+        # 29j -- the server never leaves a line out on its own: an API caller
+        # that echoes a Backfill preview keeps what CreateMissingStock gave it.
+        r = gd_preview_manual(api, h, rules_co, [
+            manual_line("GD-R-8", "8517.6250", f"Rules Backfill New {tag}", qty=1, assessed=100),
+        ], mode="backfill")
+        lines = (r.json() or {}).get("lines", []) if r.ok else []
+        check("29j: an unmatched Backfill line is not left out by the server",
+              len(lines) == 1 and lines[0].get("leaveOut") is False and lines[0].get("disposition") == "stock-posted",
+              f"{lines[0] if lines else r.text[:200]}")
 
     finally:
         if not args.keep:
