@@ -35,7 +35,7 @@ selling value typed on the sheet always overrides the computed one.
 | What | Where |
 |---|---|
 | Run an import | **Purchases ▸ Import Costing** (`/imports/costing`) |
-| Type one line by hand | Same screen, "Enter a line by hand" |
+| Type a GD by hand | Same screen, step 2 "Type the GD" |
 | In-app operator guide | **Guides ▸ Import Guide** (`/guides/import`) |
 | See the result | **Dashboards ▸ Inventory ▸ On-Hand** — Actual Cost, Margin |
 | Opening figures | **Dashboards ▸ Inventory ▸ Opening Balances** |
@@ -53,13 +53,16 @@ automatically see the margin.
 
 ## 3. The two import modes — READ THIS BEFORE EVERY MONTHLY IMPORT
 
-The choice sits next to the file picker and it is the single most consequential
-control on the screen.
+The choice is step 1 of the screen and it is the single most consequential
+control on it. Since 2026-09-25 the screen OPENS on New arrivals; Backfill sits
+behind its own "One-off: price stock that is already on the books" button and,
+once picked, carries a warning. (An API caller that sends no `mode` still gets
+Backfill, as before.)
 
 | Mode | What a MATCHED line does | Use it for |
 |---|---|---|
-| **These goods are already on the books** (default) | **SETS** the actual cost: `unitCost × balance quantity`. Quantity untouched. | The one-off backfill of historical cost onto stock already loaded. |
-| **These are new arrivals** | **ADDS** quantity, actual cost and selling value to what is on the books, so the per-unit cost becomes a weighted average across consignments. | Every monthly GD from now on. |
+| **New goods arrived on this GD** (the screen's default) | **ADDS** quantity, actual cost and selling value to what is on the books, so the per-unit cost becomes a weighted average across consignments. | Every monthly GD. |
+| **One-off: these goods are already on the books** | **SETS** the actual cost: `unitCost × balance quantity`. Quantity untouched. | The one-off backfill of historical cost onto stock already loaded. |
 
 **Why this exists.** The feature was first specified as a one-time backfill. With
 only that behaviour, month 2 breaks: an item imported in month 1 now has a
@@ -67,15 +70,20 @@ balance, so month 2's line MATCHES, the cost is overwritten with month 2's unit
 rate applied to month 1's quantity, and the newly arrived units never appear.
 The mode makes the operator say which act they are performing.
 
-A line that matches NOTHING is unaffected by the mode — it is offered as new
-stock under the separate opt-in below.
+A line that matches NOTHING becomes new stock (§4); the mode only decides whether
+the screen brings it in by default.
 
 ---
 
 ## 4. Bringing in items that are not on the books yet
 
-Off by default. Tick **"Also bring unmatched lines in as new stock"** and an
-unmatched line will:
+On **New arrivals** every such line comes in by default and has its own **Leave
+out** button; on **Backfill** it is left out until the operator brings it in (the
+screen's default, not the server's: the API still takes `createMissingStock` plus a
+per-line `leaveOut`). Before it can come in, its HS code must be in the tariff
+master and every line creating the same item must give the same unit. The review
+says which of the three below will happen (*New item* / *First stock of* /
+*Adopts the tariff item*). A line brought in will:
 
 1. **Reuse an existing item type only when the HS code AND the name both match**
    (case- and trailing-space-insensitive). One tariff line legitimately carries
@@ -378,16 +386,17 @@ on Imports debit if the consignment is ever posted under New Arrivals.
 
 ## 12. Entering a GD by hand — several lines, one consignment
 
-**Purchases ▸ Import Costing ▸ Enter a line by hand.**
+**Purchases ▸ Import Costing ▸ step 2, Type the GD.**
 
 A real GD carries several HS codes: Alpha's single declaration has 26 lines,
 PAK's `KAPE-HC-2965` has 24. So hand entry takes a LIST.
 
 1. Type the GD number and date once — they are per consignment.
-2. Fill a line and press **Add line**. The GD header, the unit and the three
-   rates carry over to the next line; the product fields clear.
-3. Repeat. Edit or remove any staged row before previewing.
-7. **Preview** sends every line in ONE call.
+2. Fill a line and press **Add line and type the next**. The GD header, the unit
+   and the three rates carry over to the next line; the product fields clear. A
+   box that has been used says in red what it still needs (§12a).
+3. Repeat. Edit or remove any staged row before checking.
+4. **Check** sends every line in ONE call.
 
 That last point is not a detail. Matching, per-balance pooling and the
 plausibility check all reason over the whole SET: two lines landing on the same
@@ -395,8 +404,31 @@ item must pool into a single unit cost, and previewing them one at a time would
 report each as though it were alone — the exact arithmetic error that produced
 the production mispricing in §17.
 
-You do not have to press Add for a single-line GD; a completed form is included
-in the preview by itself.
+You do not have to press Add for a single-line GD; what is in the form is
+included in the check by itself -- incomplete or not, since the review shows
+each line's problems and fixes them in place.
+
+## 12a. What every line needs, and fixing it in the review (2026-09-25)
+
+`Helpers/GdLineRules.cs` is the one definition, for an uploaded row and a typed
+line alike: **GD number, GD date, item name, HS code, quantity > 0, unit and
+assessed value > 0**; no negative duty, other charge or add-on profit; every rate
+0 to under 100 (a "1" read as 100% is refused, not just warned about). On top,
+from the books: the unit must be the one the matched item is kept in
+(`FbrUomAliases.SameUnit` -- Pcs, Nos and "Numbers, pieces, units" are one unit),
+and a new item's HS code must be in the tariff master.
+
+- The preview reports these **per line** (`problems`), never as a refusal of the
+  whole set. Commit re-checks every line that WRITES and refuses, naming rows.
+- **Fix** opens the same editor the typed path uses. The corrected set is
+  re-checked through the hand-entry route with the upload's own `source` (file
+  name, SHA-256), so the import is still recorded against the file and that file
+  still cannot be imported twice.
+- **Leave out** records the line as Skipped ("Left out when importing") and
+  writes nothing for it. Its goods do not come in; the summary says so.
+- **Several items under one code.** If exactly one carries the line's own name it
+  is used ("Matched by name"). Otherwise the operator picks one of the candidates
+  ("You chose ..."); a pick that is not a candidate is ignored at commit.
 
 **There is still no way to add a line to a GD already committed.** `GdNumber` is
 unique per company and there is no upsert. Correct a line in place (§8), or
@@ -453,9 +485,10 @@ catalog before looking at the valuation walk.
 
 | Suite | Command | Expect |
 |---|---|---|
-| Costing chain, layout, reader (offline) | `cd scripts/gd_costing_harness && dotnet run -c Release` | `75 checks, 0 failed` |
+| Costing chain, layout, reader, line rules (offline) | `cd scripts/gd_costing_harness && dotnet run -c Release` | `102 checks, 0 failed` |
 | Same, against a real workbook | add `-- --file "<path>" --expect-lines N` | see §6 |
-| Full live suite | `python scripts/test_gd_import_costing.py` | `410 passed, 0 failed` |
+| Full live suite | `python scripts/test_gd_import_costing.py` | `452 passed, 0 failed` (section 29 = the line rules) |
+| The screen's rules mirror, outcomes, checklist, summary (offline) | `node scripts/test_gd_costing_entry.mjs` | `54/54 checks passed` |
 | Stock valuation (adjustments) | `python scripts/test_stock_valuation_flow.py` | `84/84` |
 | Stock export layout | `cd scripts/stock_export_harness && dotnet run -c Release` | `256 checks` |
 | Tenant isolation (both new routes) | `python scripts/test_tenant_isolation.py` | all PASS |

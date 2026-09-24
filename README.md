@@ -298,6 +298,34 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-25 — Import Costing checks every GD line before its stock comes in
+
+**Purchases ▸ Import Costing** has been rebuilt on the same numbered steps as the
+bill screens: *Company & what arrived*, *The GD*, *Check the lines*, *Bring it
+in*. A bar at the bottom lists what is still to do, each item jumping to its line,
+beside the one button that saves.
+
+- **Every line must be complete.** Uploaded or typed, a GD line now needs its GD
+  number and date, the item name, the HS code, a quantity, a unit and an assessed
+  value above zero. Before, the date, code, unit and cost could all be left out,
+  so stock could come in unbillable, in the wrong month or with no cost. A line's
+  unit must also be the one its item is kept in (Pcs, Nos and "Numbers, pieces,
+  units" count as one), and a new item needs a real code from the customs tariff.
+- **Problems are shown line by line, and fixed where they are.** A typed box says
+  in red what it still needs. After Check, each line says what will happen to
+  stock ("Adds 10 Pcs to … 100 → 110", "New item: …", "Left out"), and **Fix
+  this line** opens the same editor, even for an uploaded sheet, which stays
+  recorded against its file.
+- **New goods come in by default.** The screen opens on *New goods arrived on this
+  GD*; the one-off Backfill sits behind its own button. A line that matches
+  nothing becomes a new item unless you **Leave out** that line; before, such lines
+  were skipped unless a box was ticked.
+- **Several items under one HS code no longer stop the goods.** The item with the
+  line's own name is used; otherwise you pick the item from a list. The server
+  checks the pick again when saving.
+- The sample GD costing sheet's instructions and the in-app Import Guide say the
+  same.
+
 ### 2026-09-24 — Bills follow the sales tax rate the goods were imported at
 
 Goods imported at 25% — the SRO 297(I)/2023 goods, which stay 25% on every later

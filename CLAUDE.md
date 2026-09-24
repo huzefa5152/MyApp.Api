@@ -1136,6 +1136,56 @@ layout, so an operator who has learnt one has learnt them all:
   `scrollIntoView` inside it was ignored, so a checklist link lit up a card
   nobody could see.
 
+### 5b-15. A GD line is complete before its stock comes in (2026-09-25)
+
+`Helpers/GdLineRules.cs` is the ONE definition of a complete GD costing line,
+for an uploaded row and a typed line alike (maintainer's decision): **GD number,
+GD date, item name, HS code, quantity > 0, unit, assessed value > 0**; no negative
+duty, other charge or add-on profit; every rate 0 to under 100.
+`utils/gdCostingEntry.lineProblems` mirrors it word for word for instant
+feedback -- change both, or the screen promises what the server refuses.
+
+- **Problems are per line, never a refusal of the set.** The preview fills
+  `GdCostingLineDto.Problems`; `PreviewManualAsync` no longer throws on the first
+  bad typed line. Commit re-runs the rules on every line that WRITES (a verified
+  match, or new stock) and refuses, naming the rows. A left-out, not-asked-for or
+  still-ambiguous line writes nothing, so it is not held to them.
+- **The book rules live in the service** (`LineProblems`): the unit must be the
+  matched item's (`FbrUomAliases.SameUnit`, the one spelling rule); a new item's
+  HS code must be in `HsCodes` (skipped while the master is empty); lines that
+  create one new item must agree on its unit; a reused catalog item's unit must
+  match.
+- **The server never leaves a line out on its own.** `LeaveOut` is true only
+  because the caller said so. The screen applies its own default (Backfill leaves
+  a line with nothing to price out) and sends it back. The first cut defaulted it
+  server-side, and an API caller echoing a preview into commit with
+  `createMissingStock: true` silently stopped creating stock -- four suite
+  sections at once.
+- **An ambiguous code settles two ways, both re-verified at commit:** exactly one
+  candidate carries the line's own name (the same (HS code, name) identity
+  `CreateMissingStockAsync` reuses items by), or the operator's
+  `ChosenOpeningStockBalanceId`, honoured only when it IS a candidate. Anything
+  else stays ambiguous and writes nothing. Without this, the second product under
+  a code made every later GD line for that code ambiguous, and those goods never
+  came in.
+- **Fix in the review keeps the file.** The screen re-checks every change (Fix,
+  Leave out, Choose, mode) through `preview-manual` with `Source` = the upload's
+  name and SHA-256, so the run is recorded against the file and "this exact file
+  was already imported" still fires. `SourceRow` survives the round trip.
+- **`CanCommit` does not absorb line problems:** whether a new-stock line's
+  problems stop a commit depends on the commit's own `CreateMissingStock`, which a
+  preview cannot know. `ProblemLineCount` is informational; the screen's checklist
+  and the commit refusal are the controls.
+- **The screen** (`pages/GdCostingImportPage.jsx`) is built on
+  `Components/bill/BillStep` + `BillChecklist` and opens on New arrivals (Backfill
+  sits behind a one-off button; the API default without `mode` stays Backfill).
+  Its footer is `position: fixed` over the measured `main`, NOT sticky:
+  `.dl-main` sets `overflow-x`, which makes it a scroll container that never
+  scrolls, so a sticky footer sat at the foot of a 5,000px page with the save
+  button out of sight.
+- Suites: the offline harness (`GdLineRules` cases),
+  `scripts/test_gd_import_costing.py` section 29, `node scripts/test_gd_costing_entry.mjs`.
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -1621,6 +1671,7 @@ them can be resolved from FBR.
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
 | Billing at the rate the goods came in at (evidence, refuse vs advise, override, picker, isolation) | `python scripts/test_imported_tax_rate.py` (add `--db "<conn>"` for the GD-line cases) | `56/56 checks passed` (with `--db`) |
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
+| GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
