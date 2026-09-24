@@ -1541,7 +1541,12 @@ them can be resolved from FBR.
   KEPT**, scaled to the new quantity (`SalesTaxBase.Rescale`): Edit Bill has no
   MRP box, and reading the absent value as "clear" stripped every 3rd Schedule
   line on its first save. Zero clears it. A partial note's lines carry their
-  share of it. Pinned by `test_basic_flows.py` 6e.
+  share of it. Pinned by `test_basic_flows.py` 6e and 6f.
+  Both create forms take the MRP; whether a scenario needs one comes from the
+  scenario record's `isThirdSchedule` (`TaxScenarios`), never from a list of
+  codes in a component. Which scenarios a company is OFFERED stays
+  `TaxScenarios.GetApplicable` over its Business Activity x Sector: Importer +
+  All Other Sectors has no SN008; FMCG or Wholesale / Retails brings it.
 - **The bill's scenario decides every line's sale type at filing time
   (2026-09-24).** Validate / Submit refresh each line's HS code, UoM and sale
   type from the catalog; for the SALE TYPE that refresh yields to the scenario
@@ -1607,7 +1612,7 @@ them can be resolved from FBR.
 | Backend build | `dotnet build MyApp.Api.csproj` | `0 Error(s)` |
 | Audit verifier (static) | `python scripts/verify_audit_2026_05_13_security.py` | `67/67 checks passed` |
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
-| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (83 checks) |
+| Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (92 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
 | Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `53/53 checks passed` (5 skipped without `--db`) |
 | Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |

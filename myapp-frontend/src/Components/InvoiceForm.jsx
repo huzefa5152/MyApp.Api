@@ -22,7 +22,7 @@ import { billFormShell, billFormBody } from "./bill/billTheme";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
 import BillTotals from "./bill/BillTotals";
-import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows } from "../utils/billEntry";
+import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows, salesTaxBase } from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
 import BulkItemTypeBar from "./BulkItemTypeBar";
@@ -120,6 +120,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [itemPrices, setItemPrices] = useState({});
+  // Per-unit printed retail price (MRP) of a 3rd Schedule line. Sent as MRP x
+  // Qty in the stored FixedNotifiedValueOrRetailPrice, the same field the
+  // No-Challan form fills.
+  const [itemMrps, setItemMrps] = useState({});
   const [itemDescriptions, setItemDescriptions] = useState({});
   const [commonPoDate, setCommonPoDate] = useState("");
   // Bill-level customer PO (number + date). Prefilled from the linked Sales
@@ -460,6 +464,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
     [enrichedScenarios, scenarioCode],
   );
+  // A 3rd Schedule scenario (SN008 / SN027) is taxed on the retail price, so it
+  // needs one on every line. Read from the scenario record the server sends
+  // (TaxScenarios.IsThirdSchedule), not from a list of codes kept here.
+  const needsRetail = !!chosenScenario?.isThirdSchedule;
+  const retailOf = (item) => {
+    const mrp = parseFloat(itemMrps[item.id]) || 0;
+    const qty = Number(item.quantity) || 0;
+    return needsRetail && mrp > 0 && qty > 0 ? Math.round(mrp * qty * 100) / 100 : 0;
+  };
 
   // Item types compatible with the chosen scenario. When no scenario is
   // chosen, ALL item types are visible (pre-existing behaviour). When a
@@ -810,7 +823,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const price = parseFloat(itemPrices[item.id]) || 0;
     return sum + item.quantity * price;
   }, 0);
-  const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
+  // 3rd Schedule lines are taxed on MRP x Qty (Helpers/SalesTaxBase); every
+  // other line on its value, so this is the subtotal on any other bill.
+  const taxBase = salesTaxBase(allItems.map((item) => ({
+    value: item.quantity * (parseFloat(itemPrices[item.id]) || 0),
+    retail: retailOf(item),
+    thirdSchedule: needsRetail,
+  })));
+  const gstAmount = Math.round(taxBase * gstRate / 100 * 100) / 100;
   // Charged on the NET value of supply, the same base as sales tax.
   const furtherTaxAmount =
     Math.round(subtotal * (parseFloat(furtherTaxRate) || 0) / 100 * 100) / 100;
@@ -838,7 +858,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     const desc = ((itemDescriptions[i.id] ?? i.description) || "").trim();
     const qty = Number(i.quantity) || 0;
     const price = parseFloat(itemPrices[i.id]) || 0;
-    return hasPick && desc.length > 0 && qty > 0 && price > 0;
+    const mrpOk = !needsRetail || (parseFloat(itemMrps[i.id]) || 0) > 0;
+    return hasPick && desc.length > 0 && qty > 0 && price > 0 && mrpOk;
   });
   // What a line still needs, in the words on screen -- the same test as
   // allLinesComplete above, spelt out for the footer checklist.
@@ -848,6 +869,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     if (!(((itemDescriptions[i.id] ?? i.description) || "").trim())) parts.push("type a description");
     if (!((Number(i.quantity) || 0) > 0)) parts.push("the challan quantity is zero");
     if (!((parseFloat(itemPrices[i.id]) || 0) > 0)) parts.push("enter the Unit Price");
+    if (needsRetail && !((parseFloat(itemMrps[i.id]) || 0) > 0)) parts.push("enter the MRP (retail price per unit)");
     return parts.join(", ");
   };
 
@@ -981,6 +1003,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           saleType: chosenScenario
             ? chosenScenario.saleType
             : (itemSaleTypes[item.id]?.trim() || null),
+          // 3rd Schedule: MRP x Qty, which the tax is charged on and FBR is sent.
+          fixedNotifiedValueOrRetailPrice: needsRetail ? (retailOf(item) || null) : null,
         })),
         poDateUpdates,
         poNumber: billPoNumber.trim() || null,
@@ -1128,7 +1152,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     ],
   });
   const totalsRows = billTotalsRows({
-    subtotal, gstRate, gstAmount, scenarioCode: chosenScenario?.code || null,
+    subtotal, gstRate, gstAmount, taxBase, scenarioCode: chosenScenario?.code || null,
     furtherTaxRate, furtherTaxAmount, buyerRegistered, grandTotal,
     withholdingAmount: whtResolved, withholdingRate: whtMode === "rate" ? whtRate : null, balanceDue,
     advanceTaxAmount: advTaxResolved, advanceTaxSection: advTaxOption?.section,
@@ -1649,6 +1673,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>UOM</th>
                                 <th style={{ ...styles.unifiedTh, width: "8%" }}>Unit Price *</th>
                                 <th style={{ ...styles.unifiedTh, width: "9%" }}>Line Total</th>
+                                {needsRetail && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP / unit *</th>}
+                                {needsRetail && <th style={{ ...styles.unifiedTh, width: "9%", backgroundColor: "#fff8e1" }}>MRP × Qty</th>}
                                 {/* Account (GL) — which income account this line's
                                     amount posts to. Shown in BOTH Bills and Invoices
                                     modes when the company has a Chart of Accounts. */}
@@ -1804,6 +1830,26 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                     <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem" }}>
                                       {(item.quantity * price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
+                                    {needsRetail && (
+                                      <td style={{ ...styles.unifiedTd, backgroundColor: "#fffdf5" }}>
+                                        <input
+                                          type="number" min={0} step="any"
+                                          style={{
+                                            ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem",
+                                            minWidth: `calc(${Math.min(20, Math.max(4, String(itemMrps[item.id] ?? "").length + 1))}ch + 2.4rem)`,
+                                          }}
+                                          value={itemMrps[item.id] ?? ""}
+                                          onChange={(e) => setItemMrps((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                                          placeholder="MRP"
+                                          title="The retail price printed on one unit. 3rd Schedule sales tax is charged on MRP x Qty."
+                                        />
+                                      </td>
+                                    )}
+                                    {needsRetail && (
+                                      <td style={{ ...styles.unifiedTd, textAlign: "right", fontWeight: 600, fontSize: "0.82rem", backgroundColor: "#fffdf5" }}>
+                                        {retailOf(item) > 0 ? retailOf(item).toLocaleString(undefined, { minimumFractionDigits: 2 }) : "—"}
+                                      </td>
+                                    )}
                                     {glOn && (
                                       <td style={styles.unifiedTd}>
                                         <AccountSelect
@@ -1892,6 +1938,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                         </div>
                         <p style={styles.fbrToggleHint}>
                           <b>*</b> Item Type (or a Non-Inventory item) and Unit Price are required on every line.
+                          {needsRetail && " For 3rd Schedule goods enter the MRP per unit too: sales tax is charged on MRP × Qty."}
                           HS Code &amp; Sale Type are optional — needed only when submitting to FBR. They auto-fill when you pick an item.
                           {!canCreateItemType && (
                             <span style={{ marginLeft: 8 }}>

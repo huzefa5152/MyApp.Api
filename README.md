@@ -370,6 +370,13 @@ a 3rd Schedule bill no longer strips its retail price (Edit Bill has no MRP box,
 and the value it never sent was saved as empty); a changed quantity moves MRP x
 Qty with it, and a partial credit or debit note carries its share of it.
 
+**New Bill (from challan) now takes the 3rd Schedule retail price too.** Under a
+3rd Schedule scenario each line gets an MRP / unit box and its MRP x Qty, the
+bill will not save until every line has one, and the tax is charged on it --
+the same field and the same rule as New Bill (No Challan). Which scenarios a
+company is offered is unchanged: SN008 appears only when its FBR sector
+includes FMCG or Wholesale / Retails.
+
 **Quantity and rate boxes on a bill line now show the whole figure.** A quantity
 of 187,691 read as "18769" with the last digit under the spinner.
 
