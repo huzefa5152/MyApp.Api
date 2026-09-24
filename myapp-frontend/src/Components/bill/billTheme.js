@@ -22,6 +22,15 @@ export const billColors = {
   mutedLight: "#fafbfc",
 };
 
+// A bill form wraps its body and footer in a <form>, which is not a flex
+// container -- so the modal's flex column never reached the body, each form
+// capped it at a guessed 70-75vh, and a footer that wrapped to two rows on a
+// phone was pushed out of the modal with the save button in it. The form
+// joins the column instead, the body takes whatever is left and scrolls, and
+// the footer always shows.
+export const billFormShell = { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 };
+export const billFormBody = { maxHeight: "none" };
+
 // Accent, header tint and badge colour per step status.
 export const stepTone = {
   done:     { accent: billColors.success, tint: billColors.successLight, badge: billColors.success, pill: "Done" },

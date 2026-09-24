@@ -21,6 +21,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
+import { billFormShell, billFormBody } from "./bill/billTheme";
 import TaxRateBlockHint from "./TaxRateBlockHint";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import BulkItemTypeBar from "./BulkItemTypeBar";
@@ -1617,8 +1618,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSave}>
-          <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+        <form onSubmit={handleSave} style={billFormShell}>
+          <div style={{ ...formStyles.body, ...billFormBody }}>
             {loading ? (
               <div style={{ textAlign: "center", padding: "2rem", color: colors.textSecondary }}>Loading...</div>
             ) : !invoice ? (

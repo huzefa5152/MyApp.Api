@@ -14,6 +14,9 @@ import { billColors, stepTone } from "./billTheme";
  *   help    one plain-words line saying what to do here, shown when open
  *   onToggle given  -> the header collapses the card, showing `summary`
  *            absent -> always open
+ *   notice  shown under the header whether open or not -- for what the
+ *           operator must see even with the card folded ("set to SN024
+ *           because these goods came in at 25%")
  *
  * `id` is the anchor the footer checklist scrolls to (utils/billEntry
  * BILL_ANCHORS). Overflow stays visible: item and buyer pickers open
@@ -21,7 +24,7 @@ import { billColors, stepTone } from "./billTheme";
  */
 export default function BillStep({
   id, n, title, summary = null, status = "todo", help = null,
-  open = true, onToggle = null, toggleLabel = null, children,
+  open = true, onToggle = null, toggleLabel = null, notice = null, children,
 }) {
   const tone = stepTone[status] || stepTone.todo;
   const Header = onToggle ? "button" : "div";
@@ -42,7 +45,7 @@ export default function BillStep({
         style={{
           display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.35rem 0.65rem",
           width: "100%", minHeight: 48, padding: "0.6rem 0.9rem", margin: 0,
-          border: "none", borderRadius: open && children ? "11px 11px 0 0" : 11,
+          border: "none", borderRadius: (open && children) || notice ? "11px 11px 0 0" : 11,
           backgroundColor: tone.tint, boxShadow: "none", textAlign: "left",
           fontFamily: "inherit", cursor: onToggle ? "pointer" : "default",
         }}
@@ -93,6 +96,7 @@ export default function BillStep({
           </span>
         )}
       </Header>
+      {notice && <div style={{ padding: "0.55rem 0.9rem 0.6rem", borderTop: `1px solid ${billColors.cardBorder}` }}>{notice}</div>}
       {open && children && (
         <div style={{ padding: "0.8rem 0.9rem 0.9rem", borderTop: `1px solid ${billColors.cardBorder}` }}>
           {help && (

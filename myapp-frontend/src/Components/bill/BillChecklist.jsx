@@ -1,12 +1,29 @@
 import { MdCheckCircle } from "react-icons/md";
 import { billColors } from "./billTheme";
 
+// The box that scrolls this element vertically -- the modal body, on a bill.
+function scrollerOf(el) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === "auto" || oy === "scroll") && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
 // Jump to the step or line an item is about, and flash it so the eye lands
-// there -- on a long bill the target is usually off screen.
-function jump(target) {
+// there -- on a long bill the target is usually off screen. The modal body is
+// scrolled directly: a smooth scrollIntoView inside it was ignored, so the
+// link lit up a card nobody could see.
+export function jumpToAnchor(target) {
   const el = document.getElementById(target);
   if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const box = scrollerOf(el);
+  if (box) {
+    const delta = el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    box.scrollTop = Math.max(0, box.scrollTop + delta - Math.max(12, (box.clientHeight - el.offsetHeight) / 2));
+  } else {
+    el.scrollIntoView({ block: "center" });
+  }
   const prev = el.style.boxShadow;
   el.style.boxShadow = `0 0 0 3px ${billColors.warn}66`;
   setTimeout(() => { el.style.boxShadow = prev; }, 1400);
@@ -51,7 +68,7 @@ export default function BillChecklist({ items = [], readyText = "Ready to save",
         <button
           key={it.key}
           type="button"
-          onClick={() => jump(it.target)}
+          onClick={() => jumpToAnchor(it.target)}
           title="Show me"
           style={{
             minHeight: 36, padding: "0.3rem 0.65rem", borderRadius: 999,

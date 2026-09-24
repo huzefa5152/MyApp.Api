@@ -18,6 +18,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
+import { billFormShell, billFormBody } from "./bill/billTheme";
 import TaxRateBlockHint from "./TaxRateBlockHint";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
@@ -1099,8 +1100,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
           <h5 style={formStyles.title}>Create Bill</h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
-        <form onSubmit={handleSubmit}>
-          <div style={{ ...formStyles.body, maxHeight: "70vh", overflowY: "auto" }}>
+        <form onSubmit={handleSubmit} style={billFormShell}>
+          <div style={{ ...formStyles.body, ...billFormBody }}>
             {error && <div ref={errorRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
