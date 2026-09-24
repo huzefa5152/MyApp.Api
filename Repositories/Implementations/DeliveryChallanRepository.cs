@@ -94,6 +94,7 @@ namespace MyApp.Api.Repositories.Implementations
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderByDescending(dc => dc.ChallanNumber)
+                .ThenByDescending(dc => dc.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();

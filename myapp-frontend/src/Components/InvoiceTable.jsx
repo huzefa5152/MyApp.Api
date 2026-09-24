@@ -6,6 +6,7 @@ import {
   MdAddLink, MdLinkOff,
 } from "react-icons/md";
 import DataTable from "./DataTable";
+import DocumentLinesLink from "./DocumentLinesLink";
 import StatusBadge from "./StatusBadge";
 import { isFutureDocDate } from "../utils/dateInput";
 
@@ -298,6 +299,7 @@ export default function InvoiceTable({
             <MdOpenInNew size={14} />
           </button>
         )}
+        <DocumentLinesLink type={isReturnsMode ? noteDocType === 10 ? "creditNote" : "debitNote" : isBillsMode ? "bill" : "taxInvoice"} documentId={inv.id} compact />
         {isBillsMode && perms.canPrint && (
           <button style={{ ...btn.print, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintBill?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print bill"}>
             <MdPrint size={14} />
@@ -430,11 +432,11 @@ export default function InvoiceTable({
           </button>
         )}
         {isBillsMode && perms.canLinkChallan && hasDetachableChallan(inv) && !inv.isCancelled &&
-         inv.fbrStatus !== "Submitted" && inv.documentType !== 9 && inv.documentType !== 10 && (
+         inv.documentType !== 9 && inv.documentType !== 10 && (
           <button
             style={btn.neutral}
             onClick={() => onLinkChallan?.(inv)}
-            title="Detach the delivery challan attached to this bill — it goes back to the pending list so it can be billed correctly. The bill itself is unchanged."
+            title="Manage linked delivery challans and Sales Order"
           >
             <MdLinkOff size={14} />
           </button>

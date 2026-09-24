@@ -28,6 +28,8 @@ import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import SalesReportPage from "./pages/SalesReportPage";
+import DocumentLinesPage from "./pages/DocumentLinesPage";
+import { lineSources } from "./utils/documentLines";
 import TaxSheetPage from "./pages/TaxSheetPage";
 import ClientsPage from "./pages/ClientsPage";
 import SuppliersPage from "./pages/SuppliersPage";
@@ -147,6 +149,7 @@ export default function App() {
           <Route path="/fbr-import/purchase" element={<RequirePermission anyPrefix="fbrimport."><FbrPurchaseImportPage /></RequirePermission>} />
           {/* Reports */}
           <Route path="/reports/sales" element={<RequirePermission anyPrefix="reports.sales"><SalesReportPage /></RequirePermission>} />
+          <Route path="/reports/document-lines" element={<RequirePermission anyOf={Object.values(lineSources).map((source) => source.permission)}><DocumentLinesPage /></RequirePermission>} />
           <Route path="/reports/tax-sheet" element={<RequirePermission anyPrefix="reports.taxsheet"><TaxSheetPage /></RequirePermission>} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/users" element={<RequirePermission anyPrefix="users."><UsersPage /></RequirePermission>} />

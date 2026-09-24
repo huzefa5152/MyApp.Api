@@ -3,6 +3,9 @@ import httpClient from "./httpClient";
 export const getPagedSalesOrdersByCompany = (companyId, params = {}) =>
   httpClient.get(`/salesorders/company/${companyId}/paged`, { params });
 
+export const getSalesOrdersByCompany = (companyId) =>
+  httpClient.get(`/salesorders/company/${companyId}`);
+
 // Picker helper: the paged endpoint clamps pageSize at 100 server-side, so a
 // single oversized request silently truncates larger companies. Walk pages
 // (bounded) and return a flat item array.

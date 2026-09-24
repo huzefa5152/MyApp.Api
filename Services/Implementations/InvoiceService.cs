@@ -2363,6 +2363,80 @@ namespace MyApp.Api.Services.Implementations
         private static bool IsStandalone(Invoice invoice) =>
             invoice.DeliveryChallans == null || invoice.DeliveryChallans.Count == 0;
 
+        public async Task<InvoiceDto?> LinkDeliveriesAsync(int invoiceId, LinkInvoiceDeliveriesDto dto)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var invoice = await _context.Invoices
+                .Include(i => i.DeliveryChallans).ThenInclude(c => c.Items)
+                .Include(i => i.Items)
+                .FirstOrDefaultAsync(i => i.Id == invoiceId);
+            if (invoice == null) return null;
+            if (invoice.IsCancelled)
+                throw new InvalidOperationException("A cancelled bill cannot be linked to deliveries.");
+            if (invoice.DocumentType is 9 or 10)
+                throw new InvalidOperationException("Credit and debit notes cannot be linked to deliveries.");
+            if (invoice.Items.Any(i => i.DeliveryItemId != null))
+                throw new InvalidOperationException("This bill was raised from delivery challans; its delivery links cannot be changed here.");
+
+            SalesOrder? order = null;
+            if (dto.SalesOrderId is int orderId)
+            {
+                order = await _context.SalesOrders.AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.Id == orderId);
+                if (order == null) throw new KeyNotFoundException("Sales Order not found.");
+                if (order.CompanyId != invoice.CompanyId || order.ClientId != invoice.ClientId ||
+                    order.DivisionId != invoice.DivisionId)
+                    throw new InvalidOperationException("The Sales Order must belong to this bill's company, buyer and division.");
+                if (order.Status == "Cancelled")
+                    throw new InvalidOperationException("A cancelled Sales Order cannot be linked.");
+                if (invoice.SalesOrderId.HasValue && invoice.SalesOrderId != orderId)
+                    throw new InvalidOperationException("This bill is already linked to another Sales Order.");
+                if (invoice.DeliveryChallans.Any(c => c.SalesOrderId != orderId))
+                    throw new InvalidOperationException("The bill already has a challan outside this Sales Order.");
+            }
+
+            var ids = (dto.ChallanIds ?? new List<int>()).Distinct().ToHashSet();
+            if (order != null)
+            {
+                var orderChallanIds = await _context.DeliveryChallans.AsNoTracking()
+                    .Where(c => c.SalesOrderId == order.Id && c.Status != "Cancelled")
+                    .Select(c => c.Id).ToListAsync();
+                ids.UnionWith(orderChallanIds);
+            }
+            if (ids.Count == 0)
+                throw new InvalidOperationException("Select at least one delivery challan.");
+
+            var challans = await _context.DeliveryChallans
+                .Where(c => ids.Contains(c.Id)).ToListAsync();
+            if (challans.Count != ids.Count)
+                throw new KeyNotFoundException("A selected delivery challan was not found.");
+            foreach (var challan in challans)
+            {
+                if (challan.CompanyId != invoice.CompanyId || challan.ClientId != invoice.ClientId ||
+                    challan.DivisionId != invoice.DivisionId)
+                    throw new InvalidOperationException("Every challan must belong to this bill's company, buyer and division.");
+                if (challan.Status == "Cancelled")
+                    throw new InvalidOperationException($"Challan #{challan.ChallanNumber} is cancelled.");
+                if (challan.InvoiceId.HasValue && challan.InvoiceId != invoice.Id)
+                    throw new InvalidOperationException($"Challan #{challan.ChallanNumber} is already billed.");
+                if (invoice.SalesOrderId.HasValue && challan.SalesOrderId != invoice.SalesOrderId)
+                    throw new InvalidOperationException($"Challan #{challan.ChallanNumber} belongs to another Sales Order.");
+                if (order != null && challan.SalesOrderId != order.Id)
+                    throw new InvalidOperationException($"Challan #{challan.ChallanNumber} is outside the selected Sales Order.");
+            }
+
+            if (order != null) invoice.SalesOrderId = order.Id;
+            foreach (var challan in challans)
+            {
+                challan.InvoiceId = invoice.Id;
+                challan.Status = "Invoiced";
+            }
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            var reloaded = await _invoiceRepo.GetByIdAsync(invoice.Id);
+            return reloaded == null ? null : ToDto(reloaded);
+        }
+
         public async Task<InvoiceDto?> LinkChallanAsync(int invoiceId, int challanId)
         {
             var invoice = await _context.Invoices

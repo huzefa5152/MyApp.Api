@@ -46,6 +46,7 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 - **Code Editor** - Direct HTML/CSS editing with 200+ merge fields
 - **Excel Export** - Upload Excel templates, export filled documents
 - **PDF Generation** - Client-side PDF via jsPDF + html2canvas
+- **Document Lines** - Filter line items by period across sales and purchase documents, then copy the selected columns into Excel or download an editable workbook
 
 ### Administration
 
@@ -299,6 +300,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > `CLAUDE.md`.)
 
 
+
+### 2026-09-25 — Document lines and multi-delivery linking
+
+- Added a date-filtered Document Lines view for sales quotes, orders, delivery challans, bills, tax invoices, credit/debit notes, purchase bills, purchase debit notes, and goods receipts. Each document has a direct Lines shortcut; operators can choose columns, copy rows into Excel, or download the matching lines.
+- Standalone bills can link several unbilled challans in one transaction or select a Sales Order and attach its current active challans. Linking preserves bill amounts and FBR data.
 
 ### 2026-09-25 — Multi-line item descriptions everywhere
 
@@ -1689,6 +1695,7 @@ the only one who can tell the customer.
 - [x] AI-powered PO import (Gemini)
 - [x] Customizable print templates (HTML + GrapesJS), multi-doc + per-division
 - [x] Excel export
+- [x] Date-filtered document line copy and Excel export
 - [x] Audit logging + FBR communication log
 - [x] User management
 - [x] Sales Quotes & Sales Orders

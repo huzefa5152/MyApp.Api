@@ -58,6 +58,7 @@ namespace MyApp.Api.Services.Interfaces
         /// was raised standalone. Same company and same buyer only; the challan is
         /// marked billed against this bill so it cannot also be billed elsewhere.</summary>
         Task<InvoiceDto?> LinkChallanAsync(int invoiceId, int challanId);
+        Task<InvoiceDto?> LinkDeliveriesAsync(int invoiceId, LinkInvoiceDeliveriesDto dto);
 
         /// <summary>Raise a delivery challan FROM a standalone bill, mirroring its
         /// lines, and link the two. For the operator who billed first and needs the

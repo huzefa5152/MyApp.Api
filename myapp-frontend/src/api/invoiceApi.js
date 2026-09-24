@@ -164,6 +164,12 @@ export const getNextInvoiceNumber = (companyId, { divisionId, check } = {}) =>
 export const linkChallanToInvoice = (invoiceId, challanId) =>
   httpClient.post(`/invoices/${invoiceId}/link-challan/${challanId}`);
 
+export const linkDeliveriesToInvoice = (invoiceId, payload) =>
+  httpClient.post(`/invoices/${invoiceId}/link-deliveries`, payload);
+
+export const linkSalesOrderToInvoice = (invoiceId, salesOrderId) =>
+  httpClient.post(`/invoices/${invoiceId}/link-sales-order/${salesOrderId}`);
+
 /** Raise a delivery challan FROM a standalone bill, mirroring its lines. */
 export const createChallanForInvoice = (invoiceId) =>
   httpClient.post(`/invoices/${invoiceId}/create-challan`);

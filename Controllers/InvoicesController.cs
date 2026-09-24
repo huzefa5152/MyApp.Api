@@ -17,14 +17,16 @@ namespace MyApp.Api.Controllers
         private readonly IInvoiceService _service;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly ILogger<InvoicesController> _logger;
         private readonly int _defaultPageSize;
 
         public InvoicesController(IInvoiceService service, ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess, IConfiguration configuration)
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration, ILogger<InvoicesController> logger)
         {
             _service = service;
             _access = access;
             _divisionAccess = divisionAccess;
+            _logger = logger;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
@@ -512,6 +514,44 @@ namespace MyApp.Api.Controllers
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("{id}/link-deliveries")]
+        [HasPermission("bills.manage.update")]
+        public async Task<ActionResult<InvoiceDto>> LinkDeliveries(int id, [FromBody] LinkInvoiceDeliveriesDto dto)
+        {
+            if (dto.SalesOrderId.HasValue)
+                return BadRequest(new { error = "Use the Sales Order link action to attach an order's deliveries." });
+            return await LinkDeliveriesCore(id, dto);
+        }
+
+        [HttpPost("{id}/link-sales-order/{salesOrderId}")]
+        [HasPermission("bills.manage.update")]
+        [HasPermission("salesorders.list.view")]
+        public Task<ActionResult<InvoiceDto>> LinkSalesOrder(int id, int salesOrderId) =>
+            LinkDeliveriesCore(id, new LinkInvoiceDeliveriesDto { SalesOrderId = salesOrderId });
+
+        private async Task<ActionResult<InvoiceDto>> LinkDeliveriesCore(int id, LinkInvoiceDeliveriesDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { error = "Bill not found." });
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
+            try
+            {
+                var updated = await _service.LinkDeliveriesAsync(id, dto);
+                return updated == null ? NotFound(new { error = "Bill not found." }) : Ok(updated);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Delivery link source missing for bill {BillId}", id);
+                return NotFound(new { error = "A selected Sales Order or delivery challan was not found." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Delivery link rejected for bill {BillId}", id);
+                return BadRequest(new { error = "These deliveries cannot be linked to this bill. Check the buyer, division and current billing status." });
             }
         }
 

@@ -308,6 +308,85 @@ def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> 
     return bill
 
 
+def test_link_multiple_deliveries(base: str, token: str, company: dict,
+                                  client: dict, standalone: dict | None,
+                                  billed_challan: dict | None) -> None:
+    suite = "3b. Link standalone bill to deliveries"
+    if not standalone:
+        check(suite, "standalone fixture exists", False)
+        return
+    item_type_id = first_item_type_id(base, token)
+    today = pkt_date_iso()
+    def make_dc(label: str) -> dict | None:
+        status, dc = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={
+            "clientId": client["id"], "poNumber": label, "deliveryDate": today,
+            "items": [{"itemTypeId": item_type_id, "description": label, "quantity": 1, "unit": "Pcs"}],
+        })
+        check(suite, f"create {label}", status in (200, 201), f"{status} {dc}")
+        return dc if status in (200, 201) else None
+
+    first, second = make_dc("LINK-ONE"), make_dc("LINK-TWO")
+    if not first or not second:
+        return
+    _, current_bill = http("GET", f"/api/invoices/{standalone['id']}", base, token=token)
+    original_total = current_bill["grandTotal"]
+    if billed_challan:
+        status, _ = http("POST", f"/api/invoices/{standalone['id']}/link-deliveries", base, token=token,
+                         body={"challanIds": [first["id"], billed_challan["id"]]})
+        check(suite, "mixed available and billed set refused atomically", status == 400, f"got {status}")
+        _, untouched = http("GET", f"/api/deliverychallans/{first['id']}", base, token=token)
+        check(suite, "failed set did not consume available challan", untouched.get("invoiceId") is None)
+
+    status, linked = http("POST", f"/api/invoices/{standalone['id']}/link-deliveries", base, token=token,
+                          body={"challanIds": [first["id"], second["id"]]})
+    check(suite, "two challans attach together", status == 200 and
+          set(linked.get("challanIds") or []) == {first["id"], second["id"]}, f"{status} {linked}")
+    check(suite, "link does not change bill total", status == 200 and linked.get("grandTotal") == original_total)
+    third = make_dc("LINK-THREE")
+    if third:
+        status, extended = http("POST", f"/api/invoices/{standalone['id']}/link-deliveries", base, token=token,
+                                body={"challanIds": [third["id"]]})
+        check(suite, "existing standalone bill accepts another challan", status == 200 and
+              set(extended.get("challanIds") or []) == {first["id"], second["id"], third["id"]},
+              f"{status} {extended}")
+
+    status, order = http("POST", f"/api/salesorders/company/{company['id']}", base, token=token, body={
+        "clientId": client["id"], "orderDate": today, "customerPoNumber": "LINK-SO",
+        "items": [{"itemTypeId": item_type_id, "description": "LINK-SO-ITEM", "quantity": 2, "unit": "Pcs"}],
+    })
+    check(suite, "create Sales Order", status in (200, 201), f"{status} {order}")
+    if status not in (200, 201):
+        return
+    order_dc_ids = []
+    for number in (1, 2):
+        status, dc = http("POST", f"/api/salesorders/{order['id']}/create-challan", base, token=token,
+                          body={"deliveryDate": today, "lines": [{"salesOrderItemId": order["items"][0]["id"], "quantity": 1}]})
+        check(suite, f"create order challan {number}", status in (200, 201), f"{status} {dc}")
+        if status in (200, 201):
+            order_dc_ids.append(dc["id"])
+    if len(order_dc_ids) != 2:
+        return
+    status, so_bill = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "companyId": company["id"], "clientId": client["id"], "date": today, "gstRate": 18,
+        "items": [{"itemTypeId": item_type_id, "description": "LINK-SO-ITEM", "quantity": 2,
+                   "uom": "Pcs", "unitPrice": 100}],
+    })
+    check(suite, "create bill for Sales Order link", status in (200, 201), f"{status} {so_bill}")
+    if status not in (200, 201):
+        return
+    original_total = so_bill["grandTotal"]
+    bypass_status, _ = http("POST", f"/api/invoices/{so_bill['id']}/link-deliveries", base, token=token,
+                            body={"salesOrderId": order["id"]})
+    check(suite, "Sales Order cannot bypass dedicated permission route", bypass_status == 400,
+          f"got {bypass_status}")
+    status, linked = http("POST", f"/api/invoices/{so_bill['id']}/link-sales-order/{order['id']}", base, token=token)
+    check(suite, "Sales Order links both challans", status == 200 and
+          set(linked.get("challanIds") or []) == set(order_dc_ids) and
+          linked.get("salesOrderId") == order["id"], f"{status} {linked}")
+    check(suite, "Sales Order link leaves bill total unchanged", status == 200 and
+          linked.get("grandTotal") == original_total)
+
+
 # ── Suite 4: Invoice update ────────────────────────────────────────
 def test_invoice_update(base: str, token: str, bill: dict | None) -> None:
     suite = "4. Invoice update"
@@ -790,6 +869,8 @@ def main() -> int:
         test_item_description_casing(args.base, token, company, client)
         test_twelve_decimal_precision(args.base, token, company, client)
         test_default_print_templates(args.base, token, company)
+        test_link_multiple_deliveries(args.base, token, company, client, standalone,
+                                      challan if bill_from_challan else None)
     finally:
         teardown(args.base, token, company, args.keep)
 

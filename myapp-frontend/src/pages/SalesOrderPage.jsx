@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import DocumentLinesLink from "../Components/DocumentLinesLink";
 import { useNavigate } from "react-router-dom";
 import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdUploadFile, MdVisibility, MdReceiptLong, MdLink, MdCopyAll } from "react-icons/md";
 import SalesOrderForm from "../Components/SalesOrderForm";
@@ -322,6 +323,7 @@ export default function SalesOrderPage() {
                   </div>
                   <div style={st.actions}>
                     {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
+                    {canView && <DocumentLinesLink type="order" documentId={o.id} compact />}
                     {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)} title="Create a delivery challan for this order"><MdLocalShipping size={15} /> Create Challan</button>}
                     {canDeliver && <button style={st.attachBtn} onClick={() => setAttachOrder(o)} title="Attach an existing delivery challan to this order"><MdLink size={15} /> Attach Challan</button>}
                     {canUpdate && (o.isEditable

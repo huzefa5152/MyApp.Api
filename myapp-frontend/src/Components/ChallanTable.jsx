@@ -4,6 +4,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import DataTable from "./DataTable";
 import StatusBadge, { toneForStatus } from "./StatusBadge";
 import ChallanModal from "./ChallanModal";
+import DocumentLinesLink from "./DocumentLinesLink";
 
 // Mirror of ChallanList's eligibility checks so the table view enforces the
 // exact same business rules around editability / cancel / delete / duplicate.
@@ -160,6 +161,7 @@ export default function ChallanTable({
             {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
           </button>
         )}
+        <DocumentLinesLink type="challan" documentId={c.id} compact />
         {perms.permPrint && onExportExcel && (
           <button
             style={{ ...btnStyles.excel, opacity: exportingId ? 0.55 : 1 }}

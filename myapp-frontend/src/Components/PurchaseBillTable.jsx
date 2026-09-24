@@ -1,4 +1,5 @@
 import { MdVisibility, MdEdit, MdDelete, MdPayments, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
+import DocumentLinesLink from "./DocumentLinesLink";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
@@ -97,6 +98,7 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
       <button style={btn.view} onClick={() => onView?.(b)} title="View">
         <MdVisibility size={14} />
       </button>
+      <DocumentLinesLink type="purchase" documentId={b.id} compact />
       {perms.canPrint && onPrint && (
         <button style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(b)} title={printDisabled ? printDisabledReason : "Print purchase bill"}>
           <MdPrint size={14} />

@@ -14,6 +14,7 @@ import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
 import LinkChallanModal from "../Components/LinkChallanModal";
+import DocumentLinesLink from "../Components/DocumentLinesLink";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -1263,6 +1264,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdOpenInNew size={14} /> Open in Invoices
                       </button>
                     )}
+                    <DocumentLinesLink type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"} documentId={inv.id} />
                     {isBillsMode && canPrint && (
                       <button style={{ ...styles.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"} onClick={() => handlePrintBill(inv)}>
                         <MdPrint size={14} /> Bill
@@ -1440,20 +1442,20 @@ export default function InvoicePage({ mode = "invoices" }) {
                         onClick={() => setLinkingChallanFor(inv)}
                         title="No delivery challan behind this bill — attach an existing unbilled challan for this buyer, or raise one from the bill's own lines."
                       >
-                        <MdAddLink size={14} /> Link DC
+                        <MdAddLink size={14} /> Link deliveries
                       </button>
                     )}
                     {/* Detach: only a challan that was ATTACHED can be taken off.
                         One the bill was raised FROM is referenced by the bill's
                         own lines, so that bill is voided or deleted instead. */}
                     {isBillsMode && canLinkChallan && inv.challanNumbers?.length > 0 && !inv.isCancelled &&
-                     inv.fbrStatus !== "Submitted" && (inv.items || []).every((i) => !i.deliveryItemId) && (
+                     (inv.items || []).every((i) => !i.deliveryItemId) && (
                       <button
                         style={{ ...styles.printBtn, backgroundColor: "#eceff1", color: "#546e7a", border: "1px solid #b0bec5" }}
                         onClick={() => setLinkingChallanFor(inv)}
                         title="Detach the delivery challan attached to this bill — it goes back to the pending list so it can be billed correctly. The bill itself is unchanged."
                       >
-                        <MdLinkOff size={14} /> Unlink DC
+                        <MdLinkOff size={14} /> Manage deliveries
                       </button>
                     )}
                     {(isBillsMode || isNotesMode) && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
