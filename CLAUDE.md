@@ -1085,10 +1085,11 @@ what refuses.
   then on nothing changes it. Opening on SN001 and waiting for someone to notice
   a red card is how 25% goods were billed at 18%.
 - **A save that will be refused must LOOK refused.** Each bill form disables its
-  save button while an enforced finding has no reason, and `TaxRateBlockHint`
-  says why beside the button ("Show" scrolls to the red card). An enabled button
-  with the refusal scrolled away at the top of a long form read as "it let me
-  save". The server guard stays the control; this is only what the operator sees.
+  save button while an enforced finding has no reason, and the footer checklist
+  (`bill/BillChecklist`, wording `utils/billEntry.rateBlockText`) says why beside
+  the button, as a link to the red card. An enabled button with the refusal
+  scrolled away at the top of a long form read as "it let me save". The server
+  guard stays the control; this is only what the operator sees.
 - **One scenario and one rate per bill here**, so 18% and 25% goods need separate
   bills; the notice says so rather than offering a switch that moves the conflict.
 - **The SRO serial is not resolved.** The GD records the rate, not the serial,
@@ -1105,6 +1106,35 @@ what refuses.
   can be narrower than the matrix — adding a sector here does not assign it there.
 - Suite: `scripts/test_imported_tax_rate.py` (56 checks; the GD-line cases need
   `--db`).
+
+### 5b-14. Every bill screen is built from the same steps (2026-09-24)
+
+New Bill, New Bill (No Challan), Edit Bill and View Bill (both tabs) share one
+layout, so an operator who has learnt one has learnt them all:
+
+- **`Components/bill/`** holds the pieces -- `BillStep` (the numbered card:
+  status `done` / `todo` / `warn` / `optional` / `view`, a one-line `help`, a
+  `notice` that shows even when folded, an anchor `id`), `BillChecklist` (the
+  footer's clickable "what's left before you can save"), `BillTotals` (totals
+  with a note on every row) and `billTheme.js`.
+- **`utils/billEntry.js` decides, the components only draw.** It is pure and
+  dependency-free: the anchors, the checklist items, the rate-block wording
+  and the create screens' totals rows. `node scripts/test_bill_entry.mjs` pins
+  it, including that the totals rows reproduce the amounts the forms printed
+  before -- the layout may change, a figure may not.
+- **Layout only.** Each form keeps its own state, handlers and save payload; a
+  change to one of these pieces must never reach what is saved or filed.
+- **Same order everywhere:** scenario, buyer, (challans), bill details, items,
+  taxes & total, attachments. Steps that wait for the buyer still show, folded,
+  so the numbering never jumps. Edit keeps its tax inputs in Buyer & Bill
+  Details and its own balance due (grand total - withholding + advance tax).
+- **The form must join the modal's flex column** (`billFormShell` /
+  `billFormBody`). A `<form>` is not a flex container, so the body used to be
+  capped at a guessed 70-75vh and a footer that wrapped on a phone pushed the
+  save button out of the modal.
+- **Scroll the modal body directly** (`jumpToAnchor`). A smooth
+  `scrollIntoView` inside it was ignored, so a checklist link lit up a card
+  nobody could see.
 
 ### 5c. Customer Portal — the only anonymous surface
 
@@ -1572,6 +1602,7 @@ them can be resolved from FBR.
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
 | Billing at the rate the goods came in at (evidence, refuse vs advise, override, picker, isolation) | `python scripts/test_imported_tax_rate.py` (add `--db "<conn>"` for the GD-line cases) | `56/56 checks passed` (with `--db`) |
+| Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

@@ -350,6 +350,17 @@ GST, sale type and SRO reference with it -- and a note says why; removing them
 puts it back. Once you pick a scenario yourself it stays yours, and a
 disagreement is the usual notice. Mixed or doubtful records never move it.
 
+**Every bill screen now works the same way.** New Bill, New Bill (No Challan),
+Edit Bill and View Bill are built from the same numbered steps -- FBR scenario,
+buyer, (challans), bill details, items, taxes & total, attachments -- each one
+turning green when it is complete and saying in one line what to do there. The
+tax inputs sit beside the totals they change, and every total says where its
+figure comes from ("GST (25%) -- rate set by scenario SN024"). The footer lists
+what is left before the bill can be saved, each item a link to the step or line
+it is about, or says "Ready to save". View Bill shows the same steps read-only.
+The save button now stays on screen at phone width. Nothing that is saved or
+filed changes.
+
 **Further tax now follows the buyer.** Further tax (s.3(1A)) applies to a supply
 to an unregistered buyer, but both create forms opened on 4% for every bill, so
 bills to registered buyers were going out with it. The field now starts at 4%
