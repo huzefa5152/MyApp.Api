@@ -555,6 +555,56 @@ CheckBool("totals.descWithSellingValue", GdCostingMapping.LooksLikeTotalsRow("To
     Check("read.blankStreak.sourceRow", row0?.SourceRow ?? -1, 3);
 }
 
+// 11. GdLineRules — what makes a line complete (2026-09-25). One rule per
+// field, each tested on both sides of its bound, so a rule that silently
+// stopped firing shows up here and not as stock that came in unbillable.
+{
+    var today = new DateTime(2026, 9, 25);
+    GdLineRules.Line Good() => new(
+        GdNumber: "KAPW-HC-8876", GdDate: new DateTime(2026, 9, 1), Description: "SCREW DRIVER",
+        HsCode: "8205.4000", Quantity: 10m, Unit: "Pcs", AssessedValue: 62490m, CustomsDuty: 0m,
+        Acd: 0m, RegulatoryDuty: 0m, Others: 0m, AddOnProfit: 0m, SalesTaxRate: 18m, AstRate: 3m,
+        IncomeTaxRate: 6m, SellingValue: null);
+    string Fields(GdLineRules.Line l) =>
+        string.Join(",", GdLineRules.Check(l, today).Select(p => p.Field));
+
+    CheckStr("rules.complete.noProblems", Fields(Good()), "");
+    CheckStr("rules.hsCode.paddedCleans", Fields(Good() with { HsCode = "  8205.4000 " }), "");
+
+    CheckStr("rules.gdNumber.blank", Fields(Good() with { GdNumber = "  " }), GdLineRules.Fields.GdNumber);
+    CheckStr("rules.gdDate.missing", Fields(Good() with { GdDate = null }), GdLineRules.Fields.GdDate);
+    CheckStr("rules.gdDate.before2000", Fields(Good() with { GdDate = new DateTime(1999, 12, 31) }), GdLineRules.Fields.GdDate);
+    CheckStr("rules.gdDate.first2000", Fields(Good() with { GdDate = new DateTime(2000, 1, 1) }), "");
+    CheckStr("rules.gdDate.tomorrowAllowed", Fields(Good() with { GdDate = today.AddDays(1) }), "");
+    CheckStr("rules.gdDate.dayAfterTomorrow", Fields(Good() with { GdDate = today.AddDays(2) }), GdLineRules.Fields.GdDate);
+    CheckStr("rules.description.blank", Fields(Good() with { Description = "" }), GdLineRules.Fields.Description);
+    CheckStr("rules.hsCode.blank", Fields(Good() with { HsCode = null }), GdLineRules.Fields.HsCode);
+    CheckStr("rules.hsCode.punctuationOnly", Fields(Good() with { HsCode = " - " }), GdLineRules.Fields.HsCode);
+    CheckStr("rules.quantity.zero", Fields(Good() with { Quantity = 0m }), GdLineRules.Fields.Quantity);
+    CheckStr("rules.quantity.negative", Fields(Good() with { Quantity = -1m }), GdLineRules.Fields.Quantity);
+    CheckStr("rules.quantity.fraction", Fields(Good() with { Quantity = 0.5m }), "");
+    CheckStr("rules.unit.blank", Fields(Good() with { Unit = " " }), GdLineRules.Fields.Unit);
+    CheckStr("rules.assessed.zero", Fields(Good() with { AssessedValue = 0m }), GdLineRules.Fields.AssessedValue);
+    CheckStr("rules.assessed.penny", Fields(Good() with { AssessedValue = 0.01m }), "");
+    CheckStr("rules.duty.negative", Fields(Good() with { RegulatoryDuty = -5m }), GdLineRules.Fields.Amounts);
+    CheckStr("rules.addOn.negative", Fields(Good() with { AddOnProfit = -1m }), GdLineRules.Fields.Amounts);
+    CheckStr("rules.rate.hundred", Fields(Good() with { IncomeTaxRate = 100m }), GdLineRules.Fields.Rates);
+    CheckStr("rules.rate.negative", Fields(Good() with { AstRate = -1m }), GdLineRules.Fields.Rates);
+    CheckStr("rules.rate.justUnderHundred", Fields(Good() with { SalesTaxRate = 99.99m }), "");
+    CheckStr("rules.rate.zeroExempt", Fields(Good() with { SalesTaxRate = 0m }), "");
+    CheckStr("rules.selling.negative", Fields(Good() with { SellingValue = -1m }), GdLineRules.Fields.SellingValue);
+    CheckStr("rules.selling.zeroAllowed", Fields(Good() with { SellingValue = 0m }), "");
+
+    // Several at once are ALL reported, in form order -- one message at a time
+    // is how an operator fixes one thing and meets the next.
+    CheckStr("rules.many.allReported",
+        Fields(Good() with { GdDate = null, Unit = null, AssessedValue = 0m }),
+        string.Join(",", GdLineRules.Fields.GdDate, GdLineRules.Fields.Unit, GdLineRules.Fields.AssessedValue));
+    CheckStr("rules.message.unit",
+        GdLineRules.Check(Good() with { Unit = null }, today).Select(p => p.Message).FirstOrDefault() ?? "",
+        "Enter the unit (Pcs, Kg, ...).");
+}
+
 // Optional: run a REAL client workbook through the shipped layout.
 //   dotnet run -c Release -- --file "C:\path\Alpha Trader Costing.xlsx" --expect-lines 26 --expect-cost 18816870 --expect-selling 21940496.99
 // The workbooks are client data and are never committed. Without --file the
