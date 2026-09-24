@@ -1,1134 +1,697 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  MdCloudUpload, MdCheckCircle, MdWarning, MdError, MdRestartAlt, MdMenuBook, MdEdit, MdAdd,
+  MdAdd, MdCheckCircle, MdClose, MdCloudUpload, MdDelete, MdEdit, MdError, MdInfoOutline,
+  MdMenuBook, MdRestartAlt, MdWarning,
 } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { notify } from "../utils/notify";
-import { colors, formStyles } from "../theme";
+import { formStyles, modalSizes } from "../theme";
 import {
   previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles,
 } from "../api/spreadsheetImportApi";
-import { getItemTypesPaged } from "../api/itemTypeApi";
-import HsCodeAutocomplete from "../Components/HsCodeAutocomplete";
+import BillStep from "../Components/bill/BillStep";
+import BillChecklist from "../Components/bill/BillChecklist";
+import { billColors } from "../Components/bill/billTheme";
+import GdLineEditor from "../Components/costing/GdLineEditor";
+import GdReviewLines from "../Components/costing/GdReviewLines";
+import {
+  MODE_NEW_ARRIVALS, MODE_BACKFILL, COSTING_ANCHORS, lineProblems, blankLine, nextLineFrom,
+  editorLineFrom, toLinePayload, previewLineToPayload, effectiveLeaveOut, entryChecklist,
+  commitSummary, summarySentences, commitLabel, moneyText, qtyText, computeCosting,
+} from "../utils/gdCostingEntry";
 
 /**
- * Purchases → Import Costing.
+ * Purchases → Import Costing -- bringing a customs GD's goods, and what they
+ * cost, onto the books.
  *
- * Loads the ACTUAL LANDED COST of stock already on the books from a customs
- * GD (Goods Declaration) costing workbook. Stock already carries a selling
- * value; this screen supplies the cost side, so margin becomes answerable.
+ * Built from the bill screens' step pieces (Components/bill/BillStep and
+ * BillChecklist), so it reads like New Bill:
+ *   1. Company & what arrived  -- New arrivals (the monthly GD, the default) or
+ *                                 the one-off Backfill of stock already there
+ *   2. The GD                  -- upload the costing sheet, or type the lines
+ *   3. Check the lines         -- what happens to stock for every line, with
+ *                                 Fix / Leave out / Choose the item
+ *   4. Bring it in             -- what will happen, in sentences, then commit
  *
- * Three steps: choose company + file, preview, commit. There is exactly one
- * built-in workbook layout (see GdCostingImportService / GdCostingMapping),
- * so unlike the general Spreadsheet Import screen there is no separate
- * mapping step — the installation's default "GdCosting" import profile is
- * resolved quietly in the background and used for every preview.
- *
- * The preview table is the whole value of this screen: nothing is written
- * until the operator has seen, per line, what would happen and pressed
- * Commit. Preview never writes anything; commit takes the reviewed lines
- * back and never re-reads the file, exactly like the opening-stock and
- * customer-ledger importers.
+ * The server decides everything that is saved. Every Check, Fix, Leave out and
+ * Choose goes back to it (the hand-entry route, which keeps an uploaded file's
+ * own identity via `source`), so what this screen shows is always the server's
+ * answer. utils/gdCostingEntry only mirrors the line rules for instant red
+ * messages while typing, and words the outcome. Commit sends the reviewed lines
+ * back and never re-reads the file; the server re-checks every line it writes.
  */
-
-const DISPOSITION_LABEL = {
-  "cost-only": "Cost set",
-  "stock-posted": "Not matched",
-  "ambiguous": "Ambiguous",
-};
-const DISPOSITION_TONE = {
-  "cost-only": colors.success,
-  "stock-posted": colors.textSecondary,
-  "ambiguous": "#b26a00",
-};
-
-// Task 19: what a MATCHED (cost-only) line does to the balance it matches.
-// "backfill" (default) is this feature's original, one-time-history
-// behaviour: SET the cost, leave quantity alone. "new-arrivals" is for the
-// sheet's actual monthly use: ADD quantity, cost and selling value, so a
-// month's new goods are never silently dropped by overwriting last month's
-// cost onto an unchanged quantity. Neither can happen by accident — the
-// operator always chooses, and the screen states the consequence (server-
-// derived, in MatchNote) before Commit is ever pressed.
-const MODE_BACKFILL = "backfill";
-const MODE_NEW_ARRIVALS = "new-arrivals";
-const MODE_CHOICES = [
-  {
-    value: MODE_BACKFILL,
-    title: "These goods are already on the books — set their actual cost",
-    body: "Use this for a one-off backfill of history. A matched line's cost is SET; quantity is left untouched.",
-  },
-  {
-    value: MODE_NEW_ARRIVALS,
-    title: "These are new arrivals — add their quantity and cost to what is on the books",
-    body: "Use this for a monthly GD. A matched line's quantity, cost and selling value are ADDED to what the balance already holds.",
-  },
-];
-// "cost-only" reads differently depending on the chosen mode; every other
-// disposition's label is unaffected by it.
-const dispositionLabel = (disposition, newArrivals) =>
-  disposition === "cost-only" && newArrivals ? "Stock added" : (DISPOSITION_LABEL[disposition] || disposition);
-// Fixed caption for an unmatched line. The server's own note differs by case
-// (no HS code vs. no opening balance under this HS code) — this is the one
-// thing the operator needs to know either way, and it is not committed
-// unless "bring in as new stock" is switched on (see WILL_CREATE_NOTE).
-const NOT_MATCHED_NOTE = "Not matched — no stock on the books for this GD and HS code";
-// Shown instead of NOT_MATCHED_NOTE once the operator opts in — the server
-// re-verifies this independently at commit (a real match, or more than one,
-// overrides whatever the preview showed), so this is a preview of INTENT,
-// not a guarantee.
-const WILL_CREATE_NOTE = "Will be created as new stock — a new item type and opening balance";
-
-const money = (n) =>
-  (n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = (n) =>
-  (n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
-
-// ── "Enter a line by hand" (Task 18) ────────────────────────────────────────
-// The form itself never decides anything: submitting it calls
-// previewGdCostingManual, which builds ONE consignment line SERVER-SIDE and
-// runs it through the exact same match/cost pipeline the file preview uses,
-// returning the same GdCostingPreviewDto shape — same table, same
-// disposition, same Commit button below. The 18/3/6 defaults are the rates
-// every real GD costing sheet seen so far actually uses (Helpers/
-// ImportCostingCalculator.cs), not a guess.
-const DEFAULT_MANUAL = {
-  gdNumber: "", gdDate: "", description: "", hsCode: "", quantity: "", unit: "",
-  assessedValue: "0", customsDuty: "0", acd: "0", regulatoryDuty: "0", others: "0",
-  salesTaxRate: "18", astRate: "3", incomeTaxRate: "6", addOnProfit: "0", sellingValue: "",
-};
-
-const round2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
-
-/**
- * Client-side mirror of Helpers/ImportCostingCalculator.cs's formula, for
- * INSTANT feedback only as the operator types — so the arithmetic is visible
- * before spending a round trip on it. NOT authoritative: previewGdCostingManual
- * recomputes this exact same formula on the server (the ONE place it is
- * computed for real — see that file's own doc comment), and the server's
- * figures are what land in the preview table and what commit writes. This
- * duplication is deliberately narrow (one pure function, no matching, no
- * persistence) and never substitutes for the server round trip.
- */
-function computeManualCosting(m) {
-  const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
-  const cost = round2(n(m.assessedValue) + n(m.customsDuty) + n(m.acd) + n(m.regulatoryDuty));
-  const st = Math.max(0, n(m.salesTaxRate));
-  const ast = Math.max(0, n(m.astRate));
-  const it = Math.max(0, n(m.incomeTaxRate));
-  const salesTax = round2(cost * st / 100);
-  const astAmount = round2(cost * ast / 100);
-  const subtotal = round2(cost + salesTax + astAmount + n(m.others));
-  const incomeTax = round2(subtotal * it / 100);
-  const inputTax = round2(salesTax + astAmount);
-  const sellingValue = st > 0
-    ? round2((inputTax * 100 / st) + round2(n(m.addOnProfit)))
-    : round2(cost + round2(n(m.addOnProfit)));
-  return { cost, salesTax, ast: astAmount, subtotal, incomeTax, inputTax, sellingValue };
-}
-
-// companyId/quantity travel as text through controlled inputs; this turns
-// what's on screen into the numbers (and null-when-blank optional selling
-// value) the server DTO expects.
-const toManualPayload = (m) => {
-  const n = (v) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
-  return {
-    gdNumber: m.gdNumber.trim(),
-    gdDate: m.gdDate || null,
-    description: m.description.trim(),
-    hsCode: m.hsCode.trim(),
-    quantity: n(m.quantity),
-    unit: m.unit.trim() || null,
-    assessedValue: n(m.assessedValue),
-    customsDuty: n(m.customsDuty),
-    acd: n(m.acd),
-    regulatoryDuty: n(m.regulatoryDuty),
-    others: n(m.others),
-    salesTaxRate: n(m.salesTaxRate),
-    astRate: n(m.astRate),
-    incomeTaxRate: n(m.incomeTaxRate),
-    addOnProfit: n(m.addOnProfit),
-    sellingValue: m.sellingValue === "" || m.sellingValue == null ? null : n(m.sellingValue),
-  };
-};
 
 const card = {
-  background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-  borderRadius: 12, padding: "1rem 1.1rem", marginBottom: "1rem",
+  background: "#fff", border: `1px solid ${billColors.cardBorder}`, borderRadius: 12,
+  padding: "0.9rem 1rem", marginBottom: "0.85rem",
 };
-const grid = {
-  display: "grid", gap: "0.75rem",
-  gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-};
-const input = {
-  width: "100%", padding: "0.55rem 0.65rem", borderRadius: 8,
-  border: `1px solid ${colors.inputBorder}`, background: colors.inputBg,
-  color: colors.textPrimary, fontSize: 14, minHeight: 44, boxSizing: "border-box",
-};
-const btn = (tone = colors.blue, disabled = false) => ({
-  display: "inline-flex", alignItems: "center", gap: 8,
-  padding: "0.6rem 1rem", minHeight: 44, borderRadius: 9, border: "none",
-  background: disabled ? "#c8d1de" : tone, color: "#fff", fontWeight: 600,
-  fontSize: 14, cursor: disabled ? "not-allowed" : "pointer",
-});
-const th = {
-  textAlign: "left", padding: "0.5rem 0.6rem", fontSize: 12,
-  textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary,
-  borderBottom: `1px solid ${colors.cardBorder}`, whiteSpace: "nowrap",
-};
-const td = {
-  padding: "0.55rem 0.6rem", fontSize: 13.5, borderBottom: `1px solid ${colors.cardBorder}`,
-  verticalAlign: "top",
-};
-// User-supplied text (item description, match note) must never use
-// nowrap+ellipsis — it visually collapses distinct values that share a
-// prefix. Clamp to two lines instead (CLAUDE.md §3).
-const wrap2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
 
-// Segmented "Upload a workbook" / "Enter a line by hand" toggle. >=44px tall
-// per the house tap-target rule.
-const modeBtn = (active) => ({
-  padding: "0.6rem 0.9rem", minHeight: 44, borderRadius: 8,
-  border: `1px solid ${active ? colors.blue : colors.cardBorder}`,
-  background: active ? colors.blue : "#fff",
-  color: active ? "#fff" : colors.textPrimary,
-  fontWeight: 600, fontSize: 13.5, cursor: "pointer",
+const btn = (color, disabled) => ({
+  display: "inline-flex", alignItems: "center", gap: 8, minHeight: 44, padding: "0.55rem 1rem",
+  borderRadius: 9, border: "none", background: disabled ? "#c8d1de" : color, color: "#fff",
+  fontWeight: 700, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", boxShadow: "none",
 });
 
-/**
- * Task 19: the two-way choice of what a MATCHED line does to the balance it
- * matches — spelled out in full rather than a bare toggle labelled "mode",
- * because the whole point is that the operator always knows which one they
- * are doing. Radio cards, not a checkbox: exactly one of the two is always
- * true, unlike "bring in as new stock" below it (which is a genuine opt-in
- * on top of whichever mode is chosen here). >=44px tall per the house
- * tap-target rule; grid so it collapses to one column on a phone.
- */
-function ModeChoice({ mode, onChange, disabled }) {
-  return (
-    <div style={{ ...grid, margin: "0.5rem 0 0.9rem" }}>
-      {MODE_CHOICES.map((opt) => {
-        const active = mode === opt.value;
-        return (
-          <label key={opt.value} style={{
-            display: "flex", gap: 10, alignItems: "flex-start",
-            padding: "0.65rem 0.75rem", borderRadius: 9, minHeight: 44, boxSizing: "border-box",
-            border: `1px solid ${active ? colors.blue : colors.cardBorder}`,
-            background: active ? "#eef4ff" : colors.cardBg,
-            cursor: disabled ? "not-allowed" : "pointer",
-          }}>
-            <input type="radio" name="gdCostingImportMode" checked={active} disabled={disabled}
-              onChange={() => onChange(opt.value)}
-              style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
-            <span>
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{opt.title}</div>
-              <div style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>{opt.body}</div>
-            </span>
-          </label>
-        );
-      })}
-    </div>
-  );
-}
+const ghostBtn = (color) => ({
+  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.5rem 0.9rem",
+  borderRadius: 9, border: `1px solid ${color}55`, background: "#fff", color,
+  fontWeight: 700, fontSize: 13.5, cursor: "pointer", boxShadow: "none",
+});
 
-function Banner({ tone, icon: Icon, children }) {
-  const tint = { error: colors.dangerLight, warn: "#fff8e6", ok: "#eefaf1" }[tone];
-  const line = { error: colors.danger, warn: "#b26a00", ok: colors.success }[tone];
+const segBtn = (active) => ({
+  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.55rem 0.95rem",
+  borderRadius: 9, border: `1px solid ${active ? billColors.blue : billColors.cardBorder}`,
+  background: active ? billColors.blue : "#fff", color: active ? "#fff" : billColors.textPrimary,
+  fontWeight: 700, fontSize: 13.5, cursor: "pointer", boxShadow: "none",
+});
+
+const selectStyle = {
+  width: "100%", maxWidth: 420, minHeight: 44, padding: "0.5rem 0.65rem", borderRadius: 8,
+  border: `1px solid ${billColors.inputBorder}`, background: billColors.inputBg, fontSize: 14,
+};
+
+function Banner({ tone = "warn", children }) {
+  const c = {
+    error: [billColors.danger, billColors.dangerLight, MdError],
+    warn: [billColors.warn, billColors.warnLight, MdWarning],
+    info: [billColors.blue, billColors.blueSoft, MdInfoOutline],
+    ok: [billColors.success, billColors.successLight, MdCheckCircle],
+  }[tone];
+  const Icon = c[2];
   return (
-    <div style={{
-      display: "flex", gap: 10, padding: "0.7rem 0.85rem", borderRadius: 9,
-      background: tint, borderLeft: `3px solid ${line}`, marginBottom: "0.6rem",
-      fontSize: 14, color: colors.textPrimary,
+    <div role={tone === "error" ? "alert" : undefined} style={{
+      display: "flex", gap: 9, padding: "0.65rem 0.8rem", borderRadius: 9, background: c[1],
+      borderLeft: `3px solid ${c[0]}`, marginBottom: "0.55rem", fontSize: 13.5, lineHeight: 1.45,
     }}>
-      <Icon size={18} style={{ color: line, flexShrink: 0, marginTop: 2 }} />
+      <Icon size={18} style={{ color: c[0], flexShrink: 0, marginTop: 1 }} />
       <div style={{ minWidth: 0 }}>{children}</div>
     </div>
   );
 }
 
-function Stat({ label, value }) {
+// The two import modes, said in full: which act is being performed is the most
+// consequential choice on the screen (GD_IMPORT_COSTING_GUIDE.md §3).
+function ModeCard({ active, title, body, onPick, disabled, tone = billColors.blue }) {
   return (
-    <div>
-      <div style={{ fontSize: 12, color: colors.textSecondary }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{value}</div>
-    </div>
-  );
-}
-
-function SectionLabel({ children }) {
-  return (
-    <h4 style={{
-      margin: "0.9rem 0 0.5rem", fontSize: 12, fontWeight: 700,
-      textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary,
-    }}>{children}</h4>
-  );
-}
-
-/**
- * `required` puts a red asterisk on the label; `hint` adds one line under the
- * control. Both exist because this form had neither: every field looked
- * equally necessary, sixteen of them defaulted to a perfectly valid 0, and the
- * Add button sat greyed out with nothing saying which three actually mattered.
- */
-function Field({ label, children, required, hint, tone }) {
-  return (
-    <label style={{ fontSize: 13, color: colors.textSecondary, display: "block" }}>
-      {label}
-      {required && <span style={{ color: colors.danger, marginLeft: 3 }} aria-hidden="true">*</span>}
-      {required && <span style={srOnly}> (required)</span>}
-      <div style={{ marginTop: 4 }}>{children}</div>
-      {hint && (
-        <div style={{ marginTop: 3, fontSize: 11.5, lineHeight: 1.45, color: tone || colors.textSecondary }}>
-          {hint}
-        </div>
-      )}
+    <label style={{
+      display: "flex", gap: 10, alignItems: "flex-start", padding: "0.7rem 0.8rem", borderRadius: 10,
+      border: `1px solid ${active ? tone : billColors.cardBorder}`, background: active ? `${tone}0f` : "#fff",
+      cursor: disabled ? "not-allowed" : "pointer", minHeight: 44, boxSizing: "border-box",
+    }}>
+      <input type="radio" name="gdCostingMode" checked={active} disabled={disabled} onChange={onPick}
+        aria-label={title} style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
+      <span>
+        <span style={{ display: "block", fontWeight: 800, fontSize: 14 }}>{title}</span>
+        <span style={{ display: "block", fontSize: 12.5, color: billColors.textSecondary, marginTop: 2 }}>{body}</span>
+      </span>
     </label>
   );
 }
 
-// Present for a screen reader, invisible on screen -- an asterisk alone does
-// not announce as "required".
-const srOnly = {
-  position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
-  overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
-};
-
-/**
- * The "enter a line by hand" form — Identity / Cost / Rates / Outcome,
- * reading like the sheet's own columns (see GdCostingSheetReader /
- * GdCostingMapping.GdCostingColumns) so a line typed here and a line read
- * off a workbook are visibly the same shape. Submitting calls onPreview,
- * which hands the typed fields to previewGdCostingManual — the server
- * builds the actual line and runs it through the real pipeline; the live
- * totals below are just this screen's own instant estimate (see
- * computeManualCosting).
- */
-function ManualEntryFields({
-  companyId, manual, onChange, onPreview, disabled, busy,
-  staged, onAddLine, onRemoveLine, onEditLine,
-}) {
-  const computed = useMemo(() => computeManualCosting(manual), [manual]);
-  // Exactly what a line still needs, in the operator's words. A greyed button
-  // with no stated reason reads as a broken screen (theme.js: formStyles.
-  // blockReason), and this form had six numeric fields, three rates and an
-  // autocomplete with no indication that only three of them decide anything.
-  const missing = [];
-  if (!manual.gdNumber.trim()) missing.push("GD number");
-  if (!manual.description.trim()) missing.push("Description");
-  if (!(Number(manual.quantity) > 0)) missing.push("Quantity");
-  const lineReady = !disabled && missing.length === 0;
-  // Preview needs at least one line — staged, or complete in the form (the
-  // one-line case must not require pressing Add first).
-  const canPreview = !disabled && !busy && (staged.length > 0 || lineReady);
-
-  const set = (key) => (e) => onChange({ [key]: e.target.value });
-
-  // What this HS code will MATCH on the books, said before Preview rather than
-  // after it. A HINT only -- the server re-resolves the match itself and its
-  // answer is the one that lands, exactly as computeManualCosting above is a
-  // hint about the arithmetic. Best-effort: a caller without the item-catalog
-  // permission simply gets no hint.
-  const [hsMatches, setHsMatches] = useState(null);
-  const hsCode = (manual.hsCode || "").trim();
-  useEffect(() => {
-    if (!companyId || hsCode.length < 4) { setHsMatches(null); return; }
-    let cancelled = false;
-    const t = setTimeout(() => {
-      getItemTypesPaged(companyId, { search: hsCode, pageSize: 50 })
-        .then(({ data }) => {
-          if (cancelled) return;
-          const exact = (data?.items || []).filter(
-            (i) => (i.hsCode || "").replace(/[^0-9.]/g, "") === hsCode.replace(/[^0-9.]/g, ""));
-          setHsMatches(exact);
-        })
-        .catch(() => { if (!cancelled) setHsMatches(null); });
-    }, 350);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [companyId, hsCode]);
-
-  const hsHint = useMemo(() => {
-    if (!hsCode) {
-      return { text: "Without a code this line cannot match existing stock.", tone: "#b26a00" };
-    }
-    if (hsMatches === null) return { text: null };
-    if (hsMatches.length === 0) {
-      return { text: "No item on your books under this code — this line will be offered as new stock.", tone: undefined };
-    }
-    if (hsMatches.length === 1) {
-      return { text: `Matches "${hsMatches[0].name}" — its cost will be set.`, tone: colors.success };
-    }
-    return {
-      text: `${hsMatches.length} items share this code (${hsMatches.slice(0, 3).map((i) => i.name).join(", ")}${hsMatches.length > 3 ? "…" : ""}). The line will be reported AMBIGUOUS and no cost written.`,
-      tone: colors.danger,
-    };
-  }, [hsCode, hsMatches]);
-
-  return (
-    <div>
-      <div style={{
-        padding: "0.7rem 0.85rem", borderRadius: 9, marginBottom: "0.9rem",
-        background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-        fontSize: 13, lineHeight: 1.6,
-      }}>
-        <strong>Three fields make a line:</strong> GD number, Description and Quantity
-        (marked <span style={{ color: colors.danger }}>*</span>). Everything else may stay
-        at 0 — a GD with no regulatory duty really is 0.
-        <div style={{ marginTop: 4 }}>
-          The <strong>HS code</strong> is what decides whether the line finds stock already
-          on your books, so it is worth setting even though it is not required.
-        </div>
-        <div style={{ marginTop: 4, color: colors.textSecondary }}>
-          One GD normally carries several HS codes. Fill a line, press <strong>Add line</strong>,
-          and repeat — the GD number, unit and rates carry over.
-        </div>
-      </div>
-
-      <SectionLabel>Identity</SectionLabel>
-      <div style={grid}>
-        <Field label="GD number" required hint="The declaration number, shared by every line of this GD.">
-          <input type="text" style={input} placeholder="e.g. KAPW-HC-8876"
-            value={manual.gdNumber} onChange={set("gdNumber")} disabled={disabled} />
-        </Field>
-        <Field label="GD date" hint="Dates the journal entry when this posts.">
-          <input type="date" style={input}
-            value={manual.gdDate} onChange={set("gdDate")} disabled={disabled} />
-        </Field>
-        <Field label="Description" required hint="What the line is, as the declaration words it.">
-          <input type="text" style={input} placeholder="e.g. Screw Driver"
-            value={manual.description} onChange={set("description")} disabled={disabled} />
-        </Field>
-        <Field label="Quantity" required>
-          <input type="number" min="0" step="any" style={input}
-            value={manual.quantity} onChange={set("quantity")} disabled={disabled} />
-        </Field>
-        <Field label="Unit" hint="Optional. Carries over to the next line.">
-          <input type="text" style={input} placeholder="e.g. Pcs"
-            value={manual.unit} onChange={set("unit")} disabled={disabled} />
-        </Field>
-        <Field label="HS code" hint={hsHint.text} tone={hsHint.tone}>
-          <HsCodeAutocomplete companyId={companyId} value={manual.hsCode} style={input}
-            onChange={(v) => onChange({ hsCode: v })}
-            placeholder="Type a product keyword, or an HS code…" />
-        </Field>
-      </div>
-
-      <SectionLabel>Cost</SectionLabel>
-      <div style={grid}>
-        <Field label="Assessed value" hint="Assessed value plus the three duties below IS the landed cost.">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.assessedValue} onChange={set("assessedValue")} disabled={disabled} />
-        </Field>
-        <Field label="Customs duty">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.customsDuty} onChange={set("customsDuty")} disabled={disabled} />
-        </Field>
-        <Field label="ACD">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.acd} onChange={set("acd")} disabled={disabled} />
-        </Field>
-        <Field label="Regulatory duty">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.regulatoryDuty} onChange={set("regulatoryDuty")} disabled={disabled} />
-        </Field>
-        <Field label="Others">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.others} onChange={set("others")} disabled={disabled} />
-        </Field>
-      </div>
-
-      <SectionLabel>Rates (%)</SectionLabel>
-      <div style={grid}>
-        <Field label="Sales tax rate">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.salesTaxRate} onChange={set("salesTaxRate")} disabled={disabled} />
-        </Field>
-        <Field label="AST rate">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.astRate} onChange={set("astRate")} disabled={disabled} />
-        </Field>
-        <Field label="Income tax rate">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.incomeTaxRate} onChange={set("incomeTaxRate")} disabled={disabled} />
-        </Field>
-      </div>
-
-      <SectionLabel>Outcome</SectionLabel>
-      <div style={grid}>
-        <Field label="Add-on profit">
-          <input type="number" min="0" step="any" style={input}
-            value={manual.addOnProfit} onChange={set("addOnProfit")} disabled={disabled} />
-        </Field>
-        <Field label="Stated selling value" hint="Optional. Leave blank and the costing chain decides it.">
-          <input type="number" min="0" step="any" style={input}
-            placeholder="Leave blank to use the computed figure"
-            value={manual.sellingValue} onChange={set("sellingValue")} disabled={disabled} />
-        </Field>
-      </div>
-
-      <div style={{
-        ...grid, marginTop: "0.9rem", padding: "0.7rem 0.8rem",
-        background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 9,
-      }}>
-        <Stat label="Cost" value={money(computed.cost)} />
-        <Stat label="Sales tax" value={money(computed.salesTax)} />
-        <Stat label="AST" value={money(computed.ast)} />
-        <Stat label="Subtotal" value={money(computed.subtotal)} />
-        <Stat label="Income tax" value={money(computed.incomeTax)} />
-        <Stat label="Input tax" value={money(computed.inputTax)} />
-        <Stat label="Selling value" value={money(computed.sellingValue)} />
-      </div>
-      <p style={{ margin: "0.4rem 0 0", fontSize: 12, color: colors.textSecondary }}>
-        Computed live from what you've typed. Preview re-verifies it on the server before anything can be committed.
-      </p>
-
-      <div style={{ marginTop: "0.9rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-        <button onClick={onAddLine} disabled={!lineReady} style={btn("#5f6d7e", !lineReady)}>
-          <MdAdd size={18} />
-          Add line
-        </button>
-        <button onClick={onPreview} disabled={!canPreview} style={btn(colors.blue, !canPreview)}>
-          <MdCloudUpload size={18} />
-          {busy ? "Checking…" : staged.length > 0
-            ? `Preview ${staged.length + (lineReady ? 1 : 0)} line(s)`
-            : "Preview"}
-        </button>
-      </div>
-
-      {!disabled && missing.length > 0 && (
-        <div style={{ ...formStyles.blockReason, textAlign: "left" }}>
-          {staged.length > 0
-            ? `This line still needs ${missing.join(", ")} — or press Preview to check the ${staged.length} line(s) already added.`
-            : `Still needed: ${missing.join(", ")}.`}
-        </div>
-      )}
-      {disabled && !busy && (
-        <div style={{ ...formStyles.blockReason, textAlign: "left" }}>
-          Choose a company first.
-        </div>
-      )}
-
-      {staged.length > 0 && (
-        <div style={{ marginTop: "0.9rem" }}>
-          <SectionLabel>Lines on this entry ({staged.length})</SectionLabel>
-          <p style={{ margin: "0 0 0.5rem", fontSize: 12.5, color: colors.textSecondary }}>
-            One GD normally carries several HS codes. Add each line, then preview them
-            together — they have to be checked as a set, because two lines landing on the
-            same item pool into one unit cost.
-          </p>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
-              <thead>
-                <tr>
-                  <th style={th}>GD</th>
-                  <th style={th}>HS code</th>
-                  <th style={th}>Description</th>
-                  <th style={{ ...th, textAlign: "right" }}>Quantity</th>
-                  <th style={{ ...th, textAlign: "right" }}>Cost</th>
-                  <th style={{ ...th, width: 96 }} aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {staged.map((m, i) => {
-                  const c = computeManualCosting(m);
-                  return (
-                    <tr key={i}>
-                      <td style={td}>{m.gdNumber}</td>
-                      <td style={{ ...td, whiteSpace: "nowrap" }}>{m.hsCode || "—"}</td>
-                      <td style={td}><div style={wrap2}>{m.description}</div></td>
-                      <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                        {qty(Number(m.quantity) || 0)}{m.unit ? ` ${m.unit}` : ""}
-                      </td>
-                      <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                        {money(c.cost)}
-                      </td>
-                      <td style={td}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button type="button" onClick={() => onEditLine(i)} disabled={disabled}
-                            title="Put this line back in the form to change it"
-                            style={miniBtn(colors.blue)}>Edit</button>
-                          <button type="button" onClick={() => onRemoveLine(i)} disabled={disabled}
-                            title="Remove this line" style={miniBtn(colors.danger)}>Remove</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const miniBtn = (tone) => ({
-  padding: "0.25rem 0.55rem", borderRadius: 6, border: `1px solid ${tone}40`,
-  background: "#fff", color: tone, fontSize: 12, fontWeight: 700,
-  cursor: "pointer", boxShadow: "none", minHeight: 30,
-});
-
-// Commit takes the reviewed lines back, never re-reads the file — echo every
-// field the server's GdCostingLineDto carries, exactly as preview sent it.
-const toCommitLine = (l) => ({
-  sourceRow: l.sourceRow,
-  gdNumber: l.gdNumber,
-  gdDate: l.gdDate,
-  description: l.description,
-  hsCode: l.hsCode,
-  quantity: l.quantity,
-  unit: l.unit,
-  assessedValue: l.assessedValue,
-  customsDuty: l.customsDuty,
-  acd: l.acd,
-  regulatoryDuty: l.regulatoryDuty,
-  others: l.others,
-  salesTaxRate: l.salesTaxRate,
-  astRate: l.astRate,
-  incomeTaxRate: l.incomeTaxRate,
-  addOnProfit: l.addOnProfit,
-  cost: l.cost,
-  salesTax: l.salesTax,
-  ast: l.ast,
-  subtotal: l.subtotal,
-  incomeTax: l.incomeTax,
-  inputTax: l.inputTax,
-  sellingValue: l.sellingValue,
-  sheetSellingValue: l.sheetSellingValue,
-  disposition: l.disposition,
-  openingStockBalanceId: l.openingStockBalanceId,
-  itemTypeId: l.itemTypeId,
-  itemTypeName: l.itemTypeName,
-  matchedBalanceQuantity: l.matchedBalanceQuantity,
-  derivedActualCost: l.derivedActualCost,
-  matchNote: l.matchNote,
-});
+const hasContent = (m) =>
+  ["description", "hsCode", "quantity", "assessedValue"].some((k) => String(m?.[k] ?? "").trim() !== "");
 
 export default function GdCostingImportPage() {
-  const { has } = usePermissions();
+  const { has, isSeedAdmin, permissions } = usePermissions();
   const { companies, selectedCompany } = useCompany();
+  const canRun = has("importcosting.sheet.run");
+  const canSeeConsignments = has("importcosting.consignments.view");
+  const canSeeStock = isSeedAdmin || [...(permissions || [])].some((k) => String(k).startsWith("stock."));
 
-  const [companyId, setCompanyId] = useState(selectedCompany?.id || "");
+  const [companyId, setCompanyId] = useState(selectedCompany?.id ? String(selectedCompany.id) : "");
+  const [mode, setMode] = useState(MODE_NEW_ARRIVALS);
+  const [showBackfill, setShowBackfill] = useState(false);
+  const [entry, setEntry] = useState("file");
+
   const [file, setFile] = useState(null);
-
-  // "file" (upload a workbook) or "manual" ("enter a line by hand" — Task 18).
-  // Mutually exclusive input methods into the SAME preview/review/commit flow
-  // below; switching clears whichever preview was showing.
-  const [mode, setMode] = useState("file");
-  const [manual, setManual] = useState(DEFAULT_MANUAL);
-  // Lines already added to this hand-entry session. A real GD carries several
-  // HS codes (Alpha's one declaration has 26 lines), and they must be previewed
-  // TOGETHER -- see PreviewManualAsync for why a line at a time is wrong.
-  const [stagedManual, setStagedManual] = useState([]);
-
+  const [fileKey, setFileKey] = useState(0);
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState("");
-  const [profileLoading, setProfileLoading] = useState(false);
+
+  const [typed, setTyped] = useState(blankLine);
+  const [typedShowAll, setTypedShowAll] = useState(false);
+  const [staged, setStaged] = useState([]);
 
   const [preview, setPreview] = useState(null);
+  const [source, setSource] = useState(null);
+  const [sheetNotes, setSheetNotes] = useState([]);
+  const [leaveOutChoice, setLeaveOutChoice] = useState({});
+  const [chosenItem, setChosenItem] = useState({});
+  const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState("");
   const [result, setResult] = useState(null);
-  // Opt-in, default off (unticked): a line matching nothing on the books is
-  // skipped unless the operator explicitly asks for it to become new stock.
-  const [createMissingStock, setCreateMissingStock] = useState(false);
-  // Task 19: what a MATCHED line does — defaults to the SAFER choice
-  // (Backfill: SET, touches only cost) rather than New Arrivals (ADD,
-  // touches quantity and selling value too).
-  const [costingMode, setCostingMode] = useState(MODE_BACKFILL);
+  const [fixing, setFixing] = useState(null);
 
-  const canView = has("importcosting.sheet.run");
+  const company = (companies || []).find((c) => String(c.id) === String(companyId));
 
-  useEffect(() => { if (selectedCompany?.id && !companyId) setCompanyId(selectedCompany.id); },
-    [selectedCompany, companyId]);
+  // The footer is FIXED to the bottom of the window, over this page's own
+  // column. It cannot be `sticky`: the layout's .dl-main sets overflow-x, which
+  // makes it a scroll container that never scrolls, so a sticky footer stayed
+  // at the foot of a 5,000px page with the save button out of sight. The
+  // column is measured so the bar never covers the sidebar.
+  const pageRef = useRef(null);
+  const [barBox, setBarBox] = useState(null);
+  useLayoutEffect(() => {
+    // The layout's own content area (padding included), so the bar reaches
+    // its edges; the bar's contents are kept to this page's width inside it.
+    const el = pageRef.current?.closest("main") || pageRef.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setBarBox((b) => (b && b.left === r.left && b.width === r.width ? b : { left: r.left, width: r.width }));
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+  // And after every render: cheap, and it catches a sidebar that opened or
+  // folded without the page itself changing size.
+  useLayoutEffect(() => {
+    const el = pageRef.current?.closest("main") || pageRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setBarBox((b) => (b && b.left === r.left && b.width === r.width ? b : { left: r.left, width: r.width }));
+  });
 
-  const resetFlow = useCallback(() => {
-    setFile(null); setPreview(null); setResult(null); setCreateMissingStock(false);
-    setManual(DEFAULT_MANUAL); setCostingMode(MODE_BACKFILL);
+  useEffect(() => {
+    if (selectedCompany?.id && !companyId) setCompanyId(String(selectedCompany.id));
+  }, [selectedCompany, companyId]);
+
+  const clearReview = useCallback(() => {
+    setPreview(null); setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({});
+    setStale(false); setFixing(null);
   }, []);
 
-  useEffect(() => { resetFlow(); }, [companyId, resetFlow]);
+  const resetAll = useCallback(() => {
+    clearReview(); setResult(null); setFile(null); setFileKey((k) => k + 1);
+    setTyped(blankLine()); setTypedShowAll(false); setStaged([]);
+  }, [clearReview]);
 
-  // Switching input method never mixes a stale preview from the other one
-  // into this screen — the mode itself (and any partly-typed manual fields)
-  // is left alone, only the preview/result.
-  const switchMode = useCallback((next) => {
-    setMode(next);
-    setPreview(null); setResult(null);
-    // Half-built hand entry does not survive a switch to the file path: it
-    // would silently ride along into the next preview.
-    if (next === "file") setStagedManual([]);
-  }, []);
+  useEffect(() => { resetAll(); }, [companyId, resetAll]);
 
-  const updateManual = useCallback((patch) => setManual((m) => ({ ...m, ...patch })), []);
-
-  // The one built-in layout, resolved quietly — there is nothing for the
-  // operator to choose (see file header comment).
-  const loadProfile = useCallback(async () => {
-    if (!companyId) { setProfile(null); setProfileError(""); return; }
-    setProfileLoading(true);
+  // The one built-in workbook layout, resolved quietly -- nothing to choose.
+  useEffect(() => {
+    let cancelled = false;
     setProfile(null); setProfileError("");
-    try {
-      const { data } = await getImportProfiles({ kind: "GdCosting", companyId });
-      const list = data || [];
-      const chosen = list.find((p) => p.isDefault) || list[0] || null;
-      setProfile(chosen);
-      if (!chosen) {
-        setProfileError(
-          "No GD costing layout is set up yet. Ask an administrator to check the import profiles.");
-      }
-    } catch {
-      setProfileError("Could not load the GD costing layout. Reload the page and try again.");
-    } finally {
-      setProfileLoading(false);
-    }
+    if (!companyId) return undefined;
+    getImportProfiles({ kind: "GdCosting", companyId })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const chosen = (data || []).find((p) => p.isDefault) || (data || [])[0] || null;
+        setProfile(chosen);
+        if (!chosen) setProfileError("No GD costing layout is set up yet. Ask an administrator to check the import profiles.");
+      })
+      .catch(() => { if (!cancelled) setProfileError("Could not load the GD costing layout. Reload the page and try again."); });
+    return () => { cancelled = true; };
   }, [companyId]);
 
-  useEffect(() => { loadProfile(); }, [loadProfile]);
-
-  const onPickFile = (e) => {
-    const chosen = e.target.files?.[0] || null;
-    setFile(chosen);
-    setPreview(null); setResult(null);
-  };
-
-  const onPreview = async () => {
-    if (!file || !companyId || !profile) return;
-    setBusy("preview"); setPreview(null); setResult(null);
-    try {
-      const { data } = await previewGdCosting({ file, companyId, profileId: profile.id, mode: costingMode });
-      setPreview(data);
-    } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
-  };
-
-  // "Enter a line by hand": the server builds ONE consignment line and runs
-  // it through the exact same pipeline onPreview's workbook goes through —
-  // no profile/mapping involved, since there is nothing to map for a
-  // hand-typed line.
-  // Every staged line PLUS the one still in the form if it is complete, so a
-  // single-line consignment never needs "Add line" pressed first.
-  const manualLinesToSend = () => {
-    const formReady = manual.gdNumber.trim() && manual.description.trim() && Number(manual.quantity) > 0;
-    return [...stagedManual, ...(formReady ? [manual] : [])].map(toManualPayload);
-  };
-
-  const onAddManualLine = () => {
-    setStagedManual((prev) => [...prev, manual]);
-    // Keep the GD header and the rates — a real GD's next line shares both, and
-    // retyping them for 26 lines is how a sheet gets typed wrong.
-    setManual((m) => ({
-      ...DEFAULT_MANUAL,
-      gdNumber: m.gdNumber, gdDate: m.gdDate, unit: m.unit,
-      salesTaxRate: m.salesTaxRate, astRate: m.astRate, incomeTaxRate: m.incomeTaxRate,
-    }));
-    setPreview(null);
-  };
-
-  const onRemoveManualLine = (i) => {
-    setStagedManual((prev) => prev.filter((_, x) => x !== i));
-    setPreview(null);
-  };
-
-  // Editing pulls the row back into the form. Anything half-typed there is
-  // staged first rather than silently discarded.
-  const onEditManualLine = (i) => {
-    setStagedManual((prev) => {
-      const row = prev[i];
-      const rest = prev.filter((_, x) => x !== i);
-      const formReady = manual.gdNumber.trim() && manual.description.trim() && Number(manual.quantity) > 0;
-      setManual(row);
-      return formReady ? [...rest, manual] : rest;
+  /**
+   * Every reviewed line back to the server with the review's decisions --
+   * `edits` replaces lines by row (a Fix). The screen's own leave-out default
+   * depends on the server's answer (Backfill leaves a line with nothing to
+   * price out), so when an answer changes it, the server is asked once more.
+   */
+  const recheck = useCallback(async ({ base, edits = {}, modeNow, leave, chosen, src }) => {
+    const build = (pv, withEdits) => (pv.lines || []).map((l) => {
+      const extra = {
+        sourceRow: l.sourceRow,
+        leaveOut: effectiveLeaveOut(l, modeNow, leave),
+        chosenOpeningStockBalanceId: chosen[l.sourceRow] ?? null,
+      };
+      return withEdits[l.sourceRow] ? toLinePayload(withEdits[l.sourceRow], extra) : previewLineToPayload(l, extra);
     });
-    setPreview(null);
-  };
-
-  const onPreviewManual = async () => {
-    if (!companyId) return;
-    const lines = manualLinesToSend();
-    if (lines.length === 0) return;
-    setBusy("preview"); setPreview(null); setResult(null);
-    try {
-      const { data } = await previewGdCostingManual({ companyId, lines, mode: costingMode });
-      setPreview(data);
-    } catch { /* httpClient surfaces it */ } finally { setBusy(""); }
-  };
-
-  // Task 19: changing Backfill/New Arrivals after a preview is already on
-  // screen re-runs it, so the table and its per-line notes never describe a
-  // different mode than the one Commit is about to use.
-  useEffect(() => {
-    if (!preview || busy) return;
-    if (mode === "file") { if (file) onPreview(); }
-    else if (companyId) { onPreviewManual(); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [costingMode]);
-
-  const onCommit = async () => {
-    if (!preview?.canCommit) return;
-    setBusy("commit");
-    try {
-      const { data } = await commitGdCosting({
-        companyId: Number(companyId),
-        importProfileId: preview.importProfileId,
-        profileVersion: preview.profileVersion,
-        fileSha256: preview.fileSha256,
-        fileName: preview.fileName,
-        fileSizeBytes: preview.fileSizeBytes,
-        lines: (preview.lines || []).map(toCommitLine),
-        createMissingStock,
-        mode: costingMode,
-      });
-      setResult(data);
-      setPreview(null);
-      notify("Imported.", "success");
-    } catch { /* surfaced */ } finally { setBusy(""); }
-  };
-
-  // Group the reviewed lines by GD, in the same order the server's own
-  // per-GD totals came back in (already sorted by GD number).
-  const groups = useMemo(() => {
-    if (!preview) return [];
-    const byGd = new Map();
-    for (const l of preview.lines || []) {
-      const key = (l.gdNumber || "").trim().toUpperCase();
-      if (!byGd.has(key)) byGd.set(key, []);
-      byGd.get(key).push(l);
+    let pv = base;
+    let pending = edits;
+    for (let pass = 0; pass < 2; pass++) {
+      const { data } = await previewGdCostingManual({ companyId, lines: build(pv, pending), mode: modeNow, source: src });
+      pv = data;
+      pending = {};
+      if ((pv.lines || []).every((l) => l.leaveOut === effectiveLeaveOut(l, modeNow, leave))) break;
     }
-    return (preview.consignments || []).map((c) => ({
-      totals: c,
-      lines: byGd.get((c.gdNumber || "").trim().toUpperCase()) || [],
+    return pv;
+  }, [companyId]);
+
+  // One wrapper for every server round trip from the review: the preview on
+  // screen is replaced only by a complete answer.
+  const run = async (label, fn) => {
+    setBusy(label);
+    try {
+      const pv = await fn();
+      if (pv) setPreview(pv);
+      return true;
+    } catch {
+      return false; // httpClient already told the operator
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const settleDefaults = (data, src, modeNow) =>
+    (data.lines || []).some((l) => l.leaveOut !== effectiveLeaveOut(l, modeNow, {}))
+      ? recheck({ base: data, modeNow, leave: {}, chosen: {}, src })
+      : data;
+
+  const onCheckFile = () => run("preview", async () => {
+    setResult(null);
+    const { data } = await previewGdCosting({ file, companyId, profileId: profile?.id, mode });
+    const src = {
+      fileName: data.fileName, fileSha256: data.fileSha256, fileSizeBytes: data.fileSizeBytes,
+      importProfileId: data.importProfileId, profileVersion: data.profileVersion,
+    };
+    setSource(src); setSheetNotes(data.warnings || []); setLeaveOutChoice({}); setChosenItem({}); setStale(false);
+    return settleDefaults(data, src, mode);
+  });
+
+  const typedLines = () => [...staged, ...(hasContent(typed) ? [typed] : [])];
+
+  const onCheckTyped = () => {
+    const lines = typedLines();
+    if (lines.length === 0) { setTypedShowAll(true); return Promise.resolve(false); }
+    return run("preview", async () => {
+      setResult(null);
+      const payload = lines.map((m, i) => toLinePayload(m, { sourceRow: i + 1 }));
+      const { data } = await previewGdCostingManual({ companyId, lines: payload, mode });
+      // What was in the form is now line N of the list, so the list and the
+      // review describe the same lines.
+      if (hasContent(typed)) { setStaged(lines); setTyped(nextLineFrom(typed)); setTypedShowAll(false); }
+      setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({}); setStale(false);
+      return settleDefaults(data, null, mode);
+    });
+  };
+
+  const onAddLine = () => {
+    if (lineProblems(typed).length > 0) { setTypedShowAll(true); return; }
+    setStaged((s) => [...s, typed]);
+    setTyped(nextLineFrom(typed));
+    setTypedShowAll(false);
+    if (preview) setStale(true);
+  };
+
+  const onEditStaged = (i) => {
+    setStaged((s) => {
+      const rest = s.filter((_, x) => x !== i);
+      return hasContent(typed) ? [...rest, typed] : rest;
+    });
+    setTyped({ ...staged[i] });
+    if (preview) setStale(true);
+  };
+
+  const onRemoveStaged = (i) => {
+    setStaged((s) => s.filter((_, x) => x !== i));
+    if (preview) setStale(true);
+  };
+
+  const onMode = (next) => {
+    if (next === mode) return;
+    setMode(next);
+    if (next === MODE_BACKFILL) setShowBackfill(true);
+    if (preview && !stale)
+      run("recheck", () => recheck({ base: preview, modeNow: next, leave: leaveOutChoice, chosen: chosenItem, src: source }));
+  };
+
+  const onToggleLeaveOut = (line, value) => {
+    const leave = { ...leaveOutChoice, [line.sourceRow]: value };
+    setLeaveOutChoice(leave);
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave, chosen: chosenItem, src: source }));
+  };
+
+  const onChoose = (line, balanceId) => {
+    const chosen = { ...chosenItem };
+    if (balanceId) chosen[line.sourceRow] = balanceId; else delete chosen[line.sourceRow];
+    setChosenItem(chosen);
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen, src: source }));
+  };
+
+  const onFix = (line) => setFixing({ sourceRow: line.sourceRow, draft: editorLineFrom(line), problems: line.problems || [] });
+
+  const onSaveFix = async () => {
+    const { sourceRow, draft } = fixing;
+    const ok = await run("recheck", () => recheck({
+      base: preview, edits: { [sourceRow]: draft }, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source,
     }));
-  }, [preview]);
+    if (!ok) return;
+    // A typed GD's list follows the fix, so going back to it shows the same line.
+    if (!source) setStaged((s) => s.map((m, i) => (i + 1 === sourceRow ? { ...draft } : m)));
+    setFixing(null);
+  };
 
-  const counts = preview?.dispositionCounts || {};
-  const costOnlyCount = counts["cost-only"] || 0;
-  const notMatchedCount = counts["stock-posted"] || 0;
-  const ambiguousCount = counts["ambiguous"] || 0;
-  const overwriteWarningCount = preview?.overwriteWarningCount || 0;
-  const costWarningCount = preview?.costPlausibilityWarningCount || 0;
-  const rateWarningCount = preview?.rateWarningCount || 0;
+  const onCommit = () => run("commit", async () => {
+    const { data } = await commitGdCosting({
+      companyId: Number(companyId),
+      importProfileId: preview.importProfileId,
+      profileVersion: preview.profileVersion,
+      fileSha256: preview.fileSha256,
+      fileName: preview.fileName,
+      fileSizeBytes: preview.fileSizeBytes,
+      lines: preview.lines,
+      createMissingStock: true,
+      mode,
+    });
+    setResult(data);
+    clearReview(); setFile(null); setFileKey((k) => k + 1);
+    setTyped(blankLine()); setStaged([]); setTypedShowAll(false);
+    notify("Imported.", "success");
+    return null;
+  });
 
-  if (!canView) {
-    return <div style={{ padding: "1.5rem" }}>
-      <Banner tone="warn" icon={MdWarning}>You do not have permission to run a GD costing import.</Banner>
-    </div>;
+  const checklist = useMemo(
+    () => entryChecklist({ companyId, preview, stale }),
+    [companyId, preview, stale],
+  );
+  const summary = useMemo(() => (preview ? commitSummary(preview, mode) : null), [preview, mode]);
+  const ready = !!preview && checklist.length === 0 && !busy;
+
+  if (!canRun) {
+    return (
+      <div style={{ padding: "1.5rem" }}>
+        <Banner tone="warn">You do not have permission to run a GD costing import.</Banner>
+      </div>
+    );
   }
 
+  // ── step statuses and summaries ─────────────────────────────────────────
+  const modeText = mode === MODE_NEW_ARRIVALS ? "New goods arrived" : "One-off: pricing stock already on the books";
+  const step1 = companyId ? "done" : "todo";
+  const step2 = preview && !stale ? "done" : stale ? "warn" : "todo";
+  const lineIssues = checklist.filter((i) => i.key.startsWith("line-") || i.key.startsWith("blocking-") || i.key === "all-out");
+  const step3 = !preview ? "todo" : lineIssues.length > 0 ? "warn" : "done";
+  const typedCount = typedLines().length;
+  const lines = preview?.lines || [];
+  const fixCount = lines.filter((l) => !l.leaveOut && (l.problems || []).length > 0).length;
+  const leftCount = lines.filter((l) => l.leaveOut).length;
+  const notes = source ? sheetNotes : (preview?.warnings || []);
+
   return (
-    <div style={{ padding: "1.25rem", maxWidth: 1200, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: colors.textPrimary }}>Import Costing</h1>
-      <p style={{ margin: "0 0 0.4rem", color: colors.textSecondary, fontSize: 14, maxWidth: "62ch" }}>
-        Load the actual landed cost of stock already on the books from a customs GD costing
-        workbook, so margin becomes answerable. Nothing is written until you press Commit.
+    <div ref={pageRef} style={{ padding: "1.1rem clamp(0.75rem, 2vw, 1.25rem) 7.5rem", maxWidth: 1100, margin: "0 auto" }}>
+      <h1 style={{ fontSize: 22, margin: "0 0 0.25rem", color: billColors.textPrimary }}>Import Costing</h1>
+      <p style={{ margin: "0 0 0.35rem", color: billColors.textSecondary, fontSize: 14, maxWidth: "68ch" }}>
+        Bring a customs GD's goods and their landed cost onto the books. Every line is checked first,
+        and nothing is saved until you press the button at the bottom.
       </p>
       <Link to="/guides/import" style={{
-        display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600,
-        color: colors.blue, textDecoration: "none", marginBottom: "1rem", minHeight: 44,
+        display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
+        color: billColors.blue, textDecoration: "none", marginBottom: "0.8rem", minHeight: 44,
       }}>
         <MdMenuBook size={16} aria-hidden="true" /> How to use this
       </Link>
 
-      {/* ── Step 1: company + workbook, or a hand-typed line ─────────── */}
-      <div style={card}>
-        <h2 style={{ fontSize: 15, margin: "0 0 0.6rem" }}>
-          1 · Company and {mode === "file" ? "workbook" : "consignment line"}
-        </h2>
-        <div style={grid}>
-          <label style={{ fontSize: 13, color: colors.textSecondary }}>
-            Company
-            <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={input}>
-              <option value="">Choose a company…</option>
-              {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </label>
-        </div>
-
-        <SectionLabel>What kind of import is this?</SectionLabel>
-        <ModeChoice mode={costingMode} onChange={setCostingMode} disabled={!!busy} />
-
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "0.9rem 0" }}>
-          <button type="button" onClick={() => switchMode("file")}
-            style={modeBtn(mode === "file")} disabled={!!busy}>
-            <MdCloudUpload size={16} style={{ marginRight: 6, verticalAlign: "-3px" }} />
-            Upload a workbook
-          </button>
-          <button type="button" onClick={() => switchMode("manual")}
-            style={modeBtn(mode === "manual")} disabled={!!busy}>
-            <MdEdit size={16} style={{ marginRight: 6, verticalAlign: "-3px" }} />
-            Enter a line by hand
-          </button>
-        </div>
-
-        {mode === "file" ? (
-          <>
-            <div style={grid}>
-              <label style={{ fontSize: 13, color: colors.textSecondary }}>
-                GD costing workbook
-                <input type="file" accept=".xls,.xlsx,.xlsm" onChange={onPickFile}
-                  disabled={!companyId || !!busy} style={{ ...input, padding: "0.5rem" }} />
-              </label>
-            </div>
-            <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
-              Excel only (.xls, .xlsx, .xlsm). Close the file in Excel first.
-            </p>
-            {/* The published sample, the same affordance the opening-stock
-                import offers. A new client sent this shape imports against the
-                built-in layout with no mapping. BASE_URL, not a bare path: this
-                app is served under /admin/ in the customer build. */}
-            <p style={{ margin: "0.35rem 0 0", fontSize: 12.5 }}>
-              <a href={`${(import.meta.env.BASE_URL || "/")}templates/gd-costing-template.xlsx`}
-                 download
-                 style={{ color: colors.blue, fontWeight: 600 }}>
-                Download the sample GD costing sheet
-              </a>
-              <span style={{ color: colors.textSecondary }}>
-                {" "}— filled-in example rows, and a sheet explaining every column.
-              </span>
-            </p>
-
-            {profileError && <div style={{ marginTop: "0.6rem" }}><Banner tone="error" icon={MdError}>{profileError}</Banner></div>}
-            {profile && (
-              <p style={{ margin: "0.6rem 0 0", fontSize: 12.5, color: colors.textSecondary }}>
-                Layout: <strong>{profile.name}</strong> (v{profile.currentVersion})
-              </p>
-            )}
-
-            <div style={{ marginTop: "0.9rem" }}>
-              <button onClick={onPreview} disabled={!file || !companyId || !profile || profileLoading || !!busy}
-                style={btn(colors.blue, !file || !companyId || !profile || profileLoading || !!busy)}>
-                <MdCloudUpload size={18} />
-                {busy === "preview" ? "Reading…" : "Preview"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            {!companyId && (
-              <Banner tone="warn" icon={MdWarning}>Choose a company first.</Banner>
-            )}
-            <ManualEntryFields
-              companyId={companyId}
-              manual={manual}
-              onChange={updateManual}
-              onPreview={onPreviewManual}
-              disabled={!companyId || !!busy}
-              busy={busy === "preview"}
-              staged={stagedManual}
-              onAddLine={onAddManualLine}
-              onRemoveLine={onRemoveManualLine}
-              onEditLine={onEditManualLine}
-            />
-          </>
-        )}
-      </div>
-
-      {/* ── Step 2: review ─────────────────────────────────────────── */}
-      {preview && (
+      {result && (
         <div style={card}>
-          <h2 style={{ fontSize: 15, margin: "0 0 0.6rem" }}>2 · Review</h2>
-
-          {preview.blockingErrors?.map((e, i) => <Banner key={i} tone="error" icon={MdError}>{e}</Banner>)}
-
-          <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 0.7rem" }}>
-            {costOnlyCount} {costingMode === MODE_NEW_ARRIVALS
-              ? "will have stock added"
-              : "will have their cost set"} ·{" "}
-            {createMissingStock
-              ? `${notMatchedCount} will be created as new stock`
-              : `${notMatchedCount} not matched`}{" "}
-            · {ambiguousCount} ambiguous
-          </p>
-
-          {overwriteWarningCount > 0 && (
-            <Banner tone="error" icon={MdWarning}>
-              {overwriteWarningCount} line{overwriteWarningCount === 1 ? "" : "s"} will REPLACE an actual
-              cost already recorded from an earlier import — see the highlighted row(s) below. Switch to
-              "These are new arrivals" instead if these are additional goods, not a correction.
-            </Banner>
-          )}
-
-          {costWarningCount > 0 && (
-            <Banner tone="error" icon={MdWarning}>
-              {costWarningCount} line{costWarningCount === 1 ? "" : "s"} would write a cost that does not
-              fit the stock it lands on — see the highlighted row(s) below for the figures and why.
-              Backfill spreads one GD's unit cost across an item's whole quantity, which goes wrong when
-              the item merges several products or the GD covers only part of it. Import anyway if you
-              know the figure is right.
-            </Banner>
-          )}
-
-          {rateWarningCount > 0 && (
-            <Banner tone="warn" icon={MdWarning}>
-              {rateWarningCount} line{rateWarningCount === 1 ? "" : "s"} carry a rate above 50%, which is
-              almost always a cell holding "1" meant as 1% — a bare 1 cannot be told apart from a
-              fraction. Cost and selling value are unaffected; income tax is not.
-            </Banner>
-          )}
-
-          {notMatchedCount > 0 && (
-            <label style={{
-              display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13.5,
-              margin: "0 0 0.8rem", padding: "0.65rem 0.75rem", borderRadius: 9,
-              background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
-              minHeight: 44, boxSizing: "border-box", cursor: "pointer",
-            }}>
-              <input type="checkbox" checked={createMissingStock}
-                onChange={(e) => setCreateMissingStock(e.target.checked)}
-                style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }} />
-              <span>
-                Also bring the {notMatchedCount} unmatched line(s) in as new stock
-                (creates item types and opening balances) instead of skipping them.
-                The server re-checks each one before creating anything.
-              </span>
-            </label>
-          )}
-
-          {preview.warnings?.length > 0 && (
-            <div style={{ marginBottom: "0.8rem" }}>
-              {preview.warnings.map((w, i) => <Banner key={i} tone="warn" icon={MdWarning}>{w}</Banner>)}
-            </div>
-          )}
-
-          {groups.map((g) => (
-            <div key={g.totals.gdNumber} style={{
-              border: `1px solid ${colors.cardBorder}`, borderRadius: 10,
-              padding: "0.8rem 0.9rem", marginBottom: "0.9rem",
-            }}>
-              <div style={{
-                display: "flex", flexWrap: "wrap", justifyContent: "space-between",
-                alignItems: "baseline", gap: 8, marginBottom: "0.6rem",
-              }}>
-                <h3 style={{ margin: 0, fontSize: 14.5 }}>GD {g.totals.gdNumber}</h3>
-                <span style={{ fontSize: 12, color: colors.textSecondary }}>
-                  {g.totals.gdDate ? new Date(g.totals.gdDate).toLocaleDateString() : "no date on the sheet"}
-                  {" · "}{g.totals.lineCount} line(s)
-                </span>
+          <Banner tone="ok"><strong>Imported.</strong> The GD is recorded and its stock is on the books.</Banner>
+          <div style={{ display: "grid", gap: "0.6rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", margin: "0.3rem 0 0.6rem" }}>
+            {[
+              ["GDs recorded", result.consignmentsWritten],
+              ["Lines recorded", result.linesWritten],
+              ["Items given stock or cost", result.balancesCosted],
+              ["New items created", result.itemTypesCreated],
+              ["Lines left out", result.linesSkipped],
+              ["Landed cost", moneyText(result.totalCostExcludingTax)],
+            ].map(([k, v]) => (
+              <div key={k}>
+                <div style={{ fontSize: 12, color: billColors.textSecondary }}>{k}</div>
+                <div style={{ fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{v}</div>
               </div>
-
-              <div style={{ ...grid, marginBottom: "0.7rem" }}>
-                <Stat label="Cost" value={money(g.totals.totalCostExcludingTax)} />
-                <Stat label="Sales tax" value={money(g.totals.totalSalesTax)} />
-                <Stat label="AST" value={money(g.totals.totalAst)} />
-                <Stat label="Income tax" value={money(g.totals.totalIncomeTax)} />
-                <Stat label="Input tax" value={money(g.totals.totalInputTax)} />
-                <Stat label="Selling value" value={money(g.totals.totalSellingValue)} />
-              </div>
-
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
-                  <thead>
-                    <tr>
-                      <th style={th}>GD</th>
-                      <th style={th}>HS code</th>
-                      <th style={th}>Description</th>
-                      <th style={{ ...th, textAlign: "right" }}>Quantity</th>
-                      <th style={{ ...th, textAlign: "right" }}>Cost</th>
-                      <th style={{ ...th, textAlign: "right" }}>Selling value</th>
-                      <th style={th}>Disposition</th>
-                      <th style={th}>Match note</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.lines.map((l) => {
-                      const notMatched = l.disposition === "stock-posted";
-                      const willCreate = notMatched && createMissingStock;
-                      return (
-                        <tr key={l.sourceRow} style={{
-                          opacity: notMatched && !willCreate ? 0.6 : 1,
-                          background: (l.overwriteWarning || l.costPlausibilityWarning)
-                            ? colors.dangerLight : undefined,
-                        }}>
-                          <td style={td}>
-                            <div>{l.gdNumber}</div>
-                            <div style={{ fontSize: 11.5, color: colors.textSecondary }}>
-                              {l.gdDate ? new Date(l.gdDate).toLocaleDateString() : "—"}
-                            </div>
-                          </td>
-                          <td style={{ ...td, whiteSpace: "nowrap" }}>{l.hsCode || "—"}</td>
-                          <td style={td}><div style={wrap2}>{l.description || "—"}</div></td>
-                          <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                            {qty(l.quantity)}{l.unit ? ` ${l.unit}` : ""}
-                          </td>
-                          <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(l.cost)}</td>
-                          <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{money(l.sellingValue)}</td>
-                          <td style={td}>
-                            <span style={{
-                              color: willCreate ? colors.success : (DISPOSITION_TONE[l.disposition] || colors.textSecondary),
-                              fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.02em",
-                            }}>
-                              {willCreate ? "Will create" : dispositionLabel(l.disposition, costingMode === MODE_NEW_ARRIVALS)}
-                            </span>
-                          </td>
-                          <td style={td}>
-                            <div style={wrap2}>
-                              {l.overwriteWarning && (
-                                <div style={{ color: colors.danger, fontWeight: 700, marginBottom: 4 }}>
-                                  {l.overwriteWarning}
-                                </div>
-                              )}
-                              {l.costPlausibilityWarning && (
-                                <div style={{ color: colors.danger, fontWeight: 700, marginBottom: 4 }}>
-                                  {l.costPlausibilityWarning}
-                                </div>
-                              )}
-                              {l.rateWarning && (
-                                <div style={{ color: "#b26a00", fontWeight: 700, marginBottom: 4 }}>
-                                  {l.rateWarning}
-                                </div>
-                              )}
-                              {willCreate
-                                ? WILL_CREATE_NOTE
-                                : notMatched
-                                  ? NOT_MATCHED_NOTE
-                                  : l.matchNote
-                                    || ((l.overwriteWarning || l.costPlausibilityWarning || l.rateWarning)
-                                        ? null : "—")}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-
-          <button onClick={onCommit} disabled={!preview.canCommit || !!busy}
-            style={{ ...btn(colors.success, !preview.canCommit || !!busy), marginTop: "0.4rem" }}>
-            {busy === "commit"
-              ? "Importing…"
-              : `Commit ${costOnlyCount + (createMissingStock ? notMatchedCount : 0)} line(s)`}
-          </button>
-          {!preview.canCommit && (preview.blockingErrors?.length ?? 0) === 0 && (
-            <p style={{ fontSize: 13, color: "#b26a00", margin: "0.5rem 0 0" }}>
-              Nothing here can be committed.
-            </p>
+            ))}
+          </div>
+          {(result.messages || []).length > 0 && (
+            <ul style={{ margin: "0.2rem 0 0", paddingLeft: "1.2rem", fontSize: 13, lineHeight: 1.6 }}>
+              {result.messages.map((m, i) => <li key={i}>{m}</li>)}
+            </ul>
           )}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.7rem" }}>
+            <button type="button" onClick={resetAll} style={btn(billColors.teal, false)}>
+              <MdRestartAlt size={18} /> Import another GD
+            </button>
+            {canSeeConsignments && <Link to="/imports/consignments" style={{ ...ghostBtn(billColors.blue), textDecoration: "none" }}>Open Consignments</Link>}
+            {canSeeStock && <Link to="/stock" style={{ ...ghostBtn(billColors.blue), textDecoration: "none" }}>See stock on hand</Link>}
+          </div>
         </div>
       )}
 
-      {/* ── Done ───────────────────────────────────────────────────── */}
-      {result && (
-        <div style={card}>
-          <Banner tone="ok" icon={MdCheckCircle}>Imported.</Banner>
-          <div style={grid}>
-            <Stat label="Consignments written" value={result.consignmentsWritten} />
-            <Stat label="Lines written" value={result.linesWritten} />
-            <Stat label="Balances costed" value={result.balancesCosted} />
-            <Stat label="Lines skipped" value={result.linesSkipped} />
-            <Stat label="Lines ambiguous" value={result.linesAmbiguous} />
-            <Stat label="Total cost" value={money(result.totalCostExcludingTax)} />
-            <Stat label="Item types created" value={result.itemTypesCreated} />
-            <Stat label="Item types adopted" value={result.itemTypesAdopted} />
-            <Stat label="Opening balances created" value={result.openingBalancesCreated} />
+      {/* 1 ── Company and what arrived ─────────────────────────────────── */}
+      <BillStep id={COSTING_ANCHORS.company} n={1} title="Company & what arrived" status={step1}
+        summary={company ? <><strong>{company.name}</strong><span>· {modeText}</span></> : null}
+        help="Choose whose books this GD goes on, and say what the GD is. Almost every GD is new goods arriving.">
+        <div style={{ display: "grid", gap: "0.8rem" }}>
+          <div>
+            <label htmlFor="costing-company" style={{ display: "block", fontSize: 13, color: billColors.textSecondary, marginBottom: 4 }}>
+              Company<span aria-hidden="true" style={{ color: billColors.danger, marginLeft: 3 }}>*</span>
+            </label>
+            <select id="costing-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}
+              disabled={!!busy} style={selectStyle}>
+              <option value="">Choose a company…</option>
+              {(companies || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
-          {(result.messages || []).map((m, i) =>
-            <p key={i} style={{ fontSize: 13.5, margin: "0.6rem 0 0" }}>{m}</p>)}
-          <button onClick={resetFlow} style={{ ...btn(colors.teal), marginTop: "0.9rem" }}>
-            <MdRestartAlt size={18} /> {mode === "manual" ? "Enter another line" : "Import another file"}
+
+          <ModeCard active={mode === MODE_NEW_ARRIVALS} disabled={!!busy} onPick={() => onMode(MODE_NEW_ARRIVALS)}
+            tone={billColors.success}
+            title="New goods arrived on this GD"
+            body="The monthly case. Each line adds its quantity, landed cost and selling value to the item it matches; a line that matches nothing becomes a new item." />
+
+          {!showBackfill && mode !== MODE_BACKFILL ? (
+            <button type="button" onClick={() => setShowBackfill(true)} disabled={!!busy}
+              style={{ ...ghostBtn(billColors.textSecondary), justifySelf: "start", fontWeight: 600 }}>
+              One-off: price stock that is already on the books…
+            </button>
+          ) : (
+            <div>
+              <ModeCard active={mode === MODE_BACKFILL} disabled={!!busy} onPick={() => onMode(MODE_BACKFILL)}
+                tone={billColors.warn}
+                title="One-off: these goods are already on the books"
+                body="For loading the history once. A matched line SETS the item's actual cost from this GD's unit cost; quantities do not move. Never use it for a new month's GD: the new units would never appear." />
+              {mode === MODE_BACKFILL && (
+                <div style={{ marginTop: "0.5rem" }}>
+                  <Banner tone="warn">
+                    Backfill replaces any actual cost already recorded on the items it matches, and lines
+                    with nothing on the books are left out unless you bring them in.
+                  </Banner>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </BillStep>
+
+      {/* 2 ── The GD ───────────────────────────────────────────────────── */}
+      <BillStep id={COSTING_ANCHORS.gd} n={2} title="The GD" status={step2}
+        summary={preview && !stale
+          ? <span>{source ? source.fileName : `${lines.length} typed line${lines.length === 1 ? "" : "s"}`} · checked</span>
+          : null}
+        notice={stale ? <Banner tone="warn">You changed the lines after checking them. Press <strong>Check</strong> again before bringing them in.</Banner> : null}
+        help="Upload the GD costing sheet your accountant keeps, or type the GD's lines off the paper. Either way, Check shows what will happen before anything is saved.">
+        {!companyId ? (
+          <Banner tone="info">Choose the company first.</Banner>
+        ) : (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: "0.8rem" }}>
+              <button type="button" onClick={() => { setEntry("file"); clearReview(); }} disabled={!!busy} style={segBtn(entry === "file")}>
+                <MdCloudUpload size={17} /> Upload the costing sheet
+              </button>
+              <button type="button" onClick={() => { setEntry("type"); clearReview(); }} disabled={!!busy} style={segBtn(entry === "type")}>
+                <MdEdit size={17} /> Type the GD
+              </button>
+            </div>
+
+            {entry === "file" ? (
+              <div>
+                <label htmlFor="costing-file" style={{ display: "block", fontSize: 13, color: billColors.textSecondary, marginBottom: 4 }}>
+                  GD costing workbook (.xls, .xlsx, .xlsm)
+                </label>
+                <input id="costing-file" key={fileKey} type="file" accept=".xls,.xlsx,.xlsm" disabled={!!busy}
+                  onChange={(e) => { setFile(e.target.files?.[0] || null); clearReview(); }}
+                  style={{ ...selectStyle, padding: "0.5rem", maxWidth: 520 }} />
+                <p style={{ margin: "0.45rem 0 0", fontSize: 12.5, color: billColors.textSecondary }}>
+                  Close the file in Excel first. Every line needs its GD number and date, item name, HS code,
+                  quantity, unit and assessed value.{" "}
+                  <a href={`${import.meta.env.BASE_URL || "/"}templates/gd-costing-template.xlsx`} download
+                    style={{ color: billColors.blue, fontWeight: 700 }}>
+                    Download the sample sheet
+                  </a>{" "}(filled-in rows and a sheet explaining every column).
+                </p>
+                {profileError && <div style={{ marginTop: "0.5rem" }}><Banner tone="error">{profileError}</Banner></div>}
+                {profile && (
+                  <p style={{ margin: "0.35rem 0 0", fontSize: 12, color: billColors.textSecondary }}>
+                    Layout: {profile.name} (v{profile.currentVersion})
+                  </p>
+                )}
+                <div style={{ marginTop: "0.8rem" }}>
+                  <button type="button" onClick={onCheckFile}
+                    disabled={!file || !profile || !!busy}
+                    style={btn(billColors.blue, !file || !profile || !!busy)}>
+                    <MdCloudUpload size={18} /> {busy === "preview" ? "Checking…" : "Check the sheet"}
+                  </button>
+                  {!file && <span style={{ marginLeft: 10, fontSize: 12.5, color: billColors.textSecondary }}>Choose the workbook first.</span>}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <GdLineEditor companyId={companyId} line={typed} showAll={typedShowAll} disabled={!!busy}
+                  onChange={(patch) => { setTyped((m) => ({ ...m, ...patch })); if (preview) setStale(true); }}
+                  idPrefix="typed" />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.8rem" }}>
+                  <button type="button" onClick={onAddLine} disabled={!!busy} style={ghostBtn(billColors.blue)}>
+                    <MdAdd size={18} /> Add line and type the next
+                  </button>
+                  <button type="button" onClick={onCheckTyped} disabled={!!busy || typedCount === 0}
+                    style={btn(billColors.blue, !!busy || typedCount === 0)}>
+                    <MdCloudUpload size={18} />
+                    {busy === "preview" ? "Checking…" : typedCount > 0 ? `Check ${typedCount} line${typedCount === 1 ? "" : "s"}` : "Check"}
+                  </button>
+                </div>
+                {staged.length > 0 && (
+                  <div style={{ marginTop: "0.9rem" }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: billColors.textSecondary, marginBottom: 6 }}>
+                      Lines added ({staged.length})
+                    </div>
+                    {staged.map((m, i) => (
+                      <div key={i} style={{
+                        display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem 0.8rem",
+                        padding: "0.45rem 0.6rem", border: `1px solid ${billColors.cardBorder}`, borderRadius: 9, marginBottom: 6,
+                      }}>
+                        <span style={{ fontWeight: 800, color: billColors.textSecondary, minWidth: 28 }}>{i + 1}</span>
+                        <span style={{ flex: "1 1 200px", minWidth: 0, fontWeight: 600, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                          {m.description || "(no item name)"}
+                        </span>
+                        <span style={{ fontSize: 12.5, color: billColors.textSecondary }}>
+                          {m.gdNumber || "no GD"} · HS {m.hsCode || "—"} · {qtyText(m.quantity)} {m.unit}
+                        </span>
+                        <span style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}>{moneyText(computeCosting(m).cost)}</span>
+                        <span style={{ display: "flex", gap: 6 }}>
+                          <button type="button" onClick={() => onEditStaged(i)} disabled={!!busy} style={ghostBtn(billColors.blue)}>
+                            <MdEdit size={16} /> Edit
+                          </button>
+                          <button type="button" onClick={() => onRemoveStaged(i)} disabled={!!busy} style={ghostBtn(billColors.danger)}
+                            aria-label={`Remove line ${i + 1}`}>
+                            <MdDelete size={16} />
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </BillStep>
+
+      {/* 3 ── Check the lines ──────────────────────────────────────────── */}
+      <BillStep id={COSTING_ANCHORS.review} n={3} title="Check the lines" status={step3}
+        summary={preview ? (
+          <span>
+            {lines.length} line{lines.length === 1 ? "" : "s"}
+            {fixCount > 0 && <strong style={{ color: billColors.danger }}> · {fixCount} to fix</strong>}
+            {leftCount > 0 && <span> · {leftCount} left out</span>}
+          </span>
+        ) : <span style={{ color: billColors.textSecondary }}>Opens when the GD is checked</span>}
+        help={preview
+          ? "Each line says what will happen to your stock. Fix anything in red, choose the item where several share a code, or leave a line out: its goods then will not come in."
+          : null}>
+        {preview && (
+          <>
+            {(preview.blockingErrors || []).map((e, i) => <Banner key={i} tone="error">{e}</Banner>)}
+            {(preview.overwriteWarningCount > 0 || preview.costPlausibilityWarningCount > 0 || preview.rateWarningCount > 0) && (
+              <Banner tone="warn">
+                Worth a look before bringing it in (the lines say why):
+                {preview.overwriteWarningCount > 0 && <> {preview.overwriteWarningCount} will REPLACE an actual cost recorded earlier.</>}
+                {preview.costPlausibilityWarningCount > 0 && <> {preview.costPlausibilityWarningCount} would write a cost that does not fit the stock it lands on.</>}
+                {preview.rateWarningCount > 0 && <> {preview.rateWarningCount} carry a rate above 50%, usually a "1" meant as 1%.</>}
+              </Banner>
+            )}
+            {notes.length > 0 && (
+              <details style={{ marginBottom: "0.7rem" }}>
+                <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700, color: billColors.textSecondary, minHeight: 32 }}>
+                  Notes from reading the sheet ({notes.length})
+                </summary>
+                <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem", fontSize: 12.5, color: billColors.textSecondary }}>
+                  {notes.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </details>
+            )}
+            {busy === "recheck" && <Banner tone="info">Checking again…</Banner>}
+            {/* A stale review describes lines that no longer exist as typed:
+                acting on it would re-check the old ones. */}
+            <GdReviewLines preview={preview} mode={mode} busy={!!busy || stale}
+              onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} />
+          </>
+        )}
+      </BillStep>
+
+      {/* 4 ── Bring it in ──────────────────────────────────────────────── */}
+      <BillStep id={COSTING_ANCHORS.commit} n={4} title="Bring it in" status={ready ? "done" : "todo"}
+        summary={summary ? <span>{moneyText(summary.totalCost)} landed cost</span> : <span style={{ color: billColors.textSecondary }}>After the check</span>}>
+        {summary ? (
+          <div>
+            <ul style={{ margin: "0 0 0.6rem", paddingLeft: "1.2rem", fontSize: 14, lineHeight: 1.6 }}>
+              {summarySentences(summary).map((s, i) => <li key={i}>{s}</li>)}
+            </ul>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "1.2rem", fontSize: 13.5 }}>
+              <span>Landed cost <strong style={{ fontVariantNumeric: "tabular-nums" }}>{moneyText(summary.totalCost)}</strong></span>
+              <span>Selling value <strong style={{ fontVariantNumeric: "tabular-nums" }}>{moneyText(summary.totalSelling)}</strong></span>
+            </div>
+            {mode === MODE_NEW_ARRIVALS && (
+              <p style={{ margin: "0.5rem 0 0", fontSize: 12.5, color: billColors.textSecondary }}>
+                When the company keeps its ledger here, each GD also posts one journal entry, dated the GD's own date.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: 13, color: billColors.textSecondary }}>Check the GD first: this step then says exactly what will be saved.</p>
+        )}
+      </BillStep>
+
+      {/* The footer: what is left, and the one button that saves. */}
+      <div data-costing-footer style={{
+        position: "fixed", bottom: 0, zIndex: 30,
+        left: barBox ? barBox.left : 0, width: barBox ? barBox.width : "100%", boxSizing: "border-box",
+        padding: "0.6rem clamp(0.75rem, 2vw, 1.25rem) 0.7rem", background: "#fff",
+        borderTop: `1px solid ${billColors.cardBorder}`, boxShadow: "0 -6px 18px rgba(13,71,161,0.08)",
+      }}>
+        <div style={{
+          maxWidth: 1100, margin: "0 auto", display: "flex", flexWrap: "wrap", alignItems: "center",
+          gap: "0.5rem 0.8rem",
+        }}>
+          <BillChecklist items={checklist} readyText="Ready to bring in" />
+          <button type="button" onClick={onCommit} disabled={!ready}
+            style={{ ...btn(billColors.success, !ready), marginLeft: "auto" }}>
+            <MdCheckCircle size={18} />
+            {busy === "commit" ? "Saving…" : summary ? commitLabel(summary) : "Bring into stock"}
           </button>
+        </div>
+      </div>
+
+      {fixing && (
+        <div style={formStyles.backdrop} role="dialog" aria-modal="true" aria-labelledby="fix-title">
+          <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}>
+            <div style={formStyles.header}>
+              <h2 id="fix-title" style={formStyles.title}>Fix row {fixing.sourceRow}</h2>
+              <button type="button" onClick={() => setFixing(null)} style={formStyles.closeButton} aria-label="Close">
+                <MdClose size={18} />
+              </button>
+            </div>
+            <div style={formStyles.body}>
+              <GdLineEditor companyId={companyId} line={fixing.draft} showAll serverProblems={fixing.problems}
+                disabled={busy === "recheck"} idPrefix={`fix-${fixing.sourceRow}`}
+                onChange={(patch) => setFixing((f) => ({ ...f, draft: { ...f.draft, ...patch }, problems: [] }))} />
+            </div>
+            <div style={formStyles.footer}>
+              <span style={{ marginRight: "auto", fontSize: 12.5, color: billColors.textSecondary }}>
+                {lineProblems(fixing.draft).length > 0
+                  ? `Still needed: ${lineProblems(fixing.draft).map((p) => p.message.replace(/\.$/, "")).join("; ")}.`
+                  : "The line is complete. Saving checks it on the server again."}
+              </span>
+              <button type="button" onClick={() => setFixing(null)} style={formStyles.cancel}>Cancel</button>
+              <button type="button" onClick={onSaveFix} disabled={busy === "recheck"}
+                style={{ ...formStyles.button, minHeight: 44 }}>
+                {busy === "recheck" ? "Checking…" : "Save and check again"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

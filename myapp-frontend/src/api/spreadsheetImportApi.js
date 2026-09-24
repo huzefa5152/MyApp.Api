@@ -77,8 +77,14 @@ export const previewGdCosting = ({ file, companyId, profileId, mode }) =>
 // ALL the lines go in ONE call, never one call per line: matching, per-balance
 // pooling and the cost-plausibility check reason over the whole set, and two
 // lines landing on the same item have to pool into a single unit cost.
-export const previewGdCostingManual = ({ companyId, lines, mode }) =>
-  httpClient.post("/spreadsheet-import/gd-costing/preview-manual", { lines },
+//
+// The same route re-checks an uploaded workbook's lines after an edit in the
+// review: `source` (the upload's fileName / fileSha256 / fileSizeBytes /
+// importProfileId / profileVersion) keeps the import recorded against that
+// file, so it still cannot be imported twice.
+export const previewGdCostingManual = ({ companyId, lines, mode, source }) =>
+  httpClient.post("/spreadsheet-import/gd-costing/preview-manual",
+    { lines, ...(source ? { source } : {}) },
     { params: { companyId, ...(mode ? { mode } : {}) } });
 
 export const commitGdCosting = (body) =>
