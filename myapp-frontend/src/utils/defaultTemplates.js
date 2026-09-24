@@ -95,6 +95,12 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
     {{/each}}
   </tbody>
 </table>
+{{#if notes}}
+<div class="doc-notes no-break" style="margin-top:10px;padding:6px 10px;border:1px solid #888;font-size:13px;line-height:1.4;">
+  <div style="font-weight:700;margin-bottom:2px;">Notes</div>
+  <div>{{{richText notes}}}</div>
+</div>
+{{/if}}
 </div>
 
 <div class="footer-section">
@@ -286,6 +292,12 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
     </table>
   </div>
 </div>
+{{#if notes}}
+<div class="doc-notes no-break" style="margin-top:10px;padding:6px 10px;border:1px solid #888;font-size:11pt;line-height:1.4;">
+  <div style="font-weight:700;margin-bottom:2px;">Notes</div>
+  <div>{{{richText notes}}}</div>
+</div>
+{{/if}}
 </div>
 
 <!-- Footer: signature + types (pushed to bottom) -->
@@ -1126,6 +1138,13 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html>
     </div>
 
   </div>
+
+  {{#if notes}}
+  <div class="doc-notes no-break" style="margin-top:10px;padding:6px 10px;border:1px solid #888;font-size:9pt;line-height:1.4;">
+    <div style="font-weight:700;margin-bottom:2px;">Notes</div>
+    <div>{{{richText notes}}}</div>
+  </div>
+  {{/if}}
 
 
   <!-- =======================================================
