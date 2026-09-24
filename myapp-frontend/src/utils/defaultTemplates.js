@@ -250,7 +250,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 <!-- Purchase Order -->
 <div class="po-section">
   <table class="po-table">
-    <tr><td>Purchase Order</td><td class="po-val">{{#if poNumber}}{{poNumber}}{{else}}\\u2014{{/if}}</td></tr>
+    <tr><td>Purchase Order</td><td class="po-val">{{#if poNumber}}{{poNumber}}{{else}}—{{/if}}</td></tr>
     {{#if poDate}}<tr><td>P.O  Date</td><td class="po-val">{{fmtDate poDate}}</td></tr>{{/if}}
   </table>
 </div>
