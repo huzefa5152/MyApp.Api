@@ -325,6 +325,14 @@ code.
 **Fixed: SN024 could not be billed.** Under SN024 the item picker hid every item
 without the SRO 297 sale type, which was all of the goods that needed it.
 
+**Fixed: 3rd Schedule (SN008) bills were refused by FBR.** Validating or
+submitting a bill re-read each line's sale type from the item catalogue, so an
+item catalogued at standard rate, billed under SN008, went to FBR as a
+standard-rate line and was refused ("sale type not match with provided
+scenario"). SN024, SN005 and SN006 bills could fail the same way. The bill's own
+scenario now decides the sale type of every line, as the bill form already
+shows it.
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New

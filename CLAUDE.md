@@ -1485,6 +1485,16 @@ them can be resolved from FBR.
   `scripts/test_fbr_sandbox_e2e.py:REGISTERED_SHAPES` with
   `filesInSuite=False` and promote it when the sandbox repeats. A suite that
   goes red on PRAL's mood teaches nobody anything.
+- **The bill's scenario decides every line's sale type at filing time
+  (2026-09-24).** Validate / Submit refresh each line's HS code, UoM and sale
+  type from the catalog; for the SALE TYPE that refresh yields to the scenario
+  the bill carries (the caller's, or its `[SNxxx]` marker) -- never to the
+  buyer-based default an unmarked bill gets. Letting the catalog win filed an
+  SN008 line for an item catalogued at standard rate as a standard-rate line,
+  and FBR refused it `[0204] Sale type not match with provided scenario`;
+  SN024 / SN005 / SN006 lines broke the same way for any item carrying its own
+  sale type. The bill form already locks every line to the scenario, so this
+  makes the filing agree with the screen.
 - Suite: `scripts/test_fbr_sandbox_e2e.py` suite H (`--cnic` for a 13-digit
   seller registration; `--file-codes` to choose what is actually filed).
 

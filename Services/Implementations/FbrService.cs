@@ -948,6 +948,12 @@ namespace MyApp.Api.Services.Implementations
             if (buyer == null)
                 return Fail("Invoice client data is missing.");
 
+            // The bill's OWN scenario -- the caller's, or its [SNxxx] marker --
+            // captured before the buyer-based default below fills the gap for
+            // older bills that never carried one. Only this one may decide a
+            // line's sale type in the catalog refresh further down.
+            var billScenario = TaxScenarios.Find(scenarioId);
+
             // Sandbox needs a scenario on every payload, and when neither the
             // caller nor the bill's [SNxxx] marker named one this used to fall
             // back to SN001 unconditionally -- so every bill for an Unregistered
@@ -1009,9 +1015,20 @@ namespace MyApp.Api.Services.Implementations
                         // field this sync had just erased. The catalog wins when it has
                         // a value; otherwise the line keeps its own, or takes the
                         // company default (FbrSaleTypeDefaults, 2026-09-10).
-                        var syncedSaleType = !string.IsNullOrWhiteSpace(t.SaleType)
-                            ? t.SaleType
-                            : FbrSaleTypeDefaults.Resolve(line.SaleType, company);
+                        //
+                        // Except when the bill names its scenario (2026-09-24). A
+                        // scenario fixes ONE sale type for every line -- the bill form
+                        // locks each line to it, and FBR refuses a line whose sale type
+                        // is another scenario's ([0204]). Letting the catalog win here
+                        // turned an SN008 line for an item catalogued at standard rate
+                        // back into a standard-rate line at validate time, so a 3rd
+                        // Schedule bill could never file; SN024 / SN005 / SN006 lines
+                        // went the same way for any item with a sale type of its own.
+                        var syncedSaleType = !string.IsNullOrWhiteSpace(billScenario?.SaleType)
+                            ? billScenario!.SaleType
+                            : !string.IsNullOrWhiteSpace(t.SaleType)
+                                ? t.SaleType
+                                : FbrSaleTypeDefaults.Resolve(line.SaleType, company);
                         if (line.SaleType     != syncedSaleType) { line.SaleType = syncedSaleType; anyChanged = true; }
                         if (line.ItemTypeName != t.Name)          { line.ItemTypeName = t.Name;    anyChanged = true; }
                     }
