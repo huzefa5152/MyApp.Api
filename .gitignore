@@ -450,6 +450,7 @@ scripts/stock_export_harness/*.xlsx
 # here: it carries the rules every coding agent has to follow, so it is
 # tracked alongside CLAUDE.md.
 .codex/
+.codex-audit/
 scripts/*.ps1
 
 # Built frontend output — CI builds wwwroot from source on every deploy;
