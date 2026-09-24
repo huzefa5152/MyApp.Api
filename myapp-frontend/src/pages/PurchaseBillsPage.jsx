@@ -1,7 +1,7 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdReceipt, MdClose, MdPayments, MdAssignment, MdPrint, MdPictureAsPdf, MdLocalShipping, MdCopyAll } from "react-icons/md";
-import DocumentLinesLink from "../Components/DocumentLinesLink";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -363,6 +363,7 @@ export default function PurchaseBillsPage() {
   };
 
   return (
+    <DocumentLinesNavigation type="purchase">
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -531,7 +532,6 @@ export default function PurchaseBillsPage() {
                         <button style={btnView} onClick={() => { setEditingId(b.id); setViewOnly(true); setShowForm(true); }}>
                           <MdVisibility size={14} /> View
                         </button>
-                        <DocumentLinesLink type="purchase" documentId={b.id} />
                         {canPrint && (
                           <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(b)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print purchase bill"}>
                             <MdPrint size={14} /> Print
@@ -937,6 +937,7 @@ export default function PurchaseBillsPage() {
         </div>
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

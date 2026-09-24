@@ -312,6 +312,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-09-25 — Document lines and multi-delivery linking
 
+- Document Lines uses compact filters and a collapsible column chooser, loads this month automatically, and refreshes when filters change. Document lists have top and bottom shortcuts instead of a Lines action on every card or row.
 - Added a date-filtered Document Lines view for sales quotes, orders, delivery challans, bills, tax invoices, credit/debit notes, purchase bills, purchase debit notes, and goods receipts. Each document has a direct Lines shortcut; operators can choose columns, copy rows into Excel, or download the matching lines.
 - Standalone bills can link several unbilled challans in one transaction or select a Sales Order and attach its current active challans. Linking preserves bill amounts and FBR data.
 

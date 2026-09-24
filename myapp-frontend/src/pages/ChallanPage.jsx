@@ -1,3 +1,4 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdUploadFile } from "react-icons/md";
@@ -385,6 +386,7 @@ export default function ChallanPage() {
   );
 
   return (
+    <DocumentLinesNavigation type="challan">
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -649,6 +651,7 @@ export default function ChallanPage() {
       />
 
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

@@ -1,6 +1,6 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
-import DocumentLinesLink from "../Components/DocumentLinesLink";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
 import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
@@ -143,6 +143,7 @@ export default function GoodsReceiptsPage() {
   };
 
   return (
+    <DocumentLinesNavigation type="receipt">
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -244,7 +245,6 @@ export default function GoodsReceiptsPage() {
                       </div>
                       <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
                         <button style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
-                        <DocumentLinesLink type="receipt" documentId={gr.id} />
                         {canPrint && <button style={{ ...btnPrint, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} onClick={() => handlePrint(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print goods receipt"}><MdPrint size={14} /> Print</button>}
                         {canPrint && <button style={{ ...btnPdf, ...((tplPicker.noTemplate || exportingId === gr.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate || !!exportingId} onClick={() => handleExportPdf(gr)} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={14} /> PDF</button>}
                         {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
@@ -289,6 +289,7 @@ export default function GoodsReceiptsPage() {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

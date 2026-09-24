@@ -1,5 +1,4 @@
 import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf, MdCopyAll } from "react-icons/md";
-import DocumentLinesLink from "./DocumentLinesLink";
 import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 
@@ -58,7 +57,6 @@ export default function GoodsReceiptTable({ receipts, perms, onView, onEdit, onD
       <button style={btn.view} onClick={() => onView?.(g)} title="View">
         <MdVisibility size={14} />
       </button>
-      <DocumentLinesLink type="receipt" documentId={g.id} compact />
       {perms.canPrint && onPrint && (
         <button style={{ ...btn.print, ...(printDisabled ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={printDisabled} onClick={() => onPrint(g)} title={printDisabled ? printDisabledReason : "Print goods receipt"}>
           <MdPrint size={14} />

@@ -1,5 +1,5 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
-import DocumentLinesLink from "../Components/DocumentLinesLink";
 import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdAttachFile, MdVisibility, MdUploadFile, MdCopyAll } from "react-icons/md";
 import SalesQuoteForm from "../Components/SalesQuoteForm";
 import CopyDocumentModal from "../Components/CopyDocumentModal";
@@ -206,6 +206,7 @@ export default function SalesQuotePage() {
   };
 
   return (
+    <DocumentLinesNavigation type="quote">
     <div>
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -283,7 +284,6 @@ export default function SalesQuotePage() {
                 <div style={st.subMeta}>Subtotal Rs {Number(q.subtotal).toLocaleString()} · GST {q.gstRate}% (Rs {Number(q.gstAmount).toLocaleString()})</div>
                 {q.convertedToSalesOrderNumber && <div style={st.converted}>→ Sales Order #{q.convertedToSalesOrderNumber}</div>}
                 <div style={st.actions}>
-                  <DocumentLinesLink type="quote" documentId={q.id} compact />
                   <button style={st.actBtn} onClick={() => setViewQuote(q)} title="View"><MdVisibility size={16} /></button>
                   {canUpdate && (q.isEditable
                     ? <button style={st.actBtn} onClick={() => { setEditQuote(q); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>
@@ -342,6 +342,7 @@ export default function SalesQuotePage() {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

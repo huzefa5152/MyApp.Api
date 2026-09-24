@@ -2,7 +2,6 @@ import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdCopyAll } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
-import DocumentLinesLink from "./DocumentLinesLink";
 import { cardStyles, cardHover } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
 
@@ -232,7 +231,6 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
                     </button>
                   )}
-                  <DocumentLinesLink type="challan" documentId={c.id} />
                   {permPrint && onExportExcel && (
                     <button
                       style={{ ...styles.actionBtn, ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }}

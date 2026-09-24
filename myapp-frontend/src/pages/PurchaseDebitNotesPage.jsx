@@ -1,6 +1,6 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { MdReceiptLong, MdSearch, MdVisibility, MdDelete, MdPrint, MdPictureAsPdf, MdEdit, MdAdd } from "react-icons/md";
-import DocumentLinesLink from "../Components/DocumentLinesLink";
 import { getPurchaseDebitNotesByCompany, deletePurchaseDebitNote, getPurchaseDebitNotePrintData } from "../api/purchaseDebitNoteApi";
 import DivisionSelect from "../Components/DivisionSelect";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
@@ -121,6 +121,7 @@ export default function PurchaseDebitNotesPage() {
   }
 
   return (
+    <DocumentLinesNavigation type="purchaseDebit">
     <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
       <div style={styles.headerRow}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
@@ -186,7 +187,6 @@ export default function PurchaseDebitNotesPage() {
               </div>
               <div style={styles.cardActions}>
                 <button style={{ ...styles.mIconBtn, ...styles.view }} title="View" onClick={() => setViewNote(n)}><MdVisibility size={18} /></button>
-                <DocumentLinesLink type="purchaseDebit" documentId={n.id} compact />
                 {canUpdate && <button style={{ ...styles.mIconBtn, ...styles.edit }} title="Edit" onClick={() => openEdit(n)}><MdEdit size={18} /></button>}
                 {canPrint && (
                   <button
@@ -239,7 +239,6 @@ export default function PurchaseDebitNotesPage() {
                   <td style={styles.tdActions}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <button style={{ ...styles.iconBtn, ...styles.view }} title="View" onClick={() => setViewNote(n)}><MdVisibility size={16} /></button>
-                      <DocumentLinesLink type="purchaseDebit" documentId={n.id} compact />
                       {canUpdate && <button style={{ ...styles.iconBtn, ...styles.edit }} title="Edit" onClick={() => openEdit(n)}><MdEdit size={16} /></button>}
                       {canPrint && (
                         <button
@@ -324,6 +323,7 @@ export default function PurchaseDebitNotesPage() {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

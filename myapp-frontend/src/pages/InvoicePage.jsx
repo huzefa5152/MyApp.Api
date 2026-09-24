@@ -1,3 +1,4 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdPayments, MdUndo, MdPostAdd, MdCopyAll, MdDownload, MdAddLink, MdLinkOff } from "react-icons/md";
@@ -14,7 +15,6 @@ import FbrPreviewDialog from "../Components/FbrPreviewDialog";
 import BulkFbrPreviewDialog from "../Components/BulkFbrPreviewDialog";
 import InvoiceTable from "../Components/InvoiceTable";
 import LinkChallanModal from "../Components/LinkChallanModal";
-import DocumentLinesLink from "../Components/DocumentLinesLink";
 import CorrectionWizard from "../Components/CorrectionWizard";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
@@ -782,6 +782,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const hasFilters = search || clientFilter || divisionFilter || dateFrom || dateTo;
 
   return (
+    <DocumentLinesNavigation type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"}>
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -1264,7 +1265,6 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdOpenInNew size={14} /> Open in Invoices
                       </button>
                     )}
-                    <DocumentLinesLink type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"} documentId={inv.id} />
                     {isBillsMode && canPrint && (
                       <button style={{ ...styles.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print bill"} onClick={() => handlePrintBill(inv)}>
                         <MdPrint size={14} /> Bill
@@ -1709,6 +1709,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

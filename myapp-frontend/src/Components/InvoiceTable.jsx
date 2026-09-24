@@ -6,7 +6,6 @@ import {
   MdAddLink, MdLinkOff,
 } from "react-icons/md";
 import DataTable from "./DataTable";
-import DocumentLinesLink from "./DocumentLinesLink";
 import StatusBadge from "./StatusBadge";
 import { isFutureDocDate } from "../utils/dateInput";
 
@@ -299,7 +298,6 @@ export default function InvoiceTable({
             <MdOpenInNew size={14} />
           </button>
         )}
-        <DocumentLinesLink type={isReturnsMode ? noteDocType === 10 ? "creditNote" : "debitNote" : isBillsMode ? "bill" : "taxInvoice"} documentId={inv.id} compact />
         {isBillsMode && perms.canPrint && (
           <button style={{ ...btn.print, ...(perms.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }} disabled={perms.noTemplate} onClick={() => onPrintBill?.(inv)} title={perms.noTemplate ? perms.noTemplateReason : "Print bill"}>
             <MdPrint size={14} />
