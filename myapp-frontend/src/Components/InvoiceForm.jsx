@@ -131,7 +131,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [whtRate, setWhtRate] = useState("");
   // Further tax (s.3(1A)) -- part of the supply's tax, so it is INSIDE the
   // grand total. Defaults to the statutory 4%; clear it to charge none.
-  const [furtherTaxRate, setFurtherTaxRate] = useState("4");
+  const [furtherTaxRate, setFurtherTaxRate] = useState(""); // set from the buyer below
   // Advance income tax (236G / 236H). One dropdown: the section and whether the
   // buyer is on the Active Taxpayer List together pick the rate. Empty means
   // none, which is the default -- it must never be charged by accident.
@@ -512,6 +512,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
     company?.fbrDefaultPaymentModeRegistered,
     company?.fbrDefaultPaymentModeUnregistered,
   ]);
+
+  // Further tax (s.3(1A)) is charged on a supply to an UNREGISTERED buyer. The
+  // form used to open on 4% for every bill, so a registered buyer was billed 4%
+  // on top -- and FBR's sandbox accepts it, so nothing downstream objected.
+  // Follows the buyer the way Payment Mode does above: 4% for an unregistered
+  // buyer, none for a registered one; the operator can still change it.
+  useEffect(() => {
+    if (!selectedClientId) return;
+    const client = clients.find((c) => String(c.id) === String(selectedClientId));
+    if (!client) return;
+    const registered = (client.registrationType || "").toLowerCase() === "registered";
+    setFurtherTaxRate(registered ? "" : "4");
+  }, [selectedClientId, clients]);
 
   // Prefill the WHT rate from the company default (rate-mode) when one is
   // configured. Runs once when the default becomes available; the primitive
@@ -1410,7 +1423,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 value={furtherTaxRate}
                                 onChange={(e) => setFurtherTaxRate(e.target.value)}
                                 placeholder="0"
-                                title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total. Defaults to 4%; clear it to charge none."
+                                title="Further tax under s.3(1A), charged on the value excluding sales tax and ADDED to the grand total. 4% when the buyer is unregistered, none when registered; change it if this sale differs."
                               />
                             </div>
                             {whtMode === "rate" && (

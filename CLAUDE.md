@@ -895,9 +895,11 @@ up is the easiest way to corrupt this ledger, so:
   half-filled form must not charge the buyer on a guess, the same rule advance
   tax keeps.
 - **The RESOLVED RATE is stored on the invoice**, so a bill keeps the rate it
-  was issued at. The form defaults to **4%** (the statutory rate for a supply
-  to an unregistered buyer) and the operator may edit it; per-client defaults
-  were deliberately left for later.
+  was issued at. The create forms default it FROM THE BUYER (2026-09-24): **4%**
+  for an unregistered buyer, the statutory rate, and **none** for a registered
+  one, reset on each buyer change like Payment Mode; the operator may edit it.
+  It used to open on 4% for every bill, and bills to registered buyers went out
+  carrying it -- FBR's sandbox accepts that, so nothing downstream objected.
 - **`PostingService` derives the sale by SUBTRACTION**, so further tax must be
   subtracted there too:
   `net = GrandTotal − GSTAmount − FurtherTaxAmount`. Miss it and the tax is

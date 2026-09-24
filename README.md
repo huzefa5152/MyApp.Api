@@ -350,6 +350,11 @@ GST, sale type and SRO reference with it -- and a note says why; removing them
 puts it back. Once you pick a scenario yourself it stays yours, and a
 disagreement is the usual notice. Mixed or doubtful records never move it.
 
+**Further tax now follows the buyer.** Further tax (s.3(1A)) applies to a supply
+to an unregistered buyer, but both create forms opened on 4% for every bill, so
+bills to registered buyers were going out with it. The field now starts at 4%
+for an unregistered buyer and empty for a registered one; it is still editable.
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New
