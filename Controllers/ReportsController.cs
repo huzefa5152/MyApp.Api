@@ -39,26 +39,27 @@ namespace MyApp.Api.Controllers
         [HasPermission("reports.invoicedetail.view")]
         [AuthorizeCompany]
         public async Task<ActionResult<InvoiceSalesDetailReportDto>> GetInvoiceSalesDetail(
-            int companyId, [FromQuery] int year, [FromQuery] int month)
+            int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)
         {
-            if (year is < 2000 or > 2100 || month is < 1 or > 12)
-                return BadRequest(new { message = "Choose a valid month and year." });
+            if (InvoiceSalesDetailFilter.Validate(query) is { } err)
+                return BadRequest(new { message = err });
             var divisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
-            return Ok(await _reports.GetInvoiceSalesDetailAsync(companyId, year, month, divisions));
+            return Ok(await _reports.GetInvoiceSalesDetailAsync(companyId, query, divisions));
         }
 
         [HttpGet("company/{companyId}/invoice-sales-detail/excel")]
         [HasPermission("reports.invoicedetail.export")]
         [AuthorizeCompany]
         public async Task<IActionResult> GetInvoiceSalesDetailExcel(
-            int companyId, [FromQuery] int year, [FromQuery] int month)
+            int companyId, [FromQuery] InvoiceSalesDetailQueryDto query)
         {
-            if (year is < 2000 or > 2100 || month is < 1 or > 12)
-                return BadRequest(new { message = "Choose a valid month and year." });
+            if (InvoiceSalesDetailFilter.Validate(query) is { } err)
+                return BadRequest(new { message = err });
             var divisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
-            var bytes = await _reports.GetInvoiceSalesDetailExcelAsync(companyId, year, month, divisions);
+            var bytes = await _reports.GetInvoiceSalesDetailExcelAsync(companyId, query, divisions);
+            var window = InvoiceSalesDetailFilter.ResolveWindow(query);
             return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                $"Invoice-Sales-Detail-{year}-{month:00}.xlsx");
+                InvoiceSalesDetailFilter.ExcelFileName(window.From!.Value, window.To!.Value));
         }
 
         /// <summary>

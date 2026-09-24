@@ -4,10 +4,10 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IReportService
     {
-        Task<InvoiceSalesDetailReportDto> GetInvoiceSalesDetailAsync(int companyId, int year, int month,
-            HashSet<int>? accessibleDivisionIds);
-        Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId, int year, int month,
-            HashSet<int>? accessibleDivisionIds);
+        Task<InvoiceSalesDetailReportDto> GetInvoiceSalesDetailAsync(int companyId,
+            InvoiceSalesDetailQueryDto query, HashSet<int>? accessibleDivisionIds);
+        Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId,
+            InvoiceSalesDetailQueryDto query, HashSet<int>? accessibleDivisionIds);
 
         /// <summary>
         /// FBR Sales report for one company. Only invoices actually

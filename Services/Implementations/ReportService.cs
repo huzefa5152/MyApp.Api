@@ -53,23 +53,43 @@ namespace MyApp.Api.Services.Implementations
             return (start, start.AddYears(1), $"Year {y}", y, null);
         }
 
-        public async Task<InvoiceSalesDetailReportDto> GetInvoiceSalesDetailAsync(int companyId, int year, int month,
-            HashSet<int>? accessibleDivisionIds)
+        public async Task<InvoiceSalesDetailReportDto> GetInvoiceSalesDetailAsync(int companyId,
+            InvoiceSalesDetailQueryDto query, HashSet<int>? accessibleDivisionIds)
         {
-            var from = new DateTime(year, month, 1);
-            var until = from.AddMonths(1);
+            var window = InvoiceSalesDetailFilter.ResolveWindow(query);
+            var from = window.From!.Value.Date;
+            var to = window.To!.Value.Date;
+            var until = to.AddDays(1);
+            InvoiceSalesDetailFilter.TryParseFbrStatus(query.FbrStatus, out var fbrStatus);
+            var search = (query.Search ?? "").Trim();
             var company = await _context.Companies.AsNoTracking()
                 .Where(c => c.Id == companyId)
                 .Select(c => new { Name = c.BrandName ?? c.Name, c.InvoiceNumberPrefix })
                 .FirstOrDefaultAsync();
-            var query = _context.Invoices.AsNoTracking().AsSplitQuery()
+            var invoiceQuery = _context.Invoices.AsNoTracking().AsSplitQuery()
                 .Include(i => i.Client).Include(i => i.Items)
                 .Where(i => i.CompanyId == companyId && i.Date >= from && i.Date < until
                     && i.NoteKind == 0 && !i.IsDemo);
             if (accessibleDivisionIds != null)
-                query = query.Where(i => i.DivisionId == null
+                invoiceQuery = invoiceQuery.Where(i => i.DivisionId == null
                     || accessibleDivisionIds.Contains(i.DivisionId.Value));
-            var invoices = await query.OrderBy(i => i.Date).ThenBy(i => i.Id).ToListAsync();
+            var inPeriod = await invoiceQuery.OrderBy(i => i.Date).ThenBy(i => i.Id).ToListAsync();
+
+            var buyers = inPeriod
+                .GroupBy(i => i.ClientId)
+                .Select(g => g.First())
+                .Select(i => new InvoiceSalesDetailBuyerDto
+                {
+                    ClientId = i.ClientId, Name = i.Client?.Name ?? "", Ntn = i.Client?.NTN ?? "",
+                })
+                .OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase).ThenBy(b => b.ClientId)
+                .ToList();
+
+            var invoices = inPeriod
+                .Where(i => query.ClientId == null || i.ClientId == query.ClientId.Value)
+                .Where(i => fbrStatus == null
+                    || IsSubmittedToFbr(i) == (fbrStatus == InvoiceSalesDetailFilter.Submitted))
+                .ToList();
             var invoiceIds = invoices.Select(i => i.Id).ToList();
             var challans = await _context.DeliveryChallans.AsNoTracking()
                 .Where(c => c.CompanyId == companyId && c.InvoiceId.HasValue
@@ -81,13 +101,13 @@ namespace MyApp.Api.Services.Implementations
 
             var report = new InvoiceSalesDetailReportDto
             {
-                CompanyId = companyId, CompanyName = company?.Name ?? "", PeriodLabel = from.ToString("MMMM yyyy"),
-                InvoiceCount = invoices.Count,
-                SubmittedCount = invoices.Count(i => i.FbrStatus == "Submitted" && i.FbrCancelledAt == null),
-                NotSubmittedCount = invoices.Count(i => i.FbrStatus != "Submitted" || i.FbrCancelledAt != null),
+                CompanyId = companyId, CompanyName = company?.Name ?? "", PeriodLabel = window.Label,
+                From = from, To = to, GeneratedAt = DateTime.UtcNow, Buyers = buyers,
             };
+            var listed = new List<Invoice>();
             foreach (var inv in invoices)
             {
+                var rows = new List<InvoiceSalesDetailRowDto>();
                 var items = inv.Items.OrderBy(i => i.Id).ToList();
                 challansByInvoice.TryGetValue(inv.Id, out var challanNumbers);
                 var status = inv.FbrCancelledAt.HasValue ? "FBR cancelled"
@@ -111,7 +131,7 @@ namespace MyApp.Api.Services.Implementations
                     var first = index == 0;
                     var advance = first ? inv.AdvanceTaxAmount : 0m;
                     var further = first ? inv.FurtherTaxAmount : 0m;
-                    report.Rows.Add(new InvoiceSalesDetailRowDto
+                    rows.Add(new InvoiceSalesDetailRowDto
                     {
                         InvoiceId = inv.Id, LineNumber = index + 1, Date = inv.Date.Date,
                         InvoiceNumber = inv.InvoiceNumber.ToString(), InvoiceSeries = company?.InvoiceNumberPrefix ?? "",
@@ -128,7 +148,15 @@ namespace MyApp.Api.Services.Implementations
                         FbrStatus = status, FbrInvoiceNumber = fbrNumber, BillStatus = billStatus,
                     });
                 }
+                if (search.Length > 0 && !rows.Any(r => InvoiceSalesDetailFilter.RowMatches(r, search)))
+                    continue;
+                report.Rows.AddRange(rows);
+                listed.Add(inv);
             }
+            report.InvoiceCount = listed.Count;
+            report.SubmittedCount = listed.Count(IsSubmittedToFbr);
+            report.NotSubmittedCount = listed.Count(i => !IsSubmittedToFbr(i));
+            report.CancelledCount = listed.Count(i => i.IsCancelled);
             report.ExcludingTax = report.Rows.Sum(r => r.ExcludingTax);
             report.SalesTax = report.Rows.Sum(r => r.SalesTax);
             report.AdvanceTax = report.Rows.Sum(r => r.AdvanceTax);
@@ -137,10 +165,14 @@ namespace MyApp.Api.Services.Implementations
             return report;
         }
 
-        public async Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId, int year, int month,
-            HashSet<int>? accessibleDivisionIds)
+        /// <summary>The one split the report's counts and its FBR status filter share.</summary>
+        private static bool IsSubmittedToFbr(Invoice i) =>
+            i.FbrStatus == "Submitted" && i.FbrCancelledAt == null;
+
+        public async Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId,
+            InvoiceSalesDetailQueryDto query, HashSet<int>? accessibleDivisionIds)
         {
-            var report = await GetInvoiceSalesDetailAsync(companyId, year, month, accessibleDivisionIds);
+            var report = await GetInvoiceSalesDetailAsync(companyId, query, accessibleDivisionIds);
             using var wb = new XLWorkbook();
             var ws = wb.Worksheets.Add("Sales Detail");
             var headers = new[] { "S. No", "Date", "Month", "DC", "DC No", "DC #", "Inv Series",
