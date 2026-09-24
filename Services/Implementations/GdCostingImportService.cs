@@ -755,7 +755,7 @@ namespace MyApp.Api.Services.Implementations
                     if (balance.ActualCostExcludingTax != 0m)
                         overwriteWarning =
                             $"This balance already carries an actual cost of {balance.ActualCostExcludingTax:N2} " +
-                            "from an earlier import. Backfill will REPLACE it. Choose \"These are new arrivals\" " +
+                            "from an earlier import. Backfill will REPLACE it. Choose \"New goods arrived on this GD\" " +
                             "if these are additional goods.";
 
                     // Does the projected figure actually FIT the stock it is
