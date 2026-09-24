@@ -202,8 +202,8 @@ export const SAMPLE_DATA = {
     amountInWords: "One Hundred Eighty Three Thousand Rupees Only",
     amountInWordsRounded: "One Hundred Eighty Three Thousand Rupees Only",
     items: [
-      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
-      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },
+      { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", hsCode: "8412.3900", unitPrice: 8000, lineTotal: 80000, valueExclTax: 80000, gstRate: 18, gstAmount: 14400, totalInclTax: 94400 },
+      { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", hsCode: "8412.3900", unitPrice: 14000, lineTotal: 70000, valueExclTax: 70000, gstRate: 18, gstAmount: 12600, totalInclTax: 82600 },
     ],
     // FBR digital invoicing -- preview values so the {{#if fbrIRN}} block
     // actually draws in the editor. Real values come from the print DTO.

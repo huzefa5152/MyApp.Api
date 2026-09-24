@@ -1,3 +1,5 @@
+import { paginateInvoice } from "./paginateInvoice";
+
 /**
  * Write merged print HTML into an already-open popup window and trigger the
  * browser print dialog only AFTER every image (logo) has finished loading.
@@ -37,7 +39,10 @@ export function writeAndPrint(w, html, { timeoutMs = 5000 } = {}) {
   w.document.write(html);
   w.document.close();
 
-  const triggerPrint = () => {
+  const triggerPrint = async () => {
+    if (w.closed) return;
+    try { await paginateInvoice(w.document); }
+    catch (error) { w.alert(error.message); return; }
     if (w.closed) return;
     w.focus();
     w.onafterprint = () => w.close();

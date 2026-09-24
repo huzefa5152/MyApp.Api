@@ -434,6 +434,16 @@ namespace MyApp.Api.DTOs
         public int OpeningBalancesCreated { get; set; }
 
         /// <summary>
+        /// Value added to the Inventory control account's OPENING BALANCE for
+        /// the stock this commit created — mirroring what a stock-sheet import
+        /// posts. Zero when the commit created no stock, or when the company
+        /// has no active Inventory account (a message says so). Not a journal
+        /// entry: an opening position is not a movement, so this never appears
+        /// in <see cref="JournalEntries"/>.
+        /// </summary>
+        public decimal InventoryOpeningPosted { get; set; }
+
+        /// <summary>
         /// Journal entries this commit wrote to the general ledger — one per
         /// GD, New Arrivals mode only (see
         /// <c>Services.Interfaces.IPostingService.PostImportConsignmentAsync</c>).

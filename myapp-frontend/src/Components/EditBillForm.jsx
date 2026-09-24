@@ -23,6 +23,16 @@ import { matchesScenarioSaleType } from "../utils/saleType";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
+import useScrollToError from "../hooks/useScrollToError";
+import BillNumberField from "./BillNumberField";
+
+// The Customer Portal addresses a document by its NUMBER
+// (GET /portal/{token}/invoices/{invoiceNumber}), so changing it breaks a link
+// already shared for that bill. The portal's own list still resolves, so this
+// is a warning and not a refusal — but the operator is the only one who can
+// tell the customer, which is why it is said here rather than left to be found.
+const PORTAL_RENUMBER_CAUTION =
+  "A portal link already shared for this bill points at its old number and will stop working.";
 
 const colors = {
   blue: "#0d47a1",
@@ -187,6 +197,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const [furtherTaxRate, setFurtherTaxRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
   const [billDate, setBillDate] = useState("");
+  // The bill number is editable here, but only while nothing has gone to
+  // FBR under it (see billNumberLock below). Held as text so the box can be
+  // cleared while typing; null is sent when it is unchanged.
+  const [billNumber, setBillNumber] = useState("");
+  const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
@@ -317,6 +332,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         // takes the date prefix verbatim when the API string starts with
         // YYYY-MM-DD (it always does).
         setBillDate(toLocalYmd(data.date));
+        setBillNumber(data.invoiceNumber != null ? String(data.invoiceNumber) : "");
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
         setPaymentMode(data.paymentMode ?? "");
@@ -1285,6 +1301,21 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const hasChallansRaisedFromBill = !isChallanLinked
     && !!(invoice?.challanNumbers && invoice.challanNumbers.length > 0);
   const lockClient      = lockNonItemType || isChallanLinked;
+  // Renumbering is gated TIGHTER than editing. A bill whose submit is in
+  // flight ("Submitting"), whose outcome is unknown ("Uncertain"), or that FBR
+  // accepted (an IRN, or "Submitted") was filed under its current number, so
+  // changing it here would leave our copy disagreeing with FBR's — mirrors the
+  // server's own refusal in InvoiceService.UpdateAsync.
+  const billNumberLock = (() => {
+    if (readOnly) return "Read-only.";
+    if (lockNonItemType) return "Not editable in this mode.";
+    const st = invoice?.fbrStatus;
+    if (invoice?.fbrIRN) return `Filed with FBR (IRN ${invoice.fbrIRN}) — the number cannot change.`;
+    if (st === "Submitted") return "Submitted to FBR — the number cannot change.";
+    if (st === "Submitting") return "A submission is in flight — the number cannot change.";
+    if (st === "Uncertain") return "FBR may already hold this bill — reset its submission before renumbering.";
+    return "";
+  })();
 
   // Item add/remove policy (2026-08-08). A bill's items belong to whatever it was
   // created from: a delivery challan, a sales order, or nothing (plain standalone).
@@ -1474,6 +1505,14 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           // refuses to reassign on challan-linked bills, so omitting the
           // field on those (when locked) avoids a needless 400.
           clientId: !lockClient && clientId ? parseInt(clientId) : null,
+          // null = "not mentioned", which is what an unchanged number means —
+          // the server then leaves it alone.
+          invoiceNumber: (() => {
+            if (billNumberLock) return null;
+            const parsed = Number((billNumber || "").trim());
+            if (!Number.isInteger(parsed) || parsed <= 0) return null;
+            return parsed === invoice?.invoiceNumber ? null : parsed;
+          })(),
           items: items.map((i) => ({
             id: i.id || 0,
             deliveryItemId: i.deliveryItemId || null,
@@ -1701,6 +1740,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
 
                 {/* Bill-level fields */}
                 <div style={styles.fieldGrid}>
+                  <div style={{ minWidth: 180 }}>
+                    <BillNumberField
+                      companyId={invoice?.companyId}
+                      divisionId={invoice?.divisionId}
+                      variant="edit"
+                      number={billNumber}
+                      onNumberChange={setBillNumber}
+                      onValidityChange={setBillNumberOk}
+                      currentNumber={invoice?.invoiceNumber}
+                      lockedReason={billNumberLock}
+                      changeCaution={PORTAL_RENUMBER_CAUTION}
+                      disabled={saving}
+                    />
+                  </div>
                   <div style={{ gridColumn: "1 / -1", minWidth: 0 }}>
                     <label style={styles.label}>
                       Buyer
@@ -2426,15 +2479,17 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
               // In itemType+qty(+price) mode, block save when totals
               // drift past the tolerance. Tooltip explains the gap.
               const blockedByTotals = showTotalsGuard && !totalsMatch;
-              const disabled = saving || blockedByTotals;
+              const disabled = saving || blockedByTotals || !billNumberOk;
               return (
                 <button
                   type="submit"
                   style={{ ...formStyles.button, ...formStyles.submit, opacity: disabled ? 0.5 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
                   disabled={disabled}
-                  title={blockedByTotals
-                    ? `Bill total mismatch: Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off (tolerance Rs. ${NARROW_EDIT_TOLERANCE_PKR}). Adjust qty / unit price to balance.`
-                    : ""}
+                  title={!billNumberOk
+                    ? "Enter a bill number that isn't already in use."
+                    : blockedByTotals
+                      ? `Bill total mismatch: Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off (tolerance Rs. ${NARROW_EDIT_TOLERANCE_PKR}). Adjust qty / unit price to balance.`
+                      : ""}
                 >
                   {saving
                     ? "Saving..."

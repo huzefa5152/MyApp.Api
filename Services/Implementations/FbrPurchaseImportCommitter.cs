@@ -229,6 +229,11 @@ namespace MyApp.Api.Services.Implementations
                     runningCounts.StockMovementsRecorded++;
                 }
 
+                // Imported stock re-prices every later sale's cost, so the
+                // monthly stock-relief entries from this bill's date on are
+                // rewritten. Once per bill, not per line.
+                await _stock.RepostInventoryPeriodsAsync(bill.CompanyId, bill.Date);
+
                 await tx.CommitAsync();
                 result.Outcome = "imported";
                 result.CreatedPurchaseBillId = bill.Id;

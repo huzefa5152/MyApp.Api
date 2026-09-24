@@ -32,7 +32,7 @@ import {
   MdBusiness, MdAccountBalanceWallet, MdReceiptLong, MdPayments, MdSwapVert,
   MdTrendingUp, MdTrendingDown, MdAttachMoney, MdAccountBalance, MdExpandMore,
   MdCallReceived, MdCallMade, MdAutorenew, MdCheckCircle, MdErrorOutline,
-  MdLock, MdClose, MdCalendarToday,
+  MdLock, MdClose, MdCalendarToday, MdInventory2,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -41,6 +41,8 @@ import { notify } from "../utils/notify";
 import { colors, dropdownStyles } from "../theme";
 import { MdChevronRight } from "react-icons/md";
 import { getAccountingSummary, getGlStatus, enableGl, rebuildGl } from "../api/accountingApi";
+import { getDashboardBreakdown } from "../api/dashboardApi";
+import KpiDrilldown from "../Components/dashboard/KpiDrilldown";
 
 // ── Formatting helpers ───────────────────────────────────────────────
 
@@ -98,6 +100,30 @@ export default function AccountingDashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [enabling, setEnabling] = useState(false);
+
+  // KPI drill-downs. The rows come from the same computation as the card, so
+  // they add up to it — see Components/dashboard/KpiDrilldown.jsx.
+  const [drill, setDrill] = useState(null);
+  const [drillData, setDrillData] = useState(null);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState("");
+  const openDrill = (kind, cardValue) => setDrill({ kind, cardValue });
+
+  useEffect(() => {
+    if (!drill || !companyId) return;
+    let cancelled = false;
+    setDrillLoading(true);
+    setDrillError("");
+    setDrillData(null);
+    // All-time: these cards are POSITIONS (stock held, owed, imported), not
+    // period flows, so scoping their rows to the date filter above would make
+    // the breakdown disagree with the card it opened from.
+    getDashboardBreakdown(companyId, drill.kind, "all-time")
+      .then((d) => { if (!cancelled) setDrillData(d); })
+      .catch(() => { if (!cancelled) setDrillError("Could not load the breakdown."); })
+      .finally(() => { if (!cancelled) setDrillLoading(false); });
+    return () => { cancelled = true; };
+  }, [drill, companyId]);
   const [rebuilding, setRebuilding] = useState(false);
   // GlEnableResultDto from the last enable/rebuild — shown as a banner.
   const [glResult, setGlResult] = useState(null);
@@ -338,6 +364,145 @@ export default function AccountingDashboardPage() {
                 />
               </div>
 
+              {/* ── Row 2b · What an importer actually holds and owes ──────
+                  The Payables card above is SUPPLIER aging, and an importer
+                  has no suppliers on the books — so it reads 0.00 while the
+                  business owes real tax and holds its capital in stock.
+                  Each card renders only when it has a figure, so a company
+                  this does not apply to sees nothing extra. */}
+              {(summary.inventoryOnHand || summary.taxPayable
+                || summary.importClearing || summary.recoverableTax) ? (
+                <>
+                  <SectionLabel>Stock &amp; tax position</SectionLabel>
+                  <div style={st.kpiGrid}>
+                    {!!summary.inventoryOnHand && (
+                      <MoneyCard
+                        label="Inventory on hand"
+                        icon={MdInventory2}
+                        accent="#e65100"
+                        value={fmtMoney(summary.inventoryOnHand)}
+                        sub="Declared value, relieved as stock sells"
+                      />
+                    )}
+                    {!!summary.taxPayable && (
+                      <MoneyCard
+                        label="Tax payable"
+                        icon={MdAccountBalance}
+                        accent={colors.danger}
+                        value={fmtMoney(summary.taxPayable)}
+                        valueColor={colors.danger}
+                        sub="Output sales tax, further tax and withholding"
+                      />
+                    )}
+                    {!!summary.importClearing && (
+                      <MoneyCard
+                        label="Import clearing"
+                        icon={MdCallMade}
+                        accent="#6a1b9a"
+                        value={fmtMoney(summary.importClearing)}
+                        sub="Cleared but not yet settled"
+                      />
+                    )}
+                    {!!summary.recoverableTax && (
+                      <MoneyCard
+                        label="Recoverable from FBR"
+                        icon={MdCallReceived}
+                        accent="#00796b"
+                        value={fmtMoney(summary.recoverableTax)}
+                        sub="Input tax + advance income tax on imports"
+                        onOpen={() => openDrill("recoverable-tax", summary.recoverableTax)}
+                      />
+                    )}
+                    {!!summary.unrealisedMargin && (
+                      <MoneyCard
+                        label="Unrealised margin"
+                        icon={MdTrendingUp}
+                        accent={colors.success}
+                        value={fmtMoney(summary.unrealisedMargin)}
+                        sub="Declared less landed cost on stock still held"
+                        onOpen={() => openDrill("unrealised-margin", summary.unrealisedMargin)}
+                      />
+                    )}
+                  </div>
+                </>
+              ) : null}
+
+              {/* ── The import book ─────────────────────────────────────────
+                  ImportConsignments drives this entire business and appeared
+                  on no screen at all before today. */}
+              {summary.importGdCount > 0 && (
+                <>
+                  <SectionLabel>Import book</SectionLabel>
+                  <div style={st.kpiGrid}>
+                    <MoneyCard
+                      label="Goods declarations"
+                      icon={MdReceiptLong}
+                      accent={colors.blue}
+                      value={String(summary.importGdCount)}
+                      sub="GDs costed into this company"
+                      onOpen={() => openDrill("import-book", summary.importLandedCost)}
+                    />
+                    <MoneyCard
+                      label="Landed cost imported"
+                      icon={MdInventory2}
+                      accent="#5d4037"
+                      value={fmtMoney(summary.importLandedCost)}
+                      sub="Total cost of goods cleared"
+                      onOpen={() => openDrill("import-book", summary.importLandedCost)}
+                    />
+                    <MoneyCard
+                      label="Duty & tax at import"
+                      icon={MdAccountBalance}
+                      accent="#6a1b9a"
+                      value={fmtMoney(summary.importInputTax + summary.importIncomeTax)}
+                      sub={summary.importDutyBurdenPercent != null
+                        ? `${Number(summary.importDutyBurdenPercent).toFixed(1)}% of landed cost`
+                        : "Input tax + advance income tax"}
+                      onOpen={() => openDrill("duty-burden",
+                        summary.importInputTax + summary.importIncomeTax)}
+                    />
+                    {!!summary.importOutstanding && (
+                      <MoneyCard
+                        label="Import clearing outstanding"
+                        icon={MdCallMade}
+                        accent={colors.danger}
+                        value={fmtMoney(summary.importOutstanding)}
+                        valueColor={colors.danger}
+                        sub="Cleared but not yet settled"
+                        onOpen={() => openDrill("import-book", summary.importLandedCost)}
+                      />
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Where the working capital actually sits — stock, debtors,
+                  cash. Three numbers that tell the whole story. */}
+              {(summary.capitalInStock || summary.capitalOwedByCustomers) ? (
+                <>
+                  <SectionLabel>Where the capital sits</SectionLabel>
+                  <div style={st.kpiGrid}>
+                    <MoneyCard
+                      label="In stock" icon={MdInventory2} accent="#e65100"
+                      value={fmtMoney(summary.capitalInStock)}
+                      sub="Goods not yet sold"
+                      onOpen={() => openDrill("stock-on-hand", summary.capitalInStock)}
+                    />
+                    <MoneyCard
+                      label="Owed by customers" icon={MdCallReceived} accent={colors.teal}
+                      value={fmtMoney(summary.capitalOwedByCustomers)}
+                      sub="Invoiced, not collected"
+                      onOpen={() => openDrill("receivables", summary.capitalOwedByCustomers)}
+                    />
+                    <MoneyCard
+                      label="Collected" icon={MdAccountBalanceWallet} accent={colors.success}
+                      value={fmtMoney(summary.capitalCollected)}
+                      sub="Cash and bank"
+                    />
+                  </div>
+                </>
+              ) : null}
+
               {/* ── Row 3 · Profitability (GL figures — hidden until on) ─ */}
               {summary.glEnabled && (
                 <>
@@ -392,6 +557,15 @@ export default function AccountingDashboardPage() {
           )}
         </>
       )}
+
+      <KpiDrilldown
+        open={!!drill}
+        onClose={() => setDrill(null)}
+        loading={drillLoading}
+        error={drillError}
+        data={drillData}
+        cardValue={drill?.cardValue}
+      />
     </div>
   );
 }

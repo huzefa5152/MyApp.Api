@@ -236,6 +236,7 @@ body { display: block !important; min-height: 0 !important; }
  */
 export function applyPrintLayout(doc) {
   if (!doc || !doc.body) return false;
+  if (doc.querySelector("[data-invoice-pages]")) return false;
   if (doc.querySelector("." + MARK + "-fixed")) return false; // already applied
 
   const anchors = doc.body.querySelectorAll(ANCHORS);

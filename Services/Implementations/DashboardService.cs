@@ -4,7 +4,9 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
+using MyApp.Api.Models.Accounting;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
@@ -222,12 +224,13 @@ namespace MyApp.Api.Services.Implementations
 
             if (canSales)
             {
-                var (totalSales, gstOutput) = await SumInvoicesAsync(companyId, period.From, period.To, divScope);
+                var (totalSales, gstOutput, salesExTax) = await SumInvoicesAsync(companyId, period.From, period.To, divScope);
                 hero.TotalSales = totalSales;
                 hero.GstOutput = gstOutput;
+                hero.TotalSalesExcludingTax = salesExTax;
                 if (period.PreviousFrom.HasValue)
                 {
-                    var (prevSales, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
+                    var (prevSales, _, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
                     hero.TotalSalesPrev = prevSales;
                 }
             }
@@ -253,16 +256,677 @@ namespace MyApp.Api.Services.Implementations
                 // sums — leave null when we computed only one side.
                 if (canSales && canPurchases)
                 {
-                    var (_, prevGstOutput) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
+                    var (_, prevGstOutput, _) = await SumInvoicesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
                     var (_, prevGstInput)  = await SumPurchasesAsync(companyId, period.PreviousFrom, period.PreviousTo, divScope);
                     hero.GstNetPrev = prevGstOutput - prevGstInput;
                 }
             }
 
+            await FillImporterKpisAsync(hero, companyId, period, divScope);
+
             return hero;
         }
 
-        private async Task<(decimal TotalGross, decimal GstAmount)> SumInvoicesAsync(
+        /// <summary>
+        /// The figures an importer's dashboard actually needs: cost of goods
+        /// sold, gross profit, stock on hand, receivables, everything owed, and
+        /// what is recoverable from the tax authority — plus the three flags
+        /// that decide which cards have anything to say.
+        ///
+        /// Why this exists: an importer buys nothing on purchase bills (stock
+        /// arrives through opening stock and GD costing), so Total Purchases
+        /// reads 0 and Net (Sales − Purchases) merely restates Total Sales
+        /// while looking like profit. On one company that made a card read
+        /// 11.4M next to a rising arrow when real gross profit was −6,195.
+        /// </summary>
+        private async Task FillImporterKpisAsync(
+            DashboardHeroKpis hero, int companyId, DashboardPeriod period, HashSet<int>? divScope)
+        {
+            // ── Cost of goods sold, and what stock is left ─────────────────
+            // Both come out of ONE walk. The cost of a sale is the weighted
+            // average standing at that moment, so the walk has to see the whole
+            // history even when the dashboard is showing one week of it.
+            var openingRows = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .Select(o => new
+                {
+                    o.ItemTypeId, o.Quantity, o.ValueExcludingTax,
+                    o.ActualCostExcludingTax, o.SalesTaxRate,
+                })
+                .ToListAsync();
+
+            var movementQuery = _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId);
+            if (divScope != null)
+                movementQuery = movementQuery.Where(m =>
+                    m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
+            var movements = await movementQuery.ToListAsync();
+
+            var openings = openingRows
+                .GroupBy(o => o.ItemTypeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new InventoryPeriodConsumption.Opening(
+                        g.Sum(x => x.Quantity),
+                        g.Sum(x => x.ValueExcludingTax),
+                        g.Sum(x => x.ActualCostExcludingTax),
+                        g.Max(x => x.SalesTaxRate)));
+
+            var movementsByItem = movements
+                .GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var positions = await LoadPositionsAsync(companyId, divScope, period.From, period.To);
+            hero.HasStock = positions.Count > 0;
+
+            if (hero.HasStock)
+            {
+                // Period figures: what left, and what it cost on each basis.
+                hero.CostOfGoodsSold = Round(positions.Sum(p => p.ConsumedDeclared));
+                hero.InventoryAdjustments = Round(positions.Sum(p => p.AdjustmentsDeclared));
+                hero.CostOfGoodsSoldLanded = Round(positions.Sum(p => p.ConsumedLanded));
+
+                // Positions, never period-scoped: "what is in the warehouse"
+                // has no date range.
+                hero.StockOnHandValue = Round(positions.Sum(p => p.ClosingDeclared));
+
+                // Dead stock — bought and never sold. The most actionable
+                // number here: on this line it reaches 82% of stock.
+                var dead = positions.Where(p => p.NeverSold && p.ClosingDeclared > 0m).ToList();
+                hero.DeadStockValue = Round(dead.Sum(p => p.ClosingDeclared));
+                hero.DeadStockItemCount = dead.Count;
+                var everHeld = positions.Sum(p => p.EverHeldDeclared);
+                hero.DeadStockPercent = everHeld > 0m
+                    ? Math.Round(hero.DeadStockValue / everHeld * 100m, 1, MidpointRounding.AwayFromZero)
+                    : null;
+
+                // How much of what was imported has turned back into money.
+                // Deliberately a SHARE, not months of cover: these companies
+                // have 10-16 days of sales history, so an annualised rate
+                // would be noise dressed up as insight.
+                hero.StockConvertedValue = Round(positions.Sum(p => p.ConsumedDeclared));
+                hero.StockConvertedPercent = everHeld > 0m
+                    ? Math.Round(hero.StockConvertedValue / everHeld * 100m, 1, MidpointRounding.AwayFromZero)
+                    : null;
+
+                // Ageing of what is still held, by last movement.
+                var ageAsOf = DateTime.Now.Date;
+                decimal Aged(Func<int, bool> test) => Round(positions
+                    .Where(p => p.ClosingDeclared > 0m)
+                    .Where(p => test((ageAsOf - (p.LastMovement?.Date ?? ageAsOf)).Days))
+                    .Sum(p => p.ClosingDeclared));
+                hero.StockAgeUnder30 = Aged(d => d < 30);
+                hero.StockAge30To90 = Aged(d => d >= 30 && d < 90);
+                hero.StockAgeOver90 = Aged(d => d >= 90);
+            }
+
+            // Real margin: what the goods actually cost, not what customs
+            // declared them at. Declared-basis gross profit reads ~0 for a
+            // company that invoices at declared value, so this is the only
+            // number on the screen that says whether it made money.
+            hero.RealMargin = Round(hero.TotalSalesExcludingTax - hero.CostOfGoodsSoldLanded);
+            hero.RealMarginPercent = hero.TotalSalesExcludingTax != 0m
+                ? Math.Round(hero.RealMargin / hero.TotalSalesExcludingTax * 100m, 1, MidpointRounding.AwayFromZero)
+                : null;
+
+            hero.GrossProfit = Math.Round(
+                hero.TotalSalesExcludingTax - hero.CostOfGoodsSold, 2, MidpointRounding.AwayFromZero);
+            hero.GrossMarginPercent = hero.TotalSalesExcludingTax != 0m
+                ? Math.Round(hero.GrossProfit / hero.TotalSalesExcludingTax * 100m, 1, MidpointRounding.AwayFromZero)
+                : null;
+
+            // ── Receivables ────────────────────────────────────────────────
+            // Outstanding is a POSITION too — what is owed now, not what was
+            // invoiced in the period — so it is deliberately unfiltered by date.
+            var today = DateTime.Now.Date;
+            var receivableQuery = _context.Invoices.AsNoTracking()
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                         && i.DocumentType != 9 && i.DocumentType != 10
+                         && i.GrandTotal > i.AmountPaid);
+            if (divScope != null)
+                receivableQuery = receivableQuery.Where(i =>
+                    i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+
+            var receivables = await receivableQuery
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    Total = g.Sum(i => i.GrandTotal - i.AmountPaid),
+                    Overdue = g.Sum(i => i.DueDate != null && i.DueDate < today
+                        ? i.GrandTotal - i.AmountPaid
+                        : 0m),
+                })
+                .FirstOrDefaultAsync();
+            hero.ReceivablesTotal = receivables?.Total ?? 0m;
+            hero.ReceivablesOverdue = receivables?.Overdue ?? 0m;
+
+            // ── Everything owed, and everything recoverable ────────────────
+            // Read from the ledger rather than recomputed, so these agree with
+            // the balance sheet by construction. A liability sits credit-side,
+            // so its balance is negated to read as a positive "owed" figure.
+            var balances = await _context.Accounts.AsNoTracking()
+                .Where(a => a.CompanyId == companyId && a.IsActive)
+                .Select(a => new
+                {
+                    a.Id,
+                    a.ControlType,
+                    Opening = a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance,
+                    Movement = _context.JournalLines
+                        .Where(jl => jl.AccountId == a.Id && jl.JournalEntry.CompanyId == companyId)
+                        .Sum(jl => (decimal?)(jl.Debit - jl.Credit)) ?? 0m,
+                })
+                .ToListAsync();
+
+            decimal Owed(params ControlType[] roles)
+            {
+                var wanted = roles.ToHashSet();
+                return Math.Round(
+                    -balances.Where(b => wanted.Contains(b.ControlType)).Sum(b => b.Opening + b.Movement),
+                    2, MidpointRounding.AwayFromZero);
+            }
+            decimal Held(params ControlType[] roles)
+            {
+                var wanted = roles.ToHashSet();
+                return Math.Round(
+                    balances.Where(b => wanted.Contains(b.ControlType)).Sum(b => b.Opening + b.Movement),
+                    2, MidpointRounding.AwayFromZero);
+            }
+
+            hero.PayablesTrade = Owed(ControlType.AccountsPayable);
+            hero.PayablesTax = Owed(ControlType.OutputTax, ControlType.FurtherTaxPayable,
+                                    ControlType.WithholdingPayable);
+            hero.PayablesImportClearing = Owed(ControlType.ImportClearing);
+            hero.PayablesTotal = Math.Round(
+                hero.PayablesTrade + hero.PayablesTax + hero.PayablesImportClearing,
+                2, MidpointRounding.AwayFromZero);
+
+            // Input tax and advance income tax on imports are ASSETS, not
+            // payables: an import's duties are paid at clearance and credited
+            // back afterwards. Zero until a GD is recorded as a New Arrival —
+            // a Backfill consignment posts nothing by design — which is exactly
+            // when this should start showing.
+            hero.RecoverableInputTax = Held(ControlType.InputTax);
+            hero.RecoverableAdvanceIncomeTax = Held(ControlType.AdvanceIncomeTaxOnImports);
+            hero.RecoverableTaxTotal = Math.Round(
+                hero.RecoverableInputTax + hero.RecoverableAdvanceIncomeTax,
+                2, MidpointRounding.AwayFromZero);
+
+            // ── Which cards have anything to say ───────────────────────────
+            hero.HasPurchases = await _context.PurchaseBills.AsNoTracking()
+                .AnyAsync(p => p.CompanyId == companyId);
+            hero.HasAnyActivity = hero.HasStock
+                || hero.HasPurchases
+                || hero.TotalSales != 0m
+                || hero.ReceivablesTotal != 0m
+                || await _context.Invoices.AsNoTracking()
+                        .AnyAsync(i => i.CompanyId == companyId && !i.IsDemo);
+        }
+
+        /// <summary>
+        /// What the goods on hand are worth, from the weighted-average walk —
+        /// the SAME figure the stock dashboard and the ledger's Inventory
+        /// account use.
+        ///
+        /// The Inventory section used to derive this from purchase-bill lines
+        /// alone, so an importer (who has none, and whose stock arrives as
+        /// opening balances and GD costing) saw Rs 0 on the same screen as a
+        /// Stock on Hand card reading 6,990,121. One source, so they cannot
+        /// disagree again.
+        /// </summary>
+
+        // ── KPI drill-downs ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// The rows behind one KPI. Every breakdown is computed from the SAME
+        /// source its card is — the item positions, or the same query — so the
+        /// rows add up to the headline by construction rather than by luck. A
+        /// drill-down that disagreed with the number it opened from would be
+        /// worse than none at all.
+        /// </summary>
+        public async Task<DashboardBreakdownDto> GetBreakdownAsync(
+            int companyId, string kind, string periodCode, ClaimsPrincipal user)
+        {
+            var userId = ResolveUserId(user);
+            var divScope = userId.HasValue
+                ? await _divisionAccess.GetAccessibleDivisionIdsAsync(userId.Value, companyId)
+                : null;
+            var period = BuildPeriod(periodCode);
+            var k = (kind ?? "").Trim().ToLowerInvariant();
+
+            var result = new DashboardBreakdownDto { Kind = k, AmountLabel = "Amount" };
+
+            // Item-derived kinds share one walk.
+            if (k is "cogs" or "cogs-landed" or "stock-on-hand" or "dead-stock"
+                  or "real-margin" or "stock-converted" or "stock-ageing"
+                  or "unrealised-margin" or "inventory-adjustments")
+            {
+                var positions = await LoadPositionsAsync(companyId, divScope, period.From, period.To);
+                var ageAsOf = DateTime.Now.Date;
+                int DaysIdle(ItemStockPositions.Position p) =>
+                    (ageAsOf - (p.LastMovement?.Date ?? ageAsOf)).Days;
+
+                // Margin is REVENUE less landed cost, so the rows need what each
+                // item actually sold for. Without this the breakdown summed
+                // declared value less landed cost instead, which is a different
+                // number and did not add up to its own card.
+                Dictionary<int, decimal> revenueByItem = new();
+                decimal unclassifiedRevenue = 0m;
+                if (k == "real-margin")
+                {
+                    var lineQuery = _context.InvoiceItems.AsNoTracking()
+                        .Where(ii => ii.Invoice!.CompanyId == companyId
+                                  && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled
+                                  && ii.Invoice.DocumentType != 9 && ii.Invoice.DocumentType != 10);
+                    if (divScope != null)
+                        lineQuery = lineQuery.Where(ii => ii.Invoice!.DivisionId == null
+                            || divScope.Contains(ii.Invoice.DivisionId!.Value));
+                    if (period.From.HasValue)
+                        lineQuery = lineQuery.Where(ii => ii.Invoice!.Date >= period.From.Value);
+                    if (period.To.HasValue)
+                        lineQuery = lineQuery.Where(ii => ii.Invoice!.Date < period.To.Value);
+
+                    var lines = await lineQuery
+                        .Select(ii => new { ii.ItemTypeId, ii.LineTotal })
+                        .ToListAsync();
+                    revenueByItem = lines.Where(l => l.ItemTypeId != null)
+                        .GroupBy(l => l.ItemTypeId!.Value)
+                        .ToDictionary(g => g.Key, g => Round(g.Sum(x => x.LineTotal)));
+                    // Lines with no item type earn revenue but relieve no stock;
+                    // they get their own row so the total still reconciles
+                    // rather than quietly going missing.
+                    unclassifiedRevenue = Round(lines.Where(l => l.ItemTypeId == null)
+                        .Sum(l => l.LineTotal));
+                }
+
+                string title, note, secondaryLabel;
+                Func<ItemStockPositions.Position, decimal> amount;
+                Func<ItemStockPositions.Position, bool> include, flag;
+                Func<ItemStockPositions.Position, string?> sub;
+                Func<ItemStockPositions.Position, decimal?> secondary;
+
+                switch (k)
+                {
+                    case "cogs":
+                        title = "Cost of goods sold, by item";
+                        note = "Declared value of what left stock in this period, at weighted average.";
+                        amount = p => p.ConsumedDeclared;
+                        include = p => p.ConsumedDeclared != 0m;
+                        sub = p => p.HsCode;
+                        secondary = p => p.SoldQuantity;
+                        secondaryLabel = "Qty sold";
+                        flag = _ => false;
+                        break;
+                    case "cogs-landed":
+                        title = "Cost of goods sold at landed cost, by item";
+                        note = "What the goods that left actually cost, rather than their declared value.";
+                        amount = p => p.ConsumedLanded;
+                        include = p => p.ConsumedLanded != 0m;
+                        sub = p => p.HsCode;
+                        secondary = p => p.ConsumedDeclared;
+                        secondaryLabel = "Declared";
+                        flag = _ => false;
+                        break;
+                    case "stock-on-hand":
+                        title = "Stock on hand, by item";
+                        note = "Declared value still in the warehouse. Not period-scoped — stock is a position, not a flow.";
+                        amount = p => p.ClosingDeclared;
+                        include = p => p.ClosingDeclared != 0m;
+                        sub = p => p.HsCode;
+                        secondary = p => p.ClosingQuantity;
+                        secondaryLabel = "Qty";
+                        flag = p => p.NeverSold;
+                        break;
+                    case "dead-stock":
+                        title = "Stock that has never sold";
+                        note = "Items still holding value that have not gone out once.";
+                        amount = p => p.ClosingDeclared;
+                        include = p => p.NeverSold && p.ClosingDeclared > 0m;
+                        sub = p => p.HsCode;
+                        secondary = p => p.ClosingQuantity;
+                        secondaryLabel = "Qty";
+                        flag = _ => true;
+                        break;
+                    case "real-margin":
+                        title = "Margin on landed cost, by item";
+                        note = "What each item SOLD for, less what those goods actually cost. Flagged rows sold for less than they cost.";
+                        amount = p => revenueByItem.GetValueOrDefault(p.ItemTypeId) - p.ConsumedLanded;
+                        include = p => revenueByItem.ContainsKey(p.ItemTypeId) || p.ConsumedLanded != 0m;
+                        sub = p => p.HsCode;
+                        secondary = p => p.ConsumedLanded;
+                        secondaryLabel = "Landed cost";
+                        flag = p => revenueByItem.GetValueOrDefault(p.ItemTypeId) < p.ConsumedLanded;
+                        break;
+                    case "stock-converted":
+                        title = "Stock converted to sales, by item";
+                        note = "Declared value that has turned back into money.";
+                        amount = p => p.ConsumedDeclared;
+                        include = p => p.ConsumedDeclared != 0m;
+                        sub = p => p.HsCode;
+                        secondary = p => p.ClosingDeclared;
+                        secondaryLabel = "Still held";
+                        flag = _ => false;
+                        break;
+                    case "stock-ageing":
+                        title = "Stock still held, by age";
+                        note = "Days since the item last moved. Opening balances share one as-of date, so early on these bunch into one bucket.";
+                        amount = p => p.ClosingDeclared;
+                        include = p => p.ClosingDeclared > 0m;
+                        sub = p => DaysIdle(p) + " days since last movement";
+                        secondary = p => p.ClosingQuantity;
+                        secondaryLabel = "Qty";
+                        flag = p => DaysIdle(p) >= 90;
+                        break;
+                    case "unrealised-margin":
+                        title = "Margin locked up in unsold stock";
+                        note = "Declared value less landed cost on goods still held — profit not yet earned.";
+                        amount = p => p.UnrealisedMargin;
+                        include = p => p.ClosingDeclared != 0m;
+                        sub = p => p.HsCode;
+                        secondary = p => p.ClosingLanded;
+                        secondaryLabel = "Landed cost";
+                        flag = p => p.UnrealisedMargin < 0m;
+                        break;
+                    default:
+                        title = "Inventory adjustments, by item";
+                        note = "Breakage, count corrections and revaluations — deliberately kept out of cost of sales.";
+                        amount = p => p.AdjustmentsDeclared;
+                        include = p => p.AdjustmentsDeclared != 0m;
+                        sub = p => p.HsCode;
+                        secondary = _ => null;
+                        secondaryLabel = "";
+                        flag = _ => true;
+                        break;
+                }
+
+                result.Title = title;
+                result.Note = note;
+                result.AmountLabel = "Value";
+                result.Rows = positions.Where(include)
+                    .Select(p => new DashboardBreakdownRowDto
+                    {
+                        Id = p.ItemTypeId,
+                        Label = p.Name,
+                        Sub = sub(p),
+                        Amount = amount(p),
+                        Secondary = secondary(p),
+                        SecondaryLabel = string.IsNullOrEmpty(secondaryLabel) ? null : secondaryLabel,
+                        Flagged = flag(p),
+                    })
+                    .OrderByDescending(r => Math.Abs(r.Amount))
+                    .ToList();
+
+                if (k == "real-margin" && unclassifiedRevenue != 0m)
+                    result.Rows.Add(new DashboardBreakdownRowDto
+                    {
+                        Label = "(lines with no item type)",
+                        Sub = "Earned revenue but relieved no stock",
+                        Amount = unclassifiedRevenue,
+                    });
+
+                result.Total = Round(result.Rows.Sum(r => r.Amount));
+                return result;
+            }
+
+            switch (k)
+            {
+                case "receivables":
+                {
+                    var today = DateTime.Now.Date;
+                    var q = _context.Invoices.AsNoTracking()
+                        .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                                 && i.DocumentType != 9 && i.DocumentType != 10
+                                 && i.GrandTotal > i.AmountPaid);
+                    if (divScope != null)
+                        q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+                    result.Title = "Receivables, by invoice";
+                    result.Note = "Invoiced and not yet collected. Flagged rows are past their due date.";
+                    result.Rows = await q
+                        .OrderByDescending(i => i.GrandTotal - i.AmountPaid)
+                        .Select(i => new DashboardBreakdownRowDto
+                        {
+                            Id = i.Id,
+                            Label = i.Client!.Name ?? "(unknown)",
+                            Sub = "#" + i.InvoiceNumber + " · " + i.Date.ToString("dd MMM yyyy"),
+                            Amount = i.GrandTotal - i.AmountPaid,
+                            Secondary = i.GrandTotal,
+                            SecondaryLabel = "Invoiced",
+                            Flagged = i.DueDate != null && i.DueDate < today,
+                        })
+                        .ToListAsync();
+                    result.Total = Round(result.Rows.Sum(r => r.Amount));
+                    return result;
+                }
+
+                case "sales":
+                {
+                    var q = _context.Invoices.AsNoTracking()
+                        .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
+                                 && i.DocumentType != 9 && i.DocumentType != 10);
+                    if (divScope != null)
+                        q = q.Where(i => i.DivisionId == null || divScope.Contains(i.DivisionId.Value));
+                    if (period.From.HasValue) q = q.Where(i => i.Date >= period.From.Value);
+                    if (period.To.HasValue) q = q.Where(i => i.Date < period.To.Value);
+                    result.Title = "Sales, by invoice";
+                    result.Note = "Tax-inclusive grand total. The second figure is the same sale excluding tax.";
+                    result.Rows = await q
+                        .OrderByDescending(i => i.GrandTotal)
+                        .Select(i => new DashboardBreakdownRowDto
+                        {
+                            Id = i.Id,
+                            Label = i.Client!.Name ?? "(unknown)",
+                            Sub = "#" + i.InvoiceNumber + " · " + i.Date.ToString("dd MMM yyyy"),
+                            Amount = i.GrandTotal,
+                            Secondary = i.Subtotal,
+                            SecondaryLabel = "Excl. tax",
+                        })
+                        .ToListAsync();
+                    result.Total = Round(result.Rows.Sum(r => r.Amount));
+                    return result;
+                }
+
+                case "payables":
+                case "recoverable-tax":
+                {
+                    var owed = k == "payables";
+                    var wanted = (owed
+                        ? new[] { ControlType.AccountsPayable, ControlType.OutputTax,
+                                  ControlType.FurtherTaxPayable, ControlType.WithholdingPayable,
+                                  ControlType.ImportClearing }
+                        : new[] { ControlType.InputTax, ControlType.AdvanceIncomeTaxOnImports })
+                        .ToHashSet();
+
+                    var accounts = await _context.Accounts.AsNoTracking()
+                        .Where(a => a.CompanyId == companyId && a.IsActive)
+                        .Select(a => new
+                        {
+                            a.Id,
+                            a.Name,
+                            a.ControlType,
+                            Opening = a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance,
+                            Movement = _context.JournalLines
+                                .Where(jl => jl.AccountId == a.Id && jl.JournalEntry.CompanyId == companyId)
+                                .Sum(jl => (decimal?)(jl.Debit - jl.Credit)) ?? 0m,
+                        })
+                        .ToListAsync();
+
+                    result.Title = owed ? "Everything owed, by account" : "Recoverable from FBR, by account";
+                    result.Note = owed
+                        ? "Trade creditors, tax payable and unsettled import clearing. An importer usually has no suppliers on the books."
+                        : "Input sales tax and advance income tax paid at import — assets you credit back, not money owed.";
+                    result.Rows = accounts
+                        .Where(a => wanted.Contains(a.ControlType))
+                        // Liabilities are credit-natural; flip so "owed" reads positive.
+                        .Select(a => new DashboardBreakdownRowDto
+                        {
+                            Id = a.Id,
+                            Label = a.Name,
+                            Sub = a.ControlType.ToString(),
+                            Amount = Round(owed ? -(a.Opening + a.Movement) : a.Opening + a.Movement),
+                        })
+                        .Where(r => r.Amount != 0m)
+                        .OrderByDescending(r => Math.Abs(r.Amount))
+                        .ToList();
+                    result.Total = Round(result.Rows.Sum(r => r.Amount));
+                    return result;
+                }
+
+                case "import-book":
+                case "duty-burden":
+                {
+                    var duty = k == "duty-burden";
+                    var gds = await _context.ImportConsignments.AsNoTracking()
+                        .Where(c => c.CompanyId == companyId)
+                        .Select(c => new
+                        {
+                            c.Id, c.GdNumber, c.GdDate, c.Mode,
+                            c.TotalCostExcludingTax, c.TotalInputTax, c.TotalIncomeTax,
+                            c.AmountSettled, c.ImportClearingCredited,
+                        })
+                        .ToListAsync();
+
+                    result.Title = duty ? "Duty and tax per consignment" : "Import book, by GD";
+                    result.Note = duty
+                        ? "Input sales tax plus advance income tax paid at clearance, against what the goods cost."
+                        : "Every GD costed into this company. A Backfill consignment posts nothing to the ledger by design, so its clearing reads zero.";
+                    result.Rows = gds
+                        .Select(c => new DashboardBreakdownRowDto
+                        {
+                            Id = c.Id,
+                            Label = string.IsNullOrWhiteSpace(c.GdNumber) ? "(no GD number)" : c.GdNumber,
+                            Sub = c.GdDate.ToString("dd MMM yyyy") + " · " + c.Mode,
+                            Amount = duty
+                                ? Round(c.TotalInputTax + c.TotalIncomeTax)
+                                : Round(c.TotalCostExcludingTax),
+                            Secondary = duty
+                                ? Round(c.TotalCostExcludingTax)
+                                : Round(c.ImportClearingCredited - c.AmountSettled),
+                            SecondaryLabel = duty ? "Landed cost" : "Outstanding",
+                            Flagged = !duty && c.ImportClearingCredited == 0m,
+                        })
+                        .OrderByDescending(r => r.Amount)
+                        .ToList();
+                    result.Total = Round(result.Rows.Sum(r => r.Amount));
+                    return result;
+                }
+
+                default:
+                    result.Title = "Unknown breakdown";
+                    result.Note = "No drill-down is defined for '" + kind + "'.";
+                    return result;
+            }
+        }
+
+        private static decimal Round(decimal v) =>
+            Math.Round(v, 2, MidpointRounding.AwayFromZero);
+
+        /// <summary>
+        /// Every item's position, from ONE walk. Cost of goods sold, stock on
+        /// hand, dead stock, real margin, stock converted, the ageing buckets
+        /// and the drill-down behind each of them all read this, so a card and
+        /// its breakdown cannot disagree.
+        /// </summary>
+        private async Task<List<ItemStockPositions.Position>> LoadPositionsAsync(
+            int companyId, HashSet<int>? divScope, DateTime? from, DateTime? to)
+        {
+            var openingRows = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .Select(o => new
+                {
+                    o.ItemTypeId, o.Quantity, o.ValueExcludingTax,
+                    o.ActualCostExcludingTax, o.SalesTaxRate,
+                })
+                .ToListAsync();
+
+            var movementQuery = _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId);
+            if (divScope != null)
+                movementQuery = movementQuery.Where(m =>
+                    m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
+            var movements = await movementQuery.ToListAsync();
+
+            var openings = openingRows
+                .GroupBy(o => o.ItemTypeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new ItemStockPositions.Opening(
+                        g.Sum(x => x.Quantity),
+                        g.Sum(x => x.ValueExcludingTax),
+                        g.Sum(x => x.ActualCostExcludingTax),
+                        g.Max(x => x.SalesTaxRate)));
+
+            var movementsByItem = movements
+                .GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var ids = openings.Keys.Union(movementsByItem.Keys).Distinct().ToList();
+
+            // Soft-deleted catalog rows are INCLUDED, and marked.
+            //
+            // The on-hand GRID hides them, which is right for a list of things
+            // you can act on. Their VALUE is a different question: a delete
+            // removes a catalog entry, not the goods, and the ledger's relief
+            // walk never filtered them — so excluding them here put the
+            // dashboard 56,358.17 below the Inventory account on one company
+            // and broke the one invariant this all rests on. The stock is real;
+            // the row just has no live catalog entry to point at.
+            var names = await _context.ItemTypes.AsNoTracking()
+                .Where(it => ids.Contains(it.Id))
+                .Select(it => new { it.Id, it.Name, it.HSCode, it.IsDeleted })
+                .ToDictionaryAsync(
+                    x => x.Id,
+                    x => (x.IsDeleted ? x.Name + " (deleted item)" : x.Name, (string?)x.HSCode));
+
+            return ItemStockPositions.Compute(openings, movementsByItem, names, from, to);
+        }
+
+        private async Task<decimal> ComputeStockOnHandValueAsync(int companyId, HashSet<int>? divScope)
+        {
+            var openingRows = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .Select(o => new
+                {
+                    o.ItemTypeId, o.Quantity, o.ValueExcludingTax,
+                    o.ActualCostExcludingTax, o.SalesTaxRate,
+                })
+                .ToListAsync();
+
+            var movementQuery = _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId);
+            if (divScope != null)
+                movementQuery = movementQuery.Where(m =>
+                    m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
+            var movements = await movementQuery.ToListAsync();
+
+            var openings = openingRows
+                .GroupBy(o => o.ItemTypeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new InventoryPeriodConsumption.Opening(
+                        g.Sum(x => x.Quantity),
+                        g.Sum(x => x.ValueExcludingTax),
+                        g.Sum(x => x.ActualCostExcludingTax),
+                        g.Max(x => x.SalesTaxRate)));
+
+            var movementsByItem = movements
+                .GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            decimal total = 0m;
+            foreach (var (itemTypeId, open) in openings)
+                if (!movementsByItem.ContainsKey(itemTypeId))
+                    total += open.ValueExcludingTax;   // never moved
+            foreach (var (itemTypeId, itemMovements) in movementsByItem)
+            {
+                openings.TryGetValue(itemTypeId, out var open);
+                var position = StockValuation.Compute(
+                    open.Quantity, open.ValueExcludingTax, open.ActualCostExcludingTax,
+                    open.SalesTaxRate, itemMovements);
+                total += position.ValueExcludingTax;
+            }
+            return Math.Round(total, 2, MidpointRounding.AwayFromZero);
+        }
+
+        private async Task<(decimal TotalGross, decimal GstAmount, decimal Subtotal)> SumInvoicesAsync(
             int companyId, DateTime? from, DateTime? to, HashSet<int>? divScope)
         {
             var q = _context.Invoices
@@ -282,9 +946,12 @@ namespace MyApp.Api.Services.Implementations
                 {
                     TotalGross = g.Sum(i => i.GrandTotal),
                     GstAmount  = g.Sum(i => i.GSTAmount),
+                    // Ex-tax, so the dashboard can show the figure a stock
+                    // sheet is actually comparable to.
+                    Subtotal   = g.Sum(i => i.Subtotal),
                 })
                 .FirstOrDefaultAsync();
-            return (agg?.TotalGross ?? 0m, agg?.GstAmount ?? 0m);
+            return (agg?.TotalGross ?? 0m, agg?.GstAmount ?? 0m, agg?.Subtotal ?? 0m);
         }
 
         private async Task<(decimal TotalGross, decimal GstAmount)> SumPurchasesAsync(
@@ -692,7 +1359,9 @@ namespace MyApp.Api.Services.Implementations
             var costMap = perItemCosts.ToDictionary(x => x.ItemTypeId,
                 x => x.TotalQty > 0 ? x.TotalCost / x.TotalQty : 0m);
 
-            decimal totalStockValue = 0m;
+            // Valued by the same walk as the hero's Stock on Hand card, so the
+            // two figures on one screen cannot contradict each other.
+            decimal totalStockValue = await ComputeStockOnHandValueAsync(companyId, divScope);
             int trackedItemCount = 0;
             int lowStockCount = 0;
             foreach (var kv in onHandByItem)
@@ -700,8 +1369,7 @@ namespace MyApp.Api.Services.Implementations
                 var onHand = kv.Value;
                 trackedItemCount++;
                 if (onHand <= 0) lowStockCount++;
-                if (costMap.TryGetValue(kv.Key, out var avgCost))
-                    totalStockValue += onHand * avgCost;
+                _ = costMap;   // retained for the low-stock/cost drill-downs below
             }
 
             // Top 5 items by movement volume in the last 30 days — most

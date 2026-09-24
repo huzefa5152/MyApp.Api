@@ -1,0 +1,4 @@
+interface:
+  display_name: "MyApp Master Print Templates"
+  short_description: "Match Master layouts with its own merge fields"
+  default_prompt: "Use $myapp-master-print-templates to create a professional template matching my reference on master."

@@ -708,8 +708,6 @@ namespace MyApp.Api.Services.Implementations
         /// HS codes already in use by any existing item type. Frontend passes this
         /// to HsCodeAutocomplete so the FBR catalog search hides codes already saved.
         /// </summary>
-        public async Task<List<string>> GetSavedHsCodesAsync()
-            => await _repo.GetSavedHsCodesAsync();
 
         public async Task DeleteAsync(int id)
         {

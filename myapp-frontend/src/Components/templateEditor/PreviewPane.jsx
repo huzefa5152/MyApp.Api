@@ -1,3 +1,4 @@
+import { paginateInvoice } from "../../utils/paginateInvoice";
 import { useState, useEffect } from "react";
 
 export default function PreviewPane({ html, isMobile }) {
@@ -27,7 +28,17 @@ export default function PreviewPane({ html, isMobile }) {
       )}
       <iframe
         srcDoc={html}
-        onLoad={() => setLoaded(true)}
+        onLoad={async (event) => {
+          const doc = event.currentTarget.contentDocument;
+          try { await paginateInvoice(doc); }
+          catch (error) {
+            const notice = doc.createElement("p");
+            notice.textContent = error.message;
+            notice.style.color = "#b71c1c";
+            doc.body.prepend(notice);
+          }
+          setLoaded(true);
+        }}
         style={{
           width: isMobile ? "100%" : "210mm",
           minHeight: "297mm",

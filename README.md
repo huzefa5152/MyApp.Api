@@ -298,6 +298,248 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
+
+Both bill-create screens — **New Bill** (from a delivery challan) and **New
+Bill (No Challan)** — now carry a **Bill / Invoice No.** field. It opens on
+**Auto**, which is exactly what happened before: the next number in the
+company's own sequence, allocated by the server when the bill is saved, so
+nothing changes for anyone who does not touch it. The number is shown while
+the bill is being written, with the company's prefix applied, instead of being
+a surprise on the Bills list afterwards.
+
+Switching to **Custom** lets the operator type the number. It is checked
+against the existing bills in that same sequence as it is typed — an
+already-used number, a zero and the reserved 900000+ band (imported history and
+FBR Sandbox test bills) each say so in plain words and block Save, and a free
+one confirms what the document will print. The
+server checks again when the bill is saved, under the same per-company
+allocation lock the automatic sequence uses, and a clash there is reported with
+the number in the message. A hand-typed number is never quietly swapped for a
+different one.
+
+Both screens share one control and one server path, so they cannot disagree
+about what is next or about which numbers they accept. Numbering is per
+division, and the field follows the division picked on the bill: a number used
+in one division stays free in another, and issuing one there leaves the
+company-level sequence where it was. A custom number above the current highest
+moves its own sequence on; back-filling a gap below it does not rewind. The old "Next bill #" hint was removed — it was computed in the
+browser from the last number issued, so it disagreed with the real sequence
+after the trailing bill was deleted.
+
+Suite: `python scripts/test_custom_bill_number.py` (38 checks, both create
+paths, company-level and per-division).
+
+**An existing bill can be renumbered too**, from Edit Bill — the same box, the
+same checks, starting on the number the bill already has, and leaving it alone
+is always valid. It is refused once anything has gone to FBR under that number:
+a bill FBR accepted, one whose submission is still in flight, and one whose
+outcome is unknown all keep their number, because ours has to keep matching
+theirs. The form says which of those applies rather than just greying the box.
+
+Suite: `python scripts/test_custom_bill_number.py` (47 checks, both create
+paths and the edit path; `--db` adds the FBR-filed lock cases).
+
+One caution the form raises while a number is being changed: the Customer
+Portal addresses a document by its number, so a portal link already shared for
+that bill points at the old one and stops working. The portal's own document
+list still resolves, so this is said rather than refused — but the operator is
+the only one who can tell the customer.
+
+### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
+
+### 2026-09-18 — A company with one tax number can be saved again
+
+- **Three reported symptoms, one cause.** A company with FBR on could not be
+  updated, its logo would not save, and the error pointed at the wrong tab. All
+  of it came from one form guard.
+- **The explicit seller registration is now required only when it is genuinely
+  ambiguous** — when a company holds BOTH a usable NTN and a 13-digit CNIC, so
+  only IRIS knows which it files under. Holding just one leaves nothing to
+  infer, and the save now goes through. The NTN and CNIC on the General tab are
+  optional and for display, which is what they were always meant to be.
+  `FbrSellerIdentity.Resolve` already worked this way; only the form was stricter.
+- **The logo failure was not a logo failure.** It uploads after the company
+  saves, because it needs the id — so a blocked save silently took the logo with
+  it and read as "the logo will not save". A logo error is now reported on its
+  own ("the company was saved, but the logo could not be uploaded"), and a
+  blocked save says the logo did not go either.
+- **The message named the wrong field.** It asked for an NTN or CNIC on the
+  General tab; the field that resolves it is "Seller NTN / CNIC" on the FBR
+  Integration tab. It now names that field first, and a server-side rejection
+  switches to the tab that owns it rather than complaining about something two
+  tabs away.
+
+### 2026-09-17 — Importer KPIs, with drill-downs that add up
+
+- **Dead stock is the headline.** Items bought and never sold: on this line
+  that reaches **82% of one company's stock** (55.5M), 63% on another. Nothing
+  on any screen said so. Now a card, with the worst offenders behind it.
+- **Margin on landed cost**, next to declared gross profit. The declared basis
+  reads ~0 by construction for a company that invoices at customs value, so it
+  cannot answer "did we make money"; this can.
+- **Stock converted** — what share of everything imported has turned back into
+  sales. Deliberately a share, not months of cover: these companies have 10–16
+  days of sales history, so an annualised rate would be noise dressed as insight.
+- **Stock ageing** by days since last movement.
+- **Accounting gains the import book** — GD count, landed cost, duty and tax at
+  import with its share of landed cost, and clearing outstanding.
+  `ImportConsignments` drives the whole business and appeared on no screen at
+  all. Plus unrealised margin on stock held, and where the capital sits
+  (stock / owed / collected).
+- **Every KPI drills down, and the rows add up to the card.** That is the
+  contract: `GET /api/dashboard/breakdown` computes the rows from the same walk
+  the card uses rather than a second time, and the panel prints the row sum
+  next to the headline so a drift would be visible instead of silent. Fifteen
+  kinds; all eleven with a single card behind them verified reconciling.
+- `Helpers/ItemStockPositions.cs` is the one walk everything reads — cost of
+  sales, stock on hand, dead stock, margin, conversion, ageing and their
+  breakdowns. Built precisely so a card and its own drill-down cannot diverge.
+- **Two defects the reconciliation check caught in this work**, which is what it
+  is for: the margin breakdown summed declared-less-landed per item while its
+  card was sales-less-landed (fixed by attributing real revenue per item, with
+  an explicit row for lines carrying no item type); and `UnrealisedMargin` was
+  declared on the DTO and never assigned, so its card read 0 against real rows.
+- Phone: the drill-down renders stacked cards rather than a wide table, per
+  CLAUDE.md §3. Verified at 375px — no horizontal scroll, dialog fits.
+- **Soft-deleted items keep their value.** The on-hand grid hides them, which is
+  right for a list of things you can act on, but excluding them from the stock
+  VALUE put the dashboard 56,358.17 below the Inventory account on one live
+  company — a delete removes a catalog entry, not the goods. They are now
+  included and labelled "(deleted item)", so the dashboard matches the ledger
+  again. Caught on production, by the same invariant.
+
+### 2026-09-17 — Dashboards rebuilt around what an importer actually has
+
+- **Half the hero band said nothing.** An importer buys nothing on purchase
+  bills — stock arrives through opening stock and GD costing — so Total
+  Purchases read Rs 0 and Net (Sales − Purchases) merely restated Total Sales
+  while looking like profit: on one company a card read 11.4M next to a rising
+  arrow when real gross profit was −6,195. Meanwhile stock and debtors, the two
+  largest numbers in the business, were not shown at all.
+- New cards: **Cost of Goods Sold**, **Gross Profit** (with margin %), **Stock
+  on Hand**, **Receivables** (with the overdue slice), **Payables** (everything
+  owed, not just trade creditors), and **Recoverable from FBR** (input tax and
+  advance income tax on imports — assets, not liabilities). Total Sales keeps
+  its tax-inclusive headline and gains an **ex-tax second line**, which is the
+  difference that started the whole investigation.
+- **One layout, cards hidden when their concept is empty**, extending the
+  hiding the dashboard already did by permission. Chosen over two layouts
+  because the only companies with purchase bills were demo data. A configured
+  but not-yet-trading company gets an empty state rather than a wall of zeroes.
+- **Accounting dashboard** gains a Stock & tax position row (inventory, tax
+  payable, import clearing, recoverable tax). Its Payables card is supplier
+  aging and legitimately Rs 0 for an importer, which said nothing about what is
+  actually owed.
+- **Stock dashboard** gains Actual (landed) cost and Margin over cost, shown
+  only when a costing import has supplied an actual cost — that is where the
+  real margin lives, since the declared-basis P&L reads near zero by design.
+- **Two defects in the day's own COGS work, caught by wiring these up:**
+  - The monthly relief entry was dated month-END, so a running month's cost sat
+    in the future and every report ending "today" showed income with no cost —
+    expenses Rs 0, profit overstated by the whole cost of sales. A running month
+    is now dated today; finished months keep month-end.
+  - `GeneralLedgerService.RebuildAsync` deletes every entry and re-posts
+    documents, but stock relief is derived from the walk rather than a document,
+    so a rebuild silently wiped all of it. Now reposted at the end of a rebuild.
+- **Stock value had two answers on one screen.** The Inventory section derived
+  it from purchase-bill lines alone (Rs 0 for an importer) while the new card
+  walked the stock. Both now use one method.
+- Modal fix: the stock dashboard's opening-balance and adjustment dialog used a
+  hand-rolled overlay with no `overflowY` and no `maxHeight`, so a tall form
+  pushed Cancel, Save and the close X off-screen — the CorrectionWizard defect
+  in CLAUDE.md §3, repeating. Now uses the shared `formStyles`, closes on Escape
+  and on backdrop click. Verified at 600px height and 375px width.
+- Removed `GET /api/itemtypes/saved-hscodes` and its service/repository chain —
+  no caller anywhere, and it carried no `[HasPermission]`.
+
+### 2026-09-17 — Sales now relieve inventory (cost of goods sold)
+
+- **Nothing ever credited the Inventory control account.** It was an opening
+  balance plus purchases, so every stock-tracking company reported revenue with
+  no matched cost and its balance sheet overstated stock by everything it had
+  ever sold — 9.7M on one importer alone. `AccountingReportService.Statements`
+  has been printing a notice admitting this; it is now fixed rather than
+  disclosed.
+- **One journal entry per company per month** (`SourceDocType.InventoryPeriod`,
+  `SourceDocId` = `year * 100 + month`): Dr Cost of goods sold, Dr/Cr Inventory
+  adjustments, Cr Inventory. Monthly rather than per invoice because weighted
+  average is path-dependent — editing one old bill changes the cost of every
+  sale after it — and because the customs stock sheet is already monthly.
+- Values come from the existing `StockValuation` walk on the **declared** basis.
+  Breakage and revaluation go to their own account, so cost of goods SOLD keeps
+  meaning that and a future write-off cannot land in gross margin silently.
+- Backfilled at startup (`COGS_PERIOD_BACKFILL_V1`). Not optional: with the
+  repost automatic on any stock change, a skipped company would sprout a full
+  month's COGS the first time anyone edited an old invoice.
+- **Three defects found while building it**, each caught by the new suite's
+  invariant rather than by reading code:
+  - `StockValuation` traces a revaluation's RAW delta, but the value it applies
+    is clamped — so contributions are now derived from the running value, which
+    telescopes to exactly opening − closing however the walk clamps.
+  - `POST /stock/opening` never posted to the Inventory account, the same gap
+    the GD costing import had. All three opening-stock paths now share one
+    `AdjustInventoryOpeningAsync`.
+  - Cancelling or deleting an invoice never reversed its COGS: those paths purge
+    movements directly and so did not inherit the sync wrapper's repost.
+- New `scripts/test_cogs_periodic.py` (21 checks). Its load-bearing assertion,
+  repeated after every step, is **Inventory account == the stock walk's closing
+  value** — the invariant the original defect broke.
+- Gross profit will read near zero for companies that invoice at declared
+  customs value. That is the honest declared-basis picture, not a fault.
+
+### 2026-09-17 — One producer for the shipped import templates
+
+- **`scripts/build_opening_stock_template.py` was deleted.** It still held the
+  three rows lifted from a live client sheet — their GD numbers, product names
+  and landed costs — that were deliberately replaced with fictional data on
+  2026-09-14, and it wrote the SAME file as
+  `scripts/build_sample_import_sheets.py`. Anyone running the old command
+  silently re-published that customer's data to a template served publicly out
+  of `wwwroot/`. `build_sample_import_sheets.py` already claimed to be "the
+  only way the files are produced"; now it is.
+- **The suite case that should have caught it only counted rows.** It asserted
+  three rows, so the entire sheet could be swapped and it would still fail for
+  the wrong reason — a stale count rather than a wrong sheet. It now asserts
+  the seven sample item names, that the two same-HS bearing rows group into one
+  line of 800 (the behaviour the template exists to demonstrate), and that some
+  row carries a rate other than 18%. A failure now says whether the template was
+  regenerated or grew real customer rows.
+- `verify_no_production_identifiers.py` does not cover this: it checks
+  production database and host names, not customer identifiers.
+
+### 2026-09-17 — GD costing imports now reach "Inventory on hand"
+
+- **A GD costing import that created opening stock never posted its value to
+  the Chart of Accounts.** A stock-sheet import puts its total on the Inventory
+  control account (`OpeningStockImportService.PostInventoryValueAsync`); the
+  costing importer wrote the same kind of opening position and posted nothing,
+  so "Inventory on hand" silently understated the books by the value of every
+  balance a costing run brought in. Found while reconciling a customer's stock
+  sheet against the dashboard: two companies on the importer line were short by
+  2,685,861.50 and 342,337.11 respectively, while a third — whose costing run
+  happened to create no balances — was correctly untouched, which is what
+  pinned the cause to the create path rather than the costing path.
+- `GdCostingImportService.CreateMissingStockAsync` now reports the value it
+  brought onto the books, and `PostCreatedStockToInventoryAsync` adds that to
+  the Inventory account's **opening balance**, offsetting to Retained earnings
+  the same way the stock-sheet importer does. It is **additive** — the account
+  already carries the stock sheet's own contribution, and
+  `AdjustOpeningBalanceAsync` takes an absolute figure, so posting the raw
+  value would have wiped it.
+- Still **no journal entry**: an opening position is not a movement, so the
+  boundary `CreateMissingStockAsync` already documented is unchanged. A
+  cost-only run, which creates nothing, posts nothing.
+- New `inventoryOpeningPosted` on the commit result, plus a message saying what
+  was added and to which account.
+- Covered by section 28 of `scripts/test_gd_import_costing.py` (419/419),
+  which asserts the account grows by exactly the created value, that the
+  earlier stock-sheet figure is added to rather than replaced, that no journal
+  entry is written, and that a cost-only run leaves the account alone.
+- **Existing production balances are not corrected by this** — the fix changes
+  what future imports do. The two affected companies need their Inventory
+  opening balance adjusted by hand.
+
 ### 2026-09-15 — FBR sandbox seeding works on a brand-new company
 
 Seeding the FBR scenarios for a newly created company produced a set FBR

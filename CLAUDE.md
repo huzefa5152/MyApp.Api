@@ -1,4 +1,4 @@
-# MyApp.Api — Claude Code session standards
+﻿# MyApp.Api — Claude Code session standards
 
 You are working on **MyApp.Api**, an FBR Digital Invoicing ERP for Pakistani
 wholesalers. Production live at `hakimitraders.runasp.net` (MonsterASP).
@@ -1476,37 +1476,8 @@ them can be resolved from FBR.
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` (72 checks) |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
-| Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `118/118`) |
-| Admin scope leak hunt (greps response BODIES for the other tree's markers) | `python scripts/test_admin_scope_leak_hunt.py` | `all checks passed` (currently `44/44`) |
-| Stock item-type reflow (V1) | `python scripts/test_stock_itemtype_reflow.py` | `76/76 checks passed` |
-| Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
-| Inventory V2 lifecycle | `python scripts/test_stock_v2_lifecycle.py` | `29/29 checks passed` |
-| Division isolation | `python scripts/test_division_isolation.py` | `all checks passed` |
-| Document copy | `python scripts/test_document_copy.py` | `184/184 checks passed` |
-| Customer Portal (incl. IDOR suite) | `python scripts/test_customer_portal.py` | `120/120 checks passed` |
-| Customer receipts, advances + FIFO auto-allocation | `python scripts/test_customer_receipts_ledger.py` | `184/184 checks passed` (3 skipped without `--db`) |
-| Customer ledger | `python scripts/test_customer_ledger.py` | `100/100 checks passed` |
-| Customer ledger grouping | `python scripts/test_customer_ledger_groups.py` | `47/47 checks passed` |
-| Client Ledger report | `python scripts/test_client_ledger_report.py` | `97/97 checks passed` |
-| Accounting reports | `python scripts/test_accounting_reports.py` | `326/326 checks passed` |
-| Public file allowlist | `python scripts/verify_public_file_allowlist.py` | `10/10 checks passed` |
-| Print pagination (offline) | see `PRINT_TEMPLATE_GUIDE.md` §11 | `0 failing cases` |
-| PDF page breaks never cut a line item (offline) | `node scripts/test_pdf_page_cuts.mjs` | `10 passed, 0 failed` |
-| Bulk invoice download / consolidated print, through BOTH callers | `python scripts/test_invoice_bulk.py` | `39 passed, 0 failed` |
-| HS code master + FBR-off classification | `python scripts/test_hscode_master.py` (add `--fbr-token <token>` to also exercise the live PRAL fetch) | `all PASS` (24 checks, 1 skipped without a token) |
-| Bulk client import | `python scripts/test_client_import.py` | `all PASS` (23 checks) |
-| Item Type lifecycle + picker reachability | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Spreadsheet import (layouts, heading aliases, tax-rate guard, stock, lots, ledger) | `python scripts/test_spreadsheet_import.py` | `all PASS` (135 checks) |
-| Bill line pricing, advance tax (236G/236H) + further tax s.3(1A), incl. edit and GL posting | `python scripts/test_bill_pricing_advance_tax.py` | `102/102 checks passed` |
-| Delivery challans raised from a bill (incl. editing a delivered bill) | `python scripts/test_challan_from_bill.py` | `34/34 checks passed` |
-| Stock valuation flow (import -> purchase -> sale -> adjustment -> correction) | `python scripts/test_stock_valuation_flow.py` (add `--stock-file <xlsx>` to run a real sheet through the shipped layout) | `78/78 checks passed` |
-| Item Type lifecycle + pickers | `python scripts/test_item_type_lifecycle.py` | `all PASS` (24 checks) |
-| Permission-section mapping (static) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
-| Default print templates in sync with the frontend (static) | `node scripts/sync_default_print_templates.mjs --check` | `default print templates are in sync` |
-| Withholding lines + stamp slot on every starter/default (offline) | `node scripts/test_print_templates_wht.mjs` | `693 passed, 0 failed` |
-| Stock dashboard Excel export (offline layout) | `cd scripts/stock_export_harness && dotnet run -c Release` | `STOCK EXPORT HARNESS PASSED` (256 checks) |
-| Stock dashboard Excel export (live, ties to the grid) | `python scripts/test_stock_export_excel.py` | `STOCK EXPORT LIVE SUITE PASSED` (40 checks) |
-| FBR duplicate-submit prevention (live sandbox) | `python scripts/test_fbr_no_double_submit.py --fbr-token <sandbox> --db-name <branch db>` | `11 passed, 0 failed` (1 skipped with a live token) |
+| Bill / invoice numbering — Auto vs a hand-typed number, both create paths, per division + renumbering on edit | `python scripts/test_custom_bill_number.py` (add `--db "<conn>"` for the FBR-filed lock suite) | `53/53 checks passed` (5 skipped without `--db`) |
+| Admin scope isolation (seed / Administrator trees, Tenant Access, IDOR) | `python scripts/test_admin_scope_isolation.py` | `all checks passed` (currently `115/115`) |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
@@ -1722,6 +1693,51 @@ stay in the pushed history and are recoverable from it. That is why the rule is
 
 ---
 
+## One commit does one thing, and the subject says what (2026-09-22)
+
+`8e1d8d5` has the subject "Refuse to delete an item type that still holds
+stock". It also deleted **3,576 lines of print templates** — the 15 bill and 15
+sales-tax-invoice starter designs and both shipped defaults — replacing them
+with colour variants of one generated layout. Nobody reviewed that, because the
+subject never mentioned it. It shipped, and sat in production for four days
+until an operator reported that all the starter templates were gone and every
+document now printed as the same unfamiliar layout.
+
+- **One commit, one change.** Stage explicit paths — `git commit -F <msgfile> --
+  <paths>`. Never `git add -A`. That was already the rule for a tree with
+  several agents in it; it is the rule with one agent too, for exactly this
+  reason.
+- **Read `git diff --stat` before every commit and account for every file.** A
+  file you cannot justify in the subject line does not belong in the commit.
+- **Deleting is a change in its own right.** A refactor that removes
+  user-visible variety — designs, templates, presets, sample data, starter
+  content — is never a side effect of something else. It gets its own commit,
+  its own subject, and the maintainer's agreement BEFORE it is written.
+- **A generated variant is not a replacement for a hand-made one.** Fifteen
+  designs that differ only by an accent colour are one design with fifteen
+  names, and the operator reads that as fourteen designs missing.
+
+## A test rewritten to fit the change proves nothing (2026-09-22)
+
+The same commit rewrote `myapp-frontend/scripts/test-print-stamps.mjs` to assert
+that every bill and tax layout has exactly eight bare `<th>` and prints a
+per-line GST column — which is to say, that every layout IS the new single
+template. The suite passed. The wipe looked verified, because the wipe had been
+written down as the expectation.
+
+- **When a change makes a test fail, the first question is whether the test is
+  right** — and that answer goes to the maintainer, not silently into the test
+  file.
+- **Re-baselining a test in the same commit as the behaviour it guards destroys
+  the only evidence anyone had.** If both genuinely must move, say so in the
+  commit body and name what the assertion used to protect.
+- **Assert the contract, not one implementation's shape.** "An item table
+  exists, the document subtotal / GST / grand total render, no `NaN`" survives
+  fifteen different designs. "Exactly eight `<th>`" blesses the one layout it
+  was written against and blocks every other.
+
+---
+
 ## Anti-patterns I keep finding (don't repeat them)
 
 - ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
@@ -1737,6 +1753,9 @@ stay in the pushed history and are recoverable from it. That is why the rule is
 - ❌ Cross-tenant entity links (`Invoice.ClientId` pointing at a `Client` whose `CompanyId` doesn't match)
 - ❌ Treating a null `Company.FbrToken` as "clear the token" — null is what an unreadable ciphertext decrypts to, and writing it back destroys the token (2026-09-10). Clear with `""`; `AppDbContext.PreserveUnreadableFbrTokens` drops null from every Company UPDATE.
 - ❌ De-duplicating against a UNIQUE index with a case-sensitive C# check.
+- ❌ Letting unrelated files ride along in a commit — read `git diff --stat` and account for every one
+- ❌ Re-baselining a test in the same commit as the behaviour it guards (the regression becomes the expectation)
+- ❌ Replacing distinct hand-made designs / templates with generated variants of a single layout
   SQL Server's default collation is **CI + ANSI PadSpace**, so `"X"`, `"x"` and
   `"X "` are ONE key. A SQL probe that matches, followed by an ordinal
   `existing.Contains(name)` that doesn't, inserts a row the index then rejects.

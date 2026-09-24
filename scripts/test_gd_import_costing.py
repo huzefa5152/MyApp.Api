@@ -3334,6 +3334,127 @@ def main():
         check("27: hand entry refuses a company the caller cannot reach",
               r.status_code == 403, f"http {r.status_code}: {r.text[:160]}")
 
+        # ---- 28: created stock reaches "Inventory on hand" -----------------
+        # Found on the importer production line 2026-09-17. A stock-sheet
+        # import posts its total onto the Inventory control account
+        # (OpeningStockImportService.PostInventoryValueAsync); a GD costing
+        # import that CREATED opening balances posted nothing, so the Chart of
+        # Accounts understated the books by the whole value of that new stock
+        # -- 2,685,861.50 on one company and 342,337.11 on another, while a
+        # third whose costing run created no balances was correctly untouched.
+        #
+        # The account carries an OPENING BALANCE, not a journal entry: an
+        # opening position is not a movement. So these checks read the
+        # account's opening figure, and assert nothing was posted to the
+        # ledger for it.
+        inv_co = make_company(api, h, f"GD Costing InvAcct {tag}")
+        created_companies.append(inv_co)
+        requests.post(f"{api}/accounts/company/{inv_co}/seed-wholesale", headers=h, timeout=120)
+
+        inv_acct = account_by_control(api, h, inv_co, "Inventory")
+        if not check("28: the seeded company has an Inventory control account",
+                     inv_acct is not None, "no ControlType=Inventory account after seed-wholesale"):
+            raise RuntimeError("Section 28 setup failed -- no Inventory account to assert on.")
+
+        def inventory_opening():
+            a = account_by_control(api, h, inv_co, "Inventory")
+            if not a:
+                return None
+            amt = float(a.get("openingBalance") or 0)
+            return amt if a.get("openingBalanceIsDebit", True) else -amt
+
+        # An existing position first, so the check proves the posting ADDS to
+        # what is already there rather than replacing it -- the exact way the
+        # production figure lost the stock sheet's own contribution.
+        seed_item = make_item(api, h, inv_co, f"GD Inv Seed Item {tag}", hs="8481.1000")
+        set_opening(api, h, inv_co, seed_item, qty=100, value=250000, cost=200000)
+        requests.post(f"{api}/accounts/{inv_acct['id']}/adjust-opening-balance",
+                      headers=h, timeout=30,
+                      json={"openingBalance": 250000, "openingBalanceIsDebit": True})
+        before = inventory_opening()
+        check("28: the Inventory account starts at the stock already on the books",
+              before is not None and close(before, 250000.0),
+              f"opening={before} expected=250000")
+
+        # A GD under a DIFFERENT HS code -- matches nothing, so createMissingStock
+        # turns it into new opening stock. Backfill mode, which posts no GD
+        # journal entry at all, so anything landing on the account came from
+        # this fix and not from the consignment posting.
+        inv_gd = f"GD-INV-{tag}"
+        inv_cells = row_cells(BASE_COLS, inv_gd, "8544.4290",
+                              desc=f"GD Inv New Item {tag}", qty=80,
+                              assessed=120000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, inv_co, build_sheet(BASE_HEADINGS, [inv_cells]), GD_MAPPING,
+                       mode="backfill")
+        inv_prev = r.json() if r.ok else {}
+        r = gd_commit(api, h, {
+            "companyId": inv_co, "fileSha256": inv_prev.get("fileSha256"),
+            "fileName": "gd-inventory-account.xlsx",
+            "fileSizeBytes": inv_prev.get("fileSizeBytes"),
+            "lines": inv_prev.get("lines", []), "createMissingStock": True,
+            "mode": "backfill",
+        })
+        inv_res = r.json() if r.ok else {}
+        if not check("28: the backfill commit creates one new opening balance",
+                     r.ok and inv_res.get("openingBalancesCreated") == 1,
+                     f"http {r.status_code}: {r.text[:200]}"):
+            raise RuntimeError("Section 28 setup failed -- no balance was created to post.")
+
+        created_value = None
+        for o in get_openings(api, h, inv_co):
+            if o.get("itemTypeId") != seed_item:
+                created_value = float(o.get("valueExcludingTax") or 0)
+        check("28: the created balance carries a selling value",
+              created_value is not None and created_value > 0,
+              f"created_value={created_value}")
+
+        posted = float(inv_res.get("inventoryOpeningPosted") or 0)
+        check("28: the commit reports what it put on the Inventory account",
+              close(posted, created_value or 0),
+              f"inventoryOpeningPosted={posted} created_value={created_value}")
+
+        after = inventory_opening()
+        check("28: THE REGRESSION -- Inventory on hand grew by the created stock",
+              after is not None and close(after, 250000.0 + (created_value or 0)),
+              f"opening after={after} expected={250000.0 + (created_value or 0)} "
+              f"(before={before}, created={created_value}). A GD costing import that "
+              f"creates stock must reach the Chart of Accounts.")
+        check("28: and the earlier stock-sheet value was ADDED to, not replaced",
+              after is not None and after > 250000.0,
+              f"opening after={after} -- the existing 250,000 was overwritten")
+
+        check("28: no GD journal entry was posted for it (an opening is not a movement)",
+              (inv_res.get("journalEntries") or []) == []
+              and float(inv_res.get("totalPosted") or 0) == 0,
+              f"journalEntries={inv_res.get('journalEntries')} "
+              f"totalPosted={inv_res.get('totalPosted')}")
+
+        # A costing run that creates NOTHING must leave the account alone --
+        # this is the AY TRADERS case, which was correctly untouched in
+        # production and must stay that way.
+        steady = inventory_opening()
+        cost_cells = row_cells(BASE_COLS, f"GD-INV2-{tag}", "8481.1000",
+                               desc=f"GD Inv Seed Item {tag}", qty=40,
+                               assessed=70000, st=18, ast=3, it=6)
+        r = gd_preview(api, h, inv_co, build_sheet(BASE_HEADINGS, [cost_cells]), GD_MAPPING,
+                       mode="backfill")
+        cost_prev = r.json() if r.ok else {}
+        r = gd_commit(api, h, {
+            "companyId": inv_co, "fileSha256": cost_prev.get("fileSha256"),
+            "fileName": "gd-cost-only.xlsx", "fileSizeBytes": cost_prev.get("fileSizeBytes"),
+            "lines": cost_prev.get("lines", []), "createMissingStock": True,
+            "mode": "backfill",
+        })
+        cost_res = r.json() if r.ok else {}
+        check("28: a cost-only run creates no balance",
+              r.ok and (cost_res.get("openingBalancesCreated") or 0) == 0,
+              f"http {r.status_code}: created={cost_res.get('openingBalancesCreated')}")
+        check("28: and therefore posts nothing to the Inventory account",
+              float(cost_res.get("inventoryOpeningPosted") or 0) == 0
+              and close(inventory_opening() or 0, steady or 0),
+              f"posted={cost_res.get('inventoryOpeningPosted')} "
+              f"opening now={inventory_opening()} expected unchanged {steady}")
+
     finally:
         if not args.keep:
             if restricted_user_id:

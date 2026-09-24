@@ -262,20 +262,12 @@ namespace MyApp.Api.Controllers
 
             var logoPath = $"/data/uploads/logos/{fileName}";
 
-            var updateDto = new UpdateCompanyDto
-            {
-                Name = company.Name,
-                BrandName = company.BrandName,
-                FullAddress = company.FullAddress,
-                Phone = company.Phone,
-                NTN = company.NTN,
-                STRN = company.STRN,
-                LogoPath = logoPath,
-                StartingChallanNumber = company.StartingChallanNumber,
-                StartingInvoiceNumber = company.StartingInvoiceNumber
-            };
-            var updated = await _companyService.UpdateAsync(id, updateDto);
-            return Ok(updated);
+            // A logo upload must not reset omitted FBR, inventory or numbering
+            // settings through the general company-update DTO.
+            await _context.Companies.Where(c => c.Id == id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.LogoPath, logoPath));
+            company.LogoPath = logoPath;
+            return Ok(company);
         }
     }
 }

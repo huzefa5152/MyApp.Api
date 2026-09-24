@@ -1,3 +1,4 @@
+import { MERGE_FIELDS } from "../utils/templateEngine";
 ﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -131,13 +132,15 @@ export default function TemplateEditorPage() {
     (async () => {
       try {
         const { data } = await getMergeFields(templateType);
-        setFields(data.map(f => ({
+        const fetched = data.map(f => ({
           field: f.fieldExpression,
           label: f.label,
           category: f.category,
-        })));
+        }));
+        const known = new Set(fetched.map(f => f.field));
+        setFields([...fetched, ...(MERGE_FIELDS[templateType] || []).filter(f => !known.has(f.field))]);
       } catch {
-        setFields([]);
+        setFields(MERGE_FIELDS[templateType] || []);
       }
     })();
   }, [templateType]);

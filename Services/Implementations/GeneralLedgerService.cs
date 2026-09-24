@@ -278,6 +278,15 @@ namespace MyApp.Api.Services.Implementations
             foreach (var t in transfers) { await _posting.PostTransferAsync(t); result.PostedTransfers++; }
             _context.ChangeTracker.Clear();
 
+            // Monthly stock relief is derived from the stock walk, not from a
+            // document, so the document loops above cannot recreate it. Without
+            // this the rebuild would wipe every cost-of-goods-sold entry and
+            // leave the Inventory account standing at its opening balance
+            // again — silently undoing the fix, with no failing document to
+            // point at. Last, so it sees the ledger the rebuild just wrote.
+            await _posting.PostInventoryPeriodsAsync(companyId, null);
+            _context.ChangeTracker.Clear();
+
             _logger.LogInformation(
                 "GL rebuild for company {CompanyId}: {Invoices} invoices, {Bills} bills, {DebitNotes} debit notes, {Consignments} consignments, {Payments} payments, {Transfers} transfers ({Removed} old entries removed).",
                 companyId, result.PostedInvoices, result.PostedBills, result.PostedDebitNotes, result.PostedConsignments, result.PostedPayments, result.PostedTransfers, removed);
@@ -678,6 +687,99 @@ namespace MyApp.Api.Services.Implementations
                 summary.Income = -plByAccount.Where(x => x.Type == AccountType.Income).Sum(x => x.Net);
                 summary.Expenses = plByAccount.Where(x => x.Type == AccountType.Expense).Sum(x => x.Net);
                 summary.NetProfit = summary.Income - summary.Expenses;
+
+                // ── Importer-oriented positions (2026-09-17) ───────────────
+                // An importer has no trade creditors, so the Payables card
+                // reads 0.00 and this screen said nothing about its largest
+                // asset (stock) or what it actually owes (tax). These are
+                // POSITIONS, not period flows, so they use the balances above
+                // rather than the period's journal lines.
+                var positionAccounts = await _context.Accounts.AsNoTracking()
+                    .Where(a => a.CompanyId == companyId && a.IsActive)
+                    .Select(a => new { a.Id, a.ControlType })
+                    .ToListAsync();
+
+                decimal Position(params ControlType[] roles)
+                {
+                    var wanted = roles.ToHashSet();
+                    return Math.Round(
+                        positionAccounts.Where(a => wanted.Contains(a.ControlType))
+                                        .Sum(a => balances.GetValueOrDefault(a.Id)),
+                        2, MidpointRounding.AwayFromZero);
+                }
+
+                summary.InventoryOnHand = Position(ControlType.Inventory);
+                // Liabilities sit credit-side; negate so "owed" reads positive.
+                summary.TaxPayable = -Position(ControlType.OutputTax,
+                    ControlType.FurtherTaxPayable, ControlType.WithholdingPayable);
+                summary.ImportClearing = -Position(ControlType.ImportClearing);
+                summary.RecoverableTax = Position(ControlType.InputTax,
+                    ControlType.AdvanceIncomeTaxOnImports);
+
+                // ── The import book ───────────────────────────────────────
+                // Every GD costed into this company. This drives the whole
+                // business and appeared on no screen at all before today.
+                var gds = await _context.ImportConsignments.AsNoTracking()
+                    .Where(c => c.CompanyId == companyId)
+                    .Select(c => new
+                    {
+                        c.TotalCostExcludingTax, c.TotalInputTax, c.TotalIncomeTax,
+                        c.AmountSettled, c.ImportClearingCredited,
+                    })
+                    .ToListAsync();
+                summary.ImportGdCount = gds.Count;
+                summary.ImportLandedCost = Math.Round(gds.Sum(g => g.TotalCostExcludingTax), 2);
+                summary.ImportInputTax = Math.Round(gds.Sum(g => g.TotalInputTax), 2);
+                summary.ImportIncomeTax = Math.Round(gds.Sum(g => g.TotalIncomeTax), 2);
+                // A Backfill consignment credits nothing by design, so its
+                // outstanding is zero rather than its whole value.
+                summary.ImportOutstanding = Math.Round(
+                    gds.Sum(g => g.ImportClearingCredited - g.AmountSettled), 2);
+                summary.ImportDutyBurdenPercent = summary.ImportLandedCost > 0m
+                    ? Math.Round((summary.ImportInputTax + summary.ImportIncomeTax)
+                                 / summary.ImportLandedCost * 100m, 1, MidpointRounding.AwayFromZero)
+                    : null;
+
+                // Profit locked up in unsold stock: declared value less landed
+                // cost on what is still held. From the same walk the drill-down
+                // uses, so the card and its rows cannot disagree — this field
+                // was declared and then left unassigned on the first pass,
+                // which the reconciliation check caught.
+                var stockOpenings = (await _context.OpeningStockBalances.AsNoTracking()
+                        .Where(o => o.CompanyId == companyId)
+                        .Select(o => new
+                        {
+                            o.ItemTypeId, o.Quantity, o.ValueExcludingTax,
+                            o.ActualCostExcludingTax, o.SalesTaxRate,
+                        })
+                        .ToListAsync())
+                    .GroupBy(o => o.ItemTypeId)
+                    .ToDictionary(g => g.Key, g => new ItemStockPositions.Opening(
+                        g.Sum(x => x.Quantity), g.Sum(x => x.ValueExcludingTax),
+                        g.Sum(x => x.ActualCostExcludingTax), g.Max(x => x.SalesTaxRate)));
+                var stockMovements = (await _context.StockMovements.AsNoTracking()
+                        .Where(sm => sm.CompanyId == companyId).ToListAsync())
+                    .GroupBy(sm => sm.ItemTypeId)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+                var stockIds = stockOpenings.Keys.Union(stockMovements.Keys).Distinct().ToList();
+                // Soft-deleted catalog rows included on purpose: a delete removes
+                // the catalog entry, not the goods, and the ledger's own relief
+                // walk never filtered them. Excluding them here would put this
+                // figure below the Inventory account it is meant to explain.
+                var stockNames = await _context.ItemTypes.AsNoTracking()
+                    .Where(it => stockIds.Contains(it.Id))
+                    .Select(it => new { it.Id, it.Name, it.HSCode })
+                    .ToDictionaryAsync(x => x.Id, x => (x.Name, (string?)x.HSCode));
+                var stockPositions = ItemStockPositions.Compute(
+                    stockOpenings, stockMovements, stockNames);
+                summary.UnrealisedMargin = Math.Round(
+                    stockPositions.Where(pp => pp.ClosingDeclared != 0m)
+                                  .Sum(pp => pp.UnrealisedMargin), 2);
+
+                // Where the working capital sits.
+                summary.CapitalInStock = summary.InventoryOnHand;
+                summary.CapitalOwedByCustomers = summary.Receivables.Total;
+                summary.CapitalCollected = summary.CashAndBankTotal;
             }
 
             // Working capital buckets (subledger).

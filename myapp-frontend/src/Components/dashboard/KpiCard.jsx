@@ -39,6 +39,15 @@ export default function KpiCard({
   title = "",
   // Icon shown next to the label.
   icon = null,
+  // Optional second line under the main figure -- the ex-tax figure under
+  // Total Sales, the overdue slice under Receivables, the split under
+  // Payables. A string or a node. Wraps rather than truncating, because
+  // these are the numbers that explain the big one above them.
+  subValue = null,
+  // When set, the card becomes a button that opens its drill-down. The rows
+  // behind it come from the same computation as the figure above, so they add
+  // up to it -- see Components/dashboard/KpiDrilldown.jsx.
+  onDrillDown = null,
 }) {
   // Compute % delta vs previous when both numbers are available.
   let deltaPct = null;
@@ -82,8 +91,17 @@ export default function KpiCard({
         overflow: "hidden",
         minHeight: 136,
         boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
+        cursor: onDrillDown ? "pointer" : undefined,
       }}
-      title={title}
+      title={onDrillDown ? `${title}
+
+Click to see the breakdown.` : title}
+      onClick={onDrillDown || undefined}
+      onKeyDown={onDrillDown ? (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDrillDown(); }
+      } : undefined}
+      role={onDrillDown ? "button" : undefined}
+      tabIndex={onDrillDown ? 0 : undefined}
     >
       {/* Thin accent strip — keeps section identity readable at a glance,
           even when the card is collapsed under its peers on mobile. */}
@@ -127,6 +145,22 @@ export default function KpiCard({
       }}>
         {format(value)}
       </div>
+
+      {subValue != null && subValue !== "" && (
+        <div className="dash-kpi-card__sub" style={{
+          marginTop: "-0.3rem",
+          color: "#69788f",
+          fontSize: "0.76rem",
+          lineHeight: 1.35,
+          fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontVariantNumeric: "tabular-nums",
+          // Wraps on a phone instead of clipping: a split like
+          // "FBR 1,743,215 - trade 0" is the whole point of the line.
+          overflowWrap: "anywhere",
+        }}>
+          {subValue}
+        </div>
+      )}
 
       {(deltaPct != null) && (
         <div className="dash-kpi-card__delta" style={{

@@ -825,6 +825,64 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
+    // ── Monthly stock relief (cost of goods sold) ──────────────────────────
+    // Until 2026-09-17 nothing ever credited the Inventory control account: it
+    // was an opening balance plus purchases, so every stock-tracking company
+    // reported revenue with no matched cost and overstated stock by everything
+    // it had ever sold. PostInventoryPeriodsAsync now writes one relief entry
+    // per company per month, and this brings existing books up to date.
+    //
+    // Backfilling is NOT optional. The repost is automatic on any stock change,
+    // so a company skipped here would sprout a full month's COGS entry out of
+    // nowhere the first time somebody edited an old invoice.
+    //
+    // Idempotent in two independent ways: the marker below, and the posting
+    // itself (one entry per company+period, replaced on repost), so a marker
+    // lost with a truncated AuditLogs table re-runs harmlessly.
+    var cogsBackfillRan = await db.AuditLogs
+        .AnyAsync(a => a.ExceptionType == "COGS_PERIOD_BACKFILL_V1");
+    if (!cogsBackfillRan)
+    {
+        var posting = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPostingService>();
+        var cogsCompanies = await db.Companies
+            .Where(c => c.GlPostingEnabled && c.InventoryTrackingEnabled)
+            .Select(c => new { c.Id, c.Name })
+            .ToListAsync();
+
+        var backfilled = 0;
+        foreach (var c in cogsCompanies)
+        {
+            try
+            {
+                await posting.PostInventoryPeriodsAsync(c.Id, null);
+                backfilled++;
+            }
+            catch (Exception ex)
+            {
+                // One company's books must not stop the application starting,
+                // nor stop the others being brought up to date. The marker is
+                // still written, and that company is corrected the next time
+                // its stock moves.
+                app.Logger.LogError(ex,
+                    "COGS period backfill failed for company {CompanyId} ({Name}) — continuing.",
+                    c.Id, c.Name);
+            }
+        }
+
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/cogs-period-backfill",
+            StatusCode = 200,
+            ExceptionType = "COGS_PERIOD_BACKFILL_V1",
+            Message = $"One-time backfill: monthly stock relief posted for {backfilled} of {cogsCompanies.Count} stock-tracking companies."
+        });
+        await db.SaveChangesAsync();
+    }
+
     // Item types are NOT auto-seeded — operators curate their own catalog
     // (an FBR-off business has no use for the FBR-mapped starter categories).
     // The Demo environment still seeds them below so its demo data has stock.

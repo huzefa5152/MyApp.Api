@@ -15,5 +15,12 @@ namespace MyApp.Api.Services.Interfaces
             int companyId,
             string periodCode,
             ClaimsPrincipal user);
+
+        /// <summary>
+        /// The rows behind one KPI, totalling to exactly what that card shows.
+        /// Computed from the same source the card is, so the two cannot drift.
+        /// </summary>
+        Task<DashboardBreakdownDto> GetBreakdownAsync(
+            int companyId, string kind, string periodCode, ClaimsPrincipal user);
     }
 }

@@ -337,6 +337,13 @@ def test_invoice_update(base: str, token: str, bill: dict | None) -> None:
           updated.get("invoiceNumber") == bill.get("invoiceNumber"),
           f"old={bill.get('invoiceNumber')} new={updated.get('invoiceNumber')}")
 
+    status, printed = http("GET", f"/api/invoices/{bill['id']}/print/bill", base, token=token)
+    check(suite, "detailed bill print succeeds", status == 200)
+    if status == 200:
+        row = printed["items"][0]
+        check(suite, "bill print preserves quantity/rate", row["quantity"] == 1 and row["unitPrice"] == 750)
+        check(suite, "bill print tax columns", row["valueExclTax"] == 750 and row["gstAmount"] == 135 and row["totalInclTax"] == 885)
+        check(suite, "bill print HS field available", "hsCode" in row)
 
 # ── Suite 5: Item Rate History (qty/price suggestion source) ───────
 def test_item_rate_history(base: str, token: str, company: dict, classified: dict | None) -> None:

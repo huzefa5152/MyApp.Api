@@ -63,6 +63,5 @@ namespace MyApp.Api.Repositories.Interfaces
         /// </summary>
         Task<bool> ExistsByNameAndHsCodeAsync(string name, string? hsCode, int? excludeId = null);
         /// <summary>All HS codes currently saved on non-deleted item types.</summary>
-        Task<List<string>> GetSavedHsCodesAsync();
     }
 }

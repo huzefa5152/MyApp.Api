@@ -52,6 +52,148 @@ namespace MyApp.Api.DTOs
         public decimal? TotalPurchasesPrev { get; set; }
         public decimal? NetPrev { get; set; }
         public decimal? GstNetPrev { get; set; }
+
+        // ── Importer-oriented figures (2026-09-17) ─────────────────────────
+        // An importer buys nothing on purchase bills — stock arrives through
+        // opening stock and GD costing — so Total Purchases reads 0 and Net
+        // (Sales − Purchases) merely restates Total Sales while looking like
+        // profit. Meanwhile the two largest numbers in the business, stock and
+        // debtors, were not on the dashboard at all. See
+        // docs/superpowers/specs/2026-09-17-importer-dashboard-kpis-design.md.
+
+        /// <summary>Sales excluding tax. <see cref="TotalSales"/> is the
+        /// tax-INCLUSIVE GrandTotal, which is what made an operator compare it
+        /// against an ex-tax stock sheet and find a gap nothing explained.</summary>
+        public decimal TotalSalesExcludingTax { get; set; }
+
+        /// <summary>Cost of the goods sold in the period, declared basis,
+        /// from the same walk the ledger's monthly relief entries use.</summary>
+        public decimal CostOfGoodsSold { get; set; }
+
+        /// <summary>Breakage, count corrections and revaluations — NOT cost of
+        /// goods sold, kept apart so gross margin stays honest.</summary>
+        public decimal InventoryAdjustments { get; set; }
+
+        /// <summary><see cref="TotalSalesExcludingTax"/> − <see cref="CostOfGoodsSold"/>.
+        /// Reads near zero for a company that invoices at declared customs
+        /// value; that is the honest declared-basis picture, not a fault.</summary>
+        public decimal GrossProfit { get; set; }
+
+        /// <summary>Gross profit as a percentage of ex-tax sales; null when
+        /// there were no sales to divide by.</summary>
+        public decimal? GrossMarginPercent { get; set; }
+
+        /// <summary>What the goods on hand are worth right now (declared
+        /// basis). Not period-scoped — stock is a position, not a flow.</summary>
+        public decimal StockOnHandValue { get; set; }
+
+        /// <summary>Outstanding receivables, and the overdue slice of them.</summary>
+        public decimal ReceivablesTotal { get; set; }
+        public decimal ReceivablesOverdue { get; set; }
+
+        /// <summary>Everything owed, not just trade creditors: an importer has
+        /// no suppliers on the books, so an AccountsPayable-only figure reads
+        /// 0.00 and teaches the operator nothing.</summary>
+        public decimal PayablesTotal { get; set; }
+        public decimal PayablesTrade { get; set; }
+        public decimal PayablesTax { get; set; }
+        public decimal PayablesImportClearing { get; set; }
+
+        /// <summary>Recoverable FROM the tax authority — input sales tax and
+        /// advance income tax on imports. These are assets, not payables: an
+        /// import's duties are paid at clearance and then credited back. Zero
+        /// until a GD is recorded as a New Arrival, which is exactly when it
+        /// should appear.</summary>
+        public decimal RecoverableTaxTotal { get; set; }
+        public decimal RecoverableInputTax { get; set; }
+        public decimal RecoverableAdvanceIncomeTax { get; set; }
+
+        // ── Which cards have anything to say ───────────────────────────────
+        // One layout, cards hidden when their concept is empty for this
+        // company. Chosen over two layouts because the only companies with
+        // purchase bills were demo data — building a second arrangement for a
+        // case no customer has is cost without benefit.
+
+        /// <summary>False when the company has never raised a purchase bill, so
+        /// Total Purchases and Net are hidden rather than shown as 0.</summary>
+        public bool HasPurchases { get; set; }
+
+        /// <summary>False when the company tracks no stock at all.</summary>
+        public bool HasStock { get; set; }
+
+        /// <summary>False when the company has no documents of any kind — a
+        /// configured but not-yet-trading tenant, which gets an empty state
+        /// instead of a wall of zeroes.</summary>
+        public bool HasAnyActivity { get; set; }
+
+        // ── Capital tied up in stock (2026-09-17) ──────────────────────────
+        // The questions an importer actually asks: what have I bought that
+        // never sold, what am I really earning, and how much of what I
+        // imported has turned back into money.
+
+        /// <summary>Declared value of items that have an opening balance and
+        /// have never gone out. On this line that runs to 82% of stock for one
+        /// company — the most actionable figure on the dashboard.</summary>
+        public decimal DeadStockValue { get; set; }
+        public int DeadStockItemCount { get; set; }
+
+        /// <summary>Dead stock as a share of all stock ever held.</summary>
+        public decimal? DeadStockPercent { get; set; }
+
+        /// <summary>Cost of the goods sold at ACTUAL landed cost rather than
+        /// declared. Declared-basis gross profit reads ~0 for a company that
+        /// invoices at customs value; this is what it really earned.</summary>
+        public decimal CostOfGoodsSoldLanded { get; set; }
+        public decimal RealMargin { get; set; }
+        public decimal? RealMarginPercent { get; set; }
+
+        /// <summary>Declared value that has converted to sales, and what share
+        /// of everything ever held that represents. Deliberately NOT expressed
+        /// as months of cover: these companies have 10–16 days of sales
+        /// history, so any annualised rate would be noise.</summary>
+        public decimal StockConvertedValue { get; set; }
+        public decimal? StockConvertedPercent { get; set; }
+
+        /// <summary>Stock still held, split by how long since it last moved.
+        /// Opening balances share one as-of date, so early on these bunch into
+        /// a single bucket — that is honest, not broken.</summary>
+        public decimal StockAgeUnder30 { get; set; }
+        public decimal StockAge30To90 { get; set; }
+        public decimal StockAgeOver90 { get; set; }
+    }
+
+    /// <summary>
+    /// One row of a KPI's drill-down. The rows of a breakdown SUM TO THE CARD
+    /// — that is the contract, and it is why every breakdown is computed from
+    /// the same source the card is rather than recomputed a second way. A
+    /// drill-down that disagreed with its own headline would be worse than no
+    /// drill-down at all.
+    /// </summary>
+    public class DashboardBreakdownRowDto
+    {
+        public int? Id { get; set; }
+        public string Label { get; set; } = "";
+        /// <summary>Secondary line — HS code, invoice date, GD number.</summary>
+        public string? Sub { get; set; }
+        /// <summary>The figure that sums to the card's value.</summary>
+        public decimal Amount { get; set; }
+        /// <summary>An optional companion figure (quantity, a second basis).</summary>
+        public decimal? Secondary { get; set; }
+        public string? SecondaryLabel { get; set; }
+        /// <summary>Set when the row deserves attention — overdue, never sold.</summary>
+        public bool Flagged { get; set; }
+    }
+
+    public class DashboardBreakdownDto
+    {
+        public string Kind { get; set; } = "";
+        public string Title { get; set; } = "";
+        /// <summary>What the card shows. Rows sum to this.</summary>
+        public decimal Total { get; set; }
+        public string? AmountLabel { get; set; }
+        /// <summary>Plain-English note on what the rows mean.</summary>
+        public string? Note { get; set; }
+        public List<DashboardBreakdownRowDto> Rows { get; set; } = new();
     }
 
     public class DashboardTrendPoint

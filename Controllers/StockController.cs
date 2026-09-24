@@ -29,13 +29,14 @@ namespace MyApp.Api.Controllers
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly IPermissionService _permission;
         private readonly IStockCostAuditService _costAudit;
+        private readonly IPostingService _posting;
         private readonly ILogger<StockController> _logger;
         private readonly int _defaultPageSize;
 
         public StockController(AppDbContext context, IStockService stock, IInventoryReadService inventory,
             IAuditLogService audit, ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess, IPermissionService permission,
-            IStockCostAuditService costAudit,
+            IStockCostAuditService costAudit, IPostingService posting,
             ILogger<StockController> logger, IConfiguration configuration)
         {
             _context = context;
@@ -46,6 +47,7 @@ namespace MyApp.Api.Controllers
             _divisionAccess = divisionAccess;
             _permission = permission;
             _costAudit = costAudit;
+            _posting = posting;
             _logger = logger;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
@@ -708,6 +710,20 @@ namespace MyApp.Api.Controllers
 
             await _context.SaveChangesAsync();
 
+            // Opening stock entered by hand has to reach the Inventory control
+            // account, exactly as the two spreadsheet importers' does. Without
+            // this the account sits below what the stock walk says the goods are
+            // worth, which is the same defect the costing import had — found
+            // here by the COGS invariant test on 2026-09-17.
+            //
+            // The DELTA, not the value: this is an upsert, so an edit from
+            // 100,000 to 120,000 moves the account by 20,000.
+            await _posting.AdjustInventoryOpeningAsync(
+                dto.CompanyId, existing.ValueExcludingTax - before.Value);
+
+            // A new opening position re-prices every sale after it.
+            await _stock.RepostInventoryPeriodsAsync(dto.CompanyId, null);
+
             var it = await _context.ItemTypes.FindAsync(existing.ItemTypeId);
             return Ok(new OpeningStockBalanceDto
             {
@@ -1054,6 +1070,12 @@ namespace MyApp.Api.Controllers
                     ? "Stock adjustment: " + string.Join(", ", written) + "."
                     : "Stock adjustment: " + string.Join(", ", written) + $". {dto.Notes}");
             await _context.SaveChangesAsync();
+
+            // An adjustment or revaluation changes what stock is worth, so the
+            // Inventory account has to follow it or it drifts above the walk.
+            // Inside the transaction, so a rollback takes the entry with it.
+            await _stock.RepostInventoryPeriodsAsync(dto.CompanyId, dto.MovementDate.Date);
+
             await costTx.CommitAsync();
 
             return Ok(new

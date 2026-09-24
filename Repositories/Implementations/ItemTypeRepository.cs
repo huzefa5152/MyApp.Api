@@ -220,14 +220,5 @@ namespace MyApp.Api.Repositories.Implementations
                               && it.HSCode == normalizedHs
                               && (!excludeId.HasValue || it.Id != excludeId.Value));
         }
-
-        public async Task<List<string>> GetSavedHsCodesAsync()
-        {
-            return await _context.ItemTypes
-                .Where(it => !it.IsDeleted && it.HSCode != null && it.HSCode != "")
-                .Select(it => it.HSCode!)
-                .Distinct()
-                .ToListAsync();
-        }
     }
 }
