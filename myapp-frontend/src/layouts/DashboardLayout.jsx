@@ -250,6 +250,7 @@ export default function DashboardLayout() {
   ];
   const reportsKeys = [
     "reports.sales.view",
+    "reports.invoicedetail.view",
     "reports.taxsheet.view",
     "reports.clientledger.view",
     "accounting.reports.view",
@@ -625,6 +626,12 @@ export default function DashboardLayout() {
                 <NavLink to="/reports/sales" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
                   <span>Sales Report</span>
+                </NavLink>
+              </Can>
+              <Can permission="reports.invoicedetail.view">
+                <NavLink to="/reports/invoice-sales-detail" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Invoice Sales Detail</span>
                 </NavLink>
               </Can>
               <Can permission="reports.taxsheet.view">

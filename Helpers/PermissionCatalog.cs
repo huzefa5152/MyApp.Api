@@ -407,6 +407,8 @@ namespace MyApp.Api.Helpers
             // ── Reports ─────────────────────────────────────────────────────
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),
             new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),
+            new("reports.invoicedetail.view", "Reports", "Invoice Sales Detail", "View", "View monthly invoice lines, buyer details and FBR status"),
+            new("reports.invoicedetail.export", "Reports", "Invoice Sales Detail", "Export", "Export monthly invoice sales detail to Excel"),
             new("reports.taxsheet.view",    "Reports", "Tax Sheet", "View",   "View the Tax Sheet (invoice lines still missing a valid HS code, for the tax consultant)"),
             new("reports.taxsheet.export",  "Reports", "Tax Sheet", "Export", "Export the Tax Sheet to Excel"),
             // Company-wide customer statements. Distinct from customerledger.* —

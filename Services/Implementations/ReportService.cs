@@ -53,6 +53,163 @@ namespace MyApp.Api.Services.Implementations
             return (start, start.AddYears(1), $"Year {y}", y, null);
         }
 
+        public async Task<InvoiceSalesDetailReportDto> GetInvoiceSalesDetailAsync(int companyId, int year, int month,
+            HashSet<int>? accessibleDivisionIds)
+        {
+            var from = new DateTime(year, month, 1);
+            var until = from.AddMonths(1);
+            var company = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == companyId)
+                .Select(c => new { Name = c.BrandName ?? c.Name, c.InvoiceNumberPrefix })
+                .FirstOrDefaultAsync();
+            var query = _context.Invoices.AsNoTracking().AsSplitQuery()
+                .Include(i => i.Client).Include(i => i.Items)
+                .Where(i => i.CompanyId == companyId && i.Date >= from && i.Date < until
+                    && i.NoteKind == 0 && !i.IsDemo);
+            if (accessibleDivisionIds != null)
+                query = query.Where(i => i.DivisionId == null
+                    || accessibleDivisionIds.Contains(i.DivisionId.Value));
+            var invoices = await query.OrderBy(i => i.Date).ThenBy(i => i.Id).ToListAsync();
+            var invoiceIds = invoices.Select(i => i.Id).ToList();
+            var challans = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.CompanyId == companyId && c.InvoiceId.HasValue
+                    && invoiceIds.Contains(c.InvoiceId.Value))
+                .Select(c => new { InvoiceId = c.InvoiceId!.Value, c.ChallanNumber })
+                .ToListAsync();
+            var challansByInvoice = challans.GroupBy(c => c.InvoiceId)
+                .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(c => c.ChallanNumber).Distinct().OrderBy(n => n)));
+
+            var report = new InvoiceSalesDetailReportDto
+            {
+                CompanyId = companyId, CompanyName = company?.Name ?? "", PeriodLabel = from.ToString("MMMM yyyy"),
+                InvoiceCount = invoices.Count,
+                SubmittedCount = invoices.Count(i => i.FbrStatus == "Submitted" && i.FbrCancelledAt == null),
+                NotSubmittedCount = invoices.Count(i => i.FbrStatus != "Submitted" || i.FbrCancelledAt != null),
+            };
+            foreach (var inv in invoices)
+            {
+                var items = inv.Items.OrderBy(i => i.Id).ToList();
+                challansByInvoice.TryGetValue(inv.Id, out var challanNumbers);
+                var status = inv.FbrCancelledAt.HasValue ? "FBR cancelled"
+                    : inv.IsFbrExcluded ? "Excluded from FBR"
+                    : string.IsNullOrWhiteSpace(inv.FbrStatus) ? "Not submitted" : inv.FbrStatus!;
+                var fbrNumber = status == "Submitted" ? inv.FbrIRN ?? inv.FbrInvoiceNumber ?? "" : "";
+                var billStatus = inv.IsCancelled ? "Cancelled" : "Active";
+                var allocatedGst = 0m;
+                var scenario = SalesTaxBase.ScenarioFrom(inv.PaymentTerms);
+                var taxBases = items.Select(i => SalesTaxBase.Line(i.LineTotal,
+                    i.FixedNotifiedValueOrRetailPrice, i.SaleType, scenario)).ToList();
+                var totalTaxBase = taxBases.Sum();
+                for (var index = 0; index < Math.Max(1, items.Count); index++)
+                {
+                    var item = index < items.Count ? items[index] : null;
+                    var amount = item?.LineTotal ?? inv.Subtotal;
+                    var tax = item == null ? inv.GSTAmount
+                        : index == items.Count - 1 ? inv.GSTAmount - allocatedGst
+                        : totalTaxBase > 0m ? Round2(inv.GSTAmount * taxBases[index] / totalTaxBase) : 0m;
+                    allocatedGst += tax;
+                    var first = index == 0;
+                    var advance = first ? inv.AdvanceTaxAmount : 0m;
+                    var further = first ? inv.FurtherTaxAmount : 0m;
+                    report.Rows.Add(new InvoiceSalesDetailRowDto
+                    {
+                        InvoiceId = inv.Id, LineNumber = index + 1, Date = inv.Date.Date,
+                        InvoiceNumber = inv.InvoiceNumber.ToString(), InvoiceSeries = company?.InvoiceNumberPrefix ?? "",
+                        DeliveryChallanNumbers = challanNumbers ?? "",
+                        Buyer = inv.Client?.Name ?? "", BuyerAddress = inv.Client?.Address ?? "",
+                        BuyerNtn = inv.Client?.NTN ?? "", HsCode = item?.HSCode ?? "",
+                        Description = item == null ? "Imported bill — line detail unavailable"
+                            : string.IsNullOrWhiteSpace(item.Description) ? item.ItemTypeName : item.Description,
+                        Unit = item?.UOM ?? "", Quantity = item?.Quantity ?? 0m,
+                        Rate = item?.UnitPrice ?? 0m, ExcludingTax = amount,
+                        TaxRate = inv.GSTRate, SalesTax = tax, IncludingTax = amount + tax,
+                        AdvanceTax = advance, FurtherTax = further,
+                        Total = amount + tax + advance + further,
+                        FbrStatus = status, FbrInvoiceNumber = fbrNumber, BillStatus = billStatus,
+                    });
+                }
+            }
+            report.ExcludingTax = report.Rows.Sum(r => r.ExcludingTax);
+            report.SalesTax = report.Rows.Sum(r => r.SalesTax);
+            report.AdvanceTax = report.Rows.Sum(r => r.AdvanceTax);
+            report.FurtherTax = report.Rows.Sum(r => r.FurtherTax);
+            report.Total = report.Rows.Sum(r => r.Total);
+            return report;
+        }
+
+        public async Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId, int year, int month,
+            HashSet<int>? accessibleDivisionIds)
+        {
+            var report = await GetInvoiceSalesDetailAsync(companyId, year, month, accessibleDivisionIds);
+            using var wb = new XLWorkbook();
+            var ws = wb.Worksheets.Add("Sales Detail");
+            var headers = new[] { "S. No", "Date", "Month", "DC", "DC No", "DC #", "Inv Series",
+                "Inv No", "Inv #", "Party Name", "Address", "Ntn", "Hs Code", "Description",
+                "Unit", "Qty", "Rate", "Excl", "Tax Rate", "G. S. T", "Incl",
+                "236-G / 236-H Tax", "Further Tax", "Total", "FBR Status", "FBR Invoice No", "Bill Status" };
+            for (var c = 1; c <= headers.Length; c++) ws.Cell(1, c).Value = headers[c - 1];
+            var header = ws.Range(1, 1, 1, headers.Length);
+            header.Style.Font.Bold = true;
+            header.Style.Fill.BackgroundColor = XLColor.FromHtml("#DCE8F5");
+            ws.SheetView.FreezeRows(1);
+            var row = 2;
+            foreach (var d in report.Rows)
+            {
+                ws.Cell(row, 1).Value = row - 1;
+                ws.Cell(row, 2).Value = d.Date;
+                ws.Cell(row, 2).Style.DateFormat.Format = "yyyy-mm-dd";
+                ws.Cell(row, 3).Value = d.Date.ToString("MMM yyyy");
+                ws.Cell(row, 5).Value = ExcelTemplateEngine.CsvSafe(d.DeliveryChallanNumbers);
+                ws.Cell(row, 6).Value = ExcelTemplateEngine.CsvSafe(d.DeliveryChallanNumbers);
+                ws.Cell(row, 7).Value = ExcelTemplateEngine.CsvSafe(d.InvoiceSeries);
+                ws.Cell(row, 8).Value = ExcelTemplateEngine.CsvSafe(d.InvoiceNumber);
+                ws.Cell(row, 9).Value = ExcelTemplateEngine.CsvSafe(d.InvoiceSeries + d.InvoiceNumber);
+                ws.Cell(row, 10).Value = ExcelTemplateEngine.CsvSafe(d.Buyer);
+                ws.Cell(row, 11).Value = ExcelTemplateEngine.CsvSafe(d.BuyerAddress);
+                ws.Cell(row, 12).Value = ExcelTemplateEngine.CsvSafe(d.BuyerNtn);
+                ws.Cell(row, 13).Value = ExcelTemplateEngine.CsvSafe(d.HsCode);
+                ws.Cell(row, 14).Value = ExcelTemplateEngine.CsvSafe(d.Description);
+                ws.Cell(row, 15).Value = ExcelTemplateEngine.CsvSafe(d.Unit);
+                ws.Cell(row, 16).Value = d.Quantity;
+                ws.Cell(row, 17).Value = d.Rate;
+                ws.Cell(row, 18).Value = d.ExcludingTax;
+                ws.Cell(row, 19).Value = d.TaxRate / 100m;
+                ws.Cell(row, 20).Value = d.SalesTax;
+                ws.Cell(row, 21).Value = d.IncludingTax;
+                ws.Cell(row, 22).Value = d.AdvanceTax;
+                ws.Cell(row, 23).Value = d.FurtherTax;
+                ws.Cell(row, 24).Value = d.Total;
+                ws.Cell(row, 25).Value = ExcelTemplateEngine.CsvSafe(d.FbrStatus);
+                ws.Cell(row, 26).Value = ExcelTemplateEngine.CsvSafe(d.FbrInvoiceNumber);
+                ws.Cell(row, 27).Value = d.BillStatus;
+                ws.Cell(row, 11).Style.Alignment.WrapText = true;
+                ws.Cell(row, 14).Style.Alignment.WrapText = true;
+                if (d.BuyerAddress.Length > 48 || d.Description.Length > 48)
+                    ws.Row(row).Height = 32;
+                ws.Cell(row, 19).Style.NumberFormat.Format = "0.00%";
+                for (var c = 16; c <= 24; c++)
+                    if (c != 19) ws.Cell(row, c).Style.NumberFormat.Format = "#,##0.00";
+                row++;
+            }
+            ws.Cell(row, 14).Value = "Total listed bills";
+            ws.Cell(row, 18).Value = report.ExcludingTax;
+            ws.Cell(row, 20).Value = report.SalesTax;
+            ws.Cell(row, 22).Value = report.AdvanceTax;
+            ws.Cell(row, 23).Value = report.FurtherTax;
+            ws.Cell(row, 24).Value = report.Total;
+            foreach (var c in new[] { 18, 20, 22, 23, 24 })
+                ws.Cell(row, c).Style.NumberFormat.Format = "#,##0.00";
+            ws.Range(row, 1, row, headers.Length).Style.Font.Bold = true;
+            ws.Range(row, 1, row, headers.Length).Style.Fill.BackgroundColor = XLColor.FromHtml("#EAF2FC");
+            ws.Columns(1, headers.Length).AdjustToContents(1, Math.Min(row, 200));
+            ws.Column(11).Width = Math.Min(55, Math.Max(25, ws.Column(11).Width));
+            ws.Column(14).Width = Math.Min(55, Math.Max(25, ws.Column(14).Width));
+            ws.Range(1, 1, Math.Max(1, row - 1), headers.Length).SetAutoFilter();
+            using var stream = new MemoryStream();
+            wb.SaveAs(stream);
+            return stream.ToArray();
+        }
+
         public async Task<SalesReportDto> GetSalesReportAsync(int companyId, int? year, int? month, string buyerType,
             DateTime? dateFrom = null, DateTime? dateTo = null)
         {

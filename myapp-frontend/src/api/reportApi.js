@@ -1,5 +1,12 @@
 import http from "./httpClient";
 
+export const getInvoiceSalesDetail = (companyId, year, month) =>
+  http.get(`/reports/company/${companyId}/invoice-sales-detail`, { params: { year, month } });
+
+export const getInvoiceSalesDetailExcel = (companyId, year, month) =>
+  http.get(`/reports/company/${companyId}/invoice-sales-detail/excel`,
+    { params: { year, month }, responseType: "blob" });
+
 // Sales report — FBR-submitted invoices grouped by document date.
 // params: { year, month?, buyerType }  (month omitted = full year)
 export const getSalesReport = (companyId, params = {}) =>

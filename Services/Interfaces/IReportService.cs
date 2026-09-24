@@ -4,6 +4,11 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IReportService
     {
+        Task<InvoiceSalesDetailReportDto> GetInvoiceSalesDetailAsync(int companyId, int year, int month,
+            HashSet<int>? accessibleDivisionIds);
+        Task<byte[]> GetInvoiceSalesDetailExcelAsync(int companyId, int year, int month,
+            HashSet<int>? accessibleDivisionIds);
+
         /// <summary>
         /// FBR Sales report for one company. Only invoices actually
         /// submitted to FBR are included, grouped by document date.

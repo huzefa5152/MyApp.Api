@@ -33,6 +33,7 @@ import GdCostingImportPage from "./pages/GdCostingImportPage";
 import ImportConsignmentsPage from "./pages/ImportConsignmentsPage";
 import ImportGuidePage from "./pages/ImportGuidePage";
 import SalesReportPage from "./pages/SalesReportPage";
+import InvoiceSalesDetailPage from "./pages/InvoiceSalesDetailPage";
 import TaxSheetPage from "./pages/TaxSheetPage";
 import ClientLedgerReportPage from "./pages/ClientLedgerReportPage";
 import ClientsPage from "./pages/ClientsPage";
@@ -169,6 +170,7 @@ export default function App() {
           <Route path="/imports/consignments" element={<RequirePermission permission="importcosting.consignments.view"><ImportConsignmentsPage /></RequirePermission>} />
           {/* Reports */}
           <Route path="/reports/sales" element={<RequirePermission anyPrefix="reports.sales"><SalesReportPage /></RequirePermission>} />
+          <Route path="/reports/invoice-sales-detail" element={<RequirePermission permission="reports.invoicedetail.view"><InvoiceSalesDetailPage /></RequirePermission>} />
           <Route path="/reports/tax-sheet" element={<RequirePermission anyPrefix="reports.taxsheet"><TaxSheetPage /></RequirePermission>} />
           {/* Client Ledger — company-wide customer statements for a period,
               composed from the same customer-ledger service the Accounting

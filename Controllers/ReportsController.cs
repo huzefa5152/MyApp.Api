@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -18,12 +20,45 @@ namespace MyApp.Api.Controllers
     public class ReportsController : ControllerBase
     {
         private readonly IReportService _reports;
+        private readonly IDivisionAccessGuard _divisionAccess;
         private readonly ILogger<ReportsController> _logger;
 
-        public ReportsController(IReportService reports, ILogger<ReportsController> logger)
+        public ReportsController(IReportService reports, IDivisionAccessGuard divisionAccess,
+            ILogger<ReportsController> logger)
         {
             _reports = reports;
+            _divisionAccess = divisionAccess;
             _logger = logger;
+        }
+
+        private int CurrentUserId => int.TryParse(
+            User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
+            out var id) ? id : 0;
+
+        [HttpGet("company/{companyId}/invoice-sales-detail")]
+        [HasPermission("reports.invoicedetail.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<InvoiceSalesDetailReportDto>> GetInvoiceSalesDetail(
+            int companyId, [FromQuery] int year, [FromQuery] int month)
+        {
+            if (year is < 2000 or > 2100 || month is < 1 or > 12)
+                return BadRequest(new { message = "Choose a valid month and year." });
+            var divisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            return Ok(await _reports.GetInvoiceSalesDetailAsync(companyId, year, month, divisions));
+        }
+
+        [HttpGet("company/{companyId}/invoice-sales-detail/excel")]
+        [HasPermission("reports.invoicedetail.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetInvoiceSalesDetailExcel(
+            int companyId, [FromQuery] int year, [FromQuery] int month)
+        {
+            if (year is < 2000 or > 2100 || month is < 1 or > 12)
+                return BadRequest(new { message = "Choose a valid month and year." });
+            var divisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var bytes = await _reports.GetInvoiceSalesDetailExcelAsync(companyId, year, month, divisions);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"Invoice-Sales-Detail-{year}-{month:00}.xlsx");
         }
 
         /// <summary>
