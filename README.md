@@ -298,6 +298,33 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-24 — Bills follow the sales tax rate the goods were imported at
+
+Goods imported at 25% — the SRO 297(I)/2023 goods, which stay 25% on every later
+supply — were being billed and filed at 18%, because every bill opens on the
+standard-rate scenario and nothing on screen said otherwise.
+
+A bill now checks each item against the rate this company's own records say it
+came in at: its GD lines, its opening stock and its purchases. When the bill
+charges a different rate, the line says so ("Imported at 25% · GD … of …"), and
+a notice above the save button offers a one-click switch to the matching
+scenario (SN024 for 25%). Saving at the other rate is still possible, but only
+with a written reason, which stays on the bill and in the audit log. The same
+check guards every edit, and the bill list marks the bills that disagree —
+**Rate conflict**, **Rate overridden** or **Check rate** — so ones raised before
+this change are found before they are filed.
+
+The check looks only at the company's own records of that exact item. Another
+item that shares its HS code is not evidence, and neither is another company's
+GD. It only blocks the choice it can settle — 18% standard rate or 25% SRO 297.
+Exempt, zero-rated and reduced-rate sales are chosen for the transaction, so they
+get a "check the rate" note instead, as do records that contradict themselves: an
+item that came in at both 18% and 25%, or a GD line filed under a different HS
+code.
+
+**Fixed: SN024 could not be billed.** Under SN024 the item picker hid every item
+without the SRO 297 sale type, which was all of the goods that needed it.
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New

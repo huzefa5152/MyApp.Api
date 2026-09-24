@@ -1026,6 +1026,72 @@ reads the flag unless it is on.
   NORMAL company through the same steps and is the one that catches a
   regression in the behaviour existing customers rely on.
 
+### 5b-13. Billing at the rate the goods came IN at (2026-09-24)
+
+An importer pays sales tax at the port, and customs states the rate on the GD:
+18% for ordinary goods, 25% for goods listed in SRO 297(I)/2023, which stay 25%
+on every later supply. The bill forms open on SN001 (18%), so goods imported at
+25% were billed — and filed — at 18% with nothing on screen to say otherwise.
+`Helpers/ImportedTaxRate.cs` is the ONE rule and its wording; the three bill
+forms, the create / edit guard and the bill list all read it, so what warns is
+what refuses.
+
+- **Evidence is the COMPANY'S OWN record of THE ITEM**: its opening balances, the
+  GD lines of its own consignments, and inward stock movements from
+  `PurchaseBill` / `GoodsReceipt`. Never another item sharing the HS code — a
+  juicer and chopper parts both sit under 8509.9000, and matching on the code is
+  how they got tangled — and never another company's GD, which is a different
+  business's goods and would hand one tenant another's declarations.
+- **A sale-side movement is never intake.** A credit note returning goods is an
+  inward movement; counting it would let an item wrongly sold at 18% and then
+  credited turn its own record "mixed" and disarm the check that should have
+  stopped the sale. Adjustments are corrections, not intake; the GD costing
+  import posts through opening balances. An `Ambiguous` GD line matched more than
+  one balance, so its item link is not evidence either.
+- **A GD line filed under a different HS code than its item is set aside**, and
+  its presence makes the verdict advisory (`HsConflict`): the line describes
+  other goods, or the item is misclassified.
+- **Unambiguous evidence refuses; everything else advises.** One rate and
+  consistent codes: both create paths and both edit paths (full `PUT` and the
+  narrow Invoices-tab `PATCH`) refuse a different rate unless
+  `TaxRateOverrideReason` is given. The reason is stored on the bill (500 chars)
+  and audited as `TAX_RATE_OVERRIDE_V1`. An item whose records carry two rates
+  only advises. Do not make mixed items block: until stock is tied to the GD lot
+  it came from, only the operator knows which lot is going out, and a block would
+  stop a business billing over a typing error in an opening sheet.
+- **It refuses only on the FULL rates — 18% vs 25% (`ImportedTaxRate.FullRates`).**
+  That is the one question the import rate settles: standard rate or SRO 297 is
+  decided by the goods, and customs has already decided it on the GD. Exempt and
+  zero-rated (0%), reduced rates and the fixed-rate schedules are regimes chosen
+  for the TRANSACTION — goods imported at 18% are zero-rated when exported — so
+  they only advise. The first cut refused any mismatch and blocked every 0% bill
+  in `test_bill_pricing_advance_tax.py`; that was the rule over-reaching, not the
+  suite being wrong. An old 17% opening is likewise not a reason to refuse 18%.
+- **On edit, a `null` reason keeps the stored one and `""` clears it.** The guard
+  clears a stored reason once no conflict remains, so a stored reason always
+  describes an override still in force.
+- **Under SN024 the item picker must be widened.** The scenario filter keeps only
+  items whose sale type IS the scenario's; the 25% goods carry none, so SN024 —
+  the scenario they need — offered nothing to bill. `imported-tax-rates/items`
+  lets the company's own unambiguously-25% goods back in, and an item already on
+  the bill is never hidden from its own row's picker.
+- **One scenario and one rate per bill here**, so 18% and 25% goods need separate
+  bills; the notice says so rather than offering a switch that moves the conflict.
+- **The SRO serial is not resolved.** The GD records the rate, not the serial,
+  and FBR publishes no HS-to-serial map, so SN024 files with the catalog's
+  default serial and the form says to confirm it.
+- Endpoints: `GET /api/invoices/company/{id}/imported-tax-rates?itemTypeIds=&billRate=`
+  and `GET .../imported-tax-rates/items?rate=` — both `[AuthorizeCompany]`, open to
+  the bill create/update keys and the Invoices-tab item-type keys.
+- **Which scenarios a company is offered is FBR's matrix, not ours.**
+  `TaxScenarios.Matrix` is §10 of the spec, keyed on the company's business
+  activity × sector (a union across the multi-select). Importer × All Other
+  Sectors has no SN008 (3rd Schedule); it arrives with FMCG or Wholesale /
+  Retails. FBR's own portal lists the scenarios it has ASSIGNED a taxpayer, which
+  can be narrower than the matrix — adding a sector here does not assign it there.
+- Suite: `scripts/test_imported_tax_rate.py` (56 checks; the GD-line cases need
+  `--db`).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -1481,6 +1547,7 @@ them can be resolved from FBR.
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
 | FBR sandbox E2E (Importer + Exporter, scenario matrix) | `python scripts/test_fbr_sandbox_e2e.py --fbr-token <sandbox>` | see the suite banner; skips every live suite without a token |
 | FBR permissions (validate / submit / reset are separate) | `python scripts/test_fbr_rbac.py --fbr-token <sandbox>` | `18/18 checks passed` |
+| Billing at the rate the goods came in at (evidence, refuse vs advise, override, picker, isolation) | `python scripts/test_imported_tax_rate.py` (add `--db "<conn>"` for the GD-line cases) | `56/56 checks passed` (with `--db`) |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
