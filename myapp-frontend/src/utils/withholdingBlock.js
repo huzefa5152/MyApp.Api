@@ -1,24 +1,9 @@
 /**
  * Withholding income tax (s.153) on a printed document.
  *
- * The print data has carried `withholdingTaxRate`, `withholdingTaxAmount` and
- * `balanceDueAfterWht` on the Bill, Tax Invoice and Purchase Bill DTOs since
- * withholding shipped, and the merge fields exist in the editor -- but not one
- * of the 80 templates on a live installation rendered them (2026-09-11), and
- * neither did any starter or built-in default. A buyer who withholds 4.5% got a
- * document whose only total was the gross, and the net they actually owe had
- * to be worked out by hand.
- *
- * This module is the ONE place the block is written, for three callers:
- *   - the build-time pass over every starter and default (scripts/),
- *   - the "Add withholding tax lines" actions on the Print Templates screen
- *     (per template, and company-wide for the existing rows on production),
- *   - the node test that proves every starter/default renders it.
- *
- * The rows render only when `withholdingTaxAmount` is non-zero, so a document
- * with no withholding prints exactly as before. The rate is a DECIMAL
- * percentage (4.5, 0.1), so it is formatted with `fmtQty`, never `fmt`, which
- * would round 0.1% to 0%.
+ * Customer-facing Bill and Tax Invoice templates omit the withholding
+ * breakdown. The Print Templates page can still add it to supplier bills and
+ * adjustment notes, where the rate uses decimal-safe `fmtQty` formatting.
  */
 
 /** Any of the three merge fields already present -> the template has the block (or its own). */
@@ -26,8 +11,8 @@ export function hasWithholdingBlock(html) {
   return /withholdingTaxAmount|balanceDueAfterWht/.test(html || "");
 }
 
-/** Document types whose print data carries the withholding fields. */
-export const WITHHOLDING_TEMPLATE_TYPES = ["Bill", "TaxInvoice", "PurchaseBill", "CreditNote", "DebitNote"];
+/** Document types where the operator can add a printed withholding block. */
+export const WITHHOLDING_TEMPLATE_TYPES = ["PurchaseBill", "CreditNote", "DebitNote"];
 
 const TR_RE = /<tr\b[^>]*>[\s\S]*?<\/tr>/gi;
 // The grand total is `grandTotal`, or `grandTotalRounded` on designs that

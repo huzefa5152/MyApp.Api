@@ -690,9 +690,6 @@ function DetailModal({ detail, loading, busy, canPrint, onClose, onPdf, onPrint 
               <div style={s.totalsCard}>
                 <Row label="Subtotal" value={money(detail.subtotal)} />
                 <Row label={`Sales tax (${detail.gstRate}%)`} value={money(detail.gstAmount)} />
-                {detail.withholdingTaxAmount > 0 && (
-                  <Row label="Withholding tax" value={`− ${money(detail.withholdingTaxAmount)}`} />
-                )}
                 <div style={s.totalsRule} />
                 <Row label="Invoice total" value={money(detail.total)} strong />
                 <Row label="Paid to date" value={money(detail.paid)} />

@@ -1,6 +1,5 @@
-// Every starter and built-in default for a document that carries withholding
-// tax must render the withholding lines when there is withholding, render
-// nothing extra when there is none, and carry a signature (stamp) slot.
+// Customer-facing Bill/Tax Invoice starters omit withholding; supplier bills
+// and adjustment notes retain their optional breakdown and stamp slot.
 // Also pins the injector used on existing templates: idempotent, and able to
 // place the block in every shipped design.
 //
@@ -46,10 +45,22 @@ const templates = [];
 for (const type of WITHHOLDING_TEMPLATE_TYPES) {
   for (const s of starters[type] || []) templates.push({ label: `${type} starter ${s.id}`, type, html: s.html });
 }
-templates.push({ label: "default Bill", type: "Bill", html: defaults.defaultBillTemplate });
-templates.push({ label: "default TaxInvoice", type: "TaxInvoice", html: defaults.defaultTaxInvoiceTemplate });
+const customerTemplates = [
+  ...(starters.Bill || []).map((s) => ({ label: `Bill starter ${s.id}`, type: "Bill", html: s.html })),
+  ...(starters.TaxInvoice || []).map((s) => ({ label: `TaxInvoice starter ${s.id}`, type: "TaxInvoice", html: s.html })),
+  { label: "default Bill", type: "Bill", html: defaults.defaultBillTemplate },
+  { label: "default TaxInvoice", type: "TaxInvoice", html: defaults.defaultTaxInvoiceTemplate },
+];
 
 const strip = (h) => h.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+for (const t of customerTemplates) {
+  check(`${t.label}: no withholding merge fields`, !hasWithholdingBlock(t.html));
+  check(`${t.label}: retains grand total`, /grandTotal(?:Rounded)?/.test(t.html));
+  const text = strip(mergeTemplate(t.html, { ...base, withholdingTaxRate: 4.5,
+    withholdingTaxAmount: 4500, balanceDueAfterWht: 172500 }));
+  check(`${t.label}: hides withholding on customer copy`, !/Withholding Income Tax|Net Payable/i.test(text));
+}
 
 for (const t of templates) {
   const data = { ...(sample?.[t.type] || {}) };

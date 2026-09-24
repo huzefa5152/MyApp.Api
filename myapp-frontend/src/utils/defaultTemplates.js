@@ -282,7 +282,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
       <tr><td class="lbl">SUB TOTAL</td><td class="val">Rs{{fmt subtotal}}</td></tr>
       <tr><td class="lbl">GST ({{gstRate}}%)</td><td class="val">Rs{{fmt gstAmount}}</td></tr>
       <tr class="grand"><td class="lbl">GRAND TOTAL</td><td class="val">Rs{{fmt grandTotal}}</td></tr>
-      {{#if withholdingTaxAmount}}<tr class="grand"><td class="lbl">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}}</td><td class="val">(-) Rs{{fmt withholdingTaxAmount}}</td></tr><tr class="grand"><td class="lbl">Net Payable</td><td class="val">Rs{{fmt balanceDueAfterWht}}</td></tr>{{/if}}
+
     </table>
   </div>
 </div>
@@ -1096,7 +1096,7 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html>
           {{fmtDec grandTotal}}
         </td>
 
-      </tr>{{#if withholdingTaxAmount}}<tr class="total-row"><td colspan="6" class="r">Withholding Income Tax{{#if withholdingTaxRate}} ({{fmtQty withholdingTaxRate}}%){{/if}} :</td><td class="r">(-) {{fmtDec withholdingTaxAmount}}</td></tr><tr class="total-row"><td colspan="6" class="r">Net Payable :</td><td class="r">{{fmtDec balanceDueAfterWht}}</td></tr>{{/if}}
+      </tr>
 
     </tfoot>
 

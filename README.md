@@ -302,6 +302,12 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-09-24 — Detach a delivery challan from the wrong bill
 
+- **Customize customer invoices hide withholding income tax.** Bill and Sales
+  Tax Invoice print templates show the full Grand Total without the withholding
+  and Net Payable rows. The customer portal hides the same tax breakdown, while
+  internal tax calculations and payment figures remain unchanged. New sales
+  invoice starters follow the same print layout.
+
 Attaching a challan to a bill was a one-way door: pick the wrong one and the
 only way back was a database fix. A bill that has an attached challan now
 carries an **Unlink DC** action — the challan goes back to the pending list and
