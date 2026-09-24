@@ -608,6 +608,45 @@ Console.WriteLine("\n=== 8. Summary sheet ===");
     Check("an empty export says it has no items", emptyText.Contains("0 items"));
 }
 
+Console.WriteLine("\n=== 9. GD detail preserves source rows without changing stock totals ===");
+{
+    var detailed = Data(items, "As at 31-08-2026");
+    detailed.GdDetails = new List<StockGdDetailDto>
+    {
+        new() { ItemTypeId = 1, ItemTypeName = LongName, HsCode = "9506.9100",
+            Source = "Opening sheet", GdNumber = "GD-A", GdDate = new DateTime(2026, 7, 12),
+            ClaimMonth = new DateTime(2026, 8, 1), SourceRow = 4,
+            Description = "First lot", Quantity = 80m, ValueExcludingTax = 1_200_000m, SalesTaxRate = 18m },
+        new() { ItemTypeId = 1, ItemTypeName = LongName, HsCode = "9506.9100",
+            Source = "GD new arrival", GdNumber = "GD-B", GdDate = new DateTime(2026, 8, 4),
+            SourceRow = 8, Description = "Second lot", Quantity = 20m,
+            ValueExcludingTax = 300_000m, SalesTaxRate = 25m },
+        new() { ItemTypeId = 1, ItemTypeName = LongName, HsCode = "9506.9100",
+            Source = "Cost-only backfill", GdNumber = "GD-A", GdDate = new DateTime(2026, 7, 12),
+            ClaimMonth = new DateTime(2026, 8, 1), SourceRow = 9,
+            Description = "Costing only", SalesTaxRate = 18m },
+    };
+    var detailedPath = Path.Combine(outDir, "stock-export-gd-detail.xlsx");
+    File.WriteAllBytes(detailedPath, StockExcelBuilder.Build(detailed));
+    using var wb = new XLWorkbook(detailedPath);
+    Check("GD detail is a third sheet only when source rows exist",
+        wb.Worksheets.Count == 3 && wb.Worksheet(3).Name == "GD Detail");
+    var gd = wb.Worksheet("GD Detail");
+    Check("two GDs under one item keep separate quantities",
+        gd.Cell(6, 3).GetString() == "GD-A" && gd.Cell(6, 10).GetValue<decimal>() == 80m
+        && gd.Cell(7, 3).GetString() == "GD-B" && gd.Cell(7, 10).GetValue<decimal>() == 20m);
+    Check("claim month differs from GD month and unknown stays blank",
+        gd.Cell(6, 5).GetString() == "Jul 2026" && gd.Cell(6, 6).GetString() == "Aug 2026"
+        && gd.Cell(7, 6).IsEmpty());
+    Check("cost-only backfill does not add stock twice",
+        gd.Cell(8, 7).GetString() == "Cost-only backfill"
+        && gd.Cell(8, 10).IsEmpty() && gd.Cell(8, 11).IsEmpty());
+    Check("GD detail does not change on-hand or tax figures",
+        wb.Worksheet(1).Cell(FirstDataRow, BalQtyCol).GetValue<decimal>() == items[0].Summary.OnHand
+        && wb.Worksheet(1).Cell(FirstDataRow, BalExlCol).GetValue<decimal>() == items[0].Summary.ValueExcludingTax
+        && wb.Worksheet("Summary").Cell(6, 2).GetValue<decimal>() == items.Sum(i => i.Summary.ValueExcludingTax));
+}
+
 Console.WriteLine($"\n=== {pass}/{pass + fail} checks passed ===");
 if (fail > 0)
 {

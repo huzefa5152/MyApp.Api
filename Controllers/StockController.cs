@@ -71,6 +71,149 @@ namespace MyApp.Api.Controllers
             return Ok(rows);
         }
 
+        /// <summary>GD source rows behind an item's company-level opening position.
+        /// Cost-only backfills carry no added quantity; later sales are never
+        /// allocated to a GD without a recorded lot issue.</summary>
+        [HttpGet("company/{companyId}/gd-details")]
+        [HasPermission("stock.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<StockGdDetailDto>>> GetGdDetails(
+            int companyId, [FromQuery] int? itemTypeId = null)
+        {
+            if (itemTypeId is <= 0) return BadRequest(new { error = "Choose a valid item." });
+            var rows = await BuildGdDetailsAsync(companyId,
+                itemTypeId.HasValue ? new List<int> { itemTypeId.Value } : null);
+            return Ok(rows);
+        }
+
+        /// <summary>Record the period actually filed for a GD. It is distinct
+        /// from the declaration date and may remain unknown.</summary>
+        [HttpPut("company/{companyId}/gd-claim-month")]
+        [HasPermission("stock.opening.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetGdClaimMonth(int companyId, [FromBody] SetGdClaimMonthDto dto)
+        {
+            var number = dto.GdNumber?.Trim() ?? "";
+            if (number.Length == 0 || number.Length > 100)
+                return BadRequest(new { error = "Enter a valid GD number." });
+            if (dto.ClaimMonth is { } month && (month.Day != 1 || month.TimeOfDay != TimeSpan.Zero))
+                return BadRequest(new { error = "Claim month must be the first day of the month." });
+
+            var known = await _context.ImportConsignments.AnyAsync(c => c.CompanyId == companyId && c.GdNumber == number)
+                || await _context.OpeningStockLots.AnyAsync(l =>
+                    l.OpeningStockBalance.CompanyId == companyId && l.LotRef == number);
+            if (!known) return NotFound(new { error = "This company has no stock GD with that number." });
+
+            var existing = await _context.GdClaimPeriods
+                .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.GdNumber == number);
+            if (dto.ClaimMonth == null)
+            {
+                if (existing != null) _context.GdClaimPeriods.Remove(existing);
+            }
+            else if (existing == null)
+            {
+                _context.GdClaimPeriods.Add(new GdClaimPeriod
+                {
+                    CompanyId = companyId, GdNumber = number, ClaimMonth = dto.ClaimMonth.Value,
+                });
+            }
+            else existing.ClaimMonth = dto.ClaimMonth.Value;
+
+            await _context.SaveChangesAsync();
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "PUT",
+                RequestPath = $"/api/stock/company/{companyId}/gd-claim-month",
+                StatusCode = 204,
+                ExceptionType = "GD_CLAIM_MONTH_CHANGE",
+                Message = $"GD {number} claim month {(dto.ClaimMonth.HasValue ? "set" : "cleared")} for company {companyId}",
+                CompanyId = companyId,
+            });
+            return NoContent();
+        }
+
+        private async Task<List<StockGdDetailDto>> BuildGdDetailsAsync(int companyId, List<int>? itemTypeIds)
+        {
+            if (itemTypeIds is { Count: 0 }) return new();
+            var lotsQuery = _context.OpeningStockLots.AsNoTracking()
+                .Where(l => l.OpeningStockBalance.CompanyId == companyId
+                    && l.LotRef != null && l.LotRef != "");
+            var linesQuery = _context.ImportConsignmentLines.AsNoTracking()
+                .Where(l => l.ImportConsignment.CompanyId == companyId
+                    && l.ItemTypeId != null
+                    && (l.Disposition == GdCostingDisposition.CostOnly
+                        || l.Disposition == GdCostingDisposition.StockPosted));
+            if (itemTypeIds != null)
+            {
+                lotsQuery = lotsQuery.Where(l => itemTypeIds.Contains(l.OpeningStockBalance.ItemTypeId));
+                linesQuery = linesQuery.Where(l => itemTypeIds.Contains(l.ItemTypeId!.Value));
+            }
+
+            var lots = await lotsQuery.Select(l => new
+            {
+                ItemTypeId = l.OpeningStockBalance.ItemTypeId,
+                l.SourceRow, l.ItemNameOnSheet, l.HsCode, l.LotRef, l.LotDate,
+                l.BalanceQuantity, l.BalanceValueExcludingTax, l.BalanceSalesTaxRate,
+            }).ToListAsync();
+            var lines = await linesQuery.Select(l => new
+            {
+                ItemTypeId = l.ItemTypeId!.Value, l.SourceRow, l.DescriptionOnSheet,
+                l.HsCode, l.Quantity, l.SellingValueExcludingTax, l.SalesTaxRate,
+                l.Disposition, l.ImportConsignment.Mode, l.ImportConsignment.GdNumber,
+                l.ImportConsignment.GdDate,
+            }).ToListAsync();
+            var ids = lots.Select(l => l.ItemTypeId).Concat(lines.Select(l => l.ItemTypeId)).Distinct().ToList();
+            if (ids.Count == 0) return new();
+            var names = await _context.ItemTypes.AsNoTracking()
+                .Where(i => ids.Contains(i.Id) && !i.IsDeleted)
+                .Select(i => new { i.Id, i.Name })
+                .ToDictionaryAsync(i => i.Id, i => i.Name);
+            var claimRows = await _context.GdClaimPeriods.AsNoTracking()
+                .Where(x => x.CompanyId == companyId)
+                .Select(x => new { x.GdNumber, x.ClaimMonth }).ToListAsync();
+            var claims = claimRows.ToDictionary(x => x.GdNumber.Trim(), x => x.ClaimMonth,
+                StringComparer.OrdinalIgnoreCase);
+            DateTime? ClaimFor(string gd) => claims.TryGetValue(gd, out var month) ? month : null;
+
+            var result = new List<StockGdDetailDto>();
+            foreach (var l in lots)
+            {
+                if (!names.TryGetValue(l.ItemTypeId, out var name)) continue;
+                var gd = l.LotRef!.Trim();
+                result.Add(new StockGdDetailDto
+                {
+                    ItemTypeId = l.ItemTypeId, ItemTypeName = name, HsCode = l.HsCode,
+                    Source = "Opening sheet", GdNumber = gd, GdDate = l.LotDate,
+                    ClaimMonth = ClaimFor(gd), SourceRow = l.SourceRow,
+                    Description = l.ItemNameOnSheet, Quantity = l.BalanceQuantity,
+                    ValueExcludingTax = l.BalanceValueExcludingTax,
+                    SalesTaxRate = l.BalanceSalesTaxRate,
+                });
+            }
+            foreach (var l in lines)
+            {
+                if (!names.TryGetValue(l.ItemTypeId, out var name)) continue;
+                var arrival = l.Mode == GdCostingImportModeNames.NewArrivals;
+                var gd = l.GdNumber.Trim();
+                result.Add(new StockGdDetailDto
+                {
+                    ItemTypeId = l.ItemTypeId, ItemTypeName = name, HsCode = l.HsCode,
+                    Source = arrival ? "GD new arrival" : "Cost-only backfill",
+                    GdNumber = gd, GdDate = l.GdDate,
+                    ClaimMonth = ClaimFor(gd), SourceRow = l.SourceRow,
+                    Description = l.DescriptionOnSheet,
+                    Quantity = arrival ? l.Quantity : null,
+                    ValueExcludingTax = arrival ? l.SellingValueExcludingTax : null,
+                    SalesTaxRate = l.SalesTaxRate,
+                });
+            }
+            return result.OrderBy(r => r.ItemTypeName).ThenBy(r => r.GdDate)
+                .ThenBy(r => r.GdNumber).ThenBy(r => r.SourceRow).ToList();
+        }
+
         /// <summary>
         /// The dashboard's on-hand grid, and optionally the movement history
         /// behind every row.
@@ -373,7 +516,16 @@ namespace MyApp.Api.Controllers
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             if (divScope != null) filters.Add("Scope: your divisions only");
 
-            var lots = await LotRefsByItemAsync(companyId, rows.Select(r => r.ItemTypeId).ToList());
+            var gdDetails = await BuildGdDetailsAsync(companyId, rows.Select(r => r.ItemTypeId).ToList());
+            var lots = gdDetails.Where(d => d.Quantity.HasValue)
+                .GroupBy(d => d.ItemTypeId)
+                .Where(g => g.Select(d => d.GdNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
+                .ToDictionary(g => g.Key, g =>
+                {
+                    var dates = g.Select(d => d.GdDate).Distinct().ToList();
+                    return (Ref: (string?)g.First().GdNumber,
+                        Date: dates.Count == 1 ? dates[0] : null);
+                });
 
             var data = new StockExportDto
             {
@@ -381,6 +533,7 @@ namespace MyApp.Api.Controllers
                 Title = "Stock Valuation Report",
                 GeneratedAt = PakistanClock.Now,
                 FiltersApplied = filters,
+                GdDetails = gdDetails,
                 Items = rows.Select(r =>
                 {
                     lots.TryGetValue(r.ItemTypeId, out var lot);
@@ -389,6 +542,9 @@ namespace MyApp.Api.Controllers
                         Summary = r,
                         LotRef = lot.Ref,
                         LotDate = lot.Date,
+                        ClaimMonth = lot.Ref == null ? null : gdDetails
+                            .FirstOrDefault(d => d.ItemTypeId == r.ItemTypeId
+                                && d.GdNumber.Equals(lot.Ref, StringComparison.OrdinalIgnoreCase))?.ClaimMonth,
                     };
                 }).ToList(),
             };
@@ -411,48 +567,6 @@ namespace MyApp.Api.Controllers
                 fileName);
         }
 
-        /// <summary>
-        /// The customs declaration behind each item, for the stock sheet's
-        /// "GDs No" / "GD Date" columns.
-        ///
-        /// Answered ONLY where every <c>OpeningStockLot</c> under the item names
-        /// the SAME declaration. The export is one row per item, so an item held
-        /// across several GDs has no single answer — naming the first would
-        /// attribute the whole position to a declaration covering part of it. An
-        /// item with no lots at all (bought on purchase bills) is absent here and
-        /// prints blank, which is the same honest answer.
-        /// </summary>
-        private async Task<Dictionary<int, (string? Ref, DateTime? Date)>>
-            LotRefsByItemAsync(int companyId, List<int> itemTypeIds)
-        {
-            var result = new Dictionary<int, (string? Ref, DateTime? Date)>();
-            if (itemTypeIds.Count == 0) return result;
-
-            var lots = await _context.OpeningStockLots
-                .AsNoTracking()
-                .Where(l => l.OpeningStockBalance.CompanyId == companyId
-                         && itemTypeIds.Contains(l.OpeningStockBalance.ItemTypeId)
-                         && l.LotRef != null && l.LotRef != "")
-                .Select(l => new
-                {
-                    l.OpeningStockBalance.ItemTypeId,
-                    l.LotRef,
-                    l.LotDate,
-                })
-                .ToListAsync();
-
-            foreach (var g in lots.GroupBy(l => l.ItemTypeId))
-            {
-                var refs = g.Select(x => x.LotRef!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-                if (refs.Count != 1) continue;
-                // The date can still vary between lots of one declaration; only
-                // state it when that is unambiguous too.
-                var dates = g.Select(x => x.LotDate).Distinct().ToList();
-                result[g.Key] = (refs[0], dates.Count == 1 ? dates[0] : null);
-            }
-
-            return result;
-        }
         /// <summary>Audit feed of every movement, newest first.</summary>
         [HttpGet("company/{companyId}/movements")]
         [HasPermission("stock.movements.view")]

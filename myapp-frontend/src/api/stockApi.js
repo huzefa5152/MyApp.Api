@@ -16,6 +16,13 @@ export const setItemTypePolicy = (companyId, itemTypeId, mode, reorderLevel = nu
   http.post(`/stock/company/${companyId}/itemtype-policy`, { itemTypeId, mode, reorderLevel });
 export const getStockMovements = (companyId, params = {}) =>
   http.get(`/stock/company/${companyId}/movements`, { params });
+export const getStockGdDetails = (companyId, itemTypeId) =>
+  http.get(`/stock/company/${companyId}/gd-details`, { params: { itemTypeId } });
+export const setGdClaimMonth = (companyId, gdNumber, claimMonth) =>
+  http.put(`/stock/company/${companyId}/gd-claim-month`, {
+    gdNumber,
+    claimMonth: claimMonth ? `${claimMonth}-01` : null,
+  });
 // The on-hand dashboard as a styled .xlsx, with each item's movement history
 // nested under it as a collapsed Excel group. `search` is the same item-or-HS
 // match the dashboard's search box makes, so the sheet mirrors the screen.

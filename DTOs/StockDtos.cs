@@ -371,6 +371,30 @@
         public decimal? SalesTaxRate { get; set; }
     }
 
+    /// <summary>One source row behind the stock position. Quantities here are
+    /// source contributions, not remaining quantities after later sales.</summary>
+    public class StockGdDetailDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string? HsCode { get; set; }
+        public string Source { get; set; } = "";
+        public string GdNumber { get; set; } = "";
+        public DateTime? GdDate { get; set; }
+        public DateTime? ClaimMonth { get; set; }
+        public int SourceRow { get; set; }
+        public string? Description { get; set; }
+        public decimal? Quantity { get; set; }
+        public decimal? ValueExcludingTax { get; set; }
+        public decimal? SalesTaxRate { get; set; }
+    }
+
+    public class SetGdClaimMonthDto
+    {
+        public string GdNumber { get; set; } = "";
+        public DateTime? ClaimMonth { get; set; }
+    }
+
     /// <summary>
     /// One item on the stock export — one ROW of the customs-lot stock sheet:
     /// the on-hand figures the dashboard shows, plus the customs declaration
@@ -397,6 +421,7 @@
         /// </summary>
         public string? LotRef { get; set; }
         public DateTime? LotDate { get; set; }
+        public DateTime? ClaimMonth { get; set; }
     }
 
     /// <summary>Everything the stock workbook needs, resolved server-side.</summary>
@@ -410,5 +435,6 @@
         public List<string> FiltersApplied { get; set; } = new();
 
         public List<StockExportItemDto> Items { get; set; } = new();
+        public List<StockGdDetailDto> GdDetails { get; set; } = new();
     }
 }

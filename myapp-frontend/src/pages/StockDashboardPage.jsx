@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes } from "../api/stockApi";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setGdClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -90,6 +90,8 @@ export default function StockDashboardPage() {
   const [expandedId, setExpandedId] = useState(null);
   const [drill, setDrill] = useState({});        // itemTypeId → movement[]
   const [drillLoading, setDrillLoading] = useState(null); // itemTypeId being fetched
+  const [gdDetails, setGdDetails] = useState({}); // itemTypeId → GD source rows
+  const [gdLoading, setGdLoading] = useState(null);
 
   const [showOpening, setShowOpening] = useState(false);
   // Set while RESTATING an existing opening balance rather than adding one.
@@ -156,6 +158,7 @@ export default function StockDashboardPage() {
       // A refresh can change movement history (new adjustment, edited bill),
       // so drop the drill cache; keep the expanded row open to refetch.
       setDrill({});
+      setGdDetails({});
     } catch {
       setOnhand([]); setOpenings([]); setItemTypes([]); setTrackedIds(null);
     } finally {
@@ -428,8 +431,31 @@ export default function StockDashboardPage() {
     return () => { cancelled = true; };
   }, [expandedId, drill, canViewMovements, selectedCompany]);
 
+  useEffect(() => {
+    if (expandedId == null || !selectedCompany || gdDetails[expandedId]) return;
+    let cancelled = false;
+    setGdLoading(expandedId);
+    getStockGdDetails(selectedCompany.id, expandedId)
+      .then(({ data }) => { if (!cancelled) setGdDetails(prev => ({ ...prev, [expandedId]: data || [] })); })
+      .catch(() => { if (!cancelled) setGdDetails(prev => ({ ...prev, [expandedId]: [] })); })
+      .finally(() => { if (!cancelled) setGdLoading(null); });
+    return () => { cancelled = true; };
+  }, [expandedId, selectedCompany, gdDetails]);
+
+  const saveClaimMonth = async (gdNumber, month) => {
+    await setGdClaimMonth(selectedCompany.id, gdNumber, month);
+    setGdDetails(prev => {
+      const next = {};
+      for (const [id, rows] of Object.entries(prev))
+        next[id] = rows.map(r => r.gdNumber.toLowerCase() === gdNumber.toLowerCase()
+          ? { ...r, claimMonth: month ? `${month}-01T00:00:00` : null } : r);
+      return next;
+    });
+    notify(month ? "Claim month saved." : "Claim month cleared.", "success");
+  };
+
   // Drop the drill cache + collapse whenever the company changes.
-  useEffect(() => { setExpandedId(null); setDrill({}); }, [selectedCompany]);
+  useEffect(() => { setExpandedId(null); setDrill({}); setGdDetails({}); }, [selectedCompany]);
 
   // A narrower search, a different company or a smaller page can all strand
   // the operator past the last page.
@@ -749,7 +775,7 @@ export default function StockDashboardPage() {
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          {canViewMovements && <th style={styles.th} aria-label="Expand"></th>}
+                          <th style={styles.th} aria-label="Expand GD details"></th>
                           <th style={styles.th}>Item</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
                           <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>
@@ -764,15 +790,15 @@ export default function StockDashboardPage() {
                         {onhandPageRows.map((r, idx) => {
                           const isOpen = expandedId === r.itemTypeId;
                           const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 5 + (canViewMovements ? 1 : 0)
+                          const colCount = 6
                             + ((canAdjust || canViewActualCost) ? 1 : 0) + (canViewActualCost ? 2 : 0);
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
-                            style={{ backgroundColor: isOpen ? colors.bandBg : rowBg, cursor: canViewMovements ? "pointer" : "default" }}
-                            onClick={canViewMovements ? () => toggleDrill(r.itemTypeId) : undefined}
+                            style={{ backgroundColor: isOpen ? colors.bandBg : rowBg, cursor: "pointer" }}
+                            onClick={() => toggleDrill(r.itemTypeId)}
                           >
-                            {canViewMovements && (
+                            {(
                               <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }}>
                                 {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                               </td>
@@ -857,15 +883,18 @@ export default function StockDashboardPage() {
                               </td>
                             )}
                           </tr>
-                          {isOpen && canViewMovements && (
+                          {isOpen && (
                             <tr>
                               <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
-                                <DrillPanel
+                                <GdPanel rows={gdDetails[r.itemTypeId]} loading={gdLoading === r.itemTypeId}
+                                  openingQty={r.openingBalance} openingValue={r.openingValueExcludingTax}
+                                  canEdit={canManageOpening} onSave={saveClaimMonth} />
+                                {canViewMovements && <DrillPanel
                                   rows={drill[r.itemTypeId]}
                                   loading={drillLoading === r.itemTypeId}
                                   uom={r.uom}
                                   canViewActualCost={canViewActualCost}
-                                />
+                                />}
                               </td>
                             </tr>
                           )}
@@ -951,14 +980,19 @@ export default function StockDashboardPage() {
                             </span>
                           </div>
                         </div>
-                        {canViewMovements && (
+                        {(
                           <button type="button" style={cardDrillBtn} onClick={() => toggleDrill(r.itemTypeId)}>
                             {isOpen ? <MdExpandMore size={16} /> : <MdChevronRight size={16} />}
-                            {isOpen ? "Hide movements" : "View movements"}
+                            {isOpen ? "Hide GD details" : "View GD details"}
                           </button>
                         )}
-                        {isOpen && canViewMovements && (
-                          <DrillPanel rows={drill[r.itemTypeId]} loading={drillLoading === r.itemTypeId} uom={r.uom} canViewActualCost={canViewActualCost} />
+                        {isOpen && (
+                          <>
+                            <GdPanel rows={gdDetails[r.itemTypeId]} loading={gdLoading === r.itemTypeId}
+                              openingQty={r.openingBalance} openingValue={r.openingValueExcludingTax}
+                              canEdit={canManageOpening} onSave={saveClaimMonth} />
+                            {canViewMovements && <DrillPanel rows={drill[r.itemTypeId]} loading={drillLoading === r.itemTypeId} uom={r.uom} canViewActualCost={canViewActualCost} />}
+                          </>
                         )}
                         {canAdjust && (
                           <button type="button" style={cardAdjustBtn} onClick={() => openAdjustForRow(r)}>
@@ -1615,6 +1649,75 @@ export default function StockDashboardPage() {
 // with 3 lines of this item shows one row, not three. Adjustments, opening
 // stock and document-less reversals stay individual. Newest-first with a
 // running on-hand computed after each whole document.
+function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
+  if (loading || !rows) return <div style={drillStyles.state}>Loading GD sources…</div>;
+  if (rows.length === 0) return <div style={drillStyles.state}>No GD source rows recorded for this item.</div>;
+  const sourceQty = rows.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
+  const sourceValue = rows.reduce((sum, r) => sum + Number(r.valueExcludingTax || 0), 0);
+  const missingQty = Number(openingQty || 0) - sourceQty;
+  const missingValue = Number(openingValue || 0) - sourceValue;
+  const month = (date) => date ? new Date(date).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—";
+  const date = (value) => value ? new Date(value).toLocaleDateString() : "—";
+  return (
+    <div style={drillStyles.wrap}>
+      <div style={drillStyles.heading}>GD source lots and receipts ({rows.length})</div>
+      <div style={{ fontSize: "0.75rem", color: colors.textSecondary, marginBottom: "0.55rem" }}>
+        Source quantities explain the opening position before later sales. Cost-only backfills add no stock.
+        GD month is the declaration month; claim month is the period actually filed.
+      </div>
+      <div style={{ display: "grid", gap: "0.5rem" }}>
+        {rows.map((r, index) => (
+          <div key={`${r.source}-${r.gdNumber}-${r.sourceRow}-${index}`}
+            style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.65rem" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.55rem", alignItems: "center" }}>
+              <strong style={{ color: colors.blue }}>GD {r.gdNumber}</strong>
+              <span>{r.source}</span>
+              <span style={{ color: colors.textSecondary }}>GD date {date(r.gdDate)} · GD month {month(r.gdDate)}</span>
+              <span style={{ color: colors.textSecondary }}>Claim month {month(r.claimMonth)}</span>
+              <span>{r.quantity == null ? "No stock added" : `${num(r.quantity)} source units · ${money(r.valueExcludingTax)} excl`}</span>
+              {r.salesTaxRate != null && <span>{num(r.salesTaxRate)}% tax</span>}
+            </div>
+            <div style={{ fontSize: "0.73rem", color: colors.textSecondary, marginTop: 4 }}>
+              {r.description || "Source line"} · row {r.sourceRow}{r.hsCode ? ` · HS ${r.hsCode}` : ""}
+            </div>
+            {canEdit && <ClaimMonthEditor key={`${r.gdNumber}:${r.claimMonth || ""}`}
+              gdNumber={r.gdNumber} value={r.claimMonth} onSave={onSave} />}
+          </div>
+        ))}
+      </div>
+      {(Math.abs(missingQty) > 0.0001 || Math.abs(missingValue) > 0.01) && (
+        <div style={{ marginTop: "0.6rem", fontSize: "0.75rem", color: colors.textSecondary }}>
+          Opening position not traced by these GD rows: {num(missingQty)} units · {money(missingValue)} excl.
+          This can include manual opening corrections or source rows without a GD number.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClaimMonthEditor({ gdNumber, value, onSave }) {
+  const [draft, setDraft] = useState(value ? String(value).slice(0, 7) : "");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try { await onSave(gdNumber, draft); }
+    catch (e) { notify(e?.response?.data?.error || "Could not save the claim month.", "error"); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", marginTop: "0.45rem" }}>
+      <label style={{ fontSize: "0.73rem" }}>Filed claim month
+        <input type="month" value={draft} onChange={(e) => setDraft(e.target.value)}
+          style={{ marginLeft: 6, minHeight: 44, border: `1px solid ${colors.inputBorder}`, borderRadius: 6 }} />
+      </label>
+      <button type="button" disabled={saving || draft === (value ? String(value).slice(0, 7) : "")}
+        onClick={save} style={{ ...styles.altBtn, minHeight: 44 }}>
+        {saving ? "Saving…" : "Save month"}
+      </button>
+    </div>
+  );
+}
+
 function DrillPanel({ rows, loading, uom, canViewActualCost }) {
   if (loading) {
     return <div style={drillStyles.state}><div style={styles.spinner} /></div>;

@@ -213,6 +213,7 @@ namespace MyApp.Api.Data
         public DbSet<OpeningStockLot> OpeningStockLots { get; set; }
         public DbSet<ImportConsignment> ImportConsignments { get; set; }
         public DbSet<ImportConsignmentLine> ImportConsignmentLines { get; set; }
+        public DbSet<GdClaimPeriod> GdClaimPeriods { get; set; }
         public DbSet<StockCostChange> StockCostChanges { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -2278,6 +2279,15 @@ namespace MyApp.Api.Data
             // ImportConsignment's class comment for how the two relate. This
             // is entities only — nothing writes to a line's OpeningStockBalance
             // match or posts a StockMovement from it yet; that is Task 10.
+            modelBuilder.Entity<GdClaimPeriod>(e =>
+            {
+                e.Property(x => x.GdNumber).HasMaxLength(100);
+                e.Property(x => x.ClaimMonth).HasColumnType("date");
+                e.HasIndex(x => new { x.CompanyId, x.GdNumber }).IsUnique();
+                e.HasOne<Company>().WithMany().HasForeignKey(x => x.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
             modelBuilder.Entity<ImportConsignment>(e =>
             {
                 // GdNumber is externally issued by customs, unique per company.

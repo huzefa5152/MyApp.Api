@@ -233,6 +233,8 @@ namespace MyApp.Api.Helpers
             ws.PageSetup.Margins.Right = 0.3;
 
             WriteSummarySheet(wb, data, truncated);
+            if (data.GdDetails.Count > 0)
+                WriteGdDetailSheet(wb, data);
 
             using var ms = new MemoryStream();
             wb.SaveAs(ms);
@@ -384,9 +386,11 @@ namespace MyApp.Api.Helpers
         {
             var s = item.Summary;
 
-            // A — Claim Month. The client stamps their customs claim period here
-            // by hand; nothing in this system records one, so it is left for
-            // them rather than filled with a month that would only look official.
+            // A — the recorded filing period, only when this item has one GD.
+            // Never derive it from the declaration date.
+            if (item.ClaimMonth.HasValue)
+                Text(ws, r, CClaim, item.ClaimMonth.Value.ToString("MMM yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture));
             Text(ws, r, CGdNo, item.LotRef);
             if (item.LotDate.HasValue) Date(ws, r, CGdDate, item.LotDate.Value);
 
@@ -643,8 +647,8 @@ namespace MyApp.Api.Helpers
                 "Opening is everything received — the opening balance plus purchases since.",
                 "Balance is the live position from the weighted-average valuation, not Opening minus Consumed.",
                 "Cost of Good Sold uses the imported GD landed cost where one exists, so Consumed is what the goods sold actually cost; where none exists it unwinds the tax uplift (cost = value x rate / (rate + 3%)). Type over any cell to record a different figure.",
-                "Claim Month and Sub cat are yours to fill — this system records neither.",
-                "GDs No and GD Date are shown only where every customs lot behind an item names the same declaration.",
+                "Claim Month and Sub cat are yours to fill when absent. A recorded Claim Month is the filed period, never inferred from the GD date.",
+                "GDs No and GD Date are shown only where every stock source behind an item names the same declaration. See GD Detail for each source row.",
             })
             {
                 ws.Cell(r, 1).Value = note;
@@ -654,6 +658,66 @@ namespace MyApp.Api.Helpers
 
             ws.Column(1).Width = 80;
             ws.Column(2).Width = 20;
+        }
+
+        private static void WriteGdDetailSheet(XLWorkbook wb, StockExportDto data)
+        {
+            var ws = wb.Worksheets.Add("GD Detail");
+            ws.Cell(1, 1).Value = Safe(data.CompanyName);
+            ws.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(14).Font.SetFontColor(Navy);
+            ws.Cell(2, 1).Value = "GD sources — quantities are original source contributions, not remaining stock after sales.";
+            ws.Cell(3, 1).Value = "Cost-only backfills priced stock already recorded; they did not add quantity or value. Claim month is the filed period, not the GD date month.";
+            ws.Cell(2, 1).Style.Font.SetItalic();
+            ws.Cell(3, 1).Style.Font.SetItalic();
+            foreach (var (col, label) in new (int, string)[]
+            {
+                (1, "Item"), (2, "HS Code"), (3, "GD Number"), (4, "GD Date"),
+                (5, "GD Month"), (6, "Claim Month"), (7, "Source"), (8, "Source Row"),
+                (9, "Source Description"), (10, "Source Quantity"),
+                (11, "Source Value Excl Tax"), (12, "Sales Tax Rate"),
+            }) ws.Cell(5, col).Value = label;
+            var header = ws.Range(5, 1, 5, 12);
+            header.Style.Fill.BackgroundColor = Navy;
+            header.Style.Font.SetBold().Font.SetFontColor(XLColor.White);
+
+            var row = 6;
+            foreach (var d in data.GdDetails)
+            {
+                if (row > MaxRows)
+                {
+                    ws.Cell(row, 1).Value = "TRUNCATED — narrow the item search for complete GD detail.";
+                    break;
+                }
+                Text(ws, row, 1, d.ItemTypeName);
+                Text(ws, row, 2, d.HsCode);
+                Text(ws, row, 3, d.GdNumber);
+                if (d.GdDate.HasValue) Date(ws, row, 4, d.GdDate.Value);
+                if (d.GdDate.HasValue) Text(ws, row, 5,
+                    d.GdDate.Value.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture));
+                if (d.ClaimMonth.HasValue) Text(ws, row, 6,
+                    d.ClaimMonth.Value.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture));
+                Text(ws, row, 7, d.Source);
+                Number(ws, row, 8, d.SourceRow, "0");
+                Text(ws, row, 9, d.Description);
+                if (d.Quantity.HasValue) Number(ws, row, 10, d.Quantity.Value, "#,##0.####");
+                if (d.ValueExcludingTax.HasValue) Number(ws, row, 11, d.ValueExcludingTax.Value, "#,##0.00");
+                if (d.SalesTaxRate.HasValue) Number(ws, row, 12, d.SalesTaxRate.Value / 100m, Pct);
+                row++;
+            }
+            ws.Column(1).Width = 36;
+            ws.Column(2).Width = 15;
+            ws.Column(3).Width = 22;
+            ws.Column(4).Width = 14;
+            ws.Column(5).Width = 14;
+            ws.Column(6).Width = 16;
+            ws.Column(7).Width = 20;
+            ws.Column(8).Width = 12;
+            ws.Column(9).Width = 45;
+            ws.Column(10).Width = 18;
+            ws.Column(11).Width = 23;
+            ws.Column(12).Width = 16;
+            ws.SheetView.FreezeRows(5);
+            ws.Range(5, 1, Math.Max(5, row - 1), 12).SetAutoFilter();
         }
 
         // ── Cell writers ──────────────────────────────────────────────────────
