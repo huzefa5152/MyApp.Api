@@ -150,6 +150,15 @@ namespace MyApp.Api.Models
         public string? FbrCancelledReason { get; set; }
         public string? FbrCancelledBy { get; set; }
 
+        // ── Charged at a rate the goods did not come in at (2026-09-24) ──────
+        // The operator's written reason for billing an item at a sales tax rate
+        // other than the one the company's own GD / opening stock records for
+        // it (Helpers/ImportedTaxRate). Without a reason such a bill is refused
+        // on create and on edit; with one it saves, the reason stays on the bill
+        // for whoever files it, and an audit row records who decided. Null =
+        // no override was needed or given.
+        public string? TaxRateOverrideReason { get; set; }
+
         // ── Credit / Debit Note linkage (2026-07-01) ─────────────────────
         // A Credit Note (DocumentType 10) or Debit Note (DocumentType 9) is
         // itself an Invoice row that ADJUSTS an earlier FBR-submitted sale.

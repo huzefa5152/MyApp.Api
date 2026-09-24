@@ -364,6 +364,10 @@ namespace MyApp.Api.Data
                 .HasForeignKey(dc => dc.InvoiceId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // The operator's reason for charging a rate the company's own GD /
+            // opening stock contradicts. Capped at the same 500 the service trims to.
+            modelBuilder.Entity<Invoice>().Property(i => i.TaxRateOverrideReason).HasMaxLength(500);
+
             // Invoice -> Company (restrict to avoid multiple cascade paths)
             modelBuilder.Entity<Invoice>()
                 .HasOne(i => i.Company)
