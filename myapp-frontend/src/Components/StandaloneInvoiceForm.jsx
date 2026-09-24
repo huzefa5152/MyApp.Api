@@ -20,7 +20,7 @@ import { billFormShell, billFormBody } from "./bill/billTheme";
 import BillStep from "./bill/BillStep";
 import BillChecklist from "./bill/BillChecklist";
 import BillTotals from "./bill/BillTotals";
-import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows } from "../utils/billEntry";
+import { BILL_ANCHORS, lineAnchor, rateBlockText, billChecklist, billTotalsRows, salesTaxBase, isThirdScheduleSaleType } from "../utils/billEntry";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import useScenarioFollowsGoods from "../hooks/useScenarioFollowsGoods";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
@@ -827,7 +827,18 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     const p = parseFloat(r.unitPrice) || 0;
     return sum + q * p;
   }, 0);
-  const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
+  // 3rd Schedule goods are taxed on MRP x Qty, not the sale value -- the base
+  // the server charges and FBR is sent (Helpers/SalesTaxBase). The MRP is the
+  // per-unit figure on the line; the payload sends it times the quantity.
+  const taxBase = salesTaxBase(rows.map((r) => {
+    const q = parseFloat(r.quantity) || 0;
+    return {
+      value: q * (parseFloat(r.unitPrice) || 0),
+      retail: chosenScenario?.meta.needsMRP && r.mrp && q ? Math.round(parseFloat(r.mrp) * q * 100) / 100 : 0,
+      thirdSchedule: !!chosenScenario?.isThirdSchedule || isThirdScheduleSaleType(effectiveSaleType(r)),
+    };
+  }));
+  const gstAmount = Math.round(taxBase * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   // Charged on the NET value of supply -- the same base as sales tax, which is
   // what FbrLineTax uses per line, so the document and the FBR payload cannot
   // disagree. Rounded the way the server rounds it.
@@ -1276,7 +1287,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       : [],
   });
   const totalsRows = billTotalsRows({
-    subtotal, gstRate, gstAmount, scenarioCode: chosenScenario?.code || null,
+    subtotal, gstRate, gstAmount, taxBase, scenarioCode: chosenScenario?.code || null,
     furtherTaxRate, furtherTaxAmount, buyerRegistered, grandTotal,
     withholdingAmount: whtResolved, withholdingRate: whtMode === "rate" ? whtRate : null, balanceDue,
     advanceTaxAmount: advTaxResolved, advanceTaxSection: advTaxOption?.section,
@@ -1874,7 +1885,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null) }}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String(r.quantity ?? "").length + 1))}ch + 2.4rem)` }}
                                       value={r.quantity}
                                       data-row-qty={r.localId}
                                       onChange={(e) => updateRow(r.localId, { quantity: e.target.value, lineTotal: "" })}
@@ -1923,7 +1934,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null) }}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String((derivedFromAmount && r.unitPrice !== "" ? String(Math.round(Number(r.unitPrice) * 10000) / 10000) : r.unitPrice) ?? "").length + 1))}ch + 2.4rem)` }}
                                       // A rate worked out from the amount carries 12 decimals so the
                                       // line multiplies back to the exact figure typed; showing all of
                                       // them read as "206.20879" cut off mid-number. Read-only then, so
