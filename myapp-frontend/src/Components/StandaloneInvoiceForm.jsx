@@ -1885,7 +1885,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null) }}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String(r.quantity ?? "").length + 1))}ch + 2.4rem)` }}
                                       value={r.quantity}
                                       data-row-qty={r.localId}
                                       onChange={(e) => updateRow(r.localId, { quantity: e.target.value, lineTotal: "" })}
@@ -1934,7 +1934,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null) }}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null), minWidth: `calc(${Math.min(20, Math.max(4, String((derivedFromAmount && r.unitPrice !== "" ? String(Math.round(Number(r.unitPrice) * 10000) / 10000) : r.unitPrice) ?? "").length + 1))}ch + 2.4rem)` }}
                                       // A rate worked out from the amount carries 12 decimals so the
                                       // line multiplies back to the exact figure typed; showing all of
                                       // them read as "206.20879" cut off mid-number. Read-only then, so
