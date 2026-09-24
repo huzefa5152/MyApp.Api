@@ -306,6 +306,8 @@ Publish output optimized from 79 MB to 37 MB via:
 - Delivery challans now have searchable per-line supplier selection and a one-step way to apply a supplier or Item Type across lines; the Sales Order picker when linking deliveries to a bill is searchable.
 - Quotes, challans, bills and tax invoices, purchase bills, goods receipts, payments, and receipts accept formatted notes on create and edit, show them in document views, and expose an optional Notes merge field for print templates. Existing templates remain unchanged.
 - Added nullable note storage for documents that did not previously have it.
+- The built-in Challan, Bill and Tax Invoice designs print a Notes box under the totals when a document has notes, and nothing when it doesn't. Templates already saved by a company need the Notes field added in the template editor.
+- The built-in Bill printed a literal `—` beside "Purchase Order" when a bill had no PO; it now prints a dash. The server's copies of the built-in Bill and Tax Invoice are back in sync after withholding was hidden on customer invoices.
 
 ### 2026-09-25 — Document lines and multi-delivery linking
 
