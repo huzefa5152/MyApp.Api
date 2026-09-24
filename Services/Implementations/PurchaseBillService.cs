@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -44,6 +45,7 @@ namespace MyApp.Api.Services.Implementations
             DivisionId = pb.DivisionId,
             DivisionName = pb.Division?.Name,
             SupplierId = pb.SupplierId,
+            SourceDeliveryChallanId = pb.SourceDeliveryChallanId,
             SupplierName = pb.Supplier?.Name ?? "",
             SupplierBillNumber = pb.SupplierBillNumber,
             SupplierIRN = pb.SupplierIRN,
@@ -547,6 +549,120 @@ namespace MyApp.Api.Services.Implementations
             throw new InvalidOperationException(
                 "Could not allocate a unique purchase bill number after " + maxAttempts +
                 " attempts. Please retry the request.", lastConflict);
+        }
+
+        public async Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId)
+        {
+            // Keep the whole supplier batch atomic. The source+supplier unique index
+            // also makes a repeated confirmation safe after a lost HTTP response.
+            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var challan = await _context.DeliveryChallans
+                    .Include(c => c.Items)
+                    .FirstOrDefaultAsync(c => c.Id == challanId && !c.IsDemo);
+                if (challan == null) throw new KeyNotFoundException("Challan not found.");
+                if (challan.Status == "Cancelled")
+                    throw new InvalidOperationException("Cannot create purchase bills for a cancelled challan.");
+                if (challan.Items.Count == 0 || challan.Items.Any(i => !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue))
+                    throw new InvalidOperationException("Set a supplier and actual unit cost on every challan line first.");
+                if (challan.Items.Any(i => i.ActualUnitCost < 0))
+                    throw new InvalidOperationException("Actual unit cost cannot be negative.");
+
+                var groups = challan.Items.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key).ToList();
+                var supplierIds = groups.Select(g => g.Key).ToList();
+                var supplierMap = await _context.Suppliers
+                    .Where(s => s.CompanyId == challan.CompanyId && supplierIds.Contains(s.Id))
+                    .ToDictionaryAsync(s => s.Id);
+                if (supplierMap.Count != groups.Count)
+                    throw new InvalidOperationException("A line supplier does not belong to this company.");
+                var itemTypeIds = challan.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+                var validItemTypes = await _context.ItemTypes
+                    .Where(i => itemTypeIds.Contains(i.Id))
+                    .ToDictionaryAsync(i => i.Id);
+                if (validItemTypes.Count != itemTypeIds.Count)
+                    throw new InvalidOperationException("A line item type does not belong to this company.");
+                await ValidateNonInvItemsAsync(challan.CompanyId, challan.Items.Select(i => i.NonInventoryItemId));
+
+                var existing = await _context.PurchaseBills.AsNoTracking()
+                    .Where(p => p.SourceDeliveryChallanId == challanId)
+                    .Select(p => new { p.Id, p.SupplierId })
+                    .ToListAsync();
+                if (existing.Count > 0)
+                {
+                    if (existing.Count != groups.Count || existing.Any(p => !supplierIds.Contains(p.SupplierId)))
+                        throw new InvalidOperationException("Purchase bills already exist for this challan. Review them before changing its suppliers.");
+                    await tx.CommitAsync();
+                    var previous = new List<PurchaseBillDto>();
+                    foreach (var row in existing)
+                        previous.Add((await GetByIdAsync(row.Id))!);
+                    return previous;
+                }
+
+                var company = await _context.Companies.FindAsync(challan.CompanyId)
+                    ?? throw new KeyNotFoundException("Company not found.");
+                var division = await DivisionNumbering.ResolveAsync(_context, challan.CompanyId, challan.DivisionId);
+                var maxQuery = _context.PurchaseBills.Where(p => p.CompanyId == challan.CompanyId);
+                maxQuery = challan.DivisionId.HasValue
+                    ? maxQuery.Where(p => p.DivisionId == challan.DivisionId.Value)
+                    : maxQuery.Where(p => p.DivisionId == null);
+                var number = await maxQuery.MaxAsync(p => (int?)p.PurchaseBillNumber) ?? 0;
+                var seed = division?.StartingPurchaseBillNumber ?? company.StartingPurchaseBillNumber;
+                var createdIds = new List<int>();
+                foreach (var group in groups)
+                {
+                    number = DivisionNumbering.Next(number, seed);
+                    var lines = group.Select(i => new PurchaseItem
+                    {
+                        ItemTypeId = i.ItemTypeId,
+                        NonInventoryItemId = i.NonInventoryItemId,
+                        ItemTypeName = i.ItemTypeId.HasValue ? validItemTypes[i.ItemTypeId.Value].Name : "",
+                        Description = i.Description,
+                        Quantity = i.Quantity,
+                        UOM = i.Unit,
+                        UnitPrice = i.ActualUnitCost!.Value,
+                        LineTotal = Math.Round(i.Quantity * i.ActualUnitCost.Value, 2),
+                    }).ToList();
+                    var total = lines.Sum(i => i.LineTotal);
+                    var bill = new PurchaseBill
+                    {
+                        CompanyId = challan.CompanyId,
+                        DivisionId = challan.DivisionId,
+                        SupplierId = group.Key,
+                        SourceDeliveryChallanId = challan.Id,
+                        Source = "delivery-challan",
+                        PurchaseBillNumber = number,
+                        Date = (challan.DeliveryDate ?? DateTime.UtcNow).Date,
+                        Subtotal = total,
+                        GrandTotal = total,
+                        AmountInWords = NumberToWordsConverter.Convert(total),
+                        ReconciliationStatus = "ManualOnly",
+                        Items = lines,
+                    };
+                    _context.PurchaseBills.Add(bill);
+                    if (division != null) division.CurrentPurchaseBillNumber = number;
+                    else company.CurrentPurchaseBillNumber = number;
+                    await _context.SaveChangesAsync();
+                    var tracked = await _stock.GetStockTrackedItemTypeIdsAsync(
+                        bill.CompanyId, lines.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+                    foreach (var line in lines.Where(i => i.ItemTypeId.HasValue && i.Quantity > 0 && tracked.Contains(i.ItemTypeId!.Value)))
+                        await _stock.RecordMovementAsync(bill.CompanyId, line.ItemTypeId!.Value,
+                            StockMovementDirection.In, line.Quantity, StockMovementSourceType.PurchaseBill,
+                            bill.Id, bill.Date, $"Purchase Bill #{bill.PurchaseBillNumber} from {supplierMap[group.Key].Name}", bill.DivisionId);
+                    await _posting.PostPurchaseBillAsync(bill);
+                    createdIds.Add(bill.Id);
+                }
+                await tx.CommitAsync();
+                var result = new List<PurchaseBillDto>();
+                foreach (var id in createdIds)
+                    result.Add((await GetByIdAsync(id))!);
+                return result;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<PurchaseBillDto?> UpdateAsync(int id, UpdatePurchaseBillDto dto)

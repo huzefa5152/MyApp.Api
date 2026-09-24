@@ -69,6 +69,7 @@
         /// </summary>
         public int? SalesOrderId { get; set; }
         public int? SalesOrderNumber { get; set; }
+        public bool HasAutoPurchaseBills { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

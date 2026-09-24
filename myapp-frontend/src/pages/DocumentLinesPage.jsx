@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { defaultColumnsForType, lineColumns, lineSources, linesToTsv, saveLinesExcel } from "../utils/documentLines";
+import { challanPrivateColumns, defaultColumnsForType, lineColumns, lineSources, linesToTsv, saveLinesExcel } from "../utils/documentLines";
 import { loadDocumentLines } from "../api/documentLinesApi";
 
 const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -27,6 +27,8 @@ export default function DocumentLinesPage() {
   const [columnPrefs, setColumnPrefs] = useState(() => Object.fromEntries(Object.keys(lineSources).map((key) => {
     try {
       const stored = JSON.parse(localStorage.getItem(`document-line-columns-${key}`) || "null");
+      if (key === "challan" && JSON.stringify(stored) === JSON.stringify(["date", "number", "party", "itemType", "description", "quantity", "unit"]))
+        return [key, defaultColumnsForType(key)];
       return [key, Array.isArray(stored) && stored.length && stored.every((id) => lineColumns.some(([field]) => field === id)) ? stored : defaultColumnsForType(key)];
     } catch { return [key, defaultColumnsForType(key)]; }
   })));
@@ -52,7 +54,8 @@ export default function DocumentLinesPage() {
       : { from, to }, [period, from, to]);
   const shown = useMemo(() => rows.filter((row) => !itemSearch ||
     `${row.description} ${row.itemType} ${row.hsCode}`.toLowerCase().includes(itemSearch.toLowerCase())), [rows, itemSearch]);
-  const visibleColumns = lineColumns.filter(([key]) => columns.includes(key));
+  const availableColumns = lineColumns.filter(([key]) => type === "challan" || !challanPrivateColumns.includes(key));
+  const visibleColumns = availableColumns.filter(([key]) => columns.includes(key));
 
   const load = async () => {
     if (!selectedCompany || !type) return;
@@ -110,7 +113,7 @@ export default function DocumentLinesPage() {
     </div>
     <details style={{ margin: "18px 0" }}><summary style={{ cursor: "pointer", fontWeight: 700 }}>Choose columns ({columns.length})</summary>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 12 }}>
-        {lineColumns.map(([key, label]) => <label key={key} style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 5, padding: "0 8px", border: "1px solid #cbd5e1", borderRadius: 8 }}>
+        {availableColumns.map(([key, label]) => <label key={key} style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 5, padding: "0 8px", border: "1px solid #cbd5e1", borderRadius: 8 }}>
           <input type="checkbox" checked={columns.includes(key)} onChange={() => setColumns((current) => current.includes(key) ? current.length > 1 ? current.filter((x) => x !== key) : current : lineColumns.map(([id]) => id).filter((id) => current.includes(id) || id === key))} />{label}
         </label>)}
       </div>

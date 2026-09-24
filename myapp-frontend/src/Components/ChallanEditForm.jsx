@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
 import LineItemsEditor from "./LineItemsEditor";
+import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
+import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
+import { useConfirm } from "./ConfirmDialog";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
@@ -76,6 +80,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       description: i.description,
       quantity: i.quantity,
       unit: i.unit,
+      supplierId: i.supplierId ?? null,
+      actualUnitCost: i.actualUnitCost ?? null,
     }))
   );
 
@@ -85,6 +91,10 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   const [units, setUnits] = useState([]);
   const [itemTypes, setItemTypes] = useState([]);
   const [nonInvItems, setNonInvItems] = useState([]);
+  const suppliers = useChallanSuppliers(challan.companyId);
+  const confirm = useConfirm();
+  const { has } = usePermissions();
+  const [savedAwaitingPurchase, setSavedAwaitingPurchase] = useState(false);
 
   // ── UI state ──
   const [error, setError] = useState("");
@@ -143,6 +153,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Submit ──
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savedAwaitingPurchase) return;
     setError("");
 
     if (!clientId) { setError("Client is required."); return; }
@@ -174,9 +185,24 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
           // validation rejects fractions for integer-only UOMs.
           quantity: parseFloat(i.quantity) || 1,
           unit: (i.unit || "").trim(),
+          supplierId: i.supplierId || null,
+          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
           itemTypeName: "",
         })),
       });
+      if (!challan.hasAutoPurchaseBills && has("purchasebills.manage.create") && validItems.every((line) =>
+        line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) {
+        const count = new Set(validItems.map((line) => Number(line.supplierId))).size;
+        const yes = await confirm({ title: "Create purchase bills?", message: `Create ${count} unpaid purchase bill${count === 1 ? "" : "s"} from this challan, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
+        if (yes) {
+          try { await createPurchaseBillsFromChallan(challan.id); }
+          catch (err) {
+            setSavedAwaitingPurchase(true);
+            setError(`Challan saved. ${err.response?.data?.error || "Could not create purchase bills."}`);
+            return;
+          }
+        }
+      }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to update challan.");
@@ -365,6 +391,14 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               coerceEmptyQtyToOne
               itemsLabel="Items *"
             />
+            <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
+            {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
+              Your challan was saved. Purchase bills still need to be created.
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button type="button" disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
+                <button type="button" onClick={onSaved}>Close without purchase bills</button>
+              </div>
+            </div>}
 
             {/* Saved record — uploads attach to the challan immediately. */}
             <AttachmentManager

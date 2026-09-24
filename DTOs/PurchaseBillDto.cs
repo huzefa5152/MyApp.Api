@@ -10,6 +10,7 @@ namespace MyApp.Api.DTOs
         public int? DivisionId { get; set; }
         public string? DivisionName { get; set; }
         public int SupplierId { get; set; }
+        public int? SourceDeliveryChallanId { get; set; }
         public string SupplierName { get; set; } = "";
         public string? SupplierBillNumber { get; set; }
         public string? SupplierIRN { get; set; }

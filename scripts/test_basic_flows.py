@@ -387,6 +387,71 @@ def test_link_multiple_deliveries(base: str, token: str, company: dict,
           linked.get("grandTotal") == original_total)
 
 
+def test_private_challan_costs(base: str, token: str, company: dict, client: dict) -> None:
+    suite = "Challan private costs and supplier payables"
+    print(f"\n=== {suite} ===")
+    suppliers = []
+    for suffix in ("A", "B"):
+        status, supplier = http("POST", "/api/suppliers", base, token=token, body={
+            "companyId": company["id"], "name": f"Test Source Supplier {suffix} {company['id']}",
+        })
+        check(suite, f"supplier {suffix} created", status == 200, f"{status} {supplier}")
+        if status != 200:
+            return
+        suppliers.append(supplier)
+
+    today = pkt_date_iso()
+    status, order = http("POST", f"/api/salesorders/company/{company['id']}", base, token=token, body={
+        "clientId": client["id"], "orderDate": today,
+        "items": [
+            {"description": "Costed A", "quantity": 2, "unit": "Pcs", "unitPrice": 120},
+            {"description": "Costed B", "quantity": 3, "unit": "Pcs", "unitPrice": 200},
+        ],
+    })
+    check(suite, "priced order created", status in (200, 201), f"{status} {order}")
+    if status not in (200, 201):
+        return
+    status, challan = http("POST", f"/api/salesorders/{order['id']}/create-challan", base, token=token, body={
+        "deliveryDate": today,
+        "lines": [
+            {"salesOrderItemId": order["items"][0]["id"], "quantity": 2,
+             "supplierId": suppliers[0]["id"], "actualUnitCost": 80},
+            {"salesOrderItemId": order["items"][1]["id"], "quantity": 3,
+             "supplierId": suppliers[1]["id"], "actualUnitCost": 150},
+        ],
+    })
+    saved_costs = {i.get("description"): i.get("actualUnitCost") for i in challan.get("items", [])} if status in (200, 201) else {}
+    check(suite, "order challan retains private costs", status in (200, 201) and
+          saved_costs == {"Costed A": 80, "Costed B": 150}, f"{status} {challan}")
+    if status not in (200, 201):
+        return
+    status, loaded = http("GET", f"/api/deliverychallans/{challan['id']}", base, token=token)
+    by_description = {i["description"]: i for i in loaded.get("items", [])} if status == 200 else {}
+    check(suite, "unit and total profit use selling minus actual cost", status == 200 and
+          by_description.get("Costed A", {}).get("unitProfit") == 40 and
+          by_description.get("Costed B", {}).get("totalProfit") == 150, f"{status} {loaded}")
+    status, printed = http("GET", f"/api/deliverychallans/{challan['id']}/print", base, token=token)
+    print_text = json.dumps(printed or {}).lower()
+    check(suite, "print data excludes private supplier/cost/profit", status == 200 and
+          all(field not in print_text for field in ("actualunitcost", "supplierid", "suppliername", "unitprofit", "totalprofit")))
+
+    status, bills = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token)
+    check(suite, "one unpaid purchase bill per supplier", status == 200 and len(bills) == 2 and
+          {b["supplierId"] for b in bills} == {s["id"] for s in suppliers} and
+          sorted(b["grandTotal"] for b in bills) == [160, 450] and
+          all(b["balanceDue"] == b["grandTotal"] for b in bills), f"{status} {bills}")
+    if status != 200:
+        return
+    retry_status, retry = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token)
+    check(suite, "repeat confirmation creates no duplicate", retry_status == 200 and
+          {b["id"] for b in retry} == {b["id"] for b in bills}, f"{retry_status} {retry}")
+    changed = dict(loaded)
+    changed["items"] = [dict(i) for i in loaded["items"]]
+    changed["items"][0]["actualUnitCost"] = 81
+    edit_status, _ = http("PUT", f"/api/deliverychallans/{challan['id']}", base, token=token, body=changed)
+    check(suite, "cost cannot drift after purchase bill creation", edit_status == 400, f"got {edit_status}")
+
+
 # ── Suite 4: Invoice update ────────────────────────────────────────
 def test_invoice_update(base: str, token: str, bill: dict | None) -> None:
     suite = "4. Invoice update"
@@ -871,6 +936,7 @@ def main() -> int:
         test_default_print_templates(args.base, token, company)
         test_link_multiple_deliveries(args.base, token, company, client, standalone,
                                       challan if bill_from_challan else None)
+        test_private_challan_costs(args.base, token, company, client)
     finally:
         teardown(args.base, token, company, args.keep)
 

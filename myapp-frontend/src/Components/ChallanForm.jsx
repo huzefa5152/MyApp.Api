@@ -12,6 +12,10 @@ import { getNonInventoryItemsByCompany } from "../api/nonInventoryItemApi";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import ChallanPrivateCosts, { PrivateCostFields, useChallanSuppliers } from "./ChallanPrivateCosts";
+import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
+import { useConfirm } from "./ConfirmDialog";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -51,6 +55,27 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
+  const suppliers = useChallanSuppliers(companyId);
+  const confirm = useConfirm();
+  const { has } = usePermissions();
+  const [orderPrivate, setOrderPrivate] = useState({});
+  const [savedChallanId, setSavedChallanId] = useState(null);
+  const [purchaseError, setPurchaseError] = useState("");
+
+  const offerPurchaseBills = async (saved, lines) => {
+    if (!saved?.id || !has("purchasebills.manage.create") || !lines.length ||
+      !lines.every((line) => line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) return true;
+    const supplierCount = new Set(lines.map((line) => Number(line.supplierId))).size;
+    const yes = await confirm({ title: "Create purchase bills?", message: `Every line has a supplier and actual cost. Create ${supplierCount} unpaid purchase bill${supplierCount === 1 ? "" : "s"} now, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
+    if (!yes) return true;
+    try { await createPurchaseBillsFromChallan(saved.id); return true; }
+    catch (err) {
+      setSavedChallanId(saved.id);
+      setPurchaseError(err.response?.data?.error || "The challan was saved, but purchase bills could not be created.");
+      setSaving(false);
+      return false;
+    }
+  };
 
   // ── Optional "deliver from Sales Order" mode ─────────────────────────────
   // Pick an open/partially-delivered order → the form fills each undelivered
@@ -158,7 +183,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || savedChallanId) return;
     setError("");
 
     // ── Deliver-from-order path — create the challan against the order ──────
@@ -169,6 +194,8 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           quantity: Number(orderQtys[i.id]) || 0,
           itemTypeId: orderItemTypes[i.id]?.itemTypeId || null,
           nonInventoryItemId: orderItemTypes[i.id]?.nonInventoryItemId || null,
+          supplierId: orderPrivate[i.id]?.supplierId || null,
+          actualUnitCost: orderPrivate[i.id]?.actualUnitCost === "" ? null : orderPrivate[i.id]?.actualUnitCost ?? null,
         }))
         .filter((l) => l.quantity > 0);
       if (lines.length === 0) {
@@ -184,7 +211,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           lines,
         });
         try { if (saved?.id) await attachmentRef.current?.flush(saved.id); } catch { /* best-effort */ }
-        onClose();
+        if (await offerPurchaseBills(saved, lines)) onClose();
       } catch (err) {
         const serverMsg = err.response?.data?.error || err.response?.data?.message;
         setError(serverMsg || (!err.response ? "Could not reach the server. Please try again." : "Could not create the challan. Please try again."));
@@ -205,6 +232,13 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
     setSaving(true);
     try {
+      const payloadItems = validItems.map((i) => ({
+          ...i,
+          itemTypeId: i.itemTypeId || null,
+          nonInventoryItemId: i.nonInventoryItemId || null,
+          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
+          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
+      }));
       const saved = await onSaved({
         clientId: client.id,
         divisionId: divisionId ? parseInt(divisionId) : null,
@@ -214,27 +248,14 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
         poDate: poDate ? new Date(poDate).toISOString() : null,
         indentNo: indentNo.trim() || null,
         deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
-        items: validItems.map((i) => ({
-          ...i,
-          // Item Type is optional on a challan line. When the operator picks
-          // one it persists on DeliveryItem.ItemTypeId; otherwise null and FBR
-          // classification can still happen later on the Invoices tab.
-          itemTypeId: i.itemTypeId || null,
-          // Non-Inventory line (Freight / Discount / …) — mutually exclusive
-          // with itemTypeId; optional.
-          nonInventoryItemId: i.nonInventoryItemId || null,
-          // parseFloat preserves decimals (12.5 KG, 0.0004 Carat). The
-          // QuantityInput already coerces correctly per UOM, this is just
-          // defensive in case a string slips through.
-          quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
-        })),
+        items: payloadItems,
       });
       // Upload any attachments staged before the challan had an id — must run
       // BEFORE onClose() unmounts this form (and its staged files with it).
       try {
         if (saved?.id) await attachmentRef.current?.flush(saved.id);
       } catch { /* attachments are best-effort — the challan is already saved */ }
-      onClose();
+      if (await offerPurchaseBills(saved, payloadItems)) onClose();
     } catch (err) {
       // Server-supplied user-friendly message wins; otherwise show a
       // friendly stable string. Bare err.message from axios is
@@ -463,8 +484,25 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 divisionId={divisionId}
                 itemsLabel="Items"
               />
+              <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
             </div>
             )}
+
+            {fromOrder && <section style={{ padding: 14, border: "1px solid #dce7e4", borderRadius: 12, background: "#f7fbfa", marginTop: 12 }}>
+              <strong style={{ color: "#00695c" }}>Private supplier and cost details</strong>
+              {deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0).map((item) => <div key={item.id} style={{ padding: 10, marginTop: 10, background: "#fff", borderRadius: 8 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>{item.description}</div>
+                <PrivateCostFields item={orderPrivate[item.id] || {}} suppliers={suppliers} onChange={(patch) => setOrderPrivate((prev) => ({ ...prev, [item.id]: { ...prev[item.id], ...patch } }))} />
+              </div>)}
+            </section>}
+
+            {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
+              Challan saved. {purchaseError}
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button type="button" onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
+                <button type="button" onClick={onClose}>Close without purchase bills</button>
+              </div>
+            </div>}
 
             {/* entityId=null — files are staged client-side and flushed against
                 the new challan id after save (this form is create-only). */}

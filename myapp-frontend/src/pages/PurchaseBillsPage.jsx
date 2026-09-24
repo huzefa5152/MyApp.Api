@@ -500,6 +500,7 @@ export default function PurchaseBillsPage() {
                         </h5>
                         {b.divisionName && <span style={styles.divisionChip}>{b.divisionName}</span>}
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
+                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Delivery challan</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {/* Payment status + balance — clickable to see all

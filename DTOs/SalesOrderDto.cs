@@ -113,6 +113,8 @@ namespace MyApp.Api.DTOs
         /// Mutually exclusive with <see cref="NonInventoryItemId"/>.</summary>
         public int? ItemTypeId { get; set; }
         public int? NonInventoryItemId { get; set; }
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
     }
 
     /// <summary>Body for the status-change endpoints on quotes and orders.</summary>

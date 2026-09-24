@@ -28,6 +28,15 @@ const adjusted = flattenDocumentLines("taxInvoice", [fixtures[4][1]])[0];
 assert.equal(adjusted.description, "Adjusted");
 assert.equal(adjusted.quantity, 0, "zero adjustment must not fall back to bill quantity");
 assert.equal(adjusted.lineTotal, 0);
+const privateLine = flattenDocumentLines("challan", [{ challanNumber: 9, items: [{
+  quantity: 2.5, supplierName: "Internal Supplier", actualUnitCost: 80,
+  sellingUnitPrice: 125, unitProfit: 45, totalProfit: 112.5,
+}] }])[0];
+assert.equal(privateLine.supplier, "Internal Supplier");
+assert.equal(privateLine.actualUnitCost, 80);
+assert.equal(privateLine.totalProfit, 112.5);
+assert.equal(flattenDocumentLines("challan", [{ items: [{ actualUnitCost: 80 }] }])[0].totalProfit, "",
+  "profit remains blank until a selling price exists");
 assert.equal(safeCell("=WEBSERVICE(1)"), "'=WEBSERVICE(1)");
 assert.equal(safeCell("a\tb\nc"), "a b c");
 assert.equal(linesToTsv([{ description: "=1+1", quantity: 2 }], ["description", "quantity"]),

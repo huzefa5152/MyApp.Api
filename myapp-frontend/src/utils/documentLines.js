@@ -18,11 +18,16 @@ export const lineColumns = [
   ["line", "Line #"], ["itemId", "Line ID"], ["itemType", "Item Type"],
   ["description", "Description"], ["quantity", "Quantity"], ["unit", "Unit"],
   ["unitPrice", "Unit Price"], ["lineTotal", "Line Total"], ["hsCode", "HS Code"],
+  ["supplier", "Supplier"], ["actualUnitCost", "Actual Unit Cost"], ["sellingUnitPrice", "Selling Unit Price"],
+  ["unitProfit", "Unit Profit"], ["totalProfit", "Total Profit"],
   ["saleType", "Sale Type"], ["account", "Account"], ["gstRate", "Document GST %"],
 ];
 
 export const defaultLineColumns = ["date", "number", "party", "itemType", "description", "quantity", "unit", "unitPrice", "lineTotal"];
-export const defaultColumnsForType = (type) => ["challan", "receipt"].includes(type)
+export const challanPrivateColumns = ["supplier", "actualUnitCost", "sellingUnitPrice", "unitProfit", "totalProfit"];
+export const defaultColumnsForType = (type) => type === "challan"
+  ? [...defaultLineColumns.filter((key) => key !== "unitPrice" && key !== "lineTotal"), ...challanPrivateColumns]
+  : ["receipt"].includes(type)
   ? defaultLineColumns.filter((key) => key !== "unitPrice" && key !== "lineTotal")
   : defaultLineColumns;
 
@@ -49,7 +54,7 @@ export function flattenDocumentLines(type, documents) {
     line: index + 1,
     itemType: type === "taxInvoice" ? item.adjustment?.adjustedItemTypeName ?? item.itemTypeName ?? item.nonInventoryItemName ?? "" : item.itemTypeName || item.nonInventoryItemName || "",
     description: itemValue(type, item, "Description"),
-    quantity: itemValue(type, item, "Quantity"),
+    quantity: type === "challan" ? item.physicalQuantity ?? item.quantity ?? "" : itemValue(type, item, "Quantity"),
     unit: type === "taxInvoice" ? item.adjustment?.adjustedUOM ?? item.uom ?? "" : item.unit ?? item.uom ?? "",
     unitPrice: type === "taxInvoice" ? item.adjustment?.adjustedUnitPrice ?? item.unitPrice ?? "" : item.unitPrice ?? "",
     lineTotal: type === "taxInvoice" ? item.adjustment?.adjustedLineTotal ?? item.lineTotal ?? "" : item.lineTotal ?? "",
@@ -57,6 +62,11 @@ export function flattenDocumentLines(type, documents) {
     saleType: type === "taxInvoice" ? item.adjustment?.adjustedSaleType ?? item.saleType ?? "" : item.saleType ?? "",
     account: item.accountName || "",
     gstRate: doc.gstRate ?? "",
+    supplier: type === "challan" ? item.supplierName || "" : "",
+    actualUnitCost: type === "challan" ? item.actualUnitCost ?? "" : "",
+    sellingUnitPrice: type === "challan" ? item.sellingUnitPrice ?? "" : "",
+    unitProfit: type === "challan" ? item.unitProfit ?? "" : "",
+    totalProfit: type === "challan" ? item.totalProfit ?? "" : "",
   })));
 }
 

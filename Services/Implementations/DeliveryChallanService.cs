@@ -36,6 +36,26 @@ namespace MyApp.Api.Services.Implementations
                 throw new InvalidOperationException("A selected non-inventory item does not belong to this company.");
         }
 
+        private async Task ValidatePrivateCostsAsync(int companyId, IEnumerable<DeliveryItemDto> items)
+        {
+            var lines = items.ToList();
+            if (lines.Any(i => i.ActualUnitCost < 0))
+                throw new InvalidOperationException("Actual unit cost cannot be negative.");
+            var supplierIds = lines.Where(i => i.SupplierId.HasValue).Select(i => i.SupplierId!.Value).Distinct().ToList();
+            if (supplierIds.Count == 0) return;
+            var validIds = await _context.Suppliers.AsNoTracking()
+                .Where(s => s.CompanyId == companyId && supplierIds.Contains(s.Id))
+                .Select(s => s.Id).ToListAsync();
+            if (supplierIds.Any(id => !validIds.Contains(id)))
+                throw new InvalidOperationException("A selected supplier does not belong to this company.");
+        }
+
+        private async Task AssertNoAutoPurchaseBillsAsync(int challanId)
+        {
+            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == challanId))
+                throw new InvalidOperationException("Purchase bills already exist for this challan. Remove those bills before changing its delivery lines or cancelling it.");
+        }
+
         /// <summary>
         /// Defence-in-depth check: reject fractional quantities (e.g. 2.5
         /// Pcs) for any line whose UOM has AllowsDecimalQuantity = false.
@@ -142,7 +162,11 @@ namespace MyApp.Api.Services.Implementations
                 DuplicatedFromChallanNumber = dc.DuplicatedFrom?.ChallanNumber,
                 SalesOrderId = dc.SalesOrderId,
                 SalesOrderNumber = dc.SalesOrder?.SalesOrderNumber,
-                Items = dc.Items.Select(i => new DeliveryItemDto
+                Items = dc.Items.Select(i =>
+                {
+                    var billedPrice = dc.Invoice?.Items.FirstOrDefault(ii => ii.DeliveryItemId == i.Id)?.UnitPrice;
+                    var sellingPrice = billedPrice > 0 ? billedPrice : i.SalesOrderItem?.UnitPrice;
+                    return new DeliveryItemDto
                 {
                     Id = i.Id,
                     ItemTypeId = i.ItemTypeId,
@@ -151,9 +175,18 @@ namespace MyApp.Api.Services.Implementations
                     NonInventoryItemName = i.NonInventoryItem?.Name,
                     Description = i.Description,
                     Quantity = i.Quantity,
+                    PhysicalQuantity = i.DeliveredQuantity ?? i.Quantity,
                     Unit = i.Unit,
-                    SalesOrderItemId = i.SalesOrderItemId
-                }).ToList()
+                    SalesOrderItemId = i.SalesOrderItemId,
+                    ActualUnitCost = i.ActualUnitCost,
+                    SupplierId = i.SupplierId,
+                    SupplierName = i.Supplier?.Name,
+                    SellingUnitPrice = sellingPrice > 0 ? sellingPrice : null,
+                    UnitProfit = sellingPrice > 0 && i.ActualUnitCost.HasValue
+                        ? sellingPrice.Value - i.ActualUnitCost.Value : null,
+                    TotalProfit = sellingPrice > 0 && i.ActualUnitCost.HasValue
+                        ? Math.Round((sellingPrice.Value - i.ActualUnitCost.Value) * (i.DeliveredQuantity ?? i.Quantity), 2) : null
+                }; }).ToList()
             };
 
             // Compute warnings for missing FBR fields — only when FBR is
@@ -234,7 +267,19 @@ namespace MyApp.Api.Services.Implementations
         public async Task<List<DeliveryChallanDto>> GetDeliveryChallansByCompanyAsync(int companyId, HashSet<int>? allowedDivisionIds = null)
         {
             var challans = await _repository.GetDeliveryChallansByCompanyAsync(companyId, allowedDivisionIds);
-            return challans.Select(ToDto).ToList();
+            var dtos = challans.Select(ToDto).ToList();
+            await MarkAutoPurchaseBillsAsync(dtos);
+            return dtos;
+        }
+
+        private async Task MarkAutoPurchaseBillsAsync(List<DeliveryChallanDto> dtos)
+        {
+            var ids = dtos.Select(d => d.Id).ToList();
+            if (ids.Count == 0) return;
+            var linked = (await _context.PurchaseBills.AsNoTracking()
+                .Where(p => p.SourceDeliveryChallanId.HasValue && ids.Contains(p.SourceDeliveryChallanId.Value))
+                .Select(p => p.SourceDeliveryChallanId!.Value).Distinct().ToListAsync()).ToHashSet();
+            foreach (var dto in dtos) dto.HasAutoPurchaseBills = linked.Contains(dto.Id);
         }
 
         public async Task<PagedResult<DeliveryChallanDto>> GetPagedByCompanyAsync(
@@ -256,6 +301,7 @@ namespace MyApp.Api.Services.Implementations
                 .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
 
             var dtos = items.Select(ToDto).ToList();
+            await MarkAutoPurchaseBillsAsync(dtos);
             foreach (var d in dtos)
                 d.IsLatest = d.ChallanNumber == maxNumber;
 
@@ -271,7 +317,10 @@ namespace MyApp.Api.Services.Implementations
         public async Task<DeliveryChallanDto?> GetByIdAsync(int id)
         {
             var dc = await _repository.GetByIdAsync(id);
-            return dc == null ? null : ToDto(dc);
+            if (dc == null) return null;
+            var dto = ToDto(dc);
+            await MarkAutoPurchaseBillsAsync(new List<DeliveryChallanDto> { dto });
+            return dto;
         }
 
         public async Task<DeliveryChallanDto> CreateDeliveryChallanAsync(int companyId, DeliveryChallanDto dto)
@@ -333,6 +382,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Cross-tenant link guard for non-inventory item refs on the lines.
             await ValidateNonInvAsync(companyId, (dto.Items ?? Enumerable.Empty<DeliveryItemDto>()).Select(i => i.NonInventoryItemId));
+            await ValidatePrivateCostsAsync(companyId, dto.Items ?? Enumerable.Empty<DeliveryItemDto>());
 
             var fbrReady = company != null && IsFbrReady(company, client);
 
@@ -367,7 +417,9 @@ namespace MyApp.Api.Services.Implementations
                     Description = i.Description,
                     Quantity = i.Quantity,
                     Unit = i.Unit,
-                    SalesOrderItemId = i.SalesOrderItemId
+                    SalesOrderItemId = i.SalesOrderItemId,
+                    ActualUnitCost = i.ActualUnitCost,
+                    SupplierId = i.SupplierId
                 }).ToList()
             };
 
@@ -476,9 +528,24 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private async Task ApplyItemsDiffAsync(DeliveryChallan dc, List<DeliveryItemDto> items)
         {
+            if (await _context.PurchaseBills.AsNoTracking().AnyAsync(p => p.SourceDeliveryChallanId == dc.Id))
+            {
+                var incomingIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
+                var changed = incomingIds.Count != dc.Items.Count ||
+                    dc.Items.Any(old => !incomingIds.Contains(old.Id)) ||
+                    items.Any(item => {
+                        var old = dc.Items.FirstOrDefault(i => i.Id == item.Id);
+                        return old == null || old.Quantity != item.Quantity || old.Description != item.Description ||
+                            old.Unit != item.Unit || old.ItemTypeId != item.ItemTypeId ||
+                            old.NonInventoryItemId != item.NonInventoryItemId || old.SupplierId != item.SupplierId ||
+                            old.ActualUnitCost != item.ActualUnitCost;
+                    });
+                if (changed) await AssertNoAutoPurchaseBillsAsync(dc.Id);
+            }
             // Cross-tenant link guard — validate against the STORED CompanyId,
             // never anything from the incoming DTO.
             await ValidateNonInvAsync(dc.CompanyId, items.Select(i => i.NonInventoryItemId));
+            await ValidatePrivateCostsAsync(dc.CompanyId, items);
 
             var updatedIds = items.Where(i => i.Id > 0).Select(i => i.Id).ToHashSet();
             var toRemove = dc.Items.Where(i => !updatedIds.Contains(i.Id)).ToList();
@@ -503,6 +570,8 @@ namespace MyApp.Api.Services.Implementations
                     existing.Description = itemDto.Description;
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
+                    existing.ActualUnitCost = itemDto.ActualUnitCost;
+                    existing.SupplierId = itemDto.SupplierId;
                 }
                 else
                 {
@@ -513,7 +582,9 @@ namespace MyApp.Api.Services.Implementations
                         NonInventoryItemId = itemDto.NonInventoryItemId,
                         Description = itemDto.Description,
                         Quantity = itemDto.Quantity,
-                        Unit = itemDto.Unit
+                        Unit = itemDto.Unit,
+                        ActualUnitCost = itemDto.ActualUnitCost,
+                        SupplierId = itemDto.SupplierId
                     };
                     dc.Items.Add(newItem);
                     newItems.Add(newItem);
@@ -673,6 +744,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
+            await AssertNoAutoPurchaseBillsAsync(challanId);
             // Cannot cancel a billed challan (even if invoice is not FBR-submitted, cancelling would leave invoice in bad state)
             if (dc.Status == "Invoiced")
                 throw new InvalidOperationException("Cannot cancel a challan that has been billed. Delete the bill first to revert the challan.");
@@ -689,6 +761,7 @@ namespace MyApp.Api.Services.Implementations
         {
             var dc = await _repository.GetByIdAsync(challanId);
             if (dc == null) return false;
+            await AssertNoAutoPurchaseBillsAsync(challanId);
             if (dc.Status == "Invoiced")
                 throw new InvalidOperationException("Cannot delete a challan that has been billed. Delete the bill first to revert the challan.");
             if (!IsEditable(dc))
@@ -774,6 +847,7 @@ namespace MyApp.Api.Services.Implementations
             // Reload with Invoice included for proper edit check
             var dc = await _repository.GetByIdAsync(item.DeliveryChallanId);
             if (dc == null) return false;
+            await AssertNoAutoPurchaseBillsAsync(dc.Id);
             if (!IsEditable(dc))
             {
                 if (dc.Status == "Invoiced" && dc.Invoice?.FbrStatus == "Submitted")

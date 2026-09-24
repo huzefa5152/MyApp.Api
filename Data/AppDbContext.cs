@@ -576,6 +576,7 @@ namespace MyApp.Api.Data
             // Same precision as the quantity it preserves — a delivered amount
             // that cannot round-trip its own column is worse than not keeping it.
             modelBuilder.Entity<DeliveryItem>().Property(di => di.DeliveredQuantity).HasPrecision(28, 12);
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.ActualUnitCost).HasPrecision(28, 12);
 
             // Optional: make ItemDescription.Name and Unit.Name unique
             modelBuilder.Entity<ItemDescription>()
@@ -738,6 +739,10 @@ namespace MyApp.Api.Data
                 .HasOne(di => di.NonInventoryItem).WithMany()
                 .HasForeignKey(di => di.NonInventoryItemId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.NonInventoryItemId);
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.Supplier).WithMany()
+                .HasForeignKey(di => di.SupplierId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SupplierId);
             modelBuilder.Entity<DeliveryItem>()
                 .ToTable(t => t.HasCheckConstraint("CK_DeliveryItem_OneItemRef",
                     "[ItemTypeId] IS NULL OR [NonInventoryItemId] IS NULL"));
@@ -1765,6 +1770,10 @@ namespace MyApp.Api.Data
                 .HasFilter(null);
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.SourceDeliveryChallanId, pb.SupplierId })
+                .IsUnique()
+                .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierIRN);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Subtotal).HasPrecision(18, 2);

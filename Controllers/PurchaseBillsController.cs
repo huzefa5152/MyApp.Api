@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -20,14 +22,16 @@ namespace MyApp.Api.Controllers
     public class PurchaseBillsController : ControllerBase
     {
         private readonly IPurchaseBillService _service;
+        private readonly AppDbContext _context;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
         private readonly int _defaultPageSize;
 
-        public PurchaseBillsController(IPurchaseBillService service, ICompanyAccessGuard access,
+        public PurchaseBillsController(IPurchaseBillService service, AppDbContext context, ICompanyAccessGuard access,
             IDivisionAccessGuard divisionAccess, IConfiguration configuration)
         {
             _service = service;
+            _context = context;
             _access = access;
             _divisionAccess = divisionAccess;
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
@@ -130,6 +134,21 @@ namespace MyApp.Api.Controllers
             {
                 return BadRequest(new { error = ex.Message });
             }
+        }
+
+        [HttpPost("from-challan/{challanId}")]
+        [HasPermission("purchasebills.manage.create")]
+        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId)
+        {
+            var challan = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.Id == challanId)
+                .Select(c => new { c.CompanyId, c.DivisionId })
+                .FirstOrDefaultAsync();
+            if (challan == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, challan.CompanyId);
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, challan.CompanyId, challan.DivisionId);
+            try { return Ok(await _service.CreateFromChallanAsync(challanId)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
 
         [HttpPut("{id}")]
