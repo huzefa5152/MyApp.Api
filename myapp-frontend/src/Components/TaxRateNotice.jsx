@@ -35,6 +35,7 @@ export default function TaxRateNotice({
       {enforced.length > 0 && (
         <div
           role="alert"
+          data-rate-notice
           style={{
             border: `1px solid ${colors.danger}55`,
             background: colors.dangerLight,

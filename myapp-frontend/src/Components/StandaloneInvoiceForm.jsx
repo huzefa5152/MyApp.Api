@@ -16,6 +16,7 @@ import { defaultAccountPlaceholder } from "../utils/accountDisplay";
 import { usePermissions } from "../contexts/PermissionsContext";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import TaxRateNotice from "./TaxRateNotice";
+import TaxRateBlockHint from "./TaxRateBlockHint";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
@@ -73,7 +74,7 @@ const SCENARIO_META = {
   SN005: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Reduced rate sale — SRO reference required." },
   SN006: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Exempt goods (rate 0%) — SRO reference required." },
   SN007: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Zero rated sale — SRO reference required." },
-  SN008: { buyerKind: "either",           needsMRP: true,  needsSRO: false, hint: "3rd Schedule goods — tax backed out of MRP. Enter the printed retail price × qty." },
+  SN008: { buyerKind: "either",           needsMRP: true,  needsSRO: false, hint: "3rd Schedule goods — FBR charges the tax on the printed retail price: 18% of MRP × Qty. Enter the MRP per unit." },
   SN009: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Cotton ginners → spinners (Textile Sector)." },
   SN010: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Telecom services rendered or provided." },
   SN011: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Toll Manufacturing sale by Steel sector (registered buyer only)." },
@@ -548,6 +549,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const removeRow = (localId) =>
     setRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.localId !== localId)));
 
+  // A description the previous pick filled in -- still that item's name, word
+  // for word -- is the catalog's text, not the operator's, so it follows a
+  // re-pick. Keeping it left "WEIGHT SCALE PARTS PLASTIC HOUSING" on a line
+  // re-pointed at a juice blender. Anything typed, or carried in from a sales
+  // order, still stays.
+  const seededDescription = (r, picked) =>
+    (r.description?.trim() && r.description !== r.itemTypeName ? r.description : (picked.name || ""));
+
   const handleItemTypePick = (localId, picked) => {
     if (!picked) {
       // Clearing the item type also drops any non-inv binding (mutually exclusive)
@@ -577,7 +586,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // written one -- in either mode. Picking (or re-picking) an item type
         // must never overwrite words someone typed, or a prefill carried in
         // from a sales order.
-        description: r.description?.trim() ? r.description : (picked.name || ""),
+        description: seededDescription(r, picked),
+        // A line priced from an AMOUNT is re-priced at the new item's cost
+        // (the effect after deriveFromTotal); the old item's quantity and
+        // rate must not stand in for it meanwhile.
+        ...(r.lineTotal && r.itemTypeId !== picked.id ? { quantity: "", unitPrice: "" } : null),
       };
     }));
     // The operator's next step is the amount (or the quantity, when there is
@@ -630,7 +643,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // written one -- in either mode. Picking (or re-picking) an item type
         // must never overwrite words someone typed, or a prefill carried in
         // from a sales order.
-        description: r.description?.trim() ? r.description : (picked.name || ""),
+        description: seededDescription(r, picked),
+        // A line priced from an AMOUNT is re-priced at the new item's cost
+        // (the effect after deriveFromTotal); the old item's quantity and
+        // rate must not stand in for it meanwhile.
+        ...(r.lineTotal && r.itemTypeId !== picked.id ? { quantity: "", unitPrice: "" } : null),
       };
     }));
   };
@@ -724,18 +741,42 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       hint: sc.meta?.needsSRO && sc.defaultSroScheduleNo
         ? `Fills SRO schedule ${sc.defaultSroScheduleNo}. The serial is FBR's catalog default: confirm it for these goods.`
         : null,
-      onApply: () => {
-        setScenarioCode(sc.code);
-        if (sc.meta?.needsSRO) {
-          setRows((prev) => prev.map((r) => ({
-            ...r,
-            sroScheduleNo: r.sroScheduleNo?.trim() ? r.sroScheduleNo : (sc.defaultSroScheduleNo || ""),
-            sroItemSerialNo: r.sroItemSerialNo?.trim() ? r.sroItemSerialNo : (sc.defaultSroItemSerialNo || ""),
-          })));
-        }
-      },
+      // The SRO reference follows from the scenario (the effect below).
+      onApply: () => setScenarioCode(sc.code),
     };
   }, [rateCheck.enforced.length, rateCheck.billRates, enrichedScenarios]);
+  // Saving is refused (here and on the server) until the scenario matches or a
+  // reason is written, so the button says so instead of looking live.
+  const rateBlocked = rateCheck.enforced.length > 0 && !rateReason.trim();
+
+  // An SRO scenario carries FBR's own schedule string and a default serial.
+  // Fill them into every line that has none, however the scenario was chosen --
+  // the Step 1 cards or the rate notice's one-click switch -- and into rows
+  // added later. Only the one-click switch used to fill them, so picking SN024
+  // from the cards left two required boxes empty and the bill unsaveable behind
+  // "Some required fields are missing". On a switch between SRO scenarios, a
+  // value the previous one filled in is replaced; one the operator typed stays.
+  const autoSro = useRef({ sched: "", serial: "" });
+  useEffect(() => {
+    const needs = !!chosenScenario?.meta.needsSRO;
+    const sched = needs ? (chosenScenario.defaultSroScheduleNo || "") : "";
+    const serial = needs ? (chosenScenario.defaultSroItemSerialNo || "") : "";
+    if (!sched && !serial) return;
+    const prev = autoSro.current;
+    autoSro.current = { sched, serial };
+    const pick = (current, fill, stale) => (!current?.trim() || current === stale ? fill : current);
+    setRows((rs) => {
+      let changed = false;
+      const next = rs.map((r) => {
+        const s = pick(r.sroScheduleNo, sched, prev.sched);
+        const n = pick(r.sroItemSerialNo, serial, prev.serial);
+        if (s === r.sroScheduleNo && n === r.sroItemSerialNo) return r;
+        changed = true;
+        return { ...r, sroScheduleNo: s, sroItemSerialNo: n };
+      });
+      return changed ? next : rs;
+    });
+  }, [chosenScenario, rows.length]);
 
   // Effective sale type for a row — locked to scenario when one's picked.
   const effectiveSaleType = (r) => (chosenScenario ? chosenScenario.saleType : r.saleType || "");
@@ -862,6 +903,28 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     // number change.
     return { qty, rate, exact: Math.round(total * 100) / 100 };
   };
+
+  // The AMOUNT is the source of truth on a line priced from stock, so a line
+  // re-pointed at another item is re-priced at THAT item's cost once its
+  // pricing arrives. Without this the old item's quantity and rate stayed:
+  // 10,000 of a 1,992-a-unit massage gun went down as 48 units at 208.33.
+  useEffect(() => {
+    setRows((rs) => {
+      let changed = false;
+      const next = rs.map((r) => {
+        if (!r.itemTypeId || !r.lineTotal) return r;
+        const d = deriveFromTotal(r, parseFloat(r.lineTotal));
+        if (!d) return r;
+        const q = String(d.qty);
+        const p = String(d.rate);
+        if (q === r.quantity && p === r.unitPrice) return r;
+        changed = true;
+        return { ...r, quantity: q, unitPrice: p, lineTotal: String(d.exact) };
+      });
+      return changed ? next : rs;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockPricing]);
 
   // How much this line wants versus how much there is.
   //
@@ -1005,6 +1068,31 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     return errs;
   };
   const allRowsValid = rows.length > 0 && rows.every((r) => rowErrors(r).length === 0);
+
+  // What a line still needs, in the words on screen. "Some required fields are
+  // missing" alone sent an operator hunting: the tax-rate reason they had just
+  // typed looked like the thing being refused, when the line had no amount.
+  const rowProblem = (r) => {
+    const errs = rowErrors(r);
+    if (errs.length === 0) return null;
+    const parts = [];
+    if (errs.includes("itemType")) parts.push("pick an item type");
+    if (errs.includes("description")) parts.push("type a description");
+    const noQty = errs.includes("qty>0");
+    const noPrice = errs.includes("unitPrice>0");
+    if (noQty || noPrice) {
+      if (r.itemTypeId && stockPricing[r.itemTypeId]?.canPrice)
+        parts.push("enter the Line Total (Qty and Unit Price are worked out from stock)");
+      else if (noQty && noPrice) parts.push("enter Qty and Unit Price");
+      else parts.push(noQty ? "enter Qty" : "enter Unit Price");
+    }
+    if (errs.includes("qty exceeds stock on hand")) parts.push("it asks for more than is on hand");
+    if (errs.includes("MRP>0")) parts.push("enter the MRP");
+    if (errs.includes("sroSchedule")) parts.push("enter the SRO Schedule");
+    if (errs.includes("sroItemNo")) parts.push("enter the SRO Item No");
+    return parts.join(", ");
+  };
+  const firstIncompleteRow = rows.findIndex((r) => rowErrors(r).length > 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1779,7 +1867,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null) }}
                                       value={r.quantity}
                                       data-row-qty={r.localId}
                                       onChange={(e) => updateRow(r.localId, { quantity: e.target.value, lineTotal: "" })}
@@ -1828,8 +1916,14 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                   <td style={styles.unifiedTd}>
                                     <input
                                       type="number" min={0} step="any"
-                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem" }}
-                                      value={r.unitPrice}
+                                      style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.8rem", ...(derivedFromAmount ? styles.derivedInput : null) }}
+                                      // A rate worked out from the amount carries 12 decimals so the
+                                      // line multiplies back to the exact figure typed; showing all of
+                                      // them read as "206.20879" cut off mid-number. Read-only then, so
+                                      // the display can round without touching what is saved.
+                                      value={derivedFromAmount && r.unitPrice !== ""
+                                        ? String(Math.round(Number(r.unitPrice) * 10000) / 10000)
+                                        : r.unitPrice}
                                       onChange={(e) => updateRow(r.localId, { unitPrice: e.target.value, lineTotal: "" })}
                                       placeholder="0.00"
                                       readOnly={derivedFromAmount}
@@ -1982,7 +2076,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                         value={r.sroScheduleNo}
                                         onChange={(e) => updateRow(r.localId, { sroScheduleNo: e.target.value })}
-                                        placeholder='e.g. "SRO 297(I)/2023"'
+                                        // FBR's own spelling, which is NOT the SRO's legal name
+                                        // ("297(I)/2023-Table-I", no "SRO" prefix) -- a legal-name
+                                        // example here taught operators a value FBR refuses [0077].
+                                        placeholder={chosenScenario?.defaultSroScheduleNo || "FBR schedule"}
+                                        title="FBR's schedule string for this scenario. Filled in for you; change it only if FBR gave these goods a different one."
                                       />
                                     </td>
                                   )}
@@ -1993,7 +2091,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         style={{ ...styles.input, padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
                                         value={r.sroItemSerialNo}
                                         onChange={(e) => updateRow(r.localId, { sroItemSerialNo: e.target.value })}
-                                        placeholder="serial #"
+                                        placeholder={chosenScenario?.defaultSroItemSerialNo || "serial"}
+                                        title="The item's serial in that schedule. Filled with FBR's catalog default: confirm it for these goods."
                                       />
                                     </td>
                                   )}
@@ -2021,7 +2120,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         ) : (
                           <> <b>Description, UOM, HS Code, Sale Type</b> all auto-fill from the picked Item Type</>
                         )}
-                        {showMRP && " · enter the per-unit MRP — the MRP × Qty total drives 3rd Schedule tax (backed out of MRP)"}
+                        {showMRP && " · enter the per-unit MRP — FBR charges 3rd Schedule tax on the MRP × Qty total"}
                         {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
                       </p>
 
@@ -2095,9 +2194,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 Enter a bill number that isn&apos;t already in use, or switch back to Auto.
               </span>
+            ) : rateBlocked ? (
+              <TaxRateBlockHint suggestion={rateSuggestion} splitNeeded={rateSplitNeeded} />
             ) : !allRowsValid && rows.length > 0 && chosenScenario && selectedClientId ? (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
-                Some required fields are missing.
+                {firstIncompleteRow >= 0 && rowProblem(rows[firstIncompleteRow])
+                  ? `Line ${firstIncompleteRow + 1}: ${rowProblem(rows[firstIncompleteRow])}.`
+                  : "Some required fields are missing."}
               </span>
             ) : null}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
@@ -2105,9 +2208,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               type="submit"
               style={{
                 ...formStyles.button, ...formStyles.submit,
-                opacity: saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk ? 0.6 : 1,
+                opacity: saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk || rateBlocked ? 0.6 : 1,
+                cursor: rateBlocked ? "not-allowed" : undefined,
               }}
-              disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk}
+              disabled={saving || !(chosenScenario || !fbrEnabled) || !selectedClientId || !allRowsValid || !billNumberOk || rateBlocked}
+              title={rateBlocked ? "These goods came in at a different sales tax rate. Switch to the matching scenario, or write a reason in the red box." : undefined}
             >
               {saving ? "Creating…" : `Create Bill${chosenScenario ? ` · ${chosenScenario.code}` : ""}`}
             </button>
@@ -2169,6 +2274,11 @@ const styles = {
   rateChipCheck: {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.3, color: "#b26a00",
     fontWeight: 600,
+  },
+  // Qty / Unit Price worked out from the amount: visibly not a box to type in.
+  derivedInput: {
+    backgroundColor: "#f1f3f6", color: colors.textSecondary, cursor: "not-allowed",
+    fontVariantNumeric: "tabular-nums",
   },
   stockChipWarn: {
     marginTop: 3, fontSize: "0.68rem", lineHeight: 1.35, color: "#8d6e00",

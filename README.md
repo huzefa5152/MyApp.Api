@@ -333,6 +333,17 @@ scenario"). SN024, SN005 and SN006 bills could fail the same way. The bill's own
 scenario now decides the sale type of every line, as the bill form already
 shows it.
 
+**The bill forms now say what they need before they save.** The save button on
+New Bill, New Bill (No Challan) and Edit Bill stays off while the goods came in
+at another rate and no reason is written, and the line beside it says what to
+do; before, the button looked live and the refusal appeared at the top of the
+form, out of sight. "Some required fields are missing" now names the line and
+the field. Choosing an SRO scenario from the scenario cards fills its schedule
+and serial the way the one-click switch did, with FBR's own spelling as the
+example. Changing a line's item re-prices it at that item's stock cost and
+replaces the name the previous pick filled in; the 3rd Schedule hint now says
+what FBR is sent (18% of MRP x Qty).
+
 ### 2026-09-18 — Choose the bill / invoice number, or let the sequence choose it
 
 Both bill-create screens — **New Bill** (from a delivery challan) and **New

@@ -18,6 +18,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
+import TaxRateBlockHint from "./TaxRateBlockHint";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import AccountSelect from "./AccountSelect";
@@ -704,6 +705,9 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
       onApply: () => setScenarioCode(sc.code),
     };
   }, [rateCheck.enforced.length, rateCheck.billRates, enrichedScenarios]);
+  // Saving is refused (here and on the server) until the scenario matches or a
+  // reason is written, so the button says so instead of looking live.
+  const rateBlocked = rateCheck.enforced.length > 0 && !rateReason.trim();
 
   // Prefill the bill PO from the selected challans (they carry the order's PO)
   // when the operator hasn't set one yet — covers the "Generate Bill from order"
@@ -1942,6 +1946,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 Enter a bill number that isn&apos;t already in use, or switch back to Auto.
               </span>
+            ) : rateBlocked ? (
+              <TaxRateBlockHint suggestion={rateSuggestion} splitNeeded={rateSplitNeeded} />
             ) : allItems.length > 0 && !allLinesComplete ? (
               <span style={{ fontSize: "0.8rem", color: colors.danger, marginRight: "auto" }}>
                 Every line needs an Item Type (or Non-Inventory item), a description, quantity &gt; 0 and unit price &gt; 0.
@@ -1950,8 +1956,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
             <button
               type="submit"
-              style={{ ...formStyles.button, ...formStyles.submit, opacity: saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete || !billNumberOk ? 0.6 : 1 }}
-              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete || !billNumberOk}
+              style={{
+                ...formStyles.button, ...formStyles.submit,
+                opacity: saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete || !billNumberOk || rateBlocked ? 0.6 : 1,
+                cursor: rateBlocked ? "not-allowed" : undefined,
+              }}
+              disabled={saving || !selectedClientId || selectedIds.length === 0 || !allLinesComplete || !billNumberOk || rateBlocked}
+              title={rateBlocked ? "These goods came in at a different sales tax rate. Switch to the matching scenario, or write a reason in the red box." : undefined}
             >
               {saving ? "Creating..." : "Create Bill"}
             </button>

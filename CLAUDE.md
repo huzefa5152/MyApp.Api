@@ -1075,6 +1075,11 @@ what refuses.
   the scenario they need — offered nothing to bill. `imported-tax-rates/items`
   lets the company's own unambiguously-25% goods back in, and an item already on
   the bill is never hidden from its own row's picker.
+- **A save that will be refused must LOOK refused.** Each bill form disables its
+  save button while an enforced finding has no reason, and `TaxRateBlockHint`
+  says why beside the button ("Show" scrolls to the red card). An enabled button
+  with the refusal scrolled away at the top of a long form read as "it let me
+  save". The server guard stays the control; this is only what the operator sees.
 - **One scenario and one rate per bill here**, so 18% and 25% goods need separate
   bills; the notice says so rather than offering a switch that moves the conflict.
 - **The SRO serial is not resolved.** The GD records the rate, not the serial,

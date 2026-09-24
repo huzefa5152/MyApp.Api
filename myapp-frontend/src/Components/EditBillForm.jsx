@@ -21,6 +21,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import { itemTypesForBook, BOOK_BILL, BOOK_INVOICE } from "../utils/itemTypeBooks";
 import { matchesScenarioSaleType, DEFAULT_SALE_TYPE } from "../utils/saleType";
 import TaxRateNotice from "./TaxRateNotice";
+import TaxRateBlockHint from "./TaxRateBlockHint";
 import useImportedTaxRates from "../hooks/useImportedTaxRates";
 import BulkItemTypeBar from "./BulkItemTypeBar";
 import ItemTypeForm from "./ItemTypeForm";
@@ -446,6 +447,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
       onApply: () => { setScenarioCode(sc.code); setGstRate(target); },
     };
   }, [rateCheck.enforced.length, rateCheck.billRates, scenarios]);
+  // Saving is refused (here and on the server) until the scenario matches or a
+  // reason is written, so the button says so instead of looking live. A reason
+  // the bill was already saved with is prefilled above, so an overridden bill
+  // stays saveable as it is.
+  const rateBlocked = !readOnly && rateCheck.enforced.length > 0 && !rateReason.trim();
 
   // Item types compatible with the chosen scenario. Empty selection ("auto")
   // shows ALL item types — same fallback as the create form.
@@ -2563,6 +2569,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
             )}
           </div>
           <div style={formStyles.footer}>
+            {rateBlocked && <TaxRateBlockHint suggestion={rateSuggestion} splitNeeded={rateSplitNeeded} />}
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>
               {readOnly ? "Close" : "Cancel"}
             </button>
@@ -2570,7 +2577,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
               // In itemType+qty(+price) mode, block save when totals
               // drift past the tolerance. Tooltip explains the gap.
               const blockedByTotals = showTotalsGuard && !totalsMatch;
-              const disabled = saving || blockedByTotals || !billNumberOk;
+              const disabled = saving || blockedByTotals || !billNumberOk || rateBlocked;
               return (
                 <button
                   type="submit"
@@ -2578,6 +2585,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   disabled={disabled}
                   title={!billNumberOk
                     ? "Enter a bill number that isn't already in use."
+                    : rateBlocked
+                      ? "These goods came in at a different sales tax rate. Switch to the matching scenario, or write a reason in the red box."
                     : blockedByTotals
                       ? `Bill total mismatch: Rs. ${Math.abs(subtotalDiff).toLocaleString("en-PK", { maximumFractionDigits: 2 })} off (tolerance Rs. ${NARROW_EDIT_TOLERANCE_PKR}). Adjust qty / unit price to balance.`
                       : ""}
