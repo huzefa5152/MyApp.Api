@@ -33,6 +33,10 @@ export default function BulkItemTypeBar({
   // Retained bulk selection (so the dropdown shows what was applied).
   const [selId, setSelId] = useState("");
   const [selNonInv, setSelNonInv] = useState("");
+  const uniformItemTypeId = items?.length && items.every((row) => row.itemTypeId && row.itemTypeId === items[0].itemTypeId)
+    ? items[0].itemTypeId : "";
+  const uniformNonInvId = items?.length && items.every((row) => row.nonInventoryItemId && row.nonInventoryItemId === items[0].nonInventoryItemId)
+    ? items[0].nonInventoryItemId : "";
 
   if (count < 2) return null;
 
@@ -81,9 +85,9 @@ export default function BulkItemTypeBar({
         <SearchableItemTypeSelect
           divisionId={divisionId}
           items={itemTypes}
-          value={selId}
+          value={items ? uniformItemTypeId : selId}
           nonInventoryItems={nonInventoryItems}
-          nonInventoryValue={selNonInv}
+          nonInventoryValue={items ? uniformNonInvId : selNonInv}
           onPickNonInventory={(n) => handlePickNonInv(n)}
           onChange={(newId, picked) => handlePick(newId, picked)}
           placeholder={mode === "all" ? "— pick to apply to all —" : "— pick to fill empty rows —"}

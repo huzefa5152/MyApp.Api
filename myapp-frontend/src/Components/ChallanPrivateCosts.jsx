@@ -25,12 +25,17 @@ export function PrivateCostFields({ item, suppliers, onChange }) {
 }
 
 export default function ChallanPrivateCosts({ items, onItemsChange, suppliers }) {
+  const supplierId = items.length && items.every((item) => item.supplierId && item.supplierId === items[0].supplierId)
+    ? items[0].supplierId : "";
   return <section style={{ marginTop: 14, padding: 14, border: "1px solid #dce7e4", borderRadius: 12, background: "#f7fbfa" }}>
     <strong style={{ color: "#00695c" }}>Private supplier and cost details</strong>
     <p style={{ margin: "4px 0 12px", color: "#64748b", fontSize: 12 }}>Used for purchase bills and profit reporting. These details do not print on customer documents.</p>
     {items.length > 1 && <div style={{ maxWidth: 340, marginBottom: 12, fontSize: 12, color: "#475569", fontWeight: 700 }}>
       Apply supplier to all {items.length} lines
-      <SearchableSelect items={suppliers} value="" onChange={(id) => { if (id) onItemsChange(items.map((row) => ({ ...row, supplierId: Number(id) }))); }} placeholder="Search supplier to apply" style={field} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}><SearchableSelect items={suppliers} value={supplierId} onChange={(id) => onItemsChange(items.map((row) => ({ ...row, supplierId: id ? Number(id) : null })))} placeholder="Search supplier to apply" style={field} /></div>
+        <button type="button" disabled={!items.some((item) => item.supplierId)} onClick={() => onItemsChange(items.map((row) => ({ ...row, supplierId: null })))}>Clear all</button>
+      </div>
     </div>}
     <div style={{ display: "grid", gap: 10 }}>
       {items.map((item, index) => <div key={item.id || index} style={{ display: "grid", gridTemplateColumns: "minmax(100px, 1fr) minmax(0, 3fr)", alignItems: "center", gap: 10, padding: 10, background: "white", borderRadius: 9, border: "1px solid #e2e8f0" }}>

@@ -382,7 +382,6 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               </div>
             </div>
 
-            <DocumentNotesEditor value={notes} onChange={setNotes} />
             {/* ── Items ── */}
             <LineItemsEditor
               items={items}
@@ -404,6 +403,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               </div>
             </div>}
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             {/* Saved record — uploads attach to the challan immediately. */}
             <AttachmentManager
               companyId={challan.companyId}

@@ -165,7 +165,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   });
   const applyOrderSupplier = (id) => setOrderPrivate((previous) => {
     const next = { ...previous };
-    deliverableItems.forEach((item) => { next[item.id] = { ...next[item.id], supplierId: id ? Number(id) : null }; });
+    deliveredItems.forEach((item) => { next[item.id] = { ...next[item.id], supplierId: id ? Number(id) : null }; });
     return next;
   });
 
@@ -176,6 +176,11 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     setOrderQtys((p) => ({ ...p, [itemId]: v }));
   };
   const deliverableItems = (order?.items || []).filter((i) => Number(i.remainingQuantity) > 0);
+  const deliveredItems = deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0);
+  const bulkOrderItemTypeId = deliverableItems.length && deliverableItems.every((item) => orderItemTypes[item.id]?.itemTypeId && orderItemTypes[item.id]?.itemTypeId === orderItemTypes[deliverableItems[0].id]?.itemTypeId)
+    ? orderItemTypes[deliverableItems[0].id].itemTypeId : "";
+  const bulkOrderSupplierId = deliveredItems.length && deliveredItems.every((item) => orderPrivate[item.id]?.supplierId && orderPrivate[item.id]?.supplierId === orderPrivate[deliveredItems[0].id]?.supplierId)
+    ? orderPrivate[deliveredItems[0].id].supplierId : "";
   const anyOrderQty = Object.values(orderQtys).some((q) => Number(q) > 0);
   const setAllRemaining = () => {
     const m = {};
@@ -433,7 +438,10 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
                 </div>
                 {deliverableItems.length > 1 && <div style={{ maxWidth: 340, marginBottom: 10, fontSize: 12, fontWeight: 700 }}>
                   Apply Item Type to all lines
-                  <SearchableItemTypeSelect divisionId={divisionId} items={itemTypes} value="" onChange={applyOrderItemType} placeholder="Search item type to apply" />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}><SearchableItemTypeSelect divisionId={divisionId} items={itemTypes} value={bulkOrderItemTypeId} onChange={applyOrderItemType} placeholder="Search item type to apply" /></div>
+                    <button type="button" disabled={!deliverableItems.some((item) => orderItemTypes[item.id]?.itemTypeId || orderItemTypes[item.id]?.nonInventoryItemId)} onClick={() => applyOrderItemType("")}>Clear all</button>
+                  </div>
                 </div>}
                 <div style={{ overflowX: "auto" }}>
                   <table style={styles.soTable}>
@@ -490,7 +498,6 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
               </div>
             )}
 
-            <DocumentNotesEditor value={notes} onChange={setNotes} />
             {!fromOrder && (
             <div style={{ marginTop: "0.25rem" }}>
               <LineItemsEditor
@@ -509,11 +516,14 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
             {fromOrder && <section style={{ padding: 14, border: "1px solid #dce7e4", borderRadius: 12, background: "#f7fbfa", marginTop: 12 }}>
               <strong style={{ color: "#00695c" }}>Private supplier and cost details</strong>
-              {deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0).length > 1 && <div style={{ maxWidth: 340, marginTop: 10, fontSize: 12, fontWeight: 700 }}>
+              {deliveredItems.length > 1 && <div style={{ maxWidth: 340, marginTop: 10, fontSize: 12, fontWeight: 700 }}>
                 Apply supplier to all delivered lines
-                <SearchableSelect items={suppliers} value="" onChange={applyOrderSupplier} placeholder="Search supplier to apply" />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}><SearchableSelect items={suppliers} value={bulkOrderSupplierId} onChange={applyOrderSupplier} placeholder="Search supplier to apply" /></div>
+                  <button type="button" disabled={!deliveredItems.some((item) => orderPrivate[item.id]?.supplierId)} onClick={() => applyOrderSupplier("")}>Clear all</button>
+                </div>
               </div>}
-              {deliverableItems.filter((item) => Number(orderQtys[item.id]) > 0).map((item) => <div key={item.id} style={{ padding: 10, marginTop: 10, background: "#fff", borderRadius: 8 }}>
+              {deliveredItems.map((item) => <div key={item.id} style={{ padding: 10, marginTop: 10, background: "#fff", borderRadius: 8 }}>
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>{item.description}</div>
                 <PrivateCostFields item={orderPrivate[item.id] || {}} suppliers={suppliers} onChange={(patch) => setOrderPrivate((prev) => ({ ...prev, [item.id]: { ...prev[item.id], ...patch } }))} />
               </div>)}
@@ -527,6 +537,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
               </div>
             </div>}
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             {/* entityId=null — files are staged client-side and flushed against
                 the new challan id after save (this form is create-only). */}
             <AttachmentManager
