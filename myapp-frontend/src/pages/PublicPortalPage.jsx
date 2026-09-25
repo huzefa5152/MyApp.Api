@@ -192,7 +192,7 @@ export default function PublicPortalPage() {
   });
 
   const handlePdf = (n) => withTemplate(n, "pdf", async (html, base) => {
-    await exportToPdf(html, `${base}.pdf`);
+    await exportToPdf(html, base);
   });
 
   const sum = header?.summary || {};
