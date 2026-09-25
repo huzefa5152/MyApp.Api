@@ -21,6 +21,8 @@ import "./Pagination.css";
  *   pageSize    current rows-per-page (omit with onPageSize to hide the selector)
  *   onPageSize(n)  rows-per-page change handler
  *   unit        noun after the count — "total" (default) / "rows"
+ *   sizeLabel   the page-size selector's label — "Rows:" (default); a screen
+ *               that pages something else says what, e.g. "Bills per page:"
  */
 export default function Pagination({
   page,
@@ -30,6 +32,7 @@ export default function Pagination({
   pageSize,
   onPageSize,
   unit = "total",
+  sizeLabel,
 }) {
   // Hide the rows-per-page selector when there's nothing to paginate — an empty
   // list shouldn't show a lone "Rows: 10" control (total === 0). `total`
@@ -40,7 +43,7 @@ export default function Pagination({
 
   return (
     <div className="pagination-bar">
-      {showSize && <PageSizeSelect value={pageSize} onChange={onPageSize} />}
+      {showSize && <PageSizeSelect value={pageSize} onChange={onPageSize} label={sizeLabel} />}
       {showNav && (
         <div className="pagination-nav">
           <button

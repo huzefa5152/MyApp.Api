@@ -28,6 +28,13 @@ export default function ReportFilterBar({
   onApply,
   loading = false,
   accountKind = null,   // "cash" | "bank" — narrows the account picker for the books
+  // Optional, for a report that is not an accounting report. Every default is
+  // what the accounting reports have always had.
+  periodOptions = PERIOD_OPTIONS,   // a report may offer fewer presets
+  clientOptions = null,             // [{ id, name, ntn? }] — used INSTEAD of fetching the client list
+  statusOptions = null,             // [{ id, name }] — replaces the built-in status choices
+  statusLabel = null,
+  searchPlaceholder = "Account, description, reference…",
 }) {
   const [draft, setDraft] = useState(value);
   const [open, setOpen] = useState(false);
@@ -40,6 +47,10 @@ export default function ReportFilterBar({
   const [suppliers, setSuppliers] = useState([]);
 
   const wants = useMemo(() => new Set(filters), [filters]);
+  // A report that supplies its own customer list never loads the client feed,
+  // which returns every customer's full record (address, phone, NTN, CNIC).
+  const ownClients = Array.isArray(clientOptions);
+  const customerList = ownClients ? clientOptions : clients;
 
   // Re-sync the draft when the caller changes the applied filters from outside
   // (a drill-down arriving from another report, or a reset).
@@ -59,7 +70,7 @@ export default function ReportFilterBar({
           jobs.push(getBankCashAccounts(companyId).then(({ data }) => alive && setBankAccounts(data || [])));
         if (need(FILTERS.division))
           jobs.push(getDivisionsByCompany(companyId).then(({ data }) => alive && setDivisions(data || [])));
-        if (need(FILTERS.payee) || need(FILTERS.client))
+        if (need(FILTERS.payee) || (need(FILTERS.client) && !ownClients))
           jobs.push(getClientsByCompany(companyId).then(({ data }) => alive && setClients(data || [])));
         if (need(FILTERS.payee) || need(FILTERS.supplier))
           jobs.push(getSuppliersByCompany(companyId).then(({ data }) => alive && setSuppliers(data || [])));
@@ -70,7 +81,7 @@ export default function ReportFilterBar({
       }
     })();
     return () => { alive = false; };
-  }, [companyId, wants]);
+  }, [companyId, wants, ownClients]);
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
@@ -83,6 +94,12 @@ export default function ReportFilterBar({
 
   const reset = () => {
     const cleared = { period: draft.period || "thisMonth", page: 1, pageSize: draft.pageSize };
+    // A custom period IS its dates: clearing the other filters must not strand
+    // it without them, or the report refuses to run.
+    if (cleared.period === "custom") {
+      cleared.from = draft.from;
+      cleared.to = draft.to;
+    }
     setDraft(cleared);
     onApply(cleared);
   };
@@ -126,8 +143,10 @@ export default function ReportFilterBar({
 
   // Chips describe the APPLIED filters, not the draft.
   const chips = useMemo(
-    () => describeChips(value, { accounts, bankAccounts, divisions, clients, suppliers, accountGroups }),
-    [value, accounts, bankAccounts, divisions, clients, suppliers, accountGroups]
+    () => describeChips(value, {
+      accounts, bankAccounts, divisions, clients: customerList, suppliers, accountGroups, statusOptions,
+    }),
+    [value, accounts, bankAccounts, divisions, customerList, suppliers, accountGroups, statusOptions]
   );
 
   const clearOne = (key) => {
@@ -149,7 +168,7 @@ export default function ReportFilterBar({
             value={draft.period || "thisMonth"}
             onChange={(e) => set({ period: e.target.value })}
           >
-            {PERIOD_OPTIONS.map((o) => (
+            {periodOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
@@ -185,7 +204,7 @@ export default function ReportFilterBar({
               <MdSearch size={18} color={colors.textSecondary} style={st.searchIcon} />
               <input
                 style={{ ...formStyles.input, ...st.control, paddingLeft: 36 }}
-                placeholder="Account, description, reference…"
+                placeholder={searchPlaceholder}
                 value={draft.search || ""}
                 onChange={(e) => set({ search: e.target.value })}
                 onKeyDown={(e) => e.key === "Enter" && apply()}
@@ -299,7 +318,7 @@ export default function ReportFilterBar({
             {wants.has(FILTERS.client) && (
               <Field label="Customer">
                 <SearchableSelect
-                  items={clients.map((c) => ({ id: c.id, name: c.name, ntn: c.ntn || "", phone: c.phone || "" }))}
+                  items={customerList.map((c) => ({ id: c.id, name: c.name, ntn: c.ntn || "", phone: c.phone || "" }))}
                   value={draft.clientId ?? ""}
                   onChange={(id) => set({ clientId: id === "" ? undefined : id })}
                   searchKeys={["name", "ntn", "phone"]}
@@ -338,12 +357,12 @@ export default function ReportFilterBar({
             )}
 
             {wants.has(FILTERS.status) && (
-              <Field label={isPartyReport ? "Transaction" : "Status"}>
+              <Field label={statusLabel || (isPartyReport ? "Transaction" : "Status")}>
                 <SelectPlain
                   value={draft.status}
                   onChange={(v) => set({ status: v })}
                   placeholder="Any"
-                  options={isPartyReport ? PARTY_STATUS_OPTIONS : STATUS_OPTIONS}
+                  options={statusOptions || (isPartyReport ? PARTY_STATUS_OPTIONS : STATUS_OPTIONS)}
                   numeric={false}
                 />
               </Field>
@@ -476,7 +495,8 @@ function describeChips(applied, lookups) {
   if (applied.tax)
     out.push({ key: "tax", text: `Tax: ${applied.tax === "taxed" ? "with tax" : applied.tax === "untaxed" ? "without tax" : `${applied.tax}%`}` });
   if (applied.status) {
-    const label = STATUS_OPTIONS.find((s) => s.id === applied.status)?.name
+    const label = (lookups.statusOptions || []).find((s) => s.id === applied.status)?.name
+      || STATUS_OPTIONS.find((s) => s.id === applied.status)?.name
       || PARTY_STATUS_OPTIONS.find((s) => s.id === applied.status)?.name
       || applied.status;
     out.push({ key: "status", text: label });

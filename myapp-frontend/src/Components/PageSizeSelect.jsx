@@ -26,10 +26,10 @@ const select = {
 // Row-count selector for paginated screens. Controlled: `value` is the
 // effective size to display (a stored choice, else the server-echoed default),
 // `onChange` receives the newly picked size as a number.
-export default function PageSizeSelect({ value, onChange, options = PAGE_SIZE_OPTIONS }) {
+export default function PageSizeSelect({ value, onChange, options = PAGE_SIZE_OPTIONS, label = "Rows:" }) {
   return (
     <label style={wrap}>
-      Rows:
+      {label}
       <select
         style={select}
         value={value ?? options[0]}

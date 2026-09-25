@@ -46,7 +46,6 @@ export default function ReportShell({
   categoryTitle,
 }) {
   const narrow = useIsNarrow(820);
-  const [busy, setBusy] = useState(null);
 
   const columns = report?.columns || [];
   const rows = report?.rows || [];
@@ -69,85 +68,16 @@ export default function ReportShell({
     ? Math.max(1, Math.ceil((report.totalCount || 0) / report.pageSize))
     : 1;
 
-  const doPrint = async () => {
-    setBusy("print");
-    try {
-      const w = window.open("", "_blank");
-      if (w) writeAndPrint(w, buildReportHtml(report));
-    } finally { setBusy(null); }
-  };
-
-  const doPdf = async () => {
-    setBusy("pdf");
-    try {
-      // Match the page the report's own stylesheet asks for. A statement is a
-      // narrow hierarchy and prints portrait; every other report is a grid and
-      // prints landscape -- which the PDF path used to ignore, so Sales Detail
-      // and its two dozen columns were squeezed onto a portrait sheet with the
-      // table running into the paper's edge (2026-09-04).
-      await exportToPdf(buildReportHtml(report), `${slug(report.title)}.pdf`, {
-        orientation: report.statement ? "portrait" : "landscape",
-        sideMarginMm: report.statement ? 12 : 10,
-      });
-    } finally { setBusy(null); }
-  };
-
   return (
     <div>
       {/* ── 1. Identity + actions ─────────────────────────────────────────── */}
-      <div style={st.header}>
-        <div style={st.headerBar} />
-        <div style={st.headerInner}>
-          <div style={{ minWidth: 0, flex: "1 1 260px" }}>
-            {onBack && (
-              <button type="button" style={st.backBtn} onClick={onBack}>
-                <MdArrowBack size={16} />
-                <span>All reports</span>
-              </button>
-            )}
-            {categoryTitle && (
-              <div style={st.crumb}>
-                <span>{categoryTitle}</span>
-                <MdChevronRight size={14} />
-              </div>
-            )}
-            <h2 style={st.title}>{report?.title || "Report"}</h2>
-            <div style={st.metaLine}>
-              {report?.companyName && <strong style={st.company}>{report.companyName}</strong>}
-              {report?.periodLabel && <Dot>{report.periodLabel}</Dot>}
-              {report?.generatedAt && <Dot>Generated {fmtDateTime(report.generatedAt)}</Dot>}
-            </div>
-            {(report?.filtersApplied || []).length > 0 && (
-              <div style={st.provenance}>
-                {report.filtersApplied.join("  ·  ")}
-              </div>
-            )}
-          </div>
-
-          <div style={st.actionRow}>
-            {canExport && (
-              <button
-                type="button"
-                style={st.actionBtn}
-                onClick={async () => { setBusy("excel"); try { await onExportExcel?.(); } finally { setBusy(null); } }}
-                disabled={!!busy}
-                title="Download as Excel"
-              >
-                <MdTableChart size={17} />
-                <span>{busy === "excel" ? "Preparing…" : "Excel"}</span>
-              </button>
-            )}
-            <button type="button" style={st.actionBtn} onClick={doPrint} disabled={!!busy} title="Print this report">
-              <MdPrint size={17} />
-              <span>Print</span>
-            </button>
-            <button type="button" style={st.actionBtn} onClick={doPdf} disabled={!!busy} title="Save as PDF">
-              <MdPictureAsPdf size={17} />
-              <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <ReportHeader
+        report={report}
+        onBack={onBack}
+        categoryTitle={categoryTitle}
+        canExport={canExport}
+        onExportExcel={onExportExcel}
+      />
 
       {/* Provenance and truncation warnings, stated rather than implied.
           The generic banner is a FALLBACK only. A report that knows why it is not
@@ -177,27 +107,7 @@ export default function ReportShell({
       )}
 
       {/* ── 2. The answer ─────────────────────────────────────────────────── */}
-      {report && Object.keys(totals).length > 0 && (
-        <div style={st.totalsStrip}>
-          {Object.entries(totals).map(([key, value]) => {
-            // The figure decides its own type size: an aged receivable can be
-            // "(226,670,962.34)" and used to spill straight out of the tile.
-            const shown = isCount(key) ? fmtInt(value) : fmtMoney(value);
-            return (
-              <div key={key} style={st.totalTile}>
-                <span style={st.totalLabel}>{totalLabels[key] || humanise(key)}</span>
-                <span style={{
-                  ...st.totalValue,
-                  ...(isCount(key) ? st.totalValueCount : {}),
-                  ...fitFigure(shown, isCount(key) ? 1.2 : 1.35),
-                }}>
-                  {shown}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {report && <TotalsStrip totals={totals} totalLabels={totalLabels} />}
 
       {/* A statement is a document you send, so it leads with the letterhead,
           the addressee and the amount due rather than a row of tiles. */}
@@ -325,6 +235,130 @@ export default function ReportShell({
       {(report?.groupSummaries || []).map((group) => (
         <GroupSummary key={group.title} group={group} onDrill={onDrill} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * A report's identity and actions: title, company · period · generated, the
+ * filters that shaped it, and Excel / Print / PDF. ReportShell renders it for
+ * every accounting report; a screen with its own grid (Invoice Sales Detail)
+ * renders it directly, so the two read as one product. `subtitle` is one
+ * optional muted line under the provenance.
+ */
+export function ReportHeader({ report, onBack, categoryTitle, canExport = false, onExportExcel, subtitle }) {
+  const [busy, setBusy] = useState(null);
+
+  const doPrint = async () => {
+    setBusy("print");
+    try {
+      const w = window.open("", "_blank");
+      if (w) writeAndPrint(w, buildReportHtml(report));
+    } finally { setBusy(null); }
+  };
+
+  const doPdf = async () => {
+    setBusy("pdf");
+    try {
+      // Match the page the report's own stylesheet asks for. A statement is a
+      // narrow hierarchy and prints portrait; every other report is a grid and
+      // prints landscape -- which the PDF path used to ignore, so Sales Detail
+      // and its two dozen columns were squeezed onto a portrait sheet with the
+      // table running into the paper's edge (2026-09-04). exportToPdf adds the
+      // ".pdf" itself; passing it here saved every report as "X.pdf.pdf".
+      await exportToPdf(buildReportHtml(report), slug(report.title), {
+        orientation: report.statement ? "portrait" : "landscape",
+        sideMarginMm: report.statement ? 12 : 10,
+      });
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div style={st.header}>
+      <div style={st.headerBar} />
+      <div style={st.headerInner}>
+        <div style={{ minWidth: 0, flex: "1 1 260px" }}>
+          {onBack && (
+            <button type="button" style={st.backBtn} onClick={onBack}>
+              <MdArrowBack size={16} />
+              <span>All reports</span>
+            </button>
+          )}
+          {categoryTitle && (
+            <div style={st.crumb}>
+              <span>{categoryTitle}</span>
+              <MdChevronRight size={14} />
+            </div>
+          )}
+          <h2 style={st.title}>{report?.title || "Report"}</h2>
+          <div style={st.metaLine}>
+            {report?.companyName && <strong style={st.company}>{report.companyName}</strong>}
+            {report?.periodLabel && <Dot>{report.periodLabel}</Dot>}
+            {report?.generatedAt && <Dot>Generated {fmtDateTime(report.generatedAt)}</Dot>}
+          </div>
+          {(report?.filtersApplied || []).length > 0 && (
+            <div style={st.provenance}>
+              {report.filtersApplied.join("  ·  ")}
+            </div>
+          )}
+          {subtitle && <div style={st.subtitle}>{subtitle}</div>}
+        </div>
+
+        <div style={st.actionRow}>
+          {canExport && (
+            <button
+              type="button"
+              style={st.actionBtn}
+              onClick={async () => { setBusy("excel"); try { await onExportExcel?.(); } finally { setBusy(null); } }}
+              disabled={!!busy}
+              title="Download as Excel"
+            >
+              <MdTableChart size={17} />
+              <span>{busy === "excel" ? "Preparing…" : "Excel"}</span>
+            </button>
+          )}
+          <button type="button" style={st.actionBtn} onClick={doPrint} disabled={!!busy} title="Print this report">
+            <MdPrint size={17} />
+            <span>Print</span>
+          </button>
+          <button type="button" style={st.actionBtn} onClick={doPdf} disabled={!!busy} title="Save as PDF">
+            <MdPictureAsPdf size={17} />
+            <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The answer first: one tile per total. `compact` is for a screen whose grid
+ * needs the height; `notes` puts a short line under a tile's figure.
+ */
+export function TotalsStrip({ totals = {}, totalLabels = {}, notes = {}, compact = false }) {
+  const entries = Object.entries(totals || {});
+  if (entries.length === 0) return null;
+  return (
+    <div style={compact ? st.totalsStripCompact : st.totalsStrip}>
+      {entries.map(([key, value]) => {
+        // The figure decides its own type size: an aged receivable can be
+        // "(226,670,962.34)" and used to spill straight out of the tile.
+        const shown = isCount(key) ? fmtInt(value) : fmtMoney(value);
+        const base = compact ? (isCount(key) ? 1.05 : 1.15) : (isCount(key) ? 1.2 : 1.35);
+        return (
+          <div key={key} style={compact ? st.totalTileCompact : st.totalTile}>
+            <span style={st.totalLabel}>{totalLabels[key] || humanise(key)}</span>
+            <span style={{
+              ...st.totalValue,
+              ...(isCount(key) ? st.totalValueCount : {}),
+              ...fitFigure(shown, base),
+            }}>
+              {shown}
+            </span>
+            {notes?.[key] && <span style={st.totalNote}>{notes[key]}</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -743,7 +777,7 @@ const slug = (s) => (s || "report").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/
  * and the totals — an emailed report has to explain itself. Both consumers
  * (writeAndPrint, exportToPdf) take a full document with a <style> block.
  */
-function buildReportHtml(report) {
+export function buildReportHtml(report) {
   if (!report) return "<html><body></body></html>";
   const cols = report.columns || [];
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
@@ -910,7 +944,8 @@ function buildReportHtml(report) {
   <div class="ttl">${esc(report.title)}</div>
   <div class="meta">${esc(report.periodLabel)}${
     (report.filtersApplied || []).length ? "  ·  " + esc(report.filtersApplied.join("  ·  ")) : ""
-  }<br/>${esc(report.ledgerSourced ? "Source: general ledger" : "Source: payment records (GL posting off)")}
+  }<br/>${esc(report.sourceLabel
+    || (report.ledgerSourced ? "Source: general ledger" : "Source: payment records (GL posting off)"))}
    ·  Generated ${esc(fmtDateTime(report.generatedAt))}</div>
   <div class="rule"></div>
   ${statement}
@@ -954,6 +989,7 @@ const st = {
   company: { color: colors.textPrimary, fontWeight: 700 },
   dot: { opacity: 0.5 },
   provenance: { marginTop: 5, fontSize: "0.78rem", color: colors.teal, fontWeight: 600, lineHeight: 1.4 },
+  subtitle: { marginTop: 4, fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.45, maxWidth: 820 },
 
   actionRow: { display: "flex", flexWrap: "wrap", gap: "0.45rem", marginLeft: "auto" },
   actionBtn: {
@@ -985,6 +1021,19 @@ const st = {
   },
   totalValue: { fontSize: "1.35rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums" },
   totalValueCount: { color: colors.textPrimary, fontSize: "1.2rem" },
+  // A denser strip for a screen whose own grid needs the height.
+  totalsStripCompact: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
+    gap: "0.6rem", marginBottom: "0.85rem",
+  },
+  totalTileCompact: {
+    display: "flex", flexDirection: "column", gap: 2, minWidth: 0,
+    padding: "0.55rem 0.8rem", borderRadius: 12,
+    background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
+    border: `1px solid ${colors.cardBorder}`,
+  },
+  totalNote: { fontSize: "0.7rem", fontWeight: 600, color: colors.textSecondary },
 
   // Statement lines: indentation carries the hierarchy, weight carries the level.
   stmtRow: { borderBottom: `1px solid ${colors.cardBorder}22` },
