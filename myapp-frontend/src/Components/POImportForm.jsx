@@ -13,6 +13,10 @@ import LookupAutocomplete from "./LookupAutocomplete";
 import QuantityInput from "./QuantityInput";
 import ParserFeedback from "./ParserFeedback";
 import useScrollToError from "../hooks/useScrollToError";
+import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
+import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
+import { useConfirm } from "./ConfirmDialog";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -87,6 +91,10 @@ export function extractPoMeta(text) {
 
 export default function POImportForm({ companyId, target = "challan", onClose, onSaved }) {
   const cfg = TARGET_CONFIG[target] || TARGET_CONFIG.challan;
+  const suppliers = useChallanSuppliers(target === "challan" ? companyId : null);
+  const confirm = useConfirm();
+  const { has } = usePermissions();
+  const [savedChallanId, setSavedChallanId] = useState(null);
   const [step, setStep] = useState(1); // 1=import, 2=preview
   const [importMode, setImportMode] = useState("pdf"); // "pdf" or "text"
   const [pastedText, setPastedText] = useState("");
@@ -299,7 +307,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
     items.every((i) => i.description.trim() && i.quantity > 0);
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || savedChallanId) return;
     setError("");
     setSaving(true);
 
@@ -352,6 +360,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
             quantity: qty(i),
             unit: i.unit.trim() || "Pcs",
             itemTypeId: null,
+            supplierId: i.supplierId || null,
+            actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
           })),
         });
       } else {
@@ -392,6 +402,20 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
         } catch { /* feedback is best-effort — the document is already created */ }
       }
 
+      if (target === "challan" && created?.data?.id && has("purchasebills.manage.create") && items.length &&
+          items.every((line) => line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) {
+        const id = created.data.id;
+        const count = new Set(items.map((line) => Number(line.supplierId))).size;
+        const yes = await confirm({ title: "Create purchase bills?", message: `Create ${count} unpaid purchase bill${count === 1 ? "" : "s"} from this challan, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
+        if (yes) {
+          try { await createPurchaseBillsFromChallan(id); }
+          catch (err) {
+            setSavedChallanId(id);
+            setError(`Challan saved. ${err.response?.data?.error || "Could not create purchase bills."}`);
+            return;
+          }
+        }
+      }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || `Failed to create ${cfg.doc.toLowerCase()}.`);
@@ -694,6 +718,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                 )}
               </div>
 
+              {target === "challan" && items.length > 0 && <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />}
+
               {/* Raw text toggle */}
               {rawText && (
                 <details style={{ marginTop: "1rem" }}>
@@ -729,6 +755,13 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
 
           <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
 
+          {savedChallanId && <button type="button" style={{ ...formStyles.button, ...formStyles.submit }} disabled={saving} onClick={async () => {
+            setSaving(true);
+            try { await createPurchaseBillsFromChallan(savedChallanId); onSaved(); }
+            catch (err) { setError(`Challan saved. ${err.response?.data?.error || "Could not create purchase bills."}`); }
+            finally { setSaving(false); }
+          }}>Retry purchase bills</button>}
+
           {step === 1 && (
             <button
               type="button"
@@ -744,7 +777,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
             <button
               type="button"
               style={{ ...formStyles.button, ...formStyles.submit, opacity: !canSubmit || saving ? 0.6 : 1 }}
-              disabled={!canSubmit || saving}
+              disabled={!canSubmit || saving || !!savedChallanId}
               onClick={handleSubmit}
             >
               {saving ? "Creating..." : cfg.verb}

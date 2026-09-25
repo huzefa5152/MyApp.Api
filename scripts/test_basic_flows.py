@@ -305,6 +305,123 @@ def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> 
     return bill
 
 
+# ── Suite: private supplier / actual cost on challans → purchase bills ─
+def test_private_challan_costs(base: str, token: str, company: dict, client: dict) -> None:
+    suite = "Challan private costs and supplier purchase bills"
+    print(f"\n=== {suite} ===")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z")
+    suppliers = []
+    for suffix in ("A", "B"):
+        status, supplier = http("POST", "/api/suppliers", base, token=token, body={
+            "companyId": company["id"], "name": f"Test Source Supplier {suffix} {company['id']}",
+        })
+        check(suite, f"supplier {suffix} created", status in (200, 201), f"{status} {supplier}")
+        if status not in (200, 201):
+            return
+        suppliers.append(supplier)
+
+    status, order = http("POST", f"/api/salesorders/company/{company['id']}", base, token=token, body={
+        "clientId": client["id"], "orderDate": today,
+        "items": [
+            {"description": "Costed A", "quantity": 2, "unit": "Pcs", "unitPrice": 120},
+            {"description": "Costed B", "quantity": 3, "unit": "Pcs", "unitPrice": 200},
+        ],
+    })
+    check(suite, "priced order created", status in (200, 201), f"{status} {order}")
+    if status not in (200, 201):
+        return
+    status, challan = http("POST", f"/api/salesorders/{order['id']}/create-challan", base, token=token, body={
+        "deliveryDate": today,
+        "notes": "From order",
+        "lines": [
+            {"salesOrderItemId": order["items"][0]["id"], "quantity": 2,
+             "supplierId": suppliers[0]["id"], "actualUnitCost": 80},
+            {"salesOrderItemId": order["items"][1]["id"], "quantity": 3,
+             "supplierId": suppliers[1]["id"], "actualUnitCost": 150},
+        ],
+    })
+    saved_costs = {i.get("description"): i.get("actualUnitCost") for i in challan.get("items", [])} if status in (200, 201) else {}
+    check(suite, "order challan retains private costs", status in (200, 201) and
+          saved_costs == {"Costed A": 80, "Costed B": 150}, f"{status} {challan}")
+    if status not in (200, 201):
+        return
+    check(suite, "order challan keeps its notes", challan.get("notes") == "From order", f"got {challan.get('notes')!r}")
+    status, loaded = http("GET", f"/api/deliverychallans/{challan['id']}", base, token=token)
+    by_description = {i["description"]: i for i in loaded.get("items", [])} if status == 200 else {}
+    check(suite, "unit and total profit use selling minus actual cost", status == 200 and
+          by_description.get("Costed A", {}).get("unitProfit") == 40 and
+          by_description.get("Costed B", {}).get("totalProfit") == 150, f"{status} {loaded}")
+    check(suite, "supplier name resolved on read",
+          by_description.get("Costed A", {}).get("supplierName") == suppliers[0]["name"], f"{by_description.get('Costed A')}")
+    status, printed = http("GET", f"/api/deliverychallans/{challan['id']}/print", base, token=token)
+    print_text = json.dumps(printed or {}).lower()
+    check(suite, "print data excludes private supplier/cost/profit", status == 200 and
+          all(field not in print_text for field in ("actualunitcost", "supplierid", "suppliername", "unitprofit", "totalprofit")))
+
+    # A supplier from another tenant can never be attached to a line.
+    status, other = http("POST", "/api/companies", base, token=token, body={
+        "name": f"_test_basic_flows other {company['id']}", "fullAddress": "Elsewhere", "ntn": "8888888",
+        "fbrSellerRegistrationNo": "8888888",
+    })
+    if status in (200, 201):
+        s2, foreign = http("POST", "/api/suppliers", base, token=token, body={"companyId": other["id"], "name": "Foreign Supplier"})
+        if s2 in (200, 201):
+            s3, _ = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={
+                "clientId": client["id"], "poNumber": "X", "deliveryDate": today,
+                "items": [{"description": "Foreign", "quantity": 1, "unit": "Pcs",
+                           "supplierId": foreign["id"], "actualUnitCost": 5}],
+            })
+            check(suite, "cross-tenant supplier refused", s3 == 400, f"got {s3}")
+            http("DELETE", f"/api/suppliers/{foreign['id']}", base, token=token)
+        http("DELETE", f"/api/companies/{other['id']}", base, token=token)
+
+    status, bills = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token)
+    check(suite, "one unpaid purchase bill per supplier", status == 200 and len(bills) == 2 and
+          {b["supplierId"] for b in bills} == {s["id"] for s in suppliers} and
+          sorted(b["grandTotal"] for b in bills) == [160, 450] and
+          all(b.get("sourceDeliveryChallanId") == challan["id"] for b in bills), f"{status} {bills}")
+    if status != 200:
+        return
+    retry_status, retry = http("POST", f"/api/purchasebills/from-challan/{challan['id']}", base, token=token)
+    check(suite, "repeat confirmation creates no duplicate", retry_status == 200 and
+          {b["id"] for b in retry} == {b["id"] for b in bills}, f"{retry_status} {retry}")
+    _, reloaded = http("GET", f"/api/deliverychallans/{challan['id']}", base, token=token)
+    check(suite, "challan reports its purchase bills", reloaded.get("hasAutoPurchaseBills") is True)
+    changed = dict(reloaded)
+    changed["items"] = [dict(i) for i in reloaded["items"]]
+    changed["items"][0]["actualUnitCost"] = 81
+    edit_status, _ = http("PUT", f"/api/deliverychallans/{challan['id']}", base, token=token, body=changed)
+    check(suite, "cost cannot drift after purchase bill creation", edit_status == 400, f"got {edit_status}")
+    notes_only = dict(reloaded)
+    notes_only["notes"] = "Notes can still change"
+    edit_status, edited = http("PUT", f"/api/deliverychallans/{challan['id']}", base, token=token, body=notes_only)
+    check(suite, "notes stay editable while lines are locked", edit_status == 200 and
+          (edited or {}).get("notes") == "Notes can still change", f"got {edit_status}")
+    cancel_status, _ = http("PUT", f"/api/deliverychallans/{challan['id']}/cancel", base, token=token)
+    check(suite, "challan with purchase bills cannot be cancelled", cancel_status == 400, f"got {cancel_status}")
+
+    # Incomplete lines are refused, never half-billed.
+    status, partial = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={
+        "clientId": client["id"], "poNumber": "PARTIAL", "deliveryDate": today,
+        "items": [{"description": "Has cost", "quantity": 1, "unit": "Pcs", "supplierId": suppliers[0]["id"], "actualUnitCost": 10},
+                  {"description": "No cost", "quantity": 1, "unit": "Pcs"}],
+    })
+    if status in (200, 201):
+        s, _ = http("POST", f"/api/purchasebills/from-challan/{partial['id']}", base, token=token)
+        check(suite, "incomplete challan refused", s == 400, f"got {s}")
+
+    # Clean up newest-first so the company teardown is not blocked: the
+    # purchase bills, then the challans (only the latest is deletable), then
+    # the order the challan delivered.
+    for b in bills:
+        http("DELETE", f"/api/purchasebills/{b['id']}", base, token=token)
+    if status in (200, 201):
+        http("DELETE", f"/api/deliverychallans/{partial['id']}", base, token=token)
+    del_status, _ = http("DELETE", f"/api/deliverychallans/{challan['id']}", base, token=token)
+    check(suite, "challan deletable once its purchase bills are gone", del_status in (200, 204), f"got {del_status}")
+    http("DELETE", f"/api/salesorders/{order['id']}", base, token=token)
+
+
 # ── Suite 4: Invoice update ────────────────────────────────────────
 def test_invoice_update(base: str, token: str, bill: dict | None) -> None:
     suite = "4. Invoice update"
@@ -619,6 +736,7 @@ def main() -> int:
         second_classified = pick_second_classified(args.base, token, classified, company["id"])
         test_billform_itemtype_override(args.base, token, company, client,
                                         classified, second_classified)
+        test_private_challan_costs(args.base, token, company, client)
     finally:
         teardown(args.base, token, company, args.keep)
 

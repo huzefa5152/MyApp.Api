@@ -16,6 +16,8 @@ namespace MyApp.Api.Models
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int SupplierId { get; set; }
+        /// <summary>Source challan for an operator-approved automatic purchase bill.</summary>
+        public int? SourceDeliveryChallanId { get; set; }
 
         /// <summary>
         /// The bill number the supplier put on their printed invoice. Free

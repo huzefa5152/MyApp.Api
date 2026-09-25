@@ -24,6 +24,11 @@
         public decimal Quantity { get; set; }
         public string Unit { get; set; } = "";
 
+        // Internal procurement details. Never map these to a print DTO.
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
+        public Supplier? Supplier { get; set; }
+
         // Navigation
         public ItemType? ItemType { get; set; }
         public SalesOrderItem? SalesOrderItem { get; set; }

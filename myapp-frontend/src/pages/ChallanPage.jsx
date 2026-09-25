@@ -215,7 +215,8 @@ export default function ChallanPage() {
       // when fully delivered. Only ordered lines are delivered this way.
       const lines = (payload.items || [])
         .filter((i) => i.salesOrderItemId && Number(i.quantity) > 0)
-        .map((i) => ({ salesOrderItemId: i.salesOrderItemId, quantity: i.quantity }));
+        .map((i) => ({ salesOrderItemId: i.salesOrderItemId, quantity: i.quantity,
+          supplierId: i.supplierId ?? null, actualUnitCost: i.actualUnitCost ?? null }));
       const { data } = await createChallanFromOrder(payload.salesOrderId, {
         deliveryDate: payload.deliveryDate,
         site: payload.site,

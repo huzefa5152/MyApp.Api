@@ -58,6 +58,7 @@
         /// ("Duplicate of #1042") without the frontend having to re-fetch.
         /// </summary>
         public int? DuplicatedFromChallanNumber { get; set; }
+        public bool HasAutoPurchaseBills { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

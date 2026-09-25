@@ -555,7 +555,9 @@ namespace MyApp.Api.Services.Implementations
                     Description = soItem.Description,
                     Quantity = qty,
                     Unit = soItem.Unit,
-                    SalesOrderItemId = soItem.Id
+                    SalesOrderItemId = soItem.Id,
+                    ActualUnitCost = reqLine?.ActualUnitCost,
+                    SupplierId = reqLine?.SupplierId
                 });
             }
 

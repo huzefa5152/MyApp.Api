@@ -1003,6 +1003,12 @@ namespace MyApp.Api.Data
                 .IsUnique();
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
+            // One automatic purchase bill per (source challan, supplier) — makes a
+            // repeated confirmation after a lost response safe.
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.SourceDeliveryChallanId, pb.SupplierId })
+                .IsUnique()
+                .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierIRN);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Subtotal).HasPrecision(18, 2);
@@ -1239,6 +1245,14 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+            // Private procurement on a challan line: an optional supplier and the
+            // actual unit cost, used only to raise purchase bills on request.
+            // Same precision as PurchaseItem.UnitPrice, the column it feeds.
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.ActualUnitCost).HasPrecision(18, 2);
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.Supplier).WithMany()
+                .HasForeignKey(di => di.SupplierId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SupplierId);
 
             // ── Chart of Accounts ──────────────────────────────────────────────
             // Group → Company and Group → parent Group, both Restrict: a chart

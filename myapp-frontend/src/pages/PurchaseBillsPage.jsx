@@ -276,6 +276,7 @@ export default function PurchaseBillsPage() {
                           <AttachmentBadge count={attachCounts[b.id]} onClick={() => setAttachTarget(b)} />
                         </div>
                         <p style={cardStyles.text}><strong>Supplier:</strong> {b.supplierName}</p>
+                        {b.sourceDeliveryChallanId && <p style={cardStyles.text}><strong>Source:</strong> Delivery challan</p>}
                         <p style={cardStyles.text}><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
                         <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {b.grandTotal?.toLocaleString()}</p>
                         {b.supplierIRN && (

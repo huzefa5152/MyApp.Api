@@ -10,6 +10,10 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
+import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
+import { useConfirm } from "./ConfirmDialog";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   textPrimary: "#1a2332",
@@ -75,6 +79,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
       description: i.description,
       quantity: i.quantity,
       unit: i.unit,
+      supplierId: i.supplierId ?? null,
+      actualUnitCost: i.actualUnitCost ?? null,
     }))
   );
 
@@ -82,6 +88,12 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   const [clients, setClients] = useState([]);
   // Units list — gates each row's quantity input on the picked UOM.
   const [units, setUnits] = useState([]);
+  const suppliers = useChallanSuppliers(challan.companyId);
+  const confirm = useConfirm();
+  const { has } = usePermissions();
+  // Challan saved but the follow-up purchase bills failed — the form stays
+  // open with a retry instead of re-saving the challan.
+  const [savedAwaitingPurchase, setSavedAwaitingPurchase] = useState(false);
 
   // ── UI state ──
   const [error, setError] = useState("");
@@ -157,6 +169,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Submit ──
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (savedAwaitingPurchase) return;
     setError("");
 
     if (!clientId) { setError("Client is required."); return; }
@@ -189,9 +202,26 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
           // validation rejects fractions for integer-only UOMs.
           quantity: parseFloat(i.quantity) || 1,
           unit: (i.unit || "").trim(),
+          supplierId: i.supplierId || null,
+          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
           itemTypeName: "",
         })),
       });
+      // Every line carries a supplier + actual cost → offer the purchase
+      // bills (one per supplier). Never automatic: the operator confirms.
+      if (!challan.hasAutoPurchaseBills && has("purchasebills.manage.create") && validItems.every((line) =>
+        line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) {
+        const count = new Set(validItems.map((line) => Number(line.supplierId))).size;
+        const yes = await confirm({ title: "Create purchase bills?", message: `Create ${count} unpaid purchase bill${count === 1 ? "" : "s"} from this challan, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
+        if (yes) {
+          try { await createPurchaseBillsFromChallan(challan.id); }
+          catch (err) {
+            setSavedAwaitingPurchase(true);
+            setError(`Challan saved. ${err.response?.data?.error || "Could not create purchase bills."}`);
+            return;
+          }
+        }
+      }
       onSaved();
     } catch (err) {
       setError(err.response?.data?.error || "Failed to update challan.");
@@ -355,6 +385,14 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               units={units}
               itemsLabel="Items *"
             />
+            <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
+            {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
+              Your challan was saved. Purchase bills still need to be created.
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <button type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
+                <button type="button" style={{ minHeight: 44 }} onClick={onSaved}>Close without purchase bills</button>
+              </div>
+            </div>}
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 
