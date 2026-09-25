@@ -46,6 +46,7 @@ import {
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { useCompany } from "../contexts/CompanyContext";
+import { lineSources } from "../utils/documentLines";
 import { Can, usePermissions } from "../contexts/PermissionsContext";
 import NoCompanyConfigured from "../Components/NoCompanyConfigured";
 import { getAvatarUrl } from "../utils/avatarUrl";
@@ -198,6 +199,9 @@ export default function DashboardLayout() {
     "reports.taxsheet.view",
     "reports.outstanding.view",
   ];
+  // Document Lines is reachable by anyone who can list at least one of the
+  // documents it reads — each source keeps its own list permission.
+  const lineViewKeys = [...new Set(Object.values(lineSources).map((source) => source.permission))];
   const adminKeys = [
     "users.manage.view",
     "rbac.roles.view",
@@ -208,7 +212,7 @@ export default function DashboardLayout() {
   const canSeeSales         = hasAny(salesKeys);
   const canSeePurchases     = hasAny(purchasesKeys);
   const canSeeAccounting    = hasAny(accountingKeys);
-  const canSeeReports       = hasAny(reportsKeys);
+  const canSeeReports       = hasAny(reportsKeys) || hasAny(lineViewKeys);
   const canSeeAdmin         = hasAny(adminKeys) || !!user?.isSeedAdmin;
 
   // ── No Company Configured gate (2026-09-11) ──
@@ -238,7 +242,7 @@ export default function DashboardLayout() {
   const salesCount         = salesKeys.filter(has).length;
   const purchasesCount     = purchasesKeys.filter(has).length;
   const accountingCount    = accountingKeys.filter(has).length;
-  const reportsCount       = reportsKeys.filter(has).length;
+  const reportsCount       = reportsKeys.filter(has).length + (hasAny(lineViewKeys) ? 1 : 0);
   const configurationCount = configKeys.filter(has).length;
   const administrationCount = adminKeys.filter(has).length;
 
@@ -509,6 +513,11 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "reports"}
               isChildActive={activeSection === "reports"}
             >
+              {hasAny(lineViewKeys) &&
+                <NavLink to="/reports/document-lines" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAssessment className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Document Lines</span>
+                </NavLink>}
               <Can permission="reports.sales.view">
                 <NavLink to="/reports/sales" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdAssessment className="dl-subitem__icon" aria-hidden="true" />

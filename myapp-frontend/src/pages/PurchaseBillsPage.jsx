@@ -1,3 +1,4 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdShoppingCart, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdReceipt, MdClose, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getPurchaseBillsByCompanyPaged, deletePurchaseBill, getPurchaseBillPrintData } from "../api/purchaseBillApi";
@@ -154,6 +155,7 @@ export default function PurchaseBillsPage() {
   };
 
   return (
+    <DocumentLinesNavigation type="purchase">
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -443,6 +445,7 @@ export default function PurchaseBillsPage() {
         </div>
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

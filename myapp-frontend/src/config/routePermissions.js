@@ -67,6 +67,10 @@ export const ROUTE_PERMISSIONS = {
 
   // Reports
   "/reports/sales": "reports.sales.view",
+  // Document Lines reads several document lists; the page offers only the
+  // sources whose own list permission the operator holds (see lineSources),
+  // and every list endpoint it calls is permission-gated on the server.
+  "/reports/document-lines": PUBLIC_TO_SIGNED_IN,
   "/reports/tax-sheet": "reports.taxsheet.view",
   "/reports/outstanding": "reports.outstanding.view",
 

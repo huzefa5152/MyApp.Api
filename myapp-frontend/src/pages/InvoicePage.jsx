@@ -1,3 +1,4 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
@@ -875,6 +876,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   const hasFilters = search || clientFilter || fbrFilter || handoverFilter || dateFrom || dateTo;
 
   return (
+    <DocumentLinesNavigation type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"}>
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -1659,6 +1661,7 @@ export default function InvoicePage({ mode = "invoices" }) {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

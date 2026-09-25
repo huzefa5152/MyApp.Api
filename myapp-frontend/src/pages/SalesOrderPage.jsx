@@ -1,3 +1,4 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { richTextToPlain } from "../utils/richText";
 import { useNavigate } from "react-router-dom";
@@ -181,6 +182,7 @@ export default function SalesOrderPage() {
   const viewChallans = (o) => navigate(`/challans?salesOrderId=${o.id}`);
 
   return (
+    <DocumentLinesNavigation type="order">
     <div>
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -357,6 +359,7 @@ export default function SalesOrderPage() {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

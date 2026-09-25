@@ -1,3 +1,4 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
@@ -128,6 +129,7 @@ export default function GoodsReceiptsPage() {
   };
 
   return (
+    <DocumentLinesNavigation type="receipt">
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -269,6 +271,7 @@ export default function GoodsReceiptsPage() {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 
