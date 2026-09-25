@@ -290,6 +290,41 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-25 — Multi-line descriptions, document notes, supplier costs on challans, Document Lines
+
+**Item descriptions are multi-line on every line editor**, including Edit
+Challan, which used to offer a single-line box. Enter adds a line break
+(Ctrl+Enter still moves to the next line item); `<b>`, `<i>` and `<u>` work.
+Descriptions keep their line breaks on screen, in the older print layouts, and
+in saved templates that still print a plain `{{this.description}}`.
+
+**Documents carry optional formatted notes.** Challans, bills, sales tax
+invoices, purchase bills, goods receipts, receipts and payments get a Notes box
+with bold / italic / underline and a preview. The default challan, bill and tax
+invoice print them; every template can add them with `{{{richText notes}}}`.
+
+**A challan can record where each line came from and what it really cost.** The
+Private supplier and cost panel on New Challan (typed, or delivered from a Sales
+Order), Edit Challan and PO Import takes an optional supplier and actual unit
+cost per line. It is internal only and never prints. When every line has both,
+saving offers to create the unpaid purchase bills, one per supplier; nothing is
+created without that confirmation, and a repeated confirmation returns the same
+bills rather than duplicating them. The bills post to the ledger like a
+hand-made purchase bill. While those bills exist the challan's lines are
+locked. Purchase bills raised this way are marked "From delivery challan".
+
+**Document Lines** (Reports) lists the line items of quotes, orders, challans,
+bills, tax invoices, credit / debit notes, purchase bills or goods receipts for
+a week, a month or a custom range, and copies them for Excel or downloads an
+`.xlsx`. Challan lines can show the supplier, actual cost and profit columns.
+Each list screen links to it at the top and bottom.
+
+**Fixed:** the default bill printed a literal `\u2014` instead of a dash when a
+bill had no PO number.
+
+Migrations `AddDocumentNotes` and `AddChallanPrivateProcurement` add nullable
+columns and indexes only.
+
 ### 2026-09-22 — A company saves with a name, and New Company works again
 
 **Fixed a break we shipped.** Retiring the tenant-isolation switch left the
