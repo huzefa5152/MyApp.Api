@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
 
-export default function LookupAutocomplete({ companyId, label, endpoint, value, onChange, inputClassName, inputStyle, inputRef, autoFocus, onEnterKey }) {
+export default function LookupAutocomplete({ companyId, label, endpoint, value, onChange, inputClassName, inputStyle, inputRef, autoFocus, onEnterKey, multiline = false }) {
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
     const [inputValue, setInputValue] = useState(value || "");
@@ -120,6 +120,16 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
         // user isn't actively picking a suggestion), fire onEnterKey and stop
         // the default form submit. Existing callers (no onEnterKey) are
         // unaffected — the original dropdown-nav behaviour below still runs.
+        // Multi-line descriptions: a plain Enter inserts a line break. Ctrl/Cmd+
+        // Enter still commits the line for callers that want quick-add.
+        if (multiline && e.key === "Enter") {
+            if ((e.ctrlKey || e.metaKey) && onEnterKey) {
+                e.preventDefault();
+                onEnterKey();
+            }
+            return;
+        }
+
         if (e.key === "Enter" && onEnterKey) {
             const pickingSuggestion = showDropdown && suggestions.length > 0 && highlightIndex >= 0;
             if (!pickingSuggestion) {
@@ -153,20 +163,37 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
 
     return (
         <div className="position-relative" ref={wrapperRef}>
-            <input
-                ref={inputRef}
-                autoFocus={autoFocus}
-                type="text"
-                className={inputClassName !== undefined ? inputClassName : "form-control"}
-                style={inputStyle}
-                placeholder={label}
-                value={inputValue}
-                onChange={handleInputChange}
-                onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
-                onBlur={handleBlur}
-                onKeyDown={handleKeyDown}   // 👈 added
-                autoComplete="off"
-            />
+            {multiline ? (
+                <textarea
+                    ref={inputRef}
+                    autoFocus={autoFocus}
+                    className={inputClassName !== undefined ? inputClassName : "form-control"}
+                    style={{ resize: "vertical", minHeight: 58, lineHeight: 1.4, ...inputStyle }}
+                    placeholder={label}
+                    value={inputValue}
+                    rows={2}
+                    onChange={handleInputChange}
+                    onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}
+                    autoComplete="off"
+                />
+            ) : (
+                <input
+                    ref={inputRef}
+                    autoFocus={autoFocus}
+                    type="text"
+                    className={inputClassName !== undefined ? inputClassName : "form-control"}
+                    style={inputStyle}
+                    placeholder={label}
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onFocus={() => { if (inputValue) { setShowDropdown(true); fetchSuggestions(inputValue); } }}
+                    onBlur={handleBlur}
+                    onKeyDown={handleKeyDown}   // 👈 added
+                    autoComplete="off"
+                />
+            )}
 
             {showDropdown && (() => {
                 // position:fixed in viewport coords so the dropdown stays

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import RichText from "./RichText";
 import {
   MdClose, MdPrint, MdLocalShipping, MdEdit, MdInventory2, MdReceiptLong, MdLink,
 } from "react-icons/md";
@@ -98,7 +99,7 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                   <tr key={i.id ?? idx}>
                     <td style={st.td}>{idx + 1}</td>
                     <td style={st.td}>
-                      <div style={st.itemDesc}>{i.description}</div>
+                      <div style={st.itemDesc}><RichText text={i.description} /></div>
                       {i.itemTypeName && <div style={st.itemType}>{i.itemTypeName}</div>}
                       {i.unitPrice != null && Number(i.unitPrice) > 0 && (
                         <div style={st.itemType}>@ Rs {Number(i.unitPrice).toLocaleString()}</div>
@@ -161,7 +162,7 @@ export default function SalesOrderDetailModal({ order, companyId, onClose, onPri
                     <div style={st.challanLines}>
                       {(c.lines || []).map((l, li) => (
                         <div key={li} style={st.challanLine}>
-                          <span style={st.clDesc}>{l.description}</span>
+                          <span style={st.clDesc}><RichText text={l.description} /></span>
                           <span style={st.clQty}>{fmtQty(l.quantity)} {l.unit}</span>
                         </div>
                       ))}

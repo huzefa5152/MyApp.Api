@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { renderRichTextHtml } from "../utils/richText";
 import { useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
@@ -684,7 +685,7 @@ function buildChallanPrintHtml(data) {
   let itemRows = data.items.map((item) =>
     `<tr>
       <td class="cell qty">${item.quantity}</td>
-      <td class="cell item">${item.description}</td>
+      <td class="cell item">${renderRichTextHtml(item.description)}</td>
     </tr>`
   ).join("");
 

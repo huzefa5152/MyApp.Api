@@ -20,6 +20,9 @@ import QuantityInput from "./QuantityInput";
  *   - Enter in any row field commits + advances: on the last row it appends a
  *     fresh line and focuses its description; otherwise it jumps to the next
  *     row's description. So "type · Enter · type · Enter" flies down the list.
+ *     The description is multi-line (line breaks + <b>/<i>/<u>, printed via the
+ *     richText helper), so there a plain Enter adds a line and Ctrl+Enter
+ *     commits.
  *   - "Repeat last" clones the previous line's item-type / unit / price into a
  *     new blank row (description + qty cleared) — for many similar items.
  *   - "Paste list" turns pasted lines into rows (tab/comma → qty, price).
@@ -44,6 +47,9 @@ export default function LineItemsEditor({
   showUnitPrice = false,
   currency = "Rs",
   getRate,
+  // Description field — multi-line by default so create and edit accept the
+  // same text. Pass false only for a single-line box.
+  descriptionMultiline = true,
   isRowLocked,
   rowLockHint,
   // Optional per-row minimum quantity → floors the qty spinner (e.g. the
@@ -356,6 +362,7 @@ export default function LineItemsEditor({
                   inputStyle={{ ...s.cellInput, fontSize: "0.95rem" }}
                   inputRef={(el) => { descRefs.current[idx] = el; }}
                   onEnterKey={() => commitAndAdvance(idx)}
+                  multiline={descriptionMultiline}
                 />
                 {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
                 {hint && <div style={s.lockHint}>{hint}</div>}
@@ -418,6 +425,7 @@ export default function LineItemsEditor({
                         inputStyle={s.cellInput}
                         inputRef={(el) => { descRefs.current[idx] = el; }}
                         onEnterKey={() => commitAndAdvance(idx)}
+                        multiline={descriptionMultiline}
                       />
                       {item.rateHint && <div style={s.hint}>{item.rateHint}</div>}
                       {hint && <div style={s.lockHint}>{hint}</div>}
@@ -447,7 +455,11 @@ export default function LineItemsEditor({
 
       <div style={s.addRow}>
         <button type="button" style={s.addBtn} onClick={addGuarded}><MdAdd size={16} /> Add Item</button>
-        <span style={s.enterHint}>Press <kbd style={s.kbd}>Enter</kbd> in a row to add the next line</span>
+        <span style={s.enterHint}>
+          {descriptionMultiline
+            ? <>Press <kbd style={s.kbd}>Ctrl</kbd>+<kbd style={s.kbd}>Enter</kbd> in a description, or <kbd style={s.kbd}>Enter</kbd> in qty / unit, to add the next line</>
+            : <>Press <kbd style={s.kbd}>Enter</kbd> in a row to add the next line</>}
+        </span>
       </div>
     </div>
   );
