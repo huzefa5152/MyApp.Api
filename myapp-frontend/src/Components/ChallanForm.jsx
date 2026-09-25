@@ -11,6 +11,9 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
+import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
+import { useConfirm } from "./ConfirmDialog";
 
 const colors = {
   blue: "#0d47a1",
@@ -54,6 +57,29 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
+  const suppliers = useChallanSuppliers(companyId);
+  const confirm = useConfirm();
+  // Set when the challan saved but its purchase bills failed — the form then
+  // offers a retry instead of saving the challan a second time.
+  const [savedChallanId, setSavedChallanId] = useState(null);
+  const [purchaseError, setPurchaseError] = useState("");
+
+  // Every line carries a supplier + actual cost → offer the purchase bills
+  // (one per supplier). Returns false when the form must stay open.
+  const offerPurchaseBills = async (saved, lines) => {
+    if (!saved?.id || !has("purchasebills.manage.create") || !lines.length ||
+      !lines.every((line) => line.supplierId && line.actualUnitCost !== null && line.actualUnitCost !== undefined && line.actualUnitCost !== "")) return true;
+    const supplierCount = new Set(lines.map((line) => Number(line.supplierId))).size;
+    const yes = await confirm({ title: "Create purchase bills?", message: `Every line has a supplier and actual cost. Create ${supplierCount} unpaid purchase bill${supplierCount === 1 ? "" : "s"} now, one per supplier?`, variant: "info", confirmText: "Create purchase bills", cancelText: "Not now" });
+    if (!yes) return true;
+    try { await createPurchaseBillsFromChallan(saved.id); return true; }
+    catch (err) {
+      setSavedChallanId(saved.id);
+      setPurchaseError(err.response?.data?.error || "The challan was saved, but purchase bills could not be created.");
+      setSaving(false);
+      return false;
+    }
+  };
 
   useEffect(() => {
     getAllUnits().then(({ data }) => setUnits(data)).catch(() => setUnits([]));
@@ -120,7 +146,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || savedChallanId) return;
     setError("");
 
     const validItems = items.filter((item) => item.description.trim());
@@ -135,19 +161,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
     setSaving(true);
     try {
-      const saved = await onSaved({
-        // When set, the parent creates the challan through the sales-order
-        // fulfilment flow (which links each line + auto-closes the order).
-        salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
-        clientId: client.id,
-        clientName: client.label,
-        site: site || null,
-        notes: notes.trim() || null,
-        poNumber: poNumber.trim(),
-        poDate: poDate ? new Date(poDate).toISOString() : null,
-        indentNo: indentNo.trim() || null,
-        deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
-        items: validItems.map((i) => ({
+      const payloadItems = validItems.map((i) => ({
           description: i.description,
           unit: i.unit,
           // Ties the delivered line back to its ordered line (SO fulfilment).
@@ -160,13 +174,29 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
           // QuantityInput already coerces correctly per UOM, this is just
           // defensive in case a string slips through.
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
-        })),
+          // Private procurement — never printed.
+          supplierId: i.supplierId || null,
+          actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
+        }));
+      const saved = await onSaved({
+        // When set, the parent creates the challan through the sales-order
+        // fulfilment flow (which links each line + auto-closes the order).
+        salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
+        clientId: client.id,
+        clientName: client.label,
+        site: site || null,
+        notes: notes.trim() || null,
+        poNumber: poNumber.trim(),
+        poDate: poDate ? new Date(poDate).toISOString() : null,
+        indentNo: indentNo.trim() || null,
+        deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
+        items: payloadItems,
       });
       // Upload any files staged before the challan had an id. Best-effort —
       // the challan is already saved.
       const savedId = saved?.id;
       if (savedId) { try { await attachmentRef.current?.flush(savedId); } catch { /* attachments best-effort */ } }
-      onClose();
+      if (await offerPurchaseBills(saved, payloadItems)) onClose();
     } catch (err) {
       // Server-supplied user-friendly message wins; otherwise show a
       // friendly stable string. Bare err.message from axios is
@@ -180,7 +210,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     }
   };
 
-  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving;
+  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving || !!savedChallanId;
 
   // Backdrop click is intentionally a no-op — the user can lose minutes
   // of typed data with one stray click otherwise. Use the X in the
@@ -299,7 +329,16 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 units={units}
                 itemsLabel="Items"
               />
+              <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
             </div>
+
+            {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
+              Challan saved. {purchaseError}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <button type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
+                <button type="button" style={{ minHeight: 44 }} onClick={onClose}>Close without purchase bills</button>
+              </div>
+            </div>}
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
 

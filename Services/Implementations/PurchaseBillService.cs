@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -35,6 +36,7 @@ namespace MyApp.Api.Services.Implementations
             CompanyId = pb.CompanyId,
             CompanyName = pb.Company?.Name ?? "",
             SupplierId = pb.SupplierId,
+            SourceDeliveryChallanId = pb.SourceDeliveryChallanId,
             SupplierName = pb.Supplier?.Name ?? "",
             SupplierBillNumber = pb.SupplierBillNumber,
             SupplierIRN = pb.SupplierIRN,
@@ -476,6 +478,160 @@ namespace MyApp.Api.Services.Implementations
             catch (Exception ex)
             {
                 _logger.LogError(ex, "PurchaseBillService: transaction rolled back");
+                await tx.RollbackAsync();
+                throw;
+            }
+            }
+            throw new InvalidOperationException(
+                "Could not allocate a unique purchase bill number after " + maxAttempts +
+                " attempts. Please retry the request.", lastConflict);
+        }
+
+        /// <summary>
+        /// Raise one unpaid purchase bill per supplier from a challan whose every
+        /// line carries a supplier and an actual unit cost. Operator-approved
+        /// (the challan forms ask first). Idempotent: the (source challan,
+        /// supplier) unique index makes a repeated confirmation after a lost
+        /// response return the bills that already exist instead of duplicating.
+        /// </summary>
+        public async Task<List<PurchaseBillDto>> CreateFromChallanAsync(int challanId)
+        {
+            const int maxAttempts = NumberAllocationRetry.DefaultMaxAttempts;
+            DbUpdateException? lastConflict = null;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+            // Keep the whole supplier batch atomic.
+            await using var tx = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var challan = await _context.DeliveryChallans
+                    .Include(c => c.Items)
+                    .FirstOrDefaultAsync(c => c.Id == challanId && !c.IsDemo);
+                if (challan == null) throw new KeyNotFoundException("Challan not found.");
+                if (challan.Status == "Cancelled")
+                    throw new InvalidOperationException("Cannot create purchase bills for a cancelled challan.");
+                if (challan.Items.Count == 0 || challan.Items.Any(i => !i.SupplierId.HasValue || !i.ActualUnitCost.HasValue))
+                    throw new InvalidOperationException("Set a supplier and actual unit cost on every challan line first.");
+                if (challan.Items.Any(i => i.ActualUnitCost < 0))
+                    throw new InvalidOperationException("Actual unit cost cannot be negative.");
+
+                var groups = challan.Items.GroupBy(i => i.SupplierId!.Value).OrderBy(g => g.Key).ToList();
+                var supplierIds = groups.Select(g => g.Key).ToList();
+                var supplierMap = await _context.Suppliers
+                    .Where(s => s.CompanyId == challan.CompanyId && supplierIds.Contains(s.Id))
+                    .ToDictionaryAsync(s => s.Id);
+                if (supplierMap.Count != groups.Count)
+                    throw new InvalidOperationException("A line supplier does not belong to this company.");
+                var itemTypeIds = challan.Items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+                var itemTypes = await _context.ItemTypes
+                    .Where(i => itemTypeIds.Contains(i.Id))
+                    .ToDictionaryAsync(i => i.Id);
+                if (itemTypes.Count != itemTypeIds.Count)
+                    throw new InvalidOperationException("A line item type could not be found.");
+
+                var existing = await _context.PurchaseBills.AsNoTracking()
+                    .Where(p => p.SourceDeliveryChallanId == challanId)
+                    .Select(p => new { p.Id, p.SupplierId })
+                    .ToListAsync();
+                if (existing.Count > 0)
+                {
+                    if (existing.Count != groups.Count || existing.Any(p => !supplierIds.Contains(p.SupplierId)))
+                        throw new InvalidOperationException("Purchase bills already exist for this challan. Review them before changing its suppliers.");
+                    await tx.CommitAsync();
+                    var previous = new List<PurchaseBillDto>();
+                    foreach (var row in existing)
+                        previous.Add((await GetByIdAsync(row.Id))!);
+                    return previous;
+                }
+
+                var company = await _context.Companies.FindAsync(challan.CompanyId)
+                    ?? throw new KeyNotFoundException("Company not found.");
+                var number = await _context.PurchaseBills
+                    .Where(p => p.CompanyId == challan.CompanyId)
+                    .Select(p => (int?)p.PurchaseBillNumber)
+                    .MaxAsync() ?? 0;
+                var createdIds = new List<int>();
+                foreach (var group in groups)
+                {
+                    number = Math.Max(number + 1, company.StartingPurchaseBillNumber);
+                    var lines = group.Select(i =>
+                    {
+                        var itemType = i.ItemTypeId.HasValue ? itemTypes[i.ItemTypeId.Value] : null;
+                        return new PurchaseItem
+                        {
+                            ItemTypeId = i.ItemTypeId,
+                            ItemTypeName = itemType?.Name ?? "",
+                            Description = i.Description,
+                            Quantity = i.Quantity,
+                            UOM = string.IsNullOrWhiteSpace(i.Unit) ? itemType?.UOM ?? "" : i.Unit,
+                            UnitPrice = i.ActualUnitCost!.Value,
+                            LineTotal = Math.Round(i.Quantity * i.ActualUnitCost.Value, 2),
+                            HSCode = itemType?.HSCode,
+                            FbrUOMId = itemType?.FbrUOMId,
+                            SaleType = itemType?.SaleType,
+                        };
+                    }).ToList();
+                    var total = lines.Sum(i => i.LineTotal);
+                    var bill = new PurchaseBill
+                    {
+                        CompanyId = challan.CompanyId,
+                        SupplierId = group.Key,
+                        SourceDeliveryChallanId = challan.Id,
+                        Source = "delivery-challan",
+                        PurchaseBillNumber = number,
+                        Date = (challan.DeliveryDate ?? DateTime.UtcNow).Date,
+                        Subtotal = total,
+                        GrandTotal = total,
+                        AmountInWords = NumberToWordsConverter.Convert(total),
+                        ReconciliationStatus = "ManualOnly",
+                        Items = lines,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    _context.PurchaseBills.Add(bill);
+                    company.CurrentPurchaseBillNumber = number;
+                    await _context.SaveChangesAsync();
+
+                    // Stock IN, same gate as a hand-made purchase bill.
+                    var tracked = await _stock.GetStockTrackedItemTypeIdsAsync(
+                        lines.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+                    foreach (var line in lines.Where(i => i.ItemTypeId.HasValue && i.Quantity > 0 && tracked.Contains(i.ItemTypeId!.Value)))
+                        await _stock.RecordMovementAsync(
+                            companyId: bill.CompanyId,
+                            itemTypeId: line.ItemTypeId!.Value,
+                            direction: StockMovementDirection.In,
+                            quantity: line.Quantity,
+                            sourceType: StockMovementSourceType.PurchaseBill,
+                            sourceId: bill.Id,
+                            movementDate: bill.Date,
+                            notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplierMap[group.Key].Name}");
+                    createdIds.Add(bill.Id);
+                }
+                await tx.CommitAsync();
+                var result = new List<PurchaseBillDto>();
+                foreach (var id in createdIds)
+                    result.Add((await GetByIdAsync(id))!);
+                return result;
+            }
+            catch (DbUpdateException dupEx) when (NumberAllocationRetry.IsUniqueViolation(dupEx))
+            {
+                // Either a purchase-bill number collision or a concurrent
+                // confirmation for the same challan — the retry re-reads both.
+                lastConflict = dupEx;
+                _logger.LogWarning(
+                    "Purchase bills from challan {ChallanId} collided with a concurrent create; retrying (attempt {Attempt}).",
+                    challanId, attempt);
+                await tx.RollbackAsync();
+                foreach (var entry in _context.ChangeTracker.Entries().ToList())
+                {
+                    if (entry.State != EntityState.Unchanged)
+                        entry.State = EntityState.Detached;
+                }
+                if (attempt < maxAttempts)
+                    await Task.Delay(10 * attempt);
+                continue;
+            }
+            catch
+            {
                 await tx.RollbackAsync();
                 throw;
             }

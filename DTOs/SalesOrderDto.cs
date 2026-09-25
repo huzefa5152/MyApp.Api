@@ -97,6 +97,8 @@ namespace MyApp.Api.DTOs
         /// set it wins over the sales-order line's item type (lets the operator
         /// tag inventory at delivery time when the order line was un-classified).</summary>
         public int? ItemTypeId { get; set; }
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
     }
 
     /// <summary>Body for the status-change endpoints on quotes and orders.</summary>
