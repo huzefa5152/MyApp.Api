@@ -1186,6 +1186,53 @@ feedback -- change both, or the screen promises what the server refuses.
 - Suites: the offline harness (`GdLineRules` cases),
   `scripts/test_gd_import_costing.py` section 29, `node scripts/test_gd_costing_entry.mjs`.
 
+### 5b-16. Invoice Sales Detail: the Excel is the operator's sheet, the screen is ours (2026-09-25)
+
+Reports ▸ Invoice Sales Detail lists every bill line in a period, filed with FBR
+or not. Its Excel is the operator's own sales-detail workbook; the maintainer
+ruled that the redesign changes the SCREEN only.
+
+- **One query for the screen and the Excel** (`InvoiceSalesDetailQueryDto`,
+  resolved by `Helpers/InvoiceSalesDetailFilter`): period, search, FBR status and
+  customer are applied on the SERVER, so the workbook always holds the bills on
+  screen. Never filter this report in the browser.
+- **The workbook's format is pinned.** `GetInvoiceSalesDetailExcelAsync`'s
+  builder is not to be edited for a screen change: sheet "Sales Detail", the 27
+  headers, number formats, the "Total listed bills" row, freeze and autofilter.
+  `scripts/test_invoice_sales_detail.py` pins the headers and the freeze, and the
+  redesign was proved by re-exporting 11 company-months and comparing the
+  workbook parts byte for byte (only ClosedXML's random package ids differ between
+  any two saves).
+- **The period is `ReportPeriod`'s presets on Pakistan time**, the Accounting
+  Reports set, except All Periods: the report returns every line in one response,
+  so it is refused (an unknown preset parses to All Periods and is refused with
+  it). With no `period`, an old `year` + `month` pair still opens its month.
+- **Search is BILL-level**: a bill is listed when any of its lines shows the text
+  in a field the grid displays, so a search never splits a bill.
+- **The customer picker is fed from the report**, not the client feed:
+  `buyers` is every buyer with a bill in the period (id, name, NTN — what the rows
+  already show), passed to `ReportFilterBar` as `clientOptions`. The client feed
+  returns full customer records; the Client Ledger report avoided it for the same
+  reason.
+- **The screen's decisions live in `utils/invoiceSalesDetail.js`** (pure; pinned
+  by `node scripts/test_invoice_sales_detail.mjs`): URL filters, the API query,
+  grouping lines into bills, paging BY BILL, the tiles, the print envelope, the
+  file name.
+- **The grid scrolls inside its own box** (`Components/reports/
+  InvoiceSalesDetailGrid`): sticky header rows, frozen Bill columns and a pinned
+  totals row only work against a bounded scroll container, never against the page
+  (`.dl-main`, see §5b-15). Each frozen cell paints one pixel past its left edge
+  in `--isd-bg`, or side-by-side sticky cells leave a hairline seam at a
+  fractional scroll offset.
+- **Print / PDF print the current page's bills** with the whole selection's
+  totals, as Accounting Reports print theirs; the header's provenance line says
+  which bills when there is more than one page.
+- **Shared pieces, optional props.** `ReportHeader`, `TotalsStrip` and
+  `buildReportHtml` are exported from `ReportShell`; `ReportFilterBar` takes
+  `periodOptions`, `clientOptions`, `statusOptions`, `statusLabel` and
+  `searchPlaceholder`. Every default is the Accounting Reports behaviour, and an
+  Accounting report rendered identically before and after (DOM compared).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -1672,6 +1719,7 @@ them can be resolved from FBR.
 | Billing at the rate the goods came in at (evidence, refuse vs advise, override, picker, isolation) | `python scripts/test_imported_tax_rate.py` (add `--db "<conn>"` for the GD-line cases) | `56/56 checks passed` (with `--db`) |
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
+| Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

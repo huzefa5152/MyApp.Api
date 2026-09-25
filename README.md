@@ -298,6 +298,33 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-25 — Invoice Sales Detail looks and filters like the other reports
+
+**Reports ▸ Invoice Sales Detail** has been rebuilt on the pieces the Accounting
+reports use: the same filter bar, header card and total tiles, in a tighter
+layout.
+
+- **Periods beyond one month.** This Month, Last Month, Today, This Week, This
+  Quarter, This Year, Last Year or a custom range, worked out on Pakistan time
+  like the Accounting reports. An old month-and-year link still opens its month.
+- **Three filters.** Search (bill number, party, NTN, HS code, item or FBR
+  number; a bill that matches is shown whole), FBR status (submitted / not
+  submitted) and customer. Applied filters show as chips and live in the page
+  address, so a view can be bookmarked or shared.
+- **A grid built for the report.** One row per bill line, as in the Excel,
+  grouped by bill: the bill's date, number, buyer, NTN, address and FBR status
+  print once, and each bill has its own band. The header rows and the totals row
+  stay in view while the grid scrolls, and the date, bill and challan columns
+  stay put when it scrolls sideways. FBR status shows as a coloured label; a
+  cancelled bill is greyed out and labelled, and still counts in the totals as
+  before. Pages hold whole bills. On a phone each bill is a card with its lines.
+- **Excel, Print and PDF** in the report header. **The Excel sheet is exactly as
+  before** (same columns, formats and totals row); it lists the bills the period
+  and filters select. A whole month keeps its old file name; any other range is
+  named by its dates.
+- On the Accounting reports, *Clear filters* now keeps a custom range's dates,
+  and a report saved as PDF is no longer named "….pdf.pdf".
+
 ### 2026-09-25 — Import Costing checks every GD line before its stock comes in
 
 **Purchases ▸ Import Costing** has been rebuilt on the same numbered steps as the
