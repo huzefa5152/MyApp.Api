@@ -1,124 +1,218 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { MdAssessment, MdBusiness } from "react-icons/md";
 import { getInvoiceSalesDetail, getInvoiceSalesDetailExcel } from "../api/reportApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { dropdownStyles } from "../theme";
+import { colors, dropdownStyles } from "../theme";
+import { FILTERS } from "../config/accountingReports";
+import ReportFilterBar from "../Components/ReportFilterBar";
+import { ReportHeader, TotalsStrip } from "../Components/ReportShell";
+import Pagination from "../Components/Pagination";
+import InvoiceSalesDetailGrid from "../Components/reports/InvoiceSalesDetailGrid";
+import usePageSize from "../hooks/usePageSize";
 import { notify } from "../utils/notify";
-import useIsNarrow from "../hooks/useIsNarrow";
+import {
+  DEFAULT_PAGE_SIZE, FBR_STATUS_OPTIONS, ISD_PERIOD_OPTIONS, emptyText, excelFileName,
+  filtersApplied, filtersFromSearch, filtersToSearch, groupBills, pageOfBills, printEnvelope,
+  toApiParams, totalsFor,
+} from "../utils/invoiceSalesDetail";
 
-const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const money = (value) => Number(value || 0).toLocaleString(undefined,
-  { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const FILTER_SET = [FILTERS.period, FILTERS.search, FILTERS.client, FILTERS.status];
+const NOTE = "Every bill dated in the period, filed with FBR or not. Cancelled bills stay listed and "
+  + "count in the totals. Buyer address and NTN are the buyer's current details.";
+const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+/**
+ * Reports ▸ Invoice Sales Detail: every bill line in the period, filed with FBR
+ * or not, in the shape of the operator's own sales-detail workbook.
+ *
+ * Built from the pieces every other report uses — the Accounting Reports filter
+ * bar, header, tiles and print builder — so it reads as the same product. The
+ * server selects the bills for the screen and the Excel from ONE query, so the
+ * workbook always holds exactly what is on screen, in the Excel's unchanged
+ * format. Filters live in the URL, like Accounting Reports: a view is linkable
+ * and survives a reload.
+ */
 export default function InvoiceSalesDetailPage() {
   const { companies, selectedCompany, setSelectedCompany } = useCompany();
-  const { has } = usePermissions();
+  const { has, loading: permsLoading } = usePermissions();
   const canView = has("reports.invoicedetail.view");
   const canExport = has("reports.invoicedetail.export");
-  const narrow = useIsNarrow();
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const companyId = selectedCompany?.id;
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => filtersFromSearch(searchParams), [searchParams]);
+  const apiParams = useMemo(() => toApiParams(filters), [filters]);
+  const applyFilters = useCallback((next) => setSearchParams(filtersToSearch(next)), [setSearchParams]);
+
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
-  const validYear = Number.isInteger(year) && year >= 2000 && year <= 2100;
+  const [page, setPage] = useState(1);
+  const [storedSize, setPageSize] = usePageSize("invoiceSalesDetail");
+  const pageSize = storedSize || DEFAULT_PAGE_SIZE;
+
+  // A customer belongs to one company, so switching company drops that filter.
+  const lastCompany = useRef(companyId);
+  useEffect(() => {
+    if (lastCompany.current !== undefined && lastCompany.current !== companyId && filters.clientId) {
+      const { clientId, ...rest } = filters;
+      applyFilters(rest);
+    }
+    lastCompany.current = companyId;
+  }, [companyId, filters, applyFilters]);
 
   useEffect(() => {
-    if (!selectedCompany || !canView) return;
-    if (!validYear) { setReport(null); return; }
+    if (!companyId || !canView) return;
     let live = true;
-    setReport(null);
     setLoading(true);
     setError("");
-    getInvoiceSalesDetail(selectedCompany.id, year, month)
-      .then(({ data }) => { if (live) setReport(data); })
-      .catch((e) => { if (live) setError(e?.response?.data?.message || "Could not load invoice sales detail."); })
+    getInvoiceSalesDetail(companyId, apiParams)
+      .then(({ data }) => { if (live) { setReport(data); setPage(1); } })
+      .catch((e) => {
+        if (!live) return;
+        setReport(null);
+        setError(e?.response?.data?.message || "Could not load the invoice sales detail.");
+      })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [selectedCompany, year, month, canView, validYear]);
+  }, [companyId, canView, apiParams]);
 
-  const download = async () => {
-    if (!selectedCompany || !canExport || !validYear) return;
-    setExporting(true);
+  const bills = useMemo(() => groupBills(report?.rows || []), [report]);
+  const view = useMemo(() => pageOfBills(bills, page, pageSize), [bills, page, pageSize]);
+  const applied = useMemo(() => filtersApplied(filters, report?.buyers || []), [filters, report]);
+  const tiles = useMemo(() => (report ? totalsFor(report) : null), [report]);
+  const clientOptions = useMemo(
+    () => (report?.buyers || []).map((b) => ({ id: b.clientId, name: b.name, ntn: b.ntn })),
+    [report]
+  );
+  const pageNote = view.totalPages > 1
+    ? `Bills ${view.firstIndex + 1}–${view.lastIndex} of ${bills.length}; totals cover all ${bills.length}`
+    : null;
+  const envelope = useMemo(
+    () => (report ? printEnvelope(report, view.bills, { filtersApplied: applied, pageNote }) : null),
+    [report, view.bills, applied, pageNote]
+  );
+
+  const exportExcel = async () => {
+    if (!companyId || !report || loading) return;
     try {
-      const { data } = await getInvoiceSalesDetailExcel(selectedCompany.id, year, month);
-      const url = URL.createObjectURL(new Blob([data],
-        { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      const { data } = await getInvoiceSalesDetailExcel(companyId, apiParams);
+      const url = URL.createObjectURL(new Blob([data], { type: XLSX }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Invoice-Sales-Detail-${year}-${String(month).padStart(2, "0")}.xlsx`;
+      link.download = excelFileName(report);
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch { notify.error("Could not export invoice sales detail."); }
-    finally { setExporting(false); }
+    } catch {
+      notify.error("Could not export the invoice sales detail.");
+    }
   };
 
-  if (!canView) return <div style={{ padding: 24 }}>You don't have permission to view this report.</div>;
-  const columns = ["Date", "DC No", "Inv No", "Party Name", "Address", "NTN", "HS Code", "Description",
-    "Unit", "Qty", "Rate", "Excl", "Tax Rate", "G. S. T", "Incl", "236-G / 236-H Tax",
-    "Further Tax", "Total", "FBR Status", "FBR Invoice No", "Bill Status"];
-  const cells = (r) => [r.date?.slice(0, 10), r.deliveryChallanNumbers, r.invoiceNumber, r.buyer,
-    r.buyerAddress, r.buyerNtn, r.hsCode, r.description, r.unit, r.quantity,
-    money(r.rate), money(r.excludingTax), `${r.taxRate}%`, money(r.salesTax),
-    money(r.includingTax), money(r.advanceTax), money(r.furtherTax), money(r.total),
-    r.fbrStatus, r.fbrInvoiceNumber, r.billStatus];
+  if (permsLoading) return <div style={st.state}>Loading…</div>;
+  if (!canView) return <div style={st.state}>You don’t have permission to view this report.</div>;
 
-  return <div style={{ padding: "clamp(12px, 3vw, 24px)" }}>
-    <h1 style={{ fontSize: "clamp(1.3rem, 3vw, 1.65rem)", margin: "0 0 6px" }}>Invoice Sales Detail</h1>
-    <p style={{ color: "#5f6d7e", margin: "0 0 16px" }}>
-      All bills dated in the selected month, including those not submitted to FBR. Amounts are the saved bill values;
-      cancelled bills remain visible and are included in the listed totals. Buyer address and NTN come from the current buyer record.
-    </p>
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", gap: 12, marginBottom: 18 }}>
-      <label>Company<br /><select style={dropdownStyles.base} value={selectedCompany?.id || ""}
-        onChange={(e) => setSelectedCompany(companies.find((c) => String(c.id) === e.target.value))}>
-        {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-      </select></label>
-      <label>Month<br /><select style={dropdownStyles.base} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-        {months.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-      </select></label>
-      <label>Year<br /><input type="number" min="2000" max="2100" step="1"
-        style={{ ...dropdownStyles.base, width: 110 }} value={year}
-        onChange={(e) => setYear(Number(e.target.value))} /></label>
-      {canExport && <button type="button" onClick={download} disabled={exporting || !selectedCompany || !validYear}
-        style={{ minHeight: 44, padding: "0 18px", border: 0, borderRadius: 8, background: "#0d47a1", color: "#fff", cursor: "pointer" }}>
-        {exporting ? "Exporting…" : "Export Excel"}
-      </button>}
-    </div>
-    {loading && <p>Loading report…</p>}
-    {!validYear && <p role="alert" style={{ color: "#b91c1c" }}>Choose a year from 2000 to 2100.</p>}
-    {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
-    {report && <>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-        {[["Bills", report.invoiceCount], ["Submitted", report.submittedCount],
-          ["Not submitted", report.notSubmittedCount], ["Excl", money(report.excludingTax)],
-          ["G. S. T", money(report.salesTax)], ["Total incl taxes", money(report.total)]].map(([label, value]) =>
-          <div key={label} style={{ background: "#f3f7fc", border: "1px solid #e0e8f1", borderRadius: 8, padding: "10px 14px" }}>
-            <div style={{ color: "#5f6d7e", fontSize: 12 }}>{label}</div><strong>{value}</strong>
-          </div>)}
+  return (
+    <div style={st.page}>
+      <div style={st.pageHead}>
+        <div style={st.titleRow}>
+          <MdAssessment size={24} color={colors.blue} />
+          <h2 style={st.h2}>Reports</h2>
+        </div>
+        {companies.length > 1 && (
+          <label style={st.companyPicker}>
+            <MdBusiness size={20} color={colors.blue} />
+            <select
+              style={{ ...dropdownStyles.base, minHeight: 44, flex: 1, minWidth: 0 }}
+              value={selectedCompany?.id || ""}
+              onChange={(e) => setSelectedCompany(companies.find((c) => String(c.id) === e.target.value))}
+              aria-label="Company"
+            >
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
+            </select>
+          </label>
+        )}
       </div>
-      {report.rows.length === 0 ? <p>No bills in {months[month - 1]} {year}.</p> : narrow ?
-        <div style={{ display: "grid", gap: 10 }}>{report.rows.map((r) =>
-          <div key={`${r.invoiceId}-${r.lineNumber}`} style={{ background: "#fff", border: "1px solid #dce5ee", borderRadius: 8, padding: 12 }}>
-            <strong>Inv {r.invoiceNumber} · {r.buyer}</strong>
-            <div>{r.date?.slice(0, 10)} · {r.description} · {r.quantity} {r.unit}</div>
-            <div>DC {r.deliveryChallanNumbers || "—"} · HS {r.hsCode || "—"} · {r.taxRate}% tax</div>
-            <div>{r.buyerNtn ? `NTN ${r.buyerNtn}` : "NTN —"}{r.buyerAddress ? ` · ${r.buyerAddress}` : ""}</div>
-            <div>Excl {money(r.excludingTax)} · GST {money(r.salesTax)} · Total {money(r.total)}</div>
-            {(r.advanceTax || r.furtherTax) ? <div>Advance {money(r.advanceTax)} · Further {money(r.furtherTax)}</div> : null}
-            <div>FBR: {r.fbrStatus}{r.fbrInvoiceNumber ? ` · ${r.fbrInvoiceNumber}` : ""}</div>
-            {r.billStatus === "Cancelled" && <div>Bill cancelled</div>}
-          </div>)}</div> :
-        <div style={{ overflowX: "auto", border: "1px solid #dce5ee", borderRadius: 8 }}>
-          <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%", fontSize: 13 }}>
-            <thead><tr>{columns.map((c) => <th key={c} style={{ textAlign: "left", padding: 8, background: "#eaf2fc", borderBottom: "1px solid #dce5ee" }}>{c}</th>)}</tr></thead>
-            <tbody>{report.rows.map((r) => <tr key={`${r.invoiceId}-${r.lineNumber}`}>
-              {cells(r).map((v, i) => <td key={i} style={{ padding: 8, borderBottom: "1px solid #edf1f5", maxWidth: i === 3 || i === 7 ? 240 : undefined, overflowWrap: "anywhere", textAlign: i >= 9 && i <= 17 ? "right" : "left" }}>{v}</td>)}
-            </tr>)}</tbody>
-          </table>
-        </div>}
-    </>}
-  </div>;
+
+      {!companyId ? (
+        <div style={st.state}>Select a company to view this report.</div>
+      ) : (
+        <>
+          <ReportFilterBar
+            companyId={companyId}
+            filters={FILTER_SET}
+            value={filters}
+            onApply={applyFilters}
+            loading={loading}
+            periodOptions={ISD_PERIOD_OPTIONS}
+            clientOptions={clientOptions}
+            statusOptions={FBR_STATUS_OPTIONS}
+            statusLabel="FBR status"
+            searchPlaceholder="Bill no, party, NTN, HS code, item…"
+          />
+
+          {error && <div role="alert" style={st.error}>{error}</div>}
+
+          {envelope && (
+            <ReportHeader
+              report={envelope}
+              categoryTitle="Sales"
+              canExport={canExport}
+              onExportExcel={exportExcel}
+              subtitle={NOTE}
+            />
+          )}
+          {tiles && <TotalsStrip {...tiles} compact />}
+
+          {!report ? (
+            loading && <div style={st.state}>Loading report…</div>
+          ) : (
+            <>
+              <InvoiceSalesDetailGrid
+                report={report}
+                bills={view.bills}
+                allBillCount={bills.length}
+                loading={loading}
+                emptyText={emptyText(report, filters)}
+              />
+              <Pagination
+                page={view.page}
+                totalPages={view.totalPages}
+                total={bills.length}
+                onPage={setPage}
+                pageSize={pageSize}
+                onPageSize={(n) => { setPageSize(n); setPage(1); }}
+                unit="bills"
+                sizeLabel="Bills per page:"
+              />
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
+
+const st = {
+  page: { padding: "clamp(0.75rem, 2vw, 1.5rem)" },
+  pageHead: {
+    display: "flex", flexWrap: "wrap", alignItems: "center",
+    justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.9rem",
+  },
+  titleRow: { display: "flex", alignItems: "center", gap: "0.5rem" },
+  h2: { margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.4rem)", color: colors.textPrimary, fontWeight: 800 },
+  companyPicker: {
+    display: "flex", alignItems: "center", gap: "0.6rem",
+    flex: "1 1 220px", minWidth: 0, maxWidth: 320,
+  },
+  state: {
+    padding: "2.5rem 1.25rem", textAlign: "center", color: colors.textSecondary,
+    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`,
+    borderRadius: 14, fontSize: "0.92rem", lineHeight: 1.55,
+  },
+  error: {
+    background: colors.dangerLight, color: colors.danger, border: `1px solid ${colors.danger}30`,
+    borderRadius: 12, padding: "0.7rem 0.9rem", marginBottom: "1rem", fontSize: "0.88rem",
+  },
+};

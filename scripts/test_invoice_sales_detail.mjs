@@ -137,7 +137,7 @@ check("the labels are the report's words", () => {
   assert.strictEqual(tiles.totalLabels.total, "Total incl taxes");
 });
 check("cancelled bills are noted under the bill count", () =>
-  assert.strictEqual(tiles.notes.invoiceCount, "incl. 1 cancelled"));
+  assert.strictEqual(tiles.notes.invoiceCount, "1 cancelled"));
 check("no cancelled bills, no note", () =>
   assert.deepStrictEqual(U.totalsFor({ ...report, cancelledCount: 0 }).notes, {}));
 check("advance tax gets a tile when charged", () =>

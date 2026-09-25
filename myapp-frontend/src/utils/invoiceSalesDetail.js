@@ -124,7 +124,7 @@ export function totalsFor(report) {
   if (Number(report.advanceTax)) totals.advanceTax = report.advanceTax;
   if (Number(report.furtherTax)) totals.furtherTax = report.furtherTax;
   totals.total = report.total;
-  const notes = report.cancelledCount ? { invoiceCount: `incl. ${report.cancelledCount} cancelled` } : {};
+  const notes = report.cancelledCount ? { invoiceCount: `${report.cancelledCount} cancelled` } : {};
   return { totals, totalLabels: TILE_LABELS, notes };
 }
 

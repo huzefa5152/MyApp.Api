@@ -1,11 +1,14 @@
 import http from "./httpClient";
 
-export const getInvoiceSalesDetail = (companyId, year, month) =>
-  http.get(`/reports/company/${companyId}/invoice-sales-detail`, { params: { year, month } });
+// Invoice Sales Detail — every bill line in the period, filed with FBR or not.
+// params: { period, from?, to?, search?, fbrStatus?, clientId? }  (legacy
+// { year, month } is still accepted). The Excel takes the same params, so the
+// workbook holds exactly the bills on screen.
+export const getInvoiceSalesDetail = (companyId, params = {}) =>
+  http.get(`/reports/company/${companyId}/invoice-sales-detail`, { params });
 
-export const getInvoiceSalesDetailExcel = (companyId, year, month) =>
-  http.get(`/reports/company/${companyId}/invoice-sales-detail/excel`,
-    { params: { year, month }, responseType: "blob" });
+export const getInvoiceSalesDetailExcel = (companyId, params = {}) =>
+  http.get(`/reports/company/${companyId}/invoice-sales-detail/excel`, { params, responseType: "blob" });
 
 // Sales report — FBR-submitted invoices grouped by document date.
 // params: { year, month?, buyerType }  (month omitted = full year)

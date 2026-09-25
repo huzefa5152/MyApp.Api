@@ -344,9 +344,14 @@ export function TotalsStrip({ totals = {}, totalLabels = {}, notes = {}, compact
         // The figure decides its own type size: an aged receivable can be
         // "(226,670,962.34)" and used to spill straight out of the tile.
         const shown = isCount(key) ? fmtInt(value) : fmtMoney(value);
-        const base = compact ? (isCount(key) ? 1.05 : 1.15) : (isCount(key) ? 1.2 : 1.35);
+        const base = compact ? (isCount(key) ? 1.0 : 1.05) : (isCount(key) ? 1.2 : 1.35);
         return (
-          <div key={key} style={compact ? st.totalTileCompact : st.totalTile}>
+          <div
+            key={key}
+            style={compact
+              ? { ...st.totalTileCompact, ...(isCount(key) ? st.totalTileCompactCount : {}) }
+              : st.totalTile}
+          >
             <span style={st.totalLabel}>{totalLabels[key] || humanise(key)}</span>
             <span style={{
               ...st.totalValue,
@@ -1021,18 +1026,22 @@ const st = {
   },
   totalValue: { fontSize: "1.35rem", fontWeight: 800, color: colors.blue, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums" },
   totalValueCount: { color: colors.textPrimary, fontSize: "1.2rem" },
-  // A denser strip for a screen whose own grid needs the height.
+  // A denser strip for a screen whose own grid needs the height. Flex rather
+  // than a grid so a count ("16") can take less room than a nine-figure
+  // amount: seven tiles then share one row on a laptop instead of two.
   totalsStripCompact: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
+    display: "flex", flexWrap: "wrap",
     gap: "0.6rem", marginBottom: "0.85rem",
   },
+  // Capped, so a tile that wraps onto a row of its own stays tile-sized.
   totalTileCompact: {
+    flex: "1 1 140px", maxWidth: 260,
     display: "flex", flexDirection: "column", gap: 2, minWidth: 0,
     padding: "0.55rem 0.8rem", borderRadius: 12,
     background: "linear-gradient(135deg, rgba(13,71,161,0.06), rgba(0,137,123,0.07))",
     border: `1px solid ${colors.cardBorder}`,
   },
+  totalTileCompactCount: { flex: "1 1 84px", maxWidth: 170 },
   totalNote: { fontSize: "0.7rem", fontWeight: 600, color: colors.textSecondary },
 
   // Statement lines: indentation carries the hierarchy, weight carries the level.
