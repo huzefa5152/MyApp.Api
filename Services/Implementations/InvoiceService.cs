@@ -261,6 +261,7 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = inv.GrandTotal,
             AmountInWords = inv.AmountInWords,
             PaymentTerms = inv.PaymentTerms,
+            Notes = inv.Notes,
             DocumentType = inv.DocumentType,
             PaymentMode = inv.PaymentMode,
             FbrInvoiceNumber = inv.FbrInvoiceNumber,
@@ -821,6 +822,7 @@ namespace MyApp.Api.Services.Implementations
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms = dto.PaymentTerms,
+                        Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                         DocumentType = effectiveDocType,
                         PaymentMode = effectivePaymentMode,
                         // Optional bill-time PO override (blank → the DTO derives the
@@ -1188,6 +1190,7 @@ namespace MyApp.Api.Services.Implementations
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms = finalPaymentTerms,
+                        Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                         DocumentType = effectiveDocType,
                         PaymentMode = effectivePaymentMode,
                         // Standalone bill has no challan to carry the PO — store it
@@ -1414,6 +1417,7 @@ namespace MyApp.Api.Services.Implementations
                 }
                 invoice.GSTRate = dto.GSTRate;
                 invoice.PaymentTerms = dto.PaymentTerms;
+                invoice.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
 
@@ -3324,6 +3328,7 @@ namespace MyApp.Api.Services.Implementations
                 // sync with the rounded total without needing a re-save.
                 AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
                 PaymentTerms = inv.PaymentTerms,
+                Notes = inv.Notes,
                 Items = inv.Items.Select((ii, idx) => new PrintBillItemDto
                 {
                     SNo = idx + 1,
@@ -3353,6 +3358,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintTaxInvoiceDto
             {
+                Notes = inv.Notes,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 SupplierAddress = inv.Company?.FullAddress,
                 SupplierNTN = inv.Company?.NTN,

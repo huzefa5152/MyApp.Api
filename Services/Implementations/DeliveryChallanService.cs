@@ -105,6 +105,7 @@ namespace MyApp.Api.Services.Implementations
                 IndentNo = dc.IndentNo,
                 DeliveryDate = dc.DeliveryDate,
                 Site = dc.Site,
+                Notes = dc.Notes,
                 Status = dc.Status,
                 InvoiceId = dc.InvoiceId,
                 InvoiceFbrStatus = dc.Invoice?.FbrStatus,
@@ -283,6 +284,7 @@ namespace MyApp.Api.Services.Implementations
                 CompanyId = companyId,
                 ClientId = dto.ClientId,
                 Site = dto.Site,
+                Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                 PoNumber = dto.PoNumber?.Trim() ?? "",
                 PoDate = hasPo ? dto.PoDate : null,
                 IndentNo = string.IsNullOrWhiteSpace(dto.IndentNo) ? null : dto.IndentNo.Trim(),
@@ -801,6 +803,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Site: null or empty string clears it
             dc.Site = string.IsNullOrWhiteSpace(dto.Site) ? null : dto.Site.Trim();
+            dc.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
 
             // PO: empty/whitespace = operator wants to clear the PO (→ No PO status)
             var poNumber = (dto.PoNumber ?? "").Trim();
@@ -921,6 +924,7 @@ namespace MyApp.Api.Services.Implementations
                 PoNumber = dc.PoNumber,
                 PoDate = dc.PoDate,
                 IndentNo = dc.IndentNo,
+                Notes = dc.Notes,
                 Items = dc.Items.Select(i => new PrintChallanItemDto
                 {
                     Quantity = i.Quantity,

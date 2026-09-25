@@ -164,6 +164,7 @@ namespace MyApp.Api.Services.Implementations
                 BankAccountName = bankAccountName,
                 Method = string.IsNullOrWhiteSpace(dto.Method) ? "Cash" : dto.Method.Trim(),
                 Description = Trimmed(dto.Description),
+                Notes = Trimmed(dto.Notes),
                 Amount = dto.Allocations.Sum(a => a.Amount),
                 ChequeNumber = Trimmed(dto.ChequeNumber),
                 ChequeDate = dto.ChequeDate,
@@ -301,6 +302,7 @@ namespace MyApp.Api.Services.Implementations
                 payment.BankAccountName = bankAccountName;
                 payment.Method = string.IsNullOrWhiteSpace(dto.Method) ? "Cash" : dto.Method.Trim();
                 payment.Description = Trimmed(dto.Description);
+                payment.Notes = Trimmed(dto.Notes);
                 payment.ChequeNumber = Trimmed(dto.ChequeNumber);
                 payment.ChequeDate = dto.ChequeDate;
                 payment.ChequeStatus = ParseChequeStatus(dto.ChequeStatus, dto.ChequeNumber);
@@ -448,6 +450,7 @@ namespace MyApp.Api.Services.Implementations
                 BankAccountName = p.BankAccountName,
                 Method = p.Method,
                 Description = p.Description,
+                Notes = p.Notes,
                 Amount = p.Amount,
                 ChequeNumber = p.ChequeNumber,
                 ChequeDate = p.ChequeDate,
@@ -573,6 +576,7 @@ namespace MyApp.Api.Services.Implementations
                 ChequeNumber = p.ChequeNumber,
                 ChequeDate = p.ChequeDate,
                 Description = p.Description,
+                Notes = p.Notes,
                 Amount = p.Amount,
                 AmountInWords = NumberToWordsConverter.Convert(p.Amount),
                 Allocations = allocs,

@@ -201,6 +201,7 @@ export function mergeTemplate(htmlTemplate, data) {
  */
 export const MERGE_FIELDS = {
   Challan: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
@@ -221,6 +222,7 @@ export const MERGE_FIELDS = {
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
@@ -253,6 +255,7 @@ export const MERGE_FIELDS = {
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
   ],
   TaxInvoice: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{#each billItems}}", label: "Loop: Group by original Bill item type" },
     { field: "{{this.billQuantity}}", label: "Original Bill quantity (sum in current group)" },
     { field: "{{this.invoiceQuantity}}", label: "Adjusted Invoice quantity (sum in current group)" },
@@ -302,6 +305,7 @@ export const MERGE_FIELDS = {
     { field: "{{fbrLogoUrl}}", label: "FBR Logo URL" },
   ],
   Receipt: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },

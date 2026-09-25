@@ -10,6 +10,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const colors = {
   blue: "#0d47a1",
@@ -30,6 +31,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const canUseOrders = has("salesorders.list.view");
   const [client, setClient] = useState(null);
   const [site, setSite] = useState("");
+  const [notes, setNotes] = useState("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
   const [indentNo, setIndentNo] = useState("");
@@ -140,6 +142,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         clientId: client.id,
         clientName: client.label,
         site: site || null,
+        notes: notes.trim() || null,
         poNumber: poNumber.trim(),
         poDate: poDate ? new Date(poDate).toISOString() : null,
         indentNo: indentNo.trim() || null,
@@ -297,6 +300,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 itemsLabel="Items"
               />
             </div>
+
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
 
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="DeliveryChallan" entityId={null} mode="edit" />

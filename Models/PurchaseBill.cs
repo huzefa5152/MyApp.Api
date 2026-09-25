@@ -10,6 +10,7 @@ namespace MyApp.Api.Models
     /// </summary>
     public class PurchaseBill
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int PurchaseBillNumber { get; set; }
         public DateTime Date { get; set; }

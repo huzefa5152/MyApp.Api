@@ -17,6 +17,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -131,6 +132,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [invoiceDate, setInvoiceDate] = useState(todayYmd());
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
   // Credit Note (10) and Debit Note (9) get their own dedicated screens
   // — see InvoiceForm.jsx for the same rationale.
@@ -500,6 +502,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         clientId: parseInt(selectedClientId),
         gstRate: parseFloat(gstRate),
         paymentTerms: paymentTerms || null,
+        notes: notes.trim() || null,
         scenarioId: scenarioCode || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
@@ -1303,6 +1306,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               </>
             )}
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />
             </div>

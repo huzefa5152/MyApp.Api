@@ -10,6 +10,7 @@ import { todayYmd } from "../utils/dateInput";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
   const isEdit = !!receiptId;
@@ -23,6 +24,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [receiptDate, setReceiptDate] = useState(todayYmd());
   const [supplierChallanNumber, setSupplierChallanNumber] = useState("");
   const [site, setSite] = useState("");
+  const [notes, setNotes] = useState("");
   const [items, setItems] = useState([{ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }]);
   // Responsive: the line-item table side-scrolls on a phone, so below 760px
   // each line renders as a tap-friendly stacked card instead.
@@ -62,6 +64,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         setReceiptDate(data.receiptDate.slice(0, 10));
         setSupplierChallanNumber(data.supplierChallanNumber || "");
         setSite(data.site || "");
+        setNotes(data.notes || "");
         setItems((data.items || []).map(i => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit })));
       } catch { setError("Failed to load receipt."); }
     })();
@@ -91,6 +94,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         purchaseBillId: purchaseBillId ? parseInt(purchaseBillId) : null,
         supplierChallanNumber: supplierChallanNumber || null,
         site: site || null,
+        notes: notes.trim() || null,
         items: items.map(i => ({
           id: i.id || 0,
           itemTypeId: i.itemTypeId || null,
@@ -157,6 +161,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
               </div>
             </div>
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #e8edf3", backgroundColor: "#f8f9fb" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong>Items ({items.length})</strong>

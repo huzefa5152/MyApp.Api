@@ -2,6 +2,7 @@ namespace MyApp.Api.DTOs
 {
     public class InvoiceDto
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
@@ -257,6 +258,7 @@ namespace MyApp.Api.DTOs
 
     public class CreateInvoiceDto
     {
+        public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
@@ -314,6 +316,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
@@ -474,6 +477,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        public string? Notes { get; set; }
         /// <summary>
         /// Optional new bill date. When null, the existing date is preserved.
         /// FBR rejects future dates with [0043], so the service caps this at

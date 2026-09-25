@@ -9,6 +9,7 @@ import { getAllUnits } from "../api/unitsApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const colors = {
   textPrimary: "#1a2332",
@@ -53,6 +54,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Header fields ──
   const [clientId, setClientId] = useState(challan.clientId || "");
   const [site, setSite] = useState(challan.site || "");
+  const [notes, setNotes] = useState(challan.notes || "");
   const [deliveryDate, setDeliveryDate] = useState(
     challan.deliveryDate ? challan.deliveryDate.substring(0, 10) : ""
   );
@@ -168,6 +170,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         companyId: challan.companyId,
         clientId: parseInt(clientId),
         site: site || null,
+        notes: notes.trim() || null,
         // Empty string = operator wants to clear PO → "No PO" status.
         // Backend re-evaluates status based on FBR readiness.
         poNumber: poNumber.trim(),
@@ -351,6 +354,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
               units={units}
               itemsLabel="Items *"
             />
+
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
 
             {/* Attachments — INSIDE the scrollable body (formStyles.body) so it
                 scrolls with the rest and never pushes the footer off-screen.
