@@ -89,7 +89,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
           {quote.notes && (
             <>
               <div style={st.sectionTitle}>Notes</div>
-              <div style={st.notes}>{quote.notes}</div>
+              <div style={st.notes}><RichText text={quote.notes} /></div>
             </>
           )}
 

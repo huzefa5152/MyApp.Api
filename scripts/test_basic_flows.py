@@ -200,6 +200,7 @@ def test_challan_creation(base: str, token: str, company: dict, client: dict,
         "poNumber": "PO-TEST-001",
         "poDate": today,
         "deliveryDate": today,
+        "notes": "<b>Deliver before noon</b>\nGate 2",
         "items": items,
     }
     status, dc = http("POST", f"/api/deliverychallans/company/{company['id']}",
@@ -220,6 +221,10 @@ def test_challan_creation(base: str, token: str, company: dict, client: dict,
           f"got {len(dc.get('items', []))} items")
     check(suite, "tenant matches", dc.get("companyId") == company["id"],
           f"companyId = {dc.get('companyId')}")
+    check(suite, "formatted challan notes round-trip", dc.get("notes") == payload["notes"], f"got {dc.get('notes')!r}")
+    print_status, print_data = http("GET", f"/api/deliverychallans/{dc['id']}/print", base, token=token)
+    check(suite, "challan print merge data includes notes",
+          print_status == 200 and (print_data or {}).get("notes") == payload["notes"], f"{print_status}")
     print(f"  challan id={dc['id']}  number={dc.get('challanNumber')}  status={dc.get('status')}")
     return dc
 
@@ -241,6 +246,7 @@ def test_bill_from_challan(base: str, token: str, company: dict, client: dict, c
         "clientId": client["id"],
         "gstRate": 18,
         "challanIds": [challan["id"]],
+        "notes": "<i>Bill delivery at gate 2</i>",
         "items": items,
     }
     status, bill = http("POST", "/api/invoices", base, token=token, body=payload)
@@ -259,6 +265,10 @@ def test_bill_from_challan(base: str, token: str, company: dict, client: dict, c
           len(bill.get("deliveryChallans") or bill.get("challanIds") or []) >= 1
           or bill.get("invoiceNumber") is not None,
           f"bill = {bill}")
+    check(suite, "bill notes round-trip", bill.get("notes") == payload["notes"], f"got {bill.get('notes')!r}")
+    print_status, print_data = http("GET", f"/api/invoices/{bill['id']}/print/bill", base, token=token)
+    check(suite, "bill print merge data includes notes",
+          print_status == 200 and (print_data or {}).get("notes") == payload["notes"], f"{print_status}")
     print(f"  bill id={bill['id']}  number={bill.get('invoiceNumber')}  total={grand}")
     return bill
 
@@ -273,6 +283,7 @@ def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> 
         "companyId": company["id"],
         "clientId": client["id"],
         "gstRate": 18,
+        "notes": "<u>Standalone note</u>",
         "items": [
             {"description": "Service Charge", "quantity": 1,
              "uom": "Pcs", "unitPrice": 500},
@@ -289,6 +300,7 @@ def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> 
           (bill.get("deliveryChallans") in (None, []))
           or len(bill.get("deliveryChallans") or []) == 0,
           f"bill = {bill}")
+    check(suite, "standalone bill notes round-trip", bill.get("notes") == payload["notes"], f"got {bill.get('notes')!r}")
     print(f"  bill id={bill['id']}  number={bill.get('invoiceNumber')}  total={grand}")
     return bill
 
@@ -310,7 +322,7 @@ def test_invoice_update(base: str, token: str, bill: dict | None) -> None:
             "uom": it.get("uom") or "Pcs",
             "unitPrice": 750,
         })
-    payload = {"gstRate": 18, "items": items_in}
+    payload = {"gstRate": 18, "items": items_in, "notes": "<b>Edited note</b>"}
     status, updated = http("PUT", f"/api/invoices/{bill['id']}", base, token=token, body=payload)
     check(suite, "update returns 200", status == 200, f"got {status} {updated}")
     if status != 200:
@@ -321,6 +333,7 @@ def test_invoice_update(base: str, token: str, bill: dict | None) -> None:
     check(suite, "invoiceNumber preserved",
           updated.get("invoiceNumber") == bill.get("invoiceNumber"),
           f"old={bill.get('invoiceNumber')} new={updated.get('invoiceNumber')}")
+    check(suite, "edited notes round-trip", updated.get("notes") == payload["notes"], f"got {updated.get('notes')!r}")
 
     # The eight-column Bill print must use original bill lines and expose
     # their tax columns; it must not borrow the tax consultant's overlay.

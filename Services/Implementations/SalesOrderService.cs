@@ -570,6 +570,7 @@ namespace MyApp.Api.Services.Implementations
                 PoNumber = order.CustomerPoNumber ?? "",
                 PoDate = order.CustomerPoDate,
                 SalesOrderId = order.Id,
+                Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                 Items = challanItems
             };
 

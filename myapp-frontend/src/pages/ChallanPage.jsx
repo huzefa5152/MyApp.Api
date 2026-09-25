@@ -219,6 +219,7 @@ export default function ChallanPage() {
       const { data } = await createChallanFromOrder(payload.salesOrderId, {
         deliveryDate: payload.deliveryDate,
         site: payload.site,
+        notes: payload.notes,
         lines,
       });
       created = data;

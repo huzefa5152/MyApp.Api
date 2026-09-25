@@ -26,6 +26,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import BillNumberField from "./BillNumberField";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const colors = {
   blue: "#0d47a1",
@@ -175,6 +176,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const [billNumber, setBillNumber] = useState("");
   const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
   const [loading, setLoading] = useState(true);
@@ -311,6 +313,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         setBillNumber(data.invoiceNumber != null ? String(data.invoiceNumber) : "");
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
+        setNotes(data.notes || "");
         setPaymentMode(data.paymentMode ?? "");
         setDocumentType(data.documentType ?? 4);
 
@@ -1496,6 +1499,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
           withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
           paymentTerms: ptToSave,
+          notes: notes.trim() || null,
           documentType: documentType || null,
           paymentMode: paymentMode || null,
           // Only send clientId when it would actually change — backend
@@ -2489,6 +2493,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                   </div>
                 )}
 
+                <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={effectiveReadOnly} />
                 <div style={{ marginTop: "1rem" }}>
                   <AttachmentManager
                     ref={attachmentRef}

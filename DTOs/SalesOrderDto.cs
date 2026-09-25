@@ -85,6 +85,7 @@ namespace MyApp.Api.DTOs
     {
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }
+        public string? Notes { get; set; }
         public List<DeliverLineDto> Lines { get; set; } = new();
     }
 

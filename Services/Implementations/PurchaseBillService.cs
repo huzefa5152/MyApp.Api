@@ -54,6 +54,7 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = pb.GrandTotal,
             AmountInWords = pb.AmountInWords,
             PaymentTerms = pb.PaymentTerms,
+            Notes = pb.Notes,
             DocumentType = pb.DocumentType,
             PaymentMode = pb.PaymentMode,
             ReconciliationStatus = pb.ReconciliationStatus,
@@ -223,6 +224,7 @@ namespace MyApp.Api.Services.Implementations
                 SupplierBillNumber = pb.SupplierBillNumber,
                 SupplierIRN = pb.SupplierIRN,
                 PaymentTerms = pb.PaymentTerms,
+                Notes = pb.Notes,
                 // DueDate omitted — master's PurchaseBill has no DueDate field.
                 GoodsReceiptNumbers = grNumbers,
                 LinkedSaleBillNumbers = pb.Items?
@@ -397,6 +399,7 @@ namespace MyApp.Api.Services.Implementations
                 WithholdingTaxAmount = withholdingTaxAmount,
                 AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                 PaymentTerms = dto.PaymentTerms,
+                Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                 DocumentType = dto.DocumentType,
                 PaymentMode = dto.PaymentMode,
                 ReconciliationStatus = string.IsNullOrWhiteSpace(dto.SupplierIRN) ? "ManualOnly" : "Pending",
@@ -537,6 +540,7 @@ namespace MyApp.Api.Services.Implementations
             bill.WithholdingTaxRate = dto.WithholdingTaxRate;
             bill.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
             bill.PaymentTerms = dto.PaymentTerms;
+            bill.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
             bill.DocumentType = dto.DocumentType;
             bill.PaymentMode = dto.PaymentMode;
             // Reconciliation status transitions:

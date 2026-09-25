@@ -13,6 +13,7 @@ import { getQuoteItemRate } from "../api/salesQuoteApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 import { todayYmd } from "../utils/dateInput";
 const colors = {
@@ -228,10 +229,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
               <div style={{ ...s.tRow, ...s.grand }}><span>Grand Total</span><span>Rs {grandTotal.toLocaleString()}</span></div>
             </div>
 
-            <div style={{ marginTop: "1rem" }}>
-              <label style={s.label}>Notes / Terms <span style={s.opt}>(optional)</span></label>
-              <textarea style={{ ...s.input, minHeight: 56, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms printed at the foot of the quote" />
-            </div>
+            <DocumentNotesEditor value={notes} onChange={setNotes} label="Notes / Terms (optional)" />
 
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="SalesQuote" entityId={quote?.id ?? null} mode="edit" />

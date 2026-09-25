@@ -38,6 +38,7 @@ namespace MyApp.Api.Services.Implementations
             PurchaseBillNumber = gr.PurchaseBill?.PurchaseBillNumber,
             SupplierChallanNumber = gr.SupplierChallanNumber,
             Site = gr.Site,
+            Notes = gr.Notes,
             Status = gr.Status,
             CreatedAt = gr.CreatedAt,
             Items = gr.Items?.Select(i => new GoodsReceiptItemDto
@@ -130,6 +131,7 @@ namespace MyApp.Api.Services.Implementations
                 SupplierChallanNumber = gr.SupplierChallanNumber,
                 PurchaseBillNumber = gr.PurchaseBill?.PurchaseBillNumber,
                 Site = gr.Site,
+                Notes = gr.Notes,
                 Status = gr.Status,
                 Items = gr.Items?.Select(i => new PrintGoodsReceiptItemDto
                 {
@@ -194,6 +196,7 @@ namespace MyApp.Api.Services.Implementations
                     PurchaseBillId = dto.PurchaseBillId,
                     SupplierChallanNumber = dto.SupplierChallanNumber?.Trim(),
                     Site = dto.Site,
+                    Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                     Status = "Pending",
                     CreatedAt = DateTime.UtcNow,
                     Items = dto.Items.Select(i => new GoodsReceiptItem
@@ -266,6 +269,7 @@ namespace MyApp.Api.Services.Implementations
             gr.PurchaseBillId = dto.PurchaseBillId;
             gr.SupplierChallanNumber = dto.SupplierChallanNumber?.Trim();
             gr.Site = dto.Site;
+            gr.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
             if (!string.IsNullOrWhiteSpace(dto.Status)) gr.Status = dto.Status;
 
             // Replace items wholesale (lighter than diff, fine for v1)

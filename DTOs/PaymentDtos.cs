@@ -5,6 +5,7 @@ namespace MyApp.Api.DTOs
     /// "None"/"Pending"/…) to match the codebase's string-status convention.</summary>
     public class PaymentDto
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int CompanyId { get; set; }
         public string Direction { get; set; } = "Receipt";
@@ -54,6 +55,7 @@ namespace MyApp.Api.DTOs
     /// (company, direction).</summary>
     public class CreatePaymentDto
     {
+        public string? Notes { get; set; }
         public string Direction { get; set; } = "Receipt";
         public int? Number { get; set; }
         public DateTime Date { get; set; }

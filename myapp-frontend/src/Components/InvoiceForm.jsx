@@ -26,6 +26,7 @@ import DocumentTaxFields from "./DocumentTaxFields";
 import LookupAutocomplete from "./LookupAutocomplete";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const colors = {
   blue: "#0d47a1",
@@ -123,6 +124,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
   // slice rolled the calendar day back by one for PKT operators billing
   // before 5am.
@@ -675,6 +677,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
         withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
         paymentTerms: paymentTermsToSave,
+        notes: notes.trim() || null,
         documentType: documentType || null,
         paymentMode: paymentMode || null,
         challanIds: selectedIds,
@@ -1718,6 +1721,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </>
             )}
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />
             </div>

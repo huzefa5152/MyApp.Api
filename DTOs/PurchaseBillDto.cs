@@ -10,6 +10,7 @@ namespace MyApp.Api.DTOs
         /// <summary>What the supplier is actually owed: GrandTotal − withholding.</summary>
         public decimal Collectible { get; set; }
 
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int PurchaseBillNumber { get; set; }
         public DateTime Date { get; set; }
@@ -92,6 +93,7 @@ namespace MyApp.Api.DTOs
         public decimal? WithholdingTaxRate { get; set; }
         public decimal? WithholdingTaxAmount { get; set; }
 
+        public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int SupplierId { get; set; }
@@ -142,6 +144,7 @@ namespace MyApp.Api.DTOs
         public decimal? WithholdingTaxRate { get; set; }
         public decimal? WithholdingTaxAmount { get; set; }
 
+        public string? Notes { get; set; }
         public DateTime? Date { get; set; }
         public string? SupplierBillNumber { get; set; }
         public string? SupplierIRN { get; set; }

@@ -3,6 +3,7 @@ namespace MyApp.Api.DTOs
     // Data for printing a Delivery Challan
     public class PrintChallanDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -35,6 +36,7 @@ namespace MyApp.Api.DTOs
         public DateTime? FbrSubmittedAt { get; set; }
         public string? FbrQrPngDataUrl { get; set; }
         public string? FbrLogoUrl { get; set; }
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -109,6 +111,7 @@ namespace MyApp.Api.DTOs
 
     public class PrintTaxInvoiceDto
     {
+        public string? Notes { get; set; }
         // Supplier (company) details
         public string SupplierName { get; set; } = "";
         public string? SupplierAddress { get; set; }
@@ -328,6 +331,7 @@ namespace MyApp.Api.DTOs
     // BUYER; supplier* fields carry the vendor party, company* the tenant).
     public class PrintPurchaseBillDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -371,6 +375,7 @@ namespace MyApp.Api.DTOs
     // PrintChallanDto on the purchase side).
     public class PrintGoodsReceiptDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
