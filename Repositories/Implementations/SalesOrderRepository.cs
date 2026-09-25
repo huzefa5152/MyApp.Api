@@ -58,6 +58,7 @@ namespace MyApp.Api.Repositories.Implementations
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderByDescending(o => o.SalesOrderNumber)
+                .ThenByDescending(o => o.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();

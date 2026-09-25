@@ -1,3 +1,4 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { MdRequestQuote, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdSwapHoriz, MdVisibility, MdUploadFile, MdGridOn } from "react-icons/md";
 import { saveAs } from "file-saver";
@@ -171,6 +172,7 @@ export default function SalesQuotePage() {
   };
 
   return (
+    <DocumentLinesNavigation type="quote">
     <div>
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -295,6 +297,7 @@ export default function SalesQuotePage() {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 
