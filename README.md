@@ -324,6 +324,8 @@ layout.
   named by its dates.
 - On the Accounting reports, *Clear filters* now keeps a custom range's dates,
   and a report saved as PDF is no longer named "….pdf.pdf".
+- A document downloaded as PDF from the **Customer Portal** is no longer named
+  "….pdf.pdf" either.
 
 ### 2026-09-25 — Import Costing checks every GD line before its stock comes in
 
