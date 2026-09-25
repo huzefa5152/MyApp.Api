@@ -157,7 +157,19 @@ export function setActiveStamps(dict) {
 
 
 
+// Templates saved before the richText helper existed (and hand-written ones)
+// print a description as {{this.description}}, which HTML-escapes it and
+// collapses the line breaks the operator typed into one run-on line. Route
+// every double-stash description through richText instead. richText escapes
+// exactly as {{…}} does, then only re-allows <br> and <b>/<i>/<u>, so this is
+// no wider than before. Triple-stash {{{description}}} is left alone.
+const PLAIN_DESCRIPTION = /(?<!\{)\{\{\s*((?:this\.|\.\.\/)*description)\s*\}\}(?!\})/g;
+export function upgradeDescriptionTags(htmlTemplate) {
+  return String(htmlTemplate ?? "").replace(PLAIN_DESCRIPTION, "{{{richText $1}}}");
+}
+
 export function mergeTemplate(htmlTemplate, data) {
+  htmlTemplate = upgradeDescriptionTags(htmlTemplate);
   // Safety net for the {{stamp}} slot. resolveTemplate() normally materializes
   // it upstream (see utils/stampSlot.js), but any path that reaches here with
   // the raw token still in place would have Handlebars resolve it to "" and

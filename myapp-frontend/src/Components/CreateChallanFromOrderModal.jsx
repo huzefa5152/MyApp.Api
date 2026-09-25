@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import RichText from "./RichText";
 import { createChallanFromOrder } from "../api/salesOrderApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { formStyles, modalSizes } from "../theme";
@@ -98,7 +99,7 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
             <div style={s.mcards}>
               {(order.items || []).map((i) => (
                 <div key={i.id} style={s.mcard}>
-                  <div style={s.desc}>{i.description}</div>
+                  <div style={s.desc}><RichText text={i.description} /></div>
                   {i.unit && <div style={s.unit}>{i.unit}</div>}
                   <div style={s.mgrid3}>
                     <div><div style={s.mlabel}>Ordered</div><div>{i.quantity}</div></div>
@@ -123,7 +124,7 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
           {(order.items || []).map((i) => (
             <div key={i.id} style={s.tableRow}>
               <div style={{ flex: 2, minWidth: 0 }}>
-                <div style={s.desc}>{i.description}</div>
+                <div style={s.desc}><RichText text={i.description} /></div>
                 <div style={s.unit}>{i.unit}</div>
               </div>
               <div style={s.col}>{i.quantity}</div>

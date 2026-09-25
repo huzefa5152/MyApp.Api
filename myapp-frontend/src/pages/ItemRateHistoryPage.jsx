@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import RichText from "../Components/RichText";
 import { MdHistory, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdInsights, MdVisibility } from "react-icons/md";
 import { getItemRateHistory } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -325,7 +326,7 @@ export default function ItemRateHistoryPage() {
                         <td style={styles.td}>{new Date(r.date).toLocaleDateString()}</td>
                         <td style={styles.td}>{r.clientName}</td>
                         <td style={{ ...styles.td, maxWidth: 360 }}>
-                          <div style={{ fontSize: "0.85rem" }}>{r.description}</div>
+                          <div style={{ fontSize: "0.85rem" }}><RichText text={r.description} /></div>
                           {r.itemTypeName && (
                             <div
                               style={{
@@ -383,7 +384,7 @@ export default function ItemRateHistoryPage() {
                     </div>
 
                     <div className="irh-card__client">{r.clientName}</div>
-                    <div className="irh-card__desc">{r.description}</div>
+                    <div className="irh-card__desc"><RichText text={r.description} /></div>
                     {r.itemTypeName && (
                       <div className="irh-card__itemtype">{r.itemTypeName}</div>
                     )}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import RichText from "../Components/RichText";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdUndo, MdSearch, MdReceipt, MdArrowBack } from "react-icons/md";
 import { getInvoicesByCompany, createNote } from "../api/invoiceApi";
@@ -268,7 +269,7 @@ export default function CreditDebitNotePage() {
                       <td style={{ padding: 6 }}>
                         <input type="checkbox" checked={l.include} onChange={(e) => updateLine(l.id, { include: e.target.checked })} />
                       </td>
-                      <td style={{ padding: 6 }}>{l.description}</td>
+                      <td style={{ padding: 6 }}><RichText text={l.description} /></td>
                       <td style={{ padding: 6, color: colors.textSecondary }}>{l.hsCode || "—"}</td>
                       <td style={{ padding: 6, textAlign: "right" }}>
                         {Number(l.invoicedQty).toLocaleString()} {l.uom} @ {Number(l.invoicedRate).toLocaleString()}
