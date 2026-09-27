@@ -308,6 +308,11 @@ Publish output optimized from 79 MB to 37 MB via:
   against the SAME saved PO formats, so no new format is needed for pictures.
   The review screen says the lines were read from an image and asks the
   operator to check every description and quantity before saving.
+- **A tilted photo reads like a straight one.** A phone photo is never square
+  to the page, and at barely half a degree a table row's cells fell onto
+  different lines, so the PO matched its format and returned no items. The
+  tilt is now measured from the words and taken out first; a straight photo or
+  a scan is left exactly as it was.
 - **A PO format still matches when the PO's own data differs.** A Meko Fabrics
   PO was refused as "no format" because a timestamp's AM/PM and colons inside
   an item description had crept into its fingerprint; matching now ignores

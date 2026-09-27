@@ -128,6 +128,14 @@ A PDF whose text layer is empty (`parse-pdf` → 422 `unreadable`) falls back to
   groups by vertical CENTRE (OCR boxes of one line do not share a bottom edge),
   drops grid-line debris (`|`, `~~`) and faint short digit-free fragments, and
   keeps a faint `-` so an empty column keeps its cell.
+- **Tilt is taken out before lines are grouped** (`PoLayoutText.Deskew`). A photo
+  0.4 degrees off square split every Mundia row into a description line and a
+  quantity line, so the format matched and no items came back. The slope is the
+  one at which word centres pile into the sharpest rows (projection profile,
+  ±5°, 0.0005 steps); it applies only when that beats level by 5%, so a square
+  photo or a scan passes through unchanged. Measured on the same PO rendered at
+  0 / 0.4 / 1.2 / -2.5 degrees: 6 / 7 / 7 / 6 items of 7, where the tilted three
+  were all 0 before.
 - **Same formats.** OCR text goes through `FindMatchForOcrAsync`: the normal
   matcher first, then word COVERAGE of the format's signature (≥ 0.85; real
   matches score 0.97–1.00, documents with no format ≤ 0.73). Label-span Jaccard

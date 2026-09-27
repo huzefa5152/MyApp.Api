@@ -70,8 +70,9 @@ namespace MyApp.Api.Helpers
             var lines = new List<string>();
             if (words.Count == 0) return lines;
 
+            var kept = Deskew(words.Where(w => !IsGridDebris(w.Text) && !IsLowConfidenceFragment(w)).ToList());
             var groups = new List<(double Top, double Bottom, List<PositionedWord> Words)>();
-            foreach (var word in words.Where(w => !IsGridDebris(w.Text) && !IsLowConfidenceFragment(w)).OrderBy(w => (w.Top + w.Bottom) / 2))
+            foreach (var word in kept.OrderBy(w => (w.Top + w.Bottom) / 2))
             {
                 var centre = (word.Top + word.Bottom) / 2;
                 int hit = -1;
@@ -83,6 +84,53 @@ namespace MyApp.Api.Helpers
 
             foreach (var g in groups.OrderBy(g => (g.Top + g.Bottom) / 2)) AddLine(lines, g.Words);
             return lines;
+        }
+
+        // A photo is never quite square to the page: at 1.2 degrees the right
+        // edge of a PO sits ~30px below the left, most of a table row, so one
+        // row's cells land in different lines and the parser finds no items.
+        // The tilt is measured from the words themselves (a projection
+        // profile: the slope at which word centres pile up into the fewest,
+        // sharpest rows) and taken out before lines are grouped. A square
+        // photo or a scan measures zero and passes through untouched.
+        private const double MaxSkewSlope = 0.09;    // ~5 degrees either way
+        private const double SkewSlopeStep = 0.0005;
+
+        private static List<PositionedWord> Deskew(List<PositionedWord> words)
+        {
+            if (words.Count < 8) return words;
+            var heights = words.Select(w => w.Bottom - w.Top).Where(h => h > 0).OrderBy(h => h).ToList();
+            if (heights.Count == 0) return words;
+            var bin = Math.Max(heights[heights.Count / 2] * 0.25, 1);
+            var xMid = words.Average(w => (w.Left + w.Right) / 2);
+
+            double Score(double slope)
+            {
+                var counts = new Dictionary<long, int>();
+                foreach (var w in words)
+                {
+                    var y = (w.Top + w.Bottom) / 2 - ((w.Left + w.Right) / 2 - xMid) * slope;
+                    var k = (long)Math.Floor(y / bin);
+                    counts[k] = counts.GetValueOrDefault(k) + 1;
+                }
+                return counts.Values.Sum(c => (double)c * c);
+            }
+
+            var level = Score(0);
+            double best = 0, bestScore = level;
+            for (var s = -MaxSkewSlope; s <= MaxSkewSlope + 1e-12; s += SkewSlopeStep)
+            {
+                var score = Score(s);
+                if (score > bestScore || (score == bestScore && Math.Abs(s) < Math.Abs(best))) { bestScore = score; best = s; }
+            }
+            // Only a clearly sharper profile moves anything: noise must not tilt a square page.
+            if (best == 0 || bestScore < level * 1.05) return words;
+
+            return words.Select(w =>
+            {
+                var dy = -((w.Left + w.Right) / 2 - xMid) * best;
+                return w with { Top = w.Top + dy, Bottom = w.Bottom + dy };
+            }).ToList();
         }
 
         // A table's ruling lines, read by OCR as "|", "~~", "__", "[" … An extra

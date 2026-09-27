@@ -61,6 +61,44 @@ Console.WriteLine("OCR lines");
 }
 Check("an empty page gives no lines", PoLayoutText.FromOcrPage(new List<PositionedWord>()).Count == 0);
 
+Console.WriteLine("Tilted photos");
+{
+    // A page-wide table: a header and six rows 40px apart, 1,400px across. A
+    // photo is never quite square to the page, so every word is lowered by
+    // x * tan(angle) — at 1.2 degrees the right edge sits 29px below the left,
+    // most of a row. The lines must come out exactly as the square photo's.
+    List<PositionedWord> Table(double degrees)
+    {
+        var slope = Math.Tan(degrees * Math.PI / 180);
+        var rows = new List<string[]> { new[] { "PR No", "Item", "Remarks", "Qty", "Rate", "Amount" } };
+        for (int r = 1; r <= 6; r++)
+            rows.Add(new[] { $"0001524{r}", $"WIDGET {r}", "FOR STORE", $"{r * 10}.00 PIECE", $"Rs {r * 5}.00", $"Rs {r * 50}.00" });
+        var columns = new[] { 0.0, 180, 500, 800, 1050, 1250 };
+        var words = new List<PositionedWord>();
+        for (int r = 0; r < rows.Count; r++)
+            for (int c = 0; c < columns.Length; c++)
+            {
+                var x = columns[c];
+                foreach (var part in rows[r][c].Split(' '))
+                {
+                    var w = W(part, x, 100 + r * 40, 118 + r * 40);
+                    var dy = (w.Left + w.Right) / 2 * slope;
+                    words.Add(w with { Top = w.Top + dy, Bottom = w.Bottom + dy });
+                    x = w.Right + 12;
+                }
+            }
+        return words;
+    }
+    var square = PoLayoutText.FromOcrPage(Table(0));
+    Check("the square table reads as seven lines", square.Count == 7, string.Join(" / ", square));
+    foreach (var deg in new[] { 0.4, 1.2, 2.5, -1.5 })
+    {
+        var tilted = PoLayoutText.FromOcrPage(Table(deg));
+        Check($"a photo tilted {deg} degrees reads like the square one", tilted.SequenceEqual(square),
+            string.Join(" / ", tilted));
+    }
+}
+
 Console.WriteLine("PDF lines (the historical rule)");
 {
     // PDF space: larger Y is higher. Bottom within 0.4 x height groups a line.
