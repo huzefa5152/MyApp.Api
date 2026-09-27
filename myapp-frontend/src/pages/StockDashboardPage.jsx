@@ -206,6 +206,9 @@ export default function StockDashboardPage() {
   // GDs per item, from the on-hand rows. The Inventory and Opening tabs carry
   // no GD of their own, so they read it from here by item.
   const gdByItem = new Map(onhand.map(r => [r.itemTypeId, r.gdNumbers || []]));
+  // The Inventory tab's stock ledger needs each item's opening balance, which
+  // only the on-hand feed carries.
+  const onhandById = new Map(onhand.map(r => [r.itemTypeId, r]));
   const gdText = (itemTypeId) => (gdByItem.get(itemTypeId) || []).join(", ");
   const matches = (name, hsCode, itemTypeId) => {
     const q = search.trim().toLowerCase();
@@ -264,8 +267,8 @@ export default function StockDashboardPage() {
     ] : []),
   ]);
   const [showInvCol, inventoryPicker] = useColumnVisibility("stock:inventory", [
-    { key: "gd", label: "GD No" },
     { key: "item", label: "Item" },
+    { key: "hs", label: "HS Code" },
     { key: "instock", label: "In Stock" },
     { key: "available", label: "Available" },
     { key: "committed", label: "Committed" },
@@ -1137,8 +1140,9 @@ export default function StockDashboardPage() {
                   <table style={styles.table}>
                     <thead>
                       <tr>
-                        {showInvCol("gd") && <th style={styles.th}>GD No</th>}
+                        <th style={{ ...styles.th, width: 28 }} aria-label="Expand stock ledger"></th>
                         {showInvCol("item") && <th style={styles.th}>Item</th>}
+                        {showInvCol("hs") && <th style={styles.th}>HS Code</th>}
                         {showInvCol("instock") && <th style={{ ...styles.th, textAlign: "right" }} title="Physical stock in hand">In Stock</th>}
                         {showInvCol("available") && <th style={{ ...styles.th, textAlign: "right" }} title="Free to sell = In Stock - Committed">Available</th>}
                         {showInvCol("committed") && <th style={{ ...styles.th, textAlign: "right" }} title="Reserved to customers = To Deliver + Delivered">Committed</th>}
@@ -1148,9 +1152,18 @@ export default function StockDashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredSummary.map((r, idx) => (
-                        <tr key={r.itemTypeId} style={idx % 2 ? { background: colors.rowAlt } : undefined}>
-                          {showInvCol("gd") && <td style={styles.td}><GdList gds={gdByItem.get(r.itemTypeId)} /></td>}
+                      {filteredSummary.map((r, idx) => {
+                        const isOpen = expandedId === r.itemTypeId;
+                        const colCount = 1 + ["item", "hs"].filter(showInvCol).length + inventoryTracked;
+                        return (
+                        <Fragment key={r.itemTypeId}>
+                        <tr
+                          style={{ backgroundColor: isOpen ? colors.bandBg : (idx % 2 ? colors.rowAlt : "#fff"), cursor: "pointer" }}
+                          onClick={() => toggleDrill(r.itemTypeId)}
+                        >
+                          <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary, paddingLeft: 6, paddingRight: 0 }}>
+                            {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
+                          </td>
                           {showInvCol("item") && (
                           <td style={styles.td}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
@@ -1163,6 +1176,12 @@ export default function StockDashboardPage() {
                               )}
                             </div>
                           </td>
+                          )}
+                          {showInvCol("hs") && (
+                            <td style={styles.td}>
+                              <span style={styles.hsChip}>{r.hsCode || "—"}</span>
+                              {r.uom && <div style={styles.itemMeta}>{r.uom}</div>}
+                            </td>
                           )}
                           {r.tracked ? (
                             <>
@@ -1177,7 +1196,23 @@ export default function StockDashboardPage() {
                             <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }} colSpan={inventoryTracked}>—</td>
                           )}
                         </tr>
-                      ))}
+                        {isOpen && (
+                          <tr>
+                            <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
+                              <StockLedgerPanel
+                                gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
+                                movements={canViewMovements ? drill[r.itemTypeId] : []}
+                                movementsLoading={canViewMovements && drillLoading === r.itemTypeId}
+                                canViewMovements={canViewMovements}
+                                openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
+                                onHand={r.onHand} uom={r.uom}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1190,10 +1225,8 @@ export default function StockDashboardPage() {
                     <div key={r.itemTypeId} className="stock-card">
                       <div className="stock-card__top">
                         <div className="stock-card__top-left">
-                          {showInvCol("gd") && gdText(r.itemTypeId) && (
-                            <span className="stock-card__hs">GD {gdText(r.itemTypeId)}</span>
-                          )}
                           <span className="stock-card__name">{r.itemTypeName}</span>
+                          {showInvCol("hs") && r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
                           {(!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)) && (
                             <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: 2 }}>
                               {!r.tracked && (
@@ -1239,6 +1272,20 @@ export default function StockDashboardPage() {
                         </div>
                       ) : (
                         <div className="stock-card__notes">Not tracked as inventory (FBR-reporting item).</div>
+                      )}
+                      <button type="button" style={cardDrillBtn} onClick={() => toggleDrill(r.itemTypeId)}>
+                        {expandedId === r.itemTypeId ? <MdExpandMore size={16} /> : <MdChevronRight size={16} />}
+                        {expandedId === r.itemTypeId ? "Hide stock ledger" : "View stock ledger"}
+                      </button>
+                      {expandedId === r.itemTypeId && (
+                        <StockLedgerPanel
+                          gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
+                          movements={canViewMovements ? drill[r.itemTypeId] : []}
+                          movementsLoading={canViewMovements && drillLoading === r.itemTypeId}
+                          canViewMovements={canViewMovements}
+                          openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
+                          onHand={r.onHand} uom={r.uom}
+                        />
                       )}
                     </div>
                   ))}
@@ -1840,6 +1887,143 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
         <div style={gdStyles.untraced}>
           Opening position not traced by these GD rows: <b>{num(missingQty)}</b> units · <b>{money(missingValue)}</b> excl.
           This can include manual opening corrections or source rows without a GD number.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The Inventory tab's per-item stock ledger: every unit that came in and
+// went out, oldest first, with a running balance. Stock IN is the GD lots
+// behind the opening position (GD number + GD date) plus any inward movement
+// (purchase bill, goods receipt, adjustment up); stock OUT is each invoice
+// (and any other outward movement). Opening quantity no GD row explains is
+// shown as its own line so the ledger still adds up to on-hand. Reads only
+// the two feeds the On-Hand drill-down already loads -- no new figures.
+const LEDGER_SOURCE_LABELS = {
+  Invoice: "Invoice",
+  PurchaseBill: "Purchase bill",
+  GoodsReceipt: "Goods receipt",
+  PurchaseDebitNote: "Debit note",
+  Adjustment: "Adjustment",
+};
+function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canViewMovements, openingQty, onHand, uom }) {
+  if (gdLoading || !gdRows || (canViewMovements && (movementsLoading || !movements))) {
+    return <div style={drillStyles.state}>Loading stock ledger…</div>;
+  }
+  const entries = [];
+  let tracedQty = 0;
+  gdRows.forEach((g, i) => {
+    const q = Number(g.quantity || 0);
+    if (g.quantity == null || q <= 0) return; // cost-only backfill: no stock moved
+    tracedQty += q;
+    entries.push({
+      key: `gd-${i}`, date: g.gdDate, order: 0, dir: "In", qty: q,
+      ref: `GD ${g.gdNumber}`, kind: g.source || "GD lot",
+      detail: g.description, sub: g.sourceRow != null ? `row ${g.sourceRow}` : null,
+    });
+  });
+  const untraced = Number(openingQty || 0) - tracedQty;
+  if (untraced > 0.0001) {
+    entries.push({
+      key: "opening-untraced", date: null, order: -1, dir: "In", qty: untraced,
+      ref: "Opening balance", kind: "Not traced to a GD", detail: null, sub: null,
+    });
+  }
+  // Movements arrive per line item; one document's lines of this item are
+  // summed into one ledger row, as the On-Hand movement history does.
+  const byDoc = new Map();
+  (movements || []).forEach((m) => {
+    if (m.sourceType === "OpeningBalance" || m.sourceType === "Revaluation") return;
+    const q = Number(m.quantity || 0);
+    if (q === 0) return;
+    const key = m.sourceId != null ? `${m.sourceType}:${m.sourceId}:${m.direction}` : `row:${m.id}`;
+    const hit = byDoc.get(key);
+    if (hit) { hit.qty += q; hit.lines += 1; return; }
+    byDoc.set(key, {
+      key: `mv-${key}`, date: m.movementDate, order: 1, dir: m.direction === "In" ? "In" : "Out", qty: q,
+      ref: `${LEDGER_SOURCE_LABELS[m.sourceType] || m.sourceType}${m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}`,
+      kind: m.direction === "In" ? "Stock in" : "Stock out",
+      detail: m.notes ? String(m.notes).split(" (")[0] : null, sub: null, lines: 1, id: m.id,
+    });
+  });
+  byDoc.forEach((e) => { if (e.lines > 1) e.sub = `${e.lines} line items`; entries.push(e); });
+
+  const time = (d) => (d ? new Date(d).getTime() : -Infinity);
+  entries.sort((a, b) => (time(a.date) - time(b.date)) || (a.order - b.order) || ((a.id || 0) - (b.id || 0)));
+  let bal = 0, totalIn = 0, totalOut = 0;
+  entries.forEach((e) => {
+    if (e.dir === "In") { bal += e.qty; totalIn += e.qty; } else { bal -= e.qty; totalOut += e.qty; }
+    e.balance = bal;
+  });
+  const drift = Number(onHand || 0) - bal;
+  const unit = uom ? ` ${uom}` : "";
+  const date = (d) => (d ? new Date(d).toLocaleDateString() : "—");
+
+  if (entries.length === 0) return <div style={drillStyles.state}>No stock has moved for this item yet.</div>;
+  return (
+    <div style={drillStyles.wrap}>
+      <div style={gdStyles.head}>
+        <span style={drillStyles.heading}><MdHistory size={15} /> Stock ledger ({entries.length})</span>
+        <span style={{ ...gdStyles.stat, ...gdStyles.statOk }}>In <b>{num(totalIn)}</b>{unit}</span>
+        <span style={{ ...gdStyles.stat, ...gdStyles.statWarn }}>Out <b>{num(totalOut)}</b>{unit}</span>
+        <span style={gdStyles.stat}>Balance <b>{num(bal)}</b>{unit}</span>
+      </div>
+      {!canViewMovements && (
+        <div style={{ ...gdStyles.help, marginBottom: "0.4rem" }}>
+          Showing stock in from GDs only — invoices need the stock movements permission.
+        </div>
+      )}
+      <div className="gd-lines" style={gdStyles.box}>
+        <table style={gdStyles.table}>
+          <thead>
+            <tr>
+              <th style={gdStyles.th}>Date</th>
+              <th style={gdStyles.th}>Reference</th>
+              <th style={gdStyles.th}>Detail</th>
+              <th style={gdStyles.thNum}>In</th>
+              <th style={gdStyles.thNum}>Out</th>
+              <th style={gdStyles.thNum}>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e) => {
+              const isIn = e.dir === "In";
+              return (
+                <tr key={e.key}>
+                  <td style={gdStyles.td} data-label="Date"><span style={{ whiteSpace: "nowrap" }}>{date(e.date)}</span></td>
+                  <td style={gdStyles.td} data-label="Reference">
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                      <span style={{ ...drillStyles.dirBadge, ...(isIn ? drillStyles.dirIn : drillStyles.dirOut) }}>{isIn ? "IN" : "OUT"}</span>
+                      <span style={gdStyles.gdNo}>{e.ref}</span>
+                    </div>
+                    <div style={gdStyles.sub}>{e.kind}</div>
+                  </td>
+                  <td style={gdStyles.td} data-label="Detail">
+                    <div style={gdStyles.desc}>{e.detail || "—"}</div>
+                    {e.sub && <div style={gdStyles.sub}>{e.sub}</div>}
+                  </td>
+                  <td style={{ ...gdStyles.tdNum, color: "#2e7d32", fontWeight: 600 }} data-label="In">{isIn ? `+${num(e.qty)}` : ""}</td>
+                  <td style={{ ...gdStyles.tdNum, color: "#c62828", fontWeight: 600 }} data-label="Out">{isIn ? "" : `−${num(e.qty)}`}</td>
+                  <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balance < 0 ? "#c62828" : "#0d47a1" }} data-label="Balance">{num(e.balance)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td style={{ ...gdStyles.td, fontWeight: 700 }} colSpan={3} data-label="Total">Total</td>
+              <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#2e7d32" }} data-label="In">+{num(totalIn)}</td>
+              <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#c62828" }} data-label="Out">−{num(totalOut)}</td>
+              <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "#0d47a1" }} data-label="Balance">{num(bal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {Math.abs(drift) > 0.0001 && (
+        <div style={gdStyles.untraced}>
+          This ledger closes at {num(bal)}{unit}; in stock is {num(onHand)}{unit} (difference {num(drift)}).
+          The opening position on the Opening Balances tab explains any gap.
         </div>
       )}
     </div>
