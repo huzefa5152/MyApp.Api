@@ -32,6 +32,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import BillNumberField from "./BillNumberField";
+import { fifoQuantityForAmount, fifoTierText } from "../utils/fifoPricing";
 
 // The Customer Portal addresses a document by its NUMBER
 // (GET /portal/{token}/invoices/{invoiceNumber}), so changing it breaks a link
@@ -675,7 +676,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         // number and the rate absorbs the rounding, so the line comes to
         // exactly what was entered. The UOM does not decide the precision here
         // -- see the note in StandaloneInvoiceForm.deriveFromTotal.
-        const qty = Math.max(1, Math.round(total / cost));
+        // FIFO by GD: the amount walks the GDs the sale will drain, in order.
+        const qty = Math.max(1, Math.round(fifoQuantityForAmount(price, total) ?? total / cost));
         const rate = Math.round((total / qty) * 1e12) / 1e12;
         next[index] = {
           ...row,
@@ -2505,6 +2507,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                                   {fromStock && (
                                     <div style={{ fontSize: "0.66rem", color: colors.textSecondary, marginTop: 2 }}>
                                       {Number(price.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
+                                      {fifoTierText(price, price.uom || item.uom) && (
+                                        <div>{fifoTierText(price, price.uom || item.uom)}</div>
+                                      )}
                                     </div>
                                   )}
                                   {(() => {

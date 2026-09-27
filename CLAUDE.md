@@ -1233,6 +1233,69 @@ ruled that the redesign changes the SCREEN only.
   `searchPlaceholder`. Every default is the Accounting Reports behaviour, and an
   Accounting report rendered identically before and after (DOM compared).
 
+### 5b-17. FIFO by GD — a sale uses claimed GDs first (2026-09-28)
+
+A company can value stock FIFO BY GD instead of the weighted average (§5b-4).
+Each GD line an item came in on is a POOL, and a sale drains the pools in this
+order: **GDs claimed for the sale's month first** (claim month on or before the
+sale's month), **oldest GD date first**; then unclaimed GDs, oldest first; then
+opening stock no GD line explains; then any other inward stock. The sale is
+costed at what the pools it drained cost, and the stock ledger, movement feed,
+GD panel and Excel export all say which GDs it took.
+
+- **Per company, off by default.** `SystemSettings` key
+  `Stock.CostingMethod.{companyId}` = `GdFifo`; no row means `WeightedAverage`.
+  A setting row rather than a Company column on purpose: nothing about a
+  `Company` query can break when the flag is added. Switch it from the Stock
+  Dashboard's **Costing method** dialog (`PUT /api/stock/company/{id}/costing-method`,
+  `stock.policy.manage`, audited as `STOCK_COSTING_METHOD_CHANGE`), which first
+  shows `GET .../costing-compare` -- both methods side by side, read-only.
+- **Switching re-posts the monthly COGS relief** (`PostInventoryPeriodsAsync`),
+  so the ledger keeps agreeing with the stock screen. It respects the GL lock
+  date. On a production company that rewrites posted journal entries, so it is
+  the maintainer's call, company by company.
+- **It never blocks a bill.** FIFO is a READ: the pools are derived on every
+  read from rows that already exist (`OpeningStockLot`, `ImportConsignmentLines`,
+  `StockMovement`), nothing is stored per pool, and no save path consults it.
+  Selling past every pool is applied in full; the uncovered quantity is a
+  shortfall costed at the last pool used, and the next inward movement settles
+  it first. `StockGuardHardBlock` is the only oversell control and is unchanged.
+- **The invoice-month claim rule** (maintainer's decision): a claim month entered
+  later never re-costs an earlier sale. Opening lots are available from the
+  start whatever their GD date -- the GD date ORDERS pools, never withholds them.
+- **Quantity is counted exactly as the weighted average counts it** (opening +
+  in − out), not as the sum of the pools. Lots that claim MORE than the opening
+  holds are scaled to it, the last lot taking the remainder. Found on real data:
+  summing scaled pools drifted on-hand in the 4th decimal and read a sold-out
+  item as −0.0000022, and close-out / oversell read that quantity.
+- **The pools open at exactly the opening balance's money**; a lot set that does
+  not add up to it is corrected in proportion. Switching method must not move a
+  figure before anything is sold.
+- **Data gaps have rules, not errors:** a GD date from the lot, else the GD
+  import's date, else the claim month, else after every dated pool by sheet row;
+  landed cost from the GD costing line (per balance + GD, spread by value), else
+  the balance's remaining landed cost spread by value; a 0% lot rate under a
+  taxed item takes the item's rate; a revaluation is spread over the pools
+  holding stock by value; a sale return goes back into the pools that bill took
+  from, most recent first.
+- **One walk, one loader.** `Helpers/GdFifoValuation.cs` is the pure walk;
+  `Helpers/StockCosting.cs` loads its inputs and is what every valuation caller
+  goes through (`StockService.GetValuationsAsync`, the stock controller, the
+  dashboard, `ItemStockPositions`, `InventoryPeriodConsumption`, the GL check).
+  `StockCosting.None` is the weighted average with no database work. A new
+  caller of `StockValuation.Compute` for a company's stock must go through it.
+- **Bill pricing walks the tiers.** `stock-pricing` returns `tiers` (the pools
+  the next sale drains) for a FIFO company; `utils/fifoPricing.js` turns an
+  amount into the quantity it buys across them. No tiers = weighted average,
+  and the forms' arithmetic is untouched.
+- **The Excel ↳ rows carry their own Consumed / Balance** under FIFO, plus rows
+  for opening not traced to a GD, other stock in, and a sale not yet covered.
+  The item row and the totals are unchanged.
+- Suites: `cd scripts/stock_fifo_harness && dotnet run -c Release` (offline, links
+  the real walk), `python scripts/test_stock_fifo.py`, `node scripts/test_fifo_pricing.mjs`,
+  and the READ-ONLY production check `cd scripts/stock_fifo_prod_check && dotnet run -c Release`
+  (build the app first; it runs the shipped loader over real data, SELECT only).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -1720,6 +1783,7 @@ them can be resolved from FBR.
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
+| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `119 checks, 0 failed`; `45/45 checks passed`; `11/11 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

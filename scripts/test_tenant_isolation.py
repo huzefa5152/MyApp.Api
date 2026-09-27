@@ -326,6 +326,14 @@ endpoints_to_test = [
     ("GET",  "/api/stock/company/{cid}/movements"),
     ("GET",  "/api/stock/company/{cid}/opening"),
     ("GET",  "/api/stock/company/{cid}/cost-changes"),
+    # FIFO by GD (2026-09-28). The compare discloses every item's value on
+    # both costing methods; the PUT changes how another tenant's stock is
+    # valued and re-posts its COGS relief.
+    ("GET",  "/api/stock/company/{cid}/costing-method"),
+    ("GET",  "/api/stock/company/{cid}/costing-compare"),
+    ("PUT",  "/api/stock/company/{cid}/costing-method"),
+    ("GET",  "/api/stock/company/{cid}/gd-details"),
+    ("GET",  "/api/invoices/company/{cid}/stock-pricing?itemTypeIds=1"),
     ("GET",  "/api/fbr/sandbox/{cid}"),
     ("GET",  "/api/fbr/scenarios/applicable/{cid}"),
     ("GET",  "/api/fbr/uom/{cid}"),

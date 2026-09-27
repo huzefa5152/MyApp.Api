@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes } from "../api/stockApi";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes, getCostingMethod, compareCostingMethods, setCostingMethod } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -326,6 +326,45 @@ export default function StockDashboardPage() {
       notify(`Company switched to ${target === 2 ? "V2 (Standard Inventory)" : "V1 (Legacy)"}.`, "success");
     } catch (e) {
       notify(e?.response?.data?.error || "Could not switch inventory version.", "error");
+    }
+  };
+
+  // How this company values stock: the weighted average, or FIFO by GD
+  // (claimed GDs first, oldest GD date first). Switching opens a dialog that
+  // first shows, read-only, what the figures would become.
+  const [costingMethod, setCostingMethodState] = useState("WeightedAverage");
+  const [costingDialog, setCostingDialog] = useState(null); // { loading, compare, error }
+  const isFifo = costingMethod === "GdFifo";
+  useEffect(() => {
+    if (!selectedCompany) return;
+    let cancelled = false;
+    getCostingMethod(selectedCompany.id)
+      .then(({ data }) => { if (!cancelled) setCostingMethodState(data?.method || "WeightedAverage"); })
+      .catch(() => { if (!cancelled) setCostingMethodState("WeightedAverage"); });
+    return () => { cancelled = true; };
+  }, [selectedCompany]);
+  const openCostingDialog = async () => {
+    if (!selectedCompany) return;
+    setCostingDialog({ loading: true });
+    try {
+      const { data } = await compareCostingMethods(selectedCompany.id);
+      setCostingDialog({ loading: false, compare: data });
+    } catch (e) {
+      setCostingDialog({ loading: false, error: e?.response?.data?.error || "Could not work out the comparison." });
+    }
+  };
+  const applyCostingMethod = async (e) => {
+    e?.preventDefault?.();
+    if (!selectedCompany) return;
+    const target = isFifo ? "WeightedAverage" : "GdFifo";
+    try {
+      await setCostingMethod(selectedCompany.id, target);
+      setCostingMethodState(target);
+      setCostingDialog(null);
+      await fetchAll();
+      notify(target === "GdFifo" ? "Stock is now valued FIFO by GD." : "Stock is now valued at the weighted average.", "success");
+    } catch (err) {
+      notify(err?.response?.data?.error || "Could not change the costing method.", "error");
     }
   };
 
@@ -712,6 +751,25 @@ export default function StockDashboardPage() {
             >
               {flowVersion === 2 ? "Inventory V2 · Standard" : "Inventory V1 · Legacy"}
             </span>
+          )}
+          {selectedCompany && (
+            <span
+              style={isFifo ? styles.verPillV2 : styles.verPillV1}
+              title={isFifo
+                ? "Stock is valued FIFO by GD: a sale uses claimed GDs first, oldest GD date first, then unclaimed GDs."
+                : "Stock is valued at the weighted average of everything held."}
+            >
+              {isFifo ? "Costing · FIFO by GD" : "Costing · Weighted average"}
+            </span>
+          )}
+          {canManagePolicy && selectedCompany && (
+            <button
+              style={styles.altBtn}
+              onClick={openCostingDialog}
+              title="See what each costing method gives this company's stock, and switch between them"
+            >
+              <MdTune size={16} /> Costing method
+            </button>
           )}
           {/* V2 is one-way. Under V2 every item type is inventory, so a company
               builds up positions on items V1 does not track; going back would
@@ -1606,6 +1664,16 @@ export default function StockDashboardPage() {
         </SmallModal>
       )}
 
+      {costingDialog && (
+        <SmallModal
+          title={isFifo ? "Switch back to the weighted average" : "Value stock FIFO by GD"}
+          onClose={() => setCostingDialog(null)}
+          onSubmit={applyCostingMethod}
+        >
+          <CostingCompare dialog={costingDialog} isFifo={isFifo} />
+        </SmallModal>
+      )}
+
       {costHistoryItem && selectedCompany?.id && (
         <CostHistoryDialog
           companyId={selectedCompany.id}
@@ -1805,6 +1873,84 @@ export default function StockDashboardPage() {
 // with 3 lines of this item shows one row, not three. Adjustments, opening
 // stock and document-less reversals stay individual. Newest-first with a
 // running on-hand computed after each whole document.
+// What switching costing method would do, read before anything is switched.
+function CostingCompare({ dialog, isFifo }) {
+  if (dialog.loading) return <div style={drillStyles.state}>Working out both methods…</div>;
+  if (dialog.error) return <div style={{ ...gdStyles.untraced, color: colors.negative }}>{dialog.error}</div>;
+  const c = dialog.compare || {};
+  const rows = [
+    ["Stock value (excl. tax)", c.weightedAverageValue, c.fifoValue],
+    ["Cost of stock sold / used", c.weightedAverageValueOut, c.fifoValueOut],
+    ["Landed cost held", c.weightedAverageActual, c.fifoActual],
+  ];
+  const items = [...(c.items || [])]
+    .sort((a, b) => Math.abs(b.fifoValue - b.weightedAverageValue) - Math.abs(a.fifoValue - a.weightedAverageValue))
+    .slice(0, 8);
+  return (
+    <div style={{ fontSize: "0.84rem", color: colors.textPrimary }}>
+      <p style={{ marginTop: 0 }}>
+        {isFifo
+          ? "Stock is valued FIFO by GD. Switching back values every item at the weighted average of what it holds."
+          : "FIFO by GD costs each sale from the GDs it actually uses: claimed GDs first (a GD counts as claimed for a sale when its claim month is on or before the sale's month), oldest GD date first, then unclaimed GDs. Bill creation is never blocked by it."}
+      </p>
+      <div style={gdStyles.box}>
+        <table style={gdStyles.table}>
+          <thead>
+            <tr>
+              <th style={gdStyles.th}></th>
+              <th style={gdStyles.thNum}>Weighted average</th>
+              <th style={gdStyles.thNum}>FIFO by GD</th>
+              <th style={gdStyles.thNum}>Difference</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, wa, fifo]) => (
+              <tr key={label}>
+                <td style={gdStyles.td}>{label}</td>
+                <td style={gdStyles.tdNum}>{money(wa)}</td>
+                <td style={gdStyles.tdNum}>{money(fifo)}</td>
+                <td style={{ ...gdStyles.tdNum, fontWeight: 700 }}>{money(Number(fifo || 0) - Number(wa || 0))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ ...gdStyles.help, marginTop: "0.5rem" }}>
+        {c.changedItemCount || 0} of {c.itemCount || 0} items value differently. Quantities never change.
+        Switching re-posts the monthly cost-of-goods entries on the new basis (months before the GL lock date stay as they are).
+      </p>
+      {items.length > 0 && (
+        <div style={gdStyles.box}>
+          <table style={gdStyles.table}>
+            <thead>
+              <tr>
+                <th style={gdStyles.th}>Item</th>
+                <th style={gdStyles.thNum}>Weighted avg.</th>
+                <th style={gdStyles.thNum}>FIFO</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.itemTypeId}>
+                  <td style={gdStyles.td}>
+                    <div style={gdStyles.desc}>{it.itemTypeName}</div>
+                    <div style={gdStyles.sub}>{it.hsCode || "no HS code"} · {it.gdPools} GD lines</div>
+                  </td>
+                  <td style={gdStyles.tdNum}>{money(it.weightedAverageValue)}</td>
+                  <td style={gdStyles.tdNum}>{money(it.fifoValue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p style={{ ...gdStyles.help, marginTop: "0.5rem", marginBottom: 0 }}>
+        Save to switch to <b>{isFifo ? "the weighted average" : "FIFO by GD"}</b>. You can switch back at any time.
+      </p>
+    </div>
+  );
+}
+
 function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
   if (loading || !rows) return <div style={drillStyles.state}>Loading GD sources…</div>;
   if (rows.length === 0) return <div style={drillStyles.state}>No GD source rows recorded for this item.</div>;
@@ -1813,6 +1959,8 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
   const missingQty = Number(openingQty || 0) - sourceQty;
   const missingValue = Number(openingValue || 0) - sourceValue;
   const unclaimed = rows.filter(r => !r.claimMonth).length;
+  // FIFO by GD fills Sold / Left per line; the weighted average has no split.
+  const fifo = rows.some(r => r.remainingQuantity != null);
   const month = (date) => date ? new Date(date).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—";
   const date = (value) => value ? new Date(value).toLocaleDateString() : "—";
   return (
@@ -1830,6 +1978,7 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
         Source quantities explain the opening position before later sales. Cost-only backfills add no stock.
         GD month is the declaration month; claim month is the return this line's input tax was
         filed in — each line has its own, and a blank one means not claimed yet.
+        {fifo && " Sold and Left are FIFO by GD: a sale uses the GDs claimed by its month first, oldest GD date first, then the unclaimed ones."}
       </details>
       <div className="gd-lines" style={gdStyles.box}>
         <table style={gdStyles.table}>
@@ -1840,6 +1989,8 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
               <th style={gdStyles.th}>Source line</th>
               <th style={gdStyles.thNum}>Qty</th>
               <th style={gdStyles.thNum}>Value excl</th>
+              {fifo && <th style={gdStyles.thNum} title="FIFO by GD: what sales took from this line">Sold</th>}
+              {fifo && <th style={gdStyles.thNum} title="FIFO by GD: what this line still holds">Left</th>}
               <th style={gdStyles.thNum}>Tax</th>
               <th style={gdStyles.th}>Claim month</th>
             </tr>
@@ -1865,6 +2016,26 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
                 <td style={gdStyles.tdNum} data-label="Value excl">
                   {r.quantity == null ? "—" : money(r.valueExcludingTax)}
                 </td>
+                {fifo && (
+                  <td style={{ ...gdStyles.tdNum, color: "#c62828" }} data-label="Sold">
+                    {r.consumedQuantity == null ? "—" : (
+                      <>
+                        <div>{num(r.consumedQuantity)}</div>
+                        <div style={gdStyles.sub}>{money(r.consumedValueExcludingTax)}</div>
+                      </>
+                    )}
+                  </td>
+                )}
+                {fifo && (
+                  <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: colors.blue }} data-label="Left">
+                    {r.remainingQuantity == null ? "—" : (
+                      <>
+                        <div>{num(r.remainingQuantity)}</div>
+                        <div style={gdStyles.sub}>{money(r.remainingValueExcludingTax)}</div>
+                      </>
+                    )}
+                  </td>
+                )}
                 <td style={gdStyles.tdNum} data-label="Tax">
                   {r.salesTaxRate != null ? `${num(r.salesTaxRate)}%` : "—"}
                 </td>
@@ -1907,6 +2078,30 @@ const LEDGER_SOURCE_LABELS = {
   PurchaseDebitNote: "Debit note",
   Adjustment: "Adjustment",
 };
+// FIFO by GD: which GDs a movement took its stock from (or, for a return, went
+// back into), one chip per GD with the quantity and the value at its cost.
+// Slices of one GD across a document's lines are summed.
+function AllocationChips({ allocations, isIn }) {
+  if (!allocations?.length) return null;
+  const byLabel = new Map();
+  for (const a of allocations) {
+    const hit = byLabel.get(a.label);
+    if (hit) { hit.quantity += Number(a.quantity); hit.value += Number(a.valueExcludingTax); }
+    else byLabel.set(a.label, { ...a, quantity: Number(a.quantity), value: Number(a.valueExcludingTax) });
+  }
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+      <span style={gdStyles.sub}>{isIn ? "into" : "from"}</span>
+      {[...byLabel.values()].map((a) => (
+        <span key={a.label} title={a.claimed ? "Claimed by this movement's month" : "Not claimed by this movement's month"}
+          style={{ ...gdStyles.pill, ...(a.gdNumber ? (a.claimed ? gdStyles.statOk : gdStyles.stat) : gdStyles.statWarn) }}>
+          {a.label} · {num(a.quantity)} · {money(a.value)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canViewMovements, openingQty, onHand, uom }) {
   if (gdLoading || !gdRows || (canViewMovements && (movementsLoading || !movements))) {
     return <div style={drillStyles.state}>Loading stock ledger…</div>;
@@ -1939,12 +2134,13 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
     if (q === 0) return;
     const key = m.sourceId != null ? `${m.sourceType}:${m.sourceId}:${m.direction}` : `row:${m.id}`;
     const hit = byDoc.get(key);
-    if (hit) { hit.qty += q; hit.lines += 1; return; }
+    if (hit) { hit.qty += q; hit.lines += 1; hit.allocations.push(...(m.allocations || [])); return; }
     byDoc.set(key, {
       key: `mv-${key}`, date: m.movementDate, order: 1, dir: m.direction === "In" ? "In" : "Out", qty: q,
       ref: `${LEDGER_SOURCE_LABELS[m.sourceType] || m.sourceType}${m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}`,
       kind: m.direction === "In" ? "Stock in" : "Stock out",
       detail: m.notes ? String(m.notes).split(" (")[0] : null, sub: null, lines: 1, id: m.id,
+      allocations: [...(m.allocations || [])],
     });
   });
   byDoc.forEach((e) => { if (e.lines > 1) e.sub = `${e.lines} line items`; entries.push(e); });
@@ -2002,6 +2198,7 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
                   <td style={gdStyles.td} data-label="Detail">
                     <div style={gdStyles.desc}>{e.detail || "—"}</div>
                     {e.sub && <div style={gdStyles.sub}>{e.sub}</div>}
+                    <AllocationChips allocations={e.allocations} isIn={isIn} />
                   </td>
                   <td style={{ ...gdStyles.tdNum, color: "#2e7d32", fontWeight: 600 }} data-label="In">{isIn ? `+${num(e.qty)}` : ""}</td>
                   <td style={{ ...gdStyles.tdNum, color: "#c62828", fontWeight: 600 }} data-label="Out">{isIn ? "" : `−${num(e.qty)}`}</td>
@@ -2093,6 +2290,7 @@ function DrillPanel({ rows, loading, uom, canViewActualCost }) {
       // runningValue, so the LATEST line in the group wins rather than summing.
       last.runningActualValue = Number(m.runningActualValue || 0);
       last.lineCount += 1;
+      last.allocations = [...(last.allocations || []), ...(m.allocations || [])];
       last.id = m.id;                     // newest id keeps the React key stable
       last.movementDate = m.movementDate; // same document date; keep newest
     } else {
@@ -2104,6 +2302,7 @@ function DrillPanel({ rows, loading, uom, canViewActualCost }) {
         runningValue: Number(m.runningValue || 0),
         runningActualValue: Number(m.runningActualValue || 0),
         lineCount: 1,
+        allocations: [...(m.allocations || [])],
       });
     }
   }
@@ -2146,6 +2345,7 @@ function DrillPanel({ rows, loading, uom, canViewActualCost }) {
                 </span>
               </div>
               {noteText && <div style={drillStyles.notes}>{noteText}</div>}
+              <AllocationChips allocations={m.allocations} isIn={isIn} />
             </div>
           );
         })}

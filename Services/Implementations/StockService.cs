@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
+using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
@@ -219,13 +220,67 @@ namespace MyApp.Api.Services.Implementations
             var byItem = movements.GroupBy(m => m.ItemTypeId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
+            // Weighted average or FIFO by GD, per the company's costing method.
+            var costing = await StockCosting.LoadAsync(_context, companyId, ids);
             var result = new Dictionary<int, StockValuation.Position>();
             foreach (var id in ids)
             {
                 var open = openings.GetValueOrDefault(id);
-                result[id] = StockValuation.Compute(
+                result[id] = costing.Compute(id,
                     open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m, open?.Rate ?? 0m,
                     byItem.GetValueOrDefault(id) ?? new List<StockMovement>());
+            }
+            return result;
+        }
+
+        public async Task<Dictionary<int, List<StockPriceTierDto>>?> GetFifoPriceTiersAsync(
+            int companyId,
+            IEnumerable<int> itemTypeIds,
+            DateTime asOf,
+            HashSet<int>? allowedDivisionIds = null)
+        {
+            var ids = itemTypeIds?.Distinct().ToList() ?? new List<int>();
+            if (ids.Count == 0) return null;
+            var costing = await StockCosting.LoadAsync(_context, companyId, ids);
+            if (!costing.IsFifo) return null;
+
+            var openings = await _context.OpeningStockBalances
+                .Where(o => o.CompanyId == companyId && ids.Contains(o.ItemTypeId))
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
+                })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x);
+            var query = _context.StockMovements
+                .Where(m => m.CompanyId == companyId && ids.Contains(m.ItemTypeId));
+            if (allowedDivisionIds != null)
+                query = query.Where(m => m.DivisionId == null || allowedDivisionIds.Contains(m.DivisionId.Value));
+            var byItem = (await query.AsNoTracking().ToListAsync())
+                .GroupBy(m => m.ItemTypeId).ToDictionary(g => g.Key, g => g.ToList());
+
+            var month = new DateTime(asOf.Year, asOf.Month, 1);
+            var result = new Dictionary<int, List<StockPriceTierDto>>();
+            foreach (var id in ids)
+            {
+                var open = openings.GetValueOrDefault(id);
+                var r = costing.Detailed(id, open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m,
+                    open?.Rate ?? 0m, byItem.GetValueOrDefault(id) ?? new List<StockMovement>());
+                result[id] = GdFifoValuation.NextConsumption(r, asOf)
+                    .Select(p => new StockPriceTierDto
+                    {
+                        GdNumber = p.GdNumber,
+                        Claimed = GdFifoValuation.ClaimedFor(p, month),
+                        Quantity = p.Quantity,
+                        ValueExcludingTax = Math.Round(p.Value, 2, MidpointRounding.AwayFromZero),
+                        UnitCost = p.Quantity > 0m
+                            ? Math.Round(p.Value / p.Quantity, 4, MidpointRounding.AwayFromZero) : 0m,
+                    })
+                    .ToList();
             }
             return result;
         }

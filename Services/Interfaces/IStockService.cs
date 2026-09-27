@@ -105,6 +105,18 @@ namespace MyApp.Api.Services.Interfaces
             HashSet<int>? allowedDivisionIds = null);
 
         /// <summary>
+        /// FIFO by GD only: for each item, the pools a sale recorded on
+        /// <paramref name="asOf"/> would drain, in order, and what each holds --
+        /// the price tiers a bill line priced from stock walks. Null when the
+        /// company values stock at the weighted average.
+        /// </summary>
+        Task<Dictionary<int, List<MyApp.Api.DTOs.StockPriceTierDto>>?> GetFifoPriceTiersAsync(
+            int companyId,
+            IEnumerable<int> itemTypeIds,
+            DateTime asOf,
+            HashSet<int>? allowedDivisionIds = null);
+
+        /// <summary>
         /// The sales tax rate each item came IN at, from this company's own GD
         /// lines, opening stock and stock received at a stated rate — weighed by
         /// <see cref="MyApp.Api.Helpers.ImportedTaxRate"/>. Company-scoped by

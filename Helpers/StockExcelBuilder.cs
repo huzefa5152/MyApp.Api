@@ -540,8 +540,10 @@ namespace MyApp.Api.Helpers
         /// <summary>
         /// One GD's share of the item above: its own claim month, GD, date,
         /// sheet line name and the OPENING quantity / value it brought in.
-        /// Consumed and Balance stay blank on purpose — sales are not allocated
-        /// to a declaration, so a per-GD balance would be invented.
+        /// Consumed and Balance are written only when the company values stock
+        /// FIFO by GD, where a sale IS allocated to a declaration; under the
+        /// weighted average they stay blank, since a per-GD balance would be
+        /// invented.
         /// </summary>
         private static void WriteBreakdownRow(IXLWorksheet ws, int r, StockExportGdLineDto line)
         {
@@ -559,6 +561,26 @@ namespace MyApp.Api.Helpers
             {
                 Number(ws, r, COpenRate, line.SalesTaxRate.Value / 100m, Pct);
                 Formula(ws, r, COpenTax, $"L{r}*K{r}", Acct2);
+            }
+            if (line.ConsumedQuantity.HasValue)
+            {
+                Number(ws, r, CConsQty, line.ConsumedQuantity.Value, Acct0);
+                Number(ws, r, CConsExl, line.ConsumedValueExcludingTax ?? 0m, Acct0);
+                if (line.SalesTaxRate.HasValue)
+                {
+                    Formula(ws, r, CConsRate, $"L{r}", Pct);
+                    Formula(ws, r, CConsTax, $"O{r}*P{r}", Acct0);
+                }
+            }
+            if (line.BalanceQuantity.HasValue)
+            {
+                Number(ws, r, CBalQty, line.BalanceQuantity.Value, Acct0);
+                Number(ws, r, CBalExl, line.BalanceValueExcludingTax ?? 0m, Acct0);
+                if (line.SalesTaxRate.HasValue)
+                {
+                    Number(ws, r, CBalRate, line.SalesTaxRate.Value / 100m, Pct);
+                    Formula(ws, r, CBalTax, $"S{r}*T{r}", Acct0);
+                }
             }
             ws.Cell(r, CStripe).Style.Fill.BackgroundColor = SeparatorFill;
 

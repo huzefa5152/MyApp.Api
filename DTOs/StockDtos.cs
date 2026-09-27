@@ -165,6 +165,24 @@
         /// excluding tax — the actual-cost pool's own running total. Null when
         /// the caller lacks <c>stock.actualcost.view</c>.</summary>
         public decimal? RunningActualValue { get; set; }
+
+        /// <summary>FIFO by GD only (empty otherwise): which GDs this movement
+        /// took its stock from -- or, for a return, went back into.</summary>
+        public List<StockMovementAllocationDto> Allocations { get; set; } = new();
+    }
+
+    /// <summary>One slice of a movement under FIFO by GD.</summary>
+    public class StockMovementAllocationDto
+    {
+        /// <summary>The GD number, or null for a pool that is not a GD
+        /// (untraced opening, other inward stock, a shortfall).</summary>
+        public string? GdNumber { get; set; }
+        /// <summary>What to call the slice on screen.</summary>
+        public string Label { get; set; } = "";
+        public DateTime? GdDate { get; set; }
+        public bool Claimed { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
     }
 
     public class OpeningStockBalanceDto
@@ -301,6 +319,24 @@
 
         /// <summary>Why pricing is unavailable, for the form to show.</summary>
         public string? Note { get; set; }
+
+        /// <summary>
+        /// FIFO by GD only (null otherwise): the GD pools the next sale would
+        /// drain, in order. A line amount is walked through them -- the first
+        /// GD's units at its cost, then the next GD's -- so the quantity it buys
+        /// reflects the GDs it will actually consume. <see cref="UnitCost"/>
+        /// is then the first tier's cost.
+        /// </summary>
+        public List<StockPriceTierDto>? Tiers { get; set; }
+    }
+
+    public class StockPriceTierDto
+    {
+        public string? GdNumber { get; set; }
+        public bool Claimed { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
+        public decimal UnitCost { get; set; }
     }
 
     public class CreateStockAdjustmentDto
@@ -397,6 +433,13 @@
         public decimal? Quantity { get; set; }
         public decimal? ValueExcludingTax { get; set; }
         public decimal? SalesTaxRate { get; set; }
+
+        /// <summary>FIFO by GD only (null otherwise): what sales have taken
+        /// from this line and what it still holds.</summary>
+        public decimal? ConsumedQuantity { get; set; }
+        public decimal? ConsumedValueExcludingTax { get; set; }
+        public decimal? RemainingQuantity { get; set; }
+        public decimal? RemainingValueExcludingTax { get; set; }
     }
 
     /// <summary>Exactly one of the two ids.</summary>
@@ -464,6 +507,15 @@
         public decimal Quantity { get; set; }
         public decimal ValueExcludingTax { get; set; }
         public decimal? SalesTaxRate { get; set; }
+
+        /// <summary>What sales have taken from this GD, and what it still
+        /// holds -- filled only for a company on FIFO by GD, where a sale IS
+        /// allocated to a declaration. Null for a weighted-average company,
+        /// whose sheet leaves these blank rather than invent a split.</summary>
+        public decimal? ConsumedQuantity { get; set; }
+        public decimal? ConsumedValueExcludingTax { get; set; }
+        public decimal? BalanceQuantity { get; set; }
+        public decimal? BalanceValueExcludingTax { get; set; }
     }
 
     /// <summary>Everything the stock workbook needs, resolved server-side.</summary>

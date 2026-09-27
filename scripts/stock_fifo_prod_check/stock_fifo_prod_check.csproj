@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- READ-ONLY production check for FIFO by GD. References the BUILT app
+         (bin/Debug/net9.0/MyApp.Api.dll) so it runs the exact shipped loader
+         (StockCosting) and both walks. It issues SELECTs only and never calls
+         SaveChanges. Build the app first: dotnet build MyApp.Api.csproj. -->
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.8" />
+    <Reference Include="MyApp.Api">
+      <HintPath>..\..\bin\Debug\net9.0\MyApp.Api.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

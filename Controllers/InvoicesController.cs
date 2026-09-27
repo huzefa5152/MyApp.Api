@@ -343,6 +343,8 @@ namespace MyApp.Api.Controllers
             // so they must be priced on the stock they can actually see.
             var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
             var positions = await _stock.GetValuationsAsync(companyId, ids, divScope);
+            // FIFO by GD: the order the next sale will drain this stock in.
+            var tiers = await _stock.GetFifoPriceTiersAsync(companyId, ids, PakistanClock.Today, divScope);
 
             var names = await _context.ItemTypes
                 .Where(it => ids.Contains(it.Id))
@@ -355,6 +357,7 @@ namespace MyApp.Api.Controllers
                 positions.TryGetValue(id, out var pos);
                 var meta = names.GetValueOrDefault(id);
                 var canPrice = pos.Quantity > 0m && pos.ValueExcludingTax > 0m;
+                var itemTiers = tiers?.GetValueOrDefault(id)?.Where(t => t.Quantity > 0m).ToList();
                 rows.Add(new StockLinePricingDto
                 {
                     ItemTypeId = id,
@@ -362,7 +365,10 @@ namespace MyApp.Api.Controllers
                     Uom = meta?.UOM,
                     AvailableQuantity = pos.Quantity,
                     AvailableValueExcludingTax = pos.ValueExcludingTax,
-                    UnitCost = canPrice ? Math.Round(pos.UnitCost, 4, MidpointRounding.AwayFromZero) : 0m,
+                    UnitCost = !canPrice ? 0m
+                        : itemTiers is { Count: > 0 } && itemTiers[0].UnitCost > 0m ? itemTiers[0].UnitCost
+                        : Math.Round(pos.UnitCost, 4, MidpointRounding.AwayFromZero),
+                    Tiers = canPrice && itemTiers is { Count: > 0 } ? itemTiers : null,
                     SalesTaxRate = pos.SalesTaxRate,
                     CanPrice = canPrice,
                     Note = canPrice ? null

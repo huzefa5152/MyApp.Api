@@ -768,7 +768,11 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(m => m.ItemTypeId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            var periods = InventoryPeriodConsumption.Compute(openings, byItem);
+            // The same costing method the stock screen values with, or the
+            // relief would post a different cost of goods than the dashboard.
+            var costing = await StockCosting.LoadAsync(_context, companyId,
+                openings.Keys.Union(byItem.Keys).Distinct().ToList());
+            var periods = InventoryPeriodConsumption.Compute(openings, byItem, costing);
 
             // Only months at or after the change need rewriting, but every LATER
             // month does — see the note above. Existing entries outside the

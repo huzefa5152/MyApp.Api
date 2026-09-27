@@ -876,7 +876,8 @@ namespace MyApp.Api.Services.Implementations
                     x => x.Id,
                     x => (x.IsDeleted ? x.Name + " (deleted item)" : x.Name, (string?)x.HSCode));
 
-            return ItemStockPositions.Compute(openings, movementsByItem, names, from, to);
+            var costing = await StockCosting.LoadAsync(_context, companyId, ids);
+            return ItemStockPositions.Compute(openings, movementsByItem, names, from, to, costing);
         }
 
         private async Task<decimal> ComputeStockOnHandValueAsync(int companyId, HashSet<int>? divScope)
@@ -911,6 +912,8 @@ namespace MyApp.Api.Services.Implementations
                 .GroupBy(m => m.ItemTypeId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
+            var costing = await StockCosting.LoadAsync(_context, companyId,
+                openings.Keys.Union(movementsByItem.Keys).Distinct().ToList());
             decimal total = 0m;
             foreach (var (itemTypeId, open) in openings)
                 if (!movementsByItem.ContainsKey(itemTypeId))
@@ -918,7 +921,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var (itemTypeId, itemMovements) in movementsByItem)
             {
                 openings.TryGetValue(itemTypeId, out var open);
-                var position = StockValuation.Compute(
+                var position = costing.Compute(itemTypeId,
                     open.Quantity, open.ValueExcludingTax, open.ActualCostExcludingTax,
                     open.SalesTaxRate, itemMovements);
                 total += position.ValueExcludingTax;

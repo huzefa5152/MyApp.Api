@@ -770,8 +770,9 @@ namespace MyApp.Api.Services.Implementations
                     .Where(it => stockIds.Contains(it.Id))
                     .Select(it => new { it.Id, it.Name, it.HSCode })
                     .ToDictionaryAsync(x => x.Id, x => (x.Name, (string?)x.HSCode));
+                var stockCosting = await StockCosting.LoadAsync(_context, companyId, stockIds);
                 var stockPositions = ItemStockPositions.Compute(
-                    stockOpenings, stockMovements, stockNames);
+                    stockOpenings, stockMovements, stockNames, costing: stockCosting);
                 summary.UnrealisedMargin = Math.Round(
                     stockPositions.Where(pp => pp.ClosingDeclared != 0m)
                                   .Sum(pp => pp.UnrealisedMargin), 2);

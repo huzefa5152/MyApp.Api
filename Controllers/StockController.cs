@@ -199,6 +199,142 @@ namespace MyApp.Api.Controllers
             return NoContent();
         }
 
+        /// <summary>
+        /// The FIFO-by-GD walk for each item -- its pools and what every
+        /// movement took from them -- or null when the company values stock at
+        /// the weighted average. Same inputs, division scope and walk as the
+        /// on-hand grid, so a GD's consumed figure cannot disagree with it.
+        /// </summary>
+        private async Task<Dictionary<int, GdFifoValuation.Result>?> FifoResultsAsync(
+            int companyId, List<int> itemTypeIds)
+        {
+            if (itemTypeIds.Count == 0 || !await StockCostingMethod.IsGdFifoAsync(_context, companyId))
+                return null;
+            var costing = await StockCosting.LoadAsync(_context, companyId, itemTypeIds);
+            var divScope = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            var openings = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId && itemTypeIds.Contains(o.ItemTypeId))
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
+                })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x);
+            var q = _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId && itemTypeIds.Contains(m.ItemTypeId));
+            if (divScope != null)
+                q = q.Where(m => m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
+            var byItem = (await q.ToListAsync()).GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var result = new Dictionary<int, GdFifoValuation.Result>();
+            foreach (var id in itemTypeIds)
+            {
+                var open = openings.GetValueOrDefault(id);
+                result[id] = costing.Detailed(id, open?.Qty ?? 0m, open?.Value ?? 0m,
+                    open?.ActualCost ?? 0m, open?.Rate ?? 0m,
+                    byItem.GetValueOrDefault(id) ?? new List<StockMovement>());
+            }
+            return result;
+        }
+
+        /// <summary>What a pool is called on screen and in the sheet.</summary>
+        private static string PoolLabel(GdFifoValuation.Pool? p, string key) => key switch
+        {
+            GdFifoValuation.ShortfallKey => "Not covered by a GD",
+            GdFifoValuation.UntracedKey => "Opening — not traced to a GD",
+            _ when p?.GdNumber is { Length: > 0 } gd => $"GD {gd}",
+            _ => "Other stock in",
+        };
+
+        /// <summary>
+        /// FIFO by GD: one export row per GD (lots of one GD summed), plus the
+        /// opening stock no GD explains, other stock in, and any sale not yet
+        /// covered by stock -- each with what came in, what sales took, and
+        /// what is left, in the order a sale drains them.
+        /// </summary>
+        private static List<StockExportGdLineDto> FifoBreakdown(
+            GdFifoValuation.Result res, List<StockGdDetailDto> details)
+        {
+            string? Claim(string gd)
+            {
+                var months = details.Where(d => string.Equals(d.GdNumber, gd, StringComparison.OrdinalIgnoreCase)
+                        && d.Quantity.HasValue)
+                    .Select(d => d.ClaimMonth).Distinct().OrderBy(m => m ?? DateTime.MaxValue).ToList();
+                if (months.Count == 0 || months.All(m => m == null)) return null;
+                return string.Join(" / ", months.Select(m => m?.ToString("MMM yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture) ?? "-"));
+            }
+            StockExportGdLineDto Line(string gd, IEnumerable<GdFifoValuation.Pool> pools, string? description)
+            {
+                var list = pools.ToList();
+                var inValue = list.Sum(p => p.InValue);
+                return new StockExportGdLineDto
+                {
+                    GdNumber = gd,
+                    GdDate = list.Where(p => p.GdNumber != null).Min(p => p.OrderDate),
+                    ClaimText = list.Any(p => p.GdNumber != null) ? Claim(gd) : null,
+                    Description = description ?? string.Join(" / ", list.Select(p => p.Description)
+                        .Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase)),
+                    Quantity = list.Sum(p => p.InQuantity),
+                    ValueExcludingTax = Money(inValue),
+                    SalesTaxRate = inValue > 0m ? Math.Round(list.Sum(p => p.InValue * p.Rate) / inValue, 4)
+                        : list.FirstOrDefault()?.Rate,
+                    ConsumedQuantity = list.Sum(p => p.ConsumedQuantity),
+                    ConsumedValueExcludingTax = Money(list.Sum(p => p.ConsumedValue)),
+                    BalanceQuantity = list.Sum(p => p.Quantity),
+                    BalanceValueExcludingTax = Money(list.Sum(p => p.Value)),
+                };
+            }
+
+            var lines = new List<StockExportGdLineDto>();
+            foreach (var g in res.Pools.Where(p => p.GdNumber != null && p.InQuantity > 0m)
+                         .GroupBy(p => p.GdNumber!, StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(g => g.Min(p => p.OrderDate) ?? DateTime.MaxValue).ThenBy(g => g.Key))
+                lines.Add(Line(g.Key, g, null));
+            var untraced = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.OpeningUntraced).ToList();
+            if (untraced.Count > 0) lines.Add(Line("-", untraced, "Opening — not traced to a GD"));
+            var inward = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.Inward && p.InQuantity > 0m).ToList();
+            if (inward.Count > 0) lines.Add(Line("-", inward, "Other stock in (purchase / receipt / adjustment)"));
+            if (res.ShortfallQuantity > 0m)
+                lines.Add(new StockExportGdLineDto
+                {
+                    GdNumber = "-",
+                    Description = "Sold beyond stock — not covered by a GD yet",
+                    ConsumedQuantity = res.ShortfallQuantity,
+                    ConsumedValueExcludingTax = res.ShortfallValue,
+                    BalanceQuantity = -res.ShortfallQuantity,
+                    BalanceValueExcludingTax = -res.ShortfallValue,
+                });
+            return lines;
+        }
+
+        /// <summary>A movement's FIFO slices, labelled for the screen.</summary>
+        private static List<StockMovementAllocationDto> AllocationsFor(
+            GdFifoValuation.Result result, int movementId, DateTime movementDate)
+        {
+            if (!result.Takes.TryGetValue(movementId, out var takes)) return new();
+            var pools = result.Pools.ToDictionary(p => p.Key);
+            var month = new DateTime(movementDate.Year, movementDate.Month, 1);
+            return takes.Select(t =>
+            {
+                pools.TryGetValue(t.PoolKey, out var p);
+                return new StockMovementAllocationDto
+                {
+                    GdNumber = p?.GdNumber,
+                    Label = PoolLabel(p, t.PoolKey),
+                    GdDate = p?.OrderDate,
+                    Claimed = p != null && GdFifoValuation.ClaimedFor(p, month),
+                    Quantity = t.Quantity,
+                    ValueExcludingTax = t.Value,
+                };
+            }).ToList();
+        }
+
         private async Task<List<StockGdDetailDto>> BuildGdDetailsAsync(int companyId, List<int>? itemTypeIds)
         {
             if (itemTypeIds is { Count: 0 }) return new();
@@ -280,6 +416,26 @@ namespace MyApp.Api.Controllers
                     SalesTaxRate = l.SalesTaxRate,
                 });
             }
+            // FIFO by GD: each stock line says what sales took from it and what
+            // it still holds. A cost-only backfill line added no stock, so it
+            // has no pool and stays as it was.
+            var fifo = await FifoResultsAsync(companyId, ids);
+            if (fifo != null)
+            {
+                foreach (var r in result)
+                {
+                    if (!fifo.TryGetValue(r.ItemTypeId, out var res)) continue;
+                    var key = r.LotId is int lid ? $"lot-{lid}"
+                        : r.ConsignmentLineId is int cid && r.Quantity.HasValue ? $"arrival-{cid}" : null;
+                    var pool = key == null ? null : res.Pools.FirstOrDefault(p => p.Key == key);
+                    if (pool == null) continue;
+                    r.ConsumedQuantity = pool.ConsumedQuantity;
+                    r.ConsumedValueExcludingTax = Money(pool.ConsumedValue);
+                    r.RemainingQuantity = pool.Quantity;
+                    r.RemainingValueExcludingTax = Money(pool.Value);
+                }
+            }
+
             return result.OrderBy(r => r.ItemTypeName).ThenBy(r => r.GdDate)
                 .ThenBy(r => r.GdNumber).ThenBy(r => r.SourceRow).ToList();
         }
@@ -366,6 +522,9 @@ namespace MyApp.Api.Controllers
                 .Select(g => new { ItemTypeId = g.Key, Last = g.Max(m => m.MovementDate) })
                 .ToDictionaryAsync(x => x.ItemTypeId, x => x.Last);
 
+            // Weighted average or FIFO by GD, per the company's costing method.
+            var costing = await StockCosting.LoadAsync(_context, companyId, ids);
+
             var rows = new List<StockOnHandRowDto>();
             var traced = withMovements ? new Dictionary<int, List<StockMovementRowDto>>() : empty;
 
@@ -385,7 +544,7 @@ namespace MyApp.Api.Controllers
                 // pure waste on the hot path.
                 var trace = withMovements ? new List<StockValuation.Step>() : null;
 
-                var position = StockValuation.Compute(
+                var position = costing.Compute(id,
                     opening,
                     open?.Value ?? 0m,
                     open?.ActualCost ?? 0m,
@@ -592,6 +751,10 @@ namespace MyApp.Api.Controllers
             if (divScope != null) filters.Add("Scope: your divisions only");
 
             var gdDetails = await BuildGdDetailsAsync(companyId, rows.Select(r => r.ItemTypeId).ToList());
+            // FIFO by GD: what every GD gave up and still holds, so each ↳ row
+            // can carry its own Consumed and Balance.
+            var fifo = await FifoResultsAsync(companyId, rows.Select(r => r.ItemTypeId).ToList());
+            if (fifo != null) filters.Add("Costing: FIFO by GD (claimed GDs first)");
             // Every GD behind an item, one entry per declaration in date order.
             // Stock sources first; an item priced only by a cost-only backfill
             // still names that GD rather than leaving the cell blank.
@@ -657,6 +820,12 @@ namespace MyApp.Api.Controllers
                         item.ClaimMonthsText = gds.Any(g => g.Claim != null)
                             ? string.Join(", ", gds.Select(g => g.Claim ?? "-"))
                             : null;
+                    }
+                    if (fifo != null && fifo.TryGetValue(r.ItemTypeId, out var res))
+                    {
+                        var breakdown = FifoBreakdown(res, gdDetails.Where(d => d.ItemTypeId == r.ItemTypeId).ToList());
+                        // A single source needs no breakdown: the item row IS it.
+                        if (breakdown.Count > 1) item.GdBreakdown = breakdown;
                     }
                     return item;
                 }).ToList(),
@@ -787,18 +956,26 @@ namespace MyApp.Api.Controllers
                     histQuery = histQuery.Where(m => m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
                 var history = await histQuery.AsNoTracking().ToListAsync();
 
+                var costing = await StockCosting.LoadAsync(_context, companyId, pageItemIds);
                 var steps = new Dictionary<int, StockValuation.Step>();
+                var fifo = new Dictionary<int, GdFifoValuation.Result>();
                 foreach (var grp in history.GroupBy(m => m.ItemTypeId))
                 {
                     var open = histOpenings.GetValueOrDefault(grp.Key);
                     var trace = new List<StockValuation.Step>();
-                    StockValuation.Compute(open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m,
-                                           open?.Rate ?? 0m, grp.ToList(), trace);
+                    if (costing.IsFifo)
+                        fifo[grp.Key] = costing.Detailed(grp.Key, open?.Qty ?? 0m, open?.Value ?? 0m,
+                            open?.ActualCost ?? 0m, open?.Rate ?? 0m, grp.ToList(), trace);
+                    else
+                        StockValuation.Compute(open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m,
+                                               open?.Rate ?? 0m, grp.ToList(), trace);
                     foreach (var st in trace) steps[st.MovementId] = st;
                 }
 
                 foreach (var r in rows)
                 {
+                    if (fifo.TryGetValue(r.ItemTypeId, out var res))
+                        r.Allocations = AllocationsFor(res, r.Id, r.MovementDate);
                     if (!steps.TryGetValue(r.Id, out var st)) continue;
                     r.UnitCost = Math.Round(st.UnitCost, 4, MidpointRounding.AwayFromZero);
                     r.Value = st.Amount;
@@ -1385,6 +1562,150 @@ namespace MyApp.Api.Controllers
         /// persists no bucket snapshots, so a flip requires no data migration
         /// or cleanup (Q8). Gated by stock.policy.manage (admin).
         /// </summary>
+        /// <summary>How this company values stock: WeightedAverage or GdFifo.</summary>
+        [HttpGet("company/{companyId}/costing-method")]
+        [HasPermission("stock.dashboard.view")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetCostingMethod(int companyId)
+            => Ok(new { companyId, method = await StockCostingMethod.GetAsync(_context, companyId) });
+
+        /// <summary>
+        /// What switching method would do to this company's figures, item by
+        /// item: the weighted-average position beside the FIFO-by-GD one. Reads
+        /// only -- nothing is stored -- so it is safe to ask before switching.
+        /// </summary>
+        [HttpGet("company/{companyId}/costing-compare")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> CompareCostingMethods(int companyId)
+        {
+            var openings = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key,
+                    Qty = g.Sum(o => o.Quantity),
+                    Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax),
+                    Rate = g.Max(o => o.SalesTaxRate),
+                })
+                .ToDictionaryAsync(x => x.ItemTypeId, x => x);
+            var byItem = (await _context.StockMovements.AsNoTracking()
+                    .Where(m => m.CompanyId == companyId).ToListAsync())
+                .GroupBy(m => m.ItemTypeId).ToDictionary(g => g.Key, g => g.ToList());
+            var ids = openings.Keys.Union(byItem.Keys).Distinct().ToList();
+            var names = await _context.ItemTypes.AsNoTracking()
+                .Where(i => ids.Contains(i.Id)).Select(i => new { i.Id, i.Name, i.HSCode })
+                .ToDictionaryAsync(i => i.Id);
+
+            // FIFO books are built directly: the compare is asked BEFORE the
+            // company is switched, when LoadAsync would answer weighted average.
+            var fifo = await StockCosting.LoadForCompareAsync(_context, companyId, ids);
+            var items = new List<object>();
+            decimal waValue = 0m, fifoValue = 0m, waOut = 0m, fifoOut = 0m, waActual = 0m, fifoActual = 0m;
+            foreach (var id in ids)
+            {
+                var open = openings.GetValueOrDefault(id);
+                var moves = byItem.GetValueOrDefault(id) ?? new List<StockMovement>();
+                var wa = StockValuation.Compute(open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m,
+                    open?.Rate ?? 0m, moves);
+                var fr = fifo.Detailed(id, open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m,
+                    open?.Rate ?? 0m, moves);
+                var f = fr.Position;
+                waValue += wa.ValueExcludingTax; fifoValue += f.ValueExcludingTax;
+                waOut += wa.ValueOut; fifoOut += f.ValueOut;
+                waActual += wa.ActualValueExcludingTax; fifoActual += f.ActualValueExcludingTax;
+                if (wa.Quantity != f.Quantity || wa.ValueExcludingTax != f.ValueExcludingTax
+                    || wa.ActualValueExcludingTax != f.ActualValueExcludingTax)
+                {
+                    names.TryGetValue(id, out var n);
+                    items.Add(new
+                    {
+                        itemTypeId = id, itemTypeName = n?.Name, hsCode = n?.HSCode,
+                        quantity = wa.Quantity, fifoQuantity = f.Quantity,
+                        weightedAverageValue = wa.ValueExcludingTax, fifoValue = f.ValueExcludingTax,
+                        weightedAverageActual = wa.ActualValueExcludingTax, fifoActual = f.ActualValueExcludingTax,
+                        weightedAverageValueOut = wa.ValueOut, fifoValueOut = f.ValueOut,
+                        gdPools = fr.Pools.Count(p => p.GdNumber != null),
+                        shortfallQuantity = fr.ShortfallQuantity,
+                    });
+                }
+            }
+            return Ok(new
+            {
+                companyId,
+                method = await StockCostingMethod.GetAsync(_context, companyId),
+                itemCount = ids.Count,
+                changedItemCount = items.Count,
+                weightedAverageValue = Money(waValue), fifoValue = Money(fifoValue),
+                weightedAverageValueOut = Money(waOut), fifoValueOut = Money(fifoOut),
+                weightedAverageActual = Money(waActual), fifoActual = Money(fifoActual),
+                items,
+            });
+        }
+
+        public record SetCostingMethodRequest(string Method);
+
+        /// <summary>
+        /// Switch how this company values stock. Reversible: both methods are
+        /// derived from the same movements, so nothing stored changes -- except
+        /// the monthly cost-of-goods relief, which is re-posted on the new basis
+        /// (the same rebuild an opening-stock import runs).
+        /// </summary>
+        [HttpPut("company/{companyId}/costing-method")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetCostingMethod(int companyId, [FromBody] SetCostingMethodRequest req)
+        {
+            var method = req?.Method switch
+            {
+                var m when string.Equals(m, StockCostingMethod.GdFifo, StringComparison.OrdinalIgnoreCase)
+                    => StockCostingMethod.GdFifo,
+                var m when string.Equals(m, StockCostingMethod.WeightedAverage, StringComparison.OrdinalIgnoreCase)
+                    => StockCostingMethod.WeightedAverage,
+                _ => null,
+            };
+            if (method == null)
+                return BadRequest(new { error = "Method must be WeightedAverage or GdFifo." });
+            if (!await _context.Companies.AnyAsync(c => c.Id == companyId)) return NotFound();
+
+            var previous = await StockCostingMethod.GetAsync(_context, companyId);
+            if (previous == method) return Ok(new { companyId, method, changed = false });
+
+            var key = StockCostingMethod.SettingKey(companyId);
+            var row = await _context.SystemSettings.FirstOrDefaultAsync(s => s.Key == key);
+            if (row == null)
+                _context.SystemSettings.Add(new SystemSetting
+                {
+                    Key = key, Value = method, UpdatedAt = DateTime.UtcNow, UpdatedByUserId = CurrentUserId,
+                });
+            else
+            {
+                row.Value = method; row.UpdatedAt = DateTime.UtcNow; row.UpdatedByUserId = CurrentUserId;
+            }
+            await _context.SaveChangesAsync();
+
+            // Cost of goods sold already posted was worked out on the old
+            // basis; re-post it on the new one so the ledger keeps agreeing with
+            // the stock screen. Respects the GL lock date like every rebuild.
+            await _posting.PostInventoryPeriodsAsync(companyId, null);
+
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "PUT",
+                RequestPath = $"/api/stock/company/{companyId}/costing-method",
+                StatusCode = 200,
+                ExceptionType = "STOCK_COSTING_METHOD_CHANGE",
+                Message = $"Stock costing method changed {previous} → {method} for company {companyId}",
+                CompanyId = companyId,
+            });
+            return Ok(new { companyId, method, changed = true, previous });
+        }
+
         [HttpPost("company/{companyId}/flow-version")]
         [HasPermission("stock.policy.manage")]
         [AuthorizeCompany]

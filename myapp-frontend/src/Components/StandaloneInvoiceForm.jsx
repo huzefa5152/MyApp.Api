@@ -35,6 +35,7 @@ import ItemTypeForm from "./ItemTypeForm";
 import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import AttachmentManager from "./AttachmentManager";
+import { fifoQuantityForAmount, fifoTierText } from "../utils/fifoPricing";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
 //   • §9 (Scenarios) — locks Sale Type per SN.
@@ -929,7 +930,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       return { qty: qtyAll, rate, exact: fullValue, closeOut: true };
     }
 
-    const rawQty = total / cost;
+    // FIFO by GD: the amount walks the GDs the sale will drain, in order.
+    const rawQty = fifoQuantityForAmount(price, total) ?? total / cost;
     const qty = Math.max(1, Math.round(rawQty));
 
     // The rate carries the remainder, to the 12 decimals UnitPrice stores:
@@ -1781,6 +1783,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                         {Number(priced.availableQuantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} {priced.uom || r.uom || ""} on hand
                                         {" · "}
                                         {Number(priced.unitCost).toLocaleString(undefined, { maximumFractionDigits: 4 })} each
+                                        {fifoTierText(priced, priced.uom || r.uom) && (
+                                          <div style={{ fontSize: "0.66rem", opacity: 0.85, marginTop: 2 }}>
+                                            {fifoTierText(priced, priced.uom || r.uom)}
+                                          </div>
+                                        )}
                                         {Number(priced.availableValueExcludingTax) > 0 && (
                                           <>
                                             {" · "}

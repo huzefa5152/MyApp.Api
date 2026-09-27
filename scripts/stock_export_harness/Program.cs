@@ -477,6 +477,49 @@ Console.WriteLine("\n=== 4. GDs No / GD Date ===");
         && ws.Cell(FirstDataRow, ClaimCol).Style.Alignment.WrapText);
 }
 
+// FIFO by GD: a sale IS allocated to a declaration, so each ↳ row carries its
+// own Consumed and Balance (2026-09-28). Weighted average stays blank (above).
+{
+    var fifoItem = Item(10, "Adjustable Hand Gripper", "9506.9990", "Pcs",
+        1000m, 500000m, 0m, 0m, 600m, 300000m, 400m, 200000m, 18m,
+        lotRef: "GD-C, GD-U");
+    fifoItem.GdBreakdown = new List<StockExportGdLineDto>
+    {
+        new() { GdNumber = "GD-C", GdDate = new DateTime(2025, 11, 20), ClaimText = "Mar 2026",
+                Description = "HAND GRIPPER", Quantity = 550m, ValueExcludingTax = 290848.83m, SalesTaxRate = 18m,
+                ConsumedQuantity = 550m, ConsumedValueExcludingTax = 290848.83m,
+                BalanceQuantity = 0m, BalanceValueExcludingTax = 0m },
+        new() { GdNumber = "GD-U", GdDate = new DateTime(2026, 7, 21), ClaimText = null,
+                Description = "EXERCISE BELT", Quantity = 450m, ValueExcludingTax = 209151.17m, SalesTaxRate = 18m,
+                ConsumedQuantity = 50m, ConsumedValueExcludingTax = 9151.17m,
+                BalanceQuantity = 400m, BalanceValueExcludingTax = 200000m },
+        new() { GdNumber = "-", Description = "Sold beyond stock — not covered by a GD yet",
+                ConsumedQuantity = 5m, ConsumedValueExcludingTax = 2500m,
+                BalanceQuantity = -5m, BalanceValueExcludingTax = -2500m },
+    };
+    var fifoPath = Path.Combine(outDir, "stock-export-fifo.xlsx");
+    File.WriteAllBytes(fifoPath, StockExcelBuilder.Build(Data(new List<StockExportItemDto> { fifoItem }, "As at 28-09-2026")));
+    using var wb = new XLWorkbook(fifoPath);
+    var ws = wb.Worksheet(1);
+    Check("FIFO: a GD row carries what sales took from it",
+        ws.Cell(FirstDataRow + 1, ConsQtyCol).GetValue<decimal>() == 550m
+        && ws.Cell(FirstDataRow + 1, ConsExlCol).GetValue<decimal>() == 290848.83m);
+    Check("FIFO: and what it still holds",
+        ws.Cell(FirstDataRow + 2, BalQtyCol).GetValue<decimal>() == 400m
+        && ws.Cell(FirstDataRow + 2, BalExlCol).GetValue<decimal>() == 200000m);
+    Check("FIFO: an emptied GD shows zero, not blank",
+        !ws.Cell(FirstDataRow + 1, BalQtyCol).IsEmpty()
+        && ws.Cell(FirstDataRow + 1, BalQtyCol).GetValue<decimal>() == 0m);
+    Check("FIFO: tax on the balance is a formula on its own row",
+        ws.Cell(FirstDataRow + 2, BalTaxCol).FormulaA1 == $"S{FirstDataRow + 2}*T{FirstDataRow + 2}",
+        ws.Cell(FirstDataRow + 2, BalTaxCol).FormulaA1);
+    Check("FIFO: an uncovered sale shows as a negative balance",
+        ws.Cell(FirstDataRow + 3, BalQtyCol).GetValue<decimal>() == -5m);
+    Check("FIFO: the GD rows still stay out of the totals",
+        ws.Cell(FirstDataRow + 6, ConsQtyCol).FormulaA1.StartsWith("SUMIF($D$"),
+        ws.Cell(FirstDataRow + 6, ConsQtyCol).FormulaA1);
+}
+
 // ── Suite 5: the totals row ──────────────────────────────────────────────────
 
 Console.WriteLine("\n=== 5. Totals ===");

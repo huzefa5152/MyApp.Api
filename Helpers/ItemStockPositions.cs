@@ -74,8 +74,10 @@ namespace MyApp.Api.Helpers
             IReadOnlyDictionary<int, List<StockMovement>> movementsByItem,
             IReadOnlyDictionary<int, (string Name, string? HsCode)> names,
             DateTime? from = null,
-            DateTime? to = null)
+            DateTime? to = null,
+            StockCosting? costing = null)
         {
+            costing ??= StockCosting.None;
             var result = new List<Position>();
             var itemIds = openings.Keys.Union(movementsByItem.Keys).Distinct();
 
@@ -88,7 +90,7 @@ namespace MyApp.Api.Helpers
                 movements ??= new List<StockMovement>();
 
                 var trace = new List<StockValuation.Step>(movements.Count);
-                var final = StockValuation.Compute(
+                var final = costing.Compute(itemTypeId,
                     open.Quantity, open.Declared, open.Landed, open.SalesTaxRate,
                     movements, trace);
 

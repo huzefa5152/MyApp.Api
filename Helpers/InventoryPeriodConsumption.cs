@@ -84,8 +84,10 @@ namespace MyApp.Api.Helpers
         /// </param>
         public static SortedDictionary<Period, Totals> Compute(
             IReadOnlyDictionary<int, Opening> openings,
-            IReadOnlyDictionary<int, List<StockMovement>> movementsByItem)
+            IReadOnlyDictionary<int, List<StockMovement>> movementsByItem,
+            StockCosting? costing = null)
         {
+            costing ??= StockCosting.None;
             var cogs = new Dictionary<Period, decimal>();
             var adjustments = new Dictionary<Period, decimal>();
 
@@ -100,7 +102,7 @@ namespace MyApp.Api.Helpers
                 // is how the per-movement cost comes back out — it exists only
                 // as part of the walk (StockValuation's own note).
                 var trace = new List<StockValuation.Step>(movements.Count);
-                StockValuation.Compute(
+                costing.Compute(itemTypeId,
                     open.Quantity, open.ValueExcludingTax, open.ActualCostExcludingTax,
                     open.SalesTaxRate, movements, trace);
 
@@ -171,8 +173,10 @@ namespace MyApp.Api.Helpers
             IReadOnlyDictionary<int, Opening> openings,
             IReadOnlyDictionary<int, List<StockMovement>> movementsByItem,
             DateTime? from,
-            DateTime? to)
+            DateTime? to,
+            StockCosting? costing = null)
         {
+            costing ??= StockCosting.None;
             var cogs = 0m;
             var adjustments = 0m;
 
@@ -182,7 +186,7 @@ namespace MyApp.Api.Helpers
                 openings.TryGetValue(itemTypeId, out var open);
 
                 var trace = new List<StockValuation.Step>(movements.Count);
-                StockValuation.Compute(
+                costing.Compute(itemTypeId,
                     open.Quantity, open.ValueExcludingTax, open.ActualCostExcludingTax,
                     open.SalesTaxRate, movements, trace);
 
