@@ -235,6 +235,8 @@ namespace MyApp.Api.Controllers
                 .Where(i => ids.Contains(i.Id) && !i.IsDeleted)
                 .Select(i => new { i.Id, i.Name })
                 .ToDictionaryAsync(i => i.Id, i => i.Name);
+            foreach (var (id, own) in await CompanyItemNames.ForCompanyAsync(_context, companyId, ids))
+                if (names.ContainsKey(id)) names[id] = own;
             var claimRows = await _context.GdClaimPeriods.AsNoTracking()
                 .Where(x => x.CompanyId == companyId)
                 .Select(x => new { x.GdNumber, x.ClaimMonth }).ToListAsync();
@@ -331,6 +333,8 @@ namespace MyApp.Api.Controllers
             var itemTypes = await _context.ItemTypes
                 .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
                 .ToDictionaryAsync(it => it.Id);
+            // The company's own names win over the shared catalog's.
+            var ownNames = await CompanyItemNames.ForCompanyAsync(_context, companyId, ids);
 
             var openings = await _context.OpeningStockBalances
                 .Where(o => o.CompanyId == companyId && ids.Contains(o.ItemTypeId))
@@ -392,7 +396,7 @@ namespace MyApp.Api.Controllers
                 rows.Add(new StockOnHandRowDto
                 {
                     ItemTypeId = id,
-                    ItemTypeName = it.Name,
+                    ItemTypeName = CompanyItemNames.Pick(ownNames, id, it.Name),
                     HSCode = it.HSCode,
                     UOM = it.UOM,
                     OpeningBalance = opening,
@@ -438,7 +442,7 @@ namespace MyApp.Api.Controllers
                     {
                         Id = m.Id,
                         ItemTypeId = m.ItemTypeId,
-                        ItemTypeName = it.Name,
+                        ItemTypeName = CompanyItemNames.Pick(ownNames, id, it.Name),
                         Direction = m.Direction.ToString(),
                         Quantity = m.Quantity,
                         SourceType = m.SourceType.ToString(),
@@ -745,6 +749,11 @@ namespace MyApp.Api.Controllers
                 })
                 .ToListAsync();
 
+            var movementNames = await CompanyItemNames.ForCompanyAsync(
+                _context, companyId, rows.Select(r => r.ItemTypeId));
+            foreach (var row in rows)
+                row.ItemTypeName = CompanyItemNames.Pick(movementNames, row.ItemTypeId, row.ItemTypeName);
+
             // Resolve human-facing document numbers for the source rows — one
             // batched query per source type, shared with the Excel export so
             // the two cannot label the same movement differently.
@@ -870,6 +879,10 @@ namespace MyApp.Api.Controllers
                     Notes = o.Notes,
                 })
                 .ToListAsync();
+            var openingNames = await CompanyItemNames.ForCompanyAsync(
+                _context, companyId, rows.Select(r => r.ItemTypeId));
+            foreach (var row in rows)
+                row.ItemTypeName = CompanyItemNames.Pick(openingNames, row.ItemTypeId, row.ItemTypeName);
             return Ok(rows);
         }
 
@@ -964,7 +977,9 @@ namespace MyApp.Api.Controllers
                 Id = existing.Id,
                 CompanyId = existing.CompanyId,
                 ItemTypeId = existing.ItemTypeId,
-                ItemTypeName = it?.Name ?? "",
+                ItemTypeName = CompanyItemNames.Pick(
+                    await CompanyItemNames.ForCompanyAsync(_context, existing.CompanyId, new[] { existing.ItemTypeId }),
+                    existing.ItemTypeId, it?.Name ?? ""),
                 Quantity = existing.Quantity,
                 ValueExcludingTax = existing.ValueExcludingTax,
                 SalesTaxRate = existing.SalesTaxRate,

@@ -58,6 +58,19 @@ namespace MyApp.Api.DTOs
         public bool WriteCompanyOverlay { get; set; }
 
         /// <summary>
+        /// The selected company's own name for this item
+        /// (CompanyItemTypeSetting.DisplayName). When set, <see cref="Name"/>
+        /// carries it on every read in that company's context and
+        /// <see cref="CatalogName"/> keeps the shared catalog name. Written only
+        /// with <see cref="WriteCompanyOverlay"/>; blank clears it.
+        /// </summary>
+        public string? CompanyDisplayName { get; set; }
+
+        /// <summary>The shared catalog name, set only when a company display
+        /// name replaced it in <see cref="Name"/>.</summary>
+        public string? CatalogName { get; set; }
+
+        /// <summary>
         /// Per-company on-hand qty (opening balance + Σ purchase In − Σ sale Out)
         /// — populated only when GET /api/itemtypes is called with
         /// ?companyId=X AND that company has inventory tracking enabled.

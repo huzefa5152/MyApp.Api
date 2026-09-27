@@ -135,9 +135,16 @@ namespace MyApp.Api.Repositories.Implementations
             var term = search?.Trim();
             if (!string.IsNullOrEmpty(term))
             {
+                // A company's own name for an item (CompanyItemTypeSetting.
+                // DisplayName) is what its pickers show, so it has to be
+                // searchable too -- but only within the companies in scope.
+                var scope = scopeToCompanyIds?.ToList();
                 query = query.Where(it =>
                     EF.Functions.Like(it.Name, "%" + term + "%") ||
-                    (it.HSCode != null && EF.Functions.Like(it.HSCode, term + "%")));
+                    (it.HSCode != null && EF.Functions.Like(it.HSCode, term + "%")) ||
+                    (scope != null && _context.CompanyItemTypeSettings.Any(s =>
+                        s.ItemTypeId == it.Id && scope.Contains(s.CompanyId)
+                        && s.DisplayName != null && EF.Functions.Like(s.DisplayName, "%" + term + "%"))));
             }
 
             query = query.OrderBy(it => it.Name);

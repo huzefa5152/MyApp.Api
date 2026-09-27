@@ -108,7 +108,12 @@ export default function ItemTypeForm({
   const mode = editItem ? "edit" : "create";
   const lockedSaleType = !!scenarioSaleType;
 
-  const [name, setName] = useState(editItem?.name || "");
+  // The shared catalog name. In a company's context the list hands back that
+  // company's own name in `name` and the catalog one in `catalogName`.
+  const [name, setName] = useState(editItem?.catalogName || editItem?.name || "");
+  // This company's own name for the item (CompanyItemTypeSetting.DisplayName):
+  // shown instead of the catalog name for this company only. Blank = none.
+  const [companyName, setCompanyName] = useState(editItem?.companyDisplayName || "");
   const [hsCode, setHsCode] = useState(editItem?.hsCode || "");
   const [uom, setUom] = useState(editItem?.uom || "");
   // Who last filled the UOM: "auto" = an HS-code lookup put it there, "manual"
@@ -414,6 +419,7 @@ export default function ItemTypeForm({
         ...(showGlMapping && companyId
           ? {
               writeCompanyOverlay: true,
+              companyDisplayName: companyName.trim() || null,
               divisionId: divisionId || null,
               saleAccountId: saleAccountId || null,
               purchaseAccountId: purchaseAccountId || null,
@@ -818,6 +824,23 @@ export default function ItemTypeForm({
                 <div style={{ fontWeight: 700, fontSize: "0.8rem", color: colors.blue, marginBottom: "0.5rem" }}>
                   <MdInventory2 size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
                   Company inventory type &amp; GL accounts
+                </div>
+
+                <div style={{ marginBottom: "0.75rem" }}>
+                  <label style={styles.label}>
+                    Name for this company <span style={{ fontWeight: 400, color: colors.textSecondary }}>(optional)</span>
+                  </label>
+                  <input
+                    style={styles.input}
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder={name || "Same as the catalog name"}
+                    maxLength={300}
+                  />
+                  <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4 }}>
+                    The item list is shared by every company. This name is shown only for this company
+                    (pickers, new documents, stock screens and export); other companies keep the name above.
+                  </div>
                 </div>
 
                 <DivisionSelect

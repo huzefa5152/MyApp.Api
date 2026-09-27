@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
@@ -89,6 +90,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(it => ids.Contains(it.Id) && !it.IsDeleted)
                 .ToDictionaryAsync(it => it.Id);
             ids = ids.Where(itemTypes.ContainsKey).ToList();
+            var ownNames = await CompanyItemNames.ForCompanyAsync(_context, companyId, ids);
             if (ids.Count == 0) return new List<InventoryBucketRow>();
 
             var trackedSet = await _stock.GetStockTrackedItemTypeIdsAsync(companyId, ids);
@@ -215,7 +217,7 @@ namespace MyApp.Api.Services.Implementations
                 rows.Add(new InventoryBucketRow
                 {
                     ItemTypeId = id,
-                    ItemTypeName = it.Name,
+                    ItemTypeName = CompanyItemNames.Pick(ownNames, id, it.Name),
                     HSCode = it.HSCode,
                     UOM = it.UOM,
                     Tracked = trackedSet.Contains(id),

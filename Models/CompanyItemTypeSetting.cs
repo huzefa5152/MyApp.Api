@@ -98,6 +98,16 @@ namespace MyApp.Api.Models
         /// then the engine's chain.</summary>
         public int? PurchaseAccountId { get; set; }
 
+        /// <summary>
+        /// This company's own name for the item, shown instead of the catalog
+        /// name everywhere the company sees it (pickers, stock screens, the
+        /// stock export). Null = use the catalog name. The catalog row is
+        /// shared by every company, so renaming it would rename another
+        /// company's item; this is how one company follows its own stock sheet
+        /// without doing that (2026-09-28).
+        /// </summary>
+        public string? DisplayName { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

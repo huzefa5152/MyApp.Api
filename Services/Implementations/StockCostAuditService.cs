@@ -95,6 +95,9 @@ namespace MyApp.Api.Services.Implementations
                     Note = c.Note,
                 })
                 .ToListAsync();
+            var ownNames = await CompanyItemNames.ForCompanyAsync(_db, companyId, rows.Select(r => r.ItemTypeId));
+            foreach (var row in rows)
+                row.ItemTypeName = CompanyItemNames.Pick(ownNames, row.ItemTypeId, row.ItemTypeName);
 
             return new PagedResult<StockCostChangeDto>
             {

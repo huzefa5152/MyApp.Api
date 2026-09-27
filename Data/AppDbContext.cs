@@ -2401,6 +2401,8 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<CompanyItemTypeSetting>()
                 .HasIndex(s => new { s.CompanyId, s.ItemTypeId }).IsUnique();
             modelBuilder.Entity<CompanyItemTypeSetting>()
+                .Property(s => s.DisplayName).HasMaxLength(300);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
                 .Property(s => s.Mode).HasConversion<byte>();
             modelBuilder.Entity<CompanyItemTypeSetting>()
                 .Property(s => s.ReorderLevel).HasPrecision(28, 12);

@@ -218,7 +218,7 @@ namespace MyApp.Api.Services.Implementations
             if (ids.Count == 0) return;
             var overlays = await _context.CompanyItemTypeSettings.AsNoTracking()
                 .Where(s => s.CompanyId == companyId && ids.Contains(s.ItemTypeId))
-                .Select(s => new { s.ItemTypeId, s.DivisionId, s.SaleAccountId, s.PurchaseAccountId })
+                .Select(s => new { s.ItemTypeId, s.DivisionId, s.SaleAccountId, s.PurchaseAccountId, s.DisplayName })
                 .ToListAsync();
             if (overlays.Count == 0) return;
             var map = overlays.ToDictionary(x => x.ItemTypeId);
@@ -236,6 +236,14 @@ namespace MyApp.Api.Services.Implementations
             foreach (var dto in dtos)
             {
                 if (!map.TryGetValue(dto.Id, out var o)) continue;
+                // The company's own name wins on every read in its context; the
+                // catalog name travels alongside so an edit can tell them apart.
+                if (!string.IsNullOrWhiteSpace(o.DisplayName))
+                {
+                    dto.CatalogName = dto.Name;
+                    dto.Name = o.DisplayName!;
+                    dto.CompanyDisplayName = o.DisplayName;
+                }
                 dto.DivisionId = o.DivisionId;
                 dto.DivisionName = o.DivisionId.HasValue ? divNames.GetValueOrDefault(o.DivisionId.Value) : null;
                 dto.SaleAccountId = o.SaleAccountId;
@@ -400,6 +408,20 @@ namespace MyApp.Api.Services.Implementations
             if (it.IsDeleted)
                 throw new InvalidOperationException($"\"{it.Name}\" is deleted — restore it first before editing.");
 
+            // A caller that read the item in a company's context got the
+            // company's own name in Name. Sending it back is not a request to
+            // rename the SHARED catalog row -- that would rename every other
+            // company's item -- so the catalog name is kept.
+            if (companyId.HasValue)
+            {
+                var ownName = await _context.CompanyItemTypeSettings.AsNoTracking()
+                    .Where(s => s.CompanyId == companyId.Value && s.ItemTypeId == id)
+                    .Select(s => s.DisplayName).FirstOrDefaultAsync();
+                if (!string.IsNullOrWhiteSpace(ownName)
+                    && string.Equals((dto.Name ?? "").Trim(), ownName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    dto.Name = it.Name;
+            }
+
             var normalizedHs = string.IsNullOrWhiteSpace(dto.HSCode) ? null : dto.HSCode!.Trim();
             if (await _repo.ExistsByNameAndHsCodeAsync(dto.Name, normalizedHs, id))
                 throw new InvalidOperationException(
@@ -509,6 +531,13 @@ namespace MyApp.Api.Services.Implementations
             overlay.DivisionId = divisionId;
             overlay.SaleAccountId = Valid(dto.SaleAccountId);
             overlay.PurchaseAccountId = Valid(dto.PurchaseAccountId);
+            // Blank, or the catalog name itself, means "no name of our own".
+            var own = (dto.CompanyDisplayName ?? "").Trim();
+            var catalogName = await _context.ItemTypes.AsNoTracking()
+                .Where(t => t.Id == itemTypeId).Select(t => t.Name).FirstOrDefaultAsync() ?? "";
+            overlay.DisplayName = own.Length == 0
+                || string.Equals(own, catalogName.Trim(), StringComparison.OrdinalIgnoreCase)
+                ? null : (own.Length <= 300 ? own : own[..300]);
             overlay.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
