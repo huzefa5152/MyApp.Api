@@ -930,15 +930,17 @@ namespace MyApp.Api.Services.Implementations
             return (claimed, split);
         }
 
-        /// <summary>Records the sheet's claim months. Set, never cleared: a
-        /// blank on the sheet means "not claimed on this sheet", and a month
-        /// already entered on the dashboard is kept.</summary>
+        /// <summary>Records the GD-level month of every GD whose lines agree,
+        /// and DROPS it for a GD whose lines disagree: each line now carries
+        /// its own month, and a stale GD-level month would otherwise be read
+        /// by that GD's unclaimed lines as if they had been claimed. A GD the
+        /// sheet names no month for keeps whatever was entered by hand.</summary>
         private async Task<int> UpsertClaimMonthsAsync(
             int companyId, IEnumerable<(string? Gd, DateTime? Month)> lines)
         {
-            var (claimed, _) = ResolveClaimMonths(lines);
-            if (claimed.Count == 0) return 0;
-            var numbers = claimed.Keys.ToList();
+            var (claimed, split) = ResolveClaimMonths(lines);
+            if (claimed.Count == 0 && split.Count == 0) return 0;
+            var numbers = claimed.Keys.Concat(split).ToList();
             var existing = await _db.GdClaimPeriods
                 .Where(x => x.CompanyId == companyId && numbers.Contains(x.GdNumber))
                 .ToListAsync();
@@ -949,6 +951,8 @@ namespace MyApp.Api.Services.Implementations
                     _db.GdClaimPeriods.Add(new GdClaimPeriod { CompanyId = companyId, GdNumber = gd, ClaimMonth = month });
                 else row.ClaimMonth = month;
             }
+            _db.GdClaimPeriods.RemoveRange(existing.Where(x =>
+                split.Contains(x.GdNumber.Trim(), StringComparer.OrdinalIgnoreCase)));
             await _db.SaveChangesAsync();
             return claimed.Count;
         }

@@ -49,12 +49,12 @@ def make_company(api, h, name):
     return r.json()["id"]
 
 
-def sheet_bytes(tag):
+def sheet_bytes(tag, title="Test Trader"):
     """The standard stock sheet: bands on row 2, headings on row 3, data from 4."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Aug 2026"
-    ws.cell(1, 6, "Test Trader")
+    ws.cell(1, 6, title)
     ws.cell(2, 10, "Opening"); ws.cell(2, 14, "Consumed"); ws.cell(2, 18, "Balance")
     heads = ["Claimed Month", "GD Number", "GD Date", "4 Digit Hs Code", "8 Digit Hs Code",
              "Items", "Sub Category", "Price", "Unit", "Qty", "Exl", "Rate", "S.Tax",
@@ -168,6 +168,29 @@ def main():
     details = requests.get(f"{api}/stock/company/{company}/gd-details", headers=h, timeout=60).json()
     check("clearing a line makes it not claimed again",
           r.status_code == 204 and not next(d for d in details if d["lotId"] == washer["lotId"]).get("claimMonth"))
+
+    print("\n  Suite 3b — a re-import drops a stale GD-level month of a mixed GD")
+    r = requests.put(f"{api}/stock/company/{company}/gd-claim-month", headers=h, timeout=30,
+                     json={"gdNumber": gd_a, "claimMonth": "2020-01-01"})
+    check("a GD-level month can be put on the mixed GD", r.status_code == 204, f"http {r.status_code}")
+    blob2, _, _ = sheet_bytes(tag, title="Test Trader (resaved)")
+    r = requests.post(f"{api}/spreadsheet-import/opening-stock/preview", headers=h, timeout=120,
+                      params={"companyId": company, "profileId": std["id"]},
+                      files={"file": ("claims2.xlsx", blob2)})
+    prev2 = r.json()
+    body2 = dict(body, fileSha256=prev2["fileSha256"], fileSizeBytes=prev2["fileSizeBytes"],
+                 fileName="claims2.xlsx",
+                 rows=[dict(x2, itemTypeId=p2["itemTypeId"], lots=p2["lots"])
+                       for x2, p2 in zip(body["rows"], prev2["rows"])])
+    r = requests.post(f"{api}/spreadsheet-import/opening-stock/commit", headers=h, timeout=300, json=body2)
+    check("the re-import commits", r.ok, f"http {r.status_code} {r.text[:200]}")
+    details = requests.get(f"{api}/stock/company/{company}/gd-details", headers=h, timeout=60).json()
+    by3 = {d["description"].split(" ")[0]: d for d in details}
+    check("the unclaimed line does not inherit the stale GD month",
+          not by3["WASHER"].get("claimMonth"), str(by3["WASHER"].get("claimMonth")))
+    check("the claimed lines keep their own months",
+          (by3["ATOMIZER"].get("claimMonth") or "")[:7] == "2026-06"
+          and (by3["LED"].get("claimMonth") or "")[:7] == "2026-07")
 
     print("\n  Suite 4 — the export names every month of a mixed GD")
     r = requests.get(f"{api}/stock/company/{company}/onhand/excel", headers=h, timeout=120)
