@@ -349,6 +349,34 @@ _, beta_tpls_after = request("GET", f"/api/printtemplates/company/{beta['id']}",
 check("POST route companyId guard", "Beta print templates unchanged after forged seed",
       len(beta_tpls_after or []) == len(beta_tpls_before or []),
       f"before {len(beta_tpls_before or [])}, after {len(beta_tpls_after or [])}")
+# alice tries the PO import parse routes against Beta. The company decides whose
+# saved PO formats match and which client is pre-selected, so each must refuse.
+# The uploads are sent as real multipart bodies: without one ASP.NET answers 415
+# before the action runs, which would prove nothing about the guard. One call
+# each: the upload routes share the "import" rate limit (10 a minute).
+def post_upload(path, token, filename, content, fields=None):
+    boundary = "----tenanttest7f3a"
+    parts = []
+    for k, v in (fields or {}).items():
+        parts.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+    parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
+                  "Content-Type: application/octet-stream\r\n\r\n").encode() + content + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    req = urllib.request.Request(BASE + path, data=b"".join(parts), method="POST", headers={
+        "Content-Type": f"multipart/form-data; boundary={boundary}", "Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+tiny_png = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000")
+for route, status in (
+    ("parse-pdf", post_upload(f"/api/poimport/parse-pdf?companyId={beta['id']}", tokens["alice"], "po.pdf", b"%PDF-1.4\n%%EOF")),
+    ("parse-text", request("POST", f"/api/poimport/parse-text?companyId={beta['id']}", token=tokens["alice"], body={"text": "PO No: 1"})[0]),
+):
+    check("POST route companyId guard", f"alice -> POST /api/poimport/{route}?companyId={{beta}}",
+          status == 403, f"expected 403, got {status}")
 
 # Suite 5: UserCompanies endpoint requires the new permission
 print("\n  Suite 5 — Tenant Access page perm gating")
