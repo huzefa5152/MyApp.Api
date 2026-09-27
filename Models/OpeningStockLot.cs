@@ -50,6 +50,14 @@ namespace MyApp.Api.Models
         /// <summary>Declaration date, when the sheet states one.</summary>
         public DateTime? LotDate { get; set; }
 
+        /// <summary>
+        /// First day of the month this LINE's input tax was claimed in, from the
+        /// sheet's "Claim Month" column; null = not claimed yet. Per line, not
+        /// per GD: one declaration's items are routinely claimed in different
+        /// returns. Wins over the GD-level <see cref="GdClaimPeriod"/>.
+        /// </summary>
+        public DateTime? ClaimMonth { get; set; }
+
         /// <summary>Unit as written on the row, which can differ between lots of
         /// the same item (Kg on one declaration, Kgs on another).</summary>
         public string? Unit { get; set; }

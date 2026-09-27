@@ -229,7 +229,8 @@ namespace MyApp.Api.DTOs
         /// <summary>Source sheet rows kept alongside those balances.</summary>
         public int LotsWritten { get; set; }
 
-        /// <summary>GDs whose Claim Month the sheet set.</summary>
+        /// <summary>GDs whose every line named one Claim Month, recorded at GD
+        /// level as well as on each line.</summary>
         public int ClaimMonthsWritten { get; set; }
         public int RowsSkippedAlreadyImported { get; set; }
         public decimal TotalQuantity { get; set; }

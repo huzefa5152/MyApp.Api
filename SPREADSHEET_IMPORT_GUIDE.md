@@ -191,7 +191,7 @@ declaration (a "lot"). A totals row at the bottom is fine and is ignored.
 
 | Col | Heading | Meaning | Used for |
 |---|---|---|---|
-| A | Claim Month | return the GD's input tax was filed in | **recorded per GD** when every line of that GD names the same month |
+| A | Claim Month | return the line's input tax was filed in | **kept per line** (blank = not claimed yet) |
 | B | **GD Number** | customs declaration reference | kept per lot |
 | C | **GD Date** | declaration date | kept per lot |
 | D | **4 Digit Hs Code** | tariff heading | fallback classification |
@@ -267,10 +267,10 @@ cost-of-goods-sold block.
 
 **Claim Month** is read by its heading ("Claim Month" or "Claimed Month") and by
 the month's short name, so "Jun 2024", "June 2026" and "Sept 2025" all read; a
-date cell gives its month. The system keeps ONE claim month per GD, so a GD
-whose lines name different months — or are only partly claimed — is listed in
-the preview and left for the operator to set on the Stock Dashboard. A blank
-never clears a month already recorded. Those are the accountant's working.
+date cell gives its month. Every line keeps its OWN month — one GD's items are
+often claimed in different returns — and a blank means that line is not
+claimed yet. A GD whose lines all agree also records that month for the GD as a
+whole. Each line's month can be corrected in the Stock Dashboard's GD panel. Those are the accountant's working.
 
 ---
 

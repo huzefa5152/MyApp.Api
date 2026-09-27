@@ -150,6 +150,55 @@ namespace MyApp.Api.Controllers
             return NoContent();
         }
 
+        /// <summary>Record the claimed month of ONE GD line — an opening-sheet
+        /// line or a GD-import line. A GD's items are often claimed in
+        /// different returns, so this is the figure the sheet itself carries;
+        /// it wins over the GD-level month.</summary>
+        [HttpPut("company/{companyId}/line-claim-month")]
+        [HasPermission("stock.opening.manage")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> SetLineClaimMonth(int companyId, [FromBody] SetLineClaimMonthDto dto)
+        {
+            if (dto.ClaimMonth is { } month && (month.Day != 1 || month.TimeOfDay != TimeSpan.Zero))
+                return BadRequest(new { error = "Claim month must be the first day of the month." });
+            if ((dto.LotId == null) == (dto.ConsignmentLineId == null))
+                return BadRequest(new { error = "Choose one stock line." });
+
+            // Scoped by the line's OWN company, never the route's alone: an id
+            // from another tenant must read as unknown, not be written.
+            string? gd; int row;
+            if (dto.LotId is { } lotId)
+            {
+                var lot = await _context.OpeningStockLots
+                    .FirstOrDefaultAsync(l => l.Id == lotId && l.OpeningStockBalance.CompanyId == companyId);
+                if (lot == null) return NotFound(new { error = "This company has no such stock line." });
+                lot.ClaimMonth = dto.ClaimMonth;
+                gd = lot.LotRef; row = lot.SourceRow;
+            }
+            else
+            {
+                var line = await _context.ImportConsignmentLines.Include(l => l.ImportConsignment)
+                    .FirstOrDefaultAsync(l => l.Id == dto.ConsignmentLineId && l.ImportConsignment.CompanyId == companyId);
+                if (line == null) return NotFound(new { error = "This company has no such stock line." });
+                line.ClaimMonth = dto.ClaimMonth;
+                gd = line.ImportConsignment.GdNumber; row = line.SourceRow;
+            }
+            await _context.SaveChangesAsync();
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "PUT",
+                RequestPath = $"/api/stock/company/{companyId}/line-claim-month",
+                StatusCode = 204,
+                ExceptionType = "LINE_CLAIM_MONTH_CHANGE",
+                Message = $"GD {gd} row {row} claim month {(dto.ClaimMonth.HasValue ? "set" : "cleared")} for company {companyId}",
+                CompanyId = companyId,
+            });
+            return NoContent();
+        }
+
         private async Task<List<StockGdDetailDto>> BuildGdDetailsAsync(int companyId, List<int>? itemTypeIds)
         {
             if (itemTypeIds is { Count: 0 }) return new();
@@ -169,13 +218,13 @@ namespace MyApp.Api.Controllers
 
             var lots = await lotsQuery.Select(l => new
             {
-                ItemTypeId = l.OpeningStockBalance.ItemTypeId,
+                ItemTypeId = l.OpeningStockBalance.ItemTypeId, l.Id, l.ClaimMonth,
                 l.SourceRow, l.ItemNameOnSheet, l.HsCode, l.LotRef, l.LotDate,
                 l.BalanceQuantity, l.BalanceValueExcludingTax, l.BalanceSalesTaxRate,
             }).ToListAsync();
             var lines = await linesQuery.Select(l => new
             {
-                ItemTypeId = l.ItemTypeId!.Value, l.SourceRow, l.DescriptionOnSheet,
+                ItemTypeId = l.ItemTypeId!.Value, l.Id, l.ClaimMonth, l.SourceRow, l.DescriptionOnSheet,
                 l.HsCode, l.Quantity, l.SellingValueExcludingTax, l.SalesTaxRate,
                 l.Disposition, l.ImportConsignment.Mode, l.ImportConsignment.GdNumber,
                 l.ImportConsignment.GdDate,
@@ -202,7 +251,10 @@ namespace MyApp.Api.Controllers
                 {
                     ItemTypeId = l.ItemTypeId, ItemTypeName = name, HsCode = l.HsCode,
                     Source = "Opening sheet", GdNumber = gd, GdDate = l.LotDate,
-                    ClaimMonth = ClaimFor(gd), SourceRow = l.SourceRow,
+                    LotId = l.Id,
+                    // The line's own month first; the GD-level month covers a
+                    // line imported before lines carried one.
+                    ClaimMonth = l.ClaimMonth ?? ClaimFor(gd), SourceRow = l.SourceRow,
                     Description = l.ItemNameOnSheet, Quantity = l.BalanceQuantity,
                     ValueExcludingTax = l.BalanceValueExcludingTax,
                     SalesTaxRate = l.BalanceSalesTaxRate,
@@ -218,7 +270,8 @@ namespace MyApp.Api.Controllers
                     ItemTypeId = l.ItemTypeId, ItemTypeName = name, HsCode = l.HsCode,
                     Source = arrival ? "GD new arrival" : "Cost-only backfill",
                     GdNumber = gd, GdDate = l.GdDate,
-                    ClaimMonth = ClaimFor(gd), SourceRow = l.SourceRow,
+                    ConsignmentLineId = l.Id,
+                    ClaimMonth = l.ClaimMonth ?? ClaimFor(gd), SourceRow = l.SourceRow,
                     Description = l.DescriptionOnSheet,
                     Quantity = arrival ? l.Quantity : null,
                     ValueExcludingTax = arrival ? l.SellingValueExcludingTax : null,
@@ -544,7 +597,7 @@ namespace MyApp.Api.Controllers
                 {
                     var src = g.Any(d => d.Quantity.HasValue) ? g.Where(d => d.Quantity.HasValue) : g;
                     return src.GroupBy(d => d.GdNumber, StringComparer.OrdinalIgnoreCase)
-                        .Select(x => (Gd: x.Key, Date: x.Min(d => d.GdDate), Claim: x.First().ClaimMonth))
+                        .Select(x => (Gd: x.Key, Date: x.Min(d => d.GdDate), Claim: ClaimText(x)))
                         .OrderBy(x => x.Date ?? DateTime.MaxValue).ThenBy(x => x.Gd)
                         .ToList();
                 });
@@ -568,7 +621,7 @@ namespace MyApp.Api.Controllers
                     if (gds.Count == 1)
                     {
                         item.LotDate = gds[0].Date;
-                        item.ClaimMonth = gds[0].Claim;
+                        item.ClaimMonthsText = gds[0].Claim;
                     }
                     else if (gds.Count > 1)
                     {
@@ -577,9 +630,8 @@ namespace MyApp.Api.Controllers
                         item.LotDatesText = gds.Any(g => g.Date.HasValue)
                             ? string.Join(", ", gds.Select(g => g.Date?.ToString("dd-MM-yyyy") ?? "-"))
                             : null;
-                        item.ClaimMonthsText = gds.Any(g => g.Claim.HasValue)
-                            ? string.Join(", ", gds.Select(g => g.Claim?.ToString("MMM yyyy",
-                                System.Globalization.CultureInfo.InvariantCulture) ?? "-"))
+                        item.ClaimMonthsText = gds.Any(g => g.Claim != null)
+                            ? string.Join(", ", gds.Select(g => g.Claim ?? "-"))
                             : null;
                     }
                     return item;
@@ -599,6 +651,17 @@ namespace MyApp.Api.Controllers
             }
 
             var fileName = $"stock-report-{PakistanClock.Today:yyyy-MM-dd}.xlsx";
+
+            // One item's lines under one GD can be claimed in different months;
+            // every distinct month is named ("Jun 2026 / Jul 2026"), with a
+            // dash when some of those lines are not claimed yet.
+            static string? ClaimText(IEnumerable<StockGdDetailDto> lines)
+            {
+                var months = lines.Select(d => d.ClaimMonth).Distinct().OrderBy(m => m ?? DateTime.MaxValue).ToList();
+                if (months.All(m => m == null)) return null;
+                return string.Join(" / ", months.Select(m => m?.ToString("MMM yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture) ?? "-"));
+            }
             return File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 fileName);

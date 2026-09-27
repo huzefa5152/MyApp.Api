@@ -386,11 +386,25 @@
         public string GdNumber { get; set; } = "";
         public DateTime? GdDate { get; set; }
         public DateTime? ClaimMonth { get; set; }
+
+        /// <summary>The line behind this row — an opening-sheet line
+        /// (<see cref="LotId"/>) or a GD-import line
+        /// (<see cref="ConsignmentLineId"/>). Its claim month is edited per line.</summary>
+        public int? LotId { get; set; }
+        public int? ConsignmentLineId { get; set; }
         public int SourceRow { get; set; }
         public string? Description { get; set; }
         public decimal? Quantity { get; set; }
         public decimal? ValueExcludingTax { get; set; }
         public decimal? SalesTaxRate { get; set; }
+    }
+
+    /// <summary>Exactly one of the two ids.</summary>
+    public class SetLineClaimMonthDto
+    {
+        public int? LotId { get; set; }
+        public int? ConsignmentLineId { get; set; }
+        public DateTime? ClaimMonth { get; set; }
     }
 
     public class SetGdClaimMonthDto

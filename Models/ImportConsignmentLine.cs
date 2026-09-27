@@ -61,6 +61,12 @@ namespace MyApp.Api.Models
         /// different workbook again.</summary>
         public string DescriptionOnSheet { get; set; } = "";
 
+        /// <summary>First day of the month THIS line's input tax was claimed
+        /// in; null = not claimed yet. Per line, like
+        /// <see cref="OpeningStockLot.ClaimMonth"/>; wins over the GD-level
+        /// <see cref="GdClaimPeriod"/>.</summary>
+        public DateTime? ClaimMonth { get; set; }
+
         /// <summary>Code as the costing sheet wrote it, cleaned of decoration.
         /// Nullable: not every costing sheet carries one.</summary>
         public string? HsCode { get; set; }

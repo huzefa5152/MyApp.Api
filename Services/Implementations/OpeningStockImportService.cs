@@ -97,13 +97,10 @@ namespace MyApp.Api.Services.Implementations
                 preview.Warnings.Add(
                     $"{ambiguous} item(s) match an existing item under a different HS code. Choose which to use before importing.");
 
-            var (claimed, split) = ResolveClaimMonths(lots.Select(l => (l.LotRef, l.ClaimMonth)));
-            if (claimed.Count > 0)
+            var claimedLines = lots.Count(l => l.ClaimMonth.HasValue && !string.IsNullOrWhiteSpace(l.LotRef));
+            if (claimedLines > 0)
                 preview.Warnings.Add(
-                    $"Claim Month will be recorded for {claimed.Count} GD(s). GDs with no Claim Month stay unclaimed.");
-            if (split.Count > 0)
-                preview.Warnings.Add(
-                    $"These GDs have different Claim Months (or some lines unclaimed) on different lines, so no claim month is recorded for them — set it on the Stock Dashboard: {string.Join(", ", split)}.");
+                    $"Claim Month will be recorded on {claimedLines} of {lots.Count} line(s), each line with its own month. Lines with no Claim Month stay unclaimed.");
 
             if (lots.Count != rows.Count)
                 preview.Warnings.Add(
@@ -888,6 +885,7 @@ namespace MyApp.Api.Services.Implementations
                     HsCode = Trim(lot.HsCode ?? row.HsCode, 20),
                     LotRef = Trim(lot.LotRef, 100) is { Length: > 0 } r ? r : null,
                     LotDate = lot.LotDate,
+                    ClaimMonth = lot.ClaimMonth is { } cm ? new DateTime(cm.Year, cm.Month, 1) : null,
                     Unit = Trim(lot.Unit ?? row.Unit, 50) is { Length: > 0 } u ? u : null,
                     UnitPrice = lot.UnitPrice,
                     OpeningQuantity = lot.OpeningQuantity,
@@ -910,10 +908,10 @@ namespace MyApp.Api.Services.Implementations
         }
 
         /// <summary>
-        /// The sheet's Claim Month is written per LINE, the system keeps one per
-        /// GD. A GD whose every line names the same month is recorded; a GD
-        /// with no month anywhere is left unclaimed; a GD whose lines disagree
-        /// — or are only partly claimed — is reported and left alone, because
+        /// Each line keeps its own month (OpeningStockLot.ClaimMonth). A GD
+        /// whose every line names the same month ALSO gets a GD-level month,
+        /// which is what a GD-import line for that declaration reads; a GD
+        /// whose lines disagree, or are only partly claimed, gets none, because
         /// any single month would misstate part of it.
         /// </summary>
         internal static (Dictionary<string, DateTime> Claimed, List<string> Split) ResolveClaimMonths(

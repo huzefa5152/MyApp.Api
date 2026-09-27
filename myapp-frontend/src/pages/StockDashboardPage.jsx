@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setGdClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes } from "../api/stockApi";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -514,13 +514,16 @@ export default function StockDashboardPage() {
     return () => { cancelled = true; };
   }, [expandedId, selectedCompany, gdDetails]);
 
-  const saveClaimMonth = async (gdNumber, month) => {
-    await setGdClaimMonth(selectedCompany.id, gdNumber, month);
+  // Per LINE, not per GD: one declaration's items are often claimed in
+  // different returns, which is how the clients' own sheets record them.
+  const saveClaimMonth = async (line, month) => {
+    await setLineClaimMonth(selectedCompany.id, line, month);
+    const same = (r) => (line.lotId != null && r.lotId === line.lotId)
+      || (line.consignmentLineId != null && r.consignmentLineId === line.consignmentLineId);
     setGdDetails(prev => {
       const next = {};
       for (const [id, rows] of Object.entries(prev))
-        next[id] = rows.map(r => r.gdNumber.toLowerCase() === gdNumber.toLowerCase()
-          ? { ...r, claimMonth: month ? `${month}-01T00:00:00` : null } : r);
+        next[id] = rows.map(r => same(r) ? { ...r, claimMonth: month ? `${month}-01T00:00:00` : null } : r);
       return next;
     });
     notify(month ? "Claim month saved." : "Claim month cleared.", "success");
@@ -1770,7 +1773,8 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
       <div style={drillStyles.heading}>GD source lots and receipts ({rows.length})</div>
       <div style={{ fontSize: "0.75rem", color: colors.textSecondary, marginBottom: "0.55rem" }}>
         Source quantities explain the opening position before later sales. Cost-only backfills add no stock.
-        GD month is the declaration month; claim month is the period actually filed.
+        GD month is the declaration month; claim month is the return this line's input tax was
+        filed in — each line has its own, and a blank one means not claimed yet.
       </div>
       <div style={{ display: "grid", gap: "0.5rem" }}>
         {rows.map((r, index) => (
@@ -1780,15 +1784,19 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
               <strong style={{ color: colors.blue }}>GD {r.gdNumber}</strong>
               <span>{r.source}</span>
               <span style={{ color: colors.textSecondary }}>GD date {date(r.gdDate)} · GD month {month(r.gdDate)}</span>
-              <span style={{ color: colors.textSecondary }}>Claim month {month(r.claimMonth)}</span>
+              <span style={{ color: r.claimMonth ? colors.textSecondary : colors.negative }}>
+                {r.claimMonth ? `Claim month ${month(r.claimMonth)}` : "Not claimed yet"}
+              </span>
               <span>{r.quantity == null ? "No stock added" : `${num(r.quantity)} source units · ${money(r.valueExcludingTax)} excl`}</span>
               {r.salesTaxRate != null && <span>{num(r.salesTaxRate)}% tax</span>}
             </div>
             <div style={{ fontSize: "0.73rem", color: colors.textSecondary, marginTop: 4 }}>
               {r.description || "Source line"} · row {r.sourceRow}{r.hsCode ? ` · HS ${r.hsCode}` : ""}
             </div>
-            {canEdit && <ClaimMonthEditor key={`${r.gdNumber}:${r.claimMonth || ""}`}
-              gdNumber={r.gdNumber} value={r.claimMonth} onSave={onSave} />}
+            {canEdit && (r.lotId != null || r.consignmentLineId != null) && (
+              <ClaimMonthEditor key={`${r.lotId}:${r.consignmentLineId}:${r.claimMonth || ""}`}
+                line={r} value={r.claimMonth} onSave={onSave} />
+            )}
           </div>
         ))}
       </div>
@@ -1802,18 +1810,18 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
   );
 }
 
-function ClaimMonthEditor({ gdNumber, value, onSave }) {
+function ClaimMonthEditor({ line, value, onSave }) {
   const [draft, setDraft] = useState(value ? String(value).slice(0, 7) : "");
   const [saving, setSaving] = useState(false);
   const save = async () => {
     setSaving(true);
-    try { await onSave(gdNumber, draft); }
+    try { await onSave(line, draft); }
     catch (e) { notify(e?.response?.data?.error || "Could not save the claim month.", "error"); }
     finally { setSaving(false); }
   };
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", marginTop: "0.45rem" }}>
-      <label style={{ fontSize: "0.73rem" }}>Filed claim month
+      <label style={{ fontSize: "0.73rem" }}>Claim month for this line
         <input type="month" value={draft} onChange={(e) => setDraft(e.target.value)}
           style={{ marginLeft: 6, minHeight: 44, border: `1px solid ${colors.inputBorder}`, borderRadius: 6 }} />
       </label>

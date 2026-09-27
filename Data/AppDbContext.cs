@@ -2255,6 +2255,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<OpeningStockLot>().Property(l => l.HsCode).HasMaxLength(20);
             modelBuilder.Entity<OpeningStockLot>().Property(l => l.LotRef).HasMaxLength(100);
             modelBuilder.Entity<OpeningStockLot>().Property(l => l.Unit).HasMaxLength(50);
+            modelBuilder.Entity<OpeningStockLot>().Property(l => l.ClaimMonth).HasColumnType("date");
             // Quantities mirror OpeningStockBalance.Quantity; money is 2dp; the
             // stated unit price keeps 6 so a row's own value reproduces from it.
             modelBuilder.Entity<OpeningStockLot>().Property(l => l.OpeningQuantity).HasPrecision(28, 12);
@@ -2321,6 +2322,7 @@ namespace MyApp.Api.Data
 
             modelBuilder.Entity<ImportConsignmentLine>(e =>
             {
+                e.Property(x => x.ClaimMonth).HasColumnType("date");
                 e.Property(l => l.DescriptionOnSheet).HasMaxLength(300);
                 e.Property(l => l.HsCode).HasMaxLength(20);
                 e.Property(l => l.Unit).HasMaxLength(50);

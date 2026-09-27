@@ -18,9 +18,12 @@ export const getStockMovements = (companyId, params = {}) =>
   http.get(`/stock/company/${companyId}/movements`, { params });
 export const getStockGdDetails = (companyId, itemTypeId) =>
   http.get(`/stock/company/${companyId}/gd-details`, { params: { itemTypeId } });
-export const setGdClaimMonth = (companyId, gdNumber, claimMonth) =>
-  http.put(`/stock/company/${companyId}/gd-claim-month`, {
-    gdNumber,
+// One GD line's claimed month. `line` is { lotId } or { consignmentLineId },
+// straight from the GD detail row.
+export const setLineClaimMonth = (companyId, line, claimMonth) =>
+  http.put(`/stock/company/${companyId}/line-claim-month`, {
+    lotId: line.lotId ?? null,
+    consignmentLineId: line.consignmentLineId ?? null,
     claimMonth: claimMonth ? `${claimMonth}-01` : null,
   });
 // The on-hand dashboard as a styled .xlsx, with each item's movement history
