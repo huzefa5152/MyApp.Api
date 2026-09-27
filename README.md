@@ -298,6 +298,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-09-28 — Stock-sheet import adds to the Inventory opening
+
+- **A partial stock-sheet import no longer resets the Inventory account.** The opening-stock import used to SET the Inventory account's opening to the imported sheet's total, so a one-line top-up replaced every other item's value in the ledger. It now adds only what the import changed (new balances, or the difference on balances it restates), the same way the GD costing import and the manual opening-balance screen already did.
+
 ### 2026-09-27 — Stock dashboard GD numbers, claim months from the sheet, filters that stay
 
 - **GD costing import confirms new stock line by line.** A GD line whose item is not on the books no longer becomes opening stock unless it is ticked "create as new stock" (or left out); the import cannot be brought in while one is undecided, and a final prompt names the items and the value going onto opening stock and Inventory. The server refuses unconfirmed lines too.
