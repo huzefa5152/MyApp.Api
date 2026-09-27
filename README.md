@@ -290,6 +290,30 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-27 — Print templates: quicker to create and manage, and no duplicate default
+
+- **The print-template dropdown on every document screen lists each template
+  once.** A type with two templates used to show three rows ("★ Default — X",
+  then X again with a star, then the other); it now shows the default once and
+  the others after it. A type with a single template shows its name as a plain
+  label, since there is nothing to choose.
+- **New Template is one dialog**: document type, a suggested unique name, and
+  what it starts from (built-in default, a copy of one of your own, or a
+  starter design). **Create & open** saves it and opens the editor on it.
+- **In the editor**, the Document Type dropdown opens that type's default (or
+  a built-in draft if it has none), and **Templates (n)** manages the type's
+  templates in place: open, set default, rename, duplicate, copy to another
+  type, delete, new. Unsaved edits ask before they are discarded, and a blank
+  name saves as the type's name instead of refusing.
+- **The Print Templates list** keeps its tab and filters per company across the
+  editor round trip, highlights the card just edited, groups cards by document
+  type with counts, and uploads stamps through a dialog with a preview.
+- **A new company starts with one default template per document type**, so
+  every document screen can print from day one (new, idempotent
+  `POST /api/printtemplates/company/{id}/seed-defaults`; existing companies are
+  untouched). Payment voucher starters now appear in the gallery.
+- Duplicate and Copy keep the source template's signature stamp.
+
 ### 2026-09-25 — Multi-line descriptions, document notes, supplier costs on challans, Document Lines
 
 **Item descriptions are multi-line on every line editor**, including Edit
