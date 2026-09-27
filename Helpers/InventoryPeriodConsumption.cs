@@ -130,13 +130,23 @@ namespace MyApp.Api.Helpers
                     var contribution = previous - step.RunningValue;
                     previous = step.RunningValue;
 
-                    if (contribution == 0m) continue;
                     if (!byId.TryGetValue(step.MovementId, out var m)) continue;
-
                     var bucket = Classify(m.SourceType);
-                    if (bucket == Bucket.Skip) continue;
-
                     var period = new Period(m.MovementDate.Year, m.MovementDate.Month);
+
+                    // FIFO: a skipped movement (a purchase) that settled an
+                    // earlier oversale carries cost of goods sold of its own --
+                    // counted here, or the Inventory account drifts from the walk
+                    // by exactly that amount.
+                    if (bucket == Bucket.Skip)
+                    {
+                        if (step.SettledValue != 0m)
+                            cogs[period] = cogs.TryGetValue(period, out var sc)
+                                ? sc + step.SettledValue : step.SettledValue;
+                        continue;
+                    }
+                    if (contribution == 0m) continue;
+
                     var target = bucket == Bucket.Cogs ? cogs : adjustments;
                     target[period] = target.TryGetValue(period, out var running)
                         ? running + contribution
@@ -198,7 +208,6 @@ namespace MyApp.Api.Helpers
                     var contribution = previous - step.RunningValue;
                     previous = step.RunningValue;
 
-                    if (contribution == 0m) continue;
                     if (!byId.TryGetValue(step.MovementId, out var m)) continue;
 
                     // Filtered AFTER the walk, never before: the average a sale
@@ -211,6 +220,8 @@ namespace MyApp.Api.Helpers
                     {
                         case Bucket.Cogs: cogs += contribution; break;
                         case Bucket.Adjustment: adjustments += contribution; break;
+                        // FIFO settlement on a skipped movement: see Compute.
+                        case Bucket.Skip: cogs += step.SettledValue; break;
                     }
                 }
             }

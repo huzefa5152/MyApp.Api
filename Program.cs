@@ -883,6 +883,53 @@ using (var scope = app.Services.CreateScope())
         await db.SaveChangesAsync();
     }
 
+    // FIFO by GD (2026-09-28): the relief now counts the cost a purchase
+    // settles on an earlier oversale (StockValuation.Step.SettledValue). The
+    // relief of FIFO companies posted before that left the Inventory account
+    // adrift from the stock walk by exactly those settlements, so re-post it
+    // once. Same idempotence as the backfill above: the marker, and a repost
+    // that replaces each company+month entry rather than adding one.
+    if (!await db.AuditLogs.AnyAsync(a => a.ExceptionType == "FIFO_SETTLED_RELIEF_BACKFILL_V1"))
+    {
+        var posting = scope.ServiceProvider.GetRequiredService<MyApp.Api.Services.Interfaces.IPostingService>();
+        var fifoKeys = await db.SystemSettings
+            .Where(s => s.Key.StartsWith("Stock.CostingMethod.") && s.Value == MyApp.Api.Helpers.StockCostingMethod.GdFifo)
+            .Select(s => s.Key).ToListAsync();
+        var fifoIds = fifoKeys
+            .Select(k => int.TryParse(k.Substring("Stock.CostingMethod.".Length), out var id) ? id : 0)
+            .Where(id => id > 0).ToList();
+        var fifoCompanies = await db.Companies
+            .Where(c => fifoIds.Contains(c.Id) && c.GlPostingEnabled && c.InventoryTrackingEnabled)
+            .Select(c => new { c.Id, c.Name }).ToListAsync();
+        var reposted = 0;
+        foreach (var c in fifoCompanies)
+        {
+            try
+            {
+                await posting.PostInventoryPeriodsAsync(c.Id, null);
+                reposted++;
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogError(ex,
+                    "FIFO settled-cost relief re-post failed for company {CompanyId} ({Name}) — continuing.",
+                    c.Id, c.Name);
+            }
+        }
+        db.AuditLogs.Add(new MyApp.Api.Models.AuditLog
+        {
+            Timestamp = DateTime.UtcNow,
+            Level = "Info",
+            UserName = "system",
+            HttpMethod = "SEED",
+            RequestPath = "/migrations/fifo-settled-relief-backfill",
+            StatusCode = 200,
+            ExceptionType = "FIFO_SETTLED_RELIEF_BACKFILL_V1",
+            Message = $"One-time re-post: monthly stock relief re-posted for {reposted} of {fifoCompanies.Count} FIFO companies."
+        });
+        await db.SaveChangesAsync();
+    }
+
     // Item types are NOT auto-seeded — operators curate their own catalog
     // (an FBR-off business has no use for the FBR-mapped starter categories).
     // The Demo environment still seeds them below so its demo data has stock.

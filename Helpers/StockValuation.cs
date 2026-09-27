@@ -79,7 +79,14 @@ namespace MyApp.Api.Helpers
             decimal RunningQuantity,
             decimal RunningValue,
             decimal ActualUnitCost,
-            decimal RunningActualValue);
+            decimal RunningActualValue,
+            // FIFO by GD only: the cost an INWARD movement settled on an earlier
+            // oversale -- its units went straight to a sale already made, at a
+            // cost the sale had to estimate. Cost of goods sold, recognised
+            // when the goods arrive; the relief must count it, because the
+            // movement itself (a purchase) is otherwise skipped (CLAUDE.md 5b-17).
+            decimal SettledValue = 0m,
+            decimal SettledActualValue = 0m);
 
         /// <summary>
         /// Walks <paramref name="movements"/> in date order over the opening

@@ -331,6 +331,7 @@ namespace MyApp.Api.Helpers
                     var sourceKey = SourceKey(m);
                     var list = new List<Take>();
                     var amount = 0m; var actualAmount = 0m;
+                    decimal settledValue = 0m, settledActual = 0m;
 
                     // A sale return goes back into the pools that sale drained,
                     // most recently taken first, at their own cost.
@@ -377,6 +378,8 @@ namespace MyApp.Api.Helpers
                             // The units cost settleValue, the sale was booked at
                             // estValue: the difference leaves the stock now.
                             valueOut += settleValue - estValue;
+                            settledValue = settleValue - estValue;
+                            settledActual = settleActual - estActual;
                             list.Add(new Take(ShortfallKey, settle, settleValue, settleActual));
                         }
 
@@ -406,7 +409,8 @@ namespace MyApp.Api.Helpers
                     totalIn += q; valueIn += amount; exactQty += q;
                     if (list.Count > 0) takes[m.Id] = list;
                     trace?.Add(new StockValuation.Step(m.Id, q > 0m ? amount / q : 0m, amount,
-                        RunQty(), Round(RunValue()), q > 0m ? actualAmount / q : 0m, Round(RunActual())));
+                        RunQty(), Round(RunValue()), q > 0m ? actualAmount / q : 0m, Round(RunActual()),
+                        settledValue, settledActual));
                 }
                 else
                 {

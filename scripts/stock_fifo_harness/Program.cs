@@ -144,6 +144,19 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
     Check("shortfall-open: quantity goes negative, as today", mid.Position.Quantity == -5m);
 }
 
+// 8b. The settled cost is reported on the purchase's step, so the monthly
+// relief can post it (the purchase itself is skipped there).
+{
+    var book = new Book { Lots = { Lot("G", "GD-G", D(2026, 1), null, 10, 1000) } };
+    var trace = new List<StockValuation.Step>();
+    GdFifoValuation.Compute(10, 1000, 0, 18, book, new[] {
+        Out(1, D(2026, 2), 15), In(2, D(2026, 3), 10, unit: 120m) }, trace);
+    var settle = trace.Single(s => s.MovementId == 2);
+    Check("settled: the purchase reports 5 x (120 - 100) = 100 of cost settled",
+        settle.SettledValue == 100m, $"{settle.SettledValue}");
+    Check("settled: a sale reports none", trace.Single(s => s.MovementId == 1).SettledValue == 0m);
+}
+
 // 9. A downward adjustment drains pools in the same order as a sale.
 {
     var book = new Book { Lots = {

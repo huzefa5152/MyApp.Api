@@ -1269,6 +1269,15 @@ GD panel and Excel export all say which GDs it took.
   Selling past every pool is applied in full; the uncovered quantity is a
   shortfall costed at the last pool used, and the next inward movement settles
   it first. `StockGuardHardBlock` is the only oversell control and is unchanged.
+- **The settled cost is cost of goods sold, and the relief must post it.**
+  When a purchase settles an earlier oversale, the difference between what
+  those units really cost and the sale's estimate is booked on the PURCHASE
+  movement (`StockValuation.Step.SettledValue` / `SettledActualValue`). The
+  relief skips purchases (their own posting already debits Inventory), so
+  `InventoryPeriodConsumption` and `ItemStockPositions` add the settled cost
+  explicitly. Missing this left three demo companies' Inventory accounts
+  adrift from the stock walk by exactly their settlements (29,600 on one item).
+  A new caller that classifies movements by source type must do the same.
 - **The invoice-month claim rule** (maintainer's decision): a claim month entered
   later never re-costs an earlier sale. Opening lots are available from the
   start whatever their GD date -- the GD date ORDERS pools, never withholds them.
@@ -1811,7 +1820,7 @@ them can be resolved from FBR.
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
-| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `141 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
+| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `143 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

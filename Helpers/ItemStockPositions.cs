@@ -126,6 +126,12 @@ namespace MyApp.Api.Helpers
                         case StockMovementSourceType.Revaluation:
                             adjustments += declaredOut;
                             break;
+                        default:
+                            // FIFO: a purchase that settled an earlier oversale
+                            // carries that sale's true cost (CLAUDE.md 5b-17).
+                            consumedDeclared += step.SettledValue;
+                            consumedLanded += step.SettledActualValue;
+                            break;
                     }
                 }
 
