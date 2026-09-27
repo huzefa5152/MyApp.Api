@@ -205,6 +205,21 @@ namespace MyApp.Api.Services.Implementations
 
             var created = await _repository.AddAsync(company);
 
+            // New-company default: stock is valued FIFO by GD from day one
+            // (CLAUDE.md 5b-17), so nobody has to switch it. Nothing has moved
+            // yet, so there is no cost-of-goods relief to re-post. Like the
+            // templates below, a failure here must not fail the create -- the
+            // company then simply starts on the weighted average.
+            try
+            {
+                await StockCostingMethod.SetAsync(_context, created.Id, StockCostingMethod.ForNewCompany);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Company {CompanyId} created, but setting FIFO by GD failed; it stays on the weighted average.",
+                    created.Id);
+            }
+
             // New-company default: a Challan, Bill and Tax Invoice print template,
             // so the first document prints and the operator has something to
             // edit instead of an empty Print Templates page (2026-09-10). Like

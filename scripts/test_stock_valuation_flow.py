@@ -749,6 +749,14 @@ def main():
 
     api_call("POST", f"{api}/accounts/company/{cid}/seed-wholesale", h)
     api_call("POST", f"{api}/stock/company/{cid}/flow-version", h, json={"version": 2})
+    # This suite pins the WEIGHTED-AVERAGE method (CLAUDE.md 5b-4). New companies
+    # start on FIFO by GD (5b-17), so the company opts in to the average while it
+    # still holds nothing -- the one moment the switch is allowed. FIFO has its
+    # own suite, scripts/test_stock_fifo.py.
+    r = api_call("PUT", f"{api}/stock/company/{cid}/costing-method", h, json={"method": "WeightedAverage"})
+    if not r.ok:
+        print(f"FATAL: could not put the company on the weighted average ({r.status_code} {r.text[:200]})")
+        return 2
 
     r = api_call("POST", f"{api}/clients", h, json={
         "name": f"Valuation Client {tag}", "address": "1 Test Road, Karachi",

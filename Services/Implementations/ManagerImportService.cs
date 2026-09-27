@@ -180,6 +180,8 @@ namespace MyApp.Api.Services.Implementations
                         };
                         _db.Companies.Add(company);
                         await _db.SaveChangesAsync();
+                        // Every new company starts FIFO by GD (CLAUDE.md 5b-17).
+                        await MyApp.Api.Helpers.StockCostingMethod.SetAsync(_db, company.Id, MyApp.Api.Helpers.StockCostingMethod.ForNewCompany);
                     }
                 }
                 int companyId = company.Id;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes, getCostingMethod, compareCostingMethods, setCostingMethod } from "../api/stockApi";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -329,11 +329,9 @@ export default function StockDashboardPage() {
     }
   };
 
-  // How this company values stock: the weighted average, or FIFO by GD
-  // (claimed GDs first, oldest GD date first). Switching opens a dialog that
-  // first shows, read-only, what the figures would become.
+  // How this company values stock, shown as a pill. FIFO by GD is the default
+  // for new companies and one-way (CLAUDE.md 5b-17), so there is no switch here.
   const [costingMethod, setCostingMethodState] = useState("WeightedAverage");
-  const [costingDialog, setCostingDialog] = useState(null); // { loading, compare, error }
   const isFifo = costingMethod === "GdFifo";
   useEffect(() => {
     if (!selectedCompany) return;
@@ -343,30 +341,6 @@ export default function StockDashboardPage() {
       .catch(() => { if (!cancelled) setCostingMethodState("WeightedAverage"); });
     return () => { cancelled = true; };
   }, [selectedCompany]);
-  const openCostingDialog = async () => {
-    if (!selectedCompany) return;
-    setCostingDialog({ loading: true });
-    try {
-      const { data } = await compareCostingMethods(selectedCompany.id);
-      setCostingDialog({ loading: false, compare: data });
-    } catch (e) {
-      setCostingDialog({ loading: false, error: e?.response?.data?.error || "Could not work out the comparison." });
-    }
-  };
-  const applyCostingMethod = async (e) => {
-    e?.preventDefault?.();
-    if (!selectedCompany) return;
-    const target = isFifo ? "WeightedAverage" : "GdFifo";
-    try {
-      await setCostingMethod(selectedCompany.id, target);
-      setCostingMethodState(target);
-      setCostingDialog(null);
-      await fetchAll();
-      notify(target === "GdFifo" ? "Stock is now valued FIFO by GD." : "Stock is now valued at the weighted average.", "success");
-    } catch (err) {
-      notify(err?.response?.data?.error || "Could not change the costing method.", "error");
-    }
-  };
 
   // Download the on-hand grid as .xlsx. The SERVER builds the workbook, so it
   // carries every item and every movement rather than the page on screen — the
@@ -761,15 +735,6 @@ export default function StockDashboardPage() {
             >
               {isFifo ? "Costing · FIFO by GD" : "Costing · Weighted average"}
             </span>
-          )}
-          {canManagePolicy && selectedCompany && (
-            <button
-              style={styles.altBtn}
-              onClick={openCostingDialog}
-              title="See what each costing method gives this company's stock, and switch between them"
-            >
-              <MdTune size={16} /> Costing method
-            </button>
           )}
           {/* V2 is one-way. Under V2 every item type is inventory, so a company
               builds up positions on items V1 does not track; going back would
@@ -1664,16 +1629,6 @@ export default function StockDashboardPage() {
         </SmallModal>
       )}
 
-      {costingDialog && (
-        <SmallModal
-          title={isFifo ? "Switch back to the weighted average" : "Value stock FIFO by GD"}
-          onClose={() => setCostingDialog(null)}
-          onSubmit={applyCostingMethod}
-        >
-          <CostingCompare dialog={costingDialog} isFifo={isFifo} />
-        </SmallModal>
-      )}
-
       {costHistoryItem && selectedCompany?.id && (
         <CostHistoryDialog
           companyId={selectedCompany.id}
@@ -1873,84 +1828,6 @@ export default function StockDashboardPage() {
 // with 3 lines of this item shows one row, not three. Adjustments, opening
 // stock and document-less reversals stay individual. Newest-first with a
 // running on-hand computed after each whole document.
-// What switching costing method would do, read before anything is switched.
-function CostingCompare({ dialog, isFifo }) {
-  if (dialog.loading) return <div style={drillStyles.state}>Working out both methods…</div>;
-  if (dialog.error) return <div style={{ ...gdStyles.untraced, color: colors.negative }}>{dialog.error}</div>;
-  const c = dialog.compare || {};
-  const rows = [
-    ["Stock value (excl. tax)", c.weightedAverageValue, c.fifoValue],
-    ["Cost of stock sold / used", c.weightedAverageValueOut, c.fifoValueOut],
-    ["Landed cost held", c.weightedAverageActual, c.fifoActual],
-  ];
-  const items = [...(c.items || [])]
-    .sort((a, b) => Math.abs(b.fifoValue - b.weightedAverageValue) - Math.abs(a.fifoValue - a.weightedAverageValue))
-    .slice(0, 8);
-  return (
-    <div style={{ fontSize: "0.84rem", color: colors.textPrimary }}>
-      <p style={{ marginTop: 0 }}>
-        {isFifo
-          ? "Stock is valued FIFO by GD. Switching back values every item at the weighted average of what it holds."
-          : "FIFO by GD costs each sale from the GDs it actually uses: claimed GDs first (a GD counts as claimed for a sale when its claim month is on or before the sale's month), oldest GD date first, then unclaimed GDs. Bill creation is never blocked by it."}
-      </p>
-      <div style={gdStyles.box}>
-        <table style={gdStyles.table}>
-          <thead>
-            <tr>
-              <th style={gdStyles.th}></th>
-              <th style={gdStyles.thNum}>Weighted average</th>
-              <th style={gdStyles.thNum}>FIFO by GD</th>
-              <th style={gdStyles.thNum}>Difference</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(([label, wa, fifo]) => (
-              <tr key={label}>
-                <td style={gdStyles.td}>{label}</td>
-                <td style={gdStyles.tdNum}>{money(wa)}</td>
-                <td style={gdStyles.tdNum}>{money(fifo)}</td>
-                <td style={{ ...gdStyles.tdNum, fontWeight: 700 }}>{money(Number(fifo || 0) - Number(wa || 0))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p style={{ ...gdStyles.help, marginTop: "0.5rem" }}>
-        {c.changedItemCount || 0} of {c.itemCount || 0} items value differently. Quantities never change.
-        Switching re-posts the monthly cost-of-goods entries on the new basis (months before the GL lock date stay as they are).
-      </p>
-      {items.length > 0 && (
-        <div style={gdStyles.box}>
-          <table style={gdStyles.table}>
-            <thead>
-              <tr>
-                <th style={gdStyles.th}>Item</th>
-                <th style={gdStyles.thNum}>Weighted avg.</th>
-                <th style={gdStyles.thNum}>FIFO</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => (
-                <tr key={it.itemTypeId}>
-                  <td style={gdStyles.td}>
-                    <div style={gdStyles.desc}>{it.itemTypeName}</div>
-                    <div style={gdStyles.sub}>{it.hsCode || "no HS code"} · {it.gdPools} GD lines</div>
-                  </td>
-                  <td style={gdStyles.tdNum}>{money(it.weightedAverageValue)}</td>
-                  <td style={gdStyles.tdNum}>{money(it.fifoValue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <p style={{ ...gdStyles.help, marginTop: "0.5rem", marginBottom: 0 }}>
-        Save to switch to <b>{isFifo ? "the weighted average" : "FIFO by GD"}</b>. You can switch back at any time.
-      </p>
-    </div>
-  );
-}
-
 function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
   if (loading || !rows) return <div style={drillStyles.state}>Loading GD sources…</div>;
   if (rows.length === 0) return <div style={drillStyles.state}>No GD source rows recorded for this item.</div>;

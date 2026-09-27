@@ -13,9 +13,9 @@ One item held on three GDs, imported through the opening-stock sheet:
 A sale this month must take claimed GDs first, oldest GD date first (A, then
 C), and only then the unclaimed B, even though B is the oldest of all.
 
-    1. A new company values at the weighted average; nothing reports FIFO.
+    1. A new company starts on FIFO by GD without anyone switching it.
     2. The read-only compare answers before anything is switched.
-    3. Switching to FIFO by GD moves no figure until something is sold.
+    3. The switch is one-way: a company holding stock cannot go back.
     4. Bill pricing returns the tiers in consumption order.
     5. A bill of 15 takes A 10 + C 5, and is costed 20,000 (not the average).
     6. The GD panel says what each GD sold and still holds.
@@ -24,7 +24,8 @@ C), and only then the unclaimed B, even though B is the oldest of all.
     9. A second bill crosses into the unclaimed GD.
    10. Selling past everything is never refused.
    11. Deleting that bill returns the stock where it came from.
-   12. Switching back restores the weighted average exactly.
+   12. Still one-way after sales and a restatement; an empty company may
+       still choose the average.
 
 Usage:
     python scripts/test_stock_fifo.py [--base URL] [--keep]
@@ -220,30 +221,32 @@ def main():
               set(g) == {"FIFO-A", "FIFO-B", "FIFO-C"} and g["FIFO-B"]["claimMonth"] is None
               and (g["FIFO-A"]["claimMonth"] or "").startswith("2026-06"), json.dumps(g)[:300])
 
-        # ── 1. Weighted average by default ────────────────────────────────
-        print("\n-- 1. A new company values at the weighted average --")
+        # ── 1. FIFO by default ────────────────────────────────────────────
+        print("\n-- 1. A new company starts on FIFO by GD --")
         r = call("GET", f"{api}/stock/company/{cid}/costing-method", h)
-        check("the method is WeightedAverage", r.ok and r.json()["method"] == "WeightedAverage", r.text[:200])
-        check("GD lines carry no FIFO split", all(x.get("remainingQuantity") is None for x in g.values()))
+        check("the method is GdFifo without anyone switching it",
+              r.ok and r.json()["method"] == "GdFifo", r.text[:200])
+        check("GD lines already carry the FIFO split",
+              all(x.get("remainingQuantity") is not None for x in g.values()))
 
-        # ── 2. Compare before switching ──────────────────────────────────
-        print("\n-- 2. The compare is read-only and answers before a switch --")
+        # ── 2. Compare ────────────────────────────────────────────────────
+        print("\n-- 2. The compare is read-only --")
         r = call("GET", f"{api}/stock/company/{cid}/costing-compare", h)
         c = r.json() if r.ok else {}
         check("compare answers", r.ok, r.text[:200])
         check("with nothing sold the two methods agree",
               near(c.get("weightedAverageValue"), c.get("fifoValue")) and c.get("changedItemCount") == 0,
               json.dumps(c)[:300])
-        check("the compare changed nothing",
-              call("GET", f"{api}/stock/company/{cid}/costing-method", h).json()["method"] == "WeightedAverage")
 
-        # ── 3. Switch ─────────────────────────────────────────────────────
-        print("\n-- 3. Switch to FIFO by GD --")
+        # ── 3. The switch is one-way ─────────────────────────────────────
+        print("\n-- 3. A company holding stock cannot go back to the weighted average --")
         r = call("PUT", f"{api}/stock/company/{cid}/costing-method", h, json={"method": "GdFifo"})
-        check("the switch is accepted", r.ok and r.json().get("changed"), r.text[:200])
+        check("asking for FIFO again changes nothing", r.ok and not r.json().get("changed"), r.text[:200])
         r = call("PUT", f"{api}/stock/company/{cid}/costing-method", h, json={"method": "Nonsense"})
         check("an unknown method is refused", r.status_code == 400, str(r.status_code))
-        check("the method reads GdFifo",
+        r = call("PUT", f"{api}/stock/company/{cid}/costing-method", h, json={"method": "WeightedAverage"})
+        check("back to the weighted average is refused once stock is held", r.status_code == 400, str(r.status_code))
+        check("the method still reads GdFifo",
               call("GET", f"{api}/stock/company/{cid}/costing-method", h).json()["method"] == "GdFifo")
         after = onhand(api, h, cid, iid)
         check("no figure moves before anything is sold",
@@ -396,25 +399,53 @@ def main():
         after = onhand(api, h, cid, iid)
         check("1 left worth 200", near(after["onHand"], 1, 1e-4) and near(after["valueExcludingTax"], 200))
 
-        # ── 12. Switch back ──────────────────────────────────────────────
-        print("\n-- 12. Switching back restores the weighted average --")
-        cmp_ = call("GET", f"{api}/stock/company/{cid}/costing-compare", h).json()
+        # ── 12. Still one-way after sales and a restatement ─────────────
+        print("\n-- 12. Going back is still refused --")
         r = call("PUT", f"{api}/stock/company/{cid}/costing-method", h, json={"method": "WeightedAverage"})
-        check("the switch back is accepted", r.ok, r.text[:200])
+        check("back to the weighted average is refused", r.status_code == 400, str(r.status_code))
         after = onhand(api, h, cid, iid)
-        check("value is the weighted average the compare predicted",
-              near(after["valueExcludingTax"], cmp_["weightedAverageValue"]),
-              f"{after['valueExcludingTax']} vs {cmp_['weightedAverageValue']}")
-        check("the restatement landed the weighted average on the sheet too (3,400 / 5 x 1 = 680)",
-              near(after["valueExcludingTax"], 680, 0.05), str(after["valueExcludingTax"]))
-        r = call("POST", f"{api}/stock/company/{cid}/fifo-restatement", h,
-                 json={"commit": False, "lines": sheet})
-        check("restating needs the company on FIFO", r.status_code == 400, str(r.status_code))
-        g = gd_rows(api, h, cid, iid)
-        check("GD lines carry no FIFO split again", all(x.get("remainingQuantity") is None for x in g.values()))
+        check("the stock is still valued FIFO (1 left worth 200)",
+              near(after["onHand"], 1, 1e-4) and near(after["valueExcludingTax"], 200), str(after["valueExcludingTax"]))
         r = call("GET", f"{api}/invoices/company/{cid}/stock-pricing", h, params={"itemTypeIds": str(iid)})
-        check("pricing has no tiers under the weighted average",
-              r.ok and not (r.json()[0].get("tiers")), r.text[:200])
+        check("pricing still offers the FIFO tiers", r.ok and r.json()[0].get("tiers"), r.text[:200])
+
+        # ── 12a. Corrections land exactly on a FIFO company ─────────────
+        print("\n-- 12a. A 'set' stock correction lands exactly under FIFO --")
+        today = pk_today().isoformat()
+        r = call("POST", f"{api}/stock/adjust", h, json={
+            "companyId": cid, "itemTypeId": iid, "mode": "set",
+            "targetQuantity": 3, "targetValueExcludingTax": 900,
+            "movementDate": today, "notes": "recount up"})
+        check("a quantity + value correction up is accepted", r.ok, r.text[:200])
+        after = onhand(api, h, cid, iid)
+        check("it lands on 3 worth 900", near(after["onHand"], 3, 1e-4) and near(after["valueExcludingTax"], 900),
+              f"{after['onHand']} / {after['valueExcludingTax']}")
+        r = call("POST", f"{api}/stock/adjust", h, json={
+            "companyId": cid, "itemTypeId": iid, "mode": "set",
+            "targetQuantity": 1, "targetValueExcludingTax": 150,
+            "movementDate": today, "notes": "recount down"})
+        check("a quantity + value correction down is accepted", r.ok, r.text[:200])
+        after = onhand(api, h, cid, iid)
+        check("it lands on 1 worth 150 (not where the average would put it)",
+              near(after["onHand"], 1, 1e-4) and near(after["valueExcludingTax"], 150),
+              f"{after['onHand']} / {after['valueExcludingTax']}")
+
+        # ── 12b. An empty company may still choose ───────────────────────
+        print("\n-- 12b. A company that has never held stock may still choose the average --")
+        r = call("POST", f"{api}/companies", h, json={
+            "name": f"_stock_fifo_empty {tag}", "brandName": "FIFOE",
+            "fullAddress": "1 Test Street", "phone": "021-0000000", "ntn": "1234567-8",
+            "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+            "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
+            "startingSalesQuoteNumber": 1, "startingSalesOrderNumber": 1,
+            "fbrEnabled": False, "inventoryTrackingEnabled": True, "enableGl": False})
+        empty_id = r.json().get("id") if r.ok else None
+        if check("a second company is created", empty_id is not None, r.text[:200]):
+            check("it starts on FIFO too",
+                  call("GET", f"{api}/stock/company/{empty_id}/costing-method", h).json()["method"] == "GdFifo")
+            r = call("PUT", f"{api}/stock/company/{empty_id}/costing-method", h, json={"method": "WeightedAverage"})
+            check("with nothing held it may choose the weighted average", r.ok and r.json().get("changed"), r.text[:200])
+            call("DELETE", f"{api}/companies/{empty_id}", h)
 
         # ── Isolation ────────────────────────────────────────────────────
         # Cross-tenant refusal of the new routes is proven by

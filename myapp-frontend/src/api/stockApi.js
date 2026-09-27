@@ -60,12 +60,7 @@ export const getStockCostChanges = (companyId, params = {}) =>
   http.get(`/stock/company/${companyId}/cost-changes`, { params });
 
 // How the company values stock: "WeightedAverage" or "GdFifo" (FIFO by GD,
-// claimed GDs first). The compare is read-only -- what each method gives,
-// item by item -- and is what the switch dialog shows before anything moves.
-// Switching re-posts the monthly cost-of-goods relief on the new basis.
+// claimed GDs first). New companies start on GdFifo and it is one-way, so the
+// screen only reads it (the Stock Dashboard's costing pill).
 export const getCostingMethod = (companyId) =>
   http.get(`/stock/company/${companyId}/costing-method`);
-export const compareCostingMethods = (companyId) =>
-  http.get(`/stock/company/${companyId}/costing-compare`);
-export const setCostingMethod = (companyId, method) =>
-  http.put(`/stock/company/${companyId}/costing-method`, { method });

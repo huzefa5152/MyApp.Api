@@ -1243,13 +1243,22 @@ opening stock no GD line explains; then any other inward stock. The sale is
 costed at what the pools it drained cost, and the stock ledger, movement feed,
 GD panel and Excel export all say which GDs it took.
 
-- **Per company, off by default.** `SystemSettings` key
-  `Stock.CostingMethod.{companyId}` = `GdFifo`; no row means `WeightedAverage`.
-  A setting row rather than a Company column on purpose: nothing about a
-  `Company` query can break when the flag is added. Switch it from the Stock
-  Dashboard's **Costing method** dialog (`PUT /api/stock/company/{id}/costing-method`,
-  `stock.policy.manage`, audited as `STOCK_COSTING_METHOD_CHANGE`), which first
-  shows `GET .../costing-compare` -- both methods side by side, read-only.
+- **Per company; every NEW company starts on FIFO** (maintainer's decision,
+  2026-09-28). `SystemSettings` key `Stock.CostingMethod.{companyId}` =
+  `GdFifo`; no row means `WeightedAverage`. `CompanyService.CreateAsync` and the
+  Manager import write the row at creation (`StockCostingMethod.ForNewCompany`),
+  so nobody switches anything. Companies created before that have no row and
+  stay on the average until switched. A setting row rather than a Company
+  column on purpose: nothing about a `Company` query can break because of it.
+- **The switch is ONE-WAY and has no screen.** The Stock Dashboard shows the
+  method as a pill only (the Costing method button was removed). `PUT
+  /api/stock/company/{id}/costing-method` (`stock.policy.manage`, audited as
+  `STOCK_COSTING_METHOD_CHANGE`) still moves a weighted-average company TO
+  FIFO, and refuses FIFO -> weighted average once the company holds any
+  opening or movement: its GD attribution, restatements and posted cost of
+  goods are built on FIFO. Only a company that has never held stock may still
+  choose the average -- that is how the weighted-average suites set up their
+  companies. `GET .../costing-compare` stays as a read-only check.
 - **Switching re-posts the monthly COGS relief** (`PostInventoryPeriodsAsync`),
   so the ledger keeps agreeing with the stock screen. It respects the GL lock
   date. On a production company that rewrites posted journal entries, so it is
@@ -1802,7 +1811,7 @@ them can be resolved from FBR.
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
-| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `141 checks, 0 failed`; `57/57 checks passed`; `11/11 checks passed` |
+| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `141 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

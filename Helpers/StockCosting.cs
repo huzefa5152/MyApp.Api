@@ -5,8 +5,11 @@ using MyApp.Api.Models;
 namespace MyApp.Api.Helpers
 {
     /// <summary>
-    /// How a company values its stock: the weighted average every company has
-    /// always used, or FIFO by GD (<see cref="GdFifoValuation"/>).
+    /// How a company values its stock: the weighted average, or FIFO by GD
+    /// (<see cref="GdFifoValuation"/>). Every company created from 2026-09-28
+    /// is written <see cref="GdFifo"/> at creation (<see cref="ForNewCompany"/>);
+    /// a company with no row -- every company created before that -- stays on
+    /// the weighted average until someone switches it.
     ///
     /// Stored per company in <see cref="SystemSetting"/> under
     /// <c>Stock.CostingMethod.{companyId}</c> rather than a new Company column:
@@ -32,6 +35,27 @@ namespace MyApp.Api.Helpers
 
         public static async Task<bool> IsGdFifoAsync(AppDbContext db, int companyId)
             => await GetAsync(db, companyId) == GdFifo;
+
+        /// <summary>The method a NEW company starts on.</summary>
+        public const string ForNewCompany = GdFifo;
+
+        /// <summary>Writes the company's method (upsert). The caller saves nothing
+        /// else here; this saves its own row.</summary>
+        public static async Task SetAsync(AppDbContext db, int companyId, string method, int? userId = null)
+        {
+            var key = SettingKey(companyId);
+            var row = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == key);
+            if (row == null)
+                db.SystemSettings.Add(new SystemSetting
+                {
+                    Key = key, Value = method, UpdatedAt = DateTime.UtcNow, UpdatedByUserId = userId,
+                });
+            else
+            {
+                row.Value = method; row.UpdatedAt = DateTime.UtcNow; row.UpdatedByUserId = userId;
+            }
+            await db.SaveChangesAsync();
+        }
     }
 
     /// <summary>

@@ -1379,6 +1379,20 @@ namespace MyApp.Api.Controllers
 
                 actualValueDelta = Money(targetActualCost - Money(predictedActualValue));
 
+                // FIFO by GD: the quantity movement is NOT valued at the average
+                // -- stock leaves from the GD pools in claim order, and cost-less
+                // stock arrives at the average of what is held -- so the
+                // prediction above would land the correction on the wrong
+                // figure. Predict it by running the company's own walk with the
+                // movement added; the revaluation then closes the exact gap.
+                if (qtyDelta != 0m && await StockCostingMethod.IsGdFifoAsync(_context, dto.CompanyId))
+                {
+                    var (fifoValue, fifoActual) = await PredictAfterMovementAsync(
+                        dto.CompanyId, dto.ItemTypeId, qtyDelta, unitCost, actualUnitCost, dto.MovementDate.Date);
+                    valueDelta = Money(targetValue - Money(fifoValue));
+                    actualValueDelta = Money(targetActualCost - Money(fifoActual));
+                }
+
                 if (qtyDelta == 0m && valueDelta == 0m && actualValueDelta == 0m
                     && !(dto.SalesTaxRate is >= 0m and <= 100m && dto.SalesTaxRate != current.SalesTaxRate))
                     return BadRequest(new { error = "Those are already the figures on record — nothing to correct." });
@@ -1572,6 +1586,42 @@ namespace MyApp.Api.Controllers
             return byItem.TryGetValue(itemTypeId, out var p) ? p : default;
         }
 
+        /// <summary>
+        /// Where one item's value and landed cost would stand after a quantity
+        /// movement recorded now -- by running the company's own costing walk
+        /// with that movement appended, so FIFO by GD predicts exactly what the
+        /// walk will then do. Company-wide: adjustments are refused to
+        /// division-restricted users, so there is no scope to apply.
+        /// </summary>
+        private async Task<(decimal Value, decimal Actual)> PredictAfterMovementAsync(
+            int companyId, int itemTypeId, decimal qtyDelta, decimal? unitCost, decimal? actualUnitCost,
+            DateTime movementDate)
+        {
+            var open = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId && o.ItemTypeId == itemTypeId)
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    Qty = g.Sum(o => o.Quantity), Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax), Rate = g.Max(o => o.SalesTaxRate),
+                }).FirstOrDefaultAsync();
+            var moves = await _context.StockMovements.AsNoTracking()
+                .Where(m => m.CompanyId == companyId && m.ItemTypeId == itemTypeId).ToListAsync();
+            moves.Add(new StockMovement
+            {
+                Id = int.MaxValue, CompanyId = companyId, ItemTypeId = itemTypeId,
+                Direction = qtyDelta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                Quantity = Math.Abs(qtyDelta), SourceType = StockMovementSourceType.Adjustment,
+                MovementDate = movementDate,
+                UnitCostExcludingTax = qtyDelta > 0m ? unitCost : null,
+                ActualUnitCostExcludingTax = qtyDelta > 0m ? actualUnitCost : null,
+            });
+            var costing = await StockCosting.LoadAsync(_context, companyId, new[] { itemTypeId });
+            var p = costing.Compute(itemTypeId, open?.Qty ?? 0m, open?.Value ?? 0m, open?.ActualCost ?? 0m,
+                open?.Rate ?? 0m, moves);
+            return (p.ValueExcludingTax, p.ActualValueExcludingTax);
+        }
+
         private static decimal Money(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
         private static decimal Round4(decimal v) => Math.Round(v, 4, MidpointRounding.AwayFromZero);
 
@@ -1711,18 +1761,20 @@ namespace MyApp.Api.Controllers
             var previous = await StockCostingMethod.GetAsync(_context, companyId);
             if (previous == method) return Ok(new { companyId, method, changed = false });
 
-            var key = StockCostingMethod.SettingKey(companyId);
-            var row = await _context.SystemSettings.FirstOrDefaultAsync(s => s.Key == key);
-            if (row == null)
-                _context.SystemSettings.Add(new SystemSetting
+            // FIFO BY GD IS ONE-WAY (maintainer's decision, 2026-09-28). A company
+            // holding stock on FIFO never goes back to the weighted average: its
+            // GD attribution, restatements and posted cost of goods are built on
+            // FIFO. Only a company that has never held stock -- no opening, no
+            // movement, so nothing to re-value -- may still choose the average.
+            if (previous == StockCostingMethod.GdFifo && method == StockCostingMethod.WeightedAverage
+                && (await _context.OpeningStockBalances.AnyAsync(o => o.CompanyId == companyId)
+                    || await _context.StockMovements.AnyAsync(m => m.CompanyId == companyId)))
+                return BadRequest(new
                 {
-                    Key = key, Value = method, UpdatedAt = DateTime.UtcNow, UpdatedByUserId = CurrentUserId,
+                    error = "This company values stock FIFO by GD and cannot be moved back to the weighted average."
                 });
-            else
-            {
-                row.Value = method; row.UpdatedAt = DateTime.UtcNow; row.UpdatedByUserId = CurrentUserId;
-            }
-            await _context.SaveChangesAsync();
+
+            await StockCostingMethod.SetAsync(_context, companyId, method, CurrentUserId);
 
             // Cost of goods sold already posted was worked out on the old
             // basis; re-post it on the new one so the ledger keeps agreeing with
