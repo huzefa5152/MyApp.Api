@@ -57,14 +57,16 @@ namespace MyApp.Api.Services.Implementations
             //    looks close to format X, but the template must have changed" —
             //    we surface it but mark IsExactMatch=false so the caller decides
             //    whether to trust it (typically only used as a UI hint).
-            var incomingSet = new HashSet<string>(fp.Keywords, StringComparer.OrdinalIgnoreCase);
+            //    Both sides are cleaned the same way before comparing
+            //    (POFormatFingerprintService.ComputeMatchKeywords): item-row text
+            //    and a time-of-day prefix are data, not layout.
+            var incomingSet = POFormatFingerprintService.ComputeMatchKeywords(rawText);
             POFormat? best = null;
             double bestScore = 0;
             foreach (var cand in candidates)
             {
-                var candSet = cand.KeywordSignature.Split('|',
-                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var score = Jaccard(incomingSet, new HashSet<string>(candSet, StringComparer.OrdinalIgnoreCase));
+                var score = POFormatFingerprintService.MatchScore(
+                    incomingSet, POFormatFingerprintService.StoredMatchKeywords(cand.KeywordSignature));
                 if (score > bestScore) { bestScore = score; best = cand; }
             }
 
@@ -184,14 +186,6 @@ namespace MyApp.Api.Services.Implementations
 
             await _db.SaveChangesAsync();
             return format;
-        }
-
-        private static double Jaccard(HashSet<string> a, HashSet<string> b)
-        {
-            if (a.Count == 0 && b.Count == 0) return 0;
-            var inter = a.Intersect(b, StringComparer.OrdinalIgnoreCase).Count();
-            var union = a.Count + b.Count - inter;
-            return union == 0 ? 0 : (double)inter / union;
         }
     }
 }
