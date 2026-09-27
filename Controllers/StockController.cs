@@ -68,7 +68,22 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<List<StockOnHandRowDto>>> GetOnHand(int companyId)
         {
             var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
+            await AttachGdNumbersAsync(companyId, rows);
             return Ok(rows);
+        }
+
+        /// <summary>Fills each row's GD numbers from the same source rows the
+        /// GD drill-down shows, ordered by declaration date.</summary>
+        private async Task<List<StockGdDetailDto>> AttachGdNumbersAsync(
+            int companyId, List<StockOnHandRowDto> rows)
+        {
+            var details = await BuildGdDetailsAsync(companyId, rows.Select(r => r.ItemTypeId).ToList());
+            var byItem = details.GroupBy(d => d.ItemTypeId).ToDictionary(g => g.Key, g => g
+                .OrderBy(d => d.GdDate ?? DateTime.MaxValue).ThenBy(d => d.GdNumber)
+                .Select(d => d.GdNumber).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+            foreach (var r in rows)
+                r.GdNumbers = byItem.TryGetValue(r.ItemTypeId, out var gds) ? gds : new();
+            return details;
         }
 
         /// <summary>GD source rows behind an item's company-level opening position.
@@ -491,15 +506,18 @@ namespace MyApp.Api.Controllers
             // only. That also drops the old stock.movements.view split: there is
             // no movement detail in the sheet for a second permission to gate.
             var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
+            await AttachGdNumbersAsync(companyId, rows);
 
-            // Same match the dashboard's search box makes (name OR HS code), so
-            // an operator who filtered the screen gets the sheet they can see.
+            // Same match the dashboard's search box makes (name, HS code OR GD
+            // number), so an operator who filtered the screen gets the sheet
+            // they can see.
             var term = (search ?? "").Trim();
             if (term.Length > 0)
             {
                 rows = rows
                     .Where(r => r.ItemTypeName.Contains(term, StringComparison.OrdinalIgnoreCase)
-                             || (r.HSCode ?? "").Contains(term, StringComparison.OrdinalIgnoreCase))
+                             || (r.HSCode ?? "").Contains(term, StringComparison.OrdinalIgnoreCase)
+                             || r.GdNumbers.Any(g => g.Contains(term, StringComparison.OrdinalIgnoreCase)))
                     .ToList();
             }
 
@@ -517,14 +535,18 @@ namespace MyApp.Api.Controllers
             if (divScope != null) filters.Add("Scope: your divisions only");
 
             var gdDetails = await BuildGdDetailsAsync(companyId, rows.Select(r => r.ItemTypeId).ToList());
-            var lots = gdDetails.Where(d => d.Quantity.HasValue)
+            // Every GD behind an item, one entry per declaration in date order.
+            // Stock sources first; an item priced only by a cost-only backfill
+            // still names that GD rather than leaving the cell blank.
+            var lots = gdDetails
                 .GroupBy(d => d.ItemTypeId)
-                .Where(g => g.Select(d => d.GdNumber).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1)
                 .ToDictionary(g => g.Key, g =>
                 {
-                    var dates = g.Select(d => d.GdDate).Distinct().ToList();
-                    return (Ref: (string?)g.First().GdNumber,
-                        Date: dates.Count == 1 ? dates[0] : null);
+                    var src = g.Any(d => d.Quantity.HasValue) ? g.Where(d => d.Quantity.HasValue) : g;
+                    return src.GroupBy(d => d.GdNumber, StringComparer.OrdinalIgnoreCase)
+                        .Select(x => (Gd: x.Key, Date: x.Min(d => d.GdDate), Claim: x.First().ClaimMonth))
+                        .OrderBy(x => x.Date ?? DateTime.MaxValue).ThenBy(x => x.Gd)
+                        .ToList();
                 });
 
             var data = new StockExportDto
@@ -536,16 +558,31 @@ namespace MyApp.Api.Controllers
                 GdDetails = gdDetails,
                 Items = rows.Select(r =>
                 {
-                    lots.TryGetValue(r.ItemTypeId, out var lot);
-                    return new StockExportItemDto
+                    lots.TryGetValue(r.ItemTypeId, out var gds);
+                    gds ??= new();
+                    var item = new StockExportItemDto
                     {
                         Summary = r,
-                        LotRef = lot.Ref,
-                        LotDate = lot.Date,
-                        ClaimMonth = lot.Ref == null ? null : gdDetails
-                            .FirstOrDefault(d => d.ItemTypeId == r.ItemTypeId
-                                && d.GdNumber.Equals(lot.Ref, StringComparison.OrdinalIgnoreCase))?.ClaimMonth,
+                        LotRef = gds.Count == 0 ? null : string.Join(", ", gds.Select(g => g.Gd)),
                     };
+                    if (gds.Count == 1)
+                    {
+                        item.LotDate = gds[0].Date;
+                        item.ClaimMonth = gds[0].Claim;
+                    }
+                    else if (gds.Count > 1)
+                    {
+                        // Unclaimed / undated GDs show as "-" so every position
+                        // still lines up with its GD number.
+                        item.LotDatesText = gds.Any(g => g.Date.HasValue)
+                            ? string.Join(", ", gds.Select(g => g.Date?.ToString("dd-MM-yyyy") ?? "-"))
+                            : null;
+                        item.ClaimMonthsText = gds.Any(g => g.Claim.HasValue)
+                            ? string.Join(", ", gds.Select(g => g.Claim?.ToString("MMM yyyy",
+                                System.Globalization.CultureInfo.InvariantCulture) ?? "-"))
+                            : null;
+                    }
+                    return item;
                 }).ToList(),
             };
 

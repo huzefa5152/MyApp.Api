@@ -386,13 +386,16 @@ namespace MyApp.Api.Helpers
         {
             var s = item.Summary;
 
-            // A — the recorded filing period, only when this item has one GD.
-            // Never derive it from the declaration date.
+            // A — the recorded filing period; several GDs list one month each,
+            // in GD order. Never derive it from the declaration date.
             if (item.ClaimMonth.HasValue)
                 Text(ws, r, CClaim, item.ClaimMonth.Value.ToString("MMM yyyy",
                     System.Globalization.CultureInfo.InvariantCulture));
+            else if (item.ClaimMonthsText != null)
+                Text(ws, r, CClaim, item.ClaimMonthsText);
             Text(ws, r, CGdNo, item.LotRef);
             if (item.LotDate.HasValue) Date(ws, r, CGdDate, item.LotDate.Value);
+            else if (item.LotDatesText != null) Text(ws, r, CGdDate, item.LotDatesText);
 
             // The three free-text columns WRAP rather than clip. Their widths are
             // the client's and may not move, and these are the fields no width
@@ -404,7 +407,7 @@ namespace MyApp.Api.Helpers
             // hit with nowrap+ellipsis: "MEKO FABRICS" and "MEKO DENIM" read
             // identical.)
             Text(ws, r, CItem, s.ItemTypeName);
-            foreach (var col in new[] { CItem, CGdNo, CUnit })
+            foreach (var col in new[] { CItem, CGdNo, CUnit, CClaim, CGdDate })
             {
                 ws.Cell(r, col).Style.Alignment.WrapText = true;
                 ws.Cell(r, col).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
@@ -648,7 +651,7 @@ namespace MyApp.Api.Helpers
                 "Balance is the live position from the weighted-average valuation, not Opening minus Consumed.",
                 "Cost of Good Sold uses the imported GD landed cost where one exists, so Consumed is what the goods sold actually cost; where none exists it unwinds the tax uplift (cost = value x rate / (rate + 3%)). Type over any cell to record a different figure.",
                 "Claim Month and Sub cat are yours to fill when absent. A recorded Claim Month is the filed period, never inferred from the GD date.",
-                "GDs No and GD Date are shown only where every stock source behind an item names the same declaration. See GD Detail for each source row.",
+                "An item held across several GDs lists every GD No, GD Date and Claim Month in the same order (a dash = not claimed yet). See GD Detail for each source row.",
             })
             {
                 ws.Cell(r, 1).Value = note;

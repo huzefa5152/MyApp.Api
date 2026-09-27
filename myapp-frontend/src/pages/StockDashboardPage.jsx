@@ -18,6 +18,8 @@ import { isDecimalUnit } from "../utils/formatQuantity";
 import SearchableItemTypeSelect from "../Components/SearchableItemTypeSelect";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
+import { useColumnVisibility } from "../Components/ColumnPicker";
 
 const colors = {
   blue: "#0d47a1",
@@ -60,7 +62,8 @@ export default function StockDashboardPage() {
   const [onhandPage, setOnhandPage] = useState(1);
   const [onhandPageSize, setOnhandPageSize] = usePageSize("stockOnhand");
 
-  const [tab, setTab] = useState("onhand");
+  // Tab and search survive leaving the screen and coming back.
+  const [tab, setTab] = usePersistentFilter("stock-dashboard", "tab", "onhand");
   const [onhand, setOnhand] = useState([]);
   // V2 derived inventory buckets (Available/Committed/ToDeliver/Delivered/
   // Incoming) per item — empty on V1 companies with no reservation activity.
@@ -81,7 +84,7 @@ export default function StockDashboardPage() {
   // whole catalog just because a fetch has not landed.
   const [trackedIds, setTrackedIds] = useState(null);
   const [units, setUnits] = useState([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("stock-dashboard", "search", "");
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -183,6 +186,14 @@ export default function StockDashboardPage() {
 
   useEffect(() => { if (selectedCompany) fetchAll(); }, [selectedCompany]);
   useEffect(() => { if (tab === "movements") fetchMovements(movPage); }, [tab, selectedCompany, movPage, movSize]);
+  useEffect(() => {
+    if (loading) return;
+    const available = tab === "onhand"
+      || (tab === "inventory" && summary.length > 0)
+      || (tab === "opening" && canManageOpening)
+      || (tab === "movements" && canViewMovements);
+    if (!available) setTab("onhand");
+  }, [tab, loading, summary.length, canManageOpening, canViewMovements, setTab]);
 
   // Units list (carries the AllowsDecimalQuantity flag) drives whether the
   // opening-balance / adjustment quantity inputs accept decimals — the same
@@ -192,10 +203,19 @@ export default function StockDashboardPage() {
     getAllUnits().then(r => setUnits(r.data || [])).catch(() => setUnits([]));
   }, []);
 
-  const filteredOnhand = onhand.filter(r =>
-    !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
-    (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
-  );
+  // GDs per item, from the on-hand rows. The Inventory and Opening tabs carry
+  // no GD of their own, so they read it from here by item.
+  const gdByItem = new Map(onhand.map(r => [r.itemTypeId, r.gdNumbers || []]));
+  const gdText = (itemTypeId) => (gdByItem.get(itemTypeId) || []).join(", ");
+  const matches = (name, hsCode, itemTypeId) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (name || "").toLowerCase().includes(q)
+      || (hsCode || "").toLowerCase().includes(q)
+      || (gdByItem.get(itemTypeId) || []).some(g => g.toLowerCase().includes(q));
+  };
+
+  const filteredOnhand = onhand.filter(r => matches(r.itemTypeName, r.hsCode, r.itemTypeId));
 
   // Paging is client-side here, unlike the item catalog. This endpoint only
   // returns items that actually have stock or an opening balance -- hundreds,
@@ -225,10 +245,62 @@ export default function StockDashboardPage() {
     actual: acc.actual + (r.actualCostExcludingTax || 0),
   }), { qty: 0, excl: 0, tax: 0, incl: 0, actual: 0 });
 
-  const filteredSummary = summary.filter(r =>
-    !search || r.itemTypeName.toLowerCase().includes(search.toLowerCase()) ||
-    (r.hsCode || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredSummary = summary.filter(r => matches(r.itemTypeName, r.hsCode, r.itemTypeId));
+  const filteredOpenings = openings.filter(o => matches(o.itemTypeName, o.hsCode, o.itemTypeId));
+
+  // Column choice per tab, remembered per viewer. On-Hand starts hidden on
+  // the On-Hand tab (operators asked for it off); the Quantity tile above the
+  // grid still totals it, and the picker brings the column back.
+  const [showOnhandCol, onhandPicker] = useColumnVisibility("stock:onhand", [
+    { key: "gd", label: "GD No" },
+    { key: "item", label: "Item" },
+    { key: "onhand", label: "On-Hand", defaultHidden: true },
+    { key: "excl", label: "Excluding" },
+    { key: "tax", label: "Sales Tax" },
+    { key: "incl", label: "Including" },
+    ...(canViewActualCost ? [
+      { key: "actual", label: "Actual Cost" },
+      { key: "margin", label: "Margin" },
+    ] : []),
+  ]);
+  const [showInvCol, inventoryPicker] = useColumnVisibility("stock:inventory", [
+    { key: "gd", label: "GD No" },
+    { key: "item", label: "Item" },
+    { key: "instock", label: "In Stock" },
+    { key: "available", label: "Available" },
+    { key: "committed", label: "Committed" },
+    { key: "todeliver", label: "To Deliver" },
+    { key: "delivered", label: "Delivered" },
+    { key: "incoming", label: "Incoming" },
+  ]);
+  const [showOpenCol, openingPicker] = useColumnVisibility("stock:opening", [
+    { key: "gd", label: "GD No" },
+    { key: "item", label: "Item" },
+    { key: "qty", label: "Quantity" },
+    { key: "excl", label: "Excluding" },
+    { key: "rate", label: "S.Tax %" },
+    { key: "tax", label: "Sales Tax" },
+    { key: "incl", label: "Including" },
+    ...(canViewActualCost ? [
+      { key: "actual", label: "Actual Cost" },
+      { key: "margin", label: "Margin" },
+    ] : []),
+    { key: "asof", label: "As Of" },
+    { key: "notes", label: "Notes" },
+  ]);
+  const [showMovCol, movementPicker] = useColumnVisibility("stock:movements", [
+    { key: "date", label: "Date" },
+    { key: "item", label: "Item" },
+    { key: "direction", label: "Direction" },
+    { key: "qty", label: "Qty" },
+    { key: "unitcost", label: "Unit Cost" },
+    { key: "value", label: "Value" },
+    { key: "balance", label: "Balance" },
+    { key: "source", label: "Source" },
+    { key: "notes", label: "Notes" },
+  ]);
+  const inventoryTracked = ["instock", "available", "committed", "todeliver", "delivered", "incoming"]
+    .filter(showInvCol).length;
 
   // Switch the selected company between V1 (legacy HS-gated) and V2 (standard
   // inventory). ONE-WAY and audited server-side. Refresh the company list so
@@ -711,14 +783,9 @@ export default function StockDashboardPage() {
                   on the FILTERED list meant a no-match search unmounted the
                   box itself and the operator had no way to clear it. */}
               {onhand.length > 0 && (
-                <div style={styles.searchWrap}>
-                  <MdSearch style={styles.searchIcon} />
-                  <input type="text" placeholder="Search item or HS code..." value={search} onChange={e => setSearch(e.target.value)} style={styles.searchInput} />
-                  {search && (
-                    <button type="button" style={styles.searchClear} onClick={() => setSearch("")} title="Clear search">
-                      <MdClose size={16} />
-                    </button>
-                  )}
+                <div style={styles.toolbar}>
+                  <SearchBox value={search} onChange={setSearch} />
+                  {onhandPicker}
                 </div>
               )}
               {!loading && filteredOnhand.length > 0 && (
@@ -776,13 +843,14 @@ export default function StockDashboardPage() {
                       <thead>
                         <tr>
                           <th style={styles.th} aria-label="Expand GD details"></th>
-                          <th style={styles.th}>Item</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
-                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
-                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
+                          {showOnhandCol("gd") && <th style={styles.th}>GD No</th>}
+                          {showOnhandCol("item") && <th style={styles.th}>Item</th>}
+                          {showOnhandCol("onhand") && <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>}
+                          {showOnhandCol("excl") && <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>}
+                          {showOnhandCol("tax") && <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>}
+                          {showOnhandCol("incl") && <th style={{ ...styles.th, textAlign: "right" }}>Including</th>}
+                          {canViewActualCost && showOnhandCol("actual") && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
+                          {canViewActualCost && showOnhandCol("margin") && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
                           {(canAdjust || canViewActualCost) && <th style={styles.th} aria-label="Actions"></th>}
                         </tr>
                       </thead>
@@ -790,8 +858,10 @@ export default function StockDashboardPage() {
                         {onhandPageRows.map((r, idx) => {
                           const isOpen = expandedId === r.itemTypeId;
                           const rowBg = idx % 2 === 0 ? "#fff" : colors.rowAlt;
-                          const colCount = 6
-                            + ((canAdjust || canViewActualCost) ? 1 : 0) + (canViewActualCost ? 2 : 0);
+                          const colCount = 1
+                            + ["gd", "item", "onhand", "excl", "tax", "incl"].filter(showOnhandCol).length
+                            + (canViewActualCost ? ["actual", "margin"].filter(showOnhandCol).length : 0)
+                            + ((canAdjust || canViewActualCost) ? 1 : 0);
                           return (
                           <Fragment key={r.itemTypeId}>
                           <tr
@@ -803,6 +873,10 @@ export default function StockDashboardPage() {
                                 {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                               </td>
                             )}
+                            {showOnhandCol("gd") && (
+                              <td style={styles.td}><GdList gds={r.gdNumbers} /></td>
+                            )}
+                            {showOnhandCol("item") && (
                             <td style={styles.td}>
                               {/* Clamped, never ellipsised on one line: two
                                   item names sharing a prefix must stay
@@ -819,6 +893,8 @@ export default function StockDashboardPage() {
                                 </span>
                               </div>
                             </td>
+                            )}
+                            {showOnhandCol("onhand") && (
                             <td style={styles.tdMoney}>
                               <div style={{ fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>
                                 {fmtOnHand(r.onHand)}
@@ -841,20 +917,23 @@ export default function StockDashboardPage() {
                                 <span style={{ color: "#c62828" }} title="Value out, excluding tax">−{money(r.valueOut)}</span>
                               </div>
                             </td>
-                            <td style={styles.tdMoney}>{money(r.valueExcludingTax)}</td>
+                            )}
+                            {showOnhandCol("excl") && <td style={styles.tdMoney}>{money(r.valueExcludingTax)}</td>}
+                            {showOnhandCol("tax") && (
                             <td style={styles.tdMoney}>
                               <div>{money(r.salesTax)}</div>
                               <div style={styles.rateChip}>
                                 {r.salesTaxRate ? `${num(r.salesTaxRate)}%` : "no rate"}
                               </div>
                             </td>
-                            <td style={{ ...styles.tdMoney, fontWeight: 700 }}>{money(r.valueIncludingTax)}</td>
-                            {canViewActualCost && (
+                            )}
+                            {showOnhandCol("incl") && <td style={{ ...styles.tdMoney, fontWeight: 700 }}>{money(r.valueIncludingTax)}</td>}
+                            {canViewActualCost && showOnhandCol("actual") && (
                               <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
                                 {r.actualCostExcludingTax ? money(r.actualCostExcludingTax) : "—"}
                               </td>
                             )}
-                            {canViewActualCost && (
+                            {canViewActualCost && showOnhandCol("margin") && (
                               <td style={{ ...styles.tdMoney, fontWeight: 600, color: r.margin < 0 ? colors.negative : colors.textPrimary }}>
                                 {money(r.margin)}
                                 <div style={styles.rateChip}>
@@ -915,6 +994,9 @@ export default function StockDashboardPage() {
                       <div key={r.itemTypeId} className="stock-card">
                         <div className="stock-card__top">
                           <div className="stock-card__top-left">
+                            {showOnhandCol("gd") && r.gdNumbers?.length > 0 && (
+                              <span className="stock-card__hs">GD {r.gdNumbers.join(", ")}</span>
+                            )}
                             <span className="stock-card__name">{r.itemTypeName}</span>
                             {r.hsCode && <span className="stock-card__hs">{r.hsCode}</span>}
                           </div>
@@ -1032,14 +1114,9 @@ export default function StockDashboardPage() {
           {tab === "inventory" && (
             <>
               {summary.length > 0 && (
-                <div style={styles.searchWrap}>
-                  <MdSearch style={styles.searchIcon} />
-                  <input type="text" placeholder="Search item or HS code..." value={search} onChange={e => setSearch(e.target.value)} style={styles.searchInput} />
-                  {search && (
-                    <button type="button" style={styles.searchClear} onClick={() => setSearch("")} title="Clear search">
-                      <MdClose size={16} />
-                    </button>
-                  )}
+                <div style={styles.toolbar}>
+                  <SearchBox value={search} onChange={setSearch} />
+                  {inventoryPicker}
                 </div>
               )}
               {loading ? (
@@ -1058,18 +1135,21 @@ export default function StockDashboardPage() {
                   <table style={styles.table}>
                     <thead>
                       <tr>
-                        <th style={styles.th}>Item</th>
-                        <th style={{ ...styles.th, textAlign: "right" }} title="Physical stock in hand">In Stock</th>
-                        <th style={{ ...styles.th, textAlign: "right" }} title="Free to sell = In Stock - Committed">Available</th>
-                        <th style={{ ...styles.th, textAlign: "right" }} title="Reserved to customers = To Deliver + Delivered">Committed</th>
-                        <th style={{ ...styles.th, textAlign: "right" }} title="Ordered, not yet delivered">To Deliver</th>
-                        <th style={{ ...styles.th, textAlign: "right" }} title="Delivered on a challan, not yet billed">Delivered</th>
-                        <th style={{ ...styles.th, textAlign: "right" }} title="On un-billed goods receipts">Incoming</th>
+                        {showInvCol("gd") && <th style={styles.th}>GD No</th>}
+                        {showInvCol("item") && <th style={styles.th}>Item</th>}
+                        {showInvCol("instock") && <th style={{ ...styles.th, textAlign: "right" }} title="Physical stock in hand">In Stock</th>}
+                        {showInvCol("available") && <th style={{ ...styles.th, textAlign: "right" }} title="Free to sell = In Stock - Committed">Available</th>}
+                        {showInvCol("committed") && <th style={{ ...styles.th, textAlign: "right" }} title="Reserved to customers = To Deliver + Delivered">Committed</th>}
+                        {showInvCol("todeliver") && <th style={{ ...styles.th, textAlign: "right" }} title="Ordered, not yet delivered">To Deliver</th>}
+                        {showInvCol("delivered") && <th style={{ ...styles.th, textAlign: "right" }} title="Delivered on a challan, not yet billed">Delivered</th>}
+                        {showInvCol("incoming") && <th style={{ ...styles.th, textAlign: "right" }} title="On un-billed goods receipts">Incoming</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredSummary.map((r, idx) => (
                         <tr key={r.itemTypeId} style={idx % 2 ? { background: colors.rowAlt } : undefined}>
+                          {showInvCol("gd") && <td style={styles.td}><GdList gds={gdByItem.get(r.itemTypeId)} /></td>}
+                          {showInvCol("item") && (
                           <td style={styles.td}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                               <span style={{ fontWeight: 600 }}>{r.itemTypeName}</span>
@@ -1081,17 +1161,18 @@ export default function StockDashboardPage() {
                               )}
                             </div>
                           </td>
+                          )}
                           {r.tracked ? (
                             <>
-                              <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{fmtOnHand(r.onHand)}</td>
-                              <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</td>
-                              <td style={{ ...styles.td, textAlign: "right" }}>{r.committed.toLocaleString()}</td>
-                              <td style={{ ...styles.td, textAlign: "right" }}>{r.toDeliver.toLocaleString()}</td>
-                              <td style={{ ...styles.td, textAlign: "right" }}>{r.delivered.toLocaleString()}</td>
-                              <td style={{ ...styles.td, textAlign: "right" }}>{r.incoming.toLocaleString()}</td>
+                              {showInvCol("instock") && <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>{fmtOnHand(r.onHand)}</td>}
+                              {showInvCol("available") && <td style={{ ...styles.td, textAlign: "right", fontWeight: 700, color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</td>}
+                              {showInvCol("committed") && <td style={{ ...styles.td, textAlign: "right" }}>{r.committed.toLocaleString()}</td>}
+                              {showInvCol("todeliver") && <td style={{ ...styles.td, textAlign: "right" }}>{r.toDeliver.toLocaleString()}</td>}
+                              {showInvCol("delivered") && <td style={{ ...styles.td, textAlign: "right" }}>{r.delivered.toLocaleString()}</td>}
+                              {showInvCol("incoming") && <td style={{ ...styles.td, textAlign: "right" }}>{r.incoming.toLocaleString()}</td>}
                             </>
-                          ) : (
-                            <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }} colSpan={6}>—</td>
+                          ) : inventoryTracked > 0 && (
+                            <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }} colSpan={inventoryTracked}>—</td>
                           )}
                         </tr>
                       ))}
@@ -1107,6 +1188,9 @@ export default function StockDashboardPage() {
                     <div key={r.itemTypeId} className="stock-card">
                       <div className="stock-card__top">
                         <div className="stock-card__top-left">
+                          {showInvCol("gd") && gdText(r.itemTypeId) && (
+                            <span className="stock-card__hs">GD {gdText(r.itemTypeId)}</span>
+                          )}
                           <span className="stock-card__name">{r.itemTypeName}</span>
                           {(!r.tracked || (r.reorderLevel != null && r.available <= r.reorderLevel)) && (
                             <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: 2 }}>
@@ -1164,7 +1248,18 @@ export default function StockDashboardPage() {
 
           {tab === "opening" && canManageOpening && (
             <>
-              {openings.length === 0 ? (
+              {openings.length > 0 && (
+                <div style={styles.toolbar}>
+                  <SearchBox value={search} onChange={setSearch} />
+                  {openingPicker}
+                </div>
+              )}
+              {openings.length > 0 && filteredOpenings.length === 0 ? (
+                <div style={styles.empty}>
+                  <p style={{ color: colors.textSecondary }}>No opening balances match "{search}".</p>
+                  <button type="button" style={styles.clearSearchBtn} onClick={() => setSearch("")}>Clear search</button>
+                </div>
+              ) : openings.length === 0 ? (
                 <div style={{ ...styles.empty, padding: "2rem 1rem" }}>
                   <p style={{ color: colors.textSecondary }}>No opening balances set yet. Click "Opening Balance" above to add one.</p>
                 </div>
@@ -1175,34 +1270,36 @@ export default function StockDashboardPage() {
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          <th style={styles.th}>Item</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Quantity</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>S.Tax %</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Including</th>
-                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
-                          {canViewActualCost && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
-                          <th style={styles.th}>As Of</th>
-                          <th style={styles.th}>Notes</th>
+                          {showOpenCol("gd") && <th style={styles.th}>GD No</th>}
+                          {showOpenCol("item") && <th style={styles.th}>Item</th>}
+                          {showOpenCol("qty") && <th style={{ ...styles.th, textAlign: "right" }}>Quantity</th>}
+                          {showOpenCol("excl") && <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>}
+                          {showOpenCol("rate") && <th style={{ ...styles.th, textAlign: "right" }}>S.Tax %</th>}
+                          {showOpenCol("tax") && <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>}
+                          {showOpenCol("incl") && <th style={{ ...styles.th, textAlign: "right" }}>Including</th>}
+                          {canViewActualCost && showOpenCol("actual") && <th style={{ ...styles.th, textAlign: "right" }}>Actual Cost</th>}
+                          {canViewActualCost && showOpenCol("margin") && <th style={{ ...styles.th, textAlign: "right" }}>Margin</th>}
+                          {showOpenCol("asof") && <th style={styles.th}>As Of</th>}
+                          {showOpenCol("notes") && <th style={styles.th}>Notes</th>}
                           <th style={{ ...styles.th, width: 60 }}></th>
                         </tr>
                       </thead>
                       <tbody>
-                        {openings.map((o, idx) => (
+                        {filteredOpenings.map((o, idx) => (
                           <tr key={o.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
-                            <td style={styles.td}><strong>{o.itemTypeName}</strong></td>
-                            <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>
-                            <td style={styles.tdMoney}>{money(o.valueExcludingTax)}</td>
-                            <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>
-                            <td style={styles.tdMoney}>{money(o.salesTax)}</td>
-                            <td style={{ ...styles.tdMoney, fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>
-                            {canViewActualCost && (
+                            {showOpenCol("gd") && <td style={styles.td}><GdList gds={gdByItem.get(o.itemTypeId)} /></td>}
+                            {showOpenCol("item") && <td style={styles.td}><strong>{o.itemTypeName}</strong></td>}
+                            {showOpenCol("qty") && <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>{o.quantity.toLocaleString()}</td>}
+                            {showOpenCol("excl") && <td style={styles.tdMoney}>{money(o.valueExcludingTax)}</td>}
+                            {showOpenCol("rate") && <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>{o.salesTaxRate ? `${num(o.salesTaxRate)}%` : "—"}</td>}
+                            {showOpenCol("tax") && <td style={styles.tdMoney}>{money(o.salesTax)}</td>}
+                            {showOpenCol("incl") && <td style={{ ...styles.tdMoney, fontWeight: 600 }}>{money(o.valueIncludingTax)}</td>}
+                            {canViewActualCost && showOpenCol("actual") && (
                               <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
                                 {o.actualCostExcludingTax ? money(o.actualCostExcludingTax) : "—"}
                               </td>
                             )}
-                            {canViewActualCost && (
+                            {canViewActualCost && showOpenCol("margin") && (
                               <td style={{ ...styles.tdMoney, fontWeight: 600, color: o.margin < 0 ? colors.negative : colors.textPrimary }}>
                                 {money(o.margin)}
                                 <div style={{ fontSize: "0.72rem", fontWeight: 400, color: colors.textSecondary, whiteSpace: "nowrap" }}>
@@ -1210,8 +1307,8 @@ export default function StockDashboardPage() {
                                 </div>
                               </td>
                             )}
-                            <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>
-                            <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>
+                            {showOpenCol("asof") && <td style={styles.td}>{new Date(o.asOfDate).toLocaleDateString()}</td>}
+                            {showOpenCol("notes") && <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{o.notes || "—"}</td>}
                             <td style={styles.td}>
                               <button style={btnTiny} title="Restate this opening balance" onClick={() => startEditOpening(o)}><MdEdit size={14} /></button>
                               <button style={btnTiny} onClick={() => handleDeleteOpening(o)}><MdClose size={14} /></button>
@@ -1224,10 +1321,13 @@ export default function StockDashboardPage() {
 
                   {/* Mobile — opening balance cards */}
                   <div className="stock-cards">
-                    {openings.map((o) => (
+                    {filteredOpenings.map((o) => (
                       <div key={o.id} className="stock-card">
                         <div className="stock-card__top">
                           <div className="stock-card__top-left">
+                            {showOpenCol("gd") && gdText(o.itemTypeId) && (
+                              <span className="stock-card__hs">GD {gdText(o.itemTypeId)}</span>
+                            )}
                             <span className="stock-card__name">{o.itemTypeName}</span>
                             <span className="stock-card__hs">As of {new Date(o.asOfDate).toLocaleDateString()}</span>
                           </div>
@@ -1287,40 +1387,47 @@ export default function StockDashboardPage() {
                 </div>
               ) : (
                 <>
+                  <div style={{ ...styles.toolbar, justifyContent: "flex-end" }}>{movementPicker}</div>
                   {/* Desktop — table */}
                   <div className="stock-table" style={styles.tableWrap}>
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          <th style={styles.th}>Date</th>
-                          <th style={styles.th}>Item</th>
-                          <th style={styles.th}>Direction</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Unit Cost</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Value</th>
-                          <th style={{ ...styles.th, textAlign: "right" }}>Balance</th>
-                          <th style={styles.th}>Source</th>
-                          <th style={styles.th}>Notes</th>
+                          {showMovCol("date") && <th style={styles.th}>Date</th>}
+                          {showMovCol("item") && <th style={styles.th}>Item</th>}
+                          {showMovCol("direction") && <th style={styles.th}>Direction</th>}
+                          {showMovCol("qty") && <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>}
+                          {showMovCol("unitcost") && <th style={{ ...styles.th, textAlign: "right" }}>Unit Cost</th>}
+                          {showMovCol("value") && <th style={{ ...styles.th, textAlign: "right" }}>Value</th>}
+                          {showMovCol("balance") && <th style={{ ...styles.th, textAlign: "right" }}>Balance</th>}
+                          {showMovCol("source") && <th style={styles.th}>Source</th>}
+                          {showMovCol("notes") && <th style={styles.th}>Notes</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {movements.map((m, idx) => (
                           <tr key={m.id} style={{ backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt }}>
-                            <td style={styles.td}>{new Date(m.movementDate).toLocaleDateString()}</td>
-                            <td style={styles.td}>{m.itemTypeName}</td>
-                            <td style={{ ...styles.td, color: m.direction === "In" ? "#2e7d32" : "#c62828", fontWeight: 600 }}>{m.direction}</td>
+                            {showMovCol("date") && <td style={styles.td}>{new Date(m.movementDate).toLocaleDateString()}</td>}
+                            {showMovCol("item") && <td style={styles.td}>{m.itemTypeName}</td>}
+                            {showMovCol("direction") && <td style={{ ...styles.td, color: m.direction === "In" ? "#2e7d32" : "#c62828", fontWeight: 600 }}>{m.direction}</td>}
+                            {showMovCol("qty") && (
                             <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
                               {m.sourceType === "Revaluation" ? "—" : m.quantity.toLocaleString()}
                             </td>
+                            )}
+                            {showMovCol("unitcost") && (
                             <td style={{ ...styles.tdMoney, color: colors.textSecondary }}>
                               {m.sourceType === "Revaluation" ? "—" : num(m.unitCost)}
                             </td>
+                            )}
+                            {showMovCol("value") && (
                             <td style={{ ...styles.tdMoney, color: m.direction === "In" ? "#2e7d32" : "#c62828" }}>
                               {m.direction === "In" ? "+" : "−"}{money(m.value)}
                             </td>
-                            <td style={styles.tdMoney}>{num(m.runningQuantity)} · {money(m.runningValue)}</td>
-                            <td style={{ ...styles.td, fontSize: "0.78rem" }}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>
-                            <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{m.notes || "—"}</td>
+                            )}
+                            {showMovCol("balance") && <td style={styles.tdMoney}>{num(m.runningQuantity)} · {money(m.runningValue)}</td>}
+                            {showMovCol("source") && <td style={{ ...styles.td, fontSize: "0.78rem" }}>{m.sourceType}{m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}</td>}
+                            {showMovCol("notes") && <td style={{ ...styles.td, fontSize: "0.78rem", color: colors.textSecondary }}>{m.notes || "—"}</td>}
                           </tr>
                         ))}
                       </tbody>
@@ -1817,6 +1924,34 @@ function DrillPanel({ rows, loading, uom, canViewActualCost }) {
   );
 }
 
+// The one search box every tab shares — same value, so switching tabs keeps
+// what was typed.
+function SearchBox({ value, onChange }) {
+  return (
+    <div style={styles.searchWrap}>
+      <MdSearch style={styles.searchIcon} />
+      <input type="text" placeholder="Search item, HS code or GD number..." value={value}
+        onChange={e => onChange(e.target.value)} style={styles.searchInput} />
+      {value && (
+        <button type="button" style={styles.searchClear} onClick={() => onChange("")} title="Clear search">
+          <MdClose size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// GD numbers behind an item, one per line so a long list wraps instead of
+// widening the column.
+function GdList({ gds }) {
+  if (!gds || gds.length === 0) return <span style={{ color: colors.textSecondary }}>—</span>;
+  return (
+    <div style={{ display: "grid", gap: 2, fontFamily: "monospace", fontSize: "0.78rem", color: colors.blue, overflowWrap: "anywhere" }}>
+      {gds.map(g => <span key={g}>{g}</span>)}
+    </div>
+  );
+}
+
 function ValueTile({ label, value, strong }) {
   return (
     <div style={styles.valueTile}>
@@ -2002,7 +2137,8 @@ const styles = {
   verPillV1: { fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", backgroundColor: "#eef2f7", border: "1px solid #d0d7e2", padding: "0.3rem 0.6rem", borderRadius: 999 },
   fbrBadge: { fontSize: "0.68rem", fontWeight: 700, color: "#6a1b9a", backgroundColor: "#f3e5f5", padding: "0.1rem 0.4rem", borderRadius: 5 },
   lowBadge: { fontSize: "0.68rem", fontWeight: 700, color: "#c62828", backgroundColor: "#ffebee", padding: "0.1rem 0.4rem", borderRadius: 5 },
-  searchWrap: { position: "relative", marginBottom: "1rem", maxWidth: 360 },
+  toolbar: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.6rem", marginBottom: "1rem" },
+  searchWrap: { position: "relative", flex: "1 1 260px", maxWidth: 360 },
   searchIcon: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" },
   searchInput: { width: "100%", padding: "0.55rem 2.4rem 0.55rem 2.3rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 10, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none" },
   searchClear: { position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", background: "none", color: "#94a3b8", cursor: "pointer", padding: 0, boxShadow: "none" },

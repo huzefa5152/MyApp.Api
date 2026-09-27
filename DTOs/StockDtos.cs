@@ -11,6 +11,10 @@
         public string ItemTypeName { get; set; } = "";
         public string? HSCode { get; set; }
         public string? UOM { get; set; }
+
+        /// <summary>Every customs declaration behind this item, oldest first —
+        /// the dashboard's GD column and part of what its search matches.</summary>
+        public List<string> GdNumbers { get; set; } = new();
         // 2026-05-12: promoted to decimal alongside StockMovement.Quantity
         // and OpeningStockBalance.Quantity so fractional UOMs (KG, Liter,
         // Carat) display without truncation.
@@ -412,16 +416,21 @@
         /// Customs declaration reference for this item, and its date — the
         /// stock sheet's "GDs No" and "GD Date".
         ///
-        /// Filled ONLY when every <c>OpeningStockLot</c> behind the item names
-        /// the SAME declaration. An item held across several GDs has no single
-        /// answer, and the export is one row per item: naming the first one
-        /// would attribute the whole position to a declaration that covers part
-        /// of it. Blank is the honest answer, and it is what an item bought on
-        /// purchase bills (no lots at all) reports too.
+        /// An item held across several GDs lists them all, comma-separated, so
+        /// no row of the sheet is left without its declarations (operators
+        /// read a blank GD cell as "no GD", 2026-09-27). Naming only the first
+        /// would attribute the whole position to one declaration. Blank now
+        /// means only what it says: an item with no GD source at all.
         /// </summary>
         public string? LotRef { get; set; }
         public DateTime? LotDate { get; set; }
         public DateTime? ClaimMonth { get; set; }
+
+        /// <summary>Set instead of <see cref="LotDate"/> / <see cref="ClaimMonth"/>
+        /// when the item holds more than one GD: every date / claim month, in
+        /// the same order as the GD numbers in <see cref="LotRef"/>.</summary>
+        public string? LotDatesText { get; set; }
+        public string? ClaimMonthsText { get; set; }
     }
 
     /// <summary>Everything the stock workbook needs, resolved server-side.</summary>

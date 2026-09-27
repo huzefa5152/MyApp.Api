@@ -424,6 +424,34 @@ Console.WriteLine("\n=== 4. GDs No / GD Date ===");
         ws.Cell(FirstDataRow + 4, Hs8Col).IsEmpty());
 }
 
+// An item held across several GDs lists every one — a blank GD cell read as
+// "no GD" to the operator (2026-09-27). Claim months line up with the GDs,
+// "-" standing for one not claimed yet.
+{
+    var multi = Item(9, "Hair Straightener Parts", "8516.9000", "Pcs",
+        4666m, 2368549m, 0m, 0m, 0m, 0m, 4666m, 2368549m, 18m,
+        lotRef: "KAPE-HC-2965, KAPE-HC-7328");
+    multi.LotDatesText = "21-07-2026, 15-08-2026";
+    multi.ClaimMonthsText = "Jul 2026, -";
+    var multiPath = Path.Combine(outDir, "stock-export-multi-gd.xlsx");
+    File.WriteAllBytes(multiPath, StockExcelBuilder.Build(Data(new List<StockExportItemDto> { multi }, "As at 31-08-2026")));
+    using var wb = new XLWorkbook(multiPath);
+    var ws = wb.Worksheet(1);
+    Check("an item with several GDs names every one",
+        ws.Cell(FirstDataRow, GdNoCol).GetString() == "KAPE-HC-2965, KAPE-HC-7328",
+        ws.Cell(FirstDataRow, GdNoCol).GetString());
+    Check("and every GD date, in the same order",
+        ws.Cell(FirstDataRow, GdDateCol).GetString() == "21-07-2026, 15-08-2026",
+        ws.Cell(FirstDataRow, GdDateCol).GetString());
+    Check("and every claim month, a dash for the unclaimed one",
+        ws.Cell(FirstDataRow, ClaimCol).GetString() == "Jul 2026, -",
+        ws.Cell(FirstDataRow, ClaimCol).GetString());
+    Check("the lists wrap rather than clip",
+        ws.Cell(FirstDataRow, GdNoCol).Style.Alignment.WrapText
+        && ws.Cell(FirstDataRow, GdDateCol).Style.Alignment.WrapText
+        && ws.Cell(FirstDataRow, ClaimCol).Style.Alignment.WrapText);
+}
+
 // ── Suite 5: the totals row ──────────────────────────────────────────────────
 
 Console.WriteLine("\n=== 5. Totals ===");
