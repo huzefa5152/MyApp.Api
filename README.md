@@ -300,6 +300,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-09-28 — Stock-sheet import adds to the Inventory opening
 
+- **The stock-sheet import no longer renames another company's item.** Item types are shared by every company on an installation. When a sheet line's HS code matched a placeholder item that another company already holds stock on or uses, the import reused it and renamed it to the sheet's spelling, changing that company's item on its dashboard, invoices and prints. Such a line now becomes a new item for the importing company, and the preview says so; a placeholder no other company uses is still taken over as before.
 - **A partial stock-sheet import no longer resets the Inventory account.** The opening-stock import used to SET the Inventory account's opening to the imported sheet's total, so a one-line top-up replaced every other item's value in the ledger. It now adds only what the import changed (new balances, or the difference on balances it restates), the same way the GD costing import and the manual opening-balance screen already did.
 
 ### 2026-09-27 — Stock dashboard GD numbers, claim months from the sheet, filters that stay
