@@ -191,7 +191,7 @@ declaration (a "lot"). A totals row at the bottom is fine and is ignored.
 
 | Col | Heading | Meaning | Used for |
 |---|---|---|---|
-| A | Claim Month | accountant's working | ignored |
+| A | Claim Month | return the GD's input tax was filed in | **recorded per GD** when every line of that GD names the same month |
 | B | **GD Number** | customs declaration reference | kept per lot |
 | C | **GD Date** | declaration date | kept per lot |
 | D | **4 Digit Hs Code** | tariff heading | fallback classification |
@@ -263,7 +263,14 @@ that kept 112 product names that the merge folds into 78 and 57 stock lines. Use
 it to reconcile a figure back to the declarations behind it.
 
 Still ignored: the sub-category column, the derived S.Tax amounts, and the
-cost-of-goods-sold block. Those are the accountant's working.
+cost-of-goods-sold block.
+
+**Claim Month** is read by its heading ("Claim Month" or "Claimed Month") and by
+the month's short name, so "Jun 2024", "June 2026" and "Sept 2025" all read; a
+date cell gives its month. The system keeps ONE claim month per GD, so a GD
+whose lines name different months — or are only partly claimed — is listed in
+the preview and left for the operator to set on the Stock Dashboard. A blank
+never clears a month already recorded. Those are the accountant's working.
 
 ---
 

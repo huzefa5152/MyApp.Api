@@ -43,6 +43,10 @@ namespace MyApp.Api.DTOs
         public string? HsCode { get; set; }
         public string? LotRef { get; set; }
         public DateTime? LotDate { get; set; }
+
+        /// <summary>First day of the sheet's "Claim Month" for this line, or
+        /// null when the line is not claimed yet.</summary>
+        public DateTime? ClaimMonth { get; set; }
         public string? Unit { get; set; }
 
         /// <summary>Landed unit cost as STATED on the row.</summary>
@@ -224,6 +228,9 @@ namespace MyApp.Api.DTOs
 
         /// <summary>Source sheet rows kept alongside those balances.</summary>
         public int LotsWritten { get; set; }
+
+        /// <summary>GDs whose Claim Month the sheet set.</summary>
+        public int ClaimMonthsWritten { get; set; }
         public int RowsSkippedAlreadyImported { get; set; }
         public decimal TotalQuantity { get; set; }
         public decimal TotalValueExcludingTax { get; set; }

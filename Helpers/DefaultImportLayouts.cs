@@ -129,7 +129,7 @@ namespace MyApp.Api.Helpers
           "headerRow": 3,
           "firstDataRow": 4,
           "columns": {
-            "lotRef": 2, "lotDate": 3,
+            "claimMonth": 1, "lotRef": 2, "lotDate": 3,
             "hsCodeShort": 4, "hsCodeFull": 5,
             "itemName": 6, "unitPrice": 8, "unit": 9,
             "openingQty": 10, "openingValue": 11, "openingTaxRate": 12,
@@ -140,6 +140,7 @@ namespace MyApp.Api.Helpers
           "headerAliases": {
             "lotRef": ["GD Number", "GDs No", "GD No", "GDs Number", "GD #"],
             "lotDate": ["GD Date"],
+            "claimMonth": ["Claim Month", "Claimed Month", "Claim Period"],
             "hsCodeShort": ["4 Digit Hs Code", "4 Digit HS Code"],
             "hsCodeFull": ["8 Digit Hs Code", "8 Digit HS Code"],
             "itemName": ["Description", "Items", "Item", "Item Name", "Particulars"],
@@ -150,7 +151,7 @@ namespace MyApp.Api.Helpers
             "consumedValue": ["Consumed Exl", "Consumed Excl"]
           },
           "hsCodeStripSuffix": ":-",
-          "ignoreColumns": [1, 7, 13, 17]
+          "ignoreColumns": [7, 13, 17]
         }
         """;
 

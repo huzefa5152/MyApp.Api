@@ -92,6 +92,11 @@ namespace MyApp.Api.Helpers.ExcelImport
             [JsonPropertyName("lotRef")] public int? LotRef { get; set; }
             [JsonPropertyName("lotDate")] public int? LotDate { get; set; }
 
+            /// <summary>The accountant's "Claim Month" — the return a line's
+            /// input tax was filed in. Stored per GD (GdClaimPeriods), and only
+            /// when every line of that GD on the sheet names the same month.</summary>
+            [JsonPropertyName("claimMonth")] public int? ClaimMonth { get; set; }
+
             /// <summary>
             /// Landed unit cost as the sheet states it. Kept per LOT, never
             /// merged: the stock position's unit cost is value / quantity and is
@@ -187,6 +192,7 @@ namespace MyApp.Api.Helpers.ExcelImport
                 ["balanceTax"] = (c, v) => c.BalanceTax = v,
                 ["lotRef"] = (c, v) => c.LotRef = v,
                 ["lotDate"] = (c, v) => c.LotDate = v,
+                ["claimMonth"] = (c, v) => c.ClaimMonth = v,
                 ["unitPrice"] = (c, v) => c.UnitPrice = v,
                 ["openingQty"] = (c, v) => c.OpeningQty = v,
                 ["openingValue"] = (c, v) => c.OpeningValue = v,
@@ -212,6 +218,7 @@ namespace MyApp.Api.Helpers.ExcelImport
                 ("hsCodeFull", c.HsCodeFull), ("hsCodeShort", c.HsCodeShort), ("unit", c.Unit),
                 ("balanceValue", c.BalanceValue), ("balanceTaxRate", c.BalanceTaxRate),
                 ("balanceTax", c.BalanceTax), ("lotRef", c.LotRef), ("lotDate", c.LotDate),
+                ("claimMonth", c.ClaimMonth),
                 ("unitPrice", c.UnitPrice),
                 ("openingQty", c.OpeningQty), ("openingValue", c.OpeningValue),
                 ("openingTaxRate", c.OpeningTaxRate),
@@ -256,6 +263,7 @@ namespace MyApp.Api.Helpers.ExcelImport
                 BalanceTax = Columns.BalanceTax,
                 LotRef = Columns.LotRef,
                 LotDate = Columns.LotDate,
+                ClaimMonth = Columns.ClaimMonth,
                 UnitPrice = Columns.UnitPrice,
                 OpeningQty = Columns.OpeningQty,
                 OpeningValue = Columns.OpeningValue,
@@ -430,6 +438,7 @@ namespace MyApp.Api.Helpers.ExcelImport
             "balancetax" => c.BalanceTax,
             "lotref" => c.LotRef,
             "lotdate" => c.LotDate,
+            "claimmonth" => c.ClaimMonth,
             "unitprice" => c.UnitPrice,
             "openingqty" => c.OpeningQty,
             "openingvalue" => c.OpeningValue,

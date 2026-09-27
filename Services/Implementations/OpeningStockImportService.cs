@@ -97,6 +97,14 @@ namespace MyApp.Api.Services.Implementations
                 preview.Warnings.Add(
                     $"{ambiguous} item(s) match an existing item under a different HS code. Choose which to use before importing.");
 
+            var (claimed, split) = ResolveClaimMonths(lots.Select(l => (l.LotRef, l.ClaimMonth)));
+            if (claimed.Count > 0)
+                preview.Warnings.Add(
+                    $"Claim Month will be recorded for {claimed.Count} GD(s). GDs with no Claim Month stay unclaimed.");
+            if (split.Count > 0)
+                preview.Warnings.Add(
+                    $"These GDs have different Claim Months (or some lines unclaimed) on different lines, so no claim month is recorded for them — set it on the Stock Dashboard: {string.Join(", ", split)}.");
+
             if (lots.Count != rows.Count)
                 preview.Warnings.Add(
                     $"{lots.Count} sheet rows became {rows.Count} items — some items are held across more than one lot and their quantities have been added together.");
@@ -123,6 +131,7 @@ namespace MyApp.Api.Services.Implementations
             string? Unit, decimal Quantity, decimal Value,
             decimal TaxRate, decimal? StatedTax, string? LotRef,
             DateTime? LotDate, decimal? UnitPrice,
+            DateTime? ClaimMonth,
             decimal? OpeningQty, decimal? OpeningValue, decimal? OpeningTaxRate,
             decimal? ConsumedQty, decimal? ConsumedValue, decimal? ConsumedTaxRate);
 
@@ -276,6 +285,12 @@ namespace MyApp.Api.Services.Implementations
                     LotRef: cols.LotRef is > 0 ? wb.GetString(sheet, row, cols.LotRef.Value).Trim() : null,
                     LotDate: cols.LotDate is > 0 ? wb.GetDate(sheet, row, cols.LotDate.Value) : null,
                     UnitPrice: cols.UnitPrice is > 0 ? wb.GetDecimal(sheet, row, cols.UnitPrice.Value) : null,
+                    // Typed text ("Jun 2024", "June 2026") first; a real date
+                    // cell is read for its month.
+                    ClaimMonth: cols.ClaimMonth is > 0
+                        ? ClaimMonthParser.Parse(wb.GetString(sheet, row, cols.ClaimMonth.Value))
+                          ?? ClaimMonthParser.FromDate(wb.GetDate(sheet, row, cols.ClaimMonth.Value))
+                        : null,
                     OpeningQty: cols.OpeningQty is > 0 ? wb.GetDecimal(sheet, row, cols.OpeningQty.Value) : null,
                     OpeningValue: cols.OpeningValue is > 0 ? wb.GetDecimal(sheet, row, cols.OpeningValue.Value) : null,
                     OpeningTaxRate: cols.OpeningTaxRate is > 0
@@ -412,6 +427,7 @@ namespace MyApp.Api.Services.Implementations
                             HsCode = x.HsCode,
                             LotRef = string.IsNullOrWhiteSpace(x.LotRef) ? null : x.LotRef,
                             LotDate = x.LotDate,
+                            ClaimMonth = x.ClaimMonth,
                             Unit = string.IsNullOrWhiteSpace(x.Unit) ? null : x.Unit,
                             UnitPrice = x.UnitPrice,
                             OpeningQuantity = x.OpeningQty,
@@ -649,6 +665,9 @@ namespace MyApp.Api.Services.Implementations
                     result.TotalValueExcludingTax += Money(row.Value);
                     result.TotalSalesTax += Money(row.Value * row.SalesTaxRate / 100m);
                 }
+
+                result.ClaimMonthsWritten = await UpsertClaimMonthsAsync(dto.CompanyId,
+                    rows.SelectMany(r => r.Lots ?? new()).Select(l => (l.LotRef, l.ClaimMonth)));
 
                 if (dto.EnableInventoryTracking)
                     result.InventoryTrackingEnabled = await EnableTrackingAsync(dto.CompanyId, result);
@@ -888,6 +907,52 @@ namespace MyApp.Api.Services.Implementations
 
             if (written.Count > 0) await _db.SaveChangesAsync();
             return written;
+        }
+
+        /// <summary>
+        /// The sheet's Claim Month is written per LINE, the system keeps one per
+        /// GD. A GD whose every line names the same month is recorded; a GD
+        /// with no month anywhere is left unclaimed; a GD whose lines disagree
+        /// — or are only partly claimed — is reported and left alone, because
+        /// any single month would misstate part of it.
+        /// </summary>
+        internal static (Dictionary<string, DateTime> Claimed, List<string> Split) ResolveClaimMonths(
+            IEnumerable<(string? Gd, DateTime? Month)> lines)
+        {
+            var claimed = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            var split = new List<string>();
+            foreach (var g in lines.Where(l => !string.IsNullOrWhiteSpace(l.Gd))
+                         .GroupBy(l => l.Gd!.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                var months = g.Select(l => l.Month).Distinct().ToList();
+                if (months.Count == 1 && months[0] is { } only) claimed[g.Key] = only;
+                else if (months.Any(m => m.HasValue)) split.Add(g.Key);
+            }
+            split.Sort(StringComparer.OrdinalIgnoreCase);
+            return (claimed, split);
+        }
+
+        /// <summary>Records the sheet's claim months. Set, never cleared: a
+        /// blank on the sheet means "not claimed on this sheet", and a month
+        /// already entered on the dashboard is kept.</summary>
+        private async Task<int> UpsertClaimMonthsAsync(
+            int companyId, IEnumerable<(string? Gd, DateTime? Month)> lines)
+        {
+            var (claimed, _) = ResolveClaimMonths(lines);
+            if (claimed.Count == 0) return 0;
+            var numbers = claimed.Keys.ToList();
+            var existing = await _db.GdClaimPeriods
+                .Where(x => x.CompanyId == companyId && numbers.Contains(x.GdNumber))
+                .ToListAsync();
+            foreach (var (gd, month) in claimed)
+            {
+                var row = existing.FirstOrDefault(x => x.GdNumber.Trim().Equals(gd, StringComparison.OrdinalIgnoreCase));
+                if (row == null)
+                    _db.GdClaimPeriods.Add(new GdClaimPeriod { CompanyId = companyId, GdNumber = gd, ClaimMonth = month });
+                else row.ClaimMonth = month;
+            }
+            await _db.SaveChangesAsync();
+            return claimed.Count;
         }
 
         private async Task<bool> EnableTrackingAsync(int companyId, OpeningStockCommitResultDto result)
