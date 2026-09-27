@@ -763,14 +763,7 @@ namespace MyApp.Api.Helpers
         /// numeric / date branches above never hit this path — we only
         /// neutralise string values.
         /// </summary>
-        private static string CsvSafe(string? s)
-        {
-            if (string.IsNullOrEmpty(s)) return s ?? "";
-            var first = s[0];
-            if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r')
-                return "'" + s;
-            return s;
-        }
+        private static string CsvSafe(string? s) => SpreadsheetFormulaGuard.Neutralise(s);
 
         private static List<Dictionary<string, object?>> GetCollection(Dictionary<string, object?> data, string name)
         {
