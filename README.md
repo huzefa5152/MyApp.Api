@@ -291,6 +291,15 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-27 — Import Data knows a business by its NTN
+
+- **A customer or supplier whose NTN is already on file is skipped**, even under
+  a different spelling of its name ("ACME" and "ACME Pvt Ltd"), and the preview
+  names the record that already holds the NTN. Two rows in one file sharing an
+  NTN are refused as the same business. NTNs are compared as their 7 digits, so
+  `1234567-8` matches `1234567`; a row without an NTN is matched by name only,
+  as before. The sample's Start Here sheet says so.
+
 ### 2026-09-27 — Import Data: onboard a company from one Excel file
 
 **Configuration → Import Data** brings a new company's master data in from a
