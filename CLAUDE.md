@@ -162,6 +162,43 @@ hard standard, not a nice-to-have.** Full patterns + recipes live in
 
 - Sales-by-client / purchases-by-supplier: group by `Client.ClientGroupId ?? -ClientId` (and `Supplier.SupplierGroupId ?? -SupplierId`). Same legal entity across tenants merges; legacy rows without a group fall back to ClientId. See `Services/Implementations/DashboardService.cs:ComputeSalesAsync`.
 
+### 5a. Onboarding import — one schema, the forms' own create paths (2026-09-27)
+
+Configuration → Import Data (`/import-data`, `Controllers/OnboardingImportController.cs`)
+brings a company's customers, items, suppliers and opening stock in from one
+workbook: sample → upload → preview → commit → fix list.
+
+- **`Helpers/Onboarding/OnboardingSchema.cs` is the ONE definition** of the
+  sheets and columns. The sample builder, the reader, the row rules and the
+  preview messages all read it. A new column is a schema entry, never a second
+  list somewhere else. Ask only for what FBR or a print template uses —
+  `Client.Email` is deliberately absent.
+- **Columns are found by HEADING, not position**, and the help row under the
+  headings is recognised by its text wherever it sits. Identifier columns are
+  written as Excel text and read back as digits, because a 13-digit CNIC typed
+  as a number reads as `4.2301E+12`, and `8481.8090` stored as a number loses
+  its trailing zero.
+- **Creation goes through `ClientService` / `SupplierService` /
+  `ItemTypeService.CreateAsync`**, so duplicate checks, HS validation, UOM
+  enrichment, unit registration and grouping cannot drift from the forms. Items
+  are created with `IsFavorite = true`, the form's own default.
+- **Existing = skipped, never changed.** Re-uploading a file creates nothing;
+  `scripts/test_onboarding_import.py` suite 4 pins it. Opening stock that
+  already has a balance is skipped too — not overwritten.
+- **Preview writes nothing; commit re-reads the file.** Never let the browser
+  send back rows to commit.
+- **Two gates.** `onboarding.import.run` opens the feature; each sheet also
+  needs the permission that creates its records (`OnboardingSheet.PermissionKey`).
+  A sheet NAMED in `sheets=` that the caller cannot create is a 403; with none
+  named the caller gets only the sheets they can create.
+- The upload routes share the `"import"` rate limit (10/min/user), which runs
+  BEFORE authorization — so a loop over many companies tests the limiter, not
+  the tenant guard. The tenant suite checks each upload route once.
+- Suites: `cd scripts/onboarding_harness && dotnet run -c Release` (97 checks,
+  offline — rules, reader, sample and fix-list round trips),
+  `python scripts/test_onboarding_import.py` (70 checks, live),
+  `node scripts/test_onboarding_import.mjs` (23 checks, the screen's decisions).
+
 ### 6. Pagination
 
 Every paged endpoint clamps via `MyApp.Api.Helpers.PaginationHelper`:
@@ -237,13 +274,14 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
 | Grouped quantity spread — no bill line left at zero, fractions only where the unit allows (offline) | `node scripts/test_group_quantity_split.mjs` | `27 passed, 0 failed` |
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `73/73 checks` |
-| Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `142 passed, 0 failed` |
+| Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `147 passed, 0 failed` |
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
 | A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |
 | Cross-tenant leak sweep — both editions against a company they were never given | `python scripts/test_tenant_leak_sweep.py` | `105/105 checks` |
 | Every permission module lands in a navbar section (offline) | `python scripts/verify_permission_sections.py` | `All permission modules are mapped` |
+| Onboarding import — sample, preview, commit, re-upload adds nothing, fix list, permissions | `python scripts/test_onboarding_import.py`; `cd scripts/onboarding_harness && dotnet run -c Release`; `node scripts/test_onboarding_import.mjs` | `70/70 checks passed`; `97 checks, 0 failed`; `23/23 checks passed` |
 | Accounting — chart of accounts | `python scripts/test_accounting_chart.py` | `103/103 checks` |
 | Accounting — general ledger core | `python scripts/test_accounting_gl.py` | `93/93 checks` |
 | Accounting — further tax + withholding on documents | `python scripts/test_document_taxes.py` (add `--db "<conn>"` for the credit-note suite) | `67/67 checks` (62 without `--db`) |

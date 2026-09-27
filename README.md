@@ -20,6 +20,7 @@ A full-stack ERP system for Pakistani businesses to manage the complete **Purcha
 - **Delivery Challans** - Create, track, and manage deliveries with automatic status workflow
 - **Invoicing** - Bundle multiple challans into invoices with GST calculations and amount-in-words
 - **Item Types & Lookups** - Autocomplete item descriptions and units, auto-create on first use
+- **Import Data (onboarding)** - One Excel workbook brings a new company's customers, items, suppliers and opening stock in: download a sample that marks every column required or optional, upload, review each row, import
 
 ### FBR Digital Invoicing
 
@@ -289,6 +290,33 @@ Publish output optimized from 79 MB to 37 MB via:
 ---
 
 ## Changelog
+
+### 2026-09-27 — Import Data: onboard a company from one Excel file
+
+**Configuration → Import Data** brings a new company's master data in from a
+single workbook, or one kind of record at a time.
+
+- **The sample says what goes where.** Download a workbook with a sheet per
+  choice: Customers, Items, Suppliers, Opening Stock. Red headings are
+  required, orange are required in some cases (NTN for a Registered customer,
+  CNIC for a CNIC customer), grey are optional; row 2 under every heading says
+  what to type, with an example. Province, registration type, sale type and unit
+  are dropdowns. Only what FBR submission or a printed document uses is asked
+  for.
+- **Nothing is saved until you have seen the result.** The upload is checked
+  first: per sheet, what will import, what imports with a warning (no HS code,
+  no address), what already exists and is skipped, and what needs fixing, each
+  with its row number and the reason naming the column.
+- **Existing records are never changed**, so the same file can be uploaded
+  twice safely. Rows that need fixing never stop the good ones; **Download rows
+  to fix** returns them in the same layout, ready to correct and upload again.
+- Items are created through the Item Type form's own checks (HS code validated,
+  unit suggested from the HS code when left empty); opening stock can name an
+  item from the same file.
+- **Import from Excel** on Customers, Suppliers and Item Types opens the screen
+  on that sheet alone.
+- New permission `onboarding.import.run` (Administrator has it); each sheet also
+  needs its normal create permission.
 
 ### 2026-09-25 — Multi-line descriptions, document notes, supplier costs on challans, Document Lines
 
