@@ -166,6 +166,12 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD_TRADER }}
           local-dir: ./.github/offline/
           server-dir: /wwwroot/
+          # Shared with "Deploy via FTP": this step deletes what the last
+          # deploy recorded and that step uploads it all again. If a run dies
+          # mid-delete the server no longer matches the recorded state and
+          # every rerun fails ("550 CD issue"); changing this name on BOTH
+          # steps starts a fresh state, so the next deploy uploads everything.
+          state-name: .ftp-deploy-state-v2.json
           dangerous-clean-slate: false
 
       - name: Wait for app to stop
@@ -184,6 +190,7 @@ jobs:
           # excludes below, this means the server's appsettings.Production.json
           # (maintained manually on the host) is never overwritten and never
           # deleted by a deploy.
+          state-name: .ftp-deploy-state-v2.json
           dangerous-clean-slate: false
           exclude: |
             **/.pdb
