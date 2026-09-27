@@ -283,6 +283,11 @@ endpoints_to_test = [
     ("GET",  "/api/attachments/company/{cid}/entity/Invoice/1"),
     # Company stamps — print-template merge-field images, [AuthorizeCompany]-gated.
     ("GET",  "/api/companies/{cid}/stamps"),
+    # Onboarding import sample. Its three upload routes are checked once each
+    # in suite 4: they sit behind the "import" rate limit (10 a minute), which
+    # runs before authorization, so looping them over every company tests the
+    # limiter instead of the tenant guard.
+    ("GET",  "/api/onboarding-import/company/{cid}/sample"),
 ]
 for username, forbidden in forbidden_for.items():
     if not forbidden:
@@ -345,6 +350,13 @@ opening_payload = {
 status, _ = request("POST", "/api/stock/opening", token=tokens["bob"], body=opening_payload)
 check("POST body companyId guard", "bob -> POST /api/stock/opening (companyId=alpha)",
       status == 403, f"expected 403, got {status}")
+
+# alice tries the onboarding import's upload routes against Beta. No file is
+# sent: [AuthorizeCompany] refuses before the upload is bound.
+for route in ("preview", "commit", "fix-list"):
+    status, _ = request("POST", f"/api/onboarding-import/company/{beta['id']}/{route}", token=tokens["alice"])
+    check("POST route companyId guard", f"alice -> POST /api/onboarding-import/company/{{beta}}/{route}",
+          status == 403, f"expected 403, got {status}")
 
 # Suite 5: UserCompanies endpoint requires the new permission
 print("\n  Suite 5 — Tenant Access page perm gating")

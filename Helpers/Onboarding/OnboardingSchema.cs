@@ -36,7 +36,8 @@ namespace MyApp.Api.Helpers.Onboarding
         ListSource List = ListSource.None,
         ColumnKind Kind = ColumnKind.Text,
         int Width = 22,
-        string[]? Aliases = null);
+        string[]? Aliases = null,
+        int MaxLength = 0);
 
     public record OnboardingSheet(
         string Key,
@@ -88,7 +89,7 @@ namespace MyApp.Api.Helpers.Onboarding
         {
             new OnboardingColumn("name", "Name", Requirement.Required,
                 $"The {who}'s business name, as it should print on documents. Each name once.",
-                Width: 34, Aliases: new[] { $"{who} name", "business name" }),
+                Width: 34, Aliases: new[] { $"{who} name", "business name" }, MaxLength: 300),
             new OnboardingColumn("registrationType", "Registration Type", Requirement.Required,
                 "Pick from the list: Registered, Unregistered, FTN or CNIC.",
                 ListSource.RegistrationType, Width: 20),
@@ -109,7 +110,7 @@ namespace MyApp.Api.Helpers.Onboarding
                 Width: 40),
             new OnboardingColumn("strn", "STRN", Requirement.Optional,
                 "Sales tax registration number. Kept for Registered only; printed on bills and tax invoices.",
-                Kind: ColumnKind.Identifier, Width: 18),
+                Kind: ColumnKind.Identifier, Width: 18, MaxLength: 20),
             new OnboardingColumn("phone", "Phone", Requirement.Optional,
                 "Printed on documents.", Kind: ColumnKind.Identifier, Width: 18),
         };
@@ -136,7 +137,7 @@ namespace MyApp.Api.Helpers.Onboarding
                 {
                     new("name", "Item Name", Requirement.Required,
                         "As it should print on bills. The same name may repeat only with a different HS code.",
-                        Width: 34, Aliases: new[] { "name", "item" }),
+                        Width: 34, Aliases: new[] { "name", "item" }, MaxLength: 300),
                     new("hsCode", "HS Code", Requirement.Optional,
                         "8 digits with a dot, e.g. 8481.8090. Leave empty if unknown; the item cannot be filed with FBR until it has one.",
                         Kind: ColumnKind.Identifier, Width: 16),

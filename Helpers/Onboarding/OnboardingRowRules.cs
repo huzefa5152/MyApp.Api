@@ -107,6 +107,10 @@ namespace MyApp.Api.Helpers.Onboarding
                 if (string.IsNullOrWhiteSpace(row.Get(col.Key)))
                     Error(col.Key, "required");
 
+            foreach (var col in sheet.Columns.Where(c => c.MaxLength > 0))
+                if (row.Get(col.Key).Length > col.MaxLength)
+                    Error(col.Key, $"longer than {col.MaxLength} characters");
+
             switch (sheet.Key)
             {
                 case OnboardingSheets.Customers:

@@ -430,6 +430,7 @@ builder.Services.AddScoped<IFbrPurchaseImportFilter, FbrPurchaseImportFilter>();
 builder.Services.AddScoped<IFbrPurchaseImportMatcher, FbrPurchaseImportMatcher>();
 builder.Services.AddScoped<IFbrPurchaseImportCommitter, FbrPurchaseImportCommitter>();
 builder.Services.AddScoped<IFbrPurchaseImportService, FbrPurchaseImportService>();
+builder.Services.AddScoped<IOnboardingImportService, OnboardingImportService>();
 
 // Dashboard KPI aggregator. Scoped because it depends on AppDbContext
 // and IPermissionService — both Scoped — and the queries use the

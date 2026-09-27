@@ -206,6 +206,12 @@ namespace MyApp.Api.Helpers
             new("config.units.manage",            "Configuration", "Units",            "Manage", "Manage the units-of-measure lookup list"),
             new("config.mergefields.manage",      "Configuration", "MergeFields",      "Manage", "Manage mergeable template fields"),
 
+            // ── Onboarding Import (one workbook: customers, items, suppliers, opening stock) ──
+            // Opens the feature only. Each sheet also needs the permission that
+            // creates its records (clients / itemtypes / suppliers create,
+            // stock.opening.manage), checked per sheet by the controller.
+            new("onboarding.import.run", "Onboarding Import", "Import Data", "Run", "Import customers, items, suppliers and opening stock from the onboarding workbook"),
+
             // ── Item Rate History (search past rates billed for any item) ───
             new("itemratehistory.view",    "Item Rate History", "View", "View", "View the Item Rate History page (past unit prices billed for an item)"),
 

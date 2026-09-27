@@ -50,6 +50,8 @@ Check("customer province is required", HasError(Rules(OnboardingSheets.Customers
 Check("STRN on Unregistered warns", HasWarning(Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "Unregistered"), ("strn", "1234567890123"), ("province", "Sindh"), ("address", "x")), "STRN", "not be stored"));
 Check("empty address warns", HasWarning(Rules(OnboardingSheets.Customers, ("name", "A"), ("registrationType", "Unregistered"), ("province", "Sindh")), "Address", "empty"));
 
+Check("name over 300 characters errors", HasError(Rules(OnboardingSheets.Customers, ("name", new string('x', 301)), ("registrationType", "Unregistered"), ("province", "Sindh"), ("address", "x")), "Name", "longer than 300"));
+
 Console.WriteLine("Rules — suppliers");
 Check("supplier province is optional", !Rules(OnboardingSheets.Suppliers, ("name", "S"), ("registrationType", "Unregistered")).Any(i => i.IsError));
 Check("supplier empty address does not warn", !Rules(OnboardingSheets.Suppliers, ("name", "S"), ("registrationType", "Unregistered")).Any());

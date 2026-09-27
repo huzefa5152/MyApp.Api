@@ -89,6 +89,7 @@ export const PERMISSION_SECTIONS = [
       { key: "Clients" },
       { key: "Suppliers" },
       { key: "ItemTypes", label: "Item Types" },
+      { key: "Onboarding Import", label: "Import Data" },
       { key: "Configuration", label: "Lookups" },
       { key: "POFormats", label: "PO Formats" },
       { key: "ImportFeedback", label: "Import Feedback" },
