@@ -373,6 +373,8 @@ def post_upload(path, token, filename, content, fields=None):
 tiny_png = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000")
 for route, status in (
     ("parse-pdf", post_upload(f"/api/poimport/parse-pdf?companyId={beta['id']}", tokens["alice"], "po.pdf", b"%PDF-1.4\n%%EOF")),
+    ("parse-image", post_upload(f"/api/poimport/parse-image?companyId={beta['id']}", tokens["alice"], "po.png", tiny_png,
+                                {"words": json.dumps({"pages": [[{"text": "PO", "left": 0, "right": 10, "top": 0, "bottom": 10, "confidence": 90}]]})})),
     ("parse-text", request("POST", f"/api/poimport/parse-text?companyId={beta['id']}", token=tokens["alice"], body={"text": "PO No: 1"})[0]),
 ):
     check("POST route companyId guard", f"alice -> POST /api/poimport/{route}?companyId={{beta}}",

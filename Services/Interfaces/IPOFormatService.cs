@@ -19,6 +19,9 @@ namespace MyApp.Api.Services.Interfaces
     public interface IPOFormatRegistry
     {
         Task<POFormatMatchResult?> FindMatchAsync(string rawText, int? companyId);
+        // Text read from an IMAGE: FindMatchAsync first, then an OCR-tolerant
+        // word-coverage match. Never used for PDF text.
+        Task<POFormatMatchResult?> FindMatchForOcrAsync(string rawText, int? companyId);
         Task<List<POFormat>> ListAsync(int? companyId);
         Task<POFormat?> GetAsync(int id);
         Task<List<POFormatVersion>> GetVersionsAsync(int formatId);

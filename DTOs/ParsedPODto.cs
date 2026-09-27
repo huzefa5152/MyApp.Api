@@ -35,4 +35,26 @@ namespace MyApp.Api.DTOs
     {
         public string Text { get; set; } = "";
     }
+
+    /// <summary>
+    /// One word the browser's OCR read, in image pixels (Y grows downward).
+    /// The server, not the browser, turns words into lines
+    /// (<c>Helpers.PoLayoutText.FromOcrPage</c>), so an image is laid out by the
+    /// same rule as a PDF and matches the same saved PO format.
+    /// </summary>
+    public class OcrWordDto
+    {
+        public string Text { get; set; } = "";
+        public double Left { get; set; }
+        public double Right { get; set; }
+        public double Top { get; set; }
+        public double Bottom { get; set; }
+        /// <summary>0-100, as tesseract reports it.</summary>
+        public double Confidence { get; set; }
+    }
+
+    public class OcrPagesDto
+    {
+        public List<List<OcrWordDto>> Pages { get; set; } = new();
+    }
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MdUploadFile, MdTextSnippet, MdAdd, MdDelete, MdCheckCircle, MdArrowBack, MdArrowForward, MdVerified, MdErrorOutline } from "react-icons/md";
-import { parsePdf, parseText, ensureLookups } from "../api/poImportApi";
+import { parsePdf, parseText, parseImage, ensureLookups } from "../api/poImportApi";
+import { readPoFile, isImageFile, averageConfidence, OCR_ACCEPT } from "../utils/poOcr";
 import { getClientsByCompany, getClientById } from "../api/clientApi";
 import { createSalesOrder } from "../api/salesOrderApi";
 import { createSalesQuote, getSalesQuotesForPicker } from "../api/salesQuoteApi";
@@ -100,6 +101,10 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
   const [pastedText, setPastedText] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [parsing, setParsing] = useState(false);
+  // Set while a picture is being read (text recognition runs in the browser).
+  const [ocrProgress, setOcrProgress] = useState(null);   // { pct, label } | null
+  // Set when the preview came from a picture, so the review says so.
+  const [ocrInfo, setOcrInfo] = useState(null);           // { confidence } | null
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
 
@@ -175,16 +180,43 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
     }
   };
 
+  // A picture of a PO (photo, screenshot, scanned PDF): read it in the
+  // browser, then let the server match and parse the words exactly as it
+  // would a PDF. Throws what parseImage throws, so the caller's 422 handling
+  // (no saved format for this layout) applies unchanged.
+  const readPicture = async (file) => {
+    setOcrProgress({ pct: 0, label: "Preparing the image…" });
+    try {
+      const pages = await readPoFile(file, (f, label) => setOcrProgress({ pct: Math.round(f * 100), label }));
+      setOcrInfo({ confidence: averageConfidence(pages) });
+      return await parseImage(file, pages, companyId);
+    } finally {
+      setOcrProgress(null);
+    }
+  };
+
   const handleParse = async () => {
     setError("");
     setNoFormatMessage("");
+    setOcrInfo(null);
     setParsing(true);
 
     try {
       let res;
       if (importMode === "pdf") {
-        if (!selectedFile) { setError("Please select a PDF file."); setParsing(false); return; }
-        res = await parsePdf(selectedFile, companyId);
+        if (!selectedFile) { setError("Please choose a PDF or an image of the PO."); setParsing(false); return; }
+        if (isImageFile(selectedFile)) {
+          res = await readPicture(selectedFile);
+        } else {
+          try {
+            res = await parsePdf(selectedFile, companyId);
+          } catch (err) {
+            // A PDF with no text layer is a scan: read it as a picture.
+            if (err.response?.status === 422 && err.response.data?.reason === "unreadable")
+              res = await readPicture(selectedFile);
+            else throw err;
+          }
+        }
       } else {
         if (!pastedText.trim()) { setError("Please paste some text."); setParsing(false); return; }
         res = await parseText(pastedText, companyId);
@@ -254,7 +286,8 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
         setNoFormatMessage(miss.message || "No PO format saved for this client — please fill the fields manually.");
         setStep(2);
       } else {
-        setError(err.response?.data?.error || "Failed to parse. Please try again.");
+        setError(err.response?.data?.error
+          || (err.response ? "Failed to parse. Please try again." : "The image could not be read. Try a sharper, straight-on photo, or fill the details manually."));
       }
     } finally {
       setParsing(false);
@@ -391,12 +424,15 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
         try {
           await submitParserFeedback({
             status: parserFeedback,
-            file: importMode === "pdf" ? selectedFile : null,
+            // Feedback retains PDFs only; a picture is already kept, with its
+            // own type, in the import archive.
+            file: importMode === "pdf" && !isImageFile(selectedFile) ? selectedFile : null,
             purchaseOrderId: created?.data?.id ?? null,
             companyId,
-            parserVersion: matchedFormatName
+            // "· OCR" keeps the accuracy of picture imports measurable on its own.
+            parserVersion: (matchedFormatName
               ? `${matchedFormatName}${matchedFormatVersion ? ` (v${matchedFormatVersion})` : ""}`
-              : (matchedFormatVersion != null ? `v${matchedFormatVersion}` : null),
+              : (matchedFormatVersion != null ? `v${matchedFormatVersion}` : null)) + (ocrInfo ? " · OCR" : ""),
             originalFileName: importMode === "pdf" ? (selectedFile?.name || null) : null,
           });
         } catch { /* feedback is best-effort — the document is already created */ }
@@ -448,7 +484,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                   style={{ ...styles.modeTab, ...(importMode === "pdf" ? styles.modeTabActive : {}) }}
                   onClick={() => setImportMode("pdf")}
                 >
-                  <MdUploadFile size={18} /> Upload PDF
+                  <MdUploadFile size={18} /> Upload PDF or image
                 </button>
                 <button
                   type="button"
@@ -464,7 +500,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf"
+                    accept={OCR_ACCEPT}
                     onChange={handleFileChange}
                     style={{ display: "none" }}
                   />
@@ -474,9 +510,9 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                   >
                     <MdUploadFile size={48} color={colors.textSecondary} />
                     <p style={{ margin: "0.5rem 0 0", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                      {selectedFile ? selectedFile.name : "Click to select a PDF file"}
+                      {selectedFile ? selectedFile.name : "Click to choose the PO: a PDF, or a photo / screenshot"}
                     </p>
-                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>Max 10 MB</span>
+                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>PDF, PNG, JPG or WEBP · max 10 MB</span>
                   </div>
                 </div>
               ) : (
@@ -496,6 +532,17 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
 
           {step === 2 && (
             <>
+              {/* Read from a picture: every line deserves a second look. */}
+              {ocrInfo && (
+                <div style={styles.ocrBanner} role="status">
+                  <MdErrorOutline size={18} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+                  <span style={{ fontSize: "0.85rem" }}>
+                    Read from an image by text recognition ({ocrInfo.confidence}% average confidence).
+                    Check every description and quantity against the original before you save.
+                  </span>
+                </div>
+              )}
+
               {/* When a saved POFormat handled the PDF — quiet confirmation */}
               {matchedFormatId && (
                 <div style={styles.matchedBanner}>
@@ -769,7 +816,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               disabled={parsing}
               onClick={handleParse}
             >
-              {parsing ? "Parsing..." : <>Parse & Preview <MdArrowForward size={16} style={{ verticalAlign: "middle", marginLeft: 4 }} /></>}
+              {parsing ? (ocrProgress ? `${ocrProgress.label} ${ocrProgress.pct}%` : "Parsing...") : <>Parse & Preview <MdArrowForward size={16} style={{ verticalAlign: "middle", marginLeft: 4 }} /></>}
             </button>
           )}
 
@@ -811,6 +858,10 @@ const styles = {
   itemRow: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc" },
   addItemBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
   deleteItemBtn: { border: "none", background: "none", color: colors.danger, cursor: "pointer", padding: "0.25rem", borderRadius: 4 },
+  ocrBanner: {
+    display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.6rem 0.8rem", marginBottom: "0.75rem",
+    borderRadius: 8, background: "#fff4e0", border: "1px solid #ffcc80", color: "#8a4b00",
+  },
   matchedBanner: {
     display: "flex",
     alignItems: "center",

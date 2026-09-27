@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -8,6 +9,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
+using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
@@ -171,6 +173,119 @@ namespace MyApp.Api.Controllers
             return result;
         }
 
+        // A PO that arrives as a picture — a phone photo, a screenshot, a scanned
+        // PDF with no text layer. The browser runs OCR (tesseract.js) and sends
+        // the words it read with their boxes, plus the original file for the
+        // archive. The words are laid out into lines HERE, by the same rule a PDF
+        // gets (PoLayoutText), and then go through the same format matching and
+        // parser — so an image matches the same saved PO format as the PDF.
+        private const int MaxOcrPages = 10;
+        private const int MaxOcrWords = 20000;
+        private static readonly Dictionary<string, string> OcrFileTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [".png"] = "image/png", [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg",
+            [".webp"] = "image/webp", [".pdf"] = "application/pdf",
+        };
+
+        [HttpPost("parse-image")]
+        [HasPermission("poformats.import.create")]
+        [RequestSizeLimit(12 * 1024 * 1024)]
+        [EnableRateLimiting("import")]
+        public async Task<IActionResult> ParseImage(IFormFile file, [FromForm] string words, [FromQuery] int? companyId)
+        {
+            // The company chooses whose saved PO formats match, and the archive
+            // row is filed under it — never trust it unchecked.
+            if (companyId is not > 0)
+                return BadRequest(new { error = "companyId is required." });
+            await _access.AssertAccessAsync(CurrentUserId() ?? 0, companyId.Value);
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No file uploaded." });
+            var ext = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
+            if (!OcrFileTypes.ContainsKey(ext))
+                return BadRequest(new { error = "Only PNG, JPG, WEBP or PDF files can be read." });
+
+            OcrPagesDto? ocr;
+            try { ocr = JsonSerializer.Deserialize<OcrPagesDto>(words ?? "", OcrJsonOpts); }
+            catch (JsonException) { return BadRequest(new { error = "The text read from the image could not be understood." }); }
+            if (ocr == null || ocr.Pages.Count == 0 || ocr.Pages.Count > MaxOcrPages
+                || ocr.Pages.Sum(p => p.Count) > MaxOcrWords)
+                return BadRequest(new { error = $"Send between 1 and {MaxOcrPages} pages of text read from the image." });
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            if (!LooksLike(ext, bytes))
+                return BadRequest(new { error = "The file does not look like the image type its name says." });
+
+            var archive = await TryWriteArchiveFileAsync(file.FileName!, bytes, ext);
+            archive.CompanyId = companyId;
+            archive.UploadedByUserId = CurrentUserId();
+
+            var allWords = ocr.Pages.SelectMany(p => p).Where(w => !string.IsNullOrWhiteSpace(w.Text)).ToList();
+            var avgConfidence = allWords.Count == 0 ? 0 : allWords.Average(w => w.Confidence);
+            archive.Notes = $"ocr: {allWords.Count} words, {avgConfidence:F0}% average confidence";
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var lines = new List<string>();
+                foreach (var page in ocr.Pages)
+                    lines.AddRange(PoLayoutText.FromOcrPage(page
+                        .Where(w => !string.IsNullOrWhiteSpace(w.Text) && w.Right >= w.Left && w.Bottom >= w.Top)
+                        .Select(w => new PositionedWord(Truncate(w.Text.Trim(), 100), w.Left, w.Right, w.Top, w.Bottom,
+                            w.Right - w.Left, w.Bottom - w.Top, w.Confidence))
+                        .ToList()));
+                var rawText = string.Join("\n", lines);
+
+                if (string.IsNullOrWhiteSpace(rawText))
+                {
+                    sw.Stop();
+                    archive.ParseOutcome = "unreadable";
+                    archive.ParseDurationMs = (int)sw.ElapsedMilliseconds;
+                    await TryPersistArchiveAsync(archive);
+                    return UnprocessableEntity(new ParseMissDto
+                    {
+                        Reason = "unreadable",
+                        Message = "No text could be read from this image. Try a sharper photo, taken straight on, or fill the details manually.",
+                        RawText = "",
+                    });
+                }
+
+                var (result, outcome) = await RouteParseAsync(rawText, companyId, fromImage: true);
+                sw.Stop();
+                ApplyOutcomeToArchive(archive, outcome, sw.ElapsedMilliseconds);
+                await TryPersistArchiveAsync(archive);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                _logger.LogError(ex, "PO image parse failed for company {CompanyId} ({FileName})", companyId, file.FileName);
+                archive.ParseOutcome = "error";
+                archive.ParseDurationMs = (int)sw.ElapsedMilliseconds;
+                archive.ErrorMessage = Truncate(ex.Message, 1000);
+                await TryPersistArchiveAsync(archive);
+                return BadRequest(new { error = "Could not process this image. Please fill the details manually." });
+            }
+        }
+
+        private static readonly JsonSerializerOptions OcrJsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+        // Magic bytes, so a renamed file is not archived under a type it is not.
+        private static bool LooksLike(string ext, byte[] b)
+        {
+            bool Starts(params byte[] sig) => b.Length >= sig.Length && sig.Select((x, i) => b[i] == x).All(v => v);
+            return ext switch
+            {
+                ".png" => Starts(0x89, 0x50, 0x4E, 0x47),
+                ".jpg" or ".jpeg" => Starts(0xFF, 0xD8, 0xFF),
+                ".webp" => b.Length >= 12 && Starts(0x52, 0x49, 0x46, 0x46) && b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50,
+                ".pdf" => Starts(0x25, 0x50, 0x44, 0x46),
+                _ => false,
+            };
+        }
+
         // Outcome metadata returned alongside the IActionResult so the
         // ParsePdf entry-point can stamp the right ParseOutcome on the
         // archive row without re-implementing the routing branch logic.
@@ -186,9 +301,12 @@ namespace MyApp.Api.Controllers
         // matches the incoming PDF text and runs the stored rules against
         // it. No LLM, no generic fallback — operator onboards each client
         // layout once through the Configuration UI.
-        private async Task<(IActionResult Result, ParseOutcomeInfo Outcome)> RouteParseAsync(string rawText, int? companyId)
+        private async Task<(IActionResult Result, ParseOutcomeInfo Outcome)> RouteParseAsync(string rawText, int? companyId, bool fromImage = false)
         {
-            var match = await _formatRegistry.FindMatchAsync(rawText, companyId);
+            // Text read from an image also gets the OCR-tolerant match.
+            var match = fromImage
+                ? await _formatRegistry.FindMatchForOcrAsync(rawText, companyId)
+                : await _formatRegistry.FindMatchAsync(rawText, companyId);
             // Accept both exact hash matches AND high-confidence fuzzy matches
             // (Jaccard ≥ 0.70, enforced upstream in POFormatRegistry). Fuzzy
             // matches catch the common case where two POs from the same client
@@ -466,7 +584,9 @@ namespace MyApp.Api.Controllers
             // Stream from disk so large PDFs don't sit in memory. Original
             // filename so the operator's download keeps a recognisable name.
             var stream = new FileStream(abs, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return File(stream, "application/pdf", row.OriginalFileName);
+            // Images read by OCR are archived with their own extension.
+            var contentType = OcrFileTypes.TryGetValue(Path.GetExtension(row.StoredPath), out var t) ? t : "application/pdf";
+            return File(stream, contentType, row.OriginalFileName);
         }
 
         // ── Archive helpers ─────────────────────────────────────────────
@@ -476,7 +596,7 @@ namespace MyApp.Api.Controllers
         // Save bytes to disk under Data/uploads/po_imports/{YYYY}/{MM}/
         // and return a half-populated PoImportArchive whose disk fields
         // are filled in. Caller fills in CompanyId / User / outcome.
-        private async Task<PoImportArchive> TryWriteArchiveFileAsync(string originalFileName, byte[] bytes)
+        private async Task<PoImportArchive> TryWriteArchiveFileAsync(string originalFileName, byte[] bytes, string extension = ".pdf")
         {
             var now = DateTime.UtcNow;
             var archive = new PoImportArchive
@@ -494,7 +614,7 @@ namespace MyApp.Api.Controllers
                 var absDir = Path.Combine(GetArchiveRoot(), rel);
                 Directory.CreateDirectory(absDir);
 
-                var filename = $"{Guid.NewGuid():N}.pdf";
+                var filename = $"{Guid.NewGuid():N}{extension}";
                 var absPath = Path.Combine(absDir, filename);
                 await System.IO.File.WriteAllBytesAsync(absPath, bytes);
 

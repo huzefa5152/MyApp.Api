@@ -24,54 +24,13 @@ namespace MyApp.Api.Services.Implementations
                     continue;
                 }
 
-                // Group words into lines by Y-coordinate proximity
-                var avgHeight = words.Average(w => w.BoundingBox.Height);
-                var yTolerance = Math.Max(avgHeight * 0.4, 2);
-
-                var lineGroups = new List<(double Y, List<UglyToad.PdfPig.Content.Word> Words)>();
-
-                foreach (var word in words)
-                {
-                    var wordY = word.BoundingBox.Bottom;
-                    bool added = false;
-
-                    for (int i = 0; i < lineGroups.Count; i++)
-                    {
-                        if (Math.Abs(wordY - lineGroups[i].Y) <= yTolerance)
-                        {
-                            lineGroups[i].Words.Add(word);
-                            added = true;
-                            break;
-                        }
-                    }
-
-                    if (!added)
-                        lineGroups.Add((wordY, new List<UglyToad.PdfPig.Content.Word> { word }));
-                }
-
-                // Sort: top to bottom (higher Y = higher on page in PDF coordinates)
-                lineGroups.Sort((a, b) => b.Y.CompareTo(a.Y));
-
-                foreach (var (_, lineWords) in lineGroups)
-                {
-                    var sorted = lineWords.OrderBy(w => w.BoundingBox.Left).ToList();
-                    var sb = new StringBuilder();
-                    for (int wi = 0; wi < sorted.Count; wi++)
-                    {
-                        if (wi > 0)
-                        {
-                            // Use actual gap between words to decide spacing
-                            var gap = sorted[wi].BoundingBox.Left - sorted[wi - 1].BoundingBox.Right;
-                            var prevCharWidth = sorted[wi - 1].BoundingBox.Width / Math.Max(sorted[wi - 1].Text.Length, 1);
-                            // Gap wider than ~2 chars → column boundary → use double space
-                            sb.Append(gap > prevCharWidth * 1.8 ? "  " : " ");
-                        }
-                        sb.Append(sorted[wi].Text);
-                    }
-                    var text = sb.ToString();
-                    if (!string.IsNullOrWhiteSpace(text))
-                        allLines.Add(text);
-                }
+                // Lines are built by the one rule OCR'd images share, so a PDF and
+                // a photo of the same PO give text of the same shape.
+                allLines.AddRange(MyApp.Api.Helpers.PoLayoutText.FromPdfPage(words
+                    .Select(w => new MyApp.Api.Helpers.PositionedWord(w.Text,
+                        w.BoundingBox.Left, w.BoundingBox.Right, w.BoundingBox.Top, w.BoundingBox.Bottom,
+                        w.BoundingBox.Width, w.BoundingBox.Height))
+                    .ToList()));
             }
 
             return string.Join("\n", allLines);

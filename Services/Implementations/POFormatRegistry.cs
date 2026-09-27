@@ -77,6 +77,41 @@ namespace MyApp.Api.Services.Implementations
             return null;
         }
 
+        // Below this share of a format's signature words, text read from an
+        // image is not routed to it. Calibrated on the production archive (see
+        // POFormatFingerprintService.OcrCoverageScore): real matches 0.97-1.00,
+        // documents with no saved format at most 0.73.
+        private const double OcrCoverageFloor = 0.85;
+
+        public async Task<POFormatMatchResult?> FindMatchForOcrAsync(string rawText, int? companyId)
+        {
+            // The normal matcher first: a clean photo can match exactly as its PDF would.
+            var normal = await FindMatchAsync(rawText, companyId);
+            if (normal != null) return normal;
+            if (string.IsNullOrWhiteSpace(rawText)) return null;
+
+            var candidates = await _db.POFormats
+                .AsNoTracking()
+                .Where(f => f.IsActive && (f.CompanyId == companyId || f.CompanyId == null))
+                .ToListAsync();
+            if (candidates.Count == 0) return null;
+
+            // Highest coverage wins; near-identical layouts (the Meko family)
+            // can tie, and the regular fuzzy score breaks the tie.
+            var incoming = POFormatFingerprintService.ComputeMatchKeywords(rawText);
+            var best = candidates
+                .Select(f => (Format: f,
+                    Coverage: POFormatFingerprintService.OcrCoverageScore(rawText, f.KeywordSignature),
+                    Fuzzy: POFormatFingerprintService.MatchScore(incoming, POFormatFingerprintService.StoredMatchKeywords(f.KeywordSignature))))
+                .OrderByDescending(x => x.Coverage).ThenByDescending(x => x.Fuzzy)
+                .First();
+            if (best.Coverage < OcrCoverageFloor) return null;
+
+            _logger.LogInformation("PO format OCR match: formatId={FormatId} name={Name} coverage={Coverage:F2}",
+                best.Format.Id, best.Format.Name, best.Coverage);
+            return new POFormatMatchResult(best.Format, best.Coverage, IsExactMatch: false);
+        }
+
         public Task<List<POFormat>> ListAsync(int? companyId)
         {
             var q = _db.POFormats.AsNoTracking().OrderByDescending(f => f.UpdatedAt).AsQueryable();
