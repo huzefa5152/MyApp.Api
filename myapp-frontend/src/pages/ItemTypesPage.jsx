@@ -10,6 +10,7 @@ import HsCodeImportModal from "../Components/HsCodeImportModal";
 import { getHsCodeCount } from "../api/hsCodeApi";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -86,7 +87,7 @@ export default function ItemTypesPage() {
   // token-free tariff option stayed invisible to the people who needed it.
   const [hsCodeCount, setHsCodeCount] = useState(null);
   const [editItem, setEditItem] = useState(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("item-types", "search", "");
   const [loading, setLoading] = useState(true);
 
   // This list is ONE list. Items typed in by hand, the placeholder rows the HS
@@ -100,7 +101,7 @@ export default function ItemTypesPage() {
   const [pageSize, setPageSize] = usePageSize("itemTypes");
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => search.trim());
 
   // The catalog rows are shared (global ItemType), but the per-company
   // OVERLAY (division + GL account mapping) is what this screen edits — so it

@@ -5,6 +5,7 @@ import { formStyles, modalSizes } from "../theme";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -44,8 +45,8 @@ export default function FbrSettingsPage() {
   const [editItem, setEditItem] = useState(null);
   const [formData, setFormData] = useState({ category: "", code: "", label: "", sortOrder: 0 });
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
+  const [search, setSearch] = usePersistentFilter("fbr-settings", "search", "");
+  const [filterCategory, setFilterCategory] = usePersistentFilter("fbr-settings", "filterCategory", "");
 
   const fetchAll = async () => {
     try {

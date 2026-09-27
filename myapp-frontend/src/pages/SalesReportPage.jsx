@@ -6,6 +6,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import useIsNarrow from "../hooks/useIsNarrow";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -57,13 +58,13 @@ export default function SalesReportPage() {
   const isNarrow = useIsNarrow();
 
   // Period mode: "period" (month / year) or "custom" (date range).
-  const [mode, setMode] = useState("period");
-  const [year, setYear] = useState(NOW.getFullYear());
-  const [month, setMonth] = useState(NOW.getMonth() + 1); // 1–12
-  const [fullYear, setFullYear] = useState(false);
-  const [dateFrom, setDateFrom] = useState(ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 1)));
-  const [dateTo, setDateTo] = useState(ymd(NOW));
-  const [buyerType, setBuyerType] = useState("all");
+  const [mode, setMode] = usePersistentFilter("salesReport", "mode", "period");
+  const [year, setYear] = usePersistentFilter("salesReport", "year", NOW.getFullYear());
+  const [month, setMonth] = usePersistentFilter("salesReport", "month", NOW.getMonth() + 1); // 1–12
+  const [fullYear, setFullYear] = usePersistentFilter("salesReport", "fullYear", false);
+  const [dateFrom, setDateFrom] = usePersistentFilter("salesReport", "dateFrom", ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 1)));
+  const [dateTo, setDateTo] = usePersistentFilter("salesReport", "dateTo", ymd(NOW));
+  const [buyerType, setBuyerType] = usePersistentFilter("salesReport", "buyerType", "all");
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);

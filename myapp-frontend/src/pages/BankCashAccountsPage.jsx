@@ -13,6 +13,7 @@ import StatementImportModal from "../Components/StatementImportModal";
 import DivisionSelect from "../Components/DivisionSelect";
 import useIsNarrow from "../hooks/useIsNarrow";
 import useScrollToError from "../hooks/useScrollToError";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 // "- PKR 10,306,052.29" for negatives, "PKR 3,517,780.34" otherwise — matches
 // the reference product's bank-list convention.
@@ -55,7 +56,7 @@ export default function BankCashAccountsPage() {
   const [assetGroups, setAssetGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [glOff, setGlOff] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("bank-cash-accounts", "search", "");
   const [ledgerAccount, setLedgerAccount] = useState(null); // { id, name, code }
   const [reconcileAccount, setReconcileAccount] = useState(null); // { id, name, code }
   const [importAccount, setImportAccount] = useState(null); // { id, name, code }

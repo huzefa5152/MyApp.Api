@@ -8,6 +8,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { colors, dropdownStyles } from "../theme";
 import Pagination from "../Components/Pagination";
 import { getCustomerLedgerSummary, getCustomerLedgerEntries } from "../api/customerLedgerApi";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 /* ------------------------------------------------------------------ */
 /*  Formatting                                                         */
@@ -72,14 +73,14 @@ export default function CustomerLedgerPage() {
   const companyId = selectedCompany?.id;
 
   // Server-side. Period re-bases everything; type/method narrow the trail.
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [type, setType] = useState("");
-  const [method, setMethod] = useState("");
+  const [from, setFrom] = usePersistentFilter("customer-ledger", "from", "");
+  const [to, setTo] = usePersistentFilter("customer-ledger", "to", "");
+  const [type, setType] = usePersistentFilter("customer-ledger", "type", "");
+  const [method, setMethod] = usePersistentFilter("customer-ledger", "method", "");
 
   // Client-side — these narrow the customer LIST and never refetch.
-  const [balance, setBalance] = useState("");     // "" | "outstanding" | "advance"
-  const [search, setSearch] = useState("");
+  const [balance, setBalance] = usePersistentFilter("customer-ledger", "balance", "");     // "" | "outstanding" | "advance"
+  const [search, setSearch] = usePersistentFilter("customer-ledger", "search", "");
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -239,9 +240,10 @@ export default function CustomerLedgerPage() {
 
   // Methods offered = the canonical list plus anything a loaded trail actually
   // carried, so a hand-typed method stays selectable.
+  // A restored method keeps its option before any trail has been opened.
   const methodOptions = useMemo(
-    () => Array.from(new Set([...METHODS, ...seenMethods])),
-    [seenMethods]);
+    () => Array.from(new Set([...METHODS, ...seenMethods, ...(method ? [method] : [])])),
+    [seenMethods, method]);
 
   const filtersActive = !!(from || to || type || method || balance || search);
   const clearFilters = () => {

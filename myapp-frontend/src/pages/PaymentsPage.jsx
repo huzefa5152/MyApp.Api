@@ -23,6 +23,7 @@ import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import DivisionSelect from "../Components/DivisionSelect";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import useIsNarrow from "../hooks/useIsNarrow";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 
@@ -74,7 +75,8 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const [totalCount, setTotalCount] = useState(0);
   // Rows-per-page remembered separately for receipts vs payments.
   const [size, setSize] = usePageSize(dir);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter(dir, "search", "");
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter(dir, "companyId", null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // payment being edited
@@ -101,8 +103,14 @@ export default function PaymentsPage({ mode = "receipts" }) {
     }
   }, [companyId, dir, page, size, search]);
 
-  // Reset to page 1 on company / mode switch.
-  useEffect(() => { setPage(1); setSearch(""); }, [companyId, dir]);
+  // Reset to page 1 on company / mode switch; the search clears only on a real
+  // company switch, not when the operator comes back to this screen.
+  useEffect(() => {
+    setPage(1);
+    if (companyId == null) return;
+    if (filterCompanyId != null && filterCompanyId !== companyId) setSearch("");
+    setFilterCompanyId(companyId);
+  }, [companyId, dir]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { fetchRows(page); }, [fetchRows, page]);
 
   const handleDelete = async (p) => {

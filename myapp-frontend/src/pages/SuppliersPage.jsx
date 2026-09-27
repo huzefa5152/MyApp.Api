@@ -12,6 +12,7 @@ import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -37,7 +38,7 @@ export default function SuppliersPage() {
   const [ledgerSupplier, setLedgerSupplier] = useState(null);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("suppliers", "search", "");
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
   // Common Supplier edit state — separate from per-company edit
@@ -57,7 +58,7 @@ export default function SuppliersPage() {
   // Clients page: one list, one place.
   const [commonGroups, setCommonGroups] = useState(() => new Map());
   // "all" | "common" | "own" — which cards the grid shows.
-  const [scope, setScope] = useState("all");
+  const [scope, setScope] = usePersistentFilter("suppliers", "scope", "all");
 
   useEffect(() => {
     if (!selectedCompany) {

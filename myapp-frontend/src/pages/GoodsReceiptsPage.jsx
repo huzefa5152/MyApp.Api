@@ -24,6 +24,7 @@ import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -53,9 +54,12 @@ export default function GoodsReceiptsPage() {
   const [size, setSize] = usePageSize("goodsReceipts");
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [search, setSearch] = useState("");
-  const [supplierFilter, setSupplierFilter] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [search, setSearch] = usePersistentFilter("goods-receipts", "search", "");
+  const [supplierFilter, setSupplierFilter] = usePersistentFilter("goods-receipts", "supplierFilter", "");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("goods-receipts", "divisionFilter", "");
+  // Company the remembered filters belong to — returning to the screen keeps
+  // them, a real company switch still clears the division.
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("goods-receipts", "companyId", null);
   // Shared template-picker state, scoped to the selected division: "All
   // Divisions" → company-wide templates; a specific division → that division's.
   // An empty scope hides the picker and blocks Print/PDF.
@@ -87,11 +91,13 @@ export default function GoodsReceiptsPage() {
     if (selectedCompany) {
       getSuppliersByCompany(selectedCompany.id).then(r => setSuppliers(r.data || [])).catch(() => setSuppliers([]));
       setPage(1);
+      const sameCompany = filterCompanyId === selectedCompany.id;
+      setFilterCompanyId(selectedCompany.id);
       // Division ids are per-company — a stale filter would blank the list.
       // Resetting it retriggers the filter effect below, so only fetch
       // directly when there's no reset to piggyback on (avoids a stale-
       // division request racing the corrected one).
-      if (divisionFilter) setDivisionFilter("");
+      if (divisionFilter && !sameCompany) setDivisionFilter("");
       else fetchReceipts(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

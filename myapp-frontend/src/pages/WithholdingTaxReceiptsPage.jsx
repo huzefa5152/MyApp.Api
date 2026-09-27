@@ -20,6 +20,7 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { exportToPdf } from "../utils/exportUtils";
 import { defaultWithholdingTaxTemplate } from "../utils/accountingDocTemplates";
 import { formStyles, modalSizes, dropdownStyles, cardStyles } from "../theme";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = { blue: "#0d47a1", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
 
@@ -40,8 +41,8 @@ export default function WithholdingTaxReceiptsPage() {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exportingId, setExportingId] = useState(null);
-  const [search, setSearch] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [search, setSearch] = usePersistentFilter("withholdingReceipts", "search", "");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("withholdingReceipts", "divisionFilter", "");
   // Shared template-picker state, scoped to the selected division: "All
   // Divisions" → company-wide templates; a specific division → that division's.
   // An empty scope hides the picker and blocks Print/PDF (in the View modal).
@@ -69,8 +70,17 @@ export default function WithholdingTaxReceiptsPage() {
   useEffect(() => {
     if (selectedCompany) fetchReceipts(selectedCompany.id);
     else setReceipts([]);
-    setDivisionFilter("");
   }, [selectedCompany, fetchReceipts]);
+
+  // Division is per company: clear it on a real switch (also one made while
+  // away), but not on the remount that restores it.
+  const companyId = selectedCompany?.id;
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("withholdingReceipts", "companyId", null);
+  useEffect(() => {
+    if (!companyId || companyId === filterCompanyId) return;
+    if (filterCompanyId != null) setDivisionFilter("");
+    setFilterCompanyId(companyId);
+  }, [companyId, filterCompanyId, setDivisionFilter, setFilterCompanyId]);
 
   const handleSave = async (payload) => {
     const res = editReceipt

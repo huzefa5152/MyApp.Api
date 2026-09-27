@@ -3,6 +3,7 @@ import { MdStraighten, MdSearch, MdCheck, MdInfo } from "react-icons/md";
 import { getAllUnits, updateUnit } from "../api/unitsApi";
 import { notify } from "../utils/notify";
 import { usePermissions } from "../contexts/PermissionsContext";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -40,7 +41,7 @@ export default function UnitsPage() {
 
   const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("units", "search", "");
   const [pendingId, setPendingId] = useState(null); // id currently saving
 
   useEffect(() => {

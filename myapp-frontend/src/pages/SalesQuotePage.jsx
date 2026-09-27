@@ -27,6 +27,7 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 
@@ -62,10 +63,11 @@ export default function SalesQuotePage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [size, setSize] = usePageSize("salesquotes");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
-  const [clientFilter, setClientFilter] = useState("");
+  const [search, setSearch] = usePersistentFilter("sales-quotes", "search", "");
+  const [statusFilter, setStatusFilter] = usePersistentFilter("sales-quotes", "statusFilter", "");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("sales-quotes", "divisionFilter", "");
+  const [clientFilter, setClientFilter] = usePersistentFilter("sales-quotes", "clientFilter", "");
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("sales-quotes", "companyId", null);
   const [clients, setClients] = useState([]);
 
   // Shared template-picker state, scoped to the selected division: "All
@@ -102,8 +104,13 @@ export default function SalesQuotePage() {
   }, [page, size, search, statusFilter, divisionFilter, clientFilter, canSeeAttachments]);
 
   // Reset paging + filters and load the client list when the company changes.
+  // Remembered filters survive coming back to the screen for the same company.
   useEffect(() => {
-    setPage(1); setSearch(""); setStatusFilter(""); setDivisionFilter(""); setClientFilter("");
+    setPage(1);
+    if (selectedCompany && filterCompanyId !== selectedCompany.id) {
+      if (filterCompanyId != null) { setSearch(""); setStatusFilter(""); setDivisionFilter(""); setClientFilter(""); }
+      setFilterCompanyId(selectedCompany.id);
+    }
     if (selectedCompany) {
       getClientsByCompany(selectedCompany.id).then(({ data }) => setClients(data || [])).catch(() => setClients([]));
     } else { setClients([]); setQuotes([]); }

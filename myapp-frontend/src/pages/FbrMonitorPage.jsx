@@ -23,6 +23,7 @@ import { getFbrLogs, getFbrLogById, getFbrSummary } from "../api/fbrMonitorApi";
 import { notify } from "../utils/notify";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import "./FbrMonitorPage.css";
 
 // Status -> visual config. Keys mirror FbrCommunicationLog.Status taxonomy.
@@ -68,9 +69,9 @@ export default function FbrMonitorPage() {
   const [pageSize, setPageSize] = usePageSize("fbrMonitor");
   const effectiveSize = pageSize ?? 20;
   const [loading, setLoading] = useState(false);
-  const [windowHours, setWindowHours] = useState(24);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [actionFilter, setActionFilter] = useState("");
+  const [windowHours, setWindowHours] = usePersistentFilter("fbr-monitor", "windowHours", 24);
+  const [statusFilter, setStatusFilter] = usePersistentFilter("fbr-monitor", "statusFilter", "");
+  const [actionFilter, setActionFilter] = usePersistentFilter("fbr-monitor", "actionFilter", "");
   const [drawer, setDrawer] = useState(null);
 
   const companyId = selectedCompany?.id ?? null;

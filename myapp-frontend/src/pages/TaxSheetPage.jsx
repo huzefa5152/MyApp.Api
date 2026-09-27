@@ -6,6 +6,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import useIsNarrow from "../hooks/useIsNarrow";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -44,12 +45,12 @@ export default function TaxSheetPage() {
   const canExport = has("reports.taxsheet.export");
   const isNarrow = useIsNarrow();
 
-  const [mode, setMode] = useState("period"); // "period" | "custom"
-  const [year, setYear] = useState(NOW.getFullYear());
-  const [month, setMonth] = useState(NOW.getMonth() + 1);
-  const [fullYear, setFullYear] = useState(false);
-  const [dateFrom, setDateFrom] = useState(ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 1)));
-  const [dateTo, setDateTo] = useState(ymd(NOW));
+  const [mode, setMode] = usePersistentFilter("taxSheet", "mode", "period"); // "period" | "custom"
+  const [year, setYear] = usePersistentFilter("taxSheet", "year", NOW.getFullYear());
+  const [month, setMonth] = usePersistentFilter("taxSheet", "month", NOW.getMonth() + 1);
+  const [fullYear, setFullYear] = usePersistentFilter("taxSheet", "fullYear", false);
+  const [dateFrom, setDateFrom] = usePersistentFilter("taxSheet", "dateFrom", ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 1)));
+  const [dateTo, setDateTo] = usePersistentFilter("taxSheet", "dateTo", ymd(NOW));
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);

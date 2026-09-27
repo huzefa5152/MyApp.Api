@@ -30,6 +30,7 @@ import ViewModeToggle from "../Components/ViewModeToggle";
 import { useListViewMode } from "../hooks/useListViewMode";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import useIsNarrow from "../hooks/useIsNarrow";
 
 const colors = {
@@ -77,13 +78,21 @@ export default function PurchaseBillsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [searchParams] = useSearchParams();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("purchase-bills", "search", "");
   // Seed from ?supplierId= so the Suppliers page "N purchase bills" chip
-  // deep-links straight to this list filtered to that supplier.
-  const [supplierFilter, setSupplierFilter] = useState(() => searchParams.get("supplierId") || "");
-  const [divisionFilter, setDivisionFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  // deep-links straight to this list filtered to that supplier — the link
+  // wins over the remembered filter, applied once during the first render.
+  const [supplierFilter, setSupplierFilter] = usePersistentFilter("purchase-bills", "supplierFilter", "");
+  const [deepLinkApplied, setDeepLinkApplied] = useState(false);
+  if (!deepLinkApplied) {
+    setDeepLinkApplied(true);
+    if (searchParams.get("supplierId")) setSupplierFilter(searchParams.get("supplierId"));
+  }
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("purchase-bills", "divisionFilter", "");
+  const [dateFrom, setDateFrom] = usePersistentFilter("purchase-bills", "dateFrom", "");
+  const [dateTo, setDateTo] = usePersistentFilter("purchase-bills", "dateTo", "");
+  // Company the remembered filters belong to (see the company effect below).
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("purchase-bills", "companyId", null);
   // Shared template-picker state, scoped to the selected division: "All
   // Divisions" → company-wide templates; a specific division → that division's.
   // An empty scope hides the picker and blocks Print/PDF.
@@ -292,11 +301,13 @@ export default function PurchaseBillsPage() {
     if (selectedCompany) {
       getSuppliersByCompany(selectedCompany.id).then(r => setSuppliers(r.data || [])).catch(() => setSuppliers([]));
       setPage(1);
+      const sameCompany = filterCompanyId === selectedCompany.id;
+      setFilterCompanyId(selectedCompany.id);
       // Division ids are per-company — a stale filter would blank the list.
       // Resetting it retriggers the filter effect below, so only fetch
       // directly when there's no reset to piggyback on (avoids a stale-
       // division request racing the corrected one).
-      if (divisionFilter) setDivisionFilter("");
+      if (divisionFilter && !sameCompany) setDivisionFilter("");
       else fetchBills(1);
     } else {
       setBills([]);

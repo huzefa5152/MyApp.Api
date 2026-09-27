@@ -46,6 +46,7 @@ import { useDocumentCopy } from "../hooks/useDocumentCopy";
 import { useConfirm } from "../Components/ConfirmDialog";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -84,6 +85,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Persist view-mode per tab so each tab remembers its own setting
   // (e.g. operator wants cards on Bills but table on Invoices).
   const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
+  const filterScreen = isBillsMode ? "bills" : isNotesMode ? mode : "invoices";
   const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
@@ -146,7 +148,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // consume it; the list filter + dropdown next to Company drive it). "All
   // Divisions" → company-wide templates; a specific division → that division's;
   // an empty scope hides the picker and blocks Print/PDF.
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter(filterScreen, "divisionFilter", "");
   const tplPicker = usePrintTemplates(printTemplateType, { divisionId: divisionFilter });
   const printFallbackTemplate = isBillsMode ? defaultBillTemplate
     : noteDocType === 9 ? defaultDebitNoteTemplate
@@ -257,7 +259,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Rows-per-page is remembered per tab (Bills / Invoices / each note tab),
   // matching the per-tab view-mode persistence above.
   const [size, setSize] = usePageSize(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
-  const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const [search, setSearch] = usePersistentFilter(filterScreen, "search", "");
   // Keep the URL's ?search= in sync with the search-box state. Without
   // this, clearing the box would still leave the param in the URL, and
   // a page reload would re-seed the box from the stale value (which is
@@ -274,9 +276,22 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Seed from ?clientId= so the Clients page "N sales invoices" chip deep-links
   // straight to this list filtered to that client (distinct route key remounts
   // the page, so this initializer always sees the current URL).
-  const [clientFilter, setClientFilter] = useState(() => searchParams.get("clientId") || "");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [clientFilter, setClientFilter] = usePersistentFilter(filterScreen, "clientFilter", "");
+  const [dateFrom, setDateFrom] = usePersistentFilter(filterScreen, "dateFrom", "");
+  const [dateTo, setDateTo] = usePersistentFilter(filterScreen, "dateTo", "");
+  // Filters are remembered across visits, but a deep link (?search= /
+  // ?clientId=) still wins — applied once, during the first render, so the
+  // first fetch already uses it. filterCompanyId tags which company the
+  // remembered filters belong to (see the company effect below).
+  const [deepLinkApplied, setDeepLinkApplied] = useState(false);
+  if (!deepLinkApplied) {
+    setDeepLinkApplied(true);
+    const qSearch = searchParams.get("search");
+    const qClient = searchParams.get("clientId");
+    if (qSearch) setSearch(qSearch);
+    if (qClient) setClientFilter(qClient);
+  }
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter(filterScreen, "companyId", null);
   const [hasExcelBill, setHasExcelBill] = useState(false);
   const [hasExcelTax, setHasExcelTax] = useState(false);
   const [exportingId, setExportingId] = useState(null);
@@ -335,11 +350,13 @@ export default function InvoicePage({ mode = "invoices" }) {
     if (selectedCompany) {
       fetchClients(selectedCompany.id);
       setPage(1);
+      const sameCompany = filterCompanyId === selectedCompany.id;
+      setFilterCompanyId(selectedCompany.id);
       // Division ids are per-company — a stale filter would blank the list.
       // Resetting it retriggers the filter effect below, so only fetch
       // directly when there's no reset to piggyback on (avoids a stale-
       // division request racing the corrected one).
-      if (divisionFilter) setDivisionFilter("");
+      if (divisionFilter && !sameCompany) setDivisionFilter("");
       else fetchInvoices(selectedCompany.id, 1);
       hasExcelTemplate(selectedCompany.id, "Bill")
         .then(r => setHasExcelBill(r.data.hasExcelTemplate))

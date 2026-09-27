@@ -26,6 +26,7 @@ import DivisionSelect from "../Components/DivisionSelect";
 import { defaultJournalEntryTemplate } from "../utils/accountingDocTemplates";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import useScrollToError from "../hooks/useScrollToError";
 
 const fmtMoney = (n) =>
@@ -113,10 +114,11 @@ export default function JournalEntriesPage() {
   const [serverPageSize, setServerPageSize] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("journal-entries", "search", "");
   // Default to real journals only (Manager's "Journal Entries" tab) — the
   // system-posted document/receipt/transfer entries live in the ledgers.
-  const [manualOnly, setManualOnly] = useState(true);
+  const [manualOnly, setManualOnly] = usePersistentFilter("journal-entries", "manualOnly", true);
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("journal-entries", "companyId", null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // manual entry being edited
@@ -144,8 +146,14 @@ export default function JournalEntriesPage() {
     }
   }, [companyId, page, size, search, manualOnly]);
 
-  // Reset to page 1 on company switch.
-  useEffect(() => { setPage(1); setSearch(""); }, [companyId]);
+  // Reset to page 1 on company switch; the search clears only on a real switch,
+  // not when the operator comes back to this screen.
+  useEffect(() => {
+    setPage(1);
+    if (companyId == null) return;
+    if (filterCompanyId != null && filterCompanyId !== companyId) setSearch("");
+    setFilterCompanyId(companyId);
+  }, [companyId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { fetchRows(page); }, [fetchRows, page]);
 
   const handleDelete = async (e) => {

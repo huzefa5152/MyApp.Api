@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   MdReceiptLong, MdBusiness, MdRefresh, MdDownload,
   MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess,
@@ -12,6 +12,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import useIsNarrow from "../hooks/useIsNarrow";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -68,13 +69,13 @@ export default function ClientLedgerReportPage() {
 
   // Period mode: "period" (month / year) or "custom" (date range) — the same
   // contract every other report on this module uses.
-  const [mode, setMode] = useState("period");
-  const [year, setYear] = useState(NOW.getFullYear());
-  const [month, setMonth] = useState(NOW.getMonth() + 1); // 1–12
-  const [fullYear, setFullYear] = useState(true);
-  const [dateFrom, setDateFrom] = useState(ymd(new Date(NOW.getFullYear(), 0, 1)));
-  const [dateTo, setDateTo] = useState(ymd(NOW));
-  const [clientId, setClientId] = useState("");
+  const [mode, setMode] = usePersistentFilter("client-ledger-report", "mode", "period");
+  const [year, setYear] = usePersistentFilter("client-ledger-report", "year", NOW.getFullYear());
+  const [month, setMonth] = usePersistentFilter("client-ledger-report", "month", NOW.getMonth() + 1); // 1–12
+  const [fullYear, setFullYear] = usePersistentFilter("client-ledger-report", "fullYear", true);
+  const [dateFrom, setDateFrom] = usePersistentFilter("client-ledger-report", "dateFrom", ymd(new Date(NOW.getFullYear(), 0, 1)));
+  const [dateTo, setDateTo] = usePersistentFilter("client-ledger-report", "dateTo", ymd(NOW));
+  const [clientId, setClientId] = usePersistentFilter("client-ledger-report", "clientId", "");
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -137,11 +138,14 @@ export default function ClientLedgerReportPage() {
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
   // Every customer of the company, so the filter can reach the dormant ones the
-  // report leaves out. Switching company invalidates the cached list.
+  // report leaves out. Switching company invalidates the cached list — and the
+  // customer filter, but only on a real switch, not the mount that restored it.
+  const lastCompanyIdRef = useRef(null);
   useEffect(() => {
     setClientOptions([]);
-    setClientId("");
     const companyId = selectedCompany?.id;
+    if (lastCompanyIdRef.current != null && lastCompanyIdRef.current !== companyId) setClientId("");
+    if (companyId != null) lastCompanyIdRef.current = companyId;
     if (!companyId || !canView) return;
     let cancelled = false;
     (async () => {

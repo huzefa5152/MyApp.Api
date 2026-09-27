@@ -23,6 +23,7 @@ import { notify } from "../utils/notify";
 // non-movable. Every popup in the app pulls from these so widths and
 // behaviour stay consistent.
 import { formStyles, modalSizes } from "../theme";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -55,7 +56,7 @@ export default function UsersPage() {
   const canAssignTenant = has("tenantaccess.manage.assign");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("users", "search", "");
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState({ username: "", fullName: "", password: "", role: "" });

@@ -7,6 +7,7 @@ import EditBillForm from "../Components/EditBillForm";
 import RichText from "../Components/RichText";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -38,11 +39,11 @@ export default function ItemRateHistoryPage() {
   const [viewingId, setViewingId] = useState(null);
 
   // Filters
-  const [search, setSearch] = useState("");
-  const [itemTypeId, setItemTypeId] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = usePersistentFilter("item-rate-history", "search", "");
+  const [itemTypeId, setItemTypeId] = usePersistentFilter("item-rate-history", "itemTypeId", "");
+  const [clientId, setClientId] = usePersistentFilter("item-rate-history", "clientId", "");
+  const [dateFrom, setDateFrom] = usePersistentFilter("item-rate-history", "dateFrom", "");
+  const [dateTo, setDateTo] = usePersistentFilter("item-rate-history", "dateTo", "");
 
   // Pagination. The rows-per-page selector is a per-screen preference
   // (usePageSize); while unset we OMIT pageSize so the server applies the

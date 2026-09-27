@@ -11,6 +11,7 @@ import { colors, dropdownStyles } from "../theme";
 import { fitFigure } from "../utils/figureFit";
 import useIsNarrow from "../hooks/useIsNarrow";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import ReportFilterBar from "../Components/ReportFilterBar";
 import ReportShell from "../Components/ReportShell";
 import { getReport, downloadReportExcel, saveBlob } from "../api/accountingReportApi";
@@ -250,6 +251,11 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
     return f;
   }, [searchParams, report.id]);
 
+  // Also remembered per report for this tab: the sidebar lands here with a bare
+  // URL, and the filters the operator left should come back with it. The page
+  // number is not kept — returning starts on page 1.
+  const [savedFilters, setSavedFilters] = usePersistentFilter("accounting-reports", report.id, {});
+
   const applyFilters = useCallback((next) => {
     const params = {};
     Object.entries(next).forEach(([k, v]) => {
@@ -257,7 +263,16 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
       params[k] = String(v);
     });
     setSearchParams(params, { replace: false });
-  }, [setSearchParams]);
+    const { page: _page, ...keep } = params;
+    setSavedFilters(keep);
+  }, [setSearchParams, setSavedFilters]);
+
+  // A URL that already carries filters (a drill-down, a dashboard card) wins.
+  useEffect(() => {
+    if ([...searchParams.keys()].length) return;
+    if (savedFilters && Object.keys(savedFilters).length) setSearchParams(savedFilters, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const requestParams = useMemo(
     () => ({ ...filters, ...(report.query || {}), ...(pageSize ? { pageSize } : {}) }),
@@ -398,9 +413,9 @@ function LegacyReport({ companyId, kind, title, categoryTitle, onBack }) {
 }
 
 function TrialBalanceReport({ companyId }) {
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [applied, setApplied] = useState({ from: "", to: "" });
+  const [applied, setApplied] = usePersistentFilter("trial-balance", "applied", { from: "", to: "" });
+  const [from, setFrom] = useState(applied.from);
+  const [to, setTo] = useState(applied.to);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

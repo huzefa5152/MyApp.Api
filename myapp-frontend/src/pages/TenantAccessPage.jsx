@@ -23,6 +23,7 @@ import DivisionAccessModal, {
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles, modalSizes } from "../theme";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -51,7 +52,7 @@ export default function TenantAccessPage() {
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("tenantAccess", "search", "");
 
   // Edit modal state — full set of companies for one user, edited as a Set.
   const [editUser, setEditUser] = useState(null);

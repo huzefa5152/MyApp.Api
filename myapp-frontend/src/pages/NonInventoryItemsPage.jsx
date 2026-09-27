@@ -10,6 +10,7 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import useIsNarrow from "../hooks/useIsNarrow";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import { dropdownStyles, cardStyles } from "../theme";
 
 const colors = { blue: "#0d47a1", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
@@ -26,7 +27,7 @@ export default function NonInventoryItemsPage() {
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("non-inventory-items", "search", "");
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState(null);
 

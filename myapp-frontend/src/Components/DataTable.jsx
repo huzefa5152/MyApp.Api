@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { MdArrowUpward, MdArrowDownward, MdViewColumn, MdSearch } from "react-icons/md";
 import { useUiPreference } from "../hooks/useUiPreference";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 /**
  * Sticky-header sortable table for dense list views.
@@ -40,7 +41,11 @@ export default function DataTable({
   dense = false,
 }) {
   const [sort, setSort] = useState({ key: null, dir: "asc" });
-  const [quickFilter, setQuickFilter] = useState("");
+  // Quick filter survives leaving the screen only for a table with a storageKey;
+  // both hooks always run (rules of hooks), the key picks which one is used.
+  const localQuickFilter = useState("");
+  const savedQuickFilter = usePersistentFilter(`datatable:${storageKey || "__none__"}`, "quickFilter", "");
+  const [quickFilter, setQuickFilter] = storageKey ? savedQuickFilter : localQuickFilter;
   // Column visibility — persisted under storageKey so the operator's
   // preference survives reloads.
   const [hiddenSerialized, setHiddenSerialized] = useUiPreference(

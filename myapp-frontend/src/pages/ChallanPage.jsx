@@ -41,6 +41,7 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import DuplicateChallanDialog from "../Components/DuplicateChallanDialog";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -92,10 +93,13 @@ export default function ChallanPage() {
   const [pageSize, setPageSize] = useState(10);
   // User-chosen rows-per-page (persisted, null until picked → server default).
   const [size, setSize] = usePageSize("challans");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
-  const [clientFilter, setClientFilter] = useState("");
+  const [search, setSearch] = usePersistentFilter("challans", "search", "");
+  const [statusFilter, setStatusFilter] = usePersistentFilter("challans", "statusFilter", "");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("challans", "divisionFilter", "");
+  const [clientFilter, setClientFilter] = usePersistentFilter("challans", "clientFilter", "");
+  // Company the remembered filters were set under — a switch made on another
+  // screen must still clear per-company ids when this one mounts.
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("challans", "companyId", null);
   // Seed the SO filter from ?salesOrderId= so the "View Challans" shortcut
   // from the Sales Order screen lands here already filtered to that order.
   const [searchParams] = useSearchParams();
@@ -106,8 +110,8 @@ export default function ChallanPage() {
   // division → that division's. An empty scope hides the picker and blocks
   // Print/PDF. Declared after divisionFilter so it can consume it.
   const tplPicker = usePrintTemplates("Challan", { divisionId: divisionFilter });
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = usePersistentFilter("challans", "dateFrom", "");
+  const [dateTo, setDateTo] = usePersistentFilter("challans", "dateTo", "");
   const [hasExcelTpl, setHasExcelTpl] = useState(false);
   const [exportingId, setExportingId] = useState(null);
   // Set to the challan id while a duplicate POST is in flight. Acts as
@@ -166,13 +170,19 @@ export default function ChallanPage() {
       // from the previous company would otherwise filter this list to nothing.
       // Skip on the initial mount so a ?salesOrderId= deep-link (the "View
       // Challans" shortcut from the SO page) isn't wiped before it applies.
-      if (soFilterMountRef.current) setSalesOrderFilter("");
+      const firstRun = !soFilterMountRef.current;
+      const companySwitched = !firstRun
+        || (filterCompanyId != null && filterCompanyId !== selectedCompany.id);
+      setFilterCompanyId(selectedCompany.id);
+      if (!firstRun) setSalesOrderFilter("");
       soFilterMountRef.current = true;
       // Division ids are per-company — a stale filter would blank the list.
       // Resetting it retriggers the filter effect below, so only fetch
       // directly when there's no reset to piggyback on (avoids a stale-
-      // division request racing the corrected one).
-      if (divisionFilter) setDivisionFilter("");
+      // division request racing the corrected one). Returning to the screen
+      // under the same company keeps the restored filters.
+      if (companySwitched && clientFilter) setClientFilter("");
+      if (divisionFilter && companySwitched) setDivisionFilter("");
       else fetchChallans(selectedCompany.id, 1);
       hasExcelTemplate(selectedCompany.id, "Challan")
         .then(r => setHasExcelTpl(r.data.hasExcelTemplate))

@@ -14,6 +14,7 @@ import StatusBadge from "../Components/StatusBadge";
 import ViewModeToggle from "../Components/ViewModeToggle";
 import DataTable from "../Components/DataTable";
 import { useListViewMode } from "../hooks/useListViewMode";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -24,6 +25,9 @@ const colors = {
   blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332",
   textSecondary: "#5f6d7e", cardBorder: "#e8edf3", amber: "#b26a00", amberBg: "#fff8e1",
 };
+
+// Query-string keys that make up the list filter.
+const FILTER_KEYS = ["companyId", "clientId", "status", "q"];
 
 /**
  * Customer Portal management.
@@ -62,6 +66,10 @@ export default function CustomerPortalsPage() {
   const statusFilter = searchParams.get("status") || "";
   const searchFilter = searchParams.get("q") || "";
 
+  // Mirrored into sessionStorage too: a sidebar link lands here with a bare
+  // URL, and the filters the operator left must come back with it.
+  const [savedFilters, setSavedFilters] = usePersistentFilter("customer-portals", "filters", {});
+
   const setFilters = useCallback((changes) => {
     const next = new URLSearchParams(searchParams);
     for (const [k, v] of Object.entries(changes)) {
@@ -69,7 +77,22 @@ export default function CustomerPortalsPage() {
       else next.set(k, String(v));
     }
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    const saved = {};
+    for (const k of FILTER_KEYS) if (next.get(k)) saved[k] = next.get(k);
+    setSavedFilters(saved);
+  }, [searchParams, setSearchParams, setSavedFilters]);
+
+  // Restore once on arrival, unless the URL already carries a filter (a shared
+  // link wins over what this tab remembered).
+  useEffect(() => {
+    if (FILTER_KEYS.some((k) => searchParams.get(k))) return;
+    const entries = Object.entries(savedFilters || {}).filter(([k, v]) => FILTER_KEYS.includes(k) && v);
+    if (!entries.length) return;
+    const next = new URLSearchParams(searchParams);
+    for (const [k, v] of entries) next.set(k, String(v));
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Options come from the PORTAL ROWS, not from the company and client
   // catalogues. Two reasons: this screen filters portals, so a client with no
@@ -94,10 +117,10 @@ export default function CustomerPortalsPage() {
   // than left to filter everything away — a screen showing "no portals" because
   // of an invisible stale filter reads as data loss.
   useEffect(() => {
-    if (!clientFilter) return;
+    if (!clientFilter || !portals.length) return;
     if (clientOptions.some((c) => String(c.id) === clientFilter)) return;
     setFilters({ clientId: "" });
-  }, [clientFilter, clientOptions, setFilters]);
+  }, [clientFilter, clientOptions, setFilters, portals.length]);
 
   const visiblePortals = useMemo(() => {
     const needle = searchFilter.trim().toLowerCase();

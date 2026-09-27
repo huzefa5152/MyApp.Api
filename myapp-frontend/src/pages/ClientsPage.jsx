@@ -11,6 +11,7 @@ import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -33,7 +34,7 @@ export default function ClientsPage() {
   // Bulk onboarding — same permission as creating one client by hand, since
   // that is exactly what it does, just 200 at a time.
   const [showImport, setShowImport] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("clients", "search", "");
   const [loadingClients, setLoadingClients] = useState(false);
 
   // Common Client edit state — separate from per-company edit because
@@ -58,7 +59,7 @@ export default function ClientsPage() {
   // above the table is gone (2026-09-10): one list, one place.
   const [commonGroups, setCommonGroups] = useState(() => new Map());
   // "all" | "common" | "own" — which rows the table shows.
-  const [scope, setScope] = useState("all");
+  const [scope, setScope] = usePersistentFilter("clients", "scope", "all");
 
   useEffect(() => {
     if (!selectedCompany) {

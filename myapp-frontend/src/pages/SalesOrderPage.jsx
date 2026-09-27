@@ -32,6 +32,7 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 
@@ -77,11 +78,14 @@ export default function SalesOrderPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [size, setSize] = usePageSize("salesorders");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [search, setSearch] = usePersistentFilter("sales-orders", "search", "");
+  const [statusFilter, setStatusFilter] = usePersistentFilter("sales-orders", "statusFilter", "");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("sales-orders", "divisionFilter", "");
   const [clients, setClients] = useState([]);
-  const [clientFilter, setClientFilter] = useState("");
+  const [clientFilter, setClientFilter] = usePersistentFilter("sales-orders", "clientFilter", "");
+  // Company the remembered filters belong to — coming back to the screen keeps
+  // them; only a real company switch resets division + client.
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("sales-orders", "companyId", null);
 
   // Shared template-picker state, scoped to the selected division: "All
   // Divisions" → company-wide templates; a specific division → that division's.
@@ -120,11 +124,13 @@ export default function SalesOrderPage() {
     if (selectedCompany) {
       setPage(1);
       fetchClients(selectedCompany.id);
-      const willReset = divisionFilter || clientFilter;
-      if (divisionFilter) setDivisionFilter("");
-      if (clientFilter) setClientFilter("");
+      const sameCompany = filterCompanyId === selectedCompany.id;
+      setFilterCompanyId(selectedCompany.id);
+      const willReset = !sameCompany && (divisionFilter || clientFilter);
+      if (willReset && divisionFilter) setDivisionFilter("");
+      if (willReset && clientFilter) setClientFilter("");
       if (!willReset) fetchOrders(selectedCompany.id, 1);
-    } else { setDivisionFilter(""); setClientFilter(""); setClients([]); setOrders([]); }
+    } else { setClients([]); setOrders([]); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany]);
   useEffect(() => { if (selectedCompany) fetchOrders(selectedCompany.id, page); }, [page, size, search, statusFilter, divisionFilter, clientFilter]);

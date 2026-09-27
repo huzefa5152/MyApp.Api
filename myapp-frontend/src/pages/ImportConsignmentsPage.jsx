@@ -9,6 +9,7 @@ import Pagination from "../Components/Pagination";
 import SettleConsignmentDialog from "../Components/SettleConsignmentDialog";
 import CorrectConsignmentLineDialog from "../Components/CorrectConsignmentLineDialog";
 import { getImportConsignments, getImportConsignment, deleteImportConsignment } from "../api/importConsignmentApi";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 /**
  * Purchases → Consignments.
@@ -284,7 +285,7 @@ export default function ImportConsignmentsPage() {
   const [deletingId, setDeletingId] = useState(null);
   // Task 23: narrow the page to what is still owed. The default order
   // already puts it first; this is for when the operator wants ONLY that.
-  const [onlyOutstanding, setOnlyOutstanding] = useState(false);
+  const [onlyOutstanding, setOnlyOutstanding] = usePersistentFilter("importConsignments", "onlyOutstanding", false);
   const [settlingRow, setSettlingRow] = useState(null);
   const [correcting, setCorrecting] = useState(null);
 

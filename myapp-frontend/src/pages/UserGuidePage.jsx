@@ -3,6 +3,7 @@ import { MdSearch, MdMenuBook, MdClose } from "react-icons/md";
 import { colors, formStyles } from "../theme";
 import { GUIDE_SECTIONS, GUIDE_GROUPS } from "../content/accountingGuide";
 import useIsNarrow from "../hooks/useIsNarrow";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 /**
  * In-app accounting guide. Content lives in content/accountingGuide.js; this
@@ -14,7 +15,7 @@ import useIsNarrow from "../hooks/useIsNarrow";
  */
 export default function UserGuidePage() {
   const [active, setActive] = useState(GUIDE_SECTIONS[0].id);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = usePersistentFilter("userGuide", "query", "");
   const isNarrow = useIsNarrow();
   const [navOpen, setNavOpen] = useState(false);
 

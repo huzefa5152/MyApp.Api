@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import {
   MdAdminPanelSettings,
   MdAdd,
@@ -47,7 +48,7 @@ export default function AdministratorsPage() {
   const [allCompanies, setAllCompanies] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("administrators", "search", "");
   const [expanded, setExpanded] = useState(() => new Set());
 
   // Create-administrator modal

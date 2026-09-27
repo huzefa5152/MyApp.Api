@@ -43,6 +43,7 @@ import { MdChevronRight } from "react-icons/md";
 import { getAccountingSummary, getGlStatus, enableGl, rebuildGl } from "../api/accountingApi";
 import { getDashboardBreakdown } from "../api/dashboardApi";
 import KpiDrilldown from "../Components/dashboard/KpiDrilldown";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 // ── Formatting helpers ───────────────────────────────────────────────
 
@@ -92,8 +93,8 @@ export default function AccountingDashboardPage() {
 
   // Draft dates live in the inputs; `period` only changes on Apply so we
   // don't refetch on every keystroke of the date picker.
-  const [draft, setDraft] = useState(currentMonthRange);
-  const [period, setPeriod] = useState(draft);
+  const [draft, setDraft] = usePersistentFilter("accountingDashboard", "draft", currentMonthRange());
+  const [period, setPeriod] = usePersistentFilter("accountingDashboard", "period", draft);
 
   const [summary, setSummary] = useState(null);
   const [glStatus, setGlStatus] = useState(null);

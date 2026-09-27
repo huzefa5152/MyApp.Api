@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, getCurrentUser } from "../api/authApi";
+import { clearPersistentFilters } from "../hooks/usePersistentFilter";
 
 const AuthContext = createContext(null);
 
@@ -94,6 +95,8 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem("token");
+    // Remembered searches / filters belong to the person who set them.
+    clearPersistentFilters();
     setToken(null);
     setUser(null);
     navigate("/login");

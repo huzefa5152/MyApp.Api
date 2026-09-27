@@ -11,6 +11,7 @@ import { ReportHeader, TotalsStrip } from "../Components/ReportShell";
 import Pagination from "../Components/Pagination";
 import InvoiceSalesDetailGrid from "../Components/reports/InvoiceSalesDetailGrid";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 import { notify } from "../utils/notify";
 import {
   DEFAULT_PAGE_SIZE, FBR_STATUS_OPTIONS, ISD_PERIOD_OPTIONS, emptyText, excelFileName,
@@ -42,7 +43,19 @@ export default function InvoiceSalesDetailPage() {
   const companyId = selectedCompany?.id;
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const filters = useMemo(() => filtersFromSearch(searchParams), [searchParams]);
+  // The URL is also remembered, so arriving from the sidebar (a bare URL)
+  // restores the last view; a URL that carries filters always wins.
+  const [remembered, setRemembered] = usePersistentFilter("invoice-sales-detail", "filters", null);
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("invoice-sales-detail", "companyId", undefined);
+  const restoring = !searchParams.toString() && !!remembered;
+  const filters = useMemo(
+    () => filtersFromSearch(restoring ? new URLSearchParams(remembered) : searchParams),
+    [searchParams, restoring, remembered]
+  );
+  useEffect(() => {
+    if (restoring) setSearchParams(remembered, { replace: true });
+    else if (searchParams.toString()) setRemembered(filtersToSearch(filtersFromSearch(searchParams)));
+  }, [searchParams, restoring]); // eslint-disable-line react-hooks/exhaustive-deps
   const apiParams = useMemo(() => toApiParams(filters), [filters]);
   const applyFilters = useCallback((next) => setSearchParams(filtersToSearch(next)), [setSearchParams]);
 
@@ -54,14 +67,15 @@ export default function InvoiceSalesDetailPage() {
   const pageSize = storedSize || DEFAULT_PAGE_SIZE;
 
   // A customer belongs to one company, so switching company drops that filter.
-  const lastCompany = useRef(companyId);
+  const lastCompany = useRef(filterCompanyId ?? companyId);
   useEffect(() => {
     if (lastCompany.current !== undefined && lastCompany.current !== companyId && filters.clientId) {
       const { clientId, ...rest } = filters;
       applyFilters(rest);
     }
     lastCompany.current = companyId;
-  }, [companyId, filters, applyFilters]);
+    if (companyId !== undefined) setFilterCompanyId(companyId);
+  }, [companyId, filters, applyFilters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!companyId || !canView) return;

@@ -4,6 +4,7 @@ import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 // Shared backdrop / modal so this audit-log detail dialog matches every
 // other popup (blurred backdrop, centered, non-movable).
 import { formStyles, modalSizes } from "../theme";
@@ -52,9 +53,9 @@ export default function AuditLogsPage() {
   // pageSize and the server applies Pagination:DefaultPageSize (unchanged
   // default behaviour); a pick is clamped to the audit max (200) server-side.
   const [size, setSize] = usePageSize("auditlogs");
-  const [level, setLevel] = useState("");
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const [level, setLevel] = usePersistentFilter("audit-logs", "level", "");
+  const [search, setSearch] = usePersistentFilter("audit-logs", "search", "");
+  const [searchInput, setSearchInput] = useState(search);
   const [summary, setSummary] = useState(null);
   const [selectedLog, setSelectedLog] = useState(null);
   const [loading, setLoading] = useState(false);

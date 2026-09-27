@@ -4,6 +4,7 @@ import CompanyList from "../Components/CompanyList";
 import CompanyForm from "../Components/CompanyForm";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const styles = {
   header: {
@@ -96,7 +97,7 @@ export default function CompanyPage() {
   const canDelete = has("companies.manage.delete");
   const [editingCompany, setEditingCompany] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("companies", "search", "");
 
   const handleEdit = (company) => {
     setEditingCompany(company);

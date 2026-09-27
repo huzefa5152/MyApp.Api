@@ -31,6 +31,7 @@ import { formStyles, modalSizes } from "../theme";
 // Section layout config — maps catalog modules to navbar super-groups.
 // Edit this file to add a new module/screen; nothing else here needs to change.
 import { groupTreeBySections, getModuleLabel } from "../config/permissionSections";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = {
   blue: "#0d47a1",
@@ -62,7 +63,7 @@ export default function RolesPage() {
   const [roles, setRoles] = useState([]);
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("roles", "search", "");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editRole, setEditRole] = useState(null);

@@ -22,6 +22,7 @@ import { defaultTransferTemplate } from "../utils/accountingDocTemplates";
 import Pagination from "../Components/Pagination";
 import usePageSize from "../hooks/usePageSize";
 import useScrollToError from "../hooks/useScrollToError";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -51,7 +52,7 @@ export default function TransfersPage() {
   // drives which template scope Print/PDF use — consistent with every other
   // document screen. "All Divisions" → company-wide templates; a specific
   // division → that division's. (Separate from the create-form's own division.)
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("transfers", "divisionFilter", "");
   // Shared template-picker state (dropdown + Print/PDF resolution).
   const tplPicker = usePrintTemplates("Transfer", { divisionId: divisionFilter });
   const [exportingId, setExportingId] = useState(null);
@@ -62,7 +63,7 @@ export default function TransfersPage() {
   const [serverPageSize, setServerPageSize] = useState(null);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("transfers", "search", "");
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);   // transfer being edited
@@ -89,8 +90,14 @@ export default function TransfersPage() {
     }
   }, [companyId, page, size, search]);
 
-  // Reset to page 1 on company switch.
-  useEffect(() => { setPage(1); setSearch(""); }, [companyId]);
+  // Reset on a real company switch — remembered per company, so the restored
+  // filters survive a remount but not a switch made while away.
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("transfers", "companyId", null);
+  useEffect(() => {
+    if (!companyId || companyId === filterCompanyId) return;
+    if (filterCompanyId != null) { setPage(1); setSearch(""); setDivisionFilter(""); }
+    setFilterCompanyId(companyId);
+  }, [companyId, filterCompanyId, setSearch, setDivisionFilter, setFilterCompanyId]);
   useEffect(() => { fetchRows(page); }, [fetchRows, page]);
 
   const handleDelete = async (t) => {

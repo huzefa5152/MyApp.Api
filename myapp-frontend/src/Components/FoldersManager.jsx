@@ -11,6 +11,7 @@ import { getPagedFolders, deleteFolder, getUncategorizedAttachments } from "../a
 import { dropdownStyles } from "../theme";
 import FolderFormModal from "./FolderFormModal";
 import FolderDetailModal from "./FolderDetailModal";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 
@@ -31,7 +32,7 @@ export default function FoldersManager() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentFilter("folders", "search", "");
   const [showForm, setShowForm] = useState(false);
   const [editFolder, setEditFolder] = useState(null);
   const [detailFolder, setDetailFolder] = useState(null);
@@ -54,7 +55,15 @@ export default function FoldersManager() {
     finally { setLoading(false); }
   }, [page, search]);
 
-  useEffect(() => { setPage(1); setSearch(""); }, [selectedCompany]);
+  // Reset on a real company switch (also one made while away), not on the
+  // remount that restores the remembered search.
+  const companyId = selectedCompany?.id;
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("folders", "companyId", null);
+  useEffect(() => {
+    if (!companyId || companyId === filterCompanyId) return;
+    if (filterCompanyId != null) { setPage(1); setSearch(""); }
+    setFilterCompanyId(companyId);
+  }, [companyId, filterCompanyId, setSearch, setFilterCompanyId]);
   useEffect(() => {
     if (selectedCompany) fetchFolders(selectedCompany.id, page);
     else setFolders([]);

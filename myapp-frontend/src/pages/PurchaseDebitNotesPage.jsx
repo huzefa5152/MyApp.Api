@@ -15,6 +15,7 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { exportToPdf } from "../utils/exportUtils";
 import { defaultDebitNoteTemplate } from "../utils/purchaseNoteDocTemplates";
 import { formStyles, modalSizes, dropdownStyles, cardStyles } from "../theme";
+import usePersistentFilter from "../hooks/usePersistentFilter";
 
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", danger: "#dc3545", inputBg: "#f8f9fb", inputBorder: "#d0d7e2" };
 const money = (n) => "Rs. " + (Number(n) || 0).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -33,8 +34,9 @@ export default function PurchaseDebitNotesPage() {
 
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [search, setSearch] = usePersistentFilter("purchase-debit-notes", "search", "");
+  const [divisionFilter, setDivisionFilter] = usePersistentFilter("purchase-debit-notes", "divisionFilter", "");
+  const [filterCompanyId, setFilterCompanyId] = usePersistentFilter("purchase-debit-notes", "companyId", null);
   const [viewNote, setViewNote] = useState(null);
   const [exportingId, setExportingId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -92,6 +94,13 @@ export default function PurchaseDebitNotesPage() {
   useEffect(() => {
     if (selectedCompany?.id) fetchNotes(selectedCompany.id);
   }, [selectedCompany, fetchNotes]);
+
+  // A remembered division belongs to the company it was picked in.
+  useEffect(() => {
+    if (!selectedCompany?.id) return;
+    if (filterCompanyId != null && filterCompanyId !== selectedCompany.id) setDivisionFilter("");
+    setFilterCompanyId(selectedCompany.id);
+  }, [selectedCompany?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDelete = async (n) => {
     if (!(await confirm({ title: "Delete purchase debit note?", message: `Debit note #${n.debitNoteNumber} to ${n.supplierName} will be removed.`, confirmText: "Delete", danger: true }))) return;
