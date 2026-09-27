@@ -94,6 +94,8 @@ def main():
     tag = uuid.uuid4().hex[:6].upper()
     company = make_company(api, h, f"Claim Month Test {tag}")
     other = make_company(api, h, f"Claim Month Other {tag}")
+    # A chart of accounts, so the Inventory opening can be checked (suite 5).
+    requests.post(f"{api}/accounts/company/{company}/seed-wholesale", headers=h, timeout=120)
     print(f"companies {company} / {other}")
 
     profs = requests.get(f"{api}/import-profiles", headers=h, timeout=60,
@@ -123,7 +125,7 @@ def main():
     body = {
         "companyId": company, "fileSha256": prev["fileSha256"], "fileName": "claims.xlsx",
         "fileSizeBytes": prev["fileSizeBytes"], "asOfDate": date(2026, 7, 1).isoformat(),
-        "postInventoryValue": False, "enableInventoryTracking": True,
+        "postInventoryValue": True, "enableInventoryTracking": True,
         "rows": [{"itemName": x["itemName"], "hsCode": x["hsCode"],
                   "isHsCodePartial": x["isHsCodePartial"], "unit": x["unit"],
                   "quantity": x["quantity"], "value": x["value"], "salesTaxRate": x["salesTaxRate"],
@@ -191,6 +193,46 @@ def main():
     check("the claimed lines keep their own months",
           (by3["ATOMIZER"].get("claimMonth") or "")[:7] == "2026-06"
           and (by3["LED"].get("claimMonth") or "")[:7] == "2026-07")
+
+    def inventory_opening():
+        r = requests.get(f"{api}/accounts/company/{company}/flat", headers=h, timeout=60)
+        inv = next((a for a in r.json() if a.get("controlType") == "Inventory"), None) if r.ok else None
+        return float(inv.get("openingBalance") or 0) if inv else None
+
+    # 2026-09-28: a one-row import SET a company's Inventory opening to that
+    # row's value, wiping every other balance's value from the ledger.
+    print("\n  Suite 5 — a one-row import ADDS to the Inventory opening")
+    before = inventory_opening()
+    check("the first import posted its stock to Inventory", before is not None and abs(before - 4000) < 0.01,
+          f"opening={before}")
+    wb = openpyxl.load_workbook(io.BytesIO(sheet_bytes(tag)[0]))
+    ws = wb.active
+    for r in range(4, ws.max_row + 1):
+        for c in range(1, 22):
+            ws.cell(r, c).value = None
+    for c, v in enumerate(["July 2026", f"CLM-C-{tag}", "01-08-2026", "8536", "8536.5010:-", f"TOPUP SWITCH {tag}",
+                           "Test", 250, "Pcs", 10, 2500, 0.18, 450, 0, 0, 0.18, 0, 10, 2500, 0.18, 450], start=1):
+        ws.cell(4, c, v)
+    buf = io.BytesIO()
+    wb.save(buf)
+    r = requests.post(f"{api}/spreadsheet-import/opening-stock/preview", headers=h, timeout=120,
+                      params={"companyId": company, "profileId": std["id"]},
+                      files={"file": ("topup.xlsx", buf.getvalue())})
+    tp = r.json() if r.ok else {}
+    if not tp.get("rows") or any(x.get("status") in ("hs-unknown", "error") for x in tp["rows"]):
+        print(f"  [skip] the top-up row cannot import here: {str(tp)[:160]}")
+    else:
+        body3 = dict(body, fileSha256=tp["fileSha256"], fileSizeBytes=tp["fileSizeBytes"], fileName="topup.xlsx",
+                     rows=[{"itemName": x["itemName"], "hsCode": x["hsCode"], "isHsCodePartial": x["isHsCodePartial"],
+                            "unit": x["unit"], "quantity": x["quantity"], "value": x["value"],
+                            "salesTaxRate": x["salesTaxRate"], "lotRefs": x["lotRefs"], "itemTypeId": x["itemTypeId"],
+                            "lots": x["lots"]} for x in tp["rows"]])
+        r = requests.post(f"{api}/spreadsheet-import/opening-stock/commit", headers=h, timeout=300, json=body3)
+        after = inventory_opening()
+        check("the one-row import commits", r.ok, f"http {r.status_code} {r.text[:200]}")
+        check("the Inventory opening grows by that row only, not replaced by it",
+              after is not None and before is not None and abs(after - (before + 2500)) < 0.01,
+              f"before={before} after={after}")
 
     print("\n  Suite 4 — the export names every month of a mixed GD")
     r = requests.get(f"{api}/stock/company/{company}/onhand/excel", headers=h, timeout=120)

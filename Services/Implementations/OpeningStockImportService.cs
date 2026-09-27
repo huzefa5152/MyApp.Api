@@ -14,7 +14,6 @@ namespace MyApp.Api.Services.Implementations
     public class OpeningStockImportService : IOpeningStockImportService
     {
         private readonly AppDbContext _db;
-        private readonly IAccountService _accounts;
         private readonly IPostingService _posting;
         private readonly ISpreadsheetImportService _imports;
         private readonly ILogger<OpeningStockImportService> _logger;
@@ -25,13 +24,11 @@ namespace MyApp.Api.Services.Implementations
 
         public OpeningStockImportService(
             AppDbContext db,
-            IAccountService accounts,
             IPostingService posting,
             ISpreadsheetImportService imports,
             ILogger<OpeningStockImportService> logger)
         {
             _db = db;
-            _accounts = accounts;
             _posting = posting;
             _imports = imports;
             _logger = logger;
@@ -649,12 +646,22 @@ namespace MyApp.Api.Services.Implementations
 
                 var hsIds = await ResolveHsCodeIdsAsync(rows);
                 var lotsWritten = new List<OpeningStockLot>();
+                // What this import changes in opening stock value: the balances
+                // it SETS, less what those same balances held before. Only this
+                // moves the Inventory opening — see PostInventoryValueAsync.
+                var valueChange = 0m;
 
                 foreach (var row in rows)
                 {
                     var itemTypeId = row.ItemTypeId.HasValue
                         ? await UpdateItemTypeAsync(row, hsIds, result)
                         : await CreateItemTypeAsync(row, hsIds, result);
+
+                    var priorValue = await _db.OpeningStockBalances
+                        .Where(o => o.CompanyId == dto.CompanyId && o.ItemTypeId == itemTypeId)
+                        .Select(o => (decimal?)o.ValueExcludingTax)
+                        .FirstOrDefaultAsync() ?? 0m;
+                    valueChange += Money(row.Value) - priorValue;
 
                     lotsWritten.AddRange(await UpsertOpeningBalanceAsync(dto, row, itemTypeId));
                     result.OpeningBalancesWritten++;
@@ -671,7 +678,7 @@ namespace MyApp.Api.Services.Implementations
 
                 if (dto.PostInventoryValue)
                     result.InventoryValuePosted = await PostInventoryValueAsync(
-                        dto.CompanyId, rows.Sum(r => r.Value), result);
+                        dto.CompanyId, valueChange, result);
 
                 // A new opening position re-prices every sale that follows it,
                 // so the monthly stock-relief entries are recomputed in full.
@@ -988,10 +995,22 @@ namespace MyApp.Api.Services.Implementations
         /// <see cref="IAccountService.AdjustOpeningBalanceAsync"/>, so no
         /// balancing entry is made — or wanted — here.
         /// </summary>
+        /// <summary>
+        /// Moves the Inventory account's opening by what this import changed —
+        /// ADDITIVE, through the same IPostingService.AdjustInventoryOpeningAsync
+        /// the GD costing import and the manual opening endpoint use.
+        ///
+        /// It used to SET the opening to this sheet's total. A sheet that is not
+        /// the company's whole stock — a one-line top-up, a second workbook —
+        /// then replaced every other balance's value in the ledger: on
+        /// 2026-09-28 a one-row import set a company's Inventory opening from
+        /// 22,297,874.00 to 56,358.17.
+        /// </summary>
         private async Task<decimal> PostInventoryValueAsync(
-            int companyId, decimal total, OpeningStockCommitResultDto result)
+            int companyId, decimal change, OpeningStockCommitResultDto result)
         {
-            if (total <= 0m) return 0m;
+            change = Money(change);
+            if (change == 0m) return 0m;
 
             var inventory = await _db.Accounts.AsNoTracking()
                 .Where(a => a.CompanyId == companyId && a.ControlType == ControlType.Inventory && a.IsActive)
@@ -1006,14 +1025,12 @@ namespace MyApp.Api.Services.Implementations
                 return 0m;
             }
 
-            await _accounts.AdjustOpeningBalanceAsync(inventory.Id, new AdjustOpeningBalanceDto
-            {
-                OpeningBalance = total,
-                OpeningBalanceIsDebit = true,
-            });
+            await _posting.AdjustInventoryOpeningAsync(companyId, change);
 
-            result.Messages.Add($"{total:N2} posted as the opening balance on {inventory.Name}.");
-            return total;
+            result.Messages.Add(change > 0m
+                ? $"{change:N2} added to the opening balance on {inventory.Name}."
+                : $"{-change:N2} taken off the opening balance on {inventory.Name}.");
+            return change;
         }
 
         private static string Trim(string? value, int max)
