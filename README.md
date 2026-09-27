@@ -298,11 +298,21 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
-### 2026-09-28 — Stock-sheet import adds to the Inventory opening
+### 2026-09-28 — Stock-sheet import fixes, per-company item names, stock sheet reconciliation
 
 - **Each company can name a shared item its own way.** Item types are one catalog shared by every company, so an item could only ever carry one name. The Item Types screen now has an optional *Name for this company*: that company's pickers, new documents, Stock Dashboard, GD panel, cost history and stock export show it, while other companies keep the catalog name. Saving an item from a company's screen never renames the shared row, and the item search finds the company's own name. Migration `AddCompanyItemDisplayName` adds the nullable column.
 - **The stock-sheet import no longer renames another company's item.** Item types are shared by every company on an installation. When a sheet line's HS code matched a placeholder item that another company already holds stock on or uses, the import reused it and renamed it to the sheet's spelling, changing that company's item on its dashboard, invoices and prints. Such a line now becomes a new item for the importing company, and the preview says so; a placeholder no other company uses is still taken over as before.
 - **A partial stock-sheet import no longer resets the Inventory account.** The opening-stock import used to SET the Inventory account's opening to the imported sheet's total, so a one-line top-up replaced every other item's value in the ledger. It now adds only what the import changed (new balances, or the difference on balances it restates), the same way the GD costing import and the manual opening-balance screen already did.
+
+**Data corrections on the importer installation (27–28 Sep).** Opening stock, GD lines and claim months were reconciled against three clients' own stock sheets. Every change went through the app's stock adjustment or import where one exists, and each one is recorded in the item's cost history and the audit log.
+
+- **Stock the GD costing import had added from GD lines missing from a client's stock sheet** was reviewed item by item. Where no document had ever used it, it was removed, and the Inventory and Retained earnings openings were reduced by the same amount. Where it had already been sold on FBR-submitted invoices, it was kept.
+- **One company's stock was set to its September stock sheet.** Each item's on-hand quantity and Excluding value now matches the sheet, with landed cost per unit kept. Items not on the sheet were set to zero, and the one sheet item the software lacked was added through the stock-sheet import.
+- **A duplicate opening balance on a deleted item type was removed.** It was hidden from every screen and would have counted the same stock twice. The Inventory and Retained earnings openings, which a one-row import had overwritten, were restored to the true opening stock total. The import bug itself is fixed above.
+- **GD source lines rebuilt.** For a company imported before sheet lines were kept, every opening balance now has its GD lines, each adding up exactly to its balance. GD lines no longer on that company's latest sheet were removed, so each item shows the sheet's GD numbers.
+- **Claim months backfilled per line** from the three sheets. A GD whose lines disagree keeps each line's own month and no GD-wide month.
+- **GD costing lines for other products** that shared an HS code with an item were unlinked from it. Each such item's landed cost was recomputed from its correct lines only; stock values and the ledger are unchanged.
+- **Item names from each client's sheet** were set as that company's own names (see *Each company can name a shared item its own way* above), leaving the other companies' names untouched.
 
 ### 2026-09-27 — Stock dashboard GD numbers, claim months from the sheet, filters that stay
 
