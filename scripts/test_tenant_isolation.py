@@ -338,6 +338,17 @@ opening_payload = {
 status, _ = request("POST", "/api/stock/opening", token=tokens["bob"], body=opening_payload)
 check("POST body companyId guard", "bob -> POST /api/stock/opening (companyId=alpha)",
       status == 403, f"expected 403, got {status}")
+# alice tries to seed default print templates into Beta (route companyId)
+_, beta_tpls_before = request("GET", f"/api/printtemplates/company/{beta['id']}", token=admin)
+seed_payload = [{"templateType": "Challan", "name": "Forged", "htmlContent": "<p>forged</p>"}]
+status, _ = request("POST", f"/api/printtemplates/company/{beta['id']}/seed-defaults",
+                    token=tokens["alice"], body=seed_payload)
+check("POST route companyId guard", "alice -> POST /api/printtemplates/company/{beta}/seed-defaults",
+      status == 403, f"expected 403, got {status}")
+_, beta_tpls_after = request("GET", f"/api/printtemplates/company/{beta['id']}", token=admin)
+check("POST route companyId guard", "Beta print templates unchanged after forged seed",
+      len(beta_tpls_after or []) == len(beta_tpls_before or []),
+      f"before {len(beta_tpls_before or [])}, after {len(beta_tpls_after or [])}")
 
 # Suite 5: UserCompanies endpoint requires the new permission
 print("\n  Suite 5 — Tenant Access page perm gating")
