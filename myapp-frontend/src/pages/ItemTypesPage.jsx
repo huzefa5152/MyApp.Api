@@ -5,6 +5,7 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
 import ItemTypeForm from "../Components/ItemTypeForm";
 
 const colors = {
@@ -152,11 +153,14 @@ export default function ItemTypesPage() {
             </p>
           </div>
         </div>
-        {canCreate && (
-          <button style={styles.addBtn} onClick={openAdd} disabled={!selectedCompany}>
-            <MdAdd size={18} /> New Item
-          </button>
-        )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+          <ImportFromExcelButton sheet="items" />
+          {canCreate && (
+            <button style={styles.addBtn} onClick={openAdd} disabled={!selectedCompany}>
+              <MdAdd size={18} /> New Item
+            </button>
+          )}
+        </div>
       </div>
 
       <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>

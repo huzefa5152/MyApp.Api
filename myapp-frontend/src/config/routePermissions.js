@@ -79,6 +79,7 @@ export const ROUTE_PERMISSIONS = {
   "/Clients/*": "clients.manage.view",
   "/Suppliers/*": "suppliers.manage.view",
   "/item-types": "itemtypes.manage.view",
+  "/import-data": "onboarding.import.run",
   "/units": "config.units.manage",
   "/po-formats": "poformats.manage.view",
   "/templates": "printtemplates.manage.update",

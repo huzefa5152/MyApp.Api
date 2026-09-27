@@ -6,7 +6,7 @@ import {
   MdSettings,
   MdBusiness,
   MdPeople,
-  MdCategory,
+  MdCategory, MdUploadFile,
   MdDescription,
   MdReceipt,
   MdLogout,
@@ -162,6 +162,7 @@ export default function DashboardLayout() {
     "clients.manage.view",
     "suppliers.manage.view",
     "itemtypes.manage.view",
+    "onboarding.import.run",
     "config.units.manage",
     "poformats.manage.view",
     "printtemplates.manage.update",
@@ -258,7 +259,7 @@ export default function DashboardLayout() {
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
-      || p.startsWith("/templates") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor") || p.startsWith("/customer-portals")) return "configuration";
+      || p.startsWith("/templates") || p.startsWith("/import-data") || p.startsWith("/configuration/navigation-menu") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor") || p.startsWith("/customer-portals")) return "configuration";
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")) return "administration";
     return "main";
   }, [location.pathname]);
@@ -572,6 +573,12 @@ export default function DashboardLayout() {
                   <span>Item Types</span>
                 </NavLink>
               </Can>
+              <Can permission="onboarding.import.run">
+                <NavLink to="/import-data" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdUploadFile className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Import Data</span>
+                </NavLink>
+              </Can>
               <Can permission="config.units.manage">
                 <NavLink to="/units" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdStraighten className="dl-subitem__icon" aria-hidden="true" />
@@ -788,6 +795,7 @@ function getBreadcrumb(pathname) {
     "/stock": "Purchases / Stock Dashboard",
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/item-types": "Configuration / Item Types",
+    "/import-data": "Configuration / Import Data",
     "/challans": "Sales / Delivery Challans",
     "/challans/import": "Sales / Import Challans",
     "/bills": "Sales / Bills",

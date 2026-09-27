@@ -22,6 +22,7 @@ import PurchaseBillsPage from "./pages/PurchaseBillsPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
+import OnboardingImportPage from "./pages/OnboardingImportPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import DocumentLinesPage from "./pages/DocumentLinesPage";
 import TaxSheetPage from "./pages/TaxSheetPage";
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="/Clients/*" element={<ClientsPage />} />
             <Route path="/Suppliers/*" element={<SuppliersPage />} />
             <Route path="/item-types" element={<ItemTypesPage />} />
+            <Route path="/import-data" element={<OnboardingImportPage />} />
             <Route path="/units" element={<UnitsPage />} />
             <Route path="/po-formats" element={<POFormatsPage />} />
             <Route path="/challans" element={<ChallansPage />} />

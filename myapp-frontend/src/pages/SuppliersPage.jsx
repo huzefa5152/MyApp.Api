@@ -10,6 +10,7 @@ import { notify } from "../utils/notify";
 import { dropdownStyles } from "../theme";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
+import ImportFromExcelButton from "../Components/onboarding/ImportFromExcelButton";
 
 const colors = {
   blue: "#0d47a1",
@@ -113,16 +114,19 @@ export default function SuppliersPage() {
             </p>
           </div>
         </div>
-        {companies.length > 0 && canCreate && (
-          <button
-            style={styles.addBtn}
-            onClick={handleAdd}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
-          >
-            <MdAdd size={18} /> New Supplier
-          </button>
-        )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+          <ImportFromExcelButton sheet="suppliers" />
+          {companies.length > 0 && canCreate && (
+            <button
+              style={styles.addBtn}
+              onClick={handleAdd}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
+            >
+              <MdAdd size={18} /> New Supplier
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Common Suppliers panel — auto-hides for tenants with no
