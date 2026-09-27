@@ -845,9 +845,9 @@ export default function StockDashboardPage() {
                     <table style={styles.table}>
                       <thead>
                         <tr>
-                          <th style={styles.th} aria-label="Expand GD details"></th>
+                          <th style={{ ...styles.th, width: 28 }} aria-label="Expand GD details"></th>
                           {showOnhandCol("gd") && <th style={styles.th}>GD No</th>}
-                          {showOnhandCol("item") && <th style={styles.th}>Item</th>}
+                          {showOnhandCol("item") && <th style={{ ...styles.th, minWidth: 160 }}>Item</th>}
                           {showOnhandCol("onhand") && <th style={{ ...styles.th, textAlign: "right" }}>On-Hand</th>}
                           {showOnhandCol("excl") && <th style={{ ...styles.th, textAlign: "right" }}>Excluding</th>}
                           {showOnhandCol("tax") && <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>}
@@ -872,7 +872,7 @@ export default function StockDashboardPage() {
                             onClick={() => toggleDrill(r.itemTypeId)}
                           >
                             {(
-                              <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }}>
+                              <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary, paddingLeft: 6, paddingRight: 0 }}>
                                 {isOpen ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                               </td>
                             )}
@@ -902,22 +902,19 @@ export default function StockDashboardPage() {
                               <div style={{ fontWeight: 700, color: r.onHand < 0 ? "#c62828" : colors.blue }}>
                                 {fmtOnHand(r.onHand)}
                               </div>
-                              <div style={styles.flowMeta}>
+                              {/* Opening / in / out, each as quantity and the
+                                  money against it (the opening's stored value
+                                  and the valuation walk's own ValueIn /
+                                  ValueOut, all from the API row). One mini
+                                  grid row per leg keeps the two figures
+                                  aligned without a wide single line. */}
+                              <div style={styles.flowGrid}>
                                 <span title="Opening balance">{num(r.openingBalance)}</span>
+                                <span style={styles.flowValue} title="Opening value, excluding tax">{money(r.openingValueExcludingTax)}</span>
                                 <span style={{ color: "#2e7d32" }} title="Total in">+{num(r.totalIn)}</span>
+                                <span style={{ ...styles.flowValue, color: "#2e7d32" }} title="Value in, excluding tax">+{money(r.valueIn)}</span>
                                 <span style={{ color: "#c62828" }} title="Total out">−{num(r.totalOut)}</span>
-                              </div>
-                              {/* The money against each of those three
-                                  quantities, on its own line beneath them so
-                                  the column keeps its width and the figures
-                                  stay aligned with the quantity above. All
-                                  three come from the API row -- the opening's
-                                  stored value and the valuation walk's own
-                                  ValueIn / ValueOut. */}
-                              <div style={styles.flowMetaValue}>
-                                <span title="Opening value, excluding tax">{money(r.openingValueExcludingTax)}</span>
-                                <span style={{ color: "#2e7d32" }} title="Value in, excluding tax">+{money(r.valueIn)}</span>
-                                <span style={{ color: "#c62828" }} title="Value out, excluding tax">−{money(r.valueOut)}</span>
+                                <span style={{ ...styles.flowValue, color: "#c62828" }} title="Value out, excluding tax">−{money(r.valueOut)}</span>
                               </div>
                             </td>
                             )}
@@ -946,19 +943,21 @@ export default function StockDashboardPage() {
                             )}
                             {(canAdjust || canViewActualCost) && (
                               <td style={styles.td} onClick={e => e.stopPropagation()}>
-                                <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", alignItems: "flex-end" }}>
                                   {canAdjust && (
-                                    <button type="button" style={rowAdjustBtn} onClick={() => openAdjustForRow(r)} title={`Record a stock adjustment for ${r.itemTypeName}`}>
-                                      <MdSwapHoriz size={13} /> Adjust
+                                    <button type="button" style={{ ...rowIconBtn, ...rowIconAdjust }} onClick={() => openAdjustForRow(r)}
+                                      title={`Record a stock adjustment for ${r.itemTypeName}`} aria-label={`Adjust ${r.itemTypeName}`}>
+                                      <MdSwapHoriz size={17} />
                                     </button>
                                   )}
                                   {canViewActualCost && (
                                     <button
-                                      type="button" style={rowHistoryBtn}
+                                      type="button" style={rowIconBtn}
                                       onClick={() => setCostHistoryItem({ itemTypeId: r.itemTypeId, itemTypeName: r.itemTypeName })}
                                       title={`What changed the actual cost of ${r.itemTypeName}`}
+                                      aria-label={`Cost history for ${r.itemTypeName}`}
                                     >
-                                      <MdHistory size={13} /> History
+                                      <MdHistory size={17} />
                                     </button>
                                   )}
                                 </div>
@@ -1766,43 +1765,80 @@ function GdPanel({ rows, loading, openingQty, openingValue, canEdit, onSave }) {
   const sourceValue = rows.reduce((sum, r) => sum + Number(r.valueExcludingTax || 0), 0);
   const missingQty = Number(openingQty || 0) - sourceQty;
   const missingValue = Number(openingValue || 0) - sourceValue;
+  const unclaimed = rows.filter(r => !r.claimMonth).length;
   const month = (date) => date ? new Date(date).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—";
   const date = (value) => value ? new Date(value).toLocaleDateString() : "—";
   return (
     <div style={drillStyles.wrap}>
-      <div style={drillStyles.heading}>GD source lots and receipts ({rows.length})</div>
-      <div style={{ fontSize: "0.75rem", color: colors.textSecondary, marginBottom: "0.55rem" }}>
+      <div style={gdStyles.head}>
+        <span style={drillStyles.heading}>GD source lots ({rows.length})</span>
+        <span style={gdStyles.stat}><b>{num(sourceQty)}</b> units</span>
+        <span style={gdStyles.stat}><b>{money(sourceValue)}</b> excl</span>
+        <span style={{ ...gdStyles.stat, ...(unclaimed ? gdStyles.statWarn : gdStyles.statOk) }}>
+          {unclaimed ? `${unclaimed} not claimed` : "All claimed"}
+        </span>
+      </div>
+      <details style={gdStyles.help}>
+        <summary style={gdStyles.helpSummary}>What these figures mean</summary>
         Source quantities explain the opening position before later sales. Cost-only backfills add no stock.
         GD month is the declaration month; claim month is the return this line's input tax was
         filed in — each line has its own, and a blank one means not claimed yet.
-      </div>
-      <div style={{ display: "grid", gap: "0.5rem" }}>
-        {rows.map((r, index) => (
-          <div key={`${r.source}-${r.gdNumber}-${r.sourceRow}-${index}`}
-            style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.65rem" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.55rem", alignItems: "center" }}>
-              <strong style={{ color: colors.blue }}>GD {r.gdNumber}</strong>
-              <span>{r.source}</span>
-              <span style={{ color: colors.textSecondary }}>GD date {date(r.gdDate)} · GD month {month(r.gdDate)}</span>
-              <span style={{ color: r.claimMonth ? colors.textSecondary : colors.negative }}>
-                {r.claimMonth ? `Claim month ${month(r.claimMonth)}` : "Not claimed yet"}
-              </span>
-              <span>{r.quantity == null ? "No stock added" : `${num(r.quantity)} source units · ${money(r.valueExcludingTax)} excl`}</span>
-              {r.salesTaxRate != null && <span>{num(r.salesTaxRate)}% tax</span>}
-            </div>
-            <div style={{ fontSize: "0.73rem", color: colors.textSecondary, marginTop: 4 }}>
-              {r.description || "Source line"} · row {r.sourceRow}{r.hsCode ? ` · HS ${r.hsCode}` : ""}
-            </div>
-            {canEdit && (r.lotId != null || r.consignmentLineId != null) && (
-              <ClaimMonthEditor key={`${r.lotId}:${r.consignmentLineId}:${r.claimMonth || ""}`}
-                line={r} value={r.claimMonth} onSave={onSave} />
-            )}
-          </div>
-        ))}
+      </details>
+      <div className="gd-lines" style={gdStyles.box}>
+        <table style={gdStyles.table}>
+          <thead>
+            <tr>
+              <th style={gdStyles.th}>GD</th>
+              <th style={gdStyles.th}>GD date</th>
+              <th style={gdStyles.th}>Source line</th>
+              <th style={gdStyles.thNum}>Qty</th>
+              <th style={gdStyles.thNum}>Value excl</th>
+              <th style={gdStyles.thNum}>Tax</th>
+              <th style={gdStyles.th}>Claim month</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, index) => (
+              <tr key={`${r.source}-${r.gdNumber}-${r.sourceRow}-${index}`}>
+                <td style={gdStyles.td} data-label="GD">
+                  <div style={gdStyles.gdNo}>{r.gdNumber}</div>
+                  <div style={gdStyles.sub}>{r.source}</div>
+                </td>
+                <td style={gdStyles.td} data-label="GD date">
+                  <div style={{ whiteSpace: "nowrap" }}>{date(r.gdDate)}</div>
+                  <div style={gdStyles.sub}>{month(r.gdDate)}</div>
+                </td>
+                <td style={gdStyles.td} data-label="Source line">
+                  <div style={gdStyles.desc}>{r.description || "Source line"}</div>
+                  <div style={gdStyles.sub}>row {r.sourceRow}{r.hsCode ? ` · HS ${r.hsCode}` : ""}</div>
+                </td>
+                <td style={gdStyles.tdNum} data-label="Qty">
+                  {r.quantity == null ? <span style={gdStyles.sub}>No stock added</span> : num(r.quantity)}
+                </td>
+                <td style={gdStyles.tdNum} data-label="Value excl">
+                  {r.quantity == null ? "—" : money(r.valueExcludingTax)}
+                </td>
+                <td style={gdStyles.tdNum} data-label="Tax">
+                  {r.salesTaxRate != null ? `${num(r.salesTaxRate)}%` : "—"}
+                </td>
+                <td style={gdStyles.td} data-label="Claim month">
+                  {canEdit && (r.lotId != null || r.consignmentLineId != null) ? (
+                    <ClaimMonthEditor key={`${r.lotId}:${r.consignmentLineId}:${r.claimMonth || ""}`}
+                      line={r} value={r.claimMonth} onSave={onSave} />
+                  ) : (
+                    <span style={{ ...gdStyles.pill, ...(r.claimMonth ? gdStyles.statOk : gdStyles.statWarn) }}>
+                      {r.claimMonth ? month(r.claimMonth) : "Not claimed yet"}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       {(Math.abs(missingQty) > 0.0001 || Math.abs(missingValue) > 0.01) && (
-        <div style={{ marginTop: "0.6rem", fontSize: "0.75rem", color: colors.textSecondary }}>
-          Opening position not traced by these GD rows: {num(missingQty)} units · {money(missingValue)} excl.
+        <div style={gdStyles.untraced}>
+          Opening position not traced by these GD rows: <b>{num(missingQty)}</b> units · <b>{money(missingValue)}</b> excl.
           This can include manual opening corrections or source rows without a GD number.
         </div>
       )}
@@ -1819,15 +1855,17 @@ function ClaimMonthEditor({ line, value, onSave }) {
     catch (e) { notify(e?.response?.data?.error || "Could not save the claim month.", "error"); }
     finally { setSaving(false); }
   };
+  const dirty = draft !== (value ? String(value).slice(0, 7) : "");
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", marginTop: "0.45rem" }}>
-      <label style={{ fontSize: "0.73rem" }}>Claim month for this line
-        <input type="month" value={draft} onChange={(e) => setDraft(e.target.value)}
-          style={{ marginLeft: 6, minHeight: 44, border: `1px solid ${colors.inputBorder}`, borderRadius: 6 }} />
-      </label>
-      <button type="button" disabled={saving || draft === (value ? String(value).slice(0, 7) : "")}
-        onClick={save} style={{ ...styles.altBtn, minHeight: 44 }}>
-        {saving ? "Saving…" : "Save month"}
+    <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+      <input type="month" value={draft} onChange={(e) => setDraft(e.target.value)}
+        aria-label="Claim month for this line" title={value ? "Claim month for this line" : "Not claimed yet"}
+        className="gd-claim-input"
+        style={{ ...gdStyles.monthInput, ...(value ? null : gdStyles.monthInputEmpty) }} />
+      <button type="button" disabled={saving || !dirty} onClick={save}
+        className="gd-claim-save"
+        style={{ ...gdStyles.saveBtn, ...(saving || !dirty ? gdStyles.saveBtnIdle : null) }}>
+        {saving ? "Saving…" : "Save"}
       </button>
     </div>
   );
@@ -1949,13 +1987,17 @@ function SearchBox({ value, onChange }) {
   );
 }
 
-// GD numbers behind an item, one per line so a long list wraps instead of
-// widening the column.
+// GD numbers behind an item as compact chips: up to two in full, otherwise
+// the first plus a "+N" chip; the tooltip lists every one. The full list is in
+// the expanded GD panel, and search still matches every GD number.
 function GdList({ gds }) {
   if (!gds || gds.length === 0) return <span style={{ color: colors.textSecondary }}>—</span>;
+  const shown = gds.length <= 2 ? gds : gds.slice(0, 1);
+  const rest = gds.length - shown.length;
   return (
-    <div style={{ display: "grid", gap: 2, fontFamily: "monospace", fontSize: "0.78rem", color: colors.blue, overflowWrap: "anywhere" }}>
-      {gds.map(g => <span key={g}>{g}</span>)}
+    <div style={gdChipStyles.wrap} title={gds.join("\n")}>
+      {shown.map(g => <span key={g} style={gdChipStyles.chip}>{g}</span>)}
+      {rest > 0 && <span style={gdChipStyles.more} aria-label={`${rest} more GD numbers`}>+{rest}</span>}
     </div>
   );
 }
@@ -2105,9 +2147,41 @@ const modeBtn = {
   flex: 1, minHeight: 40, padding: "0.45rem 0.6rem", borderRadius: 8,
   border: "1px solid", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600,
 };
-const rowAdjustBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" };
+// Icon-only row actions (house pattern: fixed box, grid-centred, explicit size)
+// so the actions column stays narrow and the figures get the width.
+const rowIconBtn = { display: "grid", placeItems: "center", width: 32, height: 32, padding: 0, borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", cursor: "pointer", boxShadow: "none", flexShrink: 0 };
+const rowIconAdjust = { border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1" };
+const gdChipStyles = {
+  wrap: { display: "flex", flexWrap: "wrap", gap: 3, maxWidth: 210 },
+  chip: { fontFamily: "monospace", fontSize: "0.72rem", color: colors.blue, backgroundColor: "#eef4fc", border: "1px solid #d6e4f7", borderRadius: 5, padding: "0.05rem 0.35rem", whiteSpace: "nowrap" },
+  more: { fontSize: "0.7rem", fontWeight: 700, color: "#5f6d7e", backgroundColor: "#eef2f7", borderRadius: 5, padding: "0.05rem 0.35rem", whiteSpace: "nowrap", cursor: "help" },
+};
+const gdTh = { padding: "0.4rem 0.6rem", backgroundColor: "#f5f8fc", borderBottom: "1px solid #e8edf3", fontSize: "0.68rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap" };
+const gdTd = { padding: "0.4rem 0.6rem", borderBottom: "1px solid #f0f3f7", verticalAlign: "top", color: "#1a2332" };
+const gdStyles = {
+  head: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.45rem", marginBottom: "0.35rem" },
+  stat: { fontSize: "0.74rem", color: "#37474f", backgroundColor: "#fff", border: "1px solid #e8edf3", borderRadius: 999, padding: "0.1rem 0.55rem", fontVariantNumeric: "tabular-nums" },
+  statWarn: { color: "#c62828", backgroundColor: "#fdecea", border: "1px solid #f5c6c2" },
+  statOk: { color: "#2e7d32", backgroundColor: "#e8f5e9", border: "1px solid #c8e6c9" },
+  help: { fontSize: "0.73rem", color: "#5f6d7e", marginBottom: "0.5rem", lineHeight: 1.4 },
+  helpSummary: { cursor: "pointer", color: "#0d47a1", fontWeight: 600, width: "fit-content" },
+  box: { border: "1px solid #e8edf3", borderRadius: 8, backgroundColor: "#fff", overflowX: "auto" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" },
+  th: { ...gdTh, textAlign: "left" },
+  thNum: { ...gdTh, textAlign: "right" },
+  td: gdTd,
+  tdNum: { ...gdTd, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
+  gdNo: { fontFamily: "monospace", fontWeight: 700, color: "#0d47a1", whiteSpace: "nowrap" },
+  sub: { fontSize: "0.7rem", color: "#5f6d7e", marginTop: 1 },
+  desc: { lineHeight: 1.3, overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  pill: { display: "inline-block", fontSize: "0.72rem", fontWeight: 600, borderRadius: 999, padding: "0.1rem 0.5rem", whiteSpace: "nowrap" },
+  monthInput: { height: 32, padding: "0 0.4rem", border: "1px solid #d0d7e2", borderRadius: 6, fontSize: "0.78rem", color: "#1a2332", backgroundColor: "#fff", minWidth: 0 },
+  monthInputEmpty: { borderColor: "#f5c6c2", backgroundColor: "#fffafa" },
+  saveBtn: { height: 32, padding: "0 0.65rem", borderRadius: 6, border: "1px solid #0d47a1", backgroundColor: "#0d47a1", color: "#fff", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" },
+  saveBtnIdle: { backgroundColor: "#fff", color: "#94a3b8", border: "1px solid #d0d7e2", cursor: "default" },
+  untraced: { marginTop: "0.5rem", fontSize: "0.74rem", color: "#8d5a00", backgroundColor: "#fff8e1", border: "1px solid #ffe0a3", borderRadius: 6, padding: "0.35rem 0.6rem" },
+};
 const cardAdjustBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.6rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #90caf9", backgroundColor: "#e3f2fd", color: "#0d47a1", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
-const rowHistoryBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", whiteSpace: "nowrap" };
 const cardHistoryBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", width: "100%", minHeight: 44, marginTop: "0.4rem", padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 const cardDrillBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", width: "100%", minHeight: 40, marginTop: "0.6rem", padding: "0.45rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#5f6d7e", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" };
 
@@ -2152,7 +2226,7 @@ const styles = {
   searchClear: { position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "none", background: "none", color: "#94a3b8", cursor: "pointer", padding: 0, boxShadow: "none" },
   clearSearchBtn: { marginTop: "0.75rem", padding: "0.45rem 1rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.84rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   tableWrap: { overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, backgroundColor: "#fff" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" },
   itemName: {
     fontWeight: 700, color: colors.textPrimary, lineHeight: 1.3, overflowWrap: "anywhere",
     minWidth: 0,
@@ -2164,19 +2238,16 @@ const styles = {
     fontSize: "0.72rem", color: colors.textSecondary,
   },
   hsChip: { fontFamily: "monospace", color: colors.blue },
-  // The flow behind the on-hand figure: opening, everything in, everything out.
-  flowMeta: {
-    display: "flex", justifyContent: "flex-end", gap: "0.35rem",
-    marginTop: "0.15rem", fontSize: "0.72rem", color: colors.textSecondary,
-    fontVariantNumeric: "tabular-nums",
+  // The flow behind the on-hand figure: opening, everything in, everything
+  // out -- quantity and value per row, one shade lighter than the on-hand
+  // figure so that stays the one the eye lands on first.
+  flowGrid: {
+    display: "grid", gridTemplateColumns: "auto auto", justifyContent: "end",
+    columnGap: "0.45rem", rowGap: 1, marginTop: "0.2rem",
+    fontSize: "0.7rem", color: colors.textSecondary, fontVariantNumeric: "tabular-nums",
+    textAlign: "right",
   },
-  // Same alignment and figures style as flowMeta above, one shade lighter so
-  // the quantity line stays the one the eye lands on first.
-  flowMetaValue: {
-    display: "flex", justifyContent: "flex-end", gap: "0.35rem",
-    marginTop: "0.1rem", fontSize: "0.68rem", color: colors.textSecondary,
-    fontVariantNumeric: "tabular-nums", opacity: 0.85,
-  },
+  flowValue: { opacity: 0.85 },
   cardStatMoney: {
     fontSize: "0.68rem", color: colors.textSecondary,
     fontVariantNumeric: "tabular-nums",
@@ -2184,14 +2255,14 @@ const styles = {
   rateChip: { marginTop: "0.15rem", fontSize: "0.72rem", color: colors.textSecondary },
   valueStrip: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))",
     gap: "0.6rem",
     margin: "0 0 0.9rem",
   },
   valueTile: {
     border: `1px solid ${colors.cardBorder}`,
     borderRadius: 10,
-    padding: "0.6rem 0.8rem",
+    padding: "0.5rem 0.7rem",
     backgroundColor: colors.inputBg,
   },
   valueTileLabel: {
@@ -2203,7 +2274,7 @@ const styles = {
     color: colors.textSecondary,
   },
   tdMoney: {
-    padding: "0.55rem 0.85rem",
+    padding: "0.5rem 0.6rem",
     borderBottom: `1px solid ${colors.cardBorder}`,
     color: colors.textPrimary,
     verticalAlign: "top",
@@ -2211,8 +2282,8 @@ const styles = {
     fontVariantNumeric: "tabular-nums",
     whiteSpace: "nowrap",
   },
-  th: { textAlign: "left", padding: "0.6rem 0.85rem", backgroundColor: "#f5f8fc", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.76rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" },
-  td: { padding: "0.55rem 0.85rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary, verticalAlign: "top" },
+  th: { textAlign: "left", padding: "0.55rem 0.6rem", backgroundColor: "#f5f8fc", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.7rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em" },
+  td: { padding: "0.5rem 0.6rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary, verticalAlign: "top" },
   pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "0.75rem 0" },
   pageBtn: { padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
