@@ -625,6 +625,26 @@ namespace MyApp.Api.Controllers
                     }
                     else if (gds.Count > 1)
                     {
+                        // One breakdown row per GD, from the stock sources only
+                        // — a cost-only backfill added no quantity to break down.
+                        item.GdBreakdown = gdDetails
+                            .Where(d => d.ItemTypeId == r.ItemTypeId && d.Quantity.HasValue)
+                            .GroupBy(d => d.GdNumber, StringComparer.OrdinalIgnoreCase)
+                            .Select(x => new StockExportGdLineDto
+                            {
+                                GdNumber = x.Key,
+                                GdDate = x.Min(d => d.GdDate),
+                                ClaimText = ClaimText(x),
+                                Description = string.Join(" / ", x.Select(d => d.Description)
+                                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                                    .Distinct(StringComparer.OrdinalIgnoreCase)),
+                                Quantity = x.Sum(d => d.Quantity ?? 0m),
+                                ValueExcludingTax = x.Sum(d => d.ValueExcludingTax ?? 0m),
+                                SalesTaxRate = x.Select(d => d.SalesTaxRate).FirstOrDefault(v => v.HasValue),
+                            })
+                            .OrderBy(x => x.GdDate ?? DateTime.MaxValue).ThenBy(x => x.GdNumber)
+                            .ToList();
+
                         // Unclaimed / undated GDs show as "-" so every position
                         // still lines up with its GD number.
                         item.LotDatesText = gds.Any(g => g.Date.HasValue)

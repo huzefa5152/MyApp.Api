@@ -201,6 +201,11 @@ namespace MyApp.Api.Helpers
                 if (r > MaxRows) { truncated = true; break; }
                 WriteItemRow(ws, r, item);
                 r++;
+                foreach (var line in item.GdBreakdown)
+                {
+                    WriteBreakdownRow(ws, r, line);
+                    r++;
+                }
             }
 
             var lastDataRow = r - 1;
@@ -525,12 +530,56 @@ namespace MyApp.Api.Helpers
             ws.Range(r, CClaim, r, Cols).Style.Font.SetFontName(Face);
         }
 
+        // ── Per-GD breakdown rows ─────────────────────────────────────────────
+
+        /// <summary>Marks a breakdown row in Items (D). The totals row sums
+        /// every row whose Items cell does NOT start with it, so a breakdown
+        /// never counts twice — and a row the operator appends still does.</summary>
+        public const string BreakdownMarker = "↳";
+
+        /// <summary>
+        /// One GD's share of the item above: its own claim month, GD, date,
+        /// sheet line name and the OPENING quantity / value it brought in.
+        /// Consumed and Balance stay blank on purpose — sales are not allocated
+        /// to a declaration, so a per-GD balance would be invented.
+        /// </summary>
+        private static void WriteBreakdownRow(IXLWorksheet ws, int r, StockExportGdLineDto line)
+        {
+            Text(ws, r, CClaim, line.ClaimText ?? "-");
+            Text(ws, r, CGdNo, line.GdNumber);
+            if (line.GdDate.HasValue) Date(ws, r, CGdDate, line.GdDate.Value);
+            Text(ws, r, CItem, $"{BreakdownMarker} {line.Description}".TrimEnd());
+            foreach (var col in new[] { CItem, CGdNo, CClaim })
+                ws.Cell(r, col).Style.Alignment.WrapText = true;
+
+            Formula(ws, r, CPrice, $"IFERROR(K{r}/J{r},\"\")", Acct0);
+            Number(ws, r, COpenQty, line.Quantity, Acct0);
+            Number(ws, r, COpenExl, line.ValueExcludingTax, Acct0);
+            if (line.SalesTaxRate.HasValue)
+            {
+                Number(ws, r, COpenRate, line.SalesTaxRate.Value / 100m, Pct);
+                Formula(ws, r, COpenTax, $"L{r}*K{r}", Acct2);
+            }
+            ws.Cell(r, CStripe).Style.Fill.BackgroundColor = SeparatorFill;
+
+            foreach (var col in new[] { COpenQty, CCogsOpenExl })
+                ws.Cell(r, col).Style.Border.LeftBorder = XLBorderStyleValues.Medium;
+            foreach (var col in new[] { COpenTax, CConsTax, CBalTax,
+                                        CCogsOpenVat, CCogsConsVat, CCogsBalVat })
+                ws.Cell(r, col).Style.Border.RightBorder = XLBorderStyleValues.Medium;
+
+            var row = ws.Range(r, CClaim, r, Cols).Style;
+            row.Font.SetFontName(Face).Font.SetItalic().Font.SetFontColor(Muted);
+        }
+
         // ── Totals ────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Written as SUM formulas over the data range, as on the source sheet —
-        /// an accountant who deletes a row expects the totals to follow, and
-        /// every data row here is an item row, so the range is contiguous.
+        /// Written as formulas over the data range, as on the source sheet — an
+        /// accountant who deletes a row expects the totals to follow. SUMIF,
+        /// not SUM, because per-GD breakdown rows sit between the item rows and
+        /// repeat part of the item's opening; they are skipped by their Items
+        /// marker (<see cref="BreakdownMarker"/>).
         ///
         /// Rate columns (L / P / T) and Price (H) are deliberately not summed: a
         /// percentage and a weighted unit cost do not add up, and a column of
@@ -556,7 +605,9 @@ namespace MyApp.Api.Helpers
             foreach (var col in TotalledColumns)
             {
                 var letter = ColumnLetter(col);
-                Formula(ws, r, col, $"SUM({letter}{FirstDataRow}:{letter}{last})", Acct0);
+                Formula(ws, r, col,
+                    $"SUMIF($D${FirstDataRow}:$D${last},\"<>{BreakdownMarker}*\",{letter}{FirstDataRow}:{letter}{last})",
+                    Acct0);
                 ws.Cell(r, col).Style.Font.SetBold();
             }
             ws.Range(r, CClaim, r, Cols).Style.Font.SetFontName(Face);
@@ -651,7 +702,7 @@ namespace MyApp.Api.Helpers
                 "Balance is the live position from the weighted-average valuation, not Opening minus Consumed.",
                 "Cost of Good Sold uses the imported GD landed cost where one exists, so Consumed is what the goods sold actually cost; where none exists it unwinds the tax uplift (cost = value x rate / (rate + 3%)). Type over any cell to record a different figure.",
                 "Claim Month and Sub cat are yours to fill when absent. A recorded Claim Month is the filed period, never inferred from the GD date.",
-                "An item held across several GDs lists every GD No, GD Date and Claim Month in the same order (a dash = not claimed yet). See GD Detail for each source row.",
+                "An item held across several GDs lists every GD No, GD Date and Claim Month in the same order (a dash = not claimed yet), with one \u21b3 row per GD beneath it showing what that GD brought in. The totals skip those rows. Consumed and Balance are per item only: sales are not allocated to a GD.",
             })
             {
                 ws.Cell(r, 1).Value = note;

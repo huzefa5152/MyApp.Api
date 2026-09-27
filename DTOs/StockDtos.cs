@@ -445,6 +445,25 @@
         /// the same order as the GD numbers in <see cref="LotRef"/>.</summary>
         public string? LotDatesText { get; set; }
         public string? ClaimMonthsText { get; set; }
+
+        /// <summary>One entry per GD when the item holds more than one — the
+        /// breakdown rows written under the item on the stock sheet. Empty for
+        /// a single-GD item, whose own row already is its breakdown.</summary>
+        public List<StockExportGdLineDto> GdBreakdown { get; set; } = new();
+    }
+
+    /// <summary>What one GD contributed to an item: its source quantity and
+    /// value as the sheet / GD import recorded them. Not what is LEFT of that
+    /// GD — sales are not allocated to a declaration.</summary>
+    public class StockExportGdLineDto
+    {
+        public string GdNumber { get; set; } = "";
+        public DateTime? GdDate { get; set; }
+        public string? ClaimText { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
+        public decimal? SalesTaxRate { get; set; }
     }
 
     /// <summary>Everything the stock workbook needs, resolved server-side.</summary>

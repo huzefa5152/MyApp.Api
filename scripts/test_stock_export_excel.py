@@ -160,17 +160,30 @@ def book(path: str):
     return wb.worksheets[0], wb["Summary"]
 
 
+BREAKDOWN = "\u21b3"
+
+
+def is_breakdown(ws, r):
+    return str(ws.cell(r, C_ITEM).value or "").startswith(BREAKDOWN)
+
+
 def anatomy(ws):
-    """(item rows, totals row) of a stock workbook. Data starts at a fixed row
-    and every data row is an item row — there is no drill-down to skip."""
+    """(item rows, totals row) of a stock workbook. Data starts at a fixed row;
+    per-GD breakdown rows (Items starting with the marker) sit under a
+    multi-GD item and are not item rows."""
     last = FIRST_DATA_ROW - 1
     for r in range(FIRST_DATA_ROW, ws.max_row + 1):
         if ws.cell(r, C_ITEM).value in (None, ""):
             break
         last = r
-    items = list(range(FIRST_DATA_ROW, last + 1))
+    items = [r for r in range(FIRST_DATA_ROW, last + 1) if not is_breakdown(ws, r)]
     totals = last + 3 if items else None
     return items, totals
+
+
+def total_formula(letter, last):
+    return (f'=SUMIF($D${FIRST_DATA_ROW}:$D${last},"<>{BREAKDOWN}*",'
+            f'{letter}{FIRST_DATA_ROW}:{letter}{last})')
 
 
 def sheet_text(ws) -> str:
@@ -433,11 +446,39 @@ def main() -> int:
             wrong = [f"col {letters[c]}: {ws.cell(totals, c).value!r}"
                      for c in TOTALLED
                      if ws.cell(totals, c).value
-                        != f"=SUM({letters[c]}{FIRST_DATA_ROW}:{letters[c]}{last})"]
+                        != total_formula(letters[c], last)]
             check("s3", "every totalled column sums the data range", not wrong,
                   " | ".join(wrong[:3]))
+            data_end = totals - 3
             check("s3", "the SUM reaches past the blank rows so an appended row counts",
-                  last == items[-1] + 2, f"last row in range {last}, data ends {items[-1]}")
+                  last == data_end + 2, f"last row in range {last}, data ends {data_end}")
+            # Per-GD breakdown rows: every multi-GD item gets one row per GD
+            # beneath it, and those rows add back up to the item's opening.
+            bad = []
+            for r in items:
+                gds = [g.strip() for g in str(ws.cell(r, C_GDNO).value or "").split(",") if g.strip()]
+                sub = []
+                n = r + 1
+                while n <= data_end and is_breakdown(ws, n):
+                    sub.append(n)
+                    n += 1
+                if len(gds) > 1 and sub:
+                    if [ws.cell(x, C_GDNO).value for x in sub] != [g for g in gds
+                                                                    if g in {ws.cell(x, C_GDNO).value for x in sub}]:
+                        bad.append(f"r{r} GD order")
+                elif len(gds) <= 1 and sub:
+                    bad.append(f"r{r} single-GD item has breakdown rows")
+            check("s3", "breakdown rows only sit under multi-GD items, in GD order",
+                  not bad, " | ".join(bad[:3]))
+            # A multi-GD item whose breakdown rows carry dates must list those
+            # dates on the item row too, one per GD.
+            missing = [r for r in items
+                       if "," in str(ws.cell(r, C_GDNO).value or "")
+                       and r + 1 <= data_end and is_breakdown(ws, r + 1)
+                       and ws.cell(r + 1, C_GDDATE).value is not None
+                       and not ws.cell(r, C_GDDATE).value]
+            check("s3", "a multi-GD item row lists its GD dates", not missing,
+                  f"rows {missing[:5]}")
             for col, what in [(C_OPEN_RATE, "Opening Rate"), (C_CONS_RATE, "Consumed Rate"),
                               (C_BAL_RATE, "Balance Rate"), (C_PRICE, "Price")]:
                 check("s3", f"TOTAL leaves {what} blank",
@@ -527,7 +568,7 @@ def main() -> int:
                 if s_items:
                     check("s7", "the narrowed total sums only the narrowed rows",
                           ws_s.cell(s_totals, C_BAL_EXL).value
-                          == f"=SUM(S{FIRST_DATA_ROW}:S{s_totals - 1})",
+                          == total_formula("S", s_totals - 1),
                           str(ws_s.cell(s_totals, C_BAL_EXL).value))
 
     finally:

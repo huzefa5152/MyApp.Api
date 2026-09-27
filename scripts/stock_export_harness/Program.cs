@@ -433,6 +433,13 @@ Console.WriteLine("\n=== 4. GDs No / GD Date ===");
         lotRef: "KAPE-HC-2965, KAPE-HC-7328");
     multi.LotDatesText = "21-07-2026, 15-08-2026";
     multi.ClaimMonthsText = "Jul 2026, -";
+    multi.GdBreakdown = new List<StockExportGdLineDto>
+    {
+        new() { GdNumber = "KAPE-HC-2965", GdDate = new DateTime(2026, 7, 21), ClaimText = "Jul 2026",
+                Description = "HAIR STRAIGHTENER PARTS", Quantity = 4000m, ValueExcludingTax = 2000000m, SalesTaxRate = 18m },
+        new() { GdNumber = "KAPE-HC-7328", GdDate = new DateTime(2026, 8, 15), ClaimText = null,
+                Description = "STRAIGHTENER SPARE", Quantity = 666m, ValueExcludingTax = 368549m, SalesTaxRate = 18m },
+    };
     var multiPath = Path.Combine(outDir, "stock-export-multi-gd.xlsx");
     File.WriteAllBytes(multiPath, StockExcelBuilder.Build(Data(new List<StockExportItemDto> { multi }, "As at 31-08-2026")));
     using var wb = new XLWorkbook(multiPath);
@@ -446,6 +453,24 @@ Console.WriteLine("\n=== 4. GDs No / GD Date ===");
     Check("and every claim month, a dash for the unclaimed one",
         ws.Cell(FirstDataRow, ClaimCol).GetString() == "Jul 2026, -",
         ws.Cell(FirstDataRow, ClaimCol).GetString());
+    Check("one breakdown row per GD sits under the item, marked in Items",
+        ws.Cell(FirstDataRow + 1, ItemCol).GetString().StartsWith(StockExcelBuilder.BreakdownMarker)
+        && ws.Cell(FirstDataRow + 2, ItemCol).GetString().StartsWith(StockExcelBuilder.BreakdownMarker)
+        && ws.Cell(FirstDataRow + 3, ItemCol).IsEmpty());
+    Check("each breakdown row names its own GD, date and claim month",
+        ws.Cell(FirstDataRow + 1, GdNoCol).GetString() == "KAPE-HC-2965"
+        && ws.Cell(FirstDataRow + 1, ClaimCol).GetString() == "Jul 2026"
+        && ws.Cell(FirstDataRow + 2, GdNoCol).GetString() == "KAPE-HC-7328"
+        && ws.Cell(FirstDataRow + 2, ClaimCol).GetString() == "-"
+        && ws.Cell(FirstDataRow + 2, GdDateCol).GetDateTime() == new DateTime(2026, 8, 15));
+    Check("each breakdown row carries what its GD brought in",
+        ws.Cell(FirstDataRow + 1, OpenQtyCol).GetValue<decimal>() == 4000m
+        && ws.Cell(FirstDataRow + 2, OpenExlCol).GetValue<decimal>() == 368549m);
+    Check("breakdown rows leave Consumed and Balance to the item",
+        ws.Cell(FirstDataRow + 1, BalQtyCol).IsEmpty() && ws.Cell(FirstDataRow + 1, ConsQtyCol).IsEmpty());
+    Check("the totals skip breakdown rows (SUMIF on the Items marker)",
+        ws.Cell(FirstDataRow + 5, OpenQtyCol).FormulaA1.StartsWith("SUMIF($D$"),
+        ws.Cell(FirstDataRow + 5, OpenQtyCol).FormulaA1);
     Check("the lists wrap rather than clip",
         ws.Cell(FirstDataRow, GdNoCol).Style.Alignment.WrapText
         && ws.Cell(FirstDataRow, GdDateCol).Style.Alignment.WrapText
@@ -474,7 +499,7 @@ Console.WriteLine("\n=== 5. Totals ===");
     };
     foreach (var col in summed)
     {
-        var want = $"SUM({Letter(col)}{FirstDataRow}:{Letter(col)}{totalsRow - 1})";
+        var want = $"SUMIF($D${FirstDataRow}:$D${totalsRow - 1},\"<>{StockExcelBuilder.BreakdownMarker}*\",{Letter(col)}{FirstDataRow}:{Letter(col)}{totalsRow - 1})";
         Check($"TOTAL {Letter(col)} is ={want}",
             ws.Cell(totalsRow, col).FormulaA1 == want,
             ws.Cell(totalsRow, col).HasFormula ? ws.Cell(totalsRow, col).FormulaA1 : "(none)");
