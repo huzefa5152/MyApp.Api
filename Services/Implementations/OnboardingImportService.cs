@@ -198,10 +198,18 @@ namespace MyApp.Api.Services.Implementations
         private async Task PlanPartiesAsync(PlannedSheet? ps, int companyId, bool isCustomer)
         {
             if (ps == null) return;
-            var names = isCustomer
-                ? await _db.Clients.AsNoTracking().Where(c => c.CompanyId == companyId).Select(c => c.Name).ToListAsync()
-                : await _db.Suppliers.AsNoTracking().Where(s => s.CompanyId == companyId).Select(s => s.Name).ToListAsync();
-            var existing = names.Select(NameKey).ToHashSet();
+            var parties = isCustomer
+                ? await _db.Clients.AsNoTracking().Where(c => c.CompanyId == companyId).Select(c => new { c.Name, c.NTN }).ToListAsync()
+                : await _db.Suppliers.AsNoTracking().Where(s => s.CompanyId == companyId).Select(s => new { s.Name, s.NTN }).ToListAsync();
+            var existing = parties.Select(p => NameKey(p.Name)).ToHashSet();
+            // An NTN is the business, whatever the name is spelt as: "ACME" and
+            // "ACME Pvt Ltd" under one NTN would otherwise import as two
+            // customers. Both sides go through NormaliseNtn, so 1234567-8 on file
+            // matches 1234567 in the sheet, and a stored placeholder that is not
+            // a real NTN ("0", "-") never matches anything.
+            var byNtn = new Dictionary<string, string>();
+            foreach (var p in parties)
+                if (OnboardingRowRules.NormaliseNtn(p.NTN) is string n) byNtn.TryAdd(n, p.Name);
             var who = isCustomer ? "customer" : "supplier";
 
             foreach (var pr in ps.Rows.Where(r => r.Status != OnboardingRowStatus.Error))
@@ -210,8 +218,15 @@ namespace MyApp.Api.Services.Implementations
                     pr.Status = OnboardingRowStatus.Exists;
                     pr.Issues.Add(new RowIssue("Name", $"a {who} with this name already exists, so this row is skipped", false));
                 }
+                else if (OnboardingRowRules.NormaliseNtn(pr.Row.Get("ntn")) is string ntn && byNtn.TryGetValue(ntn, out var holder))
+                {
+                    pr.Status = OnboardingRowStatus.Exists;
+                    pr.Issues.Add(new RowIssue("NTN", $"NTN {ntn} already belongs to the {who} \"{holder}\", so this row is skipped", false));
+                }
 
             FlagInFileDuplicates(ps, pr => pr.Status == OnboardingRowStatus.Exists ? null : NameKey(pr.Label), "Name", who);
+            FlagInFileDuplicates(ps, pr => pr.Status is OnboardingRowStatus.Exists or OnboardingRowStatus.Error ? null
+                : OnboardingRowRules.NormaliseNtn(pr.Row.Get("ntn")), "NTN", "NTN");
         }
 
         private record ExistingItem(int Id, string Name, string? HsCode);

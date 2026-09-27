@@ -347,6 +347,50 @@ def main():
         check("5", "resolves an existing catalog item case-insensitively", op3 and op3["toImport"] == 1, issue_text(op3 and op3["rows"][0]))
         check("5", "only the asked sheet is previewed", s == 200 and [x["key"] for x in pv3["sheets"]] == ["openingStock"])
 
+        # ── 5b. NTN matching ───────────────────────────────────────────────
+        # One business under a second spelling of its name is still one
+        # business: a row whose NTN is already on file is skipped, and two rows
+        # sharing an NTN in the file are refused, whatever their names say.
+        print("\n  Suite 5b — a known NTN is the same business")
+        s, ntn_sample = request("GET", f"{base_path}/sample?sheets=customers,suppliers", token=admin)
+        nwb = openpyxl.load_workbook(io.BytesIO(ntn_sample))
+        fill(nwb["Customers"], [
+            {"Name": "ZZ Onb Cust A Pvt Ltd", "Registration Type": "Registered", "NTN": "1234567", "Province": "Sindh",
+             "Address": "x"},                                                                     # 3 exists (A's NTN)
+            {"Name": "ZZ Onb Cust E", "Registration Type": "Registered", "NTN": "7654321-0", "Province": "Sindh",
+             "Address": "x"},                                                                     # 4 import
+            {"Name": "ZZ Onb Cust E Traders", "Registration Type": "Registered", "NTN": "7654321", "Province": "Sindh",
+             "Address": "x"},                                                                     # 5 same NTN as row 4
+            {"Name": "ZZ Onb Cust F", "Registration Type": "Unregistered", "Province": "Sindh", "Address": "x"},  # 6 import
+        ])
+        fill(nwb["Suppliers"], [
+            {"Name": "ZZ Onb Supp N1", "Registration Type": "Registered", "NTN": "2223334"},    # 3 import
+            {"Name": "ZZ Onb Supp N2", "Registration Type": "Registered", "NTN": "2223334-5"},  # 4 same NTN as row 3
+        ])
+        ntn_data = to_bytes(nwb)
+        s, pv5 = upload(f"{base_path}/preview", admin, ntn_data, sheets="customers,suppliers")
+        if check("5b", "preview returns 200", s == 200, f"{s} {pv5}"):
+            cu5, su5 = sheet(pv5, "customers"), sheet(pv5, "suppliers")
+            check("5b", "customers: import/exists/error = 2/1/1",
+                  (cu5["toImport"] + cu5["withWarnings"], cu5["existing"], cu5["errors"]) == (2, 1, 1),
+                  str((cu5["toImport"], cu5["withWarnings"], cu5["existing"], cu5["errors"])))
+            r3 = row_at(cu5, 3)
+            check("5b", "a known NTN under another name reads as existing", r3["status"] == "exists", r3["status"])
+            check("5b", "and names the customer already holding it",
+                  "1234567" in issue_text(r3) and "ZZ Onb Cust A" in issue_text(r3), issue_text(r3))
+            check("5b", "two rows with one NTN: the second is refused", "same NTN as row 4" in issue_text(row_at(cu5, 5)),
+                  issue_text(row_at(cu5, 5)))
+            check("5b", "a row with no NTN is not matched on it", row_at(cu5, 6)["status"] in ("import", "warning"),
+                  issue_text(row_at(cu5, 6)))
+            check("5b", "suppliers: an 8-digit NTN is the same as its 7 digits",
+                  "same NTN as row 3" in issue_text(row_at(su5, 4)), issue_text(row_at(su5, 4)))
+        s, res5 = upload(f"{base_path}/commit", admin, ntn_data, sheets="customers,suppliers")
+        _, clients5 = request("GET", f"/api/clients/company/{cid}", token=admin)
+        names5 = {c["name"] for c in clients5 or []}
+        check("5b", "commit creates the new ones only",
+              "ZZ Onb Cust E" in names5 and "ZZ Onb Cust F" in names5
+              and "ZZ Onb Cust A Pvt Ltd" not in names5 and "ZZ Onb Cust E Traders" not in names5, str(sorted(names5)))
+
         # ── 7. Permissions ─────────────────────────────────────────────────
         print("\n  Suite 7 — permissions")
         role_ids = []

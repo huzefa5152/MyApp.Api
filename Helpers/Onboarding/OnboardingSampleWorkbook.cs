@@ -129,6 +129,7 @@ namespace MyApp.Api.Helpers.Onboarding
             Line("2. Leave a sheet empty if you have nothing for it. It is simply skipped.");
             Line("3. Upload the file. Nothing is saved until you have checked the preview and pressed Import.");
             Line("4. Records that already exist are skipped, never changed, so the same file can be uploaded twice safely.");
+            Line("   A customer or supplier already exists when its name OR its NTN is already on file.");
             Line("5. Rows with a problem are listed with the reason. Download them, fix them and upload them again.");
             r++;
             Line("Column headings", true, 13);
