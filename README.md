@@ -301,6 +301,14 @@ Publish output optimized from 79 MB to 37 MB via:
 
 
 
+### 2026-09-25 — Supplier costs on challans and automatic purchase bills
+
+- A delivery challan can record, per line, an optional supplier and the actual unit cost — on New Challan (typed or delivered from a Sales Order), Edit Challan and PO Import. These details are internal only: they never reach a print template or the customer portal.
+- When every line has a supplier and a cost, saving offers to create the unpaid purchase bills, one per supplier, numbered in the challan's division sequence and posted to the ledger like a hand-made purchase bill. Nothing is created without that confirmation, and confirming again returns the same bills instead of duplicating them.
+- While those purchase bills exist the challan's lines, suppliers and costs are locked and it cannot be cancelled or deleted; notes stay editable. Purchase bills raised this way are marked "From delivery challan".
+- The challan view shows each line's supplier and cost; Document Lines adds the selling price and unit / total profit.
+- Migration `AddChallanPrivateProcurement` adds the nullable columns and indexes.
+
 ### 2026-09-25 — Searchable challan pickers and document notes
 
 - Private supplier and unit-cost details use compact, responsive rows across challan creation, PO import, Sales Order creation, editing, and viewing; bulk supplier actions remain available and private details stay out of customer prints.
@@ -309,7 +317,7 @@ Publish output optimized from 79 MB to 37 MB via:
 - Quotes, challans, bills and tax invoices, purchase bills, goods receipts, payments, and receipts accept formatted notes on create and edit, show them in document views, and expose an optional Notes merge field for print templates. Existing templates remain unchanged.
 - Added nullable note storage for documents that did not previously have it.
 - The built-in Challan, Bill and Tax Invoice designs print a Notes box under the totals when a document has notes, and nothing when it doesn't. Templates already saved by a company need the Notes field added in the template editor.
-- The built-in Bill printed a literal `—` beside "Purchase Order" when a bill had no PO; it now prints a dash. The server's copies of the built-in Bill and Tax Invoice are back in sync after withholding was hidden on customer invoices.
+- The built-in Bill printed a literal `\u2014` beside "Purchase Order" when a bill had no PO; it now prints a dash. The server's copies of the built-in Bill and Tax Invoice are back in sync after withholding was hidden on customer invoices.
 
 ### 2026-09-25 — Document lines and multi-delivery linking
 
