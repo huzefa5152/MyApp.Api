@@ -450,3 +450,11 @@ wwwroot/
 # PO-parser production read-only check output: downloaded customer PO PDFs +
 # per-item dumps. Real client-confidential documents — never commit.
 scripts/_prod_dump_out/
+
+# Local audit scratch output (logs, caches) — never project code.
+.codex-audit/
+
+# PO-parser regression corpus: real customer PO text, so it stays on the
+# maintainer's machine and out of this PUBLIC repo. The harness reads it
+# from disk (scripts/po_parser_harness); see PO_IMPORT_PARSER_GUIDE.md §5a.
+scripts/po_parser_harness/corpus/

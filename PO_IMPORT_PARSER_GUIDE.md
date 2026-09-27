@@ -160,7 +160,11 @@ dotnet run -c Release            # all corpora; exit non-zero on any failure
 dotnet run -c Release -- -v      # print every failure
 ```
 
-Corpora in `scripts/po_parser_harness/corpus/`:
+Corpora in `scripts/po_parser_harness/corpus/` — **local-only since 2026-09-27**
+(gitignored: the production cases are real customer PO text and this repo is
+public). A fresh clone has no corpus, so the harness has nothing to run until the
+folder is copied onto the machine; keep it with the maintainer's other local data.
+Its earlier versions remain in git history.
 - `diverse_corpus.json` (197) — realistic layouts across industries, header
   synonyms, no-unit tables, alpha codes, currency, multi-page.
 - `adversarial_corpus.json` (65) — layouts purpose-built to break the algorithm;
