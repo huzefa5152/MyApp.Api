@@ -967,10 +967,33 @@ namespace MyApp.Api.Services.Implementations
                     // NOT a spill, so leave qtyIndex = -1 and let the row be skipped.
                     // A percentage ("32%") is never a quantity — it belongs to the
                     // description (a concentration), so IsQuantityNumber excludes it.
+                    // The spilled quantity may carry its unit inline too ("5.00 PIECE").
                     for (int k = (qtyCol < 0 ? 0 : qtyCol + 1); k < cols.Length; k++)
+                    {
                         if (IsQuantityNumber(cols[k])) { qtyIndex = k; break; }
+                        if (TrySplitQtyUnitCell(cols[k], out var spilledUnit)) { qtyIndex = k; inlineUnit = spilledUnit; break; }
+                    }
+                    // The opposite shift: an EMPTY cell between the description
+                    // and the quantity was dropped (an OCR'd "-" read as nothing,
+                    // a blank Remarks column), so the columns moved LEFT and the
+                    // quantity column now holds the rate. Look left — but accept
+                    // only a quantity that carries its unit ("4.00 PIECE"): a bare
+                    // number there could be anything, and guessing is how a rate
+                    // becomes a quantity.
+                    if (qtyIndex < 0 && qtyCol > descCol + 1 && descCol >= 0)
+                        for (int k = Math.Min(qtyCol - 1, cols.Length - 1); k > descCol; k--)
+                            if (TrySplitQtyUnitCell(cols[k], out var shiftedUnit)) { qtyIndex = k; inlineUnit = shiftedUnit; break; }
+                    // A spill of N extra cells pushes every column after the
+                    // description N to the right, so the description absorbs
+                    // exactly N cells — not every cell up to the quantity, which
+                    // would swallow the columns between them (Remarks, Section).
+                    // When the description sits right before the quantity the
+                    // two readings are the same. It always keeps its own cell.
                     if (qtyIndex > descCol && descCol >= 0)
-                        descCells = string.Join(" ", cols.Skip(descCol).Take(qtyIndex - descCol));
+                    {
+                        var take = qtyCol > descCol ? 1 + (qtyIndex - qtyCol) : qtyIndex - descCol;
+                        descCells = string.Join(" ", cols.Skip(descCol).Take(Math.Clamp(take, 1, qtyIndex - descCol)));
+                    }
                 }
 
                 var qty = qtyIndex >= 0 ? ParseQtyCell(cols[qtyIndex]) : 0m;
@@ -980,6 +1003,11 @@ namespace MyApp.Api.Services.Implementations
                 {
                     var desc = SanitiseDescription(descCells);
                     if (string.IsNullOrWhiteSpace(desc)) continue;   // qty but no description text → not a real row
+                    // A totals line whose amount landed where a quantity reads
+                    // ("SUB TOTAL  Rs  10,600", "GST (18%)  Rs  1,908"), or a row
+                    // whose "description" is only a currency word. Never an item.
+                    if (IsFooterCell(desc) || cols.Take(qtyIndex).Any(IsFooterCell) || CurrencyWordRegex.IsMatch(desc))
+                    { FlushItem(items, ref current); continue; }
 
                     // Unit: its own column when present; if that shifted with a
                     // spill, take the cell right after the quantity.
@@ -1007,6 +1035,8 @@ namespace MyApp.Api.Services.Implementations
                     // more bare-number cells (the price/amount columns of a row
                     // whose quantity cell was left blank). Also skip numeric tails.
                     if (!Regex.IsMatch(line, "[A-Za-z]")) continue;
+                    // An empty grid row still prints its currency: "Rs  -", "Rs  0".
+                    if (CurrencyOnlyLineRegex.IsMatch(line)) continue;
                     if (LooksLikeDataRowAttempt(cols)) continue;
                     if (NoteLabelRegex.IsMatch(line)) continue;   // "Spec:"/"Note:"/… footer, not a wrap
                     // A "label … amount" line (text cells ending in a bare
@@ -1041,6 +1071,29 @@ namespace MyApp.Api.Services.Implementations
         // a percentage (a "32%" cell is a concentration in the description).
         private static bool IsQuantityNumber(string? s) =>
             !string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^[\p{Sc}]?\s*\d[\d,]*(?:\.\d+)?$");
+
+        // A currency amount is a price, never a unit: "Rs15", "Rs 1,400", "PKR 20".
+        private static readonly Regex CurrencyAmountRegex = new(
+            @"^\s*(?:Rs\.?|PKR|₨|\p{Sc})\s*[\d,]+(?:\.\d+)?\s*/?-?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A line of nothing but currency words, numbers and dashes — an empty
+        // table row ("Rs  -   Rs  -").
+        private static readonly Regex CurrencyOnlyLineRegex = new(
+            @"^(?:\s*(?:Rs\.?|PKR|₨)\s*[-\d.,]*)+\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A "description" that is only a currency word.
+        private static readonly Regex CurrencyWordRegex = new(
+            @"^\s*(?:Rs\.?|PKR|₨)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A tax line label with its rate: "GST (18%)", "Sales Tax 18 %", "VAT 5%".
+        private static readonly Regex TaxRateLabelRegex = new(
+            @"^\s*(?:GST|VAT|Sales\s+Tax|Tax)\s*\(?\s*\d+(?:\.\d+)?\s*%\s*\)?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static bool IsFooterCell(string? cell)
+        {
+            var c = StripLabelDecoration(cell ?? "");
+            return c.Length > 0 && (FooterLabelRegex.IsMatch(c) || TaxRateLabelRegex.IsMatch(c));
+        }
 
         // One letter, alone: a character of a vertical watermark.
         private static readonly Regex LoneLetterRegex = new(@"^\s*[A-Za-z]\s*$", RegexOptions.Compiled);
@@ -1216,7 +1269,8 @@ namespace MyApp.Api.Services.Implementations
         private static bool LooksLikeUnitValue(string s) =>
             !string.IsNullOrWhiteSpace(s)
             && Regex.IsMatch(s, "[A-Za-z]")
-            && !Regex.IsMatch(s, @"^\s*[\p{Sc}\d.,]+\s*$");
+            && !Regex.IsMatch(s, @"^\s*[\p{Sc}\d.,]+\s*$")
+            && !CurrencyAmountRegex.IsMatch(s);   // "Rs15" is a price, not a unit
 
         // Header-word synonyms for the generic detector — ordered most-specific
         // first so multi-word headers win over the bare "Item".
