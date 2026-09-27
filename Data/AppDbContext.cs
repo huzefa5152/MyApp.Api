@@ -211,6 +211,7 @@ namespace MyApp.Api.Data
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
         public DbSet<OpeningStockLot> OpeningStockLots { get; set; }
+        public DbSet<StockRestatementLine> StockRestatementLines { get; set; }
         public DbSet<ImportConsignment> ImportConsignments { get; set; }
         public DbSet<ImportConsignmentLine> ImportConsignmentLines { get; set; }
         public DbSet<GdClaimPeriod> GdClaimPeriods { get; set; }
@@ -2274,6 +2275,27 @@ namespace MyApp.Api.Data
                 .Property(l => l.ConsumedSalesTaxRate).HasColumnType("decimal(5,2)");
             modelBuilder.Entity<OpeningStockLot>()
                 .Property(l => l.BalanceSalesTaxRate).HasColumnType("decimal(5,2)");
+
+            // StockRestatementLine — the GD lines an item is restated to under
+            // FIFO by GD (CLAUDE.md 5b-17). Cascades from its movement only.
+            modelBuilder.Entity<StockRestatementLine>()
+                .HasOne(l => l.StockMovement)
+                .WithMany()
+                .HasForeignKey(l => l.StockMovementId)
+                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<StockRestatementLine>()
+                .HasIndex(l => new { l.CompanyId, l.ItemTypeId });
+            modelBuilder.Entity<StockRestatementLine>().Property(l => l.GdNumber).HasMaxLength(100);
+            modelBuilder.Entity<StockRestatementLine>().Property(l => l.Description).HasMaxLength(300);
+            modelBuilder.Entity<StockRestatementLine>().Property(l => l.SourceFile).HasMaxLength(260);
+            modelBuilder.Entity<StockRestatementLine>().Property(l => l.ClaimMonth).HasColumnType("date");
+            modelBuilder.Entity<StockRestatementLine>().Property(l => l.Quantity).HasPrecision(28, 12);
+            modelBuilder.Entity<StockRestatementLine>()
+                .Property(l => l.ValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<StockRestatementLine>()
+                .Property(l => l.ActualValueExcludingTax).HasColumnType("decimal(18,2)");
+            modelBuilder.Entity<StockRestatementLine>()
+                .Property(l => l.SalesTaxRate).HasColumnType("decimal(5,2)");
 
             // ── ImportConsignment / ImportConsignmentLine — GD costing import
             // (2026-09-12). The cost-side counterpart to OpeningStockLot; see

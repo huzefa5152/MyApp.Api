@@ -330,6 +330,56 @@
         public List<StockPriceTierDto>? Tiers { get; set; }
     }
 
+    /// <summary>Restate items to a stock sheet's GD lines under FIFO by GD
+    /// (CLAUDE.md 5b-17). <c>Commit</c> false = preview only, nothing written.</summary>
+    public class FifoRestatementRequestDto
+    {
+        public string? SourceFile { get; set; }
+        public bool Commit { get; set; }
+        public List<FifoRestatementLineDto> Lines { get; set; } = new();
+    }
+
+    public class FifoRestatementLineDto
+    {
+        public int ItemTypeId { get; set; }
+        public string GdNumber { get; set; } = "";
+        public DateTime? GdDate { get; set; }
+        public DateTime? ClaimMonth { get; set; }
+        public int SourceRow { get; set; }
+        public string? Description { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
+        /// <summary>Percent, e.g. 18.</summary>
+        public decimal SalesTaxRate { get; set; }
+    }
+
+    public class FifoRestatementItemDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string? HsCode { get; set; }
+        public int LineCount { get; set; }
+        public decimal OnHand { get; set; }
+        public decimal SheetQuantity { get; set; }
+        public decimal FifoValue { get; set; }
+        public decimal WeightedAverageValue { get; set; }
+        public decimal SheetValue { get; set; }
+        public decimal LandedValue { get; set; }
+        /// <summary>Why this item cannot be restated; null = fine.</summary>
+        public string? Error { get; set; }
+    }
+
+    public class FifoRestatementResultDto
+    {
+        public bool Committed { get; set; }
+        public bool CanCommit { get; set; }
+        public List<FifoRestatementItemDto> Items { get; set; } = new();
+        /// <summary>Items holding stock that the sheet does not list -- left as they are.</summary>
+        public List<FifoRestatementItemDto> NotInSheet { get; set; } = new();
+        public decimal FifoValueBefore { get; set; }
+        public decimal SheetValue { get; set; }
+    }
+
     public class StockPriceTierDto
     {
         public string? GdNumber { get; set; }
@@ -428,6 +478,8 @@
         /// (<see cref="ConsignmentLineId"/>). Its claim month is edited per line.</summary>
         public int? LotId { get; set; }
         public int? ConsignmentLineId { get; set; }
+        /// <summary>A line of the item's latest stock-sheet restatement (FIFO by GD).</summary>
+        public int? RestatementLineId { get; set; }
         public int SourceRow { get; set; }
         public string? Description { get; set; }
         public decimal? Quantity { get; set; }

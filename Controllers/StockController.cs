@@ -292,13 +292,15 @@ namespace MyApp.Api.Controllers
             }
 
             var lines = new List<StockExportGdLineDto>();
-            foreach (var g in res.Pools.Where(p => p.GdNumber != null && p.InQuantity > 0m)
+            // Pools a restatement replaced describe stock no longer held; the
+            // restated lines (and anything since) are the item's GDs now.
+            foreach (var g in res.Pools.Where(p => p.GdNumber != null && p.InQuantity > 0m && p.RestatedAwayQuantity == 0m)
                          .GroupBy(p => p.GdNumber!, StringComparer.OrdinalIgnoreCase)
                          .OrderBy(g => g.Min(p => p.OrderDate) ?? DateTime.MaxValue).ThenBy(g => g.Key))
                 lines.Add(Line(g.Key, g, null));
-            var untraced = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.OpeningUntraced).ToList();
+            var untraced = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.OpeningUntraced && p.RestatedAwayQuantity == 0m).ToList();
             if (untraced.Count > 0) lines.Add(Line("-", untraced, "Opening — not traced to a GD"));
-            var inward = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.Inward && p.InQuantity > 0m).ToList();
+            var inward = res.Pools.Where(p => p.Kind == GdFifoValuation.PoolKind.Inward && p.InQuantity > 0m && p.RestatedAwayQuantity == 0m).ToList();
             if (inward.Count > 0) lines.Add(Line("-", inward, "Other stock in (purchase / receipt / adjustment)"));
             if (res.ShortfallQuantity > 0m)
                 lines.Add(new StockExportGdLineDto
@@ -365,7 +367,11 @@ namespace MyApp.Api.Controllers
                 l.Disposition, l.ImportConsignment.Mode, l.ImportConsignment.GdNumber,
                 l.ImportConsignment.GdDate,
             }).ToListAsync();
-            var ids = lots.Select(l => l.ItemTypeId).Concat(lines.Select(l => l.ItemTypeId)).Distinct().ToList();
+            var restateItemQ = _context.StockRestatementLines.AsNoTracking().Where(l => l.CompanyId == companyId);
+            if (itemTypeIds != null) restateItemQ = restateItemQ.Where(l => itemTypeIds.Contains(l.ItemTypeId));
+            var restateItemIds = await restateItemQ.Select(l => l.ItemTypeId).Distinct().ToListAsync();
+            var ids = lots.Select(l => l.ItemTypeId).Concat(lines.Select(l => l.ItemTypeId))
+                .Concat(restateItemIds).Distinct().ToList();
             if (ids.Count == 0) return new();
             var names = await _context.ItemTypes.AsNoTracking()
                 .Where(i => ids.Contains(i.Id) && !i.IsDeleted)
@@ -416,6 +422,37 @@ namespace MyApp.Api.Controllers
                     SalesTaxRate = l.SalesTaxRate,
                 });
             }
+            // A stock-sheet restatement (CLAUDE.md 5b-17) is now what explains
+            // the item's position: its latest restatement's lines replace the
+            // older source rows, which describe stock that was restated away.
+            var restateQ = _context.StockRestatementLines.AsNoTracking().Where(l => l.CompanyId == companyId);
+            if (itemTypeIds != null) restateQ = restateQ.Where(l => itemTypeIds.Contains(l.ItemTypeId));
+            var restated = (await restateQ.ToListAsync())
+                .GroupBy(l => l.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.Where(l => l.StockMovementId == g.Max(x => x.StockMovementId)).ToList());
+            if (restated.Count > 0)
+            {
+                var missing = restated.Keys.Where(k => !names.ContainsKey(k)).ToList();
+                if (missing.Count > 0)
+                    foreach (var extra in await _context.ItemTypes.AsNoTracking()
+                                 .Where(i => missing.Contains(i.Id) && !i.IsDeleted)
+                                 .Select(i => new { i.Id, i.Name }).ToListAsync())
+                        names[extra.Id] = extra.Name;
+                result.RemoveAll(r => restated.ContainsKey(r.ItemTypeId));
+                foreach (var (itemId, rlines) in restated)
+                {
+                    if (!names.TryGetValue(itemId, out var name)) continue;
+                    foreach (var l in rlines)
+                        result.Add(new StockGdDetailDto
+                        {
+                            ItemTypeId = itemId, ItemTypeName = name, Source = "Stock sheet restatement",
+                            GdNumber = l.GdNumber, GdDate = l.GdDate, ClaimMonth = l.ClaimMonth,
+                            RestatementLineId = l.Id, SourceRow = l.SourceRow, Description = l.Description,
+                            Quantity = l.Quantity, ValueExcludingTax = l.ValueExcludingTax, SalesTaxRate = l.SalesTaxRate,
+                        });
+                }
+            }
+
             // FIFO by GD: each stock line says what sales took from it and what
             // it still holds. A cost-only backfill line added no stock, so it
             // has no pool and stays as it was.
@@ -425,7 +462,8 @@ namespace MyApp.Api.Controllers
                 foreach (var r in result)
                 {
                     if (!fifo.TryGetValue(r.ItemTypeId, out var res)) continue;
-                    var key = r.LotId is int lid ? $"lot-{lid}"
+                    var key = r.RestatementLineId is int rid ? $"restate-{rid}"
+                        : r.LotId is int lid ? $"lot-{lid}"
                         : r.ConsignmentLineId is int cid && r.Quantity.HasValue ? $"arrival-{cid}" : null;
                     var pool = key == null ? null : res.Pools.FirstOrDefault(p => p.Key == key);
                     if (pool == null) continue;
@@ -1704,6 +1742,168 @@ namespace MyApp.Api.Controllers
                 CompanyId = companyId,
             });
             return Ok(new { companyId, method, changed = true, previous });
+        }
+
+        /// <summary>
+        /// Restate items to a stock sheet's GD lines under FIFO by GD (CLAUDE.md
+        /// 5b-17): from today each listed item holds exactly those lines, so its
+        /// value and every GD's balance equal the sheet. Quantity never moves --
+        /// an item whose sheet quantity is not its on-hand is refused. Preview
+        /// unless <c>Commit</c>; a commit writes one value-only movement per item
+        /// (which also lands the weighted average on the sheet's value), its
+        /// lines, re-posts the month's COGS relief, and is audited.
+        /// </summary>
+        [HttpPost("company/{companyId}/fifo-restatement")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<FifoRestatementResultDto>> RestateFifo(
+            int companyId, [FromBody] FifoRestatementRequestDto req)
+        {
+            if (req?.Lines == null || req.Lines.Count == 0)
+                return BadRequest(new { error = "Send the sheet's lines." });
+            if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId))
+                return BadRequest(new { error = "Restating to GD lines needs the company on FIFO by GD." });
+            // A division-restricted caller sees part of the movements; a
+            // restatement must be measured against the whole company's stock.
+            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) != null)
+                return StatusCode(403, new { error = "Restating stock needs access to every division." });
+            foreach (var l in req.Lines)
+            {
+                if (string.IsNullOrWhiteSpace(l.GdNumber) || l.GdNumber.Trim().Length > 100)
+                    return BadRequest(new { error = $"Row {l.SourceRow}: a GD number is required." });
+                if (l.Quantity <= 0m || l.ValueExcludingTax < 0m || l.SalesTaxRate < 0m || l.SalesTaxRate >= 100m)
+                    return BadRequest(new { error = $"Row {l.SourceRow}: quantity must be above zero, value not negative, rate 0 to under 100." });
+                if (l.ClaimMonth is { } cm && (cm.Day != 1 || cm.TimeOfDay != TimeSpan.Zero))
+                    return BadRequest(new { error = $"Row {l.SourceRow}: claim month must be the first day of the month." });
+            }
+
+            var openings = await _context.OpeningStockBalances.AsNoTracking()
+                .Where(o => o.CompanyId == companyId)
+                .GroupBy(o => o.ItemTypeId)
+                .Select(g => new
+                {
+                    ItemTypeId = g.Key, Qty = g.Sum(o => o.Quantity), Value = g.Sum(o => o.ValueExcludingTax),
+                    ActualCost = g.Sum(o => o.ActualCostExcludingTax), Rate = g.Max(o => o.SalesTaxRate),
+                }).ToDictionaryAsync(x => x.ItemTypeId);
+            var moves = (await _context.StockMovements.AsNoTracking()
+                    .Where(m => m.CompanyId == companyId).ToListAsync())
+                .GroupBy(m => m.ItemTypeId).ToDictionary(g => g.Key, g => g.ToList());
+            var held = openings.Keys.Union(moves.Keys).Distinct().ToList();
+            var names = await _context.ItemTypes.AsNoTracking().Where(i => held.Contains(i.Id))
+                .Select(i => new { i.Id, i.Name, i.HSCode }).ToDictionaryAsync(i => i.Id);
+            var costing = await StockCosting.LoadAsync(_context, companyId, held);
+
+            var result = new FifoRestatementResultDto();
+            var plans = new List<(FifoRestatementItemDto Item, List<FifoRestatementLineDto> Lines, decimal WaValue)>();
+            foreach (var g in req.Lines.GroupBy(l => l.ItemTypeId))
+            {
+                var id = g.Key;
+                var item = new FifoRestatementItemDto
+                {
+                    ItemTypeId = id, LineCount = g.Count(),
+                    SheetQuantity = g.Sum(l => l.Quantity),
+                    SheetValue = Money(g.Sum(l => l.ValueExcludingTax)),
+                };
+                if (!names.TryGetValue(id, out var n))
+                {
+                    item.Error = "This company holds no stock record for that item.";
+                    result.Items.Add(item);
+                    continue;
+                }
+                item.ItemTypeName = n.Name; item.HsCode = n.HSCode;
+                var o = openings.GetValueOrDefault(id);
+                var ms = moves.GetValueOrDefault(id) ?? new List<StockMovement>();
+                var wa = StockValuation.Compute(o?.Qty ?? 0m, o?.Value ?? 0m, o?.ActualCost ?? 0m, o?.Rate ?? 0m, ms);
+                var fifo = costing.Compute(id, o?.Qty ?? 0m, o?.Value ?? 0m, o?.ActualCost ?? 0m, o?.Rate ?? 0m, ms);
+                item.OnHand = fifo.Quantity;
+                item.FifoValue = fifo.ValueExcludingTax;
+                item.WeightedAverageValue = wa.ValueExcludingTax;
+                item.LandedValue = wa.ActualValueExcludingTax;
+                if (Math.Abs(item.SheetQuantity - item.OnHand) > 0.0001m)
+                    item.Error = $"The sheet has {item.SheetQuantity:0.####} but {item.OnHand:0.####} is on hand. " +
+                                 "Correct the quantity first (a stock adjustment); a restatement never moves quantity.";
+                result.Items.Add(item);
+                plans.Add((item, g.OrderBy(l => l.SourceRow).ToList(), wa.ValueExcludingTax));
+            }
+            var listed = req.Lines.Select(l => l.ItemTypeId).ToHashSet();
+            foreach (var id in held.Where(i => !listed.Contains(i)))
+            {
+                var o = openings.GetValueOrDefault(id);
+                var ms = moves.GetValueOrDefault(id) ?? new List<StockMovement>();
+                var p = costing.Compute(id, o?.Qty ?? 0m, o?.Value ?? 0m, o?.ActualCost ?? 0m, o?.Rate ?? 0m, ms);
+                if (Math.Abs(p.Quantity) <= 0.0001m && Math.Abs(p.ValueExcludingTax) <= 0.005m) continue;
+                result.NotInSheet.Add(new FifoRestatementItemDto
+                {
+                    ItemTypeId = id, ItemTypeName = names.GetValueOrDefault(id)?.Name ?? "",
+                    HsCode = names.GetValueOrDefault(id)?.HSCode, OnHand = p.Quantity, FifoValue = p.ValueExcludingTax,
+                });
+            }
+            result.FifoValueBefore = Money(result.Items.Sum(i => i.FifoValue) + result.NotInSheet.Sum(i => i.FifoValue));
+            result.SheetValue = Money(result.Items.Sum(i => i.SheetValue));
+            result.CanCommit = result.Items.Count > 0 && result.Items.All(i => i.Error == null);
+            if (!req.Commit || !result.CanCommit) return Ok(result);
+
+            var today = PakistanClock.Today;
+            var file = string.IsNullOrWhiteSpace(req.SourceFile) ? null
+                : Path.GetFileName(req.SourceFile.Trim()) is var f && f.Length > 260 ? f[..260] : Path.GetFileName(req.SourceFile.Trim());
+            await using (var tx = await _context.Database.BeginTransactionAsync())
+            {
+                foreach (var (item, lines, waValue) in plans)
+                {
+                    // The same movement lands the weighted average on the sheet's
+                    // total, so switching method back keeps the sheet's figure.
+                    var movement = new StockMovement
+                    {
+                        CompanyId = companyId, ItemTypeId = item.ItemTypeId,
+                        Direction = StockMovementDirection.In, Quantity = 0m,
+                        SourceType = StockMovementSourceType.Revaluation, MovementDate = today,
+                        ValueAdjustmentExcludingTax = Money(item.SheetValue - waValue) is var d && d != 0m ? d : null,
+                        Notes = $"FIFO restatement to stock sheet{(file != null ? $" {file}" : "")}: {lines.Count} GD lines",
+                    };
+                    _context.StockMovements.Add(movement);
+                    await _context.SaveChangesAsync();
+
+                    // The item's landed value at the restatement, spread over its
+                    // lines by value -- the sheet's own cost columns are formulas.
+                    var basis = lines.Sum(l => l.ValueExcludingTax);
+                    decimal given = 0m;
+                    for (var i = 0; i < lines.Count; i++)
+                    {
+                        var l = lines[i];
+                        var actual = i == lines.Count - 1 ? Money(item.LandedValue) - given
+                            : basis > 0m ? Money(item.LandedValue * l.ValueExcludingTax / basis) : 0m;
+                        given += actual;
+                        _context.StockRestatementLines.Add(new StockRestatementLine
+                        {
+                            CompanyId = companyId, ItemTypeId = item.ItemTypeId, StockMovementId = movement.Id,
+                            GdNumber = l.GdNumber.Trim(), GdDate = l.GdDate?.Date, ClaimMonth = l.ClaimMonth,
+                            SourceRow = l.SourceRow, Description = l.Description?.Trim() is { Length: > 300 } s ? s[..300] : l.Description?.Trim(),
+                            Quantity = l.Quantity, ValueExcludingTax = Money(l.ValueExcludingTax),
+                            ActualValueExcludingTax = actual, SalesTaxRate = l.SalesTaxRate, SourceFile = file,
+                        });
+                    }
+                    await _context.SaveChangesAsync();
+                }
+                await tx.CommitAsync();
+            }
+
+            // The value change is an adjustment in this month's relief.
+            await _posting.PostInventoryPeriodsAsync(companyId, today);
+            await _audit.LogAsync(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                Level = "Information",
+                UserName = User.Identity?.Name,
+                HttpMethod = "POST",
+                RequestPath = $"/api/stock/company/{companyId}/fifo-restatement",
+                StatusCode = 200,
+                ExceptionType = "STOCK_FIFO_RESTATEMENT",
+                Message = $"FIFO restatement for company {companyId}: {plans.Count} items, {req.Lines.Count} GD lines, " +
+                          $"value {result.FifoValueBefore:0.00} -> sheet {result.SheetValue:0.00}{(file != null ? $" from {file}" : "")}",
+                CompanyId = companyId,
+            });
+            result.Committed = true;
+            return Ok(result);
         }
 
         [HttpPost("company/{companyId}/flow-version")]

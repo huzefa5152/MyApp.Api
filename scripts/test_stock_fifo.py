@@ -34,7 +34,7 @@ import argparse
 import io
 import json
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 try:
     import requests
@@ -131,9 +131,16 @@ def movements(api, h, cid, item_id):
     return r.json().get("items", []) if r.ok else []
 
 
+def pk_today():
+    # The server dates stock-side writes (a restatement) on Pakistan's
+    # calendar; bills must be dated the same way or, between midnight and
+    # 05:00 PKT, a bill lands on the day before the restatement it follows.
+    return (datetime.now(timezone.utc) + timedelta(hours=5)).date()
+
+
 def bill(api, h, cid, client_id, item, qty, price=3000):
     return call("POST", f"{api}/invoices/standalone", h, json={
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%dT00:00:00Z"),
+        "date": pk_today().strftime("%Y-%m-%dT00:00:00Z"),
         "companyId": cid, "clientId": client_id, "gstRate": 18,
         "items": [{"itemTypeId": item["itemTypeId"], "description": item["itemTypeName"],
                    "quantity": qty, "uom": "Pcs", "unitPrice": price}]})
@@ -342,6 +349,53 @@ def main():
             check("B holds 5 again", near(g["FIFO-B"]["remainingQuantity"], 5, 1e-4),
                   str(g["FIFO-B"].get("remainingQuantity")))
 
+        # ── 11b. Restate to a stock sheet ───────────────────────────────
+        print("\n-- 11b. Restating to a stock sheet's GD lines --")
+        this_month = pk_today().strftime("%Y-%m-01")
+        sheet = [
+            {"itemTypeId": iid, "gdNumber": "SHEET-R2", "gdDate": "2025-02-01", "claimMonth": None,
+             "sourceRow": 5, "description": "unclaimed line", "quantity": 2, "valueExcludingTax": 400, "salesTaxRate": 18},
+            {"itemTypeId": iid, "gdNumber": "SHEET-R1", "gdDate": "2025-06-01", "claimMonth": this_month,
+             "sourceRow": 4, "description": "claimed line", "quantity": 3, "valueExcludingTax": 3000, "salesTaxRate": 18},
+        ]
+        bad = [dict(sheet[0], quantity=9), sheet[1]]
+        r = call("POST", f"{api}/stock/company/{cid}/fifo-restatement", h,
+                 json={"sourceFile": "sheet.xlsx", "commit": True, "lines": bad})
+        body = r.json() if r.ok else {}
+        check("a sheet whose quantity is not on-hand is refused (nothing written)",
+              r.ok and not body.get("committed") and not body.get("canCommit")
+              and body["items"][0].get("error"), r.text[:300])
+        r = call("POST", f"{api}/stock/company/{cid}/fifo-restatement", h,
+                 json={"sourceFile": "sheet.xlsx", "commit": False, "lines": sheet})
+        body = r.json() if r.ok else {}
+        check("the preview reports FIFO 2,500 -> sheet 3,400 and can commit",
+              r.ok and body.get("canCommit") and not body.get("committed")
+              and near(body["items"][0]["fifoValue"], 2500) and near(body["sheetValue"], 3400), r.text[:300])
+        check("the preview wrote nothing", near(onhand(api, h, cid, iid)["valueExcludingTax"], 2500))
+        r = call("POST", f"{api}/stock/company/{cid}/fifo-restatement", h,
+                 json={"sourceFile": "sheet.xlsx", "commit": True, "lines": sheet})
+        check("the restatement commits", r.ok and r.json().get("committed"), r.text[:300])
+        after = onhand(api, h, cid, iid)
+        check("value is the sheet's 3,400, quantity still 5",
+              near(after["valueExcludingTax"], 3400) and near(after["onHand"], 5, 1e-4),
+              f"{after['onHand']} / {after['valueExcludingTax']}")
+        g = gd_rows(api, h, cid, iid)
+        check("the GD panel now shows the sheet's two lines, not the old lots",
+              set(g) == {"SHEET-R1", "SHEET-R2"}, str(list(g)))
+        check("each sheet line holds its own balance",
+              near(g["SHEET-R1"]["remainingValueExcludingTax"], 3000) and near(g["SHEET-R2"]["remainingQuantity"], 2, 1e-4))
+        r = bill(api, h, cid, client_id, item, 4)
+        check("a bill after the restatement is created", r.ok, r.text[:200])
+        mv = movements(api, h, cid, iid)
+        out = next((m for m in mv if m["direction"] == "Out"), None)
+        alloc = {a["gdNumber"]: a for a in (out or {}).get("allocations", [])}
+        check("it takes the claimed sheet line first (R1 3, then R2 1)",
+              near(alloc.get("SHEET-R1", {}).get("quantity"), 3, 1e-4) and near(alloc.get("SHEET-R2", {}).get("quantity"), 1, 1e-4),
+              json.dumps(out)[:300] if out else "no Out")
+        check("costed 3,000 + 200", out and near(out["value"], 3200), str(out and out["value"]))
+        after = onhand(api, h, cid, iid)
+        check("1 left worth 200", near(after["onHand"], 1, 1e-4) and near(after["valueExcludingTax"], 200))
+
         # ── 12. Switch back ──────────────────────────────────────────────
         print("\n-- 12. Switching back restores the weighted average --")
         cmp_ = call("GET", f"{api}/stock/company/{cid}/costing-compare", h).json()
@@ -351,8 +405,11 @@ def main():
         check("value is the weighted average the compare predicted",
               near(after["valueExcludingTax"], cmp_["weightedAverageValue"]),
               f"{after['valueExcludingTax']} vs {cmp_['weightedAverageValue']}")
-        check("5 x the 35,000/30 average = 5,833.33",
-              near(after["valueExcludingTax"], 5833.33, 0.05), str(after["valueExcludingTax"]))
+        check("the restatement landed the weighted average on the sheet too (3,400 / 5 x 1 = 680)",
+              near(after["valueExcludingTax"], 680, 0.05), str(after["valueExcludingTax"]))
+        r = call("POST", f"{api}/stock/company/{cid}/fifo-restatement", h,
+                 json={"commit": False, "lines": sheet})
+        check("restating needs the company on FIFO", r.status_code == 400, str(r.status_code))
         g = gd_rows(api, h, cid, iid)
         check("GD lines carry no FIFO split again", all(x.get("remainingQuantity") is None for x in g.values()))
         r = call("GET", f"{api}/invoices/company/{cid}/stock-pricing", h, params={"itemTypeIds": str(iid)})

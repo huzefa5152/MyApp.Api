@@ -37,7 +37,7 @@ namespace MyApp.Api.Helpers
     /// </summary>
     public static class GdFifoValuation
     {
-        public enum PoolKind { GdLot = 0, GdArrival = 1, OpeningUntraced = 2, Inward = 3 }
+        public enum PoolKind { GdLot = 0, GdArrival = 1, OpeningUntraced = 2, Inward = 3, Restated = 4 }
 
         /// <summary>One opening source line: an opening-sheet lot under the
         /// item's opening balance, with its value already resolved (landed
@@ -69,6 +69,9 @@ namespace MyApp.Api.Helpers
             public List<OpeningLot> Lots { get; init; } = new();
             /// <summary>Keyed by StockMovement id.</summary>
             public Dictionary<int, Arrival> Arrivals { get; init; } = new();
+            /// <summary>Keyed by the StockMovement id of a restatement: from that
+            /// movement on, the item holds exactly these GD lines (CLAUDE.md 5b-17).</summary>
+            public Dictionary<int, List<OpeningLot>> Restatements { get; init; } = new();
         }
 
         /// <summary>The fields of a StockMovement the walk reads.</summary>
@@ -117,6 +120,8 @@ namespace MyApp.Api.Helpers
             public decimal ConsumedQuantity { get; set; }
             public decimal ConsumedValue { get; set; }
             public decimal ConsumedActualValue { get; set; }
+            /// <summary>What a restatement replaced -- neither sold nor held.</summary>
+            public decimal RestatedAwayQuantity { get; set; }
 
             internal decimal UnitValue => Quantity > 0m ? Value / Quantity
                 : InQuantity > 0m ? InValue / InQuantity : 0m;
@@ -242,6 +247,52 @@ namespace MyApp.Api.Helpers
 
             foreach (var m in movements.OrderBy(m => m.Date).ThenBy(m => m.Id))
             {
+                // ── Restatement: the item holds exactly these GD lines from here.
+                // Whatever the pools held is replaced (not consumed -- nothing
+                // was sold), an unsettled shortfall is cleared, and the value
+                // difference is booked in or out so value = opening + in - out
+                // still holds. Quantity does not move; lines that no longer add
+                // up to it (an earlier movement edited since) are scaled to it.
+                if (book.Restatements.TryGetValue(m.Id, out var restated))
+                {
+                    var before = RunValue();
+                    foreach (var p in pools)
+                    {
+                        p.RestatedAwayQuantity += p.Quantity;
+                        p.Quantity = 0m; p.Value = 0m; p.ActualValue = 0m;
+                    }
+                    shortQty = 0m; shortValue = 0m; shortActual = 0m;
+                    var lines = restated.Where(l => l.Quantity > 0m).ToList();
+                    var lineQty = lines.Sum(l => l.Quantity);
+                    var target = Math.Max(0m, exactQty);
+                    var f = lineQty > 0m ? target / lineQty : 0m;
+                    decimal given = 0m;
+                    for (var i = 0; i < lines.Count; i++)
+                    {
+                        var l = lines[i];
+                        var exact = Math.Abs(lineQty - target) <= 0.0001m;
+                        var q = exact ? l.Quantity
+                            : i == lines.Count - 1 ? target - given : l.Quantity * f;
+                        given += q;
+                        var v = exact ? l.Value : Round(l.Value * f);
+                        var a = exact ? l.ActualValue : Round(l.ActualValue * f);
+                        pools.Add(new Pool
+                        {
+                            Key = l.Key, Kind = PoolKind.Restated, GdNumber = l.GdNumber,
+                            OrderDate = l.OrderDate, ClaimMonth = l.ClaimMonth, Tiebreak = l.Tiebreak,
+                            MovementId = m.Id, Description = l.Description,
+                            Rate = l.Rate > 0m ? l.Rate : displayRate,
+                            InQuantity = q, InValue = v, InActualValue = a,
+                            Quantity = q, Value = v, ActualValue = a,
+                        });
+                    }
+                    var delta = RunValue() - before;
+                    if (delta > 0m) valueIn += delta; else valueOut += -delta;
+                    trace?.Add(new StockValuation.Step(m.Id, 0m, Round(Math.Abs(delta)), RunQty(),
+                        Round(RunValue()), 0m, Round(RunActual())));
+                    continue;
+                }
+
                 var hasValueDelta = m.ValueDelta is decimal vd && vd != 0m;
                 var hasActualDelta = m.ActualDelta is decimal ad && ad != 0m;
 
@@ -443,14 +494,14 @@ namespace MyApp.Api.Helpers
         /// <summary>Whether a pool counts as claimed for a movement in the month
         /// starting <paramref name="monthStart"/>.</summary>
         public static bool ClaimedFor(Pool p, DateTime monthStart)
-            => (p.Kind == PoolKind.GdLot || p.Kind == PoolKind.GdArrival)
+            => (p.Kind == PoolKind.GdLot || p.Kind == PoolKind.GdArrival || p.Kind == PoolKind.Restated)
                && p.ClaimMonth is DateTime c && c.Date <= monthStart;
 
         private static IEnumerable<Pool> Ranked(List<Pool> pools, DateTime monthStart)
             => pools.Where(p => p.Quantity > 0m)
                 .OrderBy(p => p.Kind switch
                 {
-                    PoolKind.GdLot or PoolKind.GdArrival => ClaimedFor(p, monthStart) ? 0 : 1,
+                    PoolKind.GdLot or PoolKind.GdArrival or PoolKind.Restated => ClaimedFor(p, monthStart) ? 0 : 1,
                     PoolKind.OpeningUntraced => 2,
                     _ => 3,
                 })

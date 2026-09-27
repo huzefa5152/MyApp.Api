@@ -332,6 +332,7 @@ endpoints_to_test = [
     ("GET",  "/api/stock/company/{cid}/costing-method"),
     ("GET",  "/api/stock/company/{cid}/costing-compare"),
     ("PUT",  "/api/stock/company/{cid}/costing-method"),
+    ("POST", "/api/stock/company/{cid}/fifo-restatement"),
     ("GET",  "/api/stock/company/{cid}/gd-details"),
     ("GET",  "/api/invoices/company/{cid}/stock-pricing?itemTypeIds=1"),
     ("GET",  "/api/fbr/sandbox/{cid}"),

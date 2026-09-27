@@ -291,6 +291,56 @@ List<string> Order(Result r, int movementId) => r.Takes[movementId].Select(t => 
         GdFifoValuation.NextConsumption(r, D(2026, 5, 2)).Select(p => p.Key).SequenceEqual(new[] { "C", "U" }));
 }
 
+// 21. A restatement: from that movement the item holds exactly the sheet's GD
+// lines -- nothing sold, value moved to the lines, quantity untouched.
+{
+    var book = new Book
+    {
+        Lots = {
+            Lot("A", "GD-A", D(2025, 1), D(2026, 1), 10, 1000),
+            Lot("B", "GD-B", D(2025, 2), null, 10, 500) },
+        Restatements = { [2] = new List<OpeningLot> {
+            new("restate-1", "GD-X", D(2025, 6), D(2026, 8), 8, 1200, 800, 18, 4, null, "x"),
+            new("restate-2", "GD-Y", D(2025, 3), null, 7, 700, 400, 25, 5, null, "y") } },
+    };
+    var r = Run("restate", 20, 1500, book, new[] {
+        Out(1, D(2026, 8, 3), 5),
+        Reval(2, D(2026, 9, 28), 0m),
+        Out(3, D(2026, 9, 29), 10) }, oa: 900m);
+    Check("restate: quantity untouched by the restatement", r.Position.Quantity == 5m, $"{r.Position.Quantity}");
+    Check("restate: the old pools were replaced, not sold",
+        P(r, "A").ConsumedQuantity == 5m && P(r, "A").RestatedAwayQuantity == 5m
+        && P(r, "B").ConsumedQuantity == 0m && P(r, "B").RestatedAwayQuantity == 10m);
+    Check("restate: the next sale uses the sheet's claimed GD first",
+        Order(r, 3).SequenceEqual(new[] { "restate-1", "restate-2" }), string.Join(",", Order(r, 3)));
+    Check("restate: 8 x 150 + 2 x 100 = 1,400 costed", r.Takes[3].Sum(t => t.Value) == 1400m,
+        $"{r.Takes[3].Sum(t => t.Value)}");
+    Check("restate: left = 5 of GD-Y worth 500", P(r, "restate-2").Quantity == 5m && P(r, "restate-2").Value == 500m);
+    Check("restate: landed cost follows the lines", r.Position.ActualValueExcludingTax == 400m * 5m / 7m
+        || Math.Abs(r.Position.ActualValueExcludingTax - 285.71m) <= 0.01m, $"{r.Position.ActualValueExcludingTax}");
+    var only = Run("restate-only", 20, 1500, book, new[] { Out(1, D(2026, 8, 3), 5), Reval(2, D(2026, 9, 28), 0m) });
+    Check("restate-only: value is exactly the lines' total", only.Position.ValueExcludingTax == 1900m,
+        $"{only.Position.ValueExcludingTax}");
+    Check("restate-only: rate is the lines' value-weighted rate",
+        Math.Abs(only.Position.SalesTaxRate - (1200m * 18 + 700m * 25) / 1900m) < 0.0001m);
+}
+
+// 22. Lines that no longer add up to on-hand are scaled to it; a shortfall is cleared.
+{
+    var book = new Book
+    {
+        Lots = { Lot("A", "GD-A", D(2025, 1), null, 10, 1000) },
+        Restatements = { [2] = new List<OpeningLot> {
+            new("restate-1", "GD-X", D(2025, 6), null, 6, 600, 0, 18, 1, null, null),
+            new("restate-2", "GD-Y", D(2025, 7), null, 6, 1200, 0, 18, 2, null, null) } },
+    };
+    var r = Run("restate-scale", 10, 1000, book, new[] { Reval(2, D(2026, 9, 1), 0m) });
+    Check("restate-scale: pools add up to on-hand exactly", r.Pools.Where(p => p.Kind == PoolKind.Restated).Sum(p => p.Quantity) == 10m);
+    var s = Run("restate-short", 10, 1000, book, new[] { Out(1, D(2026, 8, 1), 12), Reval(2, D(2026, 9, 1), 0m) });
+    Check("restate-short: shortfall cleared, nothing on hand, value zero",
+        s.ShortfallQuantity == 0m && s.Position.Quantity == -2m && s.Pools.All(p => p.Quantity == 0m));
+}
+
 // 20. A value-only revaluation on an empty item holds nothing.
 {
     var r = Run("reval-empty", 0, 0, new Book(), new[] { Reval(1, D(2026, 1), 50m) });

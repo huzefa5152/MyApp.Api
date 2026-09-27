@@ -237,6 +237,26 @@ namespace MyApp.Api.Helpers
                     gd, a.GdDate, a.ClaimMonth ?? claimPeriods.GetValueOrDefault(gd), a.Id, a.DescriptionOnSheet);
             }
 
+            // Restatements: the GD lines an item was restated to (CLAUDE.md 5b-17).
+            var restateQ = db.StockRestatementLines.AsNoTracking().Where(l => l.CompanyId == companyId);
+            if (ids != null) restateQ = restateQ.Where(l => ids.Contains(l.ItemTypeId));
+            var restated = await restateQ.ToListAsync();
+            foreach (var l in restated)
+            {
+                var book = books.TryGetValue(l.ItemTypeId, out var existing) ? existing
+                    : books[l.ItemTypeId] = new GdFifoValuation.Book();
+                if (!book.Restatements.TryGetValue(l.StockMovementId, out var list))
+                    book.Restatements[l.StockMovementId] = list = new();
+                var gd = l.GdNumber.Trim();
+                var claim = l.ClaimMonth ?? claimPeriods.GetValueOrDefault(gd);
+                list.Add(new GdFifoValuation.OpeningLot(
+                    Key: $"restate-{l.Id}", GdNumber: gd,
+                    OrderDate: l.GdDate ?? gdDates.GetValueOrDefault(gd) ?? claim,
+                    ClaimMonth: claim, Quantity: l.Quantity, Value: l.ValueExcludingTax,
+                    ActualValue: l.ActualValueExcludingTax, Rate: l.SalesTaxRate,
+                    Tiebreak: l.SourceRow, LotId: null, Description: l.Description));
+            }
+
             return new StockCosting(true, books);
         }
     }

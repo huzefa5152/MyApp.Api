@@ -1288,6 +1288,25 @@ GD panel and Excel export all say which GDs it took.
   the next sale drains) for a FIFO company; `utils/fifoPricing.js` turns an
   amount into the quantity it buys across them. No tiers = weighted average,
   and the forms' arithmetic is untouched.
+- **A stock sheet is applied by RESTATEMENT, never by adjustments** (2026-09-28).
+  Reconciling a FIFO company to a client's stock sheet with ordinary stock
+  adjustments lands the TOTAL but not the GDs: stock put back by an adjustment
+  is "other stock" with no GD, so later sales of it cannot be traced (it cost
+  one company 562k on a single item). `POST /api/stock/company/{id}/fifo-restatement`
+  (`stock.policy.manage`, preview unless `commit`, audited `STOCK_FIFO_RESTATEMENT`)
+  takes the sheet's GD lines per item and writes one value-only `Revaluation`
+  movement per item with its lines in `StockRestatementLines`. From that
+  movement the walk REPLACES the item's pools with those lines (replaced pools
+  are `RestatedAwayQuantity`, not consumed) and books the value difference as an
+  adjustment; the same movement's `ValueAdjustmentExcludingTax` lands the
+  weighted average on the sheet's total too, so switching method keeps it.
+  Quantity never moves: an item whose sheet quantity is not its on-hand is
+  refused -- fix the quantity with an adjustment first. Landed cost is the
+  item's current landed value spread over its lines by value (the sheet's cost
+  columns are formulas). The GD panel and export show only the latest
+  restatement's lines for a restated item. Bills dated BEFORE a restatement
+  are walked before it: date them honestly, and restate on the day the sheet
+  describes.
 - **The Excel ↳ rows carry their own Consumed / Balance** under FIFO, plus rows
   for opening not traced to a GD, other stock in, and a sale not yet covered.
   The item row and the totals are unchanged.
@@ -1783,7 +1802,7 @@ them can be resolved from FBR.
 | Bill screens' shared checklist + totals rows (offline) | `node scripts/test_bill_entry.mjs` | `17/17 checks passed` |
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
-| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `119 checks, 0 failed`; `45/45 checks passed`; `11/11 checks passed` |
+| FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `141 checks, 0 failed`; `57/57 checks passed`; `11/11 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
