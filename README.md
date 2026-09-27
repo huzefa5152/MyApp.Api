@@ -318,6 +318,26 @@ single workbook, or one kind of record at a time.
 - New permission `onboarding.import.run` (Administrator has it); each sheet also
   needs its normal create permission.
 
+### 2026-09-27 — Import a PO from a picture, and more PO layouts read
+
+- **Import a PO from a photo, a screenshot or a scanned PDF.** Sales Order,
+  Sales Quote and Delivery Challan → Import PO now take PNG, JPG and WEBP as
+  well as PDF, and a PDF with no text layer is read as a picture
+  automatically. The text is read in the browser (tesseract.js, served by this
+  site — no outside service), laid out by the same rule a PDF gets, and matched
+  against the SAME saved PO formats, so no new format is needed for pictures.
+  A tilted photo is straightened first. The review screen says the lines were
+  read from an image and asks the operator to check every description and
+  quantity before saving.
+- **A quantity that carries its unit in the same cell** (`300.00 PIECE`) is
+  read, a vertical watermark is no longer glued onto descriptions, and a
+  decorated total line (`Total>>>>>>`) ends the table.
+- **A PO format still matches when the PO's own data differs**: a timestamp's
+  AM/PM and colons inside an item description no longer count against it.
+- **More PO table layouts read correctly**: a quantity shifted by an extra or a
+  missing cell, footer lines like `GST (18%)` and `SUB TOTAL`, empty grid rows,
+  and prices written `Rs15` are no longer mistaken for items or units.
+
 ### 2026-09-25 — Multi-line descriptions, document notes, supplier costs on challans, Document Lines
 
 **Item descriptions are multi-line on every line editor**, including Edit
