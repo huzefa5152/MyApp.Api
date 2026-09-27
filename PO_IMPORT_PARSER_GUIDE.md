@@ -114,6 +114,44 @@ as a fallback when the column reader finds nothing AND a unit header was
 configured. The power-user `anchored-v1` engine is unchanged and untouched by
 these rules.
 
+### Pictures: photos, screenshots, scanned PDFs (2026-09-27)
+
+`POST /api/poimport/parse-image?companyId=` (multipart: the original `file` +
+`words`, the OCR result). The browser reads the picture
+(`myapp-frontend/src/utils/poOcr.js`, tesseract.js; engine + English data served
+from `public/ocr`, copied from `node_modules` by `scripts/copy-ocr-assets.mjs`).
+A PDF whose text layer is empty (`parse-pdf` → 422 `unreadable`) falls back to it.
+
+- **One layout rule for both sources.** `Helpers/PoLayoutText.cs` turns positioned
+  words into lines. `FromPdfPage` is the historical PdfPig rule, byte-for-byte
+  (all 240 archived production PDFs re-extracted identically); `FromOcrPage`
+  groups by vertical CENTRE (OCR boxes of one line do not share a bottom edge),
+  drops grid-line debris (`|`, `~~`) and faint short digit-free fragments, and
+  keeps a faint `-` so an empty column keeps its cell.
+- **Same formats.** OCR text goes through `FindMatchForOcrAsync`: the normal
+  matcher first, then word COVERAGE of the format's signature (≥ 0.85; real
+  matches score 0.97–1.00, documents with no format ≤ 0.73). Label-span Jaccard
+  scored a photo 0.24 against the format its PDF matches at 1.00.
+- **What the browser does, and why** (measured on production POs): hand tesseract
+  a PNG Blob, never a canvas (a canvas read a ruled table as garbage); no clean-up
+  of our own (tesseract's binarisation beat it on every sample); read each page
+  twice — PSM 4 keeps one-character words, PSM 11 finds rows PSM 4 skips — and
+  merge, keeping the more confident word where both read a spot; for a scanned
+  PDF, take its single embedded image and enlarge it with high-quality
+  smoothing rather than re-rendering the page.
+- The archive keeps the original picture with its own extension; parser feedback
+  tags the version `· OCR` so picture accuracy can be measured on its own.
+- Offline suites: `cd scripts/po_layout_harness && dotnet run -c Release`
+  (line building + matching) and `node scripts/test_po_ocr.mjs`.
+
+### Fuzzy matching ignores data in a fingerprint (2026-09-27)
+
+`Compute()` (the stored signature and its exact-match hash) is unchanged — every
+saved `SignatureHash` depends on it. Fuzzy matching instead compares
+`ComputeMatchKeywords` / `StoredMatchKeywords`: a time-of-day prefix is stripped
+(`am head office` = `pm head office`), and a "label" found on an item row counts
+only when the saved signature has it too, so a score can rise but never fall.
+
 ### Known limitations (by design → Review stage + Feedback)
 
 Some quantities are simply not knowable from the text; the parser gets the item

@@ -300,6 +300,22 @@ Publish output optimized from 79 MB to 37 MB via:
   The same fix stops a vertical watermark printed down the page ("REVIEWING")
   from being glued onto item descriptions, and recognises a decorated total
   line (`Total>>>>>>`) as the end of the table.
+- **Import a PO from a photo, a screenshot or a scanned PDF.** Sales Order,
+  Sales Quote and Delivery Challan → Import PO now take PNG, JPG and WEBP as
+  well as PDF, and a PDF with no text layer is read as a picture
+  automatically. The text is read in the browser (tesseract.js, served by this
+  site — no outside service), laid out by the same rule a PDF gets, and matched
+  against the SAME saved PO formats, so no new format is needed for pictures.
+  The review screen says the lines were read from an image and asks the
+  operator to check every description and quantity before saving.
+- **A PO format still matches when the PO's own data differs.** A Meko Fabrics
+  PO was refused as "no format" because a timestamp's AM/PM and colons inside
+  an item description had crept into its fingerprint; matching now ignores
+  both, and re-checking all 240 archived imports changed no other decision.
+- **More PO table layouts read correctly**: a quantity shifted by an extra or a
+  missing cell, footer lines like `GST (18%)` and `SUB TOTAL`, empty grid rows,
+  and prices written `Rs15` are no longer mistaken for items or units.
+- PO import checks that the caller can reach the company it parses for.
 - **The print-template dropdown on every document screen lists each template
   once.** A type with two templates used to show three rows ("★ Default — X",
   then X again with a star, then the other); it now shows the default once and
