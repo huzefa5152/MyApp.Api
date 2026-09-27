@@ -212,6 +212,7 @@ namespace MyApp.Api.Services.Implementations
                         SourceRow = l.SourceRow,
                         DescriptionOnSheet = l.DescriptionOnSheet,
                         HsCode = l.HsCode,
+                        ClaimMonth = l.ClaimMonth,
                         Quantity = l.Quantity,
                         Unit = l.Unit,
                         AssessedValue = l.AssessedValue,

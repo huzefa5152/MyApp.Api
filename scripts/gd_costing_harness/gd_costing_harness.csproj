@@ -30,6 +30,7 @@
     <Compile Include="..\..\Helpers\ExcelImport\DateParser.cs" />
     <Compile Include="..\..\Helpers\ExcelImport\GdCostingLayout.cs" />
     <Compile Include="..\..\Helpers\ExcelImport\GdCostingSheetReader.cs" />
+    <Compile Include="..\..\Helpers\ExcelImport\ClaimMonthParser.cs" />
     <Compile Include="..\..\Helpers\GdLineRules.cs" />
   </ItemGroup>
 </Project>

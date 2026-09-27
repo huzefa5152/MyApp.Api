@@ -131,7 +131,7 @@ export function computeCosting(m) {
 
 /** A fresh line in the editor. The 18/3/6 rates are what every real GD costing sheet uses. */
 export const blankLine = () => ({
-  gdNumber: "", gdDate: "", description: "", hsCode: "", quantity: "", unit: "",
+  gdNumber: "", gdDate: "", claimMonth: "", description: "", hsCode: "", quantity: "", unit: "",
   assessedValue: "", customsDuty: "0", acd: "0", regulatoryDuty: "0", others: "0",
   salesTaxRate: "18", astRate: "3", incomeTaxRate: "6", addOnProfit: "0", sellingValue: "",
 });
@@ -139,7 +139,7 @@ export const blankLine = () => ({
 /** The next typed line: the GD, its date, the unit and the rates carry over -- retyping them 26 times is how a sheet gets typed wrong. */
 export const nextLineFrom = (m) => ({
   ...blankLine(),
-  gdNumber: m.gdNumber, gdDate: m.gdDate, unit: m.unit,
+  gdNumber: m.gdNumber, gdDate: m.gdDate, claimMonth: m.claimMonth, unit: m.unit,
   salesTaxRate: m.salesTaxRate, astRate: m.astRate, incomeTaxRate: m.incomeTaxRate,
 });
 
@@ -148,7 +148,8 @@ export function editorLineFrom(l) {
   const s = (v) => (v == null ? "" : String(v));
   return {
     sourceRow: l.sourceRow,
-    gdNumber: s(l.gdNumber), gdDate: isoDay(l.gdDate), description: s(l.description),
+    gdNumber: s(l.gdNumber), gdDate: isoDay(l.gdDate), claimMonth: s(l.claimMonth).slice(0, 7),
+    description: s(l.description),
     hsCode: s(l.hsCode), quantity: s(l.quantity), unit: s(l.unit),
     assessedValue: s(l.assessedValue), customsDuty: s(l.customsDuty), acd: s(l.acd),
     regulatoryDuty: s(l.regulatoryDuty), others: s(l.others), salesTaxRate: s(l.salesTaxRate),
@@ -168,8 +169,11 @@ export function toLinePayload(m, extra = {}) {
     sourceRow: extra.sourceRow ?? m.sourceRow ?? null,
     leaveOut: extra.leaveOut ?? null,
     chosenOpeningStockBalanceId: extra.chosenOpeningStockBalanceId ?? null,
+    confirmNewStock: extra.confirmNewStock ?? null,
     gdNumber: String(m.gdNumber ?? "").trim(),
     gdDate: isoDay(m.gdDate) || null,
+    // "YYYY-MM" from the month box; blank = not claimed yet.
+    claimMonth: /^\d{4}-\d{2}$/.test(String(m.claimMonth ?? "")) ? `${m.claimMonth}-01` : null,
     description: String(m.description ?? "").trim(),
     hsCode: String(m.hsCode ?? "").trim(),
     quantity: n(m.quantity),
@@ -286,16 +290,28 @@ export function entryChecklist({ companyId, preview, stale = false } = {}) {
     if (first) items.push({ key: `line-${l.sourceRow}`, label: `Row ${l.sourceRow}: ${first.message}`, target: lineAnchor(l.sourceRow) });
     else if (l.disposition === "ambiguous")
       items.push({ key: `line-${l.sourceRow}`, label: `Row ${l.sourceRow}: choose the item, or leave the line out`, target: lineAnchor(l.sourceRow) });
+    else if (needsNewStockConfirm(l))
+      items.push({ key: `line-${l.sourceRow}`, label: `Row ${l.sourceRow}: not on your books — confirm it as new stock, or leave it out`, target: lineAnchor(l.sourceRow) });
   }
   if (lines.length > 0 && lines.every((l) => l.leaveOut))
     items.push({ key: "all-out", label: "Every line is left out: include at least one", target: COSTING_ANCHORS.review });
   return items;
 }
 
+/**
+ * A line that matches nothing on the books and is not left out needs the
+ * operator's explicit "create it as new stock" (2026-09-27): three such lines
+ * once put 342,337.11 of stock on a company's books that was not on its stock
+ * sheet. The server refuses to create stock for an unconfirmed line too.
+ */
+export const needsNewStockConfirm = (l) =>
+  !l.leaveOut && l.disposition === "stock-posted" && !l.confirmNewStock;
+
 /** The figures the "Bring it in" step states, from the reviewed lines. */
 export function commitSummary(preview, mode) {
   const lines = preview?.lines || [];
-  const kept = lines.filter((l) => !l.leaveOut && l.disposition !== "ambiguous");
+  const kept = lines.filter((l) => !l.leaveOut && l.disposition !== "ambiguous"
+    && !(l.disposition === "stock-posted" && !l.confirmNewStock));
   const matched = kept.filter((l) => l.disposition === "cost-only");
   const fresh = kept.filter((l) => l.disposition === "stock-posted");
   const key = (l) => `${cleanHsCode(l.hsCode)}|${String(l.description || "").trim().toUpperCase()}`;
@@ -306,6 +322,11 @@ export function commitSummary(preview, mode) {
     unitsAdded: mode === MODE_NEW_ARRIVALS ? matched.reduce((a, l) => a + (Number(l.quantity) || 0), 0) : 0,
     newItems: new Set(fresh.map(key)).size,
     newUnits: fresh.reduce((a, l) => a + (Number(l.quantity) || 0), 0),
+    newSelling: round2(fresh.reduce((a, l) => a + (Number(l.sheetSellingValue ?? l.sellingValue) || 0), 0)),
+    // One name per new item, by the same key newItems counts with.
+    newNames: [...fresh.reduce((m, l) => (m.has(key(l)) ? m
+      : m.set(key(l), String(l.newItemName || l.description || "").trim())), new Map()).values()],
+    unconfirmed: lines.filter(needsNewStockConfirm).length,
     leftOut: lines.filter((l) => l.leaveOut).length,
     undecided: lines.filter((l) => !l.leaveOut && l.disposition === "ambiguous").length,
     totalCost: round2(kept.reduce((a, l) => a + (Number(l.cost) || 0), 0)),
@@ -327,6 +348,8 @@ export function summarySentences(s) {
     out.push(`${plural(s.leftOut, "line")} left out: ${one(s.leftOut) ? "its" : "their"} goods will NOT come into stock.`);
   if (s.undecided > 0)
     out.push(`${plural(s.undecided, "line")} still ${one(s.undecided) ? "needs" : "need"} an item chosen.`);
+  if (s.unconfirmed > 0)
+    out.push(`${plural(s.unconfirmed, "line")} not on your books still ${one(s.unconfirmed) ? "needs" : "need"} confirming as new stock, or leaving out.`);
   return out;
 }
 

@@ -54,6 +54,10 @@ namespace MyApp.Api.Helpers.ExcelImport
         {
             [JsonPropertyName("gdNumber")] public int GdNumber { get; set; }
             [JsonPropertyName("gdDate")] public int? GdDate { get; set; }
+
+            /// <summary>The accountant's "Claim Month" for the line — found by
+            /// its heading, since the costing sheets carry it in no fixed place.</summary>
+            [JsonPropertyName("claimMonth")] public int? ClaimMonth { get; set; }
             [JsonPropertyName("description")] public int Description { get; set; }
             [JsonPropertyName("quantity")] public int Quantity { get; set; }
             [JsonPropertyName("unit")] public int? Unit { get; set; }
@@ -191,6 +195,7 @@ namespace MyApp.Api.Helpers.ExcelImport
             {
                 ["gdNumber"] = (c, v) => c.GdNumber = v,
                 ["gdDate"] = (c, v) => c.GdDate = v,
+                ["claimMonth"] = (c, v) => c.ClaimMonth = v,
                 ["description"] = (c, v) => c.Description = v,
                 ["quantity"] = (c, v) => c.Quantity = v,
                 ["unit"] = (c, v) => c.Unit = v,
@@ -219,7 +224,7 @@ namespace MyApp.Api.Helpers.ExcelImport
         {
             var pairs = new (string Field, int? Col)[]
             {
-                ("gdNumber", c.GdNumber), ("gdDate", c.GdDate),
+                ("gdNumber", c.GdNumber), ("gdDate", c.GdDate), ("claimMonth", c.ClaimMonth),
                 ("description", c.Description), ("quantity", c.Quantity),
                 ("unit", c.Unit), ("hsCode", c.HsCode),
                 ("assessedValue", c.AssessedValue), ("customsDuty", c.CustomsDuty),
@@ -257,6 +262,7 @@ namespace MyApp.Api.Helpers.ExcelImport
             {
                 GdNumber = Columns.GdNumber,
                 GdDate = Columns.GdDate,
+                ClaimMonth = Columns.ClaimMonth,
                 Description = Columns.Description,
                 Quantity = Columns.Quantity,
                 Unit = Columns.Unit,
@@ -345,6 +351,7 @@ namespace MyApp.Api.Helpers.ExcelImport
         {
             "gdnumber" => c.GdNumber,
             "gddate" => c.GdDate,
+            "claimmonth" => c.ClaimMonth,
             "description" => c.Description,
             "quantity" => c.Quantity,
             "unit" => c.Unit,

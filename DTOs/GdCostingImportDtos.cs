@@ -110,6 +110,21 @@ namespace MyApp.Api.DTOs
         public int SourceRow { get; set; }
         public string GdNumber { get; set; } = "";
         public DateTime? GdDate { get; set; }
+
+        /// <summary>First day of the month this line's input tax was claimed
+        /// in, from the sheet's Claim Month or the hand-entry form; null = not
+        /// claimed yet. Stored on the GD line (ImportConsignmentLine.ClaimMonth).</summary>
+        public DateTime? ClaimMonth { get; set; }
+
+        /// <summary>
+        /// The operator's explicit "yes, create this as new stock" for a line
+        /// that matches nothing on the books. Commit creates stock for a
+        /// stock-posted line ONLY when this is true — a line the operator never
+        /// confirmed is recorded as skipped. Added 2026-09-27 after three such
+        /// lines put 342,337.11 of stock onto a company's books that was not on
+        /// its stock sheet.
+        /// </summary>
+        public bool ConfirmNewStock { get; set; }
         public string Description { get; set; } = "";
         public string HsCode { get; set; } = "";
         public decimal Quantity { get; set; }
@@ -379,8 +394,15 @@ namespace MyApp.Api.DTOs
         /// <summary>The operator's pick for an ambiguous line.</summary>
         public int? ChosenOpeningStockBalanceId { get; set; }
 
+        /// <summary>The operator's confirmation that an unmatched line is new
+        /// stock — see <see cref="GdCostingLineDto.ConfirmNewStock"/>.</summary>
+        public bool? ConfirmNewStock { get; set; }
+
         public string GdNumber { get; set; } = "";
         public DateTime? GdDate { get; set; }
+
+        /// <summary>The line's claim month (first of the month); null = not claimed yet.</summary>
+        public DateTime? ClaimMonth { get; set; }
         public string Description { get; set; } = "";
         public string HsCode { get; set; } = "";
         public decimal Quantity { get; set; }

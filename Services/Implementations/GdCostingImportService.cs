@@ -34,6 +34,7 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>The note on an unmatched line when the request did not ask
         /// for new stock (an API caller that omits CreateMissingStock).</summary>
         private const string NotAskedNote = "No stock on the books for this line, and new stock was not asked for.";
+        private const string NotConfirmedNote = "No stock on the books for this line, and it was not confirmed as new stock.";
 
         public GdCostingImportService(
             AppDbContext db,
@@ -122,7 +123,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var line = lines[i];
                 rows.Add(BuildManualRow(line, line.SourceRow is > 0 ? line.SourceRow.Value : i + 1, warnings));
-                choices.Add(new LineChoice(line.LeaveOut, line.ChosenOpeningStockBalanceId));
+                choices.Add(new LineChoice(line.LeaveOut, line.ChosenOpeningStockBalanceId, line.ConfirmNewStock));
             }
 
             // EVERY line goes through BuildPreviewAsync in ONE call, never one
@@ -179,7 +180,7 @@ namespace MyApp.Api.Services.Implementations
         /// (null = the mode's default) and, for an ambiguous line, which of its
         /// candidate balances it is. Aligned with the rows by index.
         /// </summary>
-        private sealed record LineChoice(bool? LeaveOut, int? ChosenBalanceId);
+        private sealed record LineChoice(bool? LeaveOut, int? ChosenBalanceId, bool? ConfirmNewStock = null);
 
         /// <summary>
         /// Everything a file-sourced preview does AFTER the workbook has been
@@ -251,6 +252,11 @@ namespace MyApp.Api.Services.Implementations
                 var line = preview.Lines[i];
                 line.LeaveOut = leaveOut[i];
                 line.ChosenOpeningStockBalanceId = chosen[i];
+                // Only a line that IS new stock carries the confirmation; it is
+                // the operator's to give, never assumed from a file.
+                var choiceI = choices != null && i < choices.Count ? choices[i] : null;
+                line.ConfirmNewStock = line.Disposition == GdCostingDispositionNames.StockPosted
+                    && (choiceI?.ConfirmNewStock ?? false);
                 if (matches[i].RawIds.Count > 1)
                     line.Candidates = matches[i].RawIds
                         .Select(id => index.Balances[id])
@@ -378,7 +384,8 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return new GdCostingSheetRow(
-                sourceRow, gd, line.GdDate, description, hsCode, line.Quantity, unit, input, computed, line.SellingValue);
+                sourceRow, gd, line.GdDate, description, hsCode, line.Quantity, unit, input, computed, line.SellingValue,
+                line.ClaimMonth is { } cm ? new DateTime(cm.Year, cm.Month, 1) : null);
         }
 
         /// <summary>
@@ -861,6 +868,7 @@ namespace MyApp.Api.Services.Implementations
             SourceRow = row.SourceRow,
             GdNumber = row.GdNumber,
             GdDate = row.GdDate,
+            ClaimMonth = row.ClaimMonth,
             Description = row.Description,
             HsCode = row.HsCode,
             Quantity = row.Quantity,
@@ -1224,6 +1232,14 @@ namespace MyApp.Api.Services.Implementations
                             disposition = GdCostingDisposition.Skipped;
                             dispositionNote = NotAskedNote;
                         }
+                        else if (!line.ConfirmNewStock && resolved.Count == 0)
+                        {
+                            // Asking for new stock in general is not agreeing to
+                            // THIS line becoming stock: each one is confirmed on
+                            // its own, or it is recorded and left alone.
+                            disposition = GdCostingDisposition.Skipped;
+                            dispositionNote = NotConfirmedNote;
+                        }
                         else
                         {
                             // Opted in (Task 15). Never trust "this is new
@@ -1359,6 +1375,8 @@ namespace MyApp.Api.Services.Implementations
                     {
                         ImportConsignmentId = consignment.Id,
                         SourceRow = line.SourceRow,
+                        ClaimMonth = line.ClaimMonth is { } lineClaim
+                            ? new DateTime(lineClaim.Year, lineClaim.Month, 1) : null,
                         DescriptionOnSheet = Trim(line.Description, 300),
                         HsCode = string.IsNullOrWhiteSpace(line.HsCode) ? null : Trim(line.HsCode, 20),
                         Quantity = line.Quantity,

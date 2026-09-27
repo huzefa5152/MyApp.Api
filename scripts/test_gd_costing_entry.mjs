@@ -15,7 +15,7 @@ const {
   FIELDS, MODE_NEW_ARRIVALS, MODE_BACKFILL, lineAnchor, cleanHsCode, lineProblems, messagesFor,
   computeCosting, blankLine, nextLineFrom, editorLineFrom, toLinePayload, previewLineToPayload,
   defaultLeaveOut, effectiveLeaveOut, lineOutcome, entryChecklist, commitSummary, summarySentences,
-  commitLabel,
+  commitLabel, needsNewStockConfirm,
 } = await import(new URL("../myapp-frontend/src/utils/gdCostingEntry.js", import.meta.url).href);
 
 let pass = 0;
@@ -174,6 +174,29 @@ check("blocking errors, problem lines and undecided lines are listed, each with 
   ]);
   assert.strictEqual(items[1].target, lineAnchor(3));
 });
+check("a line not on the books must be confirmed as new stock or left out", () => {
+  const lines = [
+    { sourceRow: 7, disposition: "stock-posted", problems: [] },
+    { sourceRow: 8, disposition: "stock-posted", confirmNewStock: true, problems: [] },
+    { sourceRow: 9, disposition: "stock-posted", leaveOut: true, problems: [] },
+  ];
+  assert.deepStrictEqual(entryChecklist({ companyId: 4, preview: { lines } }).map((i) => i.label),
+    ["Row 7: not on your books — confirm it as new stock, or leave it out"]);
+  assert.strictEqual(needsNewStockConfirm(lines[0]), true);
+  assert.strictEqual(needsNewStockConfirm(lines[1]), false);
+  assert.strictEqual(needsNewStockConfirm(lines[2]), false);
+});
+check("an unconfirmed new-stock line is not counted as coming in", () => {
+  const s = commitSummary({ lines: [{ sourceRow: 1, disposition: "stock-posted", description: "X", quantity: 3, cost: 30, sellingValue: 35 }] }, MODE_BACKFILL);
+  assert.deepStrictEqual([s.lineCount, s.newItems, s.unconfirmed], [0, 0, 1]);
+  assert.ok(summarySentences(s).some((t) => t.includes("still needs confirming as new stock")));
+});
+check("the claim month rides to the server as the first of the month", () => {
+  assert.strictEqual(toLinePayload({ ...blankLine(), claimMonth: "2026-06" }).claimMonth, "2026-06-01");
+  assert.strictEqual(toLinePayload({ ...blankLine(), claimMonth: "" }).claimMonth, null);
+  assert.strictEqual(editorLineFrom({ claimMonth: "2026-07-01T00:00:00" }).claimMonth, "2026-07");
+  assert.strictEqual(nextLineFrom({ ...blankLine(), claimMonth: "2026-05" }).claimMonth, "2026-05");
+});
 check("every line left out is itself something to fix", () =>
   assert.deepStrictEqual(entryChecklist({ companyId: 4, preview: { lines: [{ ...adds, leaveOut: true }] } }).map((i) => i.key), ["all-out"]));
 
@@ -181,8 +204,8 @@ console.log("\n=== summary ===");
 const preview = { lines: [
   { ...adds, cost: 1000, sellingValue: 1166.67 },
   { ...adds, sourceRow: 2, quantity: 5, cost: 500, sellingValue: 583.33 },
-  { sourceRow: 3, disposition: "stock-posted", hsCode: "8517.6250", description: "ROUTER", quantity: 4, cost: 400, sellingValue: 466.67, sheetSellingValue: 500 },
-  { sourceRow: 4, disposition: "stock-posted", hsCode: "8517.6250", description: "router ", quantity: 1, cost: 100, sellingValue: 116.67 },
+  { sourceRow: 3, disposition: "stock-posted", confirmNewStock: true, hsCode: "8517.6250", description: "ROUTER", quantity: 4, cost: 400, sellingValue: 466.67, sheetSellingValue: 500 },
+  { sourceRow: 4, disposition: "stock-posted", confirmNewStock: true, hsCode: "8517.6250", description: "router ", quantity: 1, cost: 100, sellingValue: 116.67 },
   { sourceRow: 5, disposition: "cost-only", itemTypeId: 9, quantity: 7, cost: 700, sellingValue: 816.67, leaveOut: true },
   { sourceRow: 6, disposition: "ambiguous", quantity: 2, cost: 200, sellingValue: 233.33 },
 ] };
@@ -208,6 +231,10 @@ check("plurals read as plurals", () => {
     "3 lines left out: their goods will NOT come into stock.",
     "2 lines still need an item chosen.",
   ]);
+});
+check("confirmed new stock states its value and names", () => {
+  const s = commitSummary(preview, MODE_NEW_ARRIVALS);
+  assert.deepStrictEqual([s.newSelling, s.newNames], [616.67, ["ROUTER"]]);
 });
 check("the button says what it does, per mode", () => {
   assert.strictEqual(commitLabel(commitSummary(preview, MODE_NEW_ARRIVALS)), "Bring 4 lines into stock");

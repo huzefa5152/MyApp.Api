@@ -23,7 +23,8 @@ namespace MyApp.Api.Helpers.ExcelImport
         string? Unit,
         ImportCostingInput Input,
         ImportCosting Computed,
-        decimal? SheetSellingValue);
+        decimal? SheetSellingValue,
+        DateTime? ClaimMonth = null);
 
     /// <summary>Every line the reader kept, plus a warning for every row it
     /// skipped and every figure it overrode — see
@@ -117,6 +118,12 @@ namespace MyApp.Api.Helpers.ExcelImport
                     warnings.Add($"Row {r}: {gd} has no HS code. Add it before this line can come in.");
 
                 var gdDate = cols.GdDate is > 0 ? wb.GetDate(sheet, r, cols.GdDate.Value) : null;
+                // "Jun 2026", "June 2026", "Sept 2025" or a date cell — the same
+                // reading the stock sheet's Claim Month gets. Blank = not claimed.
+                var claimMonth = cols.ClaimMonth is > 0
+                    ? ClaimMonthParser.Parse(wb.GetString(sheet, r, cols.ClaimMonth.Value))
+                      ?? ClaimMonthParser.FromDate(wb.GetDate(sheet, r, cols.ClaimMonth.Value))
+                    : null;
                 var quantity = wb.GetDecimal(sheet, r, cols.Quantity) ?? 0m;
                 var unitText = cols.Unit is > 0 ? wb.GetString(sheet, r, cols.Unit.Value).Trim() : "";
                 var unit = unitText.Length > 0 ? unitText : null;
@@ -157,7 +164,8 @@ namespace MyApp.Api.Helpers.ExcelImport
                 }
 
                 rows.Add(new GdCostingSheetRow(
-                    r, gd, gdDate, description, hsCode, quantity, unit, input, computed, sheetSellingValue));
+                    r, gd, gdDate, description, hsCode, quantity, unit, input, computed, sheetSellingValue,
+                    claimMonth));
             }
 
             return new GdCostingSheetResult(rows, warnings);

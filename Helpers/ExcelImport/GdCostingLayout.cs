@@ -32,6 +32,7 @@ namespace MyApp.Api.Helpers.ExcelImport
           "headerAliases": {
             "gdNumber":      ["GD Num", "GD Number", "GDs No"],
             "gdDate":        ["GD Date"],
+            "claimMonth":    ["Claim Month", "Claimed Month", "Claim Period"],
             "description":   ["Description", "Items"],
             "quantity":      ["Qty"],
             "unit":          ["Unit"],

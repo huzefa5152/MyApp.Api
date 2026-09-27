@@ -52,7 +52,7 @@ function extraNote(line, mode) {
   return rest || null;
 }
 
-function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose }) {
+function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfirmNew }) {
   const o = lineOutcome(line, mode);
   const note = extraNote(line, mode);
   const t = o.blocking ? tone.fix : tone[o.kind] || tone.cost;
@@ -77,6 +77,11 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose }) {
             HS {line.hsCode || "—"} · {qtyText(line.quantity)}{line.unit ? ` ${line.unit}` : " (no unit)"}
             {line.matchedItemUnit && line.unit && line.matchedItemUnit !== line.unit
               ? ` · item kept in ${line.matchedItemUnit}` : ""}
+          </div>
+          <div style={{ fontSize: 12, color: line.claimMonth ? billColors.textSecondary : billColors.warn, marginTop: 2 }}>
+            {line.claimMonth
+              ? `Claim month ${new Date(line.claimMonth).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`
+              : "Not claimed yet"}
           </div>
         </div>
 
@@ -140,6 +145,24 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose }) {
         </div>
       )}
 
+      {line.disposition === "stock-posted" && !line.leaveOut && (
+        <label style={{
+          display: "flex", alignItems: "flex-start", gap: 8, marginTop: "0.6rem", padding: "0.55rem 0.65rem",
+          border: `1px solid ${line.confirmNewStock ? billColors.success : billColors.warn}`, borderRadius: 8,
+          background: line.confirmNewStock ? "#f1f8f1" : "#fff8e6", cursor: busy ? "default" : "pointer",
+          fontSize: 13, color: billColors.textPrimary, minHeight: 44,
+        }}>
+          <input type="checkbox" checked={!!line.confirmNewStock} disabled={busy}
+            onChange={(e) => onConfirmNew(line, e.target.checked)}
+            style={{ width: 20, height: 20, marginTop: 1, flexShrink: 0 }} />
+          <span>
+            <strong>This item is not on your books.</strong> Tick to create it as new stock:{" "}
+            {qtyText(line.quantity)}{line.unit ? ` ${line.unit}` : ""} worth {moneyText(selling)} is added to opening
+            stock and to the Inventory account. Leave it out if the goods are not in stock.
+          </span>
+        </label>
+      )}
+
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "0.6rem" }}>
         <button type="button" onClick={() => onFix(line)} disabled={busy} style={actionBtn(billColors.blue, o.blocking)}>
           <MdBuild size={16} /> {o.blocking ? "Fix this line" : "Edit"}
@@ -158,7 +181,7 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose }) {
   );
 }
 
-export default function GdReviewLines({ preview, mode, busy, onFix, onToggleLeaveOut, onChoose }) {
+export default function GdReviewLines({ preview, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfirmNew }) {
   const groups = useMemo(() => {
     const byGd = new Map();
     for (const l of preview?.lines || []) {
@@ -185,7 +208,7 @@ export default function GdReviewLines({ preview, mode, busy, onFix, onToggleLeav
       </div>
       {g.lines.map((l) => (
         <LineCard key={l.sourceRow} line={l} mode={mode} busy={busy}
-          onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} />
+          onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew} />
       ))}
     </section>
   ));

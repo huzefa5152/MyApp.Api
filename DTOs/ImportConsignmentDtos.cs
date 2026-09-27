@@ -134,6 +134,9 @@ namespace MyApp.Api.DTOs
         public decimal Quantity { get; set; }
         public string? Unit { get; set; }
 
+        /// <summary>First day of the month this line was claimed in; null = not claimed yet.</summary>
+        public DateTime? ClaimMonth { get; set; }
+
         public decimal AssessedValue { get; set; }
         public decimal CustomsDuty { get; set; }
         public decimal Acd { get; set; }

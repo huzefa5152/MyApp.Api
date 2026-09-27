@@ -164,6 +164,11 @@ export default function GdLineEditor({
             <input id={id("gdDate")} type="date" style={inputStyle(errorsFor(FIELDS.gdDate).length)}
               value={line.gdDate} onChange={set("gdDate")} onBlur={touch("gdDate")} disabled={disabled} />
           </Field>
+          <Field id={id("claimMonth")} label="Claim month"
+            hint="The return this line's input tax was filed in. Leave blank if not claimed yet.">
+            <input id={id("claimMonth")} type="month" style={inputStyle(false)}
+              value={line.claimMonth || ""} onChange={set("claimMonth")} disabled={disabled} />
+          </Field>
         </div>
       </Section>
 

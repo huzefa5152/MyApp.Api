@@ -338,6 +338,17 @@ def gd_preview(api, h, company_id, content, mapping, mode=None):
 
 
 def gd_commit(api, h, body):
+    """Commit as the screen does. Since 2026-09-27 every line that would
+    become NEW stock must carry the operator's own confirmation; the screen
+    makes the operator tick each one. The suites written before that asked
+    for new stock and meant all of it, so asking for it here confirms every
+    such line -- unless the body says `_noConfirm`, which the cases proving
+    an unconfirmed line is refused use."""
+    body = dict(body)
+    no_confirm = body.pop("_noConfirm", False)
+    if body.get("createMissingStock") and not no_confirm:
+        body["lines"] = [dict(l, confirmNewStock=True) if l.get("disposition") == "stock-posted" else l
+                         for l in body.get("lines", [])]
     return requests.post(f"{api}/spreadsheet-import/gd-costing/commit", headers=h, timeout=120,
                          json=body)
 
@@ -3683,6 +3694,82 @@ def main():
         check("29j: an unmatched Backfill line is not left out by the server",
               len(lines) == 1 and lines[0].get("leaveOut") is False and lines[0].get("disposition") == "stock-posted",
               f"{lines[0] if lines else r.text[:200]}")
+
+        # 30 -- new stock needs a per-line confirmation (2026-09-27).
+        new_line = manual_line("GD-C-1", "8517.6250", f"Confirm New {tag}", qty=3, assessed=300)
+        r = gd_preview_manual(api, h, rules_co, [new_line], mode="backfill")
+        pv = r.json() if r.ok else {}
+        line = (pv.get("lines") or [{}])[0]
+        check("30a: a line not on the books arrives unconfirmed",
+              line.get("disposition") == "stock-posted" and line.get("confirmNewStock") is False,
+              f"{line.get('disposition')} confirm={line.get('confirmNewStock')}")
+        before = len(get_openings(api, h, rules_co))
+        body = {"companyId": rules_co, "fileSha256": pv.get("fileSha256"), "fileName": pv.get("fileName"),
+                "fileSizeBytes": pv.get("fileSizeBytes"), "lines": pv.get("lines", []),
+                "createMissingStock": True, "mode": "backfill", "_noConfirm": True}
+        r = gd_commit(api, h, body)
+        res = r.json() if r.ok else {}
+        check("30b: asking for new stock without confirming the line creates nothing",
+              r.ok and res.get("openingBalancesCreated") == 0 and len(get_openings(api, h, rules_co)) == before,
+              f"http {r.status_code} created={res.get('openingBalancesCreated')} {r.text[:200]}")
+        cid = find_consignment_id(api, h, rules_co, "GD-C-1")
+        det = get_consignment(api, h, cid).json() if cid else {}
+        dline = (det.get("lines") or [{}])[0]
+        check("30c: the unconfirmed line is recorded as skipped, saying why",
+              dline.get("disposition") == "skipped" and "not confirmed" in (dline.get("dispositionNote") or ""),
+              f"{dline.get('disposition')} {dline.get('dispositionNote')}")
+
+        confirmed = dict(manual_line("GD-C-2", "8517.6250", f"Confirm Yes {tag}", qty=2, assessed=200),
+                         confirmNewStock=True)
+        r = gd_preview_manual(api, h, rules_co, [confirmed], mode="backfill")
+        pv = r.json() if r.ok else {}
+        check("30d: a re-check keeps the operator's confirmation",
+              (pv.get("lines") or [{}])[0].get("confirmNewStock") is True, str((pv.get("lines") or [{}])[0])[:200])
+        body = {"companyId": rules_co, "fileSha256": pv.get("fileSha256"), "fileName": pv.get("fileName"),
+                "fileSizeBytes": pv.get("fileSizeBytes"), "lines": pv.get("lines", []),
+                "createMissingStock": True, "mode": "backfill", "_noConfirm": True}
+        r = gd_commit(api, h, body)
+        res = r.json() if r.ok else {}
+        check("30e: a confirmed line becomes new stock",
+              r.ok and res.get("openingBalancesCreated") == 1, f"http {r.status_code} {r.text[:200]}")
+
+        # 31 -- the claim month comes in from the sheet and from hand entry.
+        claim_headings = {**BASE_HEADINGS, 17: "Claim Month"}
+        claim_map = dict(GD_MAPPING, headerAliases={"claimMonth": ["Claim Month", "Claimed Month"]})
+        rows = []
+        for gd_hs, desc, month in (("8481.2000", f"Rules Pump {tag}", "June 2026"),
+                                   ("8536.1010", f"Rules Twin A {tag}", "Jul-26"),
+                                   ("8481.2000", f"Rules Pump {tag}", None)):
+            cells = row_cells(BASE_COLS, "GD-C-3", gd_hs, desc=desc, qty=1, assessed=900)
+            if month:
+                cells[17] = month
+            rows.append(cells)
+        r = gd_preview(api, h, rules_co, build_sheet(claim_headings, rows), claim_map, mode="new-arrivals")
+        pv = r.json() if r.ok else {}
+        months = [(l.get("claimMonth") or "")[:7] for l in pv.get("lines", [])]
+        check("31a: the sheet's Claim Month is read by its short name, blank = not claimed",
+              months == ["2026-06", "2026-07", ""], str(months))
+        r = commit_preview(api, h, rules_co, pv, "new-arrivals")
+        check("31b: the sheet commits", r.ok, f"http {r.status_code} {r.text[:200]}")
+        cid = find_consignment_id(api, h, rules_co, "GD-C-3")
+        det = get_consignment(api, h, cid).json() if cid else {}
+        stored = [(l.get("claimMonth") or "")[:7] for l in sorted(det.get("lines", []), key=lambda x: x["sourceRow"])]
+        check("31c: each GD line keeps its own claim month", stored == ["2026-06", "2026-07", ""], str(stored))
+
+        typed = dict(manual_line("GD-C-4", "8481.2000", f"Rules Pump {tag}", qty=1, assessed=900),
+                     claimMonth="2026-05-01")
+        r = gd_preview_manual(api, h, rules_co, [typed], mode="new-arrivals")
+        pv = r.json() if r.ok else {}
+        r = commit_preview(api, h, rules_co, pv, "new-arrivals")
+        cid = find_consignment_id(api, h, rules_co, "GD-C-4")
+        det = get_consignment(api, h, cid).json() if cid else {}
+        check("31d: a hand-entered claim month is stored on its line",
+              r.ok and ((det.get("lines") or [{}])[0].get("claimMonth") or "")[:7] == "2026-05",
+              f"http {r.status_code} {str(det.get('lines'))[:200]}")
+        det_rows = requests.get(f"{api}/stock/company/{rules_co}/gd-details", headers=h, timeout=60).json()
+        check("31e: the Stock Dashboard's GD panel shows that line's month",
+              any(d.get("gdNumber") == "GD-C-4" and (d.get("claimMonth") or "")[:7] == "2026-05" for d in det_rows),
+              str([d for d in det_rows if d.get("gdNumber") == "GD-C-4"])[:200])
 
     finally:
         if not args.keep:

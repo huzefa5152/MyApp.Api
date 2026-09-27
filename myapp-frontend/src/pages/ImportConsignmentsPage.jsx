@@ -138,6 +138,7 @@ function ConsignmentLines({ detail, loading, canCorrect, onCorrect }) {
           <tr>
             <th style={th}>HS code</th>
             <th style={th}>Description</th>
+            <th style={th}>Claim month</th>
             <th style={{ ...th, textAlign: "right" }}>Quantity</th>
             <th style={{ ...th, textAlign: "right" }}>Cost</th>
             <th style={{ ...th, textAlign: "right" }}>Selling value</th>
@@ -152,6 +153,11 @@ function ConsignmentLines({ detail, loading, canCorrect, onCorrect }) {
             <tr key={l.id}>
               <td style={{ ...td, whiteSpace: "nowrap" }}>{l.hsCode || "—"}</td>
               <td style={td}><div style={wrap2}>{l.descriptionOnSheet || "—"}</div></td>
+              <td style={{ ...td, whiteSpace: "nowrap", color: l.claimMonth ? undefined : colors.textSecondary }}>
+                {l.claimMonth
+                  ? new Date(l.claimMonth).toLocaleDateString(undefined, { month: "short", year: "numeric" })
+                  : "Not claimed"}
+              </td>
               <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                 {qty(l.quantity)}{l.unit ? ` ${l.unit}` : ""}
               </td>

@@ -96,6 +96,22 @@ says which of the three below will happen (*New item* / *First stock of* /
 4. Create the opening balance with the line's quantity, selling value, actual
    cost, tax rate and the GD date.
 
+**Every such line must be confirmed on its own (2026-09-27).** The review shows a
+"This item is not on your books" box on each one; the GD cannot be brought in
+until every unmatched line is either ticked or left out, and the final button
+asks once more, naming the items and the value going onto opening stock and the
+Inventory account. The server enforces it too: a `stock-posted` line reaches
+stock only when it carries `confirmNewStock: true`, so `createMissingStock` alone
+records the line as skipped ("not confirmed as new stock"). Added after three
+unconfirmed lines put 342,337.11 of stock on a company that was not on its stock
+sheet.
+
+**Claim month.** A costing sheet's "Claim Month" / "Claimed Month" column is read
+by heading (short month name, "June 2026", "Sept 2025", or a date cell), and the
+hand-entry form has a Claim month box. Each GD line keeps its own month
+(`ImportConsignmentLines.ClaimMonth`); blank = not claimed yet. It shows on the
+review, on the Consignments screen and in the Stock Dashboard's GD panel.
+
 ---
 
 ## 5. What the import does NOT touch

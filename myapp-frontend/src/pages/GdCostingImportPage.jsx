@@ -7,6 +7,7 @@ import {
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { notify } from "../utils/notify";
+import { useConfirm } from "../Components/ConfirmDialog";
 import { formStyles, modalSizes } from "../theme";
 import {
   previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles,
@@ -115,6 +116,7 @@ const hasContent = (m) =>
 
 export default function GdCostingImportPage() {
   const { has, isSeedAdmin, permissions } = usePermissions();
+  const confirm = useConfirm();
   const { companies, selectedCompany } = useCompany();
   const canRun = has("importcosting.sheet.run");
   const canSeeConsignments = has("importcosting.consignments.view");
@@ -139,6 +141,8 @@ export default function GdCostingImportPage() {
   const [sheetNotes, setSheetNotes] = useState([]);
   const [leaveOutChoice, setLeaveOutChoice] = useState({});
   const [chosenItem, setChosenItem] = useState({});
+  // Row -> the operator's "create it as new stock" for a line not on the books.
+  const [confirmNew, setConfirmNew] = useState({});
   const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState("");
   const [result, setResult] = useState(null);
@@ -183,7 +187,7 @@ export default function GdCostingImportPage() {
 
   const clearReview = useCallback(() => {
     setPreview(null); setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({});
-    setStale(false); setFixing(null);
+    setConfirmNew({}); setStale(false); setFixing(null);
   }, []);
 
   const resetAll = useCallback(() => {
@@ -215,12 +219,13 @@ export default function GdCostingImportPage() {
    * depends on the server's answer (Backfill leaves a line with nothing to
    * price out), so when an answer changes it, the server is asked once more.
    */
-  const recheck = useCallback(async ({ base, edits = {}, modeNow, leave, chosen, src }) => {
+  const recheck = useCallback(async ({ base, edits = {}, modeNow, leave, chosen, src, confirm = {} }) => {
     const build = (pv, withEdits) => (pv.lines || []).map((l) => {
       const extra = {
         sourceRow: l.sourceRow,
         leaveOut: effectiveLeaveOut(l, modeNow, leave),
         chosenOpeningStockBalanceId: chosen[l.sourceRow] ?? null,
+        confirmNewStock: confirm[l.sourceRow] ?? false,
       };
       return withEdits[l.sourceRow] ? toLinePayload(withEdits[l.sourceRow], extra) : previewLineToPayload(l, extra);
     });
@@ -262,7 +267,8 @@ export default function GdCostingImportPage() {
       fileName: data.fileName, fileSha256: data.fileSha256, fileSizeBytes: data.fileSizeBytes,
       importProfileId: data.importProfileId, profileVersion: data.profileVersion,
     };
-    setSource(src); setSheetNotes(data.warnings || []); setLeaveOutChoice({}); setChosenItem({}); setStale(false);
+    setSource(src); setSheetNotes(data.warnings || []); setLeaveOutChoice({}); setChosenItem({});
+    setConfirmNew({}); setStale(false);
     return settleDefaults(data, src, mode);
   });
 
@@ -278,7 +284,8 @@ export default function GdCostingImportPage() {
       // What was in the form is now line N of the list, so the list and the
       // review describe the same lines.
       if (hasContent(typed)) { setStaged(lines); setTyped(nextLineFrom(typed)); setTypedShowAll(false); }
-      setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({}); setStale(false);
+      setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({});
+      setConfirmNew({}); setStale(false);
       return settleDefaults(data, null, mode);
     });
   };
@@ -310,20 +317,26 @@ export default function GdCostingImportPage() {
     setMode(next);
     if (next === MODE_BACKFILL) setShowBackfill(true);
     if (preview && !stale)
-      run("recheck", () => recheck({ base: preview, modeNow: next, leave: leaveOutChoice, chosen: chosenItem, src: source }));
+      run("recheck", () => recheck({ base: preview, modeNow: next, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm: confirmNew }));
   };
 
   const onToggleLeaveOut = (line, value) => {
     const leave = { ...leaveOutChoice, [line.sourceRow]: value };
     setLeaveOutChoice(leave);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave, chosen: chosenItem, src: source }));
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave, chosen: chosenItem, src: source, confirm: confirmNew }));
+  };
+
+  const onConfirmNew = (line, value) => {
+    const confirm = { ...confirmNew, [line.sourceRow]: value };
+    setConfirmNew(confirm);
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm }));
   };
 
   const onChoose = (line, balanceId) => {
     const chosen = { ...chosenItem };
     if (balanceId) chosen[line.sourceRow] = balanceId; else delete chosen[line.sourceRow];
     setChosenItem(chosen);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen, src: source }));
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen, src: source, confirm: confirmNew }));
   };
 
   const onFix = (line) => setFixing({ sourceRow: line.sourceRow, draft: editorLineFrom(line), problems: line.problems || [] });
@@ -332,6 +345,7 @@ export default function GdCostingImportPage() {
     const { sourceRow, draft } = fixing;
     const ok = await run("recheck", () => recheck({
       base: preview, edits: { [sourceRow]: draft }, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source,
+      confirm: confirmNew,
     }));
     if (!ok) return;
     // A typed GD's list follows the fix, so going back to it shows the same line.
@@ -339,7 +353,26 @@ export default function GdCostingImportPage() {
     setFixing(null);
   };
 
-  const onCommit = () => run("commit", async () => {
+  const onCommit = async () => {
+    // A last look before new stock lands on the books: every line was ticked
+    // one by one, and this says what they add up to.
+    if (summary?.newItems > 0) {
+      const ok = await confirm({
+        title: "Create new stock?",
+        message: `${summary.newItems} item${summary.newItems === 1 ? " is" : "s are"} not on your books and will be created `
+          + `with ${qtyText(summary.newUnits)} units of opening stock worth ${moneyText(summary.newSelling)}, `
+          + `added to the Inventory account: ${summary.newNames.slice(0, 6).join(", ")}`
+          + `${summary.newNames.length > 6 ? ` and ${summary.newNames.length - 6} more` : ""}. `
+          + "Only continue if these goods are really in stock.",
+        confirmText: "Create new stock",
+        variant: "danger",
+      });
+      if (!ok) return;
+    }
+    return doCommit();
+  };
+
+  const doCommit = () => run("commit", async () => {
     const { data } = await commitGdCosting({
       companyId: Number(companyId),
       importProfileId: preview.importProfileId,
@@ -617,7 +650,7 @@ export default function GdCostingImportPage() {
             {/* A stale review describes lines that no longer exist as typed:
                 acting on it would re-check the old ones. */}
             <GdReviewLines preview={preview} mode={mode} busy={!!busy || stale}
-              onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} />
+              onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew} />
           </>
         )}
       </BillStep>
