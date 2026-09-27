@@ -17,7 +17,7 @@ export const upsertTemplate = (companyId, templateType, htmlContent, templateJso
 
 export const getTemplateById = (id) => httpClient.get(`/printtemplates/${id}`);
 
-// payload: { templateType, name, htmlContent, templateJson, editorMode, isDefault }
+// payload: { templateType, name, htmlContent, templateJson, editorMode, isDefault, stampId }
 export const createTemplate = (companyId, payload) =>
   httpClient.post(`/printtemplates/company/${companyId}`, {
     templateType: payload.templateType,
@@ -26,6 +26,10 @@ export const createTemplate = (companyId, payload) =>
     templateJson: payload.templateJson || null,
     editorMode: payload.editorMode || null,
     isDefault: payload.isDefault ?? false,
+    // Duplicate / copy-to-type / new-from-copy pass the source's signature so
+    // the new template starts life signed the same way. The server validates
+    // the stamp belongs to the target company.
+    stampId: payload.stampId ?? null,
   });
 
 export const updateTemplateById = (id, payload) =>
