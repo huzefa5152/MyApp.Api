@@ -908,19 +908,34 @@ namespace MyApp.Api.Services.Implementations
                 if (PageChromeRegex.IsMatch(line)) { FlushItem(items, ref current); continue; }
                 if (PageStampRegex.IsMatch(line) && !Regex.IsMatch(line, @"[A-Za-z]{3,}.*\d")) { FlushItem(items, ref current); continue; }
 
+                // A vertical watermark ("REVIEWING" printed down the page margin)
+                // comes out as one letter per line between the rows. A lone
+                // letter is never item text — skip it without flushing, so the
+                // item it interrupts keeps its description clean.
+                if (LoneLetterRegex.IsMatch(line)) continue;
+
                 var cols = SplitColumns(line);
                 if (IsRepeatedHeaderRow(cols, qtyCol)) { FlushItem(items, ref current); continue; }
 
+                // The same watermark can also land in FRONT of a footer line
+                // ("E  Total>>>>>>  509.00"), hiding the label from both checks
+                // below. Footer detection alone looks past such a letter; the
+                // data-row reading further down still sees the original cells.
+                var footerCols = cols.Length > 1 && LoneLetterRegex.IsMatch(cols[0]) ? cols.Skip(1).ToArray() : cols;
+                var footerLine = footerCols == cols ? line : string.Join("  ", footerCols);
+
                 // Real end-of-table marker (Sub Total, Grand Total, Terms, …).
-                if (SimpleStopRegex.IsMatch(line)) { FlushItem(items, ref current); break; }
+                if (SimpleStopRegex.IsMatch(footerLine)) { FlushItem(items, ref current); break; }
 
                 // A line whose first cell is PURELY a footer label — even when
                 // its amount happens to fall in the quantity column ("Basic
                 // 320,000", "Total Pcs 800") or it stands alone ("Sub Total") —
                 // is a total, never an item. A real product ("Total Station
                 // Theodolite", "Net Book A5") carries extra words, so it won't
-                // match and is read normally.
-                if (cols.Length > 0 && FooterLabelRegex.IsMatch(cols[0].Trim())) { FlushItem(items, ref current); continue; }
+                // match and is read normally. Trailing decoration is not part
+                // of the label ("Total>>>>>>", "Total :", "Total ***").
+                if (footerCols.Length > 0 && FooterLabelRegex.IsMatch(StripLabelDecoration(footerCols[0])))
+                { FlushItem(items, ref current); continue; }
 
                 // Locate the quantity. Normally it sits exactly in the quantity
                 // column. If that cell isn't a number, the description spilled
@@ -928,9 +943,18 @@ namespace MyApp.Api.Services.Implementations
                 // to the right — scan rightward for the real number and merge the
                 // spilled cells back into the description.
                 int qtyIndex = -1;
+                string? inlineUnit = null;
                 string descCells = descCol < cols.Length ? cols[descCol] : "";
                 if (qtyCol >= 0 && qtyCol < cols.Length && IsQuantityNumber(cols[qtyCol]))
                 {
+                    qtyIndex = qtyCol;
+                }
+                else if (qtyCol >= 0 && qtyCol < cols.Length && TrySplitQtyUnitCell(cols[qtyCol], out inlineUnit))
+                {
+                    // The quantity column carries its unit in the same cell,
+                    // one space apart ("300.00 PIECE") — the PDF has no
+                    // separate unit column. Only a RECOGNISED unit qualifies,
+                    // so "12 Months" or "2 Core" never become a quantity.
                     qtyIndex = qtyCol;
                 }
                 else if (qtyCol < 0 || qtyCol >= cols.Length || !IsRecognisedUnit(cols[qtyCol]))
@@ -960,6 +984,8 @@ namespace MyApp.Api.Services.Implementations
                     // Unit: its own column when present; if that shifted with a
                     // spill, take the cell right after the quantity.
                     var unitRaw = (unitCol >= 0 && unitCol < cols.Length && unitCol != qtyIndex) ? cols[unitCol] : "";
+                    if (!LooksLikeUnitValue(unitRaw) && inlineUnit != null)
+                        unitRaw = inlineUnit;
                     if (!LooksLikeUnitValue(unitRaw) && qtyIndex + 1 < cols.Length && LooksLikeUnitValue(cols[qtyIndex + 1]))
                         unitRaw = cols[qtyIndex + 1];
                     var unit = LooksLikeUnitValue(unitRaw) ? unitRaw : "Pcs";
@@ -1015,6 +1041,33 @@ namespace MyApp.Api.Services.Implementations
         // a percentage (a "32%" cell is a concentration in the description).
         private static bool IsQuantityNumber(string? s) =>
             !string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^[\p{Sc}]?\s*\d[\d,]*(?:\.\d+)?$");
+
+        // One letter, alone: a character of a vertical watermark.
+        private static readonly Regex LoneLetterRegex = new(@"^\s*[A-Za-z]\s*$", RegexOptions.Compiled);
+
+        // "Total>>>>>>" / "Total :" / "Total ***" → "Total".
+        private static string StripLabelDecoration(string cell) =>
+            Regex.Replace(cell ?? "", @"[\s>:*=.\-]+$", "").Trim();
+
+        // A quantity cell with its unit inline: "300.00 PIECE", "60 PACKET",
+        // "12.5 Kgs." — a bare number, one run of spaces, then ONE recognised
+        // unit word. Anything else ("12 Months", "2 Core", "300 PIECE BLUE")
+        // is not a quantity cell and is left to the caller's other checks.
+        private static readonly Regex QtyUnitCellRegex = new(
+            @"^\s*(?<qty>\d[\d,]*(?:\.\d+)?)\s+(?<unit>[A-Za-z]{1,12})\.?\s*$",
+            RegexOptions.Compiled);
+
+        private static bool TrySplitQtyUnitCell(string? cell, out string? unit)
+        {
+            unit = null;
+            if (string.IsNullOrWhiteSpace(cell)) return false;
+            var m = QtyUnitCellRegex.Match(cell);
+            if (!m.Success) return false;
+            var u = m.Groups["unit"].Value;
+            if (!IsRecognisedUnit(u) && !UnitOnlyWords.Contains(u)) return false;
+            unit = u;
+            return true;
+        }
 
         // True when a non-data line is really a row in its own right rather than
         // a wrapped-description fragment: it is led by a bare-number serial, or

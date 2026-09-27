@@ -292,6 +292,14 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-09-27 — Print templates: quicker to create and manage, and no duplicate default
 
+- **PO import reads a quantity that carries its unit in the same cell.**
+  Mundia Exports' purchase orders print `300.00 PIECE` in the Qty column with
+  no separate unit column, so the import matched the format and then found no
+  items at all. The quantity is now read from such a cell, and its unit used,
+  when the word is a recognised unit, so `12 Months` never becomes a quantity.
+  The same fix stops a vertical watermark printed down the page ("REVIEWING")
+  from being glued onto item descriptions, and recognises a decorated total
+  line (`Total>>>>>>`) as the end of the table.
 - **The print-template dropdown on every document screen lists each template
   once.** A type with two templates used to show three rows ("★ Default — X",
   then X again with a star, then the other); it now shows the default once and
