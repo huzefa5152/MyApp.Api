@@ -166,6 +166,12 @@
         /// the caller lacks <c>stock.actualcost.view</c>.</summary>
         public decimal? RunningActualValue { get; set; }
 
+        /// <summary>Actual (landed) cost this movement added to, or took out
+        /// of, the actual-cost pool -- Quantity x the walk's own unit figure,
+        /// before that is rounded for display. Null when the caller lacks
+        /// <c>stock.actualcost.view</c>.</summary>
+        public decimal? ActualValue { get; set; }
+
         /// <summary>FIFO by GD only (empty otherwise): which GDs this movement
         /// took its stock from -- or, for a return, went back into.</summary>
         public List<StockMovementAllocationDto> Allocations { get; set; } = new();
@@ -492,6 +498,10 @@
         public decimal? ConsumedValueExcludingTax { get; set; }
         public decimal? RemainingQuantity { get; set; }
         public decimal? RemainingValueExcludingTax { get; set; }
+
+        /// <summary>FIFO by GD only: the landed cost this line brought in.
+        /// Null otherwise, and when the caller lacks <c>stock.actualcost.view</c>.</summary>
+        public decimal? ActualCostExcludingTax { get; set; }
     }
 
     /// <summary>Exactly one of the two ids.</summary>

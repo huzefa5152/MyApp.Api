@@ -266,15 +266,42 @@ export default function StockDashboardPage() {
       { key: "margin", label: "Margin" },
     ] : []),
   ]);
-  const [showInvCol, inventoryPicker] = useColumnVisibility("stock:inventory", [
+  // Money first: the Inventory tab answers "how much value came in on GDs
+  // and how much went out on invoices". The quantity buckets stay one click
+  // away in the column picker.
+  const [showInvCol, inventoryPicker] = useColumnVisibility("stock:inventory:v2", [
     { key: "item", label: "Item" },
     { key: "hs", label: "HS Code" },
-    { key: "instock", label: "In Stock" },
-    { key: "available", label: "Available" },
-    { key: "committed", label: "Committed" },
-    { key: "todeliver", label: "To Deliver" },
-    { key: "delivered", label: "Delivered" },
-    { key: "incoming", label: "Incoming" },
+    { key: "instock", label: "In Stock (qty)" },
+    { key: "available", label: "Available (qty)", defaultHidden: true },
+    { key: "committed", label: "Committed (qty)", defaultHidden: true },
+    { key: "todeliver", label: "To Deliver (qty)", defaultHidden: true },
+    { key: "delivered", label: "Delivered (qty)", defaultHidden: true },
+    { key: "incoming", label: "Incoming (qty)", defaultHidden: true },
+    { key: "valuein", label: "Value In" },
+    { key: "valueout", label: "Value Out" },
+    { key: "excl", label: "Excluding" },
+    { key: "tax", label: "Sales Tax" },
+    { key: "incl", label: "Including" },
+    ...(canViewActualCost ? [
+      { key: "actual", label: "Actual Cost" },
+      { key: "margin", label: "Margin" },
+    ] : []),
+  ]);
+  // The per-item stock ledger under each Inventory row: values by default,
+  // quantities on request.
+  const [showLedgerCol, ledgerPicker] = useColumnVisibility("stock:ledger", [
+    { key: "qtyin", label: "Qty In", defaultHidden: true },
+    { key: "qtyout", label: "Qty Out", defaultHidden: true },
+    { key: "qtybal", label: "Qty Balance", defaultHidden: true },
+    { key: "excl", label: "Excluding" },
+    { key: "tax", label: "Sales Tax" },
+    { key: "incl", label: "Including" },
+    ...(canViewActualCost ? [
+      { key: "actual", label: "Actual Cost" },
+      { key: "margin", label: "Margin" },
+    ] : []),
+    { key: "balance", label: "Value Balance" },
   ]);
   const [showOpenCol, openingPicker] = useColumnVisibility("stock:opening", [
     { key: "gd", label: "GD No" },
@@ -302,7 +329,8 @@ export default function StockDashboardPage() {
     { key: "source", label: "Source" },
     { key: "notes", label: "Notes" },
   ]);
-  const inventoryTracked = ["instock", "available", "committed", "todeliver", "delivered", "incoming"]
+  const inventoryTracked = ["instock", "available", "committed", "todeliver", "delivered", "incoming",
+    "valuein", "valueout", "excl", "tax", "incl", ...(canViewActualCost ? ["actual", "margin"] : [])]
     .filter(showInvCol).length;
 
   // Switch the selected company between V1 (legacy HS-gated) and V2 (standard
@@ -1172,6 +1200,13 @@ export default function StockDashboardPage() {
                         {showInvCol("todeliver") && <th style={{ ...styles.th, textAlign: "right" }} title="Ordered, not yet delivered">To Deliver</th>}
                         {showInvCol("delivered") && <th style={{ ...styles.th, textAlign: "right" }} title="Delivered on a challan, not yet billed">Delivered</th>}
                         {showInvCol("incoming") && <th style={{ ...styles.th, textAlign: "right" }} title="On un-billed goods receipts">Incoming</th>}
+                        {showInvCol("valuein") && <th style={{ ...styles.th, textAlign: "right" }} title="Value that came in: opening / GD stock plus purchases, excluding tax">Value In</th>}
+                        {showInvCol("valueout") && <th style={{ ...styles.th, textAlign: "right" }} title="Value that went out on invoices and other stock out, excluding tax">Value Out</th>}
+                        {showInvCol("excl") && <th style={{ ...styles.th, textAlign: "right" }} title="Value of the stock in hand, excluding tax">Excluding</th>}
+                        {showInvCol("tax") && <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>}
+                        {showInvCol("incl") && <th style={{ ...styles.th, textAlign: "right" }}>Including</th>}
+                        {canViewActualCost && showInvCol("actual") && <th style={{ ...styles.th, textAlign: "right" }} title="Landed cost of the stock in hand">Actual Cost</th>}
+                        {canViewActualCost && showInvCol("margin") && <th style={{ ...styles.th, textAlign: "right" }} title="Excluding value less actual cost">Margin</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1214,6 +1249,7 @@ export default function StockDashboardPage() {
                               {showInvCol("todeliver") && <td style={{ ...styles.td, textAlign: "right" }}>{r.toDeliver.toLocaleString()}</td>}
                               {showInvCol("delivered") && <td style={{ ...styles.td, textAlign: "right" }}>{r.delivered.toLocaleString()}</td>}
                               {showInvCol("incoming") && <td style={{ ...styles.td, textAlign: "right" }}>{r.incoming.toLocaleString()}</td>}
+                              <InventoryValueCells o={onhandById.get(r.itemTypeId)} show={showInvCol} canViewActualCost={canViewActualCost} />
                             </>
                           ) : inventoryTracked > 0 && (
                             <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }} colSpan={inventoryTracked}>—</td>
@@ -1229,6 +1265,8 @@ export default function StockDashboardPage() {
                                 canViewMovements={canViewMovements}
                                 openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
                                 onHand={r.onHand} uom={r.uom}
+                                position={onhandById.get(r.itemTypeId)}
+                                showCol={showLedgerCol} picker={ledgerPicker} canViewActualCost={canViewActualCost}
                               />
                             </td>
                           </tr>
@@ -1272,6 +1310,13 @@ export default function StockDashboardPage() {
                       </div>
                       {r.tracked ? (
                         <div className="stock-card__stats">
+                          {(() => { const o = onhandById.get(r.itemTypeId); if (!o) return null; return (<>
+                            {showInvCol("valuein") && <div className="stock-card__stat"><span className="stock-card__stat-label">Value In</span><span className="stock-card__stat-value" style={{ color: "#2e7d32" }}>{money(Number(o.openingValueExcludingTax || 0) + Number(o.valueIn || 0))}</span></div>}
+                            {showInvCol("valueout") && <div className="stock-card__stat"><span className="stock-card__stat-label">Value Out</span><span className="stock-card__stat-value" style={{ color: "#c62828" }}>{money(o.valueOut)}</span></div>}
+                            {showInvCol("excl") && <div className="stock-card__stat"><span className="stock-card__stat-label">Excluding</span><span className="stock-card__stat-value">{money(o.valueExcludingTax)}</span></div>}
+                            {showInvCol("incl") && <div className="stock-card__stat"><span className="stock-card__stat-label">Including</span><span className="stock-card__stat-value">{money(o.valueIncludingTax)}</span></div>}
+                            {canViewActualCost && showInvCol("margin") && o.margin != null && <div className="stock-card__stat"><span className="stock-card__stat-label">Margin</span><span className="stock-card__stat-value" style={{ color: o.margin < 0 ? colors.negative : "#2e7d32" }}>{money(o.margin)}</span></div>}
+                          </>); })()}
                           <div className="stock-card__stat">
                             <span className="stock-card__stat-label">Available</span>
                             <span className="stock-card__stat-value" style={{ color: r.available < 0 ? "#c62828" : colors.teal }}>{r.available.toLocaleString()}</span>
@@ -1308,6 +1353,8 @@ export default function StockDashboardPage() {
                           canViewMovements={canViewMovements}
                           openingQty={onhandById.get(r.itemTypeId)?.openingBalance}
                           onHand={r.onHand} uom={r.uom}
+                          position={onhandById.get(r.itemTypeId)}
+                          showCol={showLedgerCol} picker={ledgerPicker} canViewActualCost={canViewActualCost}
                         />
                       )}
                     </div>
@@ -1979,43 +2026,87 @@ function AllocationChips({ allocations, isIn }) {
   );
 }
 
-function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canViewMovements, openingQty, onHand, uom }) {
+// The Inventory row's money: what came in (opening / GD stock + purchases),
+// what went out, and the position in hand -- all from the on-hand feed, the
+// same figures the On-Hand tab shows. Nothing is recomputed here.
+function InventoryValueCells({ o, show, canViewActualCost }) {
+  const td = { ...styles.td, textAlign: "right", whiteSpace: "nowrap" };
+  const valueIn = Number(o?.openingValueExcludingTax || 0) + Number(o?.valueIn || 0);
+  const margin = o?.margin;
+  return (
+    <>
+      {show("valuein") && <td style={{ ...td, color: "#2e7d32", fontWeight: 600 }}>{o ? money(valueIn) : "—"}</td>}
+      {show("valueout") && <td style={{ ...td, color: "#c62828", fontWeight: 600 }}>{o ? money(o.valueOut) : "—"}</td>}
+      {show("excl") && <td style={{ ...td, fontWeight: 700, color: colors.blue }}>{o ? money(o.valueExcludingTax) : "—"}</td>}
+      {show("tax") && <td style={td}>{o ? money(o.salesTax) : "—"}</td>}
+      {show("incl") && <td style={{ ...td, fontWeight: 600 }}>{o ? money(o.valueIncludingTax) : "—"}</td>}
+      {canViewActualCost && show("actual") && <td style={td}>{o?.actualCostExcludingTax != null ? money(o.actualCostExcludingTax) : "—"}</td>}
+      {canViewActualCost && show("margin") && (
+        <td style={{ ...td, fontWeight: 600, color: margin < 0 ? colors.negative : "#2e7d32" }}>{margin != null ? money(margin) : "—"}</td>
+      )}
+    </>
+  );
+}
+
+function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canViewMovements, openingQty, onHand, uom,
+  position, showCol, picker, canViewActualCost }) {
   if (gdLoading || !gdRows || (canViewMovements && (movementsLoading || !movements))) {
     return <div style={drillStyles.state}>Loading stock ledger…</div>;
   }
+  const show = (k) => (showCol ? showCol(k) : true);
+  const itemRate = Number(position?.salesTaxRate || 0);
   const entries = [];
-  let tracedQty = 0;
+  let tracedQty = 0, tracedValue = 0, tracedActual = 0, tracedActualKnown = true;
+  const restated = gdRows.some((g) => g.restatementLineId != null);
   gdRows.forEach((g, i) => {
     const q = Number(g.quantity || 0);
     if (g.quantity == null || q <= 0) return; // cost-only backfill: no stock moved
-    tracedQty += q;
+    const v = Number(g.valueExcludingTax || 0);
+    tracedQty += q; tracedValue += v;
+    if (g.actualCostExcludingTax == null) tracedActualKnown = false; else tracedActual += Number(g.actualCostExcludingTax);
     entries.push({
-      key: `gd-${i}`, date: g.gdDate, order: 0, dir: "In", qty: q,
+      key: `gd-${i}`, date: g.gdDate, order: 0, dir: "In", qty: q, value: v,
+      actual: g.actualCostExcludingTax == null ? null : Number(g.actualCostExcludingTax),
+      rate: g.salesTaxRate != null && Number(g.salesTaxRate) > 0 ? Number(g.salesTaxRate) : itemRate,
       ref: `GD ${g.gdNumber}`, kind: g.source || "GD lot",
       detail: g.description, sub: g.sourceRow != null ? `row ${g.sourceRow}` : null,
     });
   });
   const untraced = Number(openingQty || 0) - tracedQty;
   if (untraced > 0.0001) {
+    const openActual = position?.openingActualCostExcludingTax;
     entries.push({
       key: "opening-untraced", date: null, order: -1, dir: "In", qty: untraced,
-      ref: "Opening balance", kind: "Not traced to a GD", detail: null, sub: null,
+      value: Math.max(0, Number(position?.openingValueExcludingTax || 0) - tracedValue),
+      actual: openActual == null || !tracedActualKnown ? null : Math.max(0, Number(openActual) - tracedActual),
+      rate: itemRate, ref: "Opening balance", kind: "Not traced to a GD", detail: null, sub: null,
     });
   }
   // Movements arrive per line item; one document's lines of this item are
-  // summed into one ledger row, as the On-Hand movement history does.
+  // summed into one ledger row, as the On-Hand movement history does. A
+  // revaluation moves money, not goods, so it is a row here -- except for a
+  // restated item, whose restatement lines above already carry the sheet.
   const byDoc = new Map();
   (movements || []).forEach((m) => {
-    if (m.sourceType === "OpeningBalance" || m.sourceType === "Revaluation") return;
+    if (m.sourceType === "OpeningBalance") return;
     const q = Number(m.quantity || 0);
-    if (q === 0) return;
+    const isReval = m.sourceType === "Revaluation";
+    if (isReval ? restated || !Number(m.value) : q === 0) return;
+    const v = Number(m.value || 0);
+    const a = m.actualValue == null ? null : Number(m.actualValue);
     const key = m.sourceId != null ? `${m.sourceType}:${m.sourceId}:${m.direction}` : `row:${m.id}`;
     const hit = byDoc.get(key);
-    if (hit) { hit.qty += q; hit.lines += 1; hit.allocations.push(...(m.allocations || [])); return; }
+    if (hit) {
+      hit.qty += q; hit.value += v; hit.lines += 1;
+      hit.actual = hit.actual == null || a == null ? null : hit.actual + a;
+      hit.allocations.push(...(m.allocations || []));
+      return;
+    }
     byDoc.set(key, {
       key: `mv-${key}`, date: m.movementDate, order: 1, dir: m.direction === "In" ? "In" : "Out", qty: q,
-      ref: `${LEDGER_SOURCE_LABELS[m.sourceType] || m.sourceType}${m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}`,
-      kind: m.direction === "In" ? "Stock in" : "Stock out",
+      value: v, actual: isReval ? null : a, rate: itemRate, reval: isReval,
+      ref: isReval ? "Revaluation" : `${LEDGER_SOURCE_LABELS[m.sourceType] || m.sourceType}${m.sourceDocNumber ? ` #${m.sourceDocNumber}` : ""}`,
+      kind: isReval ? "Value change, no goods moved" : m.direction === "In" ? "Stock in" : "Stock out",
       detail: m.notes ? String(m.notes).split(" (")[0] : null, sub: null, lines: 1, id: m.id,
       allocations: [...(m.allocations || [])],
     });
@@ -2024,23 +2115,54 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
 
   const time = (d) => (d ? new Date(d).getTime() : -Infinity);
   entries.sort((a, b) => (time(a.date) - time(b.date)) || (a.order - b.order) || ((a.id || 0) - (b.id || 0)));
-  let bal = 0, totalIn = 0, totalOut = 0;
+  let bal = 0, balValue = 0, totalIn = 0, totalOut = 0;
+  const tot = { in: { v: 0, t: 0, a: 0, aKnown: true }, out: { v: 0, t: 0, a: 0, aKnown: true } };
   entries.forEach((e) => {
-    if (e.dir === "In") { bal += e.qty; totalIn += e.qty; } else { bal -= e.qty; totalOut += e.qty; }
-    e.balance = bal;
+    e.tax = Math.round(e.value * e.rate) / 100;
+    if (e.dir === "In") { bal += e.qty; totalIn += e.qty; balValue += e.value; }
+    else { bal -= e.qty; totalOut += e.qty; balValue -= e.value; }
+    e.balance = bal; e.balanceValue = balValue;
+    const t = e.dir === "In" ? tot.in : tot.out;
+    t.v += e.value; t.t += e.tax;
+    if (!e.reval) { if (e.actual == null) t.aKnown = false; else t.a += e.actual; }
   });
   const drift = Number(onHand || 0) - bal;
+  const valueDrift = position ? Number(position.valueExcludingTax || 0) - balValue : 0;
   const unit = uom ? ` ${uom}` : "";
   const date = (d) => (d ? new Date(d).toLocaleDateString() : "—");
+  const showCost = canViewActualCost;
 
   if (entries.length === 0) return <div style={drillStyles.state}>No stock has moved for this item yet.</div>;
+  const signed = (dir, v) => `${dir === "In" ? "+" : "−"}${money(v)}`;
+  const tone = (dir) => ({ color: dir === "In" ? "#2e7d32" : "#c62828" });
+  const moneyCells = (dir, value, tax, actual, reval, bold) => {
+    const fw = bold ? 700 : 600;
+    const margin = actual == null ? null : value - actual;
+    return (
+      <>
+        {show("excl") && <td style={{ ...gdStyles.tdNum, ...tone(dir), fontWeight: fw }} data-label="Excluding">{signed(dir, value)}</td>}
+        {show("tax") && <td style={{ ...gdStyles.tdNum, fontWeight: bold ? 700 : 400 }} data-label="Sales Tax">{signed(dir, tax)}</td>}
+        {show("incl") && <td style={{ ...gdStyles.tdNum, ...tone(dir), fontWeight: fw }} data-label="Including">{signed(dir, value + tax)}</td>}
+        {showCost && show("actual") && <td style={{ ...gdStyles.tdNum, fontWeight: bold ? 700 : 400 }} data-label="Actual Cost">{reval || actual == null ? "—" : signed(dir, actual)}</td>}
+        {showCost && show("margin") && (
+          <td style={{ ...gdStyles.tdNum, fontWeight: fw, color: margin != null && margin < 0 ? colors.negative : "#2e7d32" }} data-label="Margin">
+            {reval || margin == null ? "—" : money(margin)}
+          </td>
+        )}
+      </>
+    );
+  };
   return (
     <div style={drillStyles.wrap}>
       <div style={gdStyles.head}>
         <span style={drillStyles.heading}><MdHistory size={15} /> Stock ledger ({entries.length})</span>
-        <span style={{ ...gdStyles.stat, ...gdStyles.statOk }}>In <b>{num(totalIn)}</b>{unit}</span>
-        <span style={{ ...gdStyles.stat, ...gdStyles.statWarn }}>Out <b>{num(totalOut)}</b>{unit}</span>
-        <span style={gdStyles.stat}>Balance <b>{num(bal)}</b>{unit}</span>
+        <span style={{ ...gdStyles.stat, ...gdStyles.statOk }} title="Value that came in, excluding tax">In <b>{money(tot.in.v)}</b></span>
+        <span style={{ ...gdStyles.stat, ...gdStyles.statWarn }} title="Value that went out, excluding tax">Out <b>{money(tot.out.v)}</b></span>
+        <span style={gdStyles.stat} title="Value in hand, excluding tax">Balance <b>{money(balValue)}</b></span>
+        {showCost && tot.out.aKnown && tot.out.a > 0 && (
+          <span style={gdStyles.stat} title="Value out less what those goods actually cost">Margin on sales <b>{money(tot.out.v - tot.out.a)}</b></span>
+        )}
+        {picker && <span style={{ marginLeft: "auto" }}>{picker}</span>}
       </div>
       {!canViewMovements && (
         <div style={{ ...gdStyles.help, marginBottom: "0.4rem" }}>
@@ -2054,9 +2176,15 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
               <th style={gdStyles.th}>Date</th>
               <th style={gdStyles.th}>Reference</th>
               <th style={gdStyles.th}>Detail</th>
-              <th style={gdStyles.thNum}>In</th>
-              <th style={gdStyles.thNum}>Out</th>
-              <th style={gdStyles.thNum}>Balance</th>
+              {show("qtyin") && <th style={gdStyles.thNum}>Qty In</th>}
+              {show("qtyout") && <th style={gdStyles.thNum}>Qty Out</th>}
+              {show("qtybal") && <th style={gdStyles.thNum}>Qty Balance</th>}
+              {show("excl") && <th style={gdStyles.thNum}>Excluding</th>}
+              {show("tax") && <th style={gdStyles.thNum}>Sales Tax</th>}
+              {show("incl") && <th style={gdStyles.thNum}>Including</th>}
+              {showCost && show("actual") && <th style={gdStyles.thNum}>Actual Cost</th>}
+              {showCost && show("margin") && <th style={gdStyles.thNum} title="Excluding value less actual cost">Margin</th>}
+              {show("balance") && <th style={gdStyles.thNum} title="Value in hand after this row, excluding tax">Value Balance</th>}
             </tr>
           </thead>
           <tbody>
@@ -2077,27 +2205,33 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
                     {e.sub && <div style={gdStyles.sub}>{e.sub}</div>}
                     <AllocationChips allocations={e.allocations} isIn={isIn} />
                   </td>
-                  <td style={{ ...gdStyles.tdNum, color: "#2e7d32", fontWeight: 600 }} data-label="In">{isIn ? `+${num(e.qty)}` : ""}</td>
-                  <td style={{ ...gdStyles.tdNum, color: "#c62828", fontWeight: 600 }} data-label="Out">{isIn ? "" : `−${num(e.qty)}`}</td>
-                  <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balance < 0 ? "#c62828" : "#0d47a1" }} data-label="Balance">{num(e.balance)}</td>
+                  {show("qtyin") && <td style={{ ...gdStyles.tdNum, color: "#2e7d32", fontWeight: 600 }} data-label="Qty In">{isIn && !e.reval ? `+${num(e.qty)}` : ""}</td>}
+                  {show("qtyout") && <td style={{ ...gdStyles.tdNum, color: "#c62828", fontWeight: 600 }} data-label="Qty Out">{isIn || e.reval ? "" : `−${num(e.qty)}`}</td>}
+                  {show("qtybal") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balance < 0 ? "#c62828" : "#0d47a1" }} data-label="Qty Balance">{num(e.balance)}</td>}
+                  {moneyCells(e.dir, e.value, e.tax, e.actual, e.reval, false)}
+                  {show("balance") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: e.balanceValue < 0 ? "#c62828" : "#0d47a1" }} data-label="Value Balance">{money(e.balanceValue)}</td>}
                 </tr>
               );
             })}
           </tbody>
           <tfoot>
-            <tr>
-              <td style={{ ...gdStyles.td, fontWeight: 700 }} colSpan={3} data-label="Total">Total</td>
-              <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#2e7d32" }} data-label="In">+{num(totalIn)}</td>
-              <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#c62828" }} data-label="Out">−{num(totalOut)}</td>
-              <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "#0d47a1" }} data-label="Balance">{num(bal)}</td>
-            </tr>
+            {[["In", tot.in, totalIn], ["Out", tot.out, totalOut]].map(([dir, t, q]) => (
+              <tr key={dir}>
+                <td style={{ ...gdStyles.td, fontWeight: 700 }} colSpan={3} data-label="Total">Total {dir === "In" ? "in" : "out"}</td>
+                {show("qtyin") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#2e7d32" }} data-label="Qty In">{dir === "In" ? `+${num(q)}` : ""}</td>}
+                {show("qtyout") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#c62828" }} data-label="Qty Out">{dir === "Out" ? `−${num(q)}` : ""}</td>}
+                {show("qtybal") && <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "#0d47a1" }} data-label="Qty Balance">{dir === "Out" ? num(bal) : ""}</td>}
+                {moneyCells(dir, t.v, t.t, t.aKnown ? t.a : null, false, true)}
+                {show("balance") && <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "#0d47a1" }} data-label="Value Balance">{dir === "Out" ? money(balValue) : ""}</td>}
+              </tr>
+            ))}
           </tfoot>
         </table>
       </div>
-      {Math.abs(drift) > 0.0001 && (
+      {(Math.abs(drift) > 0.0001 || Math.abs(valueDrift) > 0.5) && (
         <div style={gdStyles.untraced}>
-          This ledger closes at {num(bal)}{unit}; in stock is {num(onHand)}{unit} (difference {num(drift)}).
-          The opening position on the Opening Balances tab explains any gap.
+          This ledger closes at {num(bal)}{unit} worth {money(balValue)}; in stock is {num(onHand)}{unit} worth {money(position?.valueExcludingTax)}.
+          {restated ? " A stock-sheet restatement replaced this item's earlier GD lines, which explains the gap." : " The opening position on the Opening Balances tab explains any gap."}
         </div>
       )}
     </div>

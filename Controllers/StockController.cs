@@ -98,6 +98,9 @@ namespace MyApp.Api.Controllers
             if (itemTypeId is <= 0) return BadRequest(new { error = "Choose a valid item." });
             var rows = await BuildGdDetailsAsync(companyId,
                 itemTypeId.HasValue ? new List<int> { itemTypeId.Value } : null);
+            // Landed cost is gated like every other actual-cost figure.
+            if (!await _permission.HasPermissionAsync(CurrentUserId, "stock.actualcost.view"))
+                foreach (var r in rows) r.ActualCostExcludingTax = null;
             return Ok(rows);
         }
 
@@ -471,6 +474,7 @@ namespace MyApp.Api.Controllers
                     r.ConsumedValueExcludingTax = Money(pool.ConsumedValue);
                     r.RemainingQuantity = pool.Quantity;
                     r.RemainingValueExcludingTax = Money(pool.Value);
+                    r.ActualCostExcludingTax = Money(pool.InActualValue);
                 }
             }
 
@@ -654,6 +658,8 @@ namespace MyApp.Api.Controllers
                         ActualUnitCost = steps.TryGetValue(m.Id, out var sa)
                             ? Math.Round(sa.ActualUnitCost, 4, MidpointRounding.AwayFromZero) : 0m,
                         RunningActualValue = steps.TryGetValue(m.Id, out var sra) ? sra.RunningActualValue : 0m,
+                        ActualValue = steps.TryGetValue(m.Id, out var sav)
+                            ? Math.Round(sav.ActualUnitCost * m.Quantity, 2, MidpointRounding.AwayFromZero) : 0m,
                     })
                     .ToList();
             }
@@ -687,6 +693,7 @@ namespace MyApp.Api.Controllers
                         {
                             m.ActualUnitCost = null;
                             m.RunningActualValue = null;
+                            m.ActualValue = null;
                         }
                 }
             }
@@ -1021,6 +1028,7 @@ namespace MyApp.Api.Controllers
                     r.RunningValue = st.RunningValue;
                     r.ActualUnitCost = Math.Round(st.ActualUnitCost, 4, MidpointRounding.AwayFromZero);
                     r.RunningActualValue = st.RunningActualValue;
+                    r.ActualValue = Math.Round(st.ActualUnitCost * r.Quantity, 2, MidpointRounding.AwayFromZero);
                 }
             }
 
@@ -1035,6 +1043,7 @@ namespace MyApp.Api.Controllers
                 {
                     r.ActualUnitCost = null;
                     r.RunningActualValue = null;
+                    r.ActualValue = null;
                 }
             }
 

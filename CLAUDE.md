@@ -1325,6 +1325,15 @@ GD panel and Excel export all say which GDs it took.
   restatement's lines for a restated item. Bills dated BEFORE a restatement
   are walked before it: date them honestly, and restate on the day the sheet
   describes.
+- **The Inventory tab's ledger is in MONEY** (2026-09-28). Each GD line in
+  and each document out shows Excluding / Sales Tax / Including / Actual Cost /
+  Margin and a running value balance; quantity columns sit in the ledger's
+  column picker, hidden by default. The figures are READ, never recomputed:
+  `StockGdDetailDto.ActualCostExcludingTax` is the pool's `InActualValue`
+  (FIFO only) and `StockMovementRowDto.ActualValue` is the walk's unit actual x
+  quantity -- both redacted without `stock.actualcost.view`, like every other
+  actual-cost field. Tax is derived at the row's rate (the GD line's, else the
+  item's).
 - **The Excel ↳ rows carry their own Consumed / Balance** under FIFO, plus rows
   for opening not traced to a GD, other stock in, and a sale not yet covered.
   The item row and the totals are unchanged.
