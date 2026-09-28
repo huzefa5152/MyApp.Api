@@ -1329,8 +1329,9 @@ GD panel and Excel export all say which GDs it took.
   and each document out shows Excluding / Sales Tax / Including / Actual Cost /
   Margin and a running value balance; quantity columns sit in the ledger's
   column picker, hidden by default. The figures are READ, never recomputed:
-  `StockGdDetailDto.ActualCostExcludingTax` is the pool's `InActualValue`
-  (FIFO only) and `StockMovementRowDto.ActualValue` is the walk's unit actual x
+  `StockGdDetailDto.ActualCostExcludingTax` is the pool's consumed + held
+  actual (FIFO only; `InActualValue` alone reads zero when the GD costing was
+  imported after the goods came in) and `StockMovementRowDto.ActualValue` is the walk's unit actual x
   quantity -- both redacted without `stock.actualcost.view`, like every other
   actual-cost field. Tax is derived at the row's rate (the GD line's, else the
   item's).

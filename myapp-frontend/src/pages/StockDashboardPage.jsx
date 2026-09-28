@@ -1020,7 +1020,7 @@ export default function StockDashboardPage() {
                           </tr>
                           {isOpen && (
                             <tr>
-                              <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
+                              <td colSpan={colCount} style={{ padding: 0, maxWidth: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
                                 <GdPanel rows={gdDetails[r.itemTypeId]} loading={gdLoading === r.itemTypeId}
                                   openingQty={r.openingBalance} openingValue={r.openingValueExcludingTax}
                                   canEdit={canManageOpening} onSave={saveClaimMonth} />
@@ -1190,24 +1190,49 @@ export default function StockDashboardPage() {
                 <div className="stock-table" style={styles.tableWrap}>
                   <table style={styles.table}>
                     <thead>
-                      <tr>
-                        <th style={{ ...styles.th, width: 28 }} aria-label="Expand stock ledger"></th>
-                        {showInvCol("item") && <th style={styles.th}>Item</th>}
-                        {showInvCol("hs") && <th style={styles.th}>HS Code</th>}
-                        {showInvCol("instock") && <th style={{ ...styles.th, textAlign: "right" }} title="Physical stock in hand">In Stock</th>}
-                        {showInvCol("available") && <th style={{ ...styles.th, textAlign: "right" }} title="Free to sell = In Stock - Committed">Available</th>}
-                        {showInvCol("committed") && <th style={{ ...styles.th, textAlign: "right" }} title="Reserved to customers = To Deliver + Delivered">Committed</th>}
-                        {showInvCol("todeliver") && <th style={{ ...styles.th, textAlign: "right" }} title="Ordered, not yet delivered">To Deliver</th>}
-                        {showInvCol("delivered") && <th style={{ ...styles.th, textAlign: "right" }} title="Delivered on a challan, not yet billed">Delivered</th>}
-                        {showInvCol("incoming") && <th style={{ ...styles.th, textAlign: "right" }} title="On un-billed goods receipts">Incoming</th>}
-                        {showInvCol("valuein") && <th style={{ ...styles.th, textAlign: "right" }} title="Value that came in: opening / GD stock plus purchases, excluding tax">Value In</th>}
-                        {showInvCol("valueout") && <th style={{ ...styles.th, textAlign: "right" }} title="Value that went out on invoices and other stock out, excluding tax">Value Out</th>}
-                        {showInvCol("excl") && <th style={{ ...styles.th, textAlign: "right" }} title="Value of the stock in hand, excluding tax">Excluding</th>}
-                        {showInvCol("tax") && <th style={{ ...styles.th, textAlign: "right" }}>Sales Tax</th>}
-                        {showInvCol("incl") && <th style={{ ...styles.th, textAlign: "right" }}>Including</th>}
-                        {canViewActualCost && showInvCol("actual") && <th style={{ ...styles.th, textAlign: "right" }} title="Landed cost of the stock in hand">Actual Cost</th>}
-                        {canViewActualCost && showInvCol("margin") && <th style={{ ...styles.th, textAlign: "right" }} title="Excluding value less actual cost">Margin</th>}
-                      </tr>
+                      {(() => {
+                        // Two-tier header: the figures are grouped by what they
+                        // answer, so a dozen numeric columns read as four ideas.
+                        const R = { ...styles.th, textAlign: "right", whiteSpace: "nowrap" };
+                        const G = { ...styles.th, textAlign: "center", padding: "0.35rem 0.45rem", backgroundColor: "#eef3f9" };
+                        const qty = ["instock", "available", "committed", "todeliver", "delivered", "incoming"].filter(showInvCol);
+                        const flow = ["valuein", "valueout"].filter(showInvCol);
+                        const hand = ["excl", "tax", "incl"].filter(showInvCol);
+                        const cost = canViewActualCost ? ["actual", "margin"].filter(showInvCol) : [];
+                        const lead = 1 + ["item", "hs"].filter(showInvCol).length;
+                        const band = (n, label, tint) => n > 0 && (
+                          <th colSpan={n} style={{ ...G, color: tint, borderLeft: `1px solid ${colors.cardBorder}` }}>{label}</th>
+                        );
+                        return (
+                          <>
+                            <tr>
+                              <th colSpan={lead} style={G} />
+                              {band(qty.length, "Quantity", colors.textSecondary)}
+                              {band(flow.length, "Value movement", "#37474f")}
+                              {band(hand.length, "In hand", colors.blue)}
+                              {band(cost.length, "Cost & margin", "#2e7d32")}
+                            </tr>
+                            <tr>
+                              <th style={{ ...styles.th, width: 28 }} aria-label="Expand stock ledger"></th>
+                              {showInvCol("item") && <th style={styles.th}>Item</th>}
+                              {showInvCol("hs") && <th style={styles.th}>HS Code</th>}
+                              {showInvCol("instock") && <th style={R} title="Physical stock in hand">In Stock</th>}
+                              {showInvCol("available") && <th style={R} title="Free to sell = In Stock - Committed">Available</th>}
+                              {showInvCol("committed") && <th style={R} title="Reserved to customers = To Deliver + Delivered">Committed</th>}
+                              {showInvCol("todeliver") && <th style={R} title="Ordered, not yet delivered">To Deliver</th>}
+                              {showInvCol("delivered") && <th style={R} title="Delivered on a challan, not yet billed">Delivered</th>}
+                              {showInvCol("incoming") && <th style={R} title="On un-billed goods receipts">Incoming</th>}
+                              {showInvCol("valuein") && <th style={R} title="Value that came in: opening / GD stock plus purchases, excluding tax">In</th>}
+                              {showInvCol("valueout") && <th style={R} title="Value that went out on invoices and other stock out, excluding tax">Out</th>}
+                              {showInvCol("excl") && <th style={R} title="Value of the stock in hand, excluding tax">Excl.</th>}
+                              {showInvCol("tax") && <th style={R} title="Sales tax on the stock in hand">S.Tax</th>}
+                              {showInvCol("incl") && <th style={R} title="Value including sales tax">Incl.</th>}
+                              {canViewActualCost && showInvCol("actual") && <th style={R} title="Landed cost of the stock in hand">Actual</th>}
+                              {canViewActualCost && showInvCol("margin") && <th style={R} title="Excluding value less actual cost">Margin</th>}
+                            </tr>
+                          </>
+                        );
+                      })()}
                     </thead>
                     <tbody>
                       {filteredSummary.map((r, idx) => {
@@ -1257,7 +1282,7 @@ export default function StockDashboardPage() {
                         </tr>
                         {isOpen && (
                           <tr>
-                            <td colSpan={colCount} style={{ padding: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
+                            <td colSpan={colCount} style={{ padding: 0, maxWidth: 0, borderBottom: `1px solid ${colors.cardBorder}`, backgroundColor: colors.bandBg }}>
                               <StockLedgerPanel
                                 gdRows={gdDetails[r.itemTypeId]} gdLoading={gdLoading === r.itemTypeId}
                                 movements={canViewMovements ? drill[r.itemTypeId] : []}
@@ -2030,7 +2055,7 @@ function AllocationChips({ allocations, isIn }) {
 // what went out, and the position in hand -- all from the on-hand feed, the
 // same figures the On-Hand tab shows. Nothing is recomputed here.
 function InventoryValueCells({ o, show, canViewActualCost }) {
-  const td = { ...styles.td, textAlign: "right", whiteSpace: "nowrap" };
+  const td = { ...styles.td, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", paddingLeft: "0.45rem", paddingRight: "0.45rem" };
   const valueIn = Number(o?.openingValueExcludingTax || 0) + Number(o?.valueIn || 0);
   const margin = o?.margin;
   return (
@@ -2042,7 +2067,10 @@ function InventoryValueCells({ o, show, canViewActualCost }) {
       {show("incl") && <td style={{ ...td, fontWeight: 600 }}>{o ? money(o.valueIncludingTax) : "—"}</td>}
       {canViewActualCost && show("actual") && <td style={td}>{o?.actualCostExcludingTax != null ? money(o.actualCostExcludingTax) : "—"}</td>}
       {canViewActualCost && show("margin") && (
-        <td style={{ ...td, fontWeight: 600, color: margin < 0 ? colors.negative : "#2e7d32" }}>{margin != null ? money(margin) : "—"}</td>
+        <td style={{ ...td, fontWeight: 600, color: margin < 0 ? colors.negative : "#2e7d32" }}>
+          {margin != null ? money(margin) : "—"}
+          {o?.marginPercent != null && <div style={{ fontSize: "0.68rem", fontWeight: 500, color: colors.textSecondary }}>{Number(o.marginPercent).toFixed(1)}%</div>}
+        </td>
       )}
     </>
   );
@@ -2133,7 +2161,7 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
   const showCost = canViewActualCost;
 
   if (entries.length === 0) return <div style={drillStyles.state}>No stock has moved for this item yet.</div>;
-  const signed = (dir, v) => `${dir === "In" ? "+" : "−"}${money(v)}`;
+  const signed = (dir, v) => (Math.abs(v) < 0.005 ? money(0) : `${dir === "In" ? "+" : "−"}${money(v)}`);
   const tone = (dir) => ({ color: dir === "In" ? "#2e7d32" : "#c62828" });
   const moneyCells = (dir, value, tax, actual, reval, bold) => {
     const fw = bold ? 700 : 600;
@@ -2174,8 +2202,7 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
           <thead>
             <tr>
               <th style={gdStyles.th}>Date</th>
-              <th style={gdStyles.th}>Reference</th>
-              <th style={gdStyles.th}>Detail</th>
+              <th style={gdStyles.th}>Document</th>
               {show("qtyin") && <th style={gdStyles.thNum}>Qty In</th>}
               {show("qtyout") && <th style={gdStyles.thNum}>Qty Out</th>}
               {show("qtybal") && <th style={gdStyles.thNum}>Qty Balance</th>}
@@ -2193,16 +2220,15 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
               return (
                 <tr key={e.key}>
                   <td style={gdStyles.td} data-label="Date"><span style={{ whiteSpace: "nowrap" }}>{date(e.date)}</span></td>
-                  <td style={gdStyles.td} data-label="Reference">
+                  <td style={{ ...gdStyles.td, minWidth: 200 }} data-label="Document">
                     <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
                       <span style={{ ...drillStyles.dirBadge, ...(isIn ? drillStyles.dirIn : drillStyles.dirOut) }}>{isIn ? "IN" : "OUT"}</span>
                       <span style={gdStyles.gdNo}>{e.ref}</span>
+                      <span style={gdStyles.sub}>{e.kind}</span>
                     </div>
-                    <div style={gdStyles.sub}>{e.kind}</div>
-                  </td>
-                  <td style={gdStyles.td} data-label="Detail">
-                    <div style={gdStyles.desc}>{e.detail || "—"}</div>
-                    {e.sub && <div style={gdStyles.sub}>{e.sub}</div>}
+                    {(e.detail || e.sub) && (
+                      <div style={{ ...gdStyles.sub, ...gdStyles.desc }}>{[e.detail, e.sub].filter(Boolean).join(" · ")}</div>
+                    )}
                     <AllocationChips allocations={e.allocations} isIn={isIn} />
                   </td>
                   {show("qtyin") && <td style={{ ...gdStyles.tdNum, color: "#2e7d32", fontWeight: 600 }} data-label="Qty In">{isIn && !e.reval ? `+${num(e.qty)}` : ""}</td>}
@@ -2217,7 +2243,7 @@ function StockLedgerPanel({ gdRows, gdLoading, movements, movementsLoading, canV
           <tfoot>
             {[["In", tot.in, totalIn], ["Out", tot.out, totalOut]].map(([dir, t, q]) => (
               <tr key={dir}>
-                <td style={{ ...gdStyles.td, fontWeight: 700 }} colSpan={3} data-label="Total">Total {dir === "In" ? "in" : "out"}</td>
+                <td style={{ ...gdStyles.td, fontWeight: 700 }} colSpan={2} data-label="Total">Total {dir === "In" ? "in" : "out"}</td>
                 {show("qtyin") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#2e7d32" }} data-label="Qty In">{dir === "In" ? `+${num(q)}` : ""}</td>}
                 {show("qtyout") && <td style={{ ...gdStyles.tdNum, fontWeight: 700, color: "#c62828" }} data-label="Qty Out">{dir === "Out" ? `−${num(q)}` : ""}</td>}
                 {show("qtybal") && <td style={{ ...gdStyles.tdNum, fontWeight: 800, color: "#0d47a1" }} data-label="Qty Balance">{dir === "Out" ? num(bal) : ""}</td>}

@@ -474,7 +474,10 @@ namespace MyApp.Api.Controllers
                     r.ConsumedValueExcludingTax = Money(pool.ConsumedValue);
                     r.RemainingQuantity = pool.Quantity;
                     r.RemainingValueExcludingTax = Money(pool.Value);
-                    r.ActualCostExcludingTax = Money(pool.InActualValue);
+                    // What the line's goods cost, sold and still held: a GD costing
+                    // imported after the goods came in reaches the pool later, so
+                    // InActualValue alone can read zero on a costed line.
+                    r.ActualCostExcludingTax = Money(pool.ConsumedActualValue + pool.ActualValue);
                 }
             }
 
