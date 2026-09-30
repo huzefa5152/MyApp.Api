@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getCompanies } from "../api/companyApi";
 import { getCompanyStamps } from "../api/stampApi";
 import { setActiveStamps } from "../utils/templateEngine";
@@ -10,7 +10,7 @@ const CompanyContext = createContext(null);
 const STORAGE_KEY = "selectedCompanyId";
 
 export function CompanyProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, token } = useAuth();
   const { has } = usePermissions();
   const canViewStamps = has("printtemplates.stamps.view");
   const [companies, setCompanies] = useState([]);
@@ -22,6 +22,7 @@ export function CompanyProvider({ children }) {
   const [companyStamps, setCompanyStamps] = useState([]);
 
   const stampRequest = useRef(0);
+  const companyRequest = useRef(0);
 
   const loadStamps = useCallback(async (companyId) => {
     const request = ++stampRequest.current;
@@ -39,11 +40,13 @@ export function CompanyProvider({ children }) {
       setCompanyStamps([]);
       setActiveStamps({});
     }
-  }, [canViewStamps]);
+  }, [canViewStamps, token]);
 
   const fetchCompanies = useCallback(async () => {
+    const request = ++companyRequest.current;
     try {
       const res = await getCompanies();
+      if (request !== companyRequest.current) return;
       const list = res.data;
       setCompanies(list);
 
@@ -54,21 +57,24 @@ export function CompanyProvider({ children }) {
       else localStorage.removeItem(STORAGE_KEY);
       setSelectedCompanyState(selected);
     } catch {
+      if (request !== companyRequest.current) return;
       setCompanies([]);
       setSelectedCompanyState(null);
     } finally {
-      setLoading(false);
+      if (request === companyRequest.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (isAuthenticated) fetchCompanies();
     else {
+      ++companyRequest.current;
       setCompanies([]);
       setSelectedCompanyState(null);
       setLoading(false);
     }
-  }, [isAuthenticated, fetchCompanies]);
+    return () => { ++companyRequest.current; };
+  }, [isAuthenticated, token, fetchCompanies]);
 
   const setSelectedCompany = useCallback((company) => {
     ++stampRequest.current;
@@ -79,7 +85,10 @@ export function CompanyProvider({ children }) {
   }, []);
 
   // (Re)load stamps whenever the selected company changes.
-  useEffect(() => { loadStamps(selectedCompany?.id || null); }, [selectedCompany?.id, loadStamps]);
+  useEffect(() => {
+    loadStamps(isAuthenticated ? selectedCompany?.id || null : null);
+    return () => { ++stampRequest.current; };
+  }, [selectedCompany?.id, isAuthenticated, loadStamps]);
 
   // Called by the Stamps tab after an upload / rename / delete so pickers +
   // the merge engine reflect the change without a full reload.
@@ -89,7 +98,9 @@ export function CompanyProvider({ children }) {
   );
 
   const refreshCompanies = useCallback(async () => {
+    const request = ++companyRequest.current;
     const res = await getCompanies();
+    if (request !== companyRequest.current) return;
     const list = res.data;
     setCompanies(list);
     if (selectedCompany) {
@@ -122,9 +133,12 @@ export function CompanyProvider({ children }) {
     };
   }, [isAuthenticated, refreshCompanies]);
 
+  const value = useMemo(() => ({ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading, companyStamps, refreshStamps }),
+    [companies, selectedCompany, setSelectedCompany, refreshCompanies, loading, companyStamps, refreshStamps]);
+
   return (
     <CompanyContext.Provider
-      value={{ companies, selectedCompany, setSelectedCompany, refreshCompanies, loading, companyStamps, refreshStamps }}
+      value={value}
     >
       {children}
     </CompanyContext.Provider>

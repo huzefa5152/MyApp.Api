@@ -461,23 +461,24 @@ namespace MyApp.Api.Services.Implementations
             // StockService.SyncInvoiceStockMovementsAsync.
             var trackedOnCreate = await _stock.GetStockTrackedItemTypeIdsAsync(
                 items.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
+            var createMovements = new List<StockMovementBatchItem>();
             foreach (var it in items)
             {
                 if (!it.ItemTypeId.HasValue || it.Quantity <= 0) continue;
                 if (!trackedOnCreate.Contains(it.ItemTypeId.Value)) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: it.ItemTypeId.Value,
-                    direction: StockMovementDirection.In,
+                createMovements.Add(new StockMovementBatchItem(
+                    ItemTypeId: it.ItemTypeId.Value,
+                    Direction: StockMovementDirection.In,
                     // 2026-05-12: IStockService now accepts decimal(18,4)
                     // (matches PurchaseItem precision). Fractional UOMs
                     // are preserved instead of being rounded to int.
-                    quantity: it.Quantity,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}");
+                    Quantity: it.Quantity,
+                    SourceType: StockMovementSourceType.PurchaseBill,
+                    SourceId: bill.Id,
+                    MovementDate: bill.Date,
+                    Notes: $"Purchase Bill #{bill.PurchaseBillNumber} from {supplier.Name}"));
             }
+            await _stock.RecordMovementsAsync(bill.CompanyId, createMovements);
 
             // Post to the ledger next to the stock reflow — both are derived
             // state that has to follow the bill. A no-op while the company's
@@ -841,22 +842,23 @@ namespace MyApp.Api.Services.Implementations
                 .ToDictionary(x => x.ItemTypeId, x => x.Net);
 
             // Emit only the difference.
+            var editMovements = new List<StockMovementBatchItem>();
             foreach (var itemTypeId in desired.Keys.Union(posted.Keys))
             {
                 desired.TryGetValue(itemTypeId, out var want);
                 posted.TryGetValue(itemTypeId, out var have);
                 var delta = want - have;
                 if (delta == 0m) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: itemTypeId,
-                    direction: delta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
-                    quantity: Math.Abs(delta),
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: bill.Date,
-                    notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edit — stock {(delta > 0m ? "increased" : "decreased")} by {Math.Abs(delta):0.####})");
+                editMovements.Add(new StockMovementBatchItem(
+                    ItemTypeId: itemTypeId,
+                    Direction: delta > 0m ? StockMovementDirection.In : StockMovementDirection.Out,
+                    Quantity: Math.Abs(delta),
+                    SourceType: StockMovementSourceType.PurchaseBill,
+                    SourceId: bill.Id,
+                    MovementDate: bill.Date,
+                    Notes: $"Purchase Bill #{bill.PurchaseBillNumber} (edit — stock {(delta > 0m ? "increased" : "decreased")} by {Math.Abs(delta):0.####})"));
             }
+            await _stock.RecordMovementsAsync(bill.CompanyId, editMovements);
         }
 
         private async Task ReversePostedStockAsync(PurchaseBill bill, DateTime movementDate, string notes)
@@ -873,19 +875,20 @@ namespace MyApp.Api.Services.Implementations
                 })
                 .ToListAsync();
 
+            var reverseMovements = new List<StockMovementBatchItem>();
             foreach (var p in posted)
             {
                 if (p.Net <= 0m) continue;
-                await _stock.RecordMovementAsync(
-                    companyId: bill.CompanyId,
-                    itemTypeId: p.ItemTypeId,
-                    direction: StockMovementDirection.Out,
-                    quantity: p.Net,
-                    sourceType: StockMovementSourceType.PurchaseBill,
-                    sourceId: bill.Id,
-                    movementDate: movementDate,
-                    notes: notes);
+                reverseMovements.Add(new StockMovementBatchItem(
+                    ItemTypeId: p.ItemTypeId,
+                    Direction: StockMovementDirection.Out,
+                    Quantity: p.Net,
+                    SourceType: StockMovementSourceType.PurchaseBill,
+                    SourceId: bill.Id,
+                    MovementDate: movementDate,
+                    Notes: notes));
             }
+            await _stock.RecordMovementsAsync(bill.CompanyId, reverseMovements);
         }
 
         public async Task<bool> DeleteAsync(int id)

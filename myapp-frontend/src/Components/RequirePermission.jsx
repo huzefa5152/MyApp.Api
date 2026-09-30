@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Outlet, useLocation, Link } from "react-router-dom";
 import { MdLock } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -37,8 +38,8 @@ export default function RequirePermission() {
   if (loading || companyLoading) return null;
 
   // null = open to every signed-in user (e.g. the operator's own profile).
-  if (required === null) return <Outlet key={selectedCompany?.id || "none"} />;
-  if (required !== undefined && has(required)) return <Outlet key={selectedCompany?.id || "none"} />;
+  if (required === null) return <Suspense fallback={null}><Outlet key={selectedCompany?.id || "none"} /></Suspense>;
+  if (required !== undefined && has(required)) return <Suspense fallback={null}><Outlet key={selectedCompany?.id || "none"} /></Suspense>;
 
   return <NoAccess permission={required} pathname={pathname} onRetry={reload} />;
 }

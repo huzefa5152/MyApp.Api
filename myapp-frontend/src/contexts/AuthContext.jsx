@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.jsx
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { loginApi, getCurrentUser } from "../api/authApi";
 
@@ -104,7 +104,7 @@ export function AuthProvider({ children }) {
     setAvatarVersion(Date.now());
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     token,
     setToken,
@@ -114,7 +114,7 @@ export function AuthProvider({ children }) {
     avatarVersion,
     isAuthenticated: !!token && !!user,
     loading,
-  };
+  }), [user, token, login, logout, refreshUser, avatarVersion, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

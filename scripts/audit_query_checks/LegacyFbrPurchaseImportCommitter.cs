@@ -6,7 +6,7 @@ using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
-namespace MyApp.Api.Services.Implementations
+namespace AuditChecks
 {
     // ── FBR Purchase Import Committer ───────────────────────────────────
     //
@@ -31,7 +31,7 @@ namespace MyApp.Api.Services.Implementations
     // same file would dedup on the second pass via the matcher (rows
     // tagged already-exists are skipped).
 
-    public interface IFbrPurchaseImportCommitter
+    public interface ILegacyFbrPurchaseImportCommitter
     {
         /// <summary>
         /// Commits one invoice's worth of will-import /
@@ -47,18 +47,18 @@ namespace MyApp.Api.Services.Implementations
             FbrImportCommitCounts runningCounts);
     }
 
-    public class FbrPurchaseImportCommitter : IFbrPurchaseImportCommitter
+    public class LegacyFbrPurchaseImportCommitter : ILegacyFbrPurchaseImportCommitter
     {
         private readonly AppDbContext _context;
         private readonly ISupplierGroupService _supplierGroups;
         private readonly IStockService _stock;
-        private readonly ILogger<FbrPurchaseImportCommitter> _logger;
+        private readonly ILogger<LegacyFbrPurchaseImportCommitter> _logger;
 
-        public FbrPurchaseImportCommitter(
+        public LegacyFbrPurchaseImportCommitter(
             AppDbContext context,
             ISupplierGroupService supplierGroups,
             IStockService stock,
-            ILogger<FbrPurchaseImportCommitter> logger)
+            ILogger<LegacyFbrPurchaseImportCommitter> logger)
         {
             _context = context;
             _supplierGroups = supplierGroups;
@@ -212,24 +212,22 @@ namespace MyApp.Api.Services.Implementations
                     importableLines
                         .Select(l => lineToItemType.GetValueOrDefault(l.SourceRowNumber))
                         .Where(t => t.HasValue).Select(t => t!.Value));
-                var inMovements = new List<StockMovementBatchItem>();
                 foreach (var line in importableLines)
                 {
                     var itemTypeId = lineToItemType.GetValueOrDefault(line.SourceRowNumber);
                     if (!itemTypeId.HasValue || line.Quantity <= 0 || !trackedTypes.Contains(itemTypeId.Value)) continue;
-                    inMovements.Add(new StockMovementBatchItem(
-                        ItemTypeId: itemTypeId.Value,
-                        Direction: StockMovementDirection.In,
+                    await _stock.RecordMovementAsync(
+                        companyId: companyId,
+                        itemTypeId: itemTypeId.Value,
+                        direction: StockMovementDirection.In,
                         // 2026-05-12: decimal quantity flows through.
-                        Quantity: line.Quantity,
-                        SourceType: StockMovementSourceType.PurchaseBill,
-                        SourceId: bill.Id,
-                        MovementDate: bill.Date,
-                        Notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}"));
+                        quantity: line.Quantity,
+                        sourceType: StockMovementSourceType.PurchaseBill,
+                        sourceId: bill.Id,
+                        movementDate: bill.Date,
+                        notes: $"FBR Import: {invoice.SupplierName} #{invoice.InvoiceNo}");
                     runningCounts.StockMovementsRecorded++;
                 }
-
-                await _stock.RecordMovementsAsync(companyId, inMovements);
 
                 await tx.CommitAsync();
                 result.Outcome = "imported";

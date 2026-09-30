@@ -36,6 +36,9 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<HashSet<int>> GetStockTrackedItemTypeIdsAsync(IEnumerable<int> itemTypeIds);
 
+        /// <summary>Append positive movements with one flush; no-op while tracking is disabled.</summary>
+        Task RecordMovementsAsync(int companyId, IEnumerable<StockMovementBatchItem> movements);
+
         /// <summary>
         /// Append a movement to the log. No-op if tracking is disabled for
         /// the company OR if itemTypeId is null (we can't track lines that
@@ -151,4 +154,14 @@ namespace MyApp.Api.Services.Interfaces
         decimal RequiredQuantity,
         decimal OnHandQuantity,
         decimal ShortBy);
+
+    /// <summary>One movement in a <see cref="IStockService.RecordMovementsAsync"/> batch.</summary>
+    public record StockMovementBatchItem(
+        int ItemTypeId,
+        StockMovementDirection Direction,
+        decimal Quantity,
+        StockMovementSourceType SourceType,
+        int? SourceId,
+        DateTime MovementDate,
+        string? Notes = null);
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -671,11 +671,12 @@ namespace MyApp.Api.Services.Implementations
             if (PakistanClock.IsFutureInvoiceDate(dto.Date))
                 throw new InvalidOperationException(FutureDateMessage(dto.Date));
 
-            // Load and validate all challans
+            // Batch the read; keep validation in the submitted order.
+            var challanMap = (await _challanRepo.GetByIdsAsync(dto.ChallanIds)).ToDictionary(c => c.Id);
             var challans = new List<DeliveryChallan>();
             foreach (var challanId in dto.ChallanIds)
             {
-                var dc = await _challanRepo.GetByIdAsync(challanId);
+                challanMap.TryGetValue(challanId, out var dc);
                 if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
                 // Both "Pending" (natively-created) and "Imported" (back-filled)
                 // are billable. Anything else (Invoiced, Cancelled, Setup Required, No PO)
@@ -4221,86 +4222,7 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<List<LastRateDto>> GetLastRatesForChallanAsync(int companyId, int challanId)
-        {
-            // Pull the challan's items (including ItemType + description). We
-            // scope by companyId AS WELL to defend against cross-tenant probes
-            // — a user can only see last-rates for their own challan.
-            var challan = await _context.DeliveryChallans
-                .Include(dc => dc.Items)
-                .FirstOrDefaultAsync(dc => dc.Id == challanId && dc.CompanyId == companyId);
-            if (challan == null) return new List<LastRateDto>();
-
-            var result = new List<LastRateDto>();
-
-            // Build a single query base — we'll execute it once per item below.
-            // Demo bills are excluded so synthetic FBR sandbox prices don't
-            // leak into real quoting.
-            var bills = _context.InvoiceItems
-                // Debit/Credit Note lines are RETURNS — excluding them keeps
-                // rate suggestions based on actual sales only.
-                .Where(ii => ii.Invoice.CompanyId == companyId && !ii.Invoice.IsDemo && !ii.Invoice.IsCancelled
-                          && ii.Invoice.DocumentType != 9 && ii.Invoice.DocumentType != 10);
-
-            foreach (var di in challan.Items)
-            {
-                LastRateDto row = new() { DeliveryItemId = di.Id };
-
-                // 1. Match by ItemTypeId — the precise path.
-                if (di.ItemTypeId.HasValue)
-                {
-                    var hit = await bills
-                        .Where(ii => ii.ItemTypeId == di.ItemTypeId.Value)
-                        .OrderByDescending(ii => ii.Invoice.Date)
-                        .ThenByDescending(ii => ii.Invoice.InvoiceNumber)
-                        .Select(ii => new
-                        {
-                            ii.UnitPrice,
-                            ii.Invoice.InvoiceNumber,
-                            ii.Invoice.Date,
-                            ClientName = ii.Invoice.Client.Name
-                        })
-                        .FirstOrDefaultAsync();
-                    if (hit != null)
-                    {
-                        row.LastUnitPrice = hit.UnitPrice;
-                        row.LastInvoiceNumber = hit.InvoiceNumber;
-                        row.LastInvoiceDate = hit.Date;
-                        row.LastClientName = hit.ClientName;
-                        row.MatchedBy = "ItemType";
-                    }
-                }
-
-                // 2. Fallback: exact (case-insensitive) Description match.
-                if (row.LastUnitPrice == null && !string.IsNullOrWhiteSpace(di.Description))
-                {
-                    var desc = di.Description.ToLower();
-                    var hit = await bills
-                        .Where(ii => ii.Description.ToLower() == desc)
-                        .OrderByDescending(ii => ii.Invoice.Date)
-                        .ThenByDescending(ii => ii.Invoice.InvoiceNumber)
-                        .Select(ii => new
-                        {
-                            ii.UnitPrice,
-                            ii.Invoice.InvoiceNumber,
-                            ii.Invoice.Date,
-                            ClientName = ii.Invoice.Client.Name
-                        })
-                        .FirstOrDefaultAsync();
-                    if (hit != null)
-                    {
-                        row.LastUnitPrice = hit.UnitPrice;
-                        row.LastInvoiceNumber = hit.InvoiceNumber;
-                        row.LastInvoiceDate = hit.Date;
-                        row.LastClientName = hit.ClientName;
-                        row.MatchedBy = "Description";
-                    }
-                }
-
-                result.Add(row);
-            }
-
-            return result;
-        }
+        public Task<List<LastRateDto>> GetLastRatesForChallanAsync(int companyId, int challanId)
+            => MyApp.Api.Services.Queries.ChallanLastRateQuery.ExecuteAsync(_context, companyId, challanId);
     }
 }

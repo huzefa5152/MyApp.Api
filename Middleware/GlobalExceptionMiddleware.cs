@@ -70,11 +70,8 @@ namespace MyApp.Api.Middleware
             {
                 if (context.Request.Body.CanSeek)
                 {
-                    context.Request.Body.Position = 0;
-                    using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-                    requestBody = await reader.ReadToEndAsync();
+                    requestBody = await AuditRequestBody.ReadPrefixAsync(context.Request.Body);
                     if (string.IsNullOrWhiteSpace(requestBody)) requestBody = null;
-                    else if (requestBody.Length > 4000) requestBody = requestBody[..4000] + "...(truncated)";
                     // Audit C-10 / H-7 (2026-05-13): dispatch by content
                     // type so form-encoded and multipart bodies are also
                     // scrubbed (the JSON regex was a no-op for those).
@@ -163,11 +160,7 @@ namespace MyApp.Api.Middleware
             {
                 if (context.Request.Body.CanSeek)
                 {
-                    context.Request.Body.Position = 0;
-                    using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-                    requestBody = await reader.ReadToEndAsync();
-                    if (requestBody.Length > 4000)
-                        requestBody = requestBody[..4000] + "...(truncated)";
+                    requestBody = await AuditRequestBody.ReadPrefixAsync(context.Request.Body);
                     // Audit C-10 / H-7 (2026-05-13): dispatch by content
                     // type so form-encoded and multipart bodies are also
                     // scrubbed (the JSON regex was a no-op for those).

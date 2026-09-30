@@ -106,6 +106,45 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        public async Task RecordMovementsAsync(int companyId, IEnumerable<StockMovementBatchItem> movements)
+        {
+            // One tracking check for the whole batch (audit H-1) — same
+            // no-op-when-off semantics as the per-row RecordMovementAsync.
+            if (!await IsTrackingEnabledAsync(companyId)) return;
+
+            var toAdd = new List<StockMovement>();
+            foreach (var m in movements)
+            {
+                if (m.Quantity <= 0m) continue;   // same guard as RecordMovementAsync
+                toAdd.Add(new StockMovement
+                {
+                    CompanyId = companyId,
+                    ItemTypeId = m.ItemTypeId,
+                    Direction = m.Direction,
+                    Quantity = m.Quantity,
+                    SourceType = m.SourceType,
+                    SourceId = m.SourceId,
+                    MovementDate = m.MovementDate,
+                    Notes = m.Notes,
+                    CreatedAt = DateTime.UtcNow,
+                });
+            }
+            if (toAdd.Count == 0) return;
+
+            _context.StockMovements.AddRange(toAdd);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex,
+                    "StockMovement batch insert failed for company={CompanyId} count={Count}",
+                    companyId, toAdd.Count);
+                throw;
+            }
+        }
+
         public async Task<decimal> GetOnHandAsync(int companyId, int itemTypeId, DateTime? asOfDate = null)
         {
             var dict = await GetOnHandBulkAsync(companyId, new[] { itemTypeId }, asOfDate);
