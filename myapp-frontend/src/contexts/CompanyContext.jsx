@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getCompanies } from "../api/companyApi";
 import { getCompanyStamps } from "../api/stampApi";
 import { setActiveStamps } from "../utils/templateEngine";
@@ -9,7 +9,7 @@ const CompanyContext = createContext(null);
 const STORAGE_KEY = "selectedCompanyId";
 
 export function CompanyProvider({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, token } = useAuth();
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompanyState] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,23 +18,37 @@ export function CompanyProvider({ children }) {
   // {{stamps.<slug>}} resolves in every print/preview.
   const [companyStamps, setCompanyStamps] = useState([]);
 
+  const stampRequest = useRef(0);
+  const companyRequest = useRef(0);
+  const stampScope = useRef(null);
+
   const loadStamps = useCallback(async (companyId) => {
-    if (!companyId) { setCompanyStamps([]); setActiveStamps({}); return; }
+    const request = ++stampRequest.current;
+    if (stampScope.current?.companyId !== companyId || stampScope.current?.token !== token) {
+      setCompanyStamps([]);
+      setActiveStamps({});
+    }
+    stampScope.current = { companyId, token };
+    if (!companyId) return;
     try {
       const { data } = await getCompanyStamps(companyId);
+      if (request !== stampRequest.current) return;
       const list = data || [];
       setCompanyStamps(list);
       setActiveStamps(Object.fromEntries(list.map((s) => [s.slug, s.url])));
     } catch {
+      if (request !== stampRequest.current) return;
       // No view permission or transient error — clear rather than leave stale.
       setCompanyStamps([]);
       setActiveStamps({});
     }
-  }, []);
+  }, [token]);
 
   const fetchCompanies = useCallback(async () => {
+    const request = ++companyRequest.current;
     try {
       const res = await getCompanies();
+      if (request !== companyRequest.current) return;
       const list = res.data;
       setCompanies(list);
 
@@ -42,21 +56,24 @@ export function CompanyProvider({ children }) {
       const saved = savedId ? list.find((c) => c.id === savedId) : null;
       setSelectedCompanyState(saved || list[0] || null);
     } catch {
+      if (request !== companyRequest.current) return;
       setCompanies([]);
       setSelectedCompanyState(null);
     } finally {
-      setLoading(false);
+      if (request === companyRequest.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (isAuthenticated) fetchCompanies();
     else {
+      ++companyRequest.current;
       setCompanies([]);
       setSelectedCompanyState(null);
       setLoading(false);
     }
-  }, [isAuthenticated, fetchCompanies]);
+    return () => { ++companyRequest.current; };
+  }, [isAuthenticated, token, fetchCompanies]);
 
   const setSelectedCompany = useCallback((company) => {
     setSelectedCompanyState(company);
@@ -65,7 +82,10 @@ export function CompanyProvider({ children }) {
   }, []);
 
   // (Re)load stamps whenever the selected company changes.
-  useEffect(() => { loadStamps(selectedCompany?.id || null); }, [selectedCompany?.id, loadStamps]);
+  useEffect(() => {
+    loadStamps(isAuthenticated ? selectedCompany?.id || null : null);
+    return () => { ++stampRequest.current; };
+  }, [selectedCompany?.id, isAuthenticated, token, loadStamps]);
 
   // Called by the Stamps tab after an upload / rename / delete so pickers +
   // the merge engine reflect the change without a full reload.
@@ -75,7 +95,9 @@ export function CompanyProvider({ children }) {
   );
 
   const refreshCompanies = useCallback(async () => {
+    const request = ++companyRequest.current;
     const res = await getCompanies();
+    if (request !== companyRequest.current) return;
     const list = res.data;
     setCompanies(list);
     if (selectedCompany) {
