@@ -21,6 +21,7 @@ namespace MyApp.Api.DTOs
 
     public class PrintChallanItemDto
     {
+        public int SerialNo { get; set; }
         public decimal Quantity { get; set; }
         public string Description { get; set; } = "";
         public string Unit { get; set; } = "";

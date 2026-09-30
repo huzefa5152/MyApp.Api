@@ -1032,8 +1032,9 @@ namespace MyApp.Api.Services.Implementations
                 PoDate = dc.PoDate,
                 IndentNo = dc.IndentNo,
                 Notes = dc.Notes,
-                Items = dc.Items.Select(i => new PrintChallanItemDto
+                Items = dc.Items.Select((i, index) => new PrintChallanItemDto
                 {
+                    SerialNo = index + 1,
                     Quantity = i.Quantity,
                     Description = i.Description,
                     Unit = i.Unit

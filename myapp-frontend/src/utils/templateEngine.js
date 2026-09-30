@@ -220,6 +220,7 @@ export const MERGE_FIELDS = {
     { field: "{{items.length}}", label: "Item Count" },
     { field: "{{#each items}}", label: "Loop: Items Start" },
     { field: "{{/each}}", label: "Loop: End" },
+    { field: "{{this.serialNo}}", label: "Item Serial Number (in loop)" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
     { field: "{{fmtQty this.quantity}}", label: "Item Quantity — formatted (1,000 / 2.5)" },
     { field: "{{this.unit}}", label: "Item Unit (in loop)" },

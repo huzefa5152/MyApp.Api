@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+import { fileURLToPath } from 'node:url';
+const bundled = await build({stdin:{contents:`export {mergeTemplate, MERGE_FIELDS} from './src/utils/templateEngine.js'; export {SAMPLE_DATA} from './src/utils/templateSampleData.js';`,resolveDir:fileURLToPath(new URL("../", import.meta.url))},bundle:true,write:false,platform:'node',format:'esm'});
+const m = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
+assert(m.MERGE_FIELDS.Challan.some(f=>f.field==='{{this.serialNo}}'));
+const data=m.SAMPLE_DATA.Challan;
+assert.equal(m.mergeTemplate('{{#each items}}{{this.serialNo}}:{{this.description}};{{/each}}',data),'1:Sample Item One;2:Sample Item Two;3:Sample Item Three;');
+const rows=Array.from({length:100},(_,i)=>({serialNo:i+1}));
+assert.equal(m.mergeTemplate('{{#each items}}{{this.serialNo}},{{/each}}',{items:rows}),rows.map(i=>i.serialNo+',').join(''));
+console.log('PASS: challan serial catalog, preview, and 100-line renderer checks.');

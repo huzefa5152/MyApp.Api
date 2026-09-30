@@ -103,9 +103,9 @@ export const SAMPLE_DATA = {
     clientAddress: "Client Address",
     poNumber: "PO-2025-001",
     items: [
-      { quantity: 10, description: "Sample Item One" },
-      { quantity: 5, description: "Sample Item Two" },
-      { quantity: 8, description: "Sample Item Three" },
+      { serialNo: 1, quantity: 10, description: "Sample Item One" },
+      { serialNo: 2, quantity: 5, description: "Sample Item Two" },
+      { serialNo: 3, quantity: 8, description: "Sample Item Three" },
     ],
   },
   Bill: {

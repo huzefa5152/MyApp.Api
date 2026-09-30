@@ -25,6 +25,7 @@ Expressions below come from this branch's `MERGE_FIELDS`. Fields beginning with 
 | `{{items.length}}` | Item Count |
 | `{{#each items}}` | Loop: Items Start |
 | `{{/each}}` | Loop: End |
+| `{{this.serialNo}}` | Item Serial Number (in loop), one-based printed order |
 | `{{this.quantity}}` | Item Quantity (in loop) |
 | `{{fmtQty this.quantity}}` | Item Quantity — formatted (1,000 / 2.5) |
 | `{{this.unit}}` | Item Unit (in loop) |

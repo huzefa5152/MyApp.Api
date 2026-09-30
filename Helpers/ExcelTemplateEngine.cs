@@ -883,6 +883,7 @@ namespace MyApp.Api.Helpers
             d["items"] = dto.Items.Select((item, idx) => new Dictionary<string, object?>
             {
                 ["sNo"] = idx + 1,
+                ["serialNo"] = item.SerialNo,
                 ["quantity"] = item.Quantity,
                 ["description"] = item.Description,
                 ["unit"] = item.Unit,
