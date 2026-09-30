@@ -3,9 +3,114 @@
 **Date:** 2026-08-02
 **Type:** Read-only architecture / performance / security / maintainability audit
 **Scope:** Full stack — .NET 9 API (Controllers, Services, Repositories, EF Core, Data), React 19 SPA, config/DI/middleware, CI/CD, dependencies
-**Nature:** ANALYSIS ONLY. No code, schema, contract, routing, auth, UI, or behavior was changed. Every item below is a *proposal to be verified before action*, not an applied change.
+**Nature:** Original analysis and implementation history. The current review below records the applied changes and supersedes archived status and run instructions.
 
 > How to read this document: findings carry **Severity** (Critical/High/Medium/Low), **Estimated Gain** (Very High/High/Medium/Low), **Regression Risk** (None/Very Low/Low/Medium/High), and **Effort** (<30m / 1h / half-day / 1d / multi-day). The roadmap at the end sequences them so each task ships independently with its own verification gate.
+
+---
+
+## Current review — 2026-09-30
+
+This section supersedes the archived handoff below. The current request is
+strictly performance, runtime reliability and focused internal cleanup, with
+master's business rules, HTTP contracts and UI retained. Do not use the archived
+production-replica run instructions: all verification here used a disposable
+LOCAL SQL Server database. No production queries, writes or deployment occurred.
+
+### Branch update and scope corrections
+
+- Preserved `fix/audit-2026-08-02` in local reference
+  `backup/audit-before-master-20260930`; merged remote master `c1597a1c`
+  without rewriting either history (merge `149cc4c`).
+- Kept all current master routes, including Document Lines, and its newer
+  challan procurement/navigation fields. Batched challan loading now includes
+  the same Supplier and SalesOrderItem references as the single-row path.
+- Retained compatible older audit improvements: lazy protected routes,
+  memoized providers, batched stock writes/challan loads, read-query tuning,
+  previous-period aggregate reuse and the existing additive index migration.
+- Removed the old audit's newly introduced response headers, exception-status
+  reclassification and five-second FBR enrichment fallback from active paths
+  (`955f223`). These alter master behavior/configuration, outside this request.
+  The timeout also abandoned work using request-scoped services. Existing
+  standalone helper tests remain; those helpers are not used by the active paths.
+
+### Implemented and verified
+
+| Change | Evidence / practical impact |
+|---|---|
+| Share simultaneous template-list reads | Three same-login/company reads create one request. Completed responses are never cached. Different logins/companies remain separate; successful or failed writes invalidate pending sharing. |
+| Reject stale company/stamp responses | Deferred-response tests execute the actual CompanyProvider. Old-company responses, obsolete failures and responses after logout cannot replace the current state. Same-company stamp refresh retains its existing display while waiting. |
+| Isolate the last-rate query and reuse repeated lookups | Frozen master query compared against the new query on SQL Server. 100 repeated item lines: **101 -> 2 SELECTs**. Mixed missing types/description fallback: **151 -> 4**. JSON results identical, including fractional rates, source order, missing hits, and demo/cancelled/note/company exclusions. Cache exists only during that request. |
+| Stream attachment uploads to disk | Unit tests confirm byte-for-byte contents, unchanged SHA-256/metadata, and no partial orphan after a failed copy. Removes MemoryStream plus full-payload byte-array copies; no wall-clock speed claim. |
+| Share bounded audit-body reading | Reads enough for the existing 4,000-character prefix/truncation suffix, instead of the entire body. Tests cover empty, boundary, UTF-8, 1MB and 25MB inputs, restored stream position and bounded reads. Body-free requests no longer enable buffering. Redaction and HTTP failure mapping remain unchanged. |
+| Bound Excel template-map cache | Dedicated cache retains at most 128 maps, is disposed with its owner, and still checks the source timestamp before each reuse. Tests cover capacity, equivalent reparsing, edits and missing files. Shared auth/permission caches are unchanged. |
+| Remove unused frontend xlsx dependency | No source or tool import uses it; eight dependency packages removed. XLS/XLSX handling through existing NPOI/ClosedXML/ExcelJS remains available. |
+
+The last-rate query is now `Services/Queries/ChallanLastRateQuery.cs`, delegated
+from the unchanged InvoiceService interface. Audit body-prefix reading is shared
+by the two logging paths. These are the concrete H-6 ownership/duplication
+improvements; the proposed wholesale service/form/model rewrite was not performed.
+
+### Performance and regression evidence
+
+Comparable production builds use current master's frontend source and the same
+resolved toolchain on this machine. Entry JavaScript: **3,902,348 -> 644,704
+bytes (83.5% smaller)**; gzip: **868,688 -> 196,452 bytes**. Template editor
+code stays in its own deferred chunk. This measures entry payload, not complete
+page payload, production latency or end-to-end load time.
+
+- Backend build: 0 errors; 11 existing nullable warnings remain.
+- xUnit: **48 passed, 0 failed** (39 original plus 9 added cases).
+- Local API basic flows: **66/66**; stock item-type reflow: **161/161**;
+  tenant isolation: **all checks passed**, before and after the runtime changes.
+- Static security verifier: **67/67**. Production-identifier scan passes.
+- FBR import batch tail: direct committer comparison against frozen master passes
+  with stock tracking enabled/disabled, fractional quantities, skip filters,
+  header/line amounts and counters. Injected stock-write failure verifies full
+  invoice rollback. This tests decided preview DTOs, not the file parser.
+- Existing line arithmetic: **23/23**; grouped quantity split: **27/27**.
+- New frontend tests: pending-read sharing/freshness/invalidation/scope,
+  actual-provider response races and obsolete-failure handling pass.
+- Frontend type/build succeeds; existing duplicate-style-key and large-chunk
+  warnings remain. Repository lint succeeds, but its existing configuration
+  targets TS/TSX only: JSX is not covered by that command. JSX edits are covered
+  by the build and focused execution tests, not a claimed JSX lint pass.
+- Route paths and component assignments compared against master: identical.
+  Browser smoke: local sign-in/dashboard, Bills, standalone creation modal and Document Lines;
+  Bills and modal at **375/768/1280**, with document width equal to viewport.
+- `dotnet ef migrations has-pending-model-changes --no-build`: none. No new
+  migration or database semantic change was introduced in this session.
+
+### Remaining historical proposals and required decisions
+
+The following are not silently marked fixed. They require changing behavior,
+configuration, schema, or doing a speculative rewrite, so are outside this
+request's preservation boundary.
+
+| Historical item | Current disposition |
+|---|---|
+| C-1 / M-13 startup DDL/backfill retirement | Deferred. Existing bootstrap/order and fresh-install behavior retained. Retirement needs applied-state evidence and a separately approved migration/startup policy. |
+| H-7 / H-9 error mapping / early enrichment fallback | Not active on this scoped branch; restored current master behavior rather than changing response contracts or saved enrichment results. |
+| M-1 unique last-rate keys | Repeated lookups fixed. Fully batching distinct keys is deferred: same-date/same-invoice lines have no explicit tie rule, and SQL regrouping may select a different suggested price. No tie-breaker was invented. |
+| M-6 tax-claim SQL aggregation | Deferred: changes decimal/null/rounding evaluation and needs a tax-figure equivalence gate first. |
+| M-8 / M-9 / L-12 / L-14 security/header/error/permission/config proposals | Separate review. No new headers, permission behavior, HTTP error shapes or key/config policies here. |
+| M-10 / H-6 broad layer/service/form/model splits | No evidenced performance gain from moving every controller or slicing every file. Only the query and audit-reader seams above were extracted. UI/forms/models otherwise stay intact. |
+| M-11 Excel engines / L-2 UI libraries | Different formats and UI controls have real callers; consolidation would change supported files or appearance. Keep them. |
+| M-15 deployment hygiene | No new deployment-pipeline change; no deployment. Old audit CI gate is retained. |
+| M-16 / L-13 blob storage / column lengths | Schema/data semantics outside scope. |
+| L-3 / L-5 unused backend packages/config | Already removed by prior audit commit c579b8ed; confirmed no additional new removal needed. |
+| L-6 other caches | Template-map capacity fixed. Tax-reference caches retain process-lifetime results; changing their expiry/eviction could change tax reference answers. A freshness policy requires a separate decision. Auth caches retain existing TTL/invalidation. |
+| L-9 unpaged catalogs | Adding pagination changes response contracts and picker workflows. No new contract here. |
+| L-10 fuzzy item identity scan | C# normalization/edit-distance and iteration order define duplicate validation. SQL collation/filtering can change which existing item blocks creation. Retained pending equivalence fixtures. |
+| L-11 attachment missing-file scan | Disk existence must reflect current files and drives the missing-file filter. Persisting/caching existence changes freshness; no evidence of high-volume cost justified that change. |
+| M-17 export escaping | Existing spreadsheet paths remain unchanged; modifying cell contents is a separate data/security contract decision. |
+
+Limitations: no live FBR requests or production load profiling; not every screen,
+real document/template and role was manually exercised. The audit branch is not
+ready for a production merge solely on this evidence. The missing
+`test_route_permissions.mjs` and `verify_tenant_scope.py` commands mentioned in
+other-branch instructions are not present on this master-derived line; no
+placeholder/rebased test was substituted for them. Existing API tenant tests ran.
 
 ---
 
