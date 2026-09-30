@@ -120,6 +120,8 @@ namespace MyApp.Api.Repositories.Implementations
                                  .AsSplitQuery()
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
+                                 .Include(dc => dc.Items).ThenInclude(i => i.Supplier)
+                                 .Include(dc => dc.Items).ThenInclude(i => i.SalesOrderItem)
                                  .Include(dc => dc.Client)
                                  .Include(dc => dc.Company)
                                  .Include(dc => dc.Invoice)
