@@ -13,6 +13,13 @@
         // stripped) so e.g. 12.5 displays as "12.5", 0.0004 as "0.0004",
         // 0.09 as "0.09" — never "0.0900".
         public decimal Quantity { get; set; }
+        public decimal? PhysicalQuantity { get; set; }
         public string Unit { get; set; } = "";
+        public decimal? ActualUnitCost { get; set; }
+        public int? SupplierId { get; set; }
+        public string? SupplierName { get; set; }
+        public decimal? SellingUnitPrice { get; set; }
+        public decimal? UnitProfit { get; set; }
+        public decimal? TotalProfit { get; set; }
     }
 }

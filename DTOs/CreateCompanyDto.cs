@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class CreateCompanyDto
     {
@@ -34,6 +34,7 @@
         // omitted from the payload — operators turn it on when they're
         // ready to track stock movements.
         public bool InventoryTrackingEnabled { get; set; }
+        public bool StockGuardHardBlock { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
         /// <summary>Starting number for the Sales Quote sequence. Defaults to 1.</summary>

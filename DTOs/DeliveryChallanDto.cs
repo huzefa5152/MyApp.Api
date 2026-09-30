@@ -18,6 +18,7 @@
         public string? IndentNo { get; set; }
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }
+        public string? Notes { get; set; }
         public string Status { get; set; } = "Pending";
         public int? InvoiceId { get; set; }
         /// <summary>
@@ -57,6 +58,7 @@
         /// ("Duplicate of #1042") without the frontend having to re-fetch.
         /// </summary>
         public int? DuplicatedFromChallanNumber { get; set; }
+        public bool HasAutoPurchaseBills { get; set; }
         public List<DeliveryItemDto> Items { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
     }

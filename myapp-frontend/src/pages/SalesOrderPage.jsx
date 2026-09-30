@@ -1,4 +1,6 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
+import { richTextToPlain } from "../utils/richText";
 import { useNavigate } from "react-router-dom";
 import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile, MdGridOn, MdReceiptLong, MdLink } from "react-icons/md";
 import { saveAs } from "file-saver";
@@ -180,6 +182,7 @@ export default function SalesOrderPage() {
   const viewChallans = (o) => navigate(`/challans?salesOrderId=${o.id}`);
 
   return (
+    <DocumentLinesNavigation type="order">
     <div>
       <div style={st.header}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -248,7 +251,7 @@ export default function SalesOrderPage() {
                   <div style={st.fulfilBar}>
                     {(o.items || []).slice(0, 4).map((i) => (
                       <div key={i.id} style={st.fulfilRow}>
-                        <span style={st.fItem} title={i.description}>{i.description}</span>
+                        <span style={st.fItem} title={richTextToPlain(i.description)}>{richTextToPlain(i.description)}</span>
                         <span style={st.fQty}>{i.deliveredQuantity}/{i.quantity} {i.unit}</span>
                       </div>
                     ))}
@@ -356,6 +359,7 @@ export default function SalesOrderPage() {
         />
       )}
     </div>
+    </DocumentLinesNavigation>
   );
 }
 

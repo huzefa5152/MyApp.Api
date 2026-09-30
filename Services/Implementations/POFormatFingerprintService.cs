@@ -5,6 +5,9 @@ using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
 {
+    /// <summary>An incoming PO's fuzzy-match keywords: layout, and labels found on item rows.</summary>
+    public record MatchKeywords(HashSet<string> Layout, HashSet<string> ItemRows);
+
     public class POFormatFingerprintService : IPOFormatFingerprintService
     {
         // A label is "1–4 title/upper-case words" followed by `:` or `#`, with
@@ -62,6 +65,147 @@ namespace MyApp.Api.Services.Implementations
             var hash = Sha256Hex(signature);
 
             return new FingerprintResult(hash, signature, sorted);
+        }
+
+        // ── Keywords for FUZZY matching ─────────────────────────────────────
+        // Compute() above is the stored signature and its exact-match hash, and
+        // must not change: every saved format's SignatureHash was computed with
+        // it. Fuzzy matching instead compares these two cleaned-up sets, which
+        // drop two kinds of DATA that Compute lets in as "labels":
+        //   - text on item rows ("…SUPER EPOXY RESIN:  SET  4  4800.00",
+        //     "1000gm HARDENER: 800gm") — the table's contents vary per PO;
+        //   - a time-of-day token glued in front of a label ("10:51 AM  Head
+        //     Office :" -> "am head office", on another PO "pm head office").
+        // Both made the same Meko layout score 0.67 against its own format.
+
+        // The item table's header line: three or more header tokens, one of
+        // them a quantity. Top-of-page lines ("PO Type : GST", "Delivery
+        // Location") carry header words too, but never a quantity column.
+        private static readonly Regex QuantityTokenRegex = new(@"\b(QTY|QUANTITY)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Where the item table ends: a totals line.
+        private static readonly Regex TableEndRegex = new(
+            @"^\s*(?:Sub-?\s*Total|Subtotal|Grand\s+Total|Total|Net\s+(?:Amount|Total|Payable)|Sales\s+Tax|Discount|Freight)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex TimePrefixRegex = new(@"^(?:am|pm)\s+", RegexOptions.Compiled);
+
+        /// <summary>A keyword as fuzzy matching compares it (stored or incoming).</summary>
+        public static string NormaliseForMatch(string keyword) =>
+            TimePrefixRegex.Replace((keyword ?? "").Trim().ToLowerInvariant(), "");
+
+        /// <summary>A saved format's signature as fuzzy matching compares it.</summary>
+        public static HashSet<string> StoredMatchKeywords(string? signature) =>
+            new((signature ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(NormaliseForMatch)
+                    .Where(k => k.Length > 0),
+                StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// An incoming PO's keywords for fuzzy matching, in two parts: the layout
+        /// keywords, and the "labels" that sit on item rows (see
+        /// <see cref="MatchScore"/> for how each part counts). Same extraction as
+        /// <see cref="Compute"/>, every keyword through <see cref="NormaliseForMatch"/>.
+        /// </summary>
+        public static MatchKeywords ComputeMatchKeywords(string rawText)
+        {
+            var layout = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var itemRows = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(rawText)) return new MatchKeywords(layout, itemRows);
+            var window = rawText.Length > 4000 ? rawText[..4000] : rawText;
+            var (tableStart, tableEnd) = FindItemTable(window);
+
+            foreach (Match m in LabelRegex.Matches(window))
+            {
+                var label = NormaliseForMatch(Normalize(m.Groups[1].Value));
+                if (!IsMeaningfulKeyword(label)) continue;
+                if (m.Index >= tableStart && m.Index < tableEnd) itemRows.Add(label);
+                else layout.Add(label);
+            }
+            foreach (Match m in TableHeaderTokenRegex.Matches(window))
+            {
+                var token = NormaliseForMatch(Normalize(m.Value));
+                if (IsMeaningfulKeyword(token)) layout.Add(token);
+            }
+            itemRows.ExceptWith(layout);
+            return new MatchKeywords(layout, itemRows);
+        }
+
+        /// <summary>
+        /// Jaccard similarity of an incoming PO to a saved format. An item-row
+        /// label counts only when the saved signature has it too: a saved
+        /// signature may itself carry labels from its sample's item rows (it was
+        /// computed by <see cref="Compute"/>), so dropping them from the incoming
+        /// side would cost real overlap — but one this PO's own item text
+        /// introduced ("SUPER EPOXY RESIN") never counts against it. A score can
+        /// therefore only rise against the old whole-set Jaccard, never fall.
+        /// </summary>
+        public static double MatchScore(MatchKeywords incoming, HashSet<string> stored)
+        {
+            var a = new HashSet<string>(incoming.Layout, StringComparer.OrdinalIgnoreCase);
+            foreach (var k in incoming.ItemRows)
+                if (stored.Contains(k)) a.Add(k);
+            if (a.Count == 0 && stored.Count == 0) return 0;
+            var inter = a.Count(stored.Contains);
+            var union = a.Count + stored.Count - inter;
+            return union == 0 ? 0 : (double)inter / union;
+        }
+
+        // ── Matching text read from an IMAGE ────────────────────────────────
+        // OCR text keeps a PO's words but not its exact label spans: a colon
+        // read as "1", a label run into its value, a logo read as letters. So
+        // label-span Jaccard scored a Mundia photo 0.24-0.29 against the
+        // format its PDF matches at 1.00. Coverage asks the question OCR can
+        // answer: how many of the format's signature WORDS appear in the text.
+
+        private static readonly Regex SignatureWordRegex = new(@"[a-z]{3,}", RegexOptions.Compiled);
+
+        // Words too common across PO layouts to say which layout this is.
+        private static readonly HashSet<string> CoverageStopWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "and", "for", "with", "from", "this", "that", "name", "date", "total", "amount",
+        };
+
+        /// <summary>
+        /// Share (0..1) of a saved signature's words found anywhere in the text.
+        /// Calibrated on the production archive: every real match scored 1.00 on
+        /// clean text and a Mundia photo 0.97, while documents with no saved
+        /// format peaked at 0.73.
+        /// </summary>
+        public static double OcrCoverageScore(string rawText, string? signature)
+        {
+            var wanted = new HashSet<string>(
+                (signature ?? "").Split('|').SelectMany(k => SignatureWordRegex.Matches(k.ToLowerInvariant()).Select(m => m.Value))
+                    .Where(w => !CoverageStopWords.Contains(w) && w != "am" && w != "pm"),
+                StringComparer.OrdinalIgnoreCase);
+            if (wanted.Count == 0) return 0;
+            var present = new HashSet<string>(SignatureWordRegex.Matches((rawText ?? "").ToLowerInvariant()).Select(m => m.Value),
+                StringComparer.OrdinalIgnoreCase);
+            return (double)wanted.Count(present.Contains) / wanted.Count;
+        }
+
+        /// <summary>
+        /// Character span of the item rows: from the line after the table header
+        /// to the first totals line. (-1, -1) when no header line is found, so
+        /// nothing is excluded.
+        /// </summary>
+        private static (int Start, int End) FindItemTable(string text)
+        {
+            int pos = 0, start = -1;
+            foreach (var line in text.Split('\n'))
+            {
+                var lineStart = pos;
+                pos += line.Length + 1;
+                if (start < 0)
+                {
+                    var tokens = TableHeaderTokenRegex.Matches(line)
+                        .Select(m => m.Value.ToUpperInvariant()).Distinct().Count();
+                    if (tokens >= 3 && QuantityTokenRegex.IsMatch(line)) start = pos;
+                    continue;
+                }
+                if (TableEndRegex.IsMatch(line)) return (start, lineStart);
+            }
+            return start < 0 ? (-1, -1) : (start, text.Length);
         }
 
         private static string Normalize(string input)

@@ -1,4 +1,4 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class UpdateCompanyDto
     {
@@ -30,6 +30,8 @@
         // Inventory module toggle. Off by default. Flip on once the
         // operator has entered opening balances.
         public bool InventoryTrackingEnabled { get; set; }
+        // Oversell policy — see CompanyDto. Omitted from the payload = false.
+        public bool StockGuardHardBlock { get; set; }
         public int StartingPurchaseBillNumber { get; set; }
         public int StartingGoodsReceiptNumber { get; set; }
         /// <summary>Starting number for the Sales Quote sequence. Only honoured while the company has no quotes yet.</summary>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { createClient, createClientBatch, updateClient } from "../api/clientApi";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
+import { getFbrRegistrationType } from "../api/fbrApi";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
 
@@ -94,19 +96,47 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
   }, []);
 
   // Registration-type → which identity fields apply.
-  // Pakistan FBR taxonomy:
-  //   • Registered    — NTN (7 digits) + STRN (13 digits) required.
-  //   • FTN           — Federal Tax Number lives in the NTN column;
-  //                     STRN is optional (most FTN entities don't have one).
-  //   • Unregistered  — no NTN/STRN; CNIC is the identity (13 digits).
+  // What FBR's buyer block actually needs (V1.12, proven against the
+  // sandbox 2026-09-10 on the importer line): name, registration type,
+  // province, and an NTN/CNIC for a REGISTERED buyer. STRN is never sent
+  // to FBR, and an unregistered buyer's CNIC is optional. So:
+  //   • Registered    — NTN (7 digits) required. STRN optional.
+  //   • FTN           — Federal Tax Number lives in the NTN column; required.
+  //   • Unregistered  — no NTN; CNIC optional (13 digits when given).
   //   • CNIC          — same as Unregistered for the form's purposes.
-  // Anything else / blank — show all fields with no auto-validation, so
-  // the operator picks the type first.
+  // Blank — pick the type first.
   const regType = formData.registrationType;
   const showNtn  = regType === "Registered" || regType === "FTN";
-  const showStrn = regType === "Registered"; // STRN truly required only for Registered
-  const showCnic = regType === "Unregistered" || regType === "CNIC";
+  const showStrn = regType === "Registered"; // shown, but optional
+  // CNIC shows for every type once one is picked; optional throughout —
+  // the server files under the NTN when there is one, else the CNIC.
+  const showCnic = !!regType;
   const ntnLabel = regType === "FTN" ? "FTN *" : "NTN *";
+
+  // "Check with FBR": FBR's Get_Reg_Type answer for the typed NTN/CNIC.
+  // A buyer recorded as Registered whom FBR holds as Unregistered is
+  // refused [0205] on every bill, so let the operator ask FBR up front.
+  const { has } = usePermissions();
+  const canAskFbr = has("fbr.config.view");
+  const [fbrCheck, setFbrCheck] = useState({ busy: false, result: "" });
+  const checkRegistrationWithFbr = async () => {
+    const regNo = (formData.ntn || formData.cnic || "").trim();
+    if (!regNo || !companyId) return;
+    setFbrCheck({ busy: true, result: "" });
+    try {
+      const { data } = await getFbrRegistrationType(companyId, regNo);
+      const type = (data?.registratioN_TYPE || data?.registrationType || "").trim();
+      if (type === "Registered" || type === "Unregistered") {
+        setFormData((f) => ({ ...f, registrationType: type, ...(type === "Unregistered" ? { strn: "" } : {}) }));
+        setErrors((e) => ({ ...e, registrationType: "" }));
+        setFbrCheck({ busy: false, result: `FBR: ${regNo} is ${type}` });
+      } else {
+        setFbrCheck({ busy: false, result: "FBR gave no registration type for this number." });
+      }
+    } catch (err) {
+      setFbrCheck({ busy: false, result: err?.response?.data?.message || "Could not reach FBR." });
+    }
+  };
 
   const validate = () => {
     const newErrors = {};
@@ -118,9 +148,10 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
     // form-level fields are still in state — if the operator switched
     // type they get blanked on switch, so this stays in sync.
     if (showNtn && !formData.ntn.trim()) newErrors.ntn = regType === "FTN" ? "FTN is required" : "NTN is required";
-    if (showStrn && !formData.strn.trim()) newErrors.strn = "STRN is required";
-    if (showCnic && !formData.cnic.trim()) newErrors.cnic = "CNIC is required for this registration type";
-    // CNIC must be 13 digits when present (Pakistan ID format).
+    // STRN is deliberately NOT required: the FBR buyer block carries
+    // NTN/CNIC, name, province, address and registration type — no STRN —
+    // and demanding one here kept real buyers out of FBR. A CNIC is
+    // optional on FBR's side; only its format is checked below.
     if (showCnic && formData.cnic.trim() && formData.cnic.replace(/\D/g, "").length !== 13) {
       newErrors.cnic = "CNIC must be 13 digits";
     }
@@ -144,10 +175,8 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
       const next = { ...formData, registrationType: value };
       const willShowNtn  = value === "Registered" || value === "FTN";
       const willShowStrn = value === "Registered";
-      const willShowCnic = value === "Unregistered" || value === "CNIC";
       if (!willShowNtn)  next.ntn  = "";
       if (!willShowStrn) next.strn = "";
-      if (!willShowCnic) next.cnic = "";
       setFormData(next);
       setErrors({ ...errors, registrationType: "", ntn: "", strn: "", cnic: "" });
       return;
@@ -297,6 +326,22 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                     ))}
                   </select>
                   {errorMsg("registrationType")}
+                  {canAskFbr && companyId && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        disabled={fbrCheck.busy || !(formData.ntn || formData.cnic).trim()}
+                        title="Ask FBR whether this NTN/CNIC is registered for sales tax and set the type accordingly"
+                        onClick={checkRegistrationWithFbr}
+                        style={{ ...input, width: "auto", minHeight: 44, padding: "0 0.8rem", cursor: fbrCheck.busy ? "wait" : "pointer", background: "#fff", color: "#0d47a1", fontWeight: 700, borderColor: "#0d47a1" }}
+                      >
+                        {fbrCheck.busy ? "Asking FBR…" : "Check with FBR"}
+                      </button>
+                      {fbrCheck.result && (
+                        <span style={{ fontSize: "0.78rem", color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "#b71c1c" }}>{fbrCheck.result}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div style={formGroup}>
                   <label style={label}>Province *</label>
@@ -335,7 +380,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   )}
                   {showStrn && (
                     <div style={formGroup}>
-                      <label style={label}>STRN *</label>
+                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional — not sent to FBR)</span></label>
                       <input
                         type="text"
                         name="strn"
@@ -352,7 +397,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
 
               {showCnic && (
                 <div style={{ ...formGroup, marginTop: "0.5rem" }}>
-                  <label style={label}>CNIC (13 digits) *</label>
+                  <label style={label}>CNIC (13 digits) <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
                   <input
                     type="text"
                     name="cnic"
@@ -364,7 +409,7 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   />
                   {errorMsg("cnic")}
                   <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
-                    Unregistered buyers don't have NTN/STRN — CNIC is the FBR identity for individuals.
+                    Optional — FBR files a buyer under the NTN when it has one, and under the CNIC otherwise.
                   </span>
                 </div>
               )}

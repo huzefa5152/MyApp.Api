@@ -1,6 +1,8 @@
 import { MdPerson, MdReceipt, MdCalendarToday, MdLocationOn, MdAssignmentTurnedIn, MdEventNote } from "react-icons/md";
+import RichText from "./RichText";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
+import ChallanPrivateCosts from "./ChallanPrivateCosts";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
@@ -120,7 +122,7 @@ export default function ChallanModal({ challan, onClose }) {
                     <tr key={idx}>
                       <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
                       <td style={styles.td}>{item.itemTypeName || "—"}</td>
-                      <td style={styles.td}>{item.description}</td>
+                      <td style={styles.td}><RichText text={item.description} /></td>
                       <td style={{ ...styles.td, textAlign: "center", fontWeight: 600 }}>{item.quantity}</td>
                       <td style={{ ...styles.td, textAlign: "center" }}>{item.unit}</td>
                     </tr>
@@ -129,6 +131,9 @@ export default function ChallanModal({ challan, onClose }) {
               </table>
             </div>
           </div>
+
+          <ChallanPrivateCosts items={challan.items} readOnly />
+          {challan.notes && <div style={{ marginTop: 16 }}><strong>Notes</strong><div style={{ marginTop: 6, padding: 10, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={challan.notes} /></div></div>}
 
           {/* Attachments — read-only (preview / download only). INSIDE the
               scrollable body so it never pushes the footer off-screen. */}

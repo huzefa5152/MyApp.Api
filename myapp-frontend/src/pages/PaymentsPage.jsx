@@ -26,6 +26,7 @@ import { exportToPdf } from "../utils/exportUtils";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
+import RichText from "../Components/RichText";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -444,6 +445,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           {p.chequeNumber && <Row label="Cheque #" value={`${p.chequeNumber}${p.chequeDate ? ` · ${fmtDate(p.chequeDate)}` : ""}`} />}
           <Row label="Status" value={p.isCancelled ? "Cancelled" : (p.chequeStatus && p.chequeStatus !== "None" ? p.chequeStatus : "Active")} />
           {p.description && <Row label="Description" value={p.description} />}
+          {p.notes && <div style={{ marginTop: 12 }}><div style={vd.k}>Notes</div><div style={{ marginTop: 5, padding: 10, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={p.notes} /></div></div>}
           {allocs.length > 0 && (
             <div style={{ marginTop: "0.6rem" }}>
               <div style={vd.k}>{docNoun}s settled</div>

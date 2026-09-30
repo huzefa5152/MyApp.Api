@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -223,6 +223,13 @@ namespace MyApp.Api.Services.Implementations
             return ii.LineTotal;
         }
 
+        private static PrintTaxItemDto AddPrintChoices(PrintTaxItemDto row, IEnumerable<InvoiceItem> lines, decimal gstRate)
+            => PrintItemChoices.Apply(row, lines.Select(ii => new PrintItemSource(
+                ii.Quantity, ii.Adjustment?.AdjustedQuantity ?? ii.Quantity,
+                ii.ItemTypeName, ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
+                ii.UOM, ii.Adjustment?.AdjustedUOM ?? ii.UOM,
+                EffectivePrintLineTotal(ii))), gstRate);
+
         private InvoiceDto ToDto(Invoice inv)
         {
             var missing = ComputeFbrMissing(inv);
@@ -254,6 +261,7 @@ namespace MyApp.Api.Services.Implementations
             GrandTotal = inv.GrandTotal,
             AmountInWords = inv.AmountInWords,
             PaymentTerms = inv.PaymentTerms,
+            Notes = inv.Notes,
             DocumentType = inv.DocumentType,
             PaymentMode = inv.PaymentMode,
             FbrInvoiceNumber = inv.FbrInvoiceNumber,
@@ -819,6 +827,7 @@ namespace MyApp.Api.Services.Implementations
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms = dto.PaymentTerms,
+                        Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                         DocumentType = effectiveDocType,
                         PaymentMode = effectivePaymentMode,
                         // Optional bill-time PO override (blank → the DTO derives the
@@ -1186,6 +1195,7 @@ namespace MyApp.Api.Services.Implementations
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                         PaymentTerms = finalPaymentTerms,
+                        Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                         DocumentType = effectiveDocType,
                         PaymentMode = effectivePaymentMode,
                         // Standalone bill has no challan to carry the PO — store it
@@ -1292,6 +1302,50 @@ namespace MyApp.Api.Services.Implementations
             }
         }
 
+        /// <summary>
+        /// Stock guard for the edit paths (2026-09-11). Runs AFTER
+        /// <see cref="IStockService.SyncInvoiceStockMovementsAsync"/> has
+        /// rewritten this invoice's OUT rows, inside the same transaction, and
+        /// asks the ledger which of the invoice's effective item types now
+        /// stand below zero. Company.StockGuardHardBlock = true → throw, so the
+        /// caller's transaction rolls the save back (mirrors bill creation).
+        /// Otherwise the list is returned for the client to show — the
+        /// operator already confirmed on the form, this is the record of it.
+        /// Effective type = Adjusted ?? physical, the same resolution the
+        /// stock sync uses.
+        /// </summary>
+        private async Task<List<StockWarningDto>> EnforceStockGuardAfterSyncAsync(Invoice invoice)
+        {
+            var flags = await _context.Companies
+                .AsNoTracking()
+                .Where(c => c.Id == invoice.CompanyId)
+                .Select(c => new { c.InventoryTrackingEnabled, c.StockGuardHardBlock })
+                .FirstOrDefaultAsync();
+            if (flags == null || !flags.InventoryTrackingEnabled)
+                return new List<StockWarningDto>();
+
+            var effectiveTypeIds = invoice.Items
+                .Select(ii => ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId)
+                .Where(t => t.HasValue)
+                .Select(t => t!.Value)
+                .Distinct()
+                .ToList();
+            if (effectiveTypeIds.Count == 0) return new List<StockWarningDto>();
+
+            var negatives = await _stock.GetNegativePositionsAsync(invoice.CompanyId, effectiveTypeIds);
+            if (negatives.Count == 0) return negatives;
+
+            if (flags.StockGuardHardBlock)
+            {
+                var names = string.Join(", ", negatives.Select(n =>
+                    $"{n.ItemTypeName} (on-hand would be {n.OnHand:0.####})"));
+                throw new InvalidOperationException(
+                    "Insufficient stock to save this invoice: " + names +
+                    ". Reduce the quantity or receive stock first.");
+            }
+            return negatives;
+        }
+
         public async Task<InvoiceDto?> UpdateAsync(int id, UpdateInvoiceDto dto)
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
@@ -1368,6 +1422,7 @@ namespace MyApp.Api.Services.Implementations
                 }
                 invoice.GSTRate = dto.GSTRate;
                 invoice.PaymentTerms = dto.PaymentTerms;
+                invoice.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
                 invoice.DocumentType = dto.DocumentType;
                 invoice.PaymentMode = dto.PaymentMode;
 
@@ -1496,10 +1551,16 @@ namespace MyApp.Api.Services.Implementations
                 // 2026-05-12: stock-out on save (full-edit path).
                 // See UpdateItemTypesAsync for rationale.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // Stock guard (2026-09-11): hard-block rolls back here,
+                // soft mode rides back on the DTO as warnings.
+                var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
                 await transaction.CommitAsync();
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
-                return reloaded == null ? null : ToDto(reloaded);
+                if (reloaded == null) return null;
+                var dtoOut = ToDto(reloaded);
+                if (stockWarnings.Count > 0) dtoOut.StockWarnings = stockWarnings;
+                return dtoOut;
             }
             catch (Exception ex)
             {
@@ -1599,6 +1660,105 @@ namespace MyApp.Api.Services.Implementations
             if (unknownIds.Count > 0)
                 throw new InvalidOperationException(
                     $"Bill item id(s) [{string.Join(", ", unknownIds)}] do not belong to this bill.");
+
+            // ── "Exact Line Total" adjustment method (2026-09-16) ────────────
+            // The operator states what a line must COME TO and the unit price is
+            // derived, instead of typing a price and hoping it multiplies back.
+            // The grouped view sums several lines into one row, so the caller
+            // allocates its target across those lines and states each line's
+            // share; resolving it here (rather than trusting a client-computed
+            // price) is what makes SUM(LineTotal) land on the target exactly.
+            //
+            // Normalising into row.UnitPrice deliberately keeps every path below
+            // untouched: the overlay writer, the bill writer and the subtotal
+            // recompute all continue to read Quantity x UnitPrice.
+            // Which unit each row will END UP on, and whether that unit carries
+            // fractions. Needed by the exact-line-total rule below: a quantity
+            // like 1.61 KG is a real thing to file, and refusing every fraction
+            // outright stopped a consultant filing one against a 1,565 line even
+            // though KG is configured decimal-allowed (INV-3922, 2026-09-23).
+            var exactTypeIds = dto.Items.Where(i => i.ItemTypeId.HasValue)
+                .Select(i => i.ItemTypeId!.Value).Distinct().ToList();
+            var exactTypeUoms = exactTypeIds.Count == 0
+                ? new Dictionary<int, string>()
+                : (await _context.ItemTypes
+                    .Where(t => exactTypeIds.Contains(t.Id))
+                    .Select(t => new { t.Id, t.UOM })
+                    .ToListAsync())
+                  .ToDictionary(t => t.Id, t => t.UOM ?? "");
+
+            string RowUom(UpdateInvoiceItemTypeRow r)
+            {
+                if (r.ItemTypeId.HasValue && exactTypeUoms.TryGetValue(r.ItemTypeId.Value, out var u))
+                    return u;
+                return invoice.Items.FirstOrDefault(ii => ii.Id == r.Id)?.UOM ?? "";
+            }
+
+            var exactUnitNames = dto.Items.Select(RowUom)
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var exactDecimalUnits = exactUnitNames.Count == 0
+                ? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+                : (await _context.Units
+                    .Where(u => exactUnitNames.Contains(u.Name))
+                    .Select(u => new { u.Name, u.AllowsDecimalQuantity })
+                    .ToListAsync())
+                  .ToDictionary(u => u.Name, u => u.AllowsDecimalQuantity, StringComparer.OrdinalIgnoreCase);
+
+            bool UnitAllowsDecimal(string unit) =>
+                !string.IsNullOrWhiteSpace(unit)
+                && exactDecimalUnits.TryGetValue(unit, out var allows) && allows;
+
+            if (allowQuantityEdit)
+            {
+                var existingById = invoice.Items.ToDictionary(ii => ii.Id);
+                foreach (var row in dto.Items)
+                {
+                    // A price beyond the column's scale would be silently
+                    // rounded on save, so the bill would not reproduce what the
+                    // operator was shown. Refuse it instead.
+                    if (row.UnitPrice.HasValue && decimal.Round(row.UnitPrice.Value, 12) != row.UnitPrice.Value)
+                        throw new InvalidOperationException(
+                            $"Unit price for bill item id {row.Id} has more than 12 decimal places.");
+
+                    if (!row.ExactLineTotal.HasValue) continue;
+
+                    var target = row.ExactLineTotal.Value;
+                    if (target <= 0m)
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} must be greater than zero.");
+                    if (decimal.Round(target, 2) != target)
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} must be a rupee amount with at most 2 decimal places.");
+
+                    var qty = row.Quantity ?? existingById[row.Id].Quantity;
+                    if (qty <= 0m)
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} needs a quantity greater than zero.");
+                    // The reproduction check just below is the real guard \u2014 it proves
+                    // the derived rate divides back into the target at the stored
+                    // precision. A fraction only has to be refused when the UNIT
+                    // itself does not carry one.
+                    if (qty != decimal.Truncate(qty) && !UnitAllowsDecimal(RowUom(row)))
+                        throw new InvalidOperationException(
+                            $"Exact line total for bill item id {row.Id} needs a whole-number quantity (got {qty}). " +
+                            $"Enable decimal quantity for unit '{RowUom(row)}' on the Units admin page if fractions are allowed.");
+
+                    // 12dp is the column's scale, so this is the most precise
+                    // rate that survives the round trip.
+                    var derived = decimal.Round(target / qty, 12, MidpointRounding.AwayFromZero);
+                    var reproduced = decimal.Round(qty * derived, 2, MidpointRounding.AwayFromZero);
+                    if (reproduced != target)
+                        throw new InvalidOperationException(
+                            $"Bill item id {row.Id}: {target:N2} cannot be reproduced exactly from a whole quantity of " +
+                            $"{qty:N0} at the stored precision (closest is {reproduced:N2}). " +
+                            $"Adjust the quantity or the target amount.");
+
+                    row.UnitPrice = derived;
+                    row.Quantity ??= qty;
+                }
+            }
 
             var referencedTypeIds = dto.Items
                 .Where(i => i.ItemTypeId.HasValue)
@@ -1908,6 +2068,12 @@ namespace MyApp.Api.Services.Implementations
                 // before this code shipped) gets them now. No-op when
                 // inventory tracking is off for the company.
                 await _stock.SyncInvoiceStockMovementsAsync(invoice);
+                // Stock guard (2026-09-11): the consultant's classification is
+                // what actually takes HS stock out, so this is where an
+                // oversell is caught. Hard-block → exception → rollback →
+                // 400 at the controller. Soft → warnings on the response;
+                // the client has already asked the operator to confirm.
+                var stockWarnings = await EnforceStockGuardAfterSyncAsync(invoice);
                 await transaction.CommitAsync();
 
                 // ── Audit log (after commit so we don't log a rolled-back op) ──
@@ -1978,7 +2144,10 @@ namespace MyApp.Api.Services.Implementations
                 catch { /* audit must never break the save */ }
 
                 var reloaded = await _invoiceRepo.GetByIdAsync(id);
-                return reloaded == null ? null : ToDto(reloaded);
+                if (reloaded == null) return null;
+                var dtoOut = ToDto(reloaded);
+                if (stockWarnings.Count > 0) dtoOut.StockWarnings = stockWarnings;
+                return dtoOut;
             }
             catch (Exception ex)
             {
@@ -3164,6 +3333,7 @@ namespace MyApp.Api.Services.Implementations
                 // sync with the rounded total without needing a re-save.
                 AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
                 PaymentTerms = inv.PaymentTerms,
+                Notes = inv.Notes,
                 Items = inv.Items.Select((ii, idx) => new PrintBillItemDto
                 {
                     SNo = idx + 1,
@@ -3193,6 +3363,7 @@ namespace MyApp.Api.Services.Implementations
 
             return new PrintTaxInvoiceDto
             {
+                Notes = inv.Notes,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
                 SupplierAddress = inv.Company?.FullAddress,
                 SupplierNTN = inv.Company?.NTN,
@@ -3286,7 +3457,7 @@ namespace MyApp.Api.Services.Implementations
                                 ii.Adjustment?.AdjustedQuantity ?? ii.Quantity);
                             var totalValue = g.Sum(EffectivePrintLineTotal);
                             var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
-                            return new PrintTaxItemDto
+                            return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = g.Key,
                                 Quantity = totalQty,
@@ -3305,14 +3476,14 @@ namespace MyApp.Api.Services.Implementations
                                 // defensively in case a legacy row was blank.
                                 HSCode = g.Select(x => x.Adjustment?.AdjustedHSCode ?? x.HSCode)
                                           .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
-                            };
+                            }, g, inv.GSTRate);
                         }).ToList()
                     : inv.Items.Select(ii =>
                         {
                             var lineTotal = EffectivePrintLineTotal(ii);
                             var qty       = ii.Adjustment?.AdjustedQuantity  ?? ii.Quantity;
                             var gstAmt = Math.Round(lineTotal * inv.GSTRate / 100, 2);
-                            return new PrintTaxItemDto
+                            return AddPrintChoices(new PrintTaxItemDto
                             {
                                 ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
                                 Quantity = qty,
@@ -3324,7 +3495,63 @@ namespace MyApp.Api.Services.Implementations
                                 GSTAmount = gstAmt,
                                 TotalInclTax = lineTotal + gstAmt,
                                 HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode
-                            };
+                            }, new[] { ii }, inv.GSTRate);
+                        }).ToList(),
+
+                // The BILL's own view of the same invoice (2026-09-16), for a
+                // Sales Tax Invoice template that must show what the customer
+                // was billed rather than what was filed: grouped by the bill's
+                // item type, summing the bill's quantity and line total, with
+                // NO overlay applied anywhere. The commercial item type usually
+                // carries no HS code, which is exactly why this cannot be
+                // derived from Items above.
+                //
+                // Same two shapes as Items: group when every line is classified,
+                // otherwise render a row per line, so a part-classified bill
+                // still prints every line instead of collapsing into one blank
+                // group.
+                BillItems = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                    ? inv.Items
+                        .GroupBy(ii => ii.ItemTypeName)
+                        .Select(g =>
+                        {
+                            var totalQty = g.Sum(ii => ii.Quantity);
+                            var totalValue = g.Sum(ii => ii.LineTotal);
+                            var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
+                            return AddPrintChoices(new PrintTaxItemDto
+                            {
+                                ItemTypeName = g.Key,
+                                Quantity = totalQty,
+                                // 2dp: this is a printed money column, and the
+                                // stored rate can now carry 12 (the exact-line-
+                                // total edit). The value, not the rate, is what
+                                // has to tie out on the page.
+                                UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
+                                UOM = g.Select(x => x.UOM).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "",
+                                Description = g.Key,
+                                ValueExclTax = totalValue,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = totalValue + gstAmt,
+                                HSCode = g.Select(x => x.HSCode).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                            }, g, inv.GSTRate);
+                        }).ToList()
+                    : inv.Items.Select(ii =>
+                        {
+                            var gstAmt = Math.Round(ii.LineTotal * inv.GSTRate / 100, 2);
+                            return AddPrintChoices(new PrintTaxItemDto
+                            {
+                                ItemTypeName = ii.ItemTypeName,
+                                Quantity = ii.Quantity,
+                                UnitPrice = ii.Quantity != 0 ? Math.Round(ii.LineTotal / ii.Quantity, 2) : 0m,
+                                UOM = ii.UOM,
+                                Description = ii.Description,
+                                ValueExclTax = ii.LineTotal,
+                                GSTRate = inv.GSTRate,
+                                GSTAmount = gstAmt,
+                                TotalInclTax = ii.LineTotal + gstAmt,
+                                HSCode = ii.HSCode
+                            }, new[] { ii }, inv.GSTRate);
                         }).ToList()
             };
         }

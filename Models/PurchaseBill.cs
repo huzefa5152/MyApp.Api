@@ -10,11 +10,14 @@ namespace MyApp.Api.Models
     /// </summary>
     public class PurchaseBill
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int PurchaseBillNumber { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int SupplierId { get; set; }
+        /// <summary>Source challan for an operator-approved automatic purchase bill.</summary>
+        public int? SourceDeliveryChallanId { get; set; }
 
         /// <summary>
         /// The bill number the supplier put on their printed invoice. Free

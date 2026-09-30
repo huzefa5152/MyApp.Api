@@ -9,6 +9,7 @@ import { getPagedInvoicesByCompany } from "../api/invoiceApi";
 import { getPurchaseBillsByCompanyPaged } from "../api/purchaseBillApi";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const METHODS = ["Cash", "Bank Transfer", "Cheque", "Online", "Other"];
 
@@ -37,6 +38,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   // Bank/cash destination — free text (no Chart of Accounts in master).
   const [bankAccountName, setBankAccountName] = useState(editPayment?.bankAccountName || "");
   const [description, setDescription] = useState(editPayment?.description || "");
+  const [notes, setNotes] = useState(editPayment?.notes || "");
   const [chequeNumber, setChequeNumber] = useState(editPayment?.chequeNumber || "");
   const [chequeDate, setChequeDate] = useState(editPayment?.chequeDate ? editPayment.chequeDate.slice(0, 10) : "");
 
@@ -167,6 +169,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         bankAccountName: bankAccountName.trim() || null,
         method,
         description: description.trim() || null,
+        notes: notes.trim() || null,
         chequeNumber: method === "Cheque" ? chequeNumber.trim() : null,
         chequeDate: method === "Cheque" && chequeDate ? new Date(chequeDate).toISOString() : null,
         allocations: allocations.map((x) => ({
@@ -255,6 +258,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               <label style={formStyles.label}>Description (optional)</label>
               <input style={formStyles.input} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
+            <DocumentNotesEditor value={notes} onChange={setNotes} />
 
             {/* Allocation against open documents */}
             <div style={formStyles.formGroup}>

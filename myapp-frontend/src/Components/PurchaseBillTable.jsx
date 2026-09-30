@@ -21,7 +21,12 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
     {
       key: "supplierName",
       header: "Supplier",
-      render: (b) => b.supplierName || "—",
+      render: (b) => (
+        <>
+          {b.supplierName || "—"}
+          {b.sourceDeliveryChallanId && <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600, background: "#e0f2f1", color: "#00695c" }}>From delivery challan</span>}
+        </>
+      ),
     },
     {
       key: "date",

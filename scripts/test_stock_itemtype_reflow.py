@@ -200,7 +200,9 @@ def teardown(base: str, token: str, company: dict, keep: bool) -> None:
 # ── Builders ───────────────────────────────────────────────────────
 def make_item_type(base, token, name, hs=None, uom="Pcs",
                    sale_type="Goods at standard rate (default)") -> dict | None:
-    body = {"name": name, "uom": uom, "saleType": sale_type}
+    # isFavorite confirms a near-duplicate (same HS, similar name) on small
+    # catalogs where the harvested HS pool cycles quickly.
+    body = {"name": name, "uom": uom, "saleType": sale_type, "isFavorite": True}
     if hs:
         body["hsCode"] = hs
     status, it = http("POST", "/api/itemtypes", base, token=token, body=body)
@@ -1131,6 +1133,101 @@ def suite_challan_overlay(base, token, cid, client, supplier, suffix):
 
 
 # ── Reporter ───────────────────────────────────────────────────────
+
+# ── Suite 14 — Oversell guard on invoice edit (2026-09-11) ───────────
+# The consultant's HS classification is what takes stock out, so an
+# adjustment that raises the effective qty past on-hand must (a) still save
+# with `stockWarnings` on the response while the company's stock guard is
+# soft, and (b) be refused with 400 once StockGuardHardBlock is on. Stock
+# itself must follow: -1 after the soft save, unchanged after the refusal.
+def set_hard_block(base, token, cid, on: bool) -> bool:
+    st, c = http("GET", f"/api/companies/{cid}", base, token=token)
+    if st != 200:
+        return False
+    body = {
+        "name": c["name"], "fullAddress": c.get("fullAddress"), "phone": c.get("phone"),
+        "ntn": c.get("ntn"), "cnic": c.get("cnic"), "strn": c.get("strn"),
+        "startingChallanNumber": c.get("startingChallanNumber", 1),
+        "startingInvoiceNumber": c.get("startingInvoiceNumber", 1),
+        "startingPurchaseBillNumber": c.get("startingPurchaseBillNumber", 1),
+        "startingGoodsReceiptNumber": c.get("startingGoodsReceiptNumber", 1),
+        "fbrEnvironment": c.get("fbrEnvironment"), "fbrProvinceCode": c.get("fbrProvinceCode"),
+        "inventoryTrackingEnabled": True, "stockGuardHardBlock": on,
+        "isTenantIsolated": c.get("isTenantIsolated", False),
+    }
+    st, _ = http("PUT", f"/api/companies/{cid}", base, token=token, body=body)
+    return st == 200
+
+
+def suite_oversell_guard(base, token, cid, client, supplier, suffix):
+    s = "14. Oversell guard on invoice edit (soft warning / hard block)"
+    print(f"\n=== {s} ===")
+    A = make_item_type(base, token, f"Q14_A_{suffix}", hs=next_hs())
+    if not A:
+        check(s, "item type created", False, "creation failed"); return
+    prestock(base, token, cid, supplier["id"], [(A, 5)])
+
+    def oh(): return onhand(base, token, cid, A["id"])
+
+    # 14.1 bill qty 3 @100 -> OUT 3, on-hand 2
+    st, inv = create_standalone(base, token, cid, client["id"], [
+        {"itemTypeId": A["id"], "description": "washer", "quantity": 3,
+         "uom": "Pcs", "unitPrice": 100}])
+    check(s, "14.1 create ok", st in (200, 201), f"{st} {inv}")
+    if st not in (200, 201):
+        return
+    iid, line = inv["id"], inv["items"][0]["id"]
+    check(s, "14.1 A=2 (OUT 3 of 5)", approx(oh(), 2), f"got {oh()}")
+    check(s, "14.1 create carries no stockWarnings", not inv.get("stockWarnings"), f"{inv.get('stockWarnings')}")
+
+    # 14.2 soft guard: overlay qty 6 @50 (total 300 preserved) -> saves, warns, A=-1
+    st, body = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 6, "unitPrice": 50}])
+    check(s, "14.2 oversell adjustment saves (soft guard)", st == 200, f"{st} {body}")
+    warns = (body or {}).get("stockWarnings") or []
+    check(s, "14.2 response carries stockWarnings for A",
+          any(w.get("itemTypeId") == A["id"] and float(w.get("onHand", 0)) < 0 for w in warns), f"{warns}")
+    check(s, "14.2 A=-1", approx(oh(), -1), f"got {oh()}")
+
+    # 14.3 back inside stock: qty 4 @75 -> no warnings, A=1
+    st, body = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 4, "unitPrice": 75}])
+    check(s, "14.3 in-stock adjustment ok", st == 200, f"{st}")
+    check(s, "14.3 no stockWarnings when stock stays >= 0", not (body or {}).get("stockWarnings"), f"{(body or {}).get('stockWarnings')}")
+    check(s, "14.3 A=1", approx(oh(), 1), f"got {oh()}")
+
+    # 14.4 hard guard on -> oversell refused with 400, stock unchanged
+    check(s, "14.4 enable StockGuardHardBlock", set_hard_block(base, token, cid, True), "PUT company failed")
+    st, body = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 6, "unitPrice": 50}])
+    check(s, "14.4 oversell refused under hard block (400)", st == 400, f"{st} {body}")
+    msg = (body or {}).get("error") or (body or {}).get("message") or ""
+    check(s, "14.4 refusal names insufficient stock", "stock" in str(msg).lower(), str(msg))
+    check(s, "14.4 A still 1 (save rolled back)", approx(oh(), 1), f"got {oh()}")
+
+    # 14.5 hard guard: in-stock adjustment still allowed
+    st, _ = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 5, "unitPrice": 60}])
+    check(s, "14.5 in-stock adjustment allowed under hard block", st == 200, f"{st}")
+    check(s, "14.5 A=0", approx(oh(), 0), f"got {oh()}")
+
+    # 14.6 full-edit (PUT) under a live overlay: the filed qty (5) still
+    #      governs stock, so raising the physical qty to 9 is NOT an oversell
+    #      and must be allowed even under hard block. A stays 0.
+    st, body = put_invoice(base, token, iid, [
+        {"id": line, "itemTypeId": A["id"], "description": "washer", "quantity": 9, "uom": "Pcs", "unitPrice": 100}])
+    check(s, "14.6 PUT physical qty 9 under overlay qty 5 allowed (filed qty governs)", st == 200, f"{st} {body}")
+    check(s, "14.6 A still 0 (effective qty unchanged)", approx(oh(), 0), f"got {oh()}")
+
+    # 14.6b revert the overlay to the physical line (qty 9 @100) -> effective
+    #       qty becomes 9 -> oversell -> refused under hard block, A still 0.
+    st, body = adjust(base, token, iid, [{"id": line, "itemTypeId": A["id"], "quantity": 9, "unitPrice": 100}])
+    check(s, "14.6b revert-to-base oversell refused under hard block (400)", st == 400, f"{st} {body}")
+    check(s, "14.6b A still 0 (revert rolled back)", approx(oh(), 0), f"got {oh()}")
+
+    # 14.7 restore soft guard for any suite that runs after; delete -> A=5
+    check(s, "14.7 disable StockGuardHardBlock", set_hard_block(base, token, cid, False), "PUT company failed")
+    http("DELETE", f"/api/invoices/{iid}", base, token=token)
+    check(s, "14.7 A=5 after delete", approx(oh(), 5), f"got {oh()}")
+
+
+
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
     fail = 0
@@ -1180,6 +1277,7 @@ def main() -> int:
         suite_qty_readjustment(args.base, token, cid, client, supplier, suffix)
         suite_multiline_overlays(args.base, token, cid, client, supplier, suffix)
         suite_challan_overlay(args.base, token, cid, client, supplier, suffix)
+        suite_oversell_guard(args.base, token, cid, client, supplier, suffix)
     finally:
         teardown(args.base, token, company, args.keep)
 

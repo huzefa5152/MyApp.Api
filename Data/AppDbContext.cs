@@ -22,6 +22,59 @@ namespace MyApp.Api.Data
             _fbrTokenProtector = fbrTokenProtector;
         }
 
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            PreserveUnreadableFbrTokens();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
+            CancellationToken cancellationToken = default)
+        {
+            PreserveUnreadableFbrTokens();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        /// <summary>
+        /// A <c>Company.FbrToken</c> the key ring cannot read must never be
+        /// overwritten (2026-09-10).
+        ///
+        /// The value converter in OnModelCreating returns <c>null</c> when
+        /// <see cref="IFbrTokenProtector.Unprotect"/> fails — the key ring
+        /// lost the key that encrypted the payload, or the payload is
+        /// corrupt. The entity is then materialised with a null token, and
+        /// any later save of that row would write the null back, destroying
+        /// the ciphertext for good. <c>DbSet.Update()</c> makes this
+        /// certain, because it marks every column modified — and that is
+        /// how invoice numbering saves the company on every bill. A key
+        /// ring that merely could not read the token became a token that no
+        /// longer existed, silently, on the first bill after the loss.
+        ///
+        /// A null CLR value is never an explicit write. The API clears a
+        /// token with the empty string and treats null as "no change", so
+        /// null on a Modified row can only mean "unreadable" or "was already
+        /// null" — and neither is a reason to touch the column. Dropping the
+        /// property from the UPDATE keeps the stored ciphertext exactly as
+        /// it was; a later re-entry by the operator (a non-null value, gated
+        /// by <c>companies.manage.fbrtoken</c>) still replaces it, and a
+        /// clear ("") still clears it. Added rows are untouched: inserting a
+        /// null there is the normal "no token yet" state. Nothing here reads
+        /// or logs the token value.
+        ///
+        /// Regression suite: <c>scripts/test_fbr_token_unreadable_survives_save.py</c>.
+        /// </summary>
+        private void PreserveUnreadableFbrTokens()
+        {
+            if (ChangeTracker.AutoDetectChangesEnabled) ChangeTracker.DetectChanges();
+
+            foreach (var entry in ChangeTracker.Entries<Company>())
+            {
+                if (entry.State != EntityState.Modified) continue;
+                var token = entry.Property(c => c.FbrToken);
+                if (token.IsModified && token.CurrentValue == null) token.IsModified = false;
+            }
+        }
+
         public DbSet<Company> Companies { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
@@ -102,6 +155,9 @@ namespace MyApp.Api.Data
             // writes encrypt the operator-typed value. When DI didn't
             // hand us a protector (design-time / migrations / tests)
             // we skip the converter so EF can still inspect the model.
+            //
+            // Unprotect fails closed to null. That null must not be
+            // written back — see PreserveUnreadableFbrTokens above.
             if (_fbrTokenProtector != null)
             {
                 var protector = _fbrTokenProtector;
@@ -407,7 +463,13 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<InvoiceItemAdjustment>()
                 .Property(a => a.AdjustedQuantity).HasPrecision(18, 4);
             modelBuilder.Entity<InvoiceItemAdjustment>()
-                .Property(a => a.AdjustedUnitPrice).HasPrecision(18, 2);
+                // (28,12) not (18,2): the Invoices-tab narrow edit can set a
+                // unit price derived from an exact line total (1,383,048 over
+                // 6,301 units is 219.496270433265), and a 2dp column silently
+                // rounds that to 219.50 - which reproduces 1,383,069.50 and
+                // breaks the total-preservation guard the same edit must pass.
+                // Matches the scale the importer and customize lines already run.
+                .Property(a => a.AdjustedUnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<InvoiceItemAdjustment>()
                 .Property(a => a.AdjustedLineTotal).HasPrecision(18, 2);
             modelBuilder.Entity<InvoiceItemAdjustment>()
@@ -428,7 +490,10 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<Invoice>().Property(i => i.GSTRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GSTAmount).HasPrecision(18, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.GrandTotal).HasPrecision(18, 2);
-            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(18, 2);
+            // (28,12): see AdjustedUnitPrice above. LineTotal stays (18,2) -
+            // it is money and 2dp is correct; only the RATE needs the extra
+            // scale so Quantity x UnitPrice can land on an exact line total.
+            modelBuilder.Entity<InvoiceItem>().Property(ii => ii.UnitPrice).HasPrecision(28, 12);
             modelBuilder.Entity<InvoiceItem>().Property(ii => ii.LineTotal).HasPrecision(18, 2);
 
             // Quantity columns — decimal(18,4) so fractional UOMs (KG, Liter,
@@ -935,6 +1000,12 @@ namespace MyApp.Api.Data
                 .IsUnique();
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierId);
+            // One automatic purchase bill per (source challan, supplier) — makes a
+            // repeated confirmation after a lost response safe.
+            modelBuilder.Entity<PurchaseBill>()
+                .HasIndex(pb => new { pb.SourceDeliveryChallanId, pb.SupplierId })
+                .IsUnique()
+                .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
             modelBuilder.Entity<PurchaseBill>()
                 .HasIndex(pb => pb.SupplierIRN);
             modelBuilder.Entity<PurchaseBill>().Property(pb => pb.Subtotal).HasPrecision(18, 2);
@@ -1171,6 +1242,14 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesOrder>().HasIndex(o => o.ClientId);
             modelBuilder.Entity<DeliveryChallan>().HasIndex(dc => dc.SalesOrderId);
             modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SalesOrderItemId);
+            // Private procurement on a challan line: an optional supplier and the
+            // actual unit cost, used only to raise purchase bills on request.
+            // Same precision as PurchaseItem.UnitPrice, the column it feeds.
+            modelBuilder.Entity<DeliveryItem>().Property(di => di.ActualUnitCost).HasPrecision(18, 2);
+            modelBuilder.Entity<DeliveryItem>()
+                .HasOne(di => di.Supplier).WithMany()
+                .HasForeignKey(di => di.SupplierId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<DeliveryItem>().HasIndex(di => di.SupplierId);
 
             // ── Payments / Receipts (AR/AP subledger, GL-free) ─────────────────
             // Payment header → Company (Restrict: a company's payment history

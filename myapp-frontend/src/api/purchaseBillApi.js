@@ -9,3 +9,4 @@ export const updatePurchaseBill = (id, payload) => http.put(`/purchasebills/${id
 export const deletePurchaseBill = (id) => http.delete(`/purchasebills/${id}`);
 export const getPurchaseBillsCount = (companyId) =>
   http.get("/purchasebills/count", { params: { companyId } });
+export const createPurchaseBillsFromChallan = (challanId) => http.post(`/purchasebills/from-challan/${challanId}`);

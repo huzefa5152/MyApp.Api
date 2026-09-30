@@ -11,6 +11,7 @@ namespace MyApp.Api.Models
     /// </summary>
     public class GoodsReceipt
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int GoodsReceiptNumber { get; set; }
         public DateTime ReceiptDate { get; set; }

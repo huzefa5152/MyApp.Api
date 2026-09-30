@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using MyApp.Api.Data;
 using MyApp.Api.DTOs;
 using MyApp.Api.Helpers;
 using MyApp.Api.Middleware;
@@ -20,12 +22,14 @@ namespace MyApp.Api.Controllers
     public class PurchaseBillsController : ControllerBase
     {
         private readonly IPurchaseBillService _service;
+        private readonly AppDbContext _context;
         private readonly ICompanyAccessGuard _access;
         private readonly IPermissionService _permissions;
         private readonly int _defaultPageSize;
 
-        public PurchaseBillsController(IPurchaseBillService service, ICompanyAccessGuard access, IPermissionService permissions, IConfiguration configuration)
+        public PurchaseBillsController(IPurchaseBillService service, AppDbContext context, ICompanyAccessGuard access, IPermissionService permissions, IConfiguration configuration)
         {
+            _context = context;
             _service = service;
             _access = access;
             _permissions = permissions;
@@ -126,6 +130,26 @@ namespace MyApp.Api.Controllers
             {
                 return BadRequest(new { error = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Raise one purchase bill per supplier from a challan's private
+        /// supplier / actual-cost lines. Authorized on the challan's STORED
+        /// company — the route carries only the challan id.
+        /// </summary>
+        [HttpPost("from-challan/{challanId}")]
+        [HasPermission("purchasebills.manage.create")]
+        public async Task<ActionResult<List<PurchaseBillDto>>> CreateFromChallan(int challanId)
+        {
+            var companyId = await _context.DeliveryChallans.AsNoTracking()
+                .Where(c => c.Id == challanId && !c.IsDemo)
+                .Select(c => (int?)c.CompanyId)
+                .FirstOrDefaultAsync();
+            if (companyId == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            try { return Ok(await _service.CreateFromChallanAsync(challanId)); }
+            catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
         }
 
         [HttpPut("{id}")]

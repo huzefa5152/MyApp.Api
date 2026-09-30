@@ -27,6 +27,7 @@ namespace MyApp.Api.Models.Accounting
     /// </summary>
     public class Payment
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int CompanyId { get; set; }
 

@@ -88,6 +88,9 @@ namespace MyApp.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("Number")
                         .HasColumnType("int");
 
@@ -613,6 +616,9 @@ namespace MyApp.Api.Migrations
                     b.Property<bool>("IsImported")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("PoDate")
                         .HasColumnType("datetime2");
 
@@ -661,6 +667,10 @@ namespace MyApp.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("ActualUnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("DeliveryChallanId")
                         .HasColumnType("int");
 
@@ -678,6 +688,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int?>("SalesOrderItemId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Unit")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -689,6 +702,8 @@ namespace MyApp.Api.Migrations
                     b.HasIndex("ItemTypeId");
 
                     b.HasIndex("SalesOrderItemId");
+
+                    b.HasIndex("SupplierId");
 
                     b.ToTable("DeliveryItems");
 
@@ -1238,6 +1253,9 @@ namespace MyApp.Api.Migrations
                     b.Property<int>("GoodsReceiptNumber")
                         .HasColumnType("int");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("PurchaseBillId")
                         .HasColumnType("int");
 
@@ -1424,6 +1442,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("NoteReasonRemarks")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("OriginalInvoiceId")
                         .HasColumnType("int");
 
@@ -1534,8 +1555,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal>("UnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
 
                     b.HasKey("Id");
 
@@ -1593,8 +1614,8 @@ namespace MyApp.Api.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<decimal?>("AdjustedUnitPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(28, 12)
+                        .HasColumnType("decimal(28,12)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -3114,6 +3135,9 @@ namespace MyApp.Api.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("PaymentMode")
                         .HasColumnType("nvarchar(max)");
 
@@ -3133,6 +3157,9 @@ namespace MyApp.Api.Migrations
                     b.Property<string>("Source")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("SourceDeliveryChallanId")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
@@ -3161,6 +3188,10 @@ namespace MyApp.Api.Migrations
 
                     b.HasIndex("CompanyId", "PurchaseBillNumber")
                         .IsUnique();
+
+                    b.HasIndex("SourceDeliveryChallanId", "SupplierId")
+                        .IsUnique()
+                        .HasFilter("[SourceDeliveryChallanId] IS NOT NULL");
 
                     b.ToTable("PurchaseBills");
 
@@ -3995,11 +4026,18 @@ namespace MyApp.Api.Migrations
                         .HasForeignKey("SalesOrderItemId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MyApp.Api.Models.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("DeliveryChallan");
 
                     b.Navigation("ItemType");
 
                     b.Navigation("SalesOrderItem");
+
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("MyApp.Api.Models.Folder", b =>

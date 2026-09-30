@@ -91,6 +91,12 @@ export const defaultChallanTemplate = `<!DOCTYPE html><html><head><title>DC #{{c
     {{emptyRows (math 15 "-" items.length) 2}}
   </tbody>
 </table>
+{{#if notes}}
+<div class="doc-notes no-break" style="margin-top:10px;padding:6px 10px;border:1px solid #888;font-size:13px;line-height:1.4;">
+  <div style="font-weight:700;margin-bottom:2px;">Notes</div>
+  <div>{{{richText notes}}}</div>
+</div>
+{{/if}}
 </div>
 
 <div class="footer-section">
@@ -240,7 +246,7 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
 <!-- Purchase Order -->
 <div class="po-section">
   <table class="po-table">
-    <tr><td>Purchase Order</td><td class="po-val">{{#if poNumber}}{{poNumber}}{{else}}\\u2014{{/if}}</td></tr>
+    <tr><td>Purchase Order</td><td class="po-val">{{#if poNumber}}{{poNumber}}{{else}}—{{/if}}</td></tr>
     {{#if poDate}}<tr><td>P.O  Date</td><td class="po-val">{{fmtDate poDate}}</td></tr>{{/if}}
   </table>
 </div>
@@ -282,6 +288,12 @@ export const defaultBillTemplate = `<!DOCTYPE html><html><head><title>Bill #{{in
     </table>
   </div>
 </div>
+{{#if notes}}
+<div class="doc-notes no-break" style="margin-top:10px;padding:6px 10px;border:1px solid #888;font-size:11pt;line-height:1.4;">
+  <div style="font-weight:700;margin-bottom:2px;">Notes</div>
+  <div>{{{richText notes}}}</div>
+</div>
+{{/if}}
 </div>
 
 <!-- Footer: signature + types (pushed to bottom) -->
@@ -502,6 +514,13 @@ export const defaultTaxInvoiceTemplate = `<!DOCTYPE html><html><head><title>Tax 
     </div>
   </div>
 </div>
+
+{{#if notes}}
+<div class="doc-notes no-break" style="margin-top:10px;padding:6px 10px;border:1px solid #888;font-size:9pt;line-height:1.4;">
+  <div style="font-weight:700;margin-bottom:2px;">Notes</div>
+  <div>{{{richText notes}}}</div>
+</div>
+{{/if}}
 
 {{#if fbrIRN}}
 <!-- FBR Digital Invoicing Section.

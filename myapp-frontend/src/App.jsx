@@ -30,6 +30,7 @@ const PurchaseBillsPage = lazy(() => import("./pages/PurchaseBillsPage"));
 const GoodsReceiptsPage = lazy(() => import("./pages/GoodsReceiptsPage"));
 const StockDashboardPage = lazy(() => import("./pages/StockDashboardPage"));
 const FbrPurchaseImportPage = lazy(() => import("./pages/FbrPurchaseImportPage"));
+const DocumentLinesPage = lazy(() => import("./pages/DocumentLinesPage"));
 const SalesReportPage = lazy(() => import("./pages/SalesReportPage"));
 const TaxSheetPage = lazy(() => import("./pages/TaxSheetPage"));
 const OutstandingLedgerPage = lazy(() => import("./pages/OutstandingLedgerPage"));
@@ -116,6 +117,7 @@ export default function App() {
           <Route path="/fbr-import/purchase" element={<FbrPurchaseImportPage />} />
           {/* Reports */}
           <Route path="/reports/sales" element={<SalesReportPage />} />
+          <Route path="/reports/document-lines" element={<DocumentLinesPage />} />
           <Route path="/reports/tax-sheet" element={<TaxSheetPage />} />
           <Route path="/reports/outstanding" element={<OutstandingLedgerPage />} />
           <Route path="/profile" element={<ProfilePage />} />

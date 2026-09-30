@@ -1,0 +1,29 @@
+.challan-private-costs { margin-top: 12px; border: 1px solid #e8edf3; border-radius: 10px; background: #fff; color: #1a2332; font-size: 12px; }
+.challan-private-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 12px; background: #f5f8fc; border-radius: 10px 10px 0 0; }
+.challan-private-heading strong { font-size: 13px; color: #0d47a1; }
+.challan-private-heading p { margin: 3px 0 0; font-size: 11px; color: #5f6d7e; }
+.challan-private-bulk { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 0 1 420px; }
+.challan-private-bulk > span { font-size: 11px; color: #5f6d7e; }
+.challan-private-bulk > div { flex: 1 1 160px; min-width: 0; }
+.challan-private-bulk > button { min-height: 44px; padding: 6px 9px; font-size: 12px; border: 1px solid #d0d7e2; border-radius: 7px; background: white; color: #00695c; cursor: pointer; }
+.challan-private-bulk > button:disabled { opacity: .45; cursor: not-allowed; }
+.challan-private-columns, .challan-private-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(100px, .65fr); align-items: center; gap: 10px; padding: 6px 12px; }
+.challan-private-columns { color: #5f6d7e; font-size: 11px; font-weight: 600; border-top: 1px solid #e8edf3; }
+.challan-private-row { border-top: 1px solid #edf1f5; min-height: 44px; }
+.challan-private-item { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.challan-private-item > span { color: #00897b; font-weight: 700; flex-shrink: 0; }
+.challan-private-item > div, .challan-private-supplier { min-width: 0; overflow-wrap: anywhere; }
+.challan-private-item p { margin: 0; }
+.challan-private-cost { margin: 0; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.challan-private-cost input { text-align: right; }
+.challan-private-mobile-label { display: none; }
+@media (max-width: 600px) {
+  .challan-private-heading { padding: 9px 10px; }
+  .challan-private-bulk { flex-basis: 100%; }
+  .challan-private-bulk > span { flex-basis: 100%; }
+  .challan-private-columns { display: none; }
+  .challan-private-row { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 6px 8px; padding: 9px 10px; }
+  .challan-private-item { grid-column: 1 / -1; }
+  .challan-private-mobile-label { display: block; font-size: 11px; font-weight: 600; color: #5f6d7e; margin-bottom: 3px; text-align: left; }
+}
+@media print { .challan-private-costs { display: none !important; } }

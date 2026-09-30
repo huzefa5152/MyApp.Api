@@ -77,9 +77,9 @@ const s = {
   title: {
     margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "#1a2332",
   },
-  closeBtn: {
+  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center", flexShrink: 0,
     border: "none", background: "transparent", cursor: "pointer",
-    color: "#888", padding: 4, borderRadius: 6,
+    color: "#888", padding: 0, borderRadius: 6,
   },
   subtitle: {
     margin: "0.25rem 0 1.25rem", fontSize: "0.85rem", color: "#5f6d7e",

@@ -2,6 +2,7 @@ namespace MyApp.Api.DTOs
 {
     public class GoodsReceiptDto
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int GoodsReceiptNumber { get; set; }
         public DateTime ReceiptDate { get; set; }
@@ -29,6 +30,7 @@ namespace MyApp.Api.DTOs
 
     public class CreateGoodsReceiptDto
     {
+        public string? Notes { get; set; }
         public DateTime ReceiptDate { get; set; }
         public int CompanyId { get; set; }
         public int SupplierId { get; set; }
@@ -48,6 +50,7 @@ namespace MyApp.Api.DTOs
 
     public class UpdateGoodsReceiptDto
     {
+        public string? Notes { get; set; }
         public DateTime ReceiptDate { get; set; }
         public int SupplierId { get; set; }
         public int? PurchaseBillId { get; set; }

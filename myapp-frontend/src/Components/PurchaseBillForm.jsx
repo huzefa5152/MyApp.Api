@@ -12,6 +12,7 @@ import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const colors = {
   blue: "#0d47a1",
@@ -38,6 +39,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [supplierIRN, setSupplierIRN] = useState("");
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
+  const [notes, setNotes] = useState("");
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
   // Responsive: the wide line-item table side-scrolls on a phone, so below
@@ -102,6 +104,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         setSupplierIRN(data.supplierIRN || "");
         setGstRate(data.gstRate);
         setPaymentTerms(data.paymentTerms || "");
+        setNotes(data.notes || "");
         setPaymentMode(data.paymentMode || "");
         setItems((data.items || []).map(i => ({
           id: i.id, itemTypeId: i.itemTypeId, description: i.description,
@@ -221,6 +224,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
         supplierIRN: supplierIRN || null,
         gstRate: parseFloat(gstRate),
         paymentTerms: paymentTerms || null,
+        notes: notes.trim() || null,
         paymentMode: paymentMode || null,
         items: items.map(i => ({
           id: i.id || 0,
@@ -336,6 +340,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               </div>
             </div>
 
+            <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={readOnly} />
             <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.inputBg }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>

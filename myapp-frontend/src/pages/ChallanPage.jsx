@@ -1,4 +1,6 @@
+import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
+import { renderRichTextHtml } from "../utils/richText";
 import { useSearchParams } from "react-router-dom";
 import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
@@ -214,10 +216,12 @@ export default function ChallanPage() {
       // when fully delivered. Only ordered lines are delivered this way.
       const lines = (payload.items || [])
         .filter((i) => i.salesOrderItemId && Number(i.quantity) > 0)
-        .map((i) => ({ salesOrderItemId: i.salesOrderItemId, quantity: i.quantity }));
+        .map((i) => ({ salesOrderItemId: i.salesOrderItemId, quantity: i.quantity,
+          supplierId: i.supplierId ?? null, actualUnitCost: i.actualUnitCost ?? null }));
       const { data } = await createChallanFromOrder(payload.salesOrderId, {
         deliveryDate: payload.deliveryDate,
         site: payload.site,
+        notes: payload.notes,
         lines,
       });
       created = data;
@@ -402,6 +406,7 @@ export default function ChallanPage() {
   };
 
   return (
+    <DocumentLinesNavigation type="challan">
     <div>
       <div style={styles.pageHeader}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -664,6 +669,7 @@ export default function ChallanPage() {
       )}
 
     </div>
+    </DocumentLinesNavigation>
   );
 }
 
@@ -684,7 +690,7 @@ function buildChallanPrintHtml(data) {
   let itemRows = data.items.map((item) =>
     `<tr>
       <td class="cell qty">${item.quantity}</td>
-      <td class="cell item">${item.description}</td>
+      <td class="cell item">${renderRichTextHtml(item.description)}</td>
     </tr>`
   ).join("");
 

@@ -21,11 +21,15 @@ namespace MyApp.Api.Repositories.Implementations
             // Challans page.
             return await _context.DeliveryChallans
                                  .AsNoTracking()
+                                 .AsSplitQuery()
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
+                                 .Include(dc => dc.Items).ThenInclude(i => i.Supplier)
+                                 .Include(dc => dc.Items).ThenInclude(i => i.SalesOrderItem)
                                  .Include(dc => dc.Client)
                                  .Include(dc => dc.Company)
                                  .Include(dc => dc.Invoice)
+                                     .ThenInclude(inv => inv!.Items)
                                  .Include(dc => dc.DuplicatedFrom)
                                  .Where(dc => dc.CompanyId == companyId && !dc.IsDemo)
                                  .OrderBy(dc => dc.ChallanNumber)
@@ -40,10 +44,14 @@ namespace MyApp.Api.Repositories.Implementations
         {
             var query = _context.DeliveryChallans
                 .AsNoTracking()
+                .AsSplitQuery()
                 .Include(dc => dc.Items).ThenInclude(i => i.ItemType)
+                .Include(dc => dc.Items).ThenInclude(i => i.Supplier)
+                .Include(dc => dc.Items).ThenInclude(i => i.SalesOrderItem)
                 .Include(dc => dc.Client)
                 .Include(dc => dc.Company)
                 .Include(dc => dc.Invoice)
+                    .ThenInclude(inv => inv!.Items)
                 .Include(dc => dc.DuplicatedFrom)
                 .Include(dc => dc.SalesOrder)
                 .Where(dc => dc.CompanyId == companyId && !dc.IsDemo);
@@ -77,6 +85,7 @@ namespace MyApp.Api.Repositories.Implementations
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderByDescending(dc => dc.ChallanNumber)
+                .ThenByDescending(dc => dc.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -90,6 +99,8 @@ namespace MyApp.Api.Repositories.Implementations
                                  .AsSplitQuery()
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
+                                 .Include(dc => dc.Items).ThenInclude(i => i.Supplier)
+                                 .Include(dc => dc.Items).ThenInclude(i => i.SalesOrderItem)
                                  .Include(dc => dc.Client)
                                  .Include(dc => dc.Company)
                                  .Include(dc => dc.Invoice)

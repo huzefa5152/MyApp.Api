@@ -55,14 +55,16 @@ namespace MyApp.Api.Services.Implementations
             //    looks close to format X, but the template must have changed" —
             //    we surface it but mark IsExactMatch=false so the caller decides
             //    whether to trust it (typically only used as a UI hint).
-            var incomingSet = new HashSet<string>(fp.Keywords, StringComparer.OrdinalIgnoreCase);
+            //    Both sides are cleaned the same way before comparing
+            //    (POFormatFingerprintService.ComputeMatchKeywords): item-row text
+            //    and a time-of-day prefix are data, not layout.
+            var incomingSet = POFormatFingerprintService.ComputeMatchKeywords(rawText);
             POFormat? best = null;
             double bestScore = 0;
             foreach (var cand in candidates)
             {
-                var candSet = cand.KeywordSignature.Split('|',
-                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var score = Jaccard(incomingSet, new HashSet<string>(candSet, StringComparer.OrdinalIgnoreCase));
+                var score = POFormatFingerprintService.MatchScore(
+                    incomingSet, POFormatFingerprintService.StoredMatchKeywords(cand.KeywordSignature));
                 if (score > bestScore) { bestScore = score; best = cand; }
             }
 
@@ -73,6 +75,41 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return null;
+        }
+
+        // Below this share of a format's signature words, text read from an
+        // image is not routed to it. Calibrated on the production archive (see
+        // POFormatFingerprintService.OcrCoverageScore): real matches 0.97-1.00,
+        // documents with no saved format at most 0.73.
+        private const double OcrCoverageFloor = 0.85;
+
+        public async Task<POFormatMatchResult?> FindMatchForOcrAsync(string rawText, int? companyId)
+        {
+            // The normal matcher first: a clean photo can match exactly as its PDF would.
+            var normal = await FindMatchAsync(rawText, companyId);
+            if (normal != null) return normal;
+            if (string.IsNullOrWhiteSpace(rawText)) return null;
+
+            var candidates = await _db.POFormats
+                .AsNoTracking()
+                .Where(f => f.IsActive && (f.CompanyId == companyId || f.CompanyId == null))
+                .ToListAsync();
+            if (candidates.Count == 0) return null;
+
+            // Highest coverage wins; near-identical layouts (the Meko family)
+            // can tie, and the regular fuzzy score breaks the tie.
+            var incoming = POFormatFingerprintService.ComputeMatchKeywords(rawText);
+            var best = candidates
+                .Select(f => (Format: f,
+                    Coverage: POFormatFingerprintService.OcrCoverageScore(rawText, f.KeywordSignature),
+                    Fuzzy: POFormatFingerprintService.MatchScore(incoming, POFormatFingerprintService.StoredMatchKeywords(f.KeywordSignature))))
+                .OrderByDescending(x => x.Coverage).ThenByDescending(x => x.Fuzzy)
+                .First();
+            if (best.Coverage < OcrCoverageFloor) return null;
+
+            _logger.LogInformation("PO format OCR match: formatId={FormatId} name={Name} coverage={Coverage:F2}",
+                best.Format.Id, best.Format.Name, best.Coverage);
+            return new POFormatMatchResult(best.Format, best.Coverage, IsExactMatch: false);
         }
 
         public Task<List<POFormat>> ListAsync(int? companyId)
@@ -189,14 +226,6 @@ namespace MyApp.Api.Services.Implementations
 
             await _db.SaveChangesAsync();
             return format;
-        }
-
-        private static double Jaccard(HashSet<string> a, HashSet<string> b)
-        {
-            if (a.Count == 0 && b.Count == 0) return 0;
-            var inter = a.Intersect(b, StringComparer.OrdinalIgnoreCase).Count();
-            var union = a.Count + b.Count - inter;
-            return union == 0 ? 0 : (double)inter / union;
         }
     }
 }

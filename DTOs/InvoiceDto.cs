@@ -2,6 +2,7 @@ namespace MyApp.Api.DTOs
 {
     public class InvoiceDto
     {
+        public string? Notes { get; set; }
         public int Id { get; set; }
         public int InvoiceNumber { get; set; }
         public DateTime Date { get; set; }
@@ -24,6 +25,14 @@ namespace MyApp.Api.DTOs
         public string? FbrErrorMessage { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsEditable { get; set; }
+
+        /// <summary>
+        /// Item types this save drove below zero on-hand (2026-09-11). Null
+        /// on reads and on saves that left stock non-negative; populated only
+        /// by the edit / adjustment paths when the company's stock guard is
+        /// soft. Additive — existing consumers ignore it.
+        /// </summary>
+        public List<StockWarningDto>? StockWarnings { get; set; }
         /// <summary>
         /// True when this is the LATEST (highest-numbered) bill for its
         /// company — only the latest bill can be deleted. Earlier bills
@@ -249,6 +258,7 @@ namespace MyApp.Api.DTOs
 
     public class CreateInvoiceDto
     {
+        public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
@@ -306,6 +316,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
@@ -466,6 +477,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdateInvoiceDto
     {
+        public string? Notes { get; set; }
         /// <summary>
         /// Optional new bill date. When null, the existing date is preserved.
         /// FBR rejects future dates with [0043], so the service caps this at
@@ -579,6 +591,24 @@ namespace MyApp.Api.DTOs
         /// total amount the buyer was actually billed.
         /// </summary>
         public decimal? UnitPrice { get; set; }
+        /// <summary>
+        /// Optional EXACT line total for this row, in rupees at 2dp — the
+        /// "Exact Line Total" adjustment method. Honoured only on the .qty
+        /// path, alongside Quantity.
+        ///
+        /// When present it is AUTHORITATIVE for this line: the service derives
+        /// UnitPrice = ExactLineTotal / Quantity itself rather than trusting
+        /// the client's arithmetic, and refuses the save if the stored
+        /// precision cannot reproduce the figure (rather than silently booking
+        /// a different amount).
+        ///
+        /// It exists because the grouped view sums several lines into one row,
+        /// and a per-line unit price rounded independently cannot be relied on
+        /// to re-sum to the operator's target: the caller allocates the group's
+        /// target across its lines and states each line's share here, so
+        /// SUM(LineTotal) lands on the target exactly.
+        /// </summary>
+        public decimal? ExactLineTotal { get; set; }
     }
 
     /// <summary>

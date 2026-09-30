@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import RichText from "./RichText";
+import { richTextToPlain } from "../utils/richText";
 import { MdLink, MdWarningAmber } from "react-icons/md";
 import {
   getAttachableChallans, attachChallanToOrder,
@@ -190,7 +192,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
     label: `SO #${o.salesOrderNumber} · ${fmtDate(o.orderDate)}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""} · ${o.fulfillmentStatus}`,
   })), [orders]);
 
-  const soLineLabel = (s) => `${s.description}${s.unit ? ` (${s.unit})` : ""} — ${fmtQty(s.deliveredQuantity || 0)}/${fmtQty(s.quantity)} delivered`;
+  const soLineLabel = (s) => `${richTextToPlain(s.description || "")}${s.unit ? ` (${s.unit})` : ""} — ${fmtQty(s.deliveredQuantity || 0)}/${fmtQty(s.quantity)} delivered`;
 
   return (
     <div style={formStyles.backdrop}>
@@ -225,7 +227,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                       {(opt.lines || []).length === 0 && <div style={s.optEmpty}>No line items.</div>}
                       {(opt.lines || []).map((l, i) => (
                         <div key={i} style={s.optLine}>
-                          <span style={s.optDesc}>{l.description}{l.itemTypeName ? ` · ${l.itemTypeName}` : ""}</span>
+                          <span style={s.optDesc}>{richTextToPlain(l.description || "")}{l.itemTypeName ? ` · ${l.itemTypeName}` : ""}</span>
                           <span style={s.optQty}>{fmtQty(l.quantity)} {l.unit}</span>
                         </div>
                       ))}
@@ -259,7 +261,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                 <div style={s.mcards}>
                   {challanLines.map((l) => (
                     <div key={l.deliveryItemId} style={s.mcard}>
-                      <div style={s.desc}>{l.description}</div>
+                      <div style={s.desc}><RichText text={l.description} /></div>
                       <div style={s.unit}>{fmtQty(l.quantity)} {l.unit}</div>
                       <label style={s.mlabel}>Fulfils ordered line</label>
                       <select style={s.select} value={mapping[l.deliveryItemId] ?? EXTRA} onChange={(e) => setLineMap(l.deliveryItemId, e.target.value)}>
@@ -279,7 +281,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                   {challanLines.map((l) => (
                     <div key={l.deliveryItemId} style={s.trow}>
                       <div style={{ flex: 2, minWidth: 0 }}>
-                        <div style={s.desc}>{l.description}</div>
+                        <div style={s.desc}><RichText text={l.description} /></div>
                         {l.itemTypeName && <div style={s.unit}>{l.itemTypeName}</div>}
                       </div>
                       <div style={s.qCol}>{fmtQty(l.quantity)} {l.unit}</div>
@@ -302,7 +304,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                   if (!p.add) return null;
                   return (
                     <div key={s2.id} style={s.previewRow}>
-                      <span style={s.pDesc}>{s2.description}</span>
+                      <span style={s.pDesc}>{richTextToPlain(s2.description || "")}</span>
                       <span style={{ ...s.pQty, color: p.over ? colors.warn : colors.teal }}>
                         {fmtQty(p.projected)}/{fmtQty(p.ordered)}{p.over ? " ⚠ over" : ""}
                       </span>
@@ -311,7 +313,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                 })}
                 {challanLines.filter((l) => !mapping[l.deliveryItemId]).map((l, i) => (
                   <div key={`new-${i}`} style={s.previewRow}>
-                    <span style={s.pDesc}>+ New order line: {l.description}</span>
+                    <span style={s.pDesc}>+ New order line: {richTextToPlain(l.description || "")}</span>
                     <span style={{ ...s.pQty, color: colors.blue }}>{fmtQty(l.quantity)} {l.unit}</span>
                   </div>
                 ))}

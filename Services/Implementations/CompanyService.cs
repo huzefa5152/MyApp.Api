@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -71,6 +71,7 @@ namespace MyApp.Api.Services.Implementations
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
             InventoryTrackingEnabled = c.InventoryTrackingEnabled,
+            StockGuardHardBlock = c.StockGuardHardBlock,
             StartingPurchaseBillNumber = c.StartingPurchaseBillNumber,
             CurrentPurchaseBillNumber = c.CurrentPurchaseBillNumber,
             StartingGoodsReceiptNumber = c.StartingGoodsReceiptNumber,
@@ -146,6 +147,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
                 InventoryTrackingEnabled = dto.InventoryTrackingEnabled,
+                StockGuardHardBlock = dto.StockGuardHardBlock,
                 StartingPurchaseBillNumber = dto.StartingPurchaseBillNumber,
                 CurrentPurchaseBillNumber = 0,
                 StartingGoodsReceiptNumber = dto.StartingGoodsReceiptNumber,
@@ -200,6 +202,7 @@ namespace MyApp.Api.Services.Implementations
             // only apply if no purchase docs exist yet (same rule as the
             // sales-side starting numbers).
             company.InventoryTrackingEnabled = dto.InventoryTrackingEnabled;
+            company.StockGuardHardBlock = dto.StockGuardHardBlock;
             var hasPurchaseBills = await _context.PurchaseBills.AnyAsync(p => p.CompanyId == id);
             if (!hasPurchaseBills)
             {

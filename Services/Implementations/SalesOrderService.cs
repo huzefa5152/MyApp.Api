@@ -555,7 +555,9 @@ namespace MyApp.Api.Services.Implementations
                     Description = soItem.Description,
                     Quantity = qty,
                     Unit = soItem.Unit,
-                    SalesOrderItemId = soItem.Id
+                    SalesOrderItemId = soItem.Id,
+                    ActualUnitCost = reqLine?.ActualUnitCost,
+                    SupplierId = reqLine?.SupplierId
                 });
             }
 
@@ -570,6 +572,7 @@ namespace MyApp.Api.Services.Implementations
                 PoNumber = order.CustomerPoNumber ?? "",
                 PoDate = order.CustomerPoDate,
                 SalesOrderId = order.Id,
+                Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                 Items = challanItems
             };
 

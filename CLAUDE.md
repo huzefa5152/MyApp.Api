@@ -209,6 +209,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 - Reads: `.AsNoTracking()`.
 - Migrations auto-apply at startup when `Database:AutoMigrate` is true (default). Production may flip false.
 - DataProtection encrypts `Company.FbrToken` via EF value converter; legacy plaintext payloads pass through reads and re-encrypt on next save.
+- **A null `Company.FbrToken` is never written over an existing value.** `Unprotect` fails closed to null when the key ring cannot read an `enc:v1:` payload, so `AppDbContext.PreserveUnreadableFbrTokens` (runs inside every `SaveChanges`) drops the property from a Modified Company's UPDATE whenever its CLR value is null — `DbSet.Update()` marks every column modified and would otherwise erase the ciphertext on the first bill. Null means "unreadable or absent", never "clear"; the API clears with `""`. Suite: `scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` (22 checks).
 
 ---
 
@@ -220,7 +221,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 > `master`** (a direct push, or a merge/PR that lands on it), you MUST:
 > 1. have a backend running against a schema-current DB, and
 > 2. run `python scripts/test_stock_itemtype_reflow.py` and see **`all checks
->    passed`** (currently **140/140**).
+>    passed`** (currently **161/161**).
 >
 > If it is **red**, or you **cannot run it**, **DO NOT PUSH.** A broken inventory
 > in/out flow must never reach master — ever. Run it even when the change looks
@@ -234,10 +235,13 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Audit verifier (live, optional but recommended) | `python scripts/verify_audit_2026_05_13_security.py --live` | `73/73 checks passed` |
 | Basic flows | `python scripts/test_basic_flows.py` | `all PASS` |
 | Tenant isolation | `python scripts/test_tenant_isolation.py` | `all PASS` |
+| Line arithmetic — qty / unit price / line total derive each other (offline) | `node scripts/test_line_amount.mjs` | `23 passed, 0 failed` |
+| Grouped quantity spread — no bill line left at zero, fractions only where the unit allows (offline) | `node scripts/test_group_quantity_split.mjs` | `27 passed, 0 failed` |
 | FBR cancellation + reversal releases challans | `python scripts/test_fbr_cancellation.py --db "<conn>"` | `26/26 checks passed` |
-| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `140/140`) |
+| Stock item-type reflow **(hard pre-push gate — see box above)** | `python scripts/test_stock_itemtype_reflow.py` | `all checks passed` (currently `161/161`) |
+| Unreadable FBR token survives Company saves | `python scripts/test_fbr_token_unreadable_survives_save.py --db "<conn>"` | `22/22 checks passed` |
 | PDF export pagination | `python scripts/test_pdf_pagination.py` | `all checks passed` (200 cases) |
-| PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
+| PO parser corpus (offline; the corpus folder is local-only and gitignored — real customer PO text) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |
 | No production identifiers in tracked files | `python scripts/verify_no_production_identifiers.py` | `no production identifiers in tracked files` |
 
@@ -280,6 +284,7 @@ tracking-enabled company and asserts on-hand after each edit:
 - Purchase bill: create IN, change item type (reverse old + add new), change qty, switch to an un-classified (no-HS) item (no IN), delete (reverse).
 - Classify-after-create **phantom guard**: a bill created against a no-HS item records no IN; classifying the item then editing must NOT fabricate a negative reversal.
 - Invoice OUT via **narrow** item-type edit (`PATCH /itemtypes`), **full** edit (`PUT /{id}`), and the **challan-driven** add/remove/qty path — each reverses the old item's OUT and re-records on the new, restores on clear/remove, and reverses on delete.
+- **Oversell guard (suite 14, 2026-09-11)** — an invoice edit or consultant adjustment that takes an HS item below zero saves with `stockWarnings` on the response while `Company.StockGuardHardBlock` is off, and is refused (400, rolled back) when it is on; a full edit under a live overlay stays governed by the filed qty. The form shows the same projection inline and asks "You are out of this inventory. Save anyway?".
 - **FBR dual-book overlay matrix (suites 8–13)** — the tax-consultant adjustment path (`PATCH /invoices/{id}/itemtypes-and-qty` `writeMode:"adjustment"`, which writes `InvoiceItemAdjustment.AdjustedItemTypeId`/`AdjustedQuantity` and leaves the physical line untouched). Stock keys off the **effective** type/qty (`Adjusted?? physical`, mirroring `FbrService`): a non-HS base reclassified to HS gets its OUT on the HS type; an HS→HS→HS reclassification chain reverts the old type and OUTs the new each hop; a bill (PUT) edit under an overlay reflows physical qty only while no filed qty is set, then the filed qty wins; repeated qty re-adjustment tracks the latest; multi-line overlays stay independent; challan qty changes reflow onto the overlay type; every case reverses on revert-to-base and on delete.
 
 ---
@@ -336,7 +341,7 @@ original author is honest provenance for a transplanted commit.
 
 - Live host: **MonsterASP** at `hakimitraders.runasp.net`
 - `appsettings.Production.json` provides `Jwt:Key` + `ConnectionStrings` — never committed (gitignored)
-- DataProtection keys persist to `data/keys/` — if MonsterASP wipes that on redeploy, previously-encrypted `Company.FbrToken` values become unreadable (Unprotect returns null → operator re-enters token). Verify persistence after first deploy.
+- DataProtection keys persist to `data/keys/` — if MonsterASP wipes that on redeploy, previously-encrypted `Company.FbrToken` values become unreadable (Unprotect returns null → operator re-enters token). The ciphertext itself is preserved — `AppDbContext.PreserveUnreadableFbrTokens` keeps a Company save from writing that null back (2026-09-10) — so restoring the original key ring restores the token. Verify persistence after first deploy.
 - `ForwardedHeaders:KnownProxies` should be populated with MonsterASP's proxy IPs once known (audit C-12) so the rate-limit partition key uses the real client IP.
 - Two real tenants currently: **Hakimi Traders** (CompanyId=1) and **Roshan Traders** (CompanyId=2). Do not modify their existing data without explicit say-so.
 
@@ -469,6 +474,7 @@ written down as the expectation.
 - ❌ Retrying POSTs to FBR (can issue duplicate IRN)
 - ❌ Logging passwords / JWTs / FBR tokens (use `SensitiveDataRedactor`)
 - ❌ Cross-tenant entity links (`Invoice.ClientId` pointing at a `Client` whose `CompanyId` doesn't match)
+- ❌ Treating a null `Company.FbrToken` as "clear the token" — null is what an unreadable ciphertext decrypts to, and writing it back destroys the token (2026-09-10). Clear with `""`; `AppDbContext.PreserveUnreadableFbrTokens` drops null from every Company UPDATE.
 - ❌ Letting unrelated files ride along in a commit — read `git diff --stat` and account for every one
 - ❌ Re-baselining a test in the same commit as the behaviour it guards (the regression becomes the expectation)
 - ❌ Replacing distinct hand-made designs / templates with generated variants of a single layout

@@ -218,8 +218,18 @@ namespace MyApp.Api.Services.Tax
                 }
             }
 
-            // (c) Rate ≠ 18 % requires SRO references (FBR 0077/0078).
+            // (c) Rate ≠ 18 % requires SRO references (FBR 0077/0078) — EXCEPT
+            //     for sale types FBR itself accepts at a non-standard rate with
+            //     no SRO. Per PRAL's SN016 (Processing/Conversion, 5%) and SN017
+            //     (Goods FED in ST Mode, 8%) sample payloads, neither carries an
+            //     SRO schedule/serial, so demanding one here is a false positive.
+            var stForSro = resolved.SaleType ?? "";
+            bool sroNotRequired =
+                   stForSro.IndexOf("Processing", StringComparison.OrdinalIgnoreCase) >= 0
+                || stForSro.IndexOf("Conversion", StringComparison.OrdinalIgnoreCase) >= 0
+                || stForSro.IndexOf("FED", StringComparison.OrdinalIgnoreCase) >= 0;
             if (resolved.Rate != 18m
+                && !sroNotRequired
                 && string.IsNullOrWhiteSpace(resolved.SroScheduleNo))
             {
                 errors.Add($"Rate {resolved.Rate}% requires SRO Schedule reference. [pre-flight 0077]");

@@ -871,6 +871,7 @@ namespace MyApp.Api.Helpers
         {
             var d = new Dictionary<string, object?>
             {
+                ["notes"] = dto.Notes,
                 ["companyBrandName"] = dto.CompanyBrandName,
                 ["companyLogoPath"] = dto.CompanyLogoPath,
                 ["companyAddress"] = dto.CompanyAddress,
@@ -904,6 +905,7 @@ namespace MyApp.Api.Helpers
         {
             var d = new Dictionary<string, object?>
             {
+                ["notes"] = dto.Notes,
                 ["companyBrandName"] = dto.CompanyBrandName,
                 ["companyLogoPath"] = dto.CompanyLogoPath,
                 ["companyAddress"] = dto.CompanyAddress,
@@ -951,6 +953,7 @@ namespace MyApp.Api.Helpers
         {
             var d = new Dictionary<string, object?>
             {
+                ["notes"] = dto.Notes,
                 ["supplierName"] = dto.SupplierName,
                 ["supplierAddress"] = dto.SupplierAddress,
                 ["supplierNTN"] = dto.SupplierNTN,

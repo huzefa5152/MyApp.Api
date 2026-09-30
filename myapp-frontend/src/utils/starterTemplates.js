@@ -22,6 +22,7 @@ import { debitNoteStarters } from "./starters/debitNote";
 import { purchaseBillStarters } from "./starters/purchaseBill";
 import { goodsReceiptStarters } from "./starters/goodsReceipt";
 import { receiptStarters } from "./starters/receipt";
+import { paymentStarters } from "./starters/payment";
 
 export const STARTER_TEMPLATES = [
   ...challanStarters,
@@ -34,4 +35,5 @@ export const STARTER_TEMPLATES = [
   ...purchaseBillStarters,
   ...goodsReceiptStarters,
   ...receiptStarters,
+  ...paymentStarters,
 ];

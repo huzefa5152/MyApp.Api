@@ -157,7 +157,19 @@ export function setActiveStamps(dict) {
 
 
 
+// Templates saved before the richText helper existed (and hand-written ones)
+// print a description as {{this.description}}, which HTML-escapes it and
+// collapses the line breaks the operator typed into one run-on line. Route
+// every double-stash description through richText instead. richText escapes
+// exactly as {{…}} does, then only re-allows <br> and <b>/<i>/<u>, so this is
+// no wider than before. Triple-stash {{{description}}} is left alone.
+const PLAIN_DESCRIPTION = /(?<!\{)\{\{\s*((?:this\.|\.\.\/)*description)\s*\}\}(?!\})/g;
+export function upgradeDescriptionTags(htmlTemplate) {
+  return String(htmlTemplate ?? "").replace(PLAIN_DESCRIPTION, "{{{richText $1}}}");
+}
+
 export function mergeTemplate(htmlTemplate, data) {
+  htmlTemplate = upgradeDescriptionTags(htmlTemplate);
   // Safety net for the {{stamp}} slot. resolveTemplate() normally materializes
   // it upstream (see utils/stampSlot.js), but any path that reaches here with
   // the raw token still in place would have Handlebars resolve it to "" and
@@ -189,6 +201,7 @@ export function mergeTemplate(htmlTemplate, data) {
  */
 export const MERGE_FIELDS = {
   Challan: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
@@ -209,6 +222,7 @@ export const MERGE_FIELDS = {
     { field: "{{{richText this.description}}}", label: "Item Description (in loop)" },
   ],
   Bill: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },
@@ -241,6 +255,18 @@ export const MERGE_FIELDS = {
     { field: "{{fmt this.lineTotal}}", label: "Item Line Total (in loop)" },
   ],
   TaxInvoice: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
+    { field: "{{#each billItems}}", label: "Loop: Group by original Bill item type" },
+    { field: "{{this.billQuantity}}", label: "Original Bill quantity (sum in current group)" },
+    { field: "{{this.invoiceQuantity}}", label: "Adjusted Invoice quantity (sum in current group)" },
+    { field: "{{this.billItemTypeName}}", label: "Original Bill item type name(s), no HS code" },
+    { field: "{{this.invoiceItemTypeName}}", label: "Adjusted Invoice item type name(s), no HS code" },
+    { field: "{{this.billUom}}", label: "Original Bill unit(s)" },
+    { field: "{{this.invoiceUom}}", label: "Adjusted Invoice unit(s)" },
+    { field: "{{fmtDec this.invoiceUnitPrice}}", label: "Invoice unit price (in either grouping)" },
+    { field: "{{fmtDec this.invoiceValueExclTax}}", label: "Invoice value excluding tax (in either grouping)" },
+    { field: "{{fmtDec this.invoiceGstAmount}}", label: "Invoice tax amount (in either grouping)" },
+    { field: "{{fmtDec this.invoiceTotalInclTax}}", label: "Invoice value including tax (in either grouping)" },
     { field: "{{supplierName}}", label: "Supplier Name" },
     { field: "{{{nl2br supplierAddress}}}", label: "Supplier Address (with line breaks)" },
     { field: "{{{nl2br supplierPhone}}}", label: "Supplier Phone (with line breaks)" },
@@ -260,7 +286,7 @@ export const MERGE_FIELDS = {
     { field: "{{fmtDec gstAmount}}", label: "GST Amount" },
     { field: "{{fmtDec grandTotal}}", label: "Grand Total" },
     { field: "{{amountInWords}}", label: "Amount In Words" },
-    { field: "{{#each items}}", label: "Loop: Items Start" },
+    { field: "{{#each items}}", label: "Loop: Group by adjusted Invoice item type" },
     { field: "{{/each}}", label: "Loop: End" },
     { field: "{{this.quantity}}", label: "Item Quantity (in loop)" },
     { field: "{{this.uom}}", label: "Item UOM (in loop)" },
@@ -279,6 +305,7 @@ export const MERGE_FIELDS = {
     { field: "{{fbrLogoUrl}}", label: "FBR Logo URL" },
   ],
   Receipt: [
+    { field: "{{{richText notes}}}", label: "Notes (formatted)" },
     { field: "{{companyBrandName}}", label: "Company Brand Name" },
     { field: "{{companyLogoPath}}", label: "Company Logo URL" },
     { field: "{{{nl2br companyAddress}}}", label: "Company Address (with line breaks)" },

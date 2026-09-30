@@ -3,6 +3,7 @@ namespace MyApp.Api.DTOs
     // Data for printing a Delivery Challan
     public class PrintChallanDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -28,6 +29,7 @@ namespace MyApp.Api.DTOs
     // Data for printing a Bill (Invoice)
     public class PrintBillDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -78,6 +80,7 @@ namespace MyApp.Api.DTOs
 
     public class PrintTaxInvoiceDto
     {
+        public string? Notes { get; set; }
         // Supplier (company) details
         public string SupplierName { get; set; } = "";
         public string? SupplierAddress { get; set; }
@@ -150,11 +153,46 @@ namespace MyApp.Api.DTOs
         public string? NoteReason { get; set; }
         public string? NoteReasonRemarks { get; set; }
 
+        /// <summary>
+        /// The FILED decomposition — grouped by the EFFECTIVE (adjusted) item
+        /// type, carrying the adjusted quantity and value. This is what FBR
+        /// holds, so it stays the default the templates bind to.
+        /// </summary>
         public List<PrintTaxItemDto> Items { get; set; } = new();
+
+        /// <summary>
+        /// The same invoice as the BILL states it: grouped by the bill's own
+        /// item type, summing the bill's quantity and value, with no overlay
+        /// applied. Rendered via <c>{{#each billItems}}</c>.
+        ///
+        /// Why both exist. The tax consultant reclassifies lines onto HS-coded
+        /// item types and may restate quantity and price for the filing, so
+        /// <see cref="Items"/> answers "what was filed". Some operators need the
+        /// Sales Tax Invoice to show what the CUSTOMER was billed instead —
+        /// the commercial item type, which typically has no HS code, at the
+        /// quantity actually sold. Neither is derivable from the other once an
+        /// overlay exists, so the template picks the one it wants; a template
+        /// that binds nothing new is completely unaffected.
+        ///
+        /// On an invoice with no adjustments the two collections agree, which
+        /// is the honest answer rather than a special case.
+        /// </summary>
+        public List<PrintTaxItemDto> BillItems { get; set; } = new();
     }
 
     public class PrintTaxItemDto
     {
+        // Independent display choices within this loop's existing group.
+        public decimal BillQuantity { get; set; }
+        public decimal InvoiceQuantity { get; set; }
+        public string BillItemTypeName { get; set; } = "";
+        public string InvoiceItemTypeName { get; set; } = "";
+        public string BillUom { get; set; } = "";
+        public string InvoiceUom { get; set; } = "";
+        public decimal InvoiceUnitPrice { get; set; }
+        public decimal InvoiceValueExclTax { get; set; }
+        public decimal InvoiceGstAmount { get; set; }
+        public decimal InvoiceTotalInclTax { get; set; }
         public string ItemTypeName { get; set; } = "";
         public decimal Quantity { get; set; }
         public string UOM { get; set; } = "";
@@ -258,6 +296,7 @@ namespace MyApp.Api.DTOs
     // BUYER; supplier* fields carry the vendor party, company* the tenant).
     public class PrintPurchaseBillDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }
@@ -301,6 +340,7 @@ namespace MyApp.Api.DTOs
     // PrintChallanDto on the purchase side).
     public class PrintGoodsReceiptDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }

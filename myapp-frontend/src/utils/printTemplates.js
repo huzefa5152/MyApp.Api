@@ -1,3 +1,5 @@
+import { renderRichTextHtml } from "./richText";
+
 const fmt = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const fmtDec = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -19,7 +21,7 @@ export function buildBillPrintHtml(d) {
     `<tr>
       <td class="cell c">${i.sNo}</td>
       <td class="cell c">${i.quantity}</td>
-      <td class="cell">${i.description}</td>
+      <td class="cell">${renderRichTextHtml(i.description)}</td>
       <td class="cell r">Rs${fmt(i.unitPrice)}</td>
       <td class="cell r">Rs &nbsp; ${fmt(i.lineTotal)}</td>
     </tr>`
@@ -229,7 +231,7 @@ export function buildTaxInvoicePrintHtml(d) {
         <td class="cell c">${sNo}</td>
         <td class="cell c">${i.quantity}</td>
         <td class="cell c">${i.uom}</td>
-        <td class="cell">${i.description}</td>
+        <td class="cell">${renderRichTextHtml(i.description)}</td>
         <td class="cell r">${fmtDec(i.valueExclTax)}</td>
         <td class="cell c">${i.gstRate}%</td>
         <td class="cell r">${fmtDec(i.gstAmount)}</td>

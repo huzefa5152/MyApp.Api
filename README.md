@@ -290,6 +290,304 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-09-27 — Print templates: quicker to create and manage, and no duplicate default
+
+- **PO import reads a quantity that carries its unit in the same cell.**
+  Mundia Exports' purchase orders print `300.00 PIECE` in the Qty column with
+  no separate unit column, so the import matched the format and then found no
+  items at all. The quantity is now read from such a cell, and its unit used,
+  when the word is a recognised unit, so `12 Months` never becomes a quantity.
+  The same fix stops a vertical watermark printed down the page ("REVIEWING")
+  from being glued onto item descriptions, and recognises a decorated total
+  line (`Total>>>>>>`) as the end of the table.
+- **Import a PO from a photo, a screenshot or a scanned PDF.** Sales Order,
+  Sales Quote and Delivery Challan → Import PO now take PNG, JPG and WEBP as
+  well as PDF, and a PDF with no text layer is read as a picture
+  automatically. The text is read in the browser (tesseract.js, served by this
+  site — no outside service), laid out by the same rule a PDF gets, and matched
+  against the SAME saved PO formats, so no new format is needed for pictures.
+  The review screen says the lines were read from an image and asks the
+  operator to check every description and quantity before saving.
+- **A tilted photo reads like a straight one.** A phone photo is never square
+  to the page, and at barely half a degree a table row's cells fell onto
+  different lines, so the PO matched its format and returned no items. The
+  tilt is now measured from the words and taken out first; a straight photo or
+  a scan is left exactly as it was.
+- **A PO format still matches when the PO's own data differs.** A Meko Fabrics
+  PO was refused as "no format" because a timestamp's AM/PM and colons inside
+  an item description had crept into its fingerprint; matching now ignores
+  both, and re-checking all 240 archived imports changed no other decision.
+- **More PO table layouts read correctly**: a quantity shifted by an extra or a
+  missing cell, footer lines like `GST (18%)` and `SUB TOTAL`, empty grid rows,
+  and prices written `Rs15` are no longer mistaken for items or units.
+- PO import checks that the caller can reach the company it parses for.
+- **The print-template dropdown on every document screen lists each template
+  once.** A type with two templates used to show three rows ("★ Default — X",
+  then X again with a star, then the other); it now shows the default once and
+  the others after it. A type with a single template shows its name as a plain
+  label, since there is nothing to choose.
+- **New Template is one dialog**: document type, a suggested unique name, and
+  what it starts from (built-in default, a copy of one of your own, or a
+  starter design). **Create & open** saves it and opens the editor on it.
+- **In the editor**, the Document Type dropdown opens that type's default (or
+  a built-in draft if it has none), and **Templates (n)** manages the type's
+  templates in place: open, set default, rename, duplicate, copy to another
+  type, delete, new. Unsaved edits ask before they are discarded, and a blank
+  name saves as the type's name instead of refusing.
+- **The Print Templates list** keeps its tab and filters per company across the
+  editor round trip, highlights the card just edited, groups cards by document
+  type with counts, and uploads stamps through a dialog with a preview.
+- **A new company starts with one default template per document type**, so
+  every document screen can print from day one (new, idempotent
+  `POST /api/printtemplates/company/{id}/seed-defaults`; existing companies are
+  untouched). Payment voucher starters now appear in the gallery.
+- Duplicate and Copy keep the source template's signature stamp.
+
+### 2026-09-25 — Multi-line descriptions, document notes, supplier costs on challans, Document Lines
+
+**Item descriptions are multi-line on every line editor**, including Edit
+Challan, which used to offer a single-line box. Enter adds a line break
+(Ctrl+Enter still moves to the next line item); `<b>`, `<i>` and `<u>` work.
+Descriptions keep their line breaks on screen, in the older print layouts, and
+in saved templates that still print a plain `{{this.description}}`.
+
+**Documents carry optional formatted notes.** Challans, bills, sales tax
+invoices, purchase bills, goods receipts, receipts and payments get a Notes box
+with bold / italic / underline and a preview. The default challan, bill and tax
+invoice print them; every template can add them with `{{{richText notes}}}`.
+
+**A challan can record where each line came from and what it really cost.** The
+Private supplier and cost panel on New Challan (typed, or delivered from a Sales
+Order), Edit Challan and PO Import takes an optional supplier and actual unit
+cost per line. It is internal only and never prints. When every line has both,
+saving offers to create the unpaid purchase bills, one per supplier; nothing is
+created without that confirmation, and a repeated confirmation returns the same
+bills rather than duplicating them. While those bills exist the
+challan's lines are locked. Purchase bills raised this way are marked "From
+delivery challan".
+
+**Document Lines** (Reports) lists the line items of quotes, orders, challans,
+bills, tax invoices, credit / debit notes, purchase bills or goods receipts for
+a week, a month or a custom range, and copies them for Excel or downloads an
+`.xlsx`. Challan lines can show the supplier, actual cost and profit columns.
+Each list screen links to it at the top and bottom.
+
+**Fixed:** the default bill printed a literal `\u2014` instead of a dash when a
+bill had no PO number.
+
+Migrations `AddDocumentNotes` and `AddChallanPrivateProcurement` add nullable
+columns and indexes only.
+
+### 2026-09-19 — Type the amount a line must come to, and the rate follows
+
+**Both bill-creation screens take a Line Total.** Enter quantity and unit price
+and the total computes, as before; or enter quantity and the **amount the line
+must come to** and the unit price is derived from it. On the from-a-challan
+screen the quantity is the challan's and cannot move, so there it is the total
+that drives the rate. Whichever box was just typed is never rewritten under the
+operator, and the bill subtotal adds up the amounts actually stated.
+
+The rate is derived at the twelve decimals `InvoiceItem.UnitPrice` stores, which
+is what makes the arithmetic honest: the server recomputes
+`LineTotal = Quantity × UnitPrice`, so a two-decimal rate silently bills a
+different figure than the one typed. 220,000 over 196 units at 1122.45 comes to
+**220,000.20**; at 1122.448979591837 it comes to 220,000.00. That 20-paisa gap
+was visible on a real Sales Tax Invoice, with the line and the total disagreeing
+on the printed page.
+
+Suite: `node scripts/test_line_amount.mjs` (23 checks, offline — no backend or
+database), which pins the round trip rather than the formatting: every
+total-over-quantity split it tries must reproduce the typed total exactly once
+stored at two decimals.
+
+### 2026-09-19 — Adjusting an invoice is now: pick the item type, type the quantity
+
+The Invoices-tab edit opens with **Exact Line Total** already selected on every
+grouped row, pre-filled with that group's total **from the bill itself**. The
+unit price is derived and read-only, so the consultant's whole job is the two
+things only they know: the item type that carries the right HS code (UOM and
+sale type follow it), and the quantity actually supplied. The value never
+moves, which is what the ±2 PKR total-preservation guard — and FBR — expect, so
+Save stays available without any arithmetic on their side.
+
+Re-classifying a group re-seeds the same bill total under the new item type, so
+the total does not have to be re-entered after every re-pick. *Qty & Unit
+Price* is still one click away when the price is what needs to change, and a
+group switched back to it stays that way. Opening a bill and changing nothing
+rewrites nothing: the lines are re-decomposed only when a quantity or a total
+is actually edited.
+
+### 2026-09-19 — A grouped quantity no longer leaves bill lines at zero
+
+On the Invoices tab the edit form shows every line sharing an Item Type as
+**one row with a summed quantity** — the shape FBR receives. Retyping that sum
+spreads it back across the underlying lines, proportionally to their bill
+quantities. For whole-unit items the spread floored each share and handed the
+remainder out largest-fraction-first, which on a 37-line medicines bill of 137
+units retyped to **61** left every 1-unit line at 0.45 → **0** — ten of them —
+and Save refused with "Quantity must be greater than 0" about lines the grouped
+view never shows. (INV-3932; the group's unit was `Bot`, which the units
+catalog does not know, so the whole-number path ran.)
+
+- The spread now finishes with a repair pass: any line left at zero takes one
+  unit from the largest line, so **no line ends at zero while there are at
+  least as many units as lines**. Retyping the same total still reproduces the
+  original lines exactly, and proportions are disturbed by one unit at most per
+  repaired line. Both grouped methods — *Qty & Unit Price* and *Exact Line
+  Total* — share the one split.
+- A total the group genuinely cannot hold (fewer units than lines) is called
+  out where it happens — **"needs at least 28 — one per line"** under the
+  quantity — and Save explains it in the grouped row's own terms, naming the
+  item and the smallest total that works, instead of the blind per-line error.
+
+Suite: `node scripts/test_group_quantity_split.mjs` (21 checks, offline — no
+backend or database) pins the split against INV-3932's actual 37 quantities.
+
+**The adjustment controls reach a single-line bill.** The grouped row is where
+*Qty & Unit Price* / *Exact Line Total* live, and it only rendered when
+grouping actually collapsed lines — so a bill with one line per Item Type fell
+through to the plain table, where Line Total is static text, and the one
+control that sets an exact total was unreachable on exactly the bills that most
+need it. The grouped row now renders whenever the Invoices tab does; the
+grouped/individual toggle still appears only when switching would change what
+is listed. (Same behaviour as the Trader line.)
+
+### 2026-09-16 — Match a bill exactly when adjusting an invoice, and print either item view
+
+**Exact Line Total.** The Invoices tab lets a restricted role re-classify lines
+and adjust quantity and price, under a guard that the bill's total must not
+move — but landing on that total exactly was not actually possible. The grouped
+row shows one unit price for several lines, and a rate rounded for display then
+applied to every line drifts the total: 6,301 units at a displayed 219.5 makes
+1,383,069.50 against a bill of 1,383,048.00, out by 21.50. Underneath, the unit
+price column stored only 2 decimals, so even a correctly derived rate could not
+be kept.
+
+Each grouped row now offers a choice of adjustment method. **Qty & Unit Price**
+works as before, with whole-number quantities and a rate carrying up to 12
+decimals. **Exact Line Total** turns it around: state what the line must come
+to and the quantity it covers, and the rate is derived from the two — by the
+server, not the browser — with the unit price shown read-only at full precision
+while that target is authoritative, and an explicit control to return to manual
+entry. A target spread across several underlying lines is allocated
+in whole paisa so the lines re-sum to it exactly, rather than each rounding
+independently and leaving a few paisa unaccounted for. A figure that genuinely
+cannot be reproduced from a whole quantity is refused, naming the closest
+achievable amount, instead of quietly booking something else.
+
+The totals panel now names the two figures it compares (Original Bill Total and
+Adjusted Invoice Total, both before sales tax), says what the bill comes to with
+sales tax added, and distinguishes an exact match from merely being inside the
+rounding tolerance. The unit price column stores 12 decimal places
+(`WidenInvoiceUnitPriceTo12Decimals`); sales tax and every printed money figure
+stay at 2, and nothing sent to FBR changes — the filing carries line values, not
+rates.
+
+**Both item views on the Sales Tax Invoice.** That document rendered one item
+table: the filed decomposition, grouped by the HS-coded item type at the
+adjusted quantity and price. Templates can now render the bill's own view
+instead, through `{{#each billItems}}` — grouped by the commercial item type,
+which usually has no HS code, at the quantity and value the customer was
+actually billed. Once a filing has been adjusted neither table can be derived
+from the other, so both are published and the template picks one. Existing
+templates bind only the filed view and are unchanged.
+
+### 2026-09-15 — FBR sandbox scenario seeder: all six wholesaler scenarios validate
+
+Seeding a new wholesaler company's FBR scenarios produced four bills FBR refused,
+so a fresh company could only ever reach 2/6. The recipes carried values that read
+correctly but are not what FBR accepts: a UoM taken from how the product is really
+sold ("Litre") rather than from the HS code's own valid list ([0099]), an HS code
+refused against the standard-rate sale type ([0052]), and a reduced-rate line with
+no SRO/Schedule item serial ([0078]) and no retail price ([0090]). Each is now
+corrected against a filing FBR actually accepted, and the seeder passes an
+SRO/Schedule reference and its item serial together — FBR rejects either alone.
+A newly created company with its own sandbox token and registration number now
+validates 6/6 (verified on two companies, one filing under a 7-character NTN and
+one under a 13-digit CNIC).
+
+The Trader onboarding skill's setup notes were corrected to match the code: FBR
+readiness needs the dedicated seller registration number, not an STRN (that
+requirement was removed because it stranded genuinely fileable challans), and the
+display NTN is not the FBR identity.
+
+### 2026-09-15 — FBR logo renders on the tax invoice (embedded, not a served path)
+
+The FBR Digital Invoicing logo was missing from submitted tax invoices — only the QR showed. The QR is an inlined base64 data URI, but the logo used a root-absolute served path (`/images/fbr-logo.png`), which 404s on a site rooted under `/admin/` (the Trader line) and also raced the first print. The logo is now embedded as a base64 `data:` URI (`Helpers/FbrLogoAsset.cs`), exactly as the QR already is, so it renders on any base path, under CSP, offline, and on the first print. One `PrintTaxInvoiceDto.FbrLogoUrl` default fixes Tax Invoice + Credit/Debit note prints.
+
+### 2026-09-15 — Print templates: default-per-type on new company, cleaner picker, smoother editor
+
+New companies now auto-seed one default print template per document type (`POST /api/printtemplates/company/{id}/seed-defaults`, idempotent, HTML supplied by the SPA), so every document screen prints immediately instead of hitting "No print template configured". The document-screen template picker no longer shows a lone default twice — a single template renders as a plain label, multiple templates list the default once plus the alternatives (override per screen). The template editor now lets you change the document type while creating a NEW template (it was locked), loading that type's default design and updating the suggested name; Save auto-names a blank template from its type instead of erroring. A hardcoded real-client (LOTTE Kolson) conditional was removed from the default tax-invoice template so previews and seeded templates stay fictional, and the missing Payment starters are wired into the gallery.
+
+### 2026-09-15 — FBR purchase import: both sheet layouts + fictional sample download
+
+The FBR purchase importer now surfaces both FBR export layouts — **Annexure-A** (claimed only) and the **Sales Ledger** (all purchases, claimed + unclaimed). The parser already matched both by column name (alias table); the import page adds a *Sheet format* selector and a **Download sample** button that returns a fully-fictional `.xlsx` for the chosen layout (`GET /api/fbr-purchase-import/sample?format=annexa|ledger`). The sample is invented data — no real seller/client — so it is safe for demos and re-uploads cleanly through preview. No schema change; reuses `fbrimport.purchase.preview`.
+
+### 2026-09-14 — Dedicated "Seller NTN / CNIC for FBR" field; company form split into tabs
+
+The identity filed to FBR (`SellerNTNCNIC`) is now its own required `Company.FbrSellerRegistrationNo` — a 7-digit NTN or 13-digit CNIC entered exactly as filed — instead of being derived from the display CNIC/NTN. The display NTN/CNIC/STRN are now print/display-only and optional. `FbrService` (pre-validate, payload, self-invoice check) and `DeliveryChallanService.IsFbrReady` all key off the new field. Migration `AddFbrSellerRegistrationNo` backfills existing rows `COALESCE(CNIC, NTN)`.
+
+The company create/edit modal is reorganised into four tabs — **General / FBR Integration / Numbering / Advanced** — with per-tab validation that jumps to the first tab carrying an error and dots each offending tab. Fixed a latent bug where uploading a company logo round-tripped a sparse DTO and wiped the CNIC/FBR fields (logo now updates in isolation). Seed/test scripts that create companies updated to send the new required field.
+
+### 2026-09-11 — FBR: exempt goods file as "Exempt"; Processing/FED clear the SRO pre-flight
+
+- **Exempt sale lines are now transmitted to FBR with the rate `Exempt`, not
+  `0%`.** FBR rejects `0%` for an exempt sale type (`[0046]`), so exempt goods
+  could not be filed before this fix.
+- **The local "rate ≠ 18% requires an SRO schedule" pre-flight no longer fires
+  for Processing/Conversion or Goods (FED in ST Mode) sale types**, which FBR
+  itself accepts with no SRO (per its SN016/SN017 sample payloads). Those
+  scenarios were being blocked before the invoice ever reached FBR.
+- **A compound FBR rate is now transmitted exactly as FBR publishes it.** For
+  Goods (FED in ST Mode), the invoice's `rate` is taken from FBR's `SaleTypeToRate`
+  reference (DI spec §5.8) instead of a locally built `"N%"` — e.g. Finance Act
+  2026's petroleum rate `"18% and Rs. 80 per Liter"` for HS `2710.1942` — and the
+  per-unit FED (Rs 80 × litres) is folded into `salesTaxApplicable`. Scoped to
+  FED-in-ST so no other sale type changes behaviour, with a graceful fallback to
+  the plain percentage if the reference is unavailable. This was the last piece
+  needed to file scenario SN017.
+- Verified end-to-end against the FBR sandbox (SN006 exempt, SN016 processing and
+  SN017 FED-in-ST all submitted successfully — completing the full 12-scenario
+  sandbox set); regression test `scripts/test_fbr_ratemap_preflight.py`.
+
+### 2026-09-11 — Client / supplier forms: STRN optional, "Check with FBR"
+
+- FBR's buyer block carries NTN/CNIC, name, province and registration type, never
+  STRN, so demanding an STRN kept real buyers out of FBR. STRN is now optional on
+  the client and supplier forms, and CNIC is optional for every registration type
+  (format still checked when typed). NTN stays required for Registered / FTN.
+- The client form gains "Check with FBR" (Get_Reg_Type through the existing
+  `POST /api/fbr/regtype/{companyId}`, needs `fbr.config.view`) to set the
+  registration type from FBR's own answer. Ported from the Trader line.
+
+### 2026-09-11 — Oversell guard on invoice edit (soft warning / hard block)
+
+- **Where stock actually leaves.** Only HS-coded item types move stock, and on a
+  bill only the consultant's invoice-mode classification decides which HS type a
+  line leaves stock under. Bill mode (non-HS item types) never deducts. That was
+  already so; the gap was that neither invoice edit nor the consultant adjustment
+  checked on-hand, so stock went negative silently.
+- **Soft warning (default).** On the invoice edit form, as soon as a line's item
+  type or quantity would take that item below zero, the line shows "Out of stock
+  for X: on-hand a, this bill takes b, leaves a−b" and a banner lists every such
+  item. Save asks "You are out of this inventory … Save anyway?"; Go back keeps the
+  form. Projection = on-hand + what this invoice already takes − what the edited
+  lines will take, computed from the item-type list's per-company `availableQty`.
+- **Server side.** `UpdateAsync` and `UpdateItemTypesAsync` run the same check
+  after the stock sync, inside the transaction. Soft: the response carries
+  `stockWarnings` (additive on `InvoiceDto`). Hard: with
+  `Company.StockGuardHardBlock` on, the save is refused with 400 and rolled back,
+  mirroring bill creation.
+- **`StockGuardHardBlock` is now an operator setting.** Exposed on the company
+  DTOs and as "Refuse saves that take stock below zero" under the inventory toggle
+  on the company form. It existed since the inventory module but could only be set
+  by SQL.
+- **Test.** `scripts/test_stock_itemtype_reflow.py` gains suite 14 (oversell
+  guard: soft save with warnings, in-stock save clean, hard-block refusal on the
+  adjustment path and on revert-to-base, full-edit under a live overlay still
+  governed by the filed qty). Gate is now 161/161. The harness confirms
+  near-duplicate item types with `isFavorite` so it runs on small catalogs.
+
 ### 2026-09-11 — Fourth production line documented
 
 - The repository now carries a fourth production branch, `TraderFbrInvoicingSystem`
@@ -297,6 +595,28 @@ Publish output optimized from 79 MB to 37 MB via:
   documentation changed: the branch policy in `docs/ENVIRONMENTS.md` and `CLAUDE.md`,
   the README deployment table, the local branch-to-database map and the
   production-access template now list the new line. No functional change here.
+### 2026-09-10 — An FBR token the server cannot read is no longer erased
+
+- **Losing the encryption key no longer loses the token.** The FBR bearer
+  token is encrypted at rest with a key ring kept in `data/keys/`. If that
+  key ring is ever replaced — a redeploy that wipes the folder, or a second
+  server process started with its own keys — the stored token can no longer
+  be read, and until now the very next save of the company (which every new
+  bill performs to advance the invoice number) wrote the unreadable value
+  back as *nothing*. The token was gone for good, silently, and the operator
+  only found out when the next filing failed. The encrypted value now stays
+  in the database untouched until someone deliberately replaces it.
+- **What the operator sees is unchanged.** While the token cannot be read the
+  company shows *no FBR token*, filings are refused with the usual "token not
+  configured" message, and re-entering the token on the Company form (the
+  `companies.manage.fbrtoken` permission) replaces the old value. Clearing
+  the field still clears it. The difference is that restoring the original
+  key ring now brings the original token back, because it was never
+  destroyed.
+- **Pinned by** `scripts/test_fbr_token_unreadable_survives_save.py`, which
+  plants an undecryptable payload on an ephemeral company and proves an
+  unrelated edit and a new bill leave it byte-for-byte intact, while an
+  explicit re-entry and an explicit clear still take effect.
 
 ### 2026-09-09 — The branch decides which local database you are on
 

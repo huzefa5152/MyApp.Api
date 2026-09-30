@@ -7,6 +7,7 @@ namespace MyApp.Api.DTOs
     /// only the company branding block is bound.</summary>
     public class PrintPaymentVoucherDto
     {
+        public string? Notes { get; set; }
         public string CompanyBrandName { get; set; } = "";
         public string? CompanyLogoPath { get; set; }
         public string? CompanyAddress { get; set; }

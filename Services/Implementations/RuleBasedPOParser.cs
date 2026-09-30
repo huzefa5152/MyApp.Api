@@ -908,19 +908,34 @@ namespace MyApp.Api.Services.Implementations
                 if (PageChromeRegex.IsMatch(line)) { FlushItem(items, ref current); continue; }
                 if (PageStampRegex.IsMatch(line) && !Regex.IsMatch(line, @"[A-Za-z]{3,}.*\d")) { FlushItem(items, ref current); continue; }
 
+                // A vertical watermark ("REVIEWING" printed down the page margin)
+                // comes out as one letter per line between the rows. A lone
+                // letter is never item text — skip it without flushing, so the
+                // item it interrupts keeps its description clean.
+                if (LoneLetterRegex.IsMatch(line)) continue;
+
                 var cols = SplitColumns(line);
                 if (IsRepeatedHeaderRow(cols, qtyCol)) { FlushItem(items, ref current); continue; }
 
+                // The same watermark can also land in FRONT of a footer line
+                // ("E  Total>>>>>>  509.00"), hiding the label from both checks
+                // below. Footer detection alone looks past such a letter; the
+                // data-row reading further down still sees the original cells.
+                var footerCols = cols.Length > 1 && LoneLetterRegex.IsMatch(cols[0]) ? cols.Skip(1).ToArray() : cols;
+                var footerLine = footerCols == cols ? line : string.Join("  ", footerCols);
+
                 // Real end-of-table marker (Sub Total, Grand Total, Terms, …).
-                if (SimpleStopRegex.IsMatch(line)) { FlushItem(items, ref current); break; }
+                if (SimpleStopRegex.IsMatch(footerLine)) { FlushItem(items, ref current); break; }
 
                 // A line whose first cell is PURELY a footer label — even when
                 // its amount happens to fall in the quantity column ("Basic
                 // 320,000", "Total Pcs 800") or it stands alone ("Sub Total") —
                 // is a total, never an item. A real product ("Total Station
                 // Theodolite", "Net Book A5") carries extra words, so it won't
-                // match and is read normally.
-                if (cols.Length > 0 && FooterLabelRegex.IsMatch(cols[0].Trim())) { FlushItem(items, ref current); continue; }
+                // match and is read normally. Trailing decoration is not part
+                // of the label ("Total>>>>>>", "Total :", "Total ***").
+                if (footerCols.Length > 0 && FooterLabelRegex.IsMatch(StripLabelDecoration(footerCols[0])))
+                { FlushItem(items, ref current); continue; }
 
                 // Locate the quantity. Normally it sits exactly in the quantity
                 // column. If that cell isn't a number, the description spilled
@@ -928,9 +943,18 @@ namespace MyApp.Api.Services.Implementations
                 // to the right — scan rightward for the real number and merge the
                 // spilled cells back into the description.
                 int qtyIndex = -1;
+                string? inlineUnit = null;
                 string descCells = descCol < cols.Length ? cols[descCol] : "";
                 if (qtyCol >= 0 && qtyCol < cols.Length && IsQuantityNumber(cols[qtyCol]))
                 {
+                    qtyIndex = qtyCol;
+                }
+                else if (qtyCol >= 0 && qtyCol < cols.Length && TrySplitQtyUnitCell(cols[qtyCol], out inlineUnit))
+                {
+                    // The quantity column carries its unit in the same cell,
+                    // one space apart ("300.00 PIECE") — the PDF has no
+                    // separate unit column. Only a RECOGNISED unit qualifies,
+                    // so "12 Months" or "2 Core" never become a quantity.
                     qtyIndex = qtyCol;
                 }
                 else if (qtyCol < 0 || qtyCol >= cols.Length || !IsRecognisedUnit(cols[qtyCol]))
@@ -943,10 +967,33 @@ namespace MyApp.Api.Services.Implementations
                     // NOT a spill, so leave qtyIndex = -1 and let the row be skipped.
                     // A percentage ("32%") is never a quantity — it belongs to the
                     // description (a concentration), so IsQuantityNumber excludes it.
+                    // The spilled quantity may carry its unit inline too ("5.00 PIECE").
                     for (int k = (qtyCol < 0 ? 0 : qtyCol + 1); k < cols.Length; k++)
+                    {
                         if (IsQuantityNumber(cols[k])) { qtyIndex = k; break; }
+                        if (TrySplitQtyUnitCell(cols[k], out var spilledUnit)) { qtyIndex = k; inlineUnit = spilledUnit; break; }
+                    }
+                    // The opposite shift: an EMPTY cell between the description
+                    // and the quantity was dropped (an OCR'd "-" read as nothing,
+                    // a blank Remarks column), so the columns moved LEFT and the
+                    // quantity column now holds the rate. Look left — but accept
+                    // only a quantity that carries its unit ("4.00 PIECE"): a bare
+                    // number there could be anything, and guessing is how a rate
+                    // becomes a quantity.
+                    if (qtyIndex < 0 && qtyCol > descCol + 1 && descCol >= 0)
+                        for (int k = Math.Min(qtyCol - 1, cols.Length - 1); k > descCol; k--)
+                            if (TrySplitQtyUnitCell(cols[k], out var shiftedUnit)) { qtyIndex = k; inlineUnit = shiftedUnit; break; }
+                    // A spill of N extra cells pushes every column after the
+                    // description N to the right, so the description absorbs
+                    // exactly N cells — not every cell up to the quantity, which
+                    // would swallow the columns between them (Remarks, Section).
+                    // When the description sits right before the quantity the
+                    // two readings are the same. It always keeps its own cell.
                     if (qtyIndex > descCol && descCol >= 0)
-                        descCells = string.Join(" ", cols.Skip(descCol).Take(qtyIndex - descCol));
+                    {
+                        var take = qtyCol > descCol ? 1 + (qtyIndex - qtyCol) : qtyIndex - descCol;
+                        descCells = string.Join(" ", cols.Skip(descCol).Take(Math.Clamp(take, 1, qtyIndex - descCol)));
+                    }
                 }
 
                 var qty = qtyIndex >= 0 ? ParseQtyCell(cols[qtyIndex]) : 0m;
@@ -956,10 +1003,17 @@ namespace MyApp.Api.Services.Implementations
                 {
                     var desc = SanitiseDescription(descCells);
                     if (string.IsNullOrWhiteSpace(desc)) continue;   // qty but no description text → not a real row
+                    // A totals line whose amount landed where a quantity reads
+                    // ("SUB TOTAL  Rs  10,600", "GST (18%)  Rs  1,908"), or a row
+                    // whose "description" is only a currency word. Never an item.
+                    if (IsFooterCell(desc) || cols.Take(qtyIndex).Any(IsFooterCell) || CurrencyWordRegex.IsMatch(desc))
+                    { FlushItem(items, ref current); continue; }
 
                     // Unit: its own column when present; if that shifted with a
                     // spill, take the cell right after the quantity.
                     var unitRaw = (unitCol >= 0 && unitCol < cols.Length && unitCol != qtyIndex) ? cols[unitCol] : "";
+                    if (!LooksLikeUnitValue(unitRaw) && inlineUnit != null)
+                        unitRaw = inlineUnit;
                     if (!LooksLikeUnitValue(unitRaw) && qtyIndex + 1 < cols.Length && LooksLikeUnitValue(cols[qtyIndex + 1]))
                         unitRaw = cols[qtyIndex + 1];
                     var unit = LooksLikeUnitValue(unitRaw) ? unitRaw : "Pcs";
@@ -981,6 +1035,8 @@ namespace MyApp.Api.Services.Implementations
                     // more bare-number cells (the price/amount columns of a row
                     // whose quantity cell was left blank). Also skip numeric tails.
                     if (!Regex.IsMatch(line, "[A-Za-z]")) continue;
+                    // An empty grid row still prints its currency: "Rs  -", "Rs  0".
+                    if (CurrencyOnlyLineRegex.IsMatch(line)) continue;
                     if (LooksLikeDataRowAttempt(cols)) continue;
                     if (NoteLabelRegex.IsMatch(line)) continue;   // "Spec:"/"Note:"/… footer, not a wrap
                     // A "label … amount" line (text cells ending in a bare
@@ -1015,6 +1071,56 @@ namespace MyApp.Api.Services.Implementations
         // a percentage (a "32%" cell is a concentration in the description).
         private static bool IsQuantityNumber(string? s) =>
             !string.IsNullOrWhiteSpace(s) && Regex.IsMatch(s, @"^[\p{Sc}]?\s*\d[\d,]*(?:\.\d+)?$");
+
+        // A currency amount is a price, never a unit: "Rs15", "Rs 1,400", "PKR 20".
+        private static readonly Regex CurrencyAmountRegex = new(
+            @"^\s*(?:Rs\.?|PKR|₨|\p{Sc})\s*[\d,]+(?:\.\d+)?\s*/?-?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A line of nothing but currency words, numbers and dashes — an empty
+        // table row ("Rs  -   Rs  -").
+        private static readonly Regex CurrencyOnlyLineRegex = new(
+            @"^(?:\s*(?:Rs\.?|PKR|₨)\s*[-\d.,]*)+\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A "description" that is only a currency word.
+        private static readonly Regex CurrencyWordRegex = new(
+            @"^\s*(?:Rs\.?|PKR|₨)\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // A tax line label with its rate: "GST (18%)", "Sales Tax 18 %", "VAT 5%".
+        private static readonly Regex TaxRateLabelRegex = new(
+            @"^\s*(?:GST|VAT|Sales\s+Tax|Tax)\s*\(?\s*\d+(?:\.\d+)?\s*%\s*\)?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static bool IsFooterCell(string? cell)
+        {
+            var c = StripLabelDecoration(cell ?? "");
+            return c.Length > 0 && (FooterLabelRegex.IsMatch(c) || TaxRateLabelRegex.IsMatch(c));
+        }
+
+        // One letter, alone: a character of a vertical watermark.
+        private static readonly Regex LoneLetterRegex = new(@"^\s*[A-Za-z]\s*$", RegexOptions.Compiled);
+
+        // "Total>>>>>>" / "Total :" / "Total ***" → "Total".
+        private static string StripLabelDecoration(string cell) =>
+            Regex.Replace(cell ?? "", @"[\s>:*=.\-]+$", "").Trim();
+
+        // A quantity cell with its unit inline: "300.00 PIECE", "60 PACKET",
+        // "12.5 Kgs." — a bare number, one run of spaces, then ONE recognised
+        // unit word. Anything else ("12 Months", "2 Core", "300 PIECE BLUE")
+        // is not a quantity cell and is left to the caller's other checks.
+        private static readonly Regex QtyUnitCellRegex = new(
+            @"^\s*(?<qty>\d[\d,]*(?:\.\d+)?)\s+(?<unit>[A-Za-z]{1,12})\.?\s*$",
+            RegexOptions.Compiled);
+
+        private static bool TrySplitQtyUnitCell(string? cell, out string? unit)
+        {
+            unit = null;
+            if (string.IsNullOrWhiteSpace(cell)) return false;
+            var m = QtyUnitCellRegex.Match(cell);
+            if (!m.Success) return false;
+            var u = m.Groups["unit"].Value;
+            if (!IsRecognisedUnit(u) && !UnitOnlyWords.Contains(u)) return false;
+            unit = u;
+            return true;
+        }
 
         // True when a non-data line is really a row in its own right rather than
         // a wrapped-description fragment: it is led by a bare-number serial, or
@@ -1163,7 +1269,8 @@ namespace MyApp.Api.Services.Implementations
         private static bool LooksLikeUnitValue(string s) =>
             !string.IsNullOrWhiteSpace(s)
             && Regex.IsMatch(s, "[A-Za-z]")
-            && !Regex.IsMatch(s, @"^\s*[\p{Sc}\d.,]+\s*$");
+            && !Regex.IsMatch(s, @"^\s*[\p{Sc}\d.,]+\s*$")
+            && !CurrencyAmountRegex.IsMatch(s);   // "Rs15" is a price, not a unit
 
         // Header-word synonyms for the generic detector — ordered most-specific
         // first so multi-word headers win over the bare "Item".
