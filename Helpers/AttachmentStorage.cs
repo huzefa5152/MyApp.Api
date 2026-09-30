@@ -38,24 +38,31 @@ namespace MyApp.Api.Helpers
         /// the metadata for the Attachment row. <paramref name="folderName"/> is
         /// the system folder's name, or null/empty for "Uncategorized". The
         /// relative path uses forward slashes (portable, resolved at read time).
-        /// Capped upstream by the validator + [RequestSizeLimit], so buffering
-        /// into memory here can't blow up the heap.
+        /// Streams to disk so upload memory does not scale with file size.
         /// </summary>
         public async Task<StoredFile> SaveAsync(string? folderName, IFormFile file, CancellationToken ct = default)
         {
-            using var ms = new MemoryStream();
-            await file.CopyToAsync(ms, ct);
-            var bytes = ms.ToArray();
-
             var ext = Path.GetExtension(file.FileName ?? "").ToLowerInvariant();
             var storedName = $"{Guid.NewGuid():N}{ext}";
             var relDir = DirName(folderName);
             Directory.CreateDirectory(Path.Combine(_root, relDir));
 
             var absPath = Path.Combine(_root, relDir, storedName);
-            await File.WriteAllBytesAsync(absPath, bytes, ct);
-
-            return new StoredFile(storedName, $"{relDir}/{storedName}", ComputeSha256(bytes), ext);
+            try
+            {
+                await using var output = new FileStream(absPath, FileMode.CreateNew,
+                    FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.Asynchronous);
+                await file.CopyToAsync(output, ct);
+                await output.FlushAsync(ct);
+                output.Position = 0;
+                var hash = Convert.ToHexString(await SHA256.HashDataAsync(output, ct)).ToLowerInvariant();
+                return new StoredFile(storedName, $"{relDir}/{storedName}", hash, ext);
+            }
+            catch
+            {
+                TryDelete($"{relDir}/{storedName}");
+                throw;
+            }
         }
 
         /// <summary>Absolute path for a stored relative path; null when missing on disk.</summary>
@@ -94,12 +101,6 @@ namespace MyApp.Api.Helpers
                 "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" };
             if (Array.Exists(reserved, r => string.Equals(r, n, StringComparison.OrdinalIgnoreCase))) n = "_" + n;
             return n;
-        }
-
-        private static string ComputeSha256(byte[] bytes)
-        {
-            using var sha = SHA256.Create();
-            return Convert.ToHexString(sha.ComputeHash(bytes)).ToLowerInvariant();
         }
 
         public record StoredFile(string StoredFileName, string StoragePath, string Sha256, string Extension);

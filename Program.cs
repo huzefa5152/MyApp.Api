@@ -1949,7 +1949,13 @@ if (!app.Environment.IsDevelopment())
 app.UseCors("AllowFrontend");
 
 // Enable request body buffering so the exception middleware can read it
-app.Use(async (ctx, next) => { ctx.Request.EnableBuffering(); await next(); });
+app.Use(async (ctx, next) =>
+{
+    var body = ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpRequestBodyDetectionFeature>();
+    if (body?.CanHaveBody ?? ctx.Request.ContentLength != 0)
+        ctx.Request.EnableBuffering();
+    await next();
+});
 
 // Correlation ID — must run BEFORE Serilog request logging and the
 // global exception middleware so all subsequent log lines for this
