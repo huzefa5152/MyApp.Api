@@ -1589,6 +1589,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       {editingId && (
         <EditBillForm
           invoiceId={editingId}
+          onLayoutSaved={() => fetchInvoices(selectedCompany.id, page)}
           billsMode={isBillsMode}
           // Invoices-tab edit lets the FBR officer set Item Type AND Qty —
           // descriptions, prices, dates, payment terms etc. stay read-only
@@ -1614,6 +1615,7 @@ export default function InvoicePage({ mode = "invoices" }) {
       {viewingId && (
         <EditBillForm
           invoiceId={viewingId}
+          onLayoutSaved={() => fetchInvoices(selectedCompany.id, page)}
           readOnly
           // Read-only View is tab-aware, mirroring the Edit forms: the Bills
           // tab shows the original bill qty/price; the Invoices tab applies the

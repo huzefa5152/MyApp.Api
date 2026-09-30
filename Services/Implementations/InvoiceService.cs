@@ -12,6 +12,12 @@ namespace MyApp.Api.Services.Implementations
 {
     public class InvoiceService : IInvoiceService
     {
+        public async Task<bool> SetTaxInvoiceGroupingAsync(int id, bool grouped)
+        {
+            return await _context.Invoices.Where(i => i.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.GroupTaxInvoiceByItemType, grouped)) > 0;
+        }
+
         private readonly IInvoiceRepository _invoiceRepo;
         private readonly IDeliveryChallanRepository _challanRepo;
         private readonly ICompanyRepository _companyRepo;
@@ -233,6 +239,32 @@ namespace MyApp.Api.Services.Implementations
         private static decimal Collectible(Invoice inv) =>
             WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
 
+        /// <summary>Allocate tax pennies so grouped and individual layouts retain the same total.</summary>
+        private static void ReconcilePrintTaxes(List<PrintTaxItemDto> rows, decimal rate)
+        {
+            static void Allocate(List<PrintTaxItemDto> rows, decimal rate, bool invoiceChoice)
+            {
+                if (rows.Count == 0) return;
+                decimal Value(PrintTaxItemDto r) => invoiceChoice ? r.InvoiceValueExclTax : r.ValueExclTax;
+                var target = Math.Round(rows.Sum(Value) * rate / 100m, 2);
+                var amounts = rows.Select(r => Math.Floor(Value(r) * rate) / 100m).ToArray();
+                var pennies = (int)Math.Round((target - amounts.Sum()) * 100m);
+                var order = Enumerable.Range(0, rows.Count)
+                    .OrderByDescending(i => Value(rows[i]) * rate / 100m - amounts[i]).ToArray();
+                for (var n = 0; n < pennies; n++) amounts[order[n % order.Length]] += 0.01m;
+                for (var i = 0; i < rows.Count; i++)
+                    if (invoiceChoice) {
+                        rows[i].InvoiceGstAmount = amounts[i];
+                        rows[i].InvoiceTotalInclTax = rows[i].InvoiceValueExclTax + amounts[i];
+                    } else {
+                        rows[i].GSTAmount = amounts[i];
+                        rows[i].TotalInclTax = rows[i].ValueExclTax + amounts[i];
+                    }
+            }
+            Allocate(rows, rate, false);
+            Allocate(rows, rate, true);
+        }
+
         private static PrintTaxItemDto AddPrintChoices(PrintTaxItemDto row, IEnumerable<InvoiceItem> lines, decimal gstRate)
             => PrintItemChoices.Apply(row, lines.Select(ii => new PrintItemSource(
                 ii.Quantity, ii.Adjustment?.AdjustedQuantity ?? ii.Quantity,
@@ -270,6 +302,7 @@ namespace MyApp.Api.Services.Implementations
             GSTAmount = inv.GSTAmount,
             GrandTotal = inv.GrandTotal,
             AmountInWords = inv.AmountInWords,
+            GroupTaxInvoiceByItemType = inv.GroupTaxInvoiceByItemType,
             PaymentTerms = inv.PaymentTerms,
             Notes = inv.Notes,
             DocumentType = inv.DocumentType,
@@ -958,6 +991,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = dto.PaymentTerms,
                         Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                         DocumentType = effectiveDocType,
@@ -1346,6 +1380,7 @@ namespace MyApp.Api.Services.Implementations
                         WithholdingTaxAmount = withholdingTaxAmount,
                         GrandTotal = grandTotal,
                         AmountInWords = NumberToWordsConverter.Convert(grandTotal),
+                        GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType ?? company.DefaultGroupTaxInvoiceByItemType,
                         PaymentTerms = finalPaymentTerms,
                         Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
                         DocumentType = effectiveDocType,
@@ -1632,6 +1667,8 @@ namespace MyApp.Api.Services.Implementations
                 invoice.FurtherTaxRate = dto.FurtherTaxRate is > 0m ? dto.FurtherTaxRate : null;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount ?? 0m;
+                if (dto.GroupTaxInvoiceByItemType.HasValue)
+                    invoice.GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType.Value;
                 invoice.PaymentTerms = dto.PaymentTerms;
                 invoice.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
                 invoice.DocumentType = dto.DocumentType;
@@ -2277,6 +2314,9 @@ namespace MyApp.Api.Services.Implementations
                             invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
                     }
                 }
+
+                if (dto.GroupTaxInvoiceByItemType.HasValue)
+                    invoice.GroupTaxInvoiceByItemType = dto.GroupTaxInvoiceByItemType.Value;
 
                 // Any edit invalidates a previous validation. Don't touch
                 // FbrStatus when the bill was already submitted (PreValidate
@@ -3695,7 +3735,7 @@ namespace MyApp.Api.Services.Implementations
                     .Distinct()
                     .ToList()!;
 
-            return new PrintTaxInvoiceDto
+            var result = new PrintTaxInvoiceDto
             {
                 Notes = inv.Notes,
                 SupplierName = inv.Company?.BrandName ?? inv.Company?.Name ?? "",
@@ -3782,9 +3822,17 @@ namespace MyApp.Api.Services.Implementations
                 // (Adjusted* ?? base). The customer-facing Bill print
                 // (GetPrintBillAsync) still renders the bill row verbatim, so
                 // the delivery document keeps the operator's declared type.
-                Items = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName))
+                Items = inv.GroupTaxInvoiceByItemType
                     ? inv.Items
-                        .GroupBy(ii => ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName)
+                        .GroupBy(ii => new {
+                            ItemTypeName = ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName,
+                            ItemTypeId = ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId,
+                            UOM = ii.Adjustment?.AdjustedUOM ?? ii.UOM,
+                            HSCode = ii.Adjustment?.AdjustedHSCode ?? ii.HSCode,
+                            SaleType = ii.Adjustment?.AdjustedSaleType ?? ii.SaleType,
+                            ii.RateId,
+                            Singleton = !(ii.Adjustment?.AdjustedItemTypeId ?? ii.ItemTypeId).HasValue || string.IsNullOrWhiteSpace(ii.Adjustment?.AdjustedItemTypeName ?? ii.ItemTypeName) ? ii.Id : 0
+                        })
                         .Select(g =>
                         {
                             var totalQty = g.Sum(ii =>
@@ -3793,12 +3841,12 @@ namespace MyApp.Api.Services.Implementations
                             var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
                             return AddPrintChoices(new PrintTaxItemDto
                             {
-                                ItemTypeName = g.Key,
+                                ItemTypeName = g.Key.ItemTypeName,
                                 Quantity = totalQty,
                                 UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
                                 UOM = g.Select(x => x.Adjustment?.AdjustedUOM ?? x.UOM)
                                        .FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "",
-                                Description = g.Key,
+                                Description = g.Key.ItemTypeName,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
@@ -3840,13 +3888,11 @@ namespace MyApp.Api.Services.Implementations
                 // carries no HS code, which is exactly why this cannot be
                 // derived from Items above.
                 //
-                // Same two shapes as Items: group when every line is classified,
-                // otherwise render a row per line, so a part-classified bill
-                // still prints every line instead of collapsing into one blank
-                // group.
-                BillItems = inv.Items.All(ii => !string.IsNullOrWhiteSpace(ii.ItemTypeName))
+                // The saved layout applies to both template loops. Unclassified
+                // lines and incompatible units or tax classifications stay separate.
+                BillItems = inv.GroupTaxInvoiceByItemType
                     ? inv.Items
-                        .GroupBy(ii => ii.ItemTypeName)
+                        .GroupBy(ii => new { ii.ItemTypeId, ii.ItemTypeName, ii.UOM, ii.HSCode, ii.SaleType, ii.RateId, Singleton = !ii.ItemTypeId.HasValue || string.IsNullOrWhiteSpace(ii.ItemTypeName) ? ii.Id : 0 })
                         .Select(g =>
                         {
                             var totalQty = g.Sum(ii => ii.Quantity);
@@ -3854,7 +3900,7 @@ namespace MyApp.Api.Services.Implementations
                             var gstAmt = Math.Round(totalValue * inv.GSTRate / 100, 2);
                             return AddPrintChoices(new PrintTaxItemDto
                             {
-                                ItemTypeName = g.Key,
+                                ItemTypeName = g.Key.ItemTypeName,
                                 Quantity = totalQty,
                                 // 2dp: this is a printed money column, and the
                                 // stored rate can now carry 12 (the exact-line-
@@ -3862,7 +3908,7 @@ namespace MyApp.Api.Services.Implementations
                                 // has to tie out on the page.
                                 UnitPrice = totalQty != 0 ? Math.Round(totalValue / totalQty, 2) : 0m,
                                 UOM = g.Select(x => x.UOM).FirstOrDefault(u => !string.IsNullOrWhiteSpace(u)) ?? "",
-                                Description = g.Key,
+                                Description = g.Key.ItemTypeName,
                                 ValueExclTax = totalValue,
                                 GSTRate = inv.GSTRate,
                                 GSTAmount = gstAmt,
@@ -3888,6 +3934,9 @@ namespace MyApp.Api.Services.Implementations
                             }, new[] { ii }, inv.GSTRate);
                         }).ToList()
             };
+            ReconcilePrintTaxes(result.Items, inv.GSTRate);
+            ReconcilePrintTaxes(result.BillItems, inv.GSTRate);
+            return result;
         }
 
         /// <summary>

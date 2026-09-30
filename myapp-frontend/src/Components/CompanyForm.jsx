@@ -4,6 +4,7 @@ import { seedDefaultTemplates } from "../api/printTemplateApi";
 import { DEFAULT_TEMPLATES, TEMPLATE_TYPE_LABEL } from "../utils/templateSampleData";
 import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
+import TaxInvoiceGrouping from "./TaxInvoiceGrouping";
 import useScrollToError from "../hooks/useScrollToError";
 
 const {
@@ -38,6 +39,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
     const [form, setForm] = useState({
         name: "",
         brandName: "",
+        defaultGroupTaxInvoiceByItemType: false,
         fullAddress: "",
         phone: "",
         ntn: "",
@@ -125,6 +127,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
             setForm({
                 name: freshCompany.name || "",
                 brandName: freshCompany.brandName || "",
+                defaultGroupTaxInvoiceByItemType: !!freshCompany.defaultGroupTaxInvoiceByItemType,
                 fullAddress: freshCompany.fullAddress || "",
                 phone: freshCompany.phone || "",
                 ntn: freshCompany.ntn || "",
@@ -360,6 +363,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <label style={label}>Brand Name (for print header)</label>
                                 <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="Name as it should print on documents" />
                             </div>
+                            <TaxInvoiceGrouping value={form.defaultGroupTaxInvoiceByItemType} onChange={(value) => setForm((prev) => ({ ...prev, defaultGroupTaxInvoiceByItemType: value }))} companyDefault />
 
                             <div style={formGroup}>
                                 <label style={label}>Full Address</label>

@@ -3,6 +3,7 @@ namespace MyApp.Api.DTOs
     public class UpdateCompanyDto
     {
         public string Name { get; set; } = string.Empty;
+        public bool? DefaultGroupTaxInvoiceByItemType { get; set; }
         public string? BrandName { get; set; }
         public string? FullAddress { get; set; }
         public string? Phone { get; set; }

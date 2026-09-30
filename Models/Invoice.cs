@@ -2,6 +2,7 @@ namespace MyApp.Api.Models
 {
     public class Invoice
     {
+        public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public int Id { get; set; }
         public int InvoiceNumber { get; set; }

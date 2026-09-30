@@ -20,6 +20,9 @@ export const createInvoice = (payload) =>
 export const createStandaloneInvoice = (payload) =>
   httpClient.post("/invoices/standalone", payload);
 
+export const setTaxInvoiceLayout = (id, groupTaxInvoiceByItemType) =>
+  httpClient.patch(`/invoices/${id}/tax-invoice-layout`, { groupTaxInvoiceByItemType });
+
 export const updateInvoice = (id, payload) =>
   httpClient.put(`/invoices/${id}`, payload);
 
@@ -27,8 +30,8 @@ export const updateInvoice = (id, payload) =>
 // Server re-derives HS Code / UOM / Sale Type from the catalog and refuses
 // to touch any other field on the bill. Used when the operator has
 // invoices.manage.update.itemtype but NOT the broader invoices.manage.update.
-export const updateInvoiceItemTypes = (id, items) =>
-  httpClient.patch(`/invoices/${id}/itemtypes`, { items });
+export const updateInvoiceItemTypes = (id, items, groupTaxInvoiceByItemType) =>
+  httpClient.patch(`/invoices/${id}/itemtypes`, { items, groupTaxInvoiceByItemType });
 
 // Slightly broader narrow edit path — Item Type AND Quantity per line.
 // Server still refuses to change price / desc / GST / dates / payment terms
@@ -40,8 +43,8 @@ export const updateInvoiceItemTypes = (id, items) =>
 // leaving the underlying bill row untouched. Use "adjustment" from
 // Invoice-mode saves so the printed bill stays at real qty/price while
 // the FBR-side claim math reads the optimized decomposition.
-export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill") =>
-  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items, writeMode });
+export const updateInvoiceItemTypesAndQty = (id, items, writeMode = "bill", groupTaxInvoiceByItemType) =>
+  httpClient.patch(`/invoices/${id}/itemtypes-and-qty`, { items, writeMode, groupTaxInvoiceByItemType });
 
 export const deleteInvoice = (id) =>
   httpClient.delete(`/invoices/${id}`);

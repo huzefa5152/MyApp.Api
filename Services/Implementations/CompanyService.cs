@@ -68,6 +68,7 @@ namespace MyApp.Api.Services.Implementations
             HasChallans = hasChallans,
             HasInvoices = hasInvoices,
             FbrDefaultSaleType = c.FbrDefaultSaleType,
+            DefaultGroupTaxInvoiceByItemType = c.DefaultGroupTaxInvoiceByItemType,
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
@@ -176,6 +177,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrEnvironment = dto.FbrEnvironment,
                 FbrSellerRegistrationNo = fbrSellerRegNo,
                 FbrDefaultSaleType = dto.FbrDefaultSaleType,
+                DefaultGroupTaxInvoiceByItemType = dto.DefaultGroupTaxInvoiceByItemType,
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
@@ -232,6 +234,8 @@ namespace MyApp.Api.Services.Implementations
 
             // Per-company FBR defaults — null is a valid "clear this default" signal
             company.FbrDefaultSaleType = dto.FbrDefaultSaleType;
+            if (dto.DefaultGroupTaxInvoiceByItemType.HasValue)
+                company.DefaultGroupTaxInvoiceByItemType = dto.DefaultGroupTaxInvoiceByItemType.Value;
             company.FbrDefaultUOM = dto.FbrDefaultUOM;
             company.FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered;
             company.FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered;

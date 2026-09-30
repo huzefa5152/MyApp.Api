@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -36,6 +36,17 @@ namespace MyApp.Api.Controllers
             int.TryParse(
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
+
+        [HttpPatch("{id}/tax-invoice-layout")]
+        [HasAnyPermission("bills.manage.update", "invoices.manage.update.itemtype", "invoices.manage.update.itemtype.qty")]
+        public async Task<IActionResult> SetTaxInvoiceLayout(int id, [FromBody] TaxInvoiceGroupingDto dto)
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
+            return await _service.SetTaxInvoiceGroupingAsync(id, dto.GroupTaxInvoiceByItemType!.Value)
+                ? NoContent() : NotFound();
+        }
 
         // AR payment fields (AmountPaid / BalanceDue / PaymentStatus / DaysOverdue)
         // are exposed only to callers who can see payment status OR settle

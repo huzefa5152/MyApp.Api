@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
-import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty } from "../api/invoiceApi";
+import { getInvoiceById, updateInvoice, updateInvoiceItemTypes, updateInvoiceItemTypesAndQty, setTaxInvoiceLayout } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getAllUnits } from "../api/unitsApi";
@@ -55,7 +55,7 @@ const colors = {
  * Description and UOM use LookupAutocomplete with /api/lookup/items and /api/lookup/units,
  * matching the delivery challan form — picks existing values, creates new ones if needed.
  */
-export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
+export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSaved, readOnly = false, billsMode = false, forceItemTypeAndQty = false }) {
   const confirm = useConfirm();
   // billsMode: true when this form is mounted from the Bills tab. Hides
   // the Item Type column + picker and the bulk-apply toolbar (item-type
@@ -185,9 +185,9 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   // Invoice-mode view: "grouped" collapses every line sharing an Item Type
   // into one editable row (summed qty + summed value) — the same shape FBR
   // receives — while "lines" shows each bill line individually. Only used
-  // when the Item Type column is visible (!billsMode). Defaults to grouped
-  // so the operator edits the invoice at FBR granularity out of the box.
-  const [groupedView, setGroupedView] = useState(true);
+  // when the Item Type column is visible (!billsMode). The saved document
+  // preference seeds the view; existing invoices default to individual lines.
+  const [groupedView, setGroupedView] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
@@ -228,6 +228,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           getAllUnits(data.companyId),
         ]);
         setInvoice(data);
+        setGroupedView(!!data.groupTaxInvoiceByItemType);
         setAnyOverlay((data.items || []).some((it) => it.adjustment));
         // Bill-mode source-of-truth: every InvoiceItem field as the
         // bill carries it. Used to seed both `items[]` (when no
@@ -1028,7 +1029,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
   const itemGroups = useMemo(() => {
     const map = new Map();
     items.forEach((it, idx) => {
-      const key = it.itemTypeId ? `t${it.itemTypeId}` : `u${idx}`;
+      const key = it.itemTypeId ? JSON.stringify([it.itemTypeId, it.uom || "", it.hsCode || "", it.saleType || "", it.rateId ?? null]) : `u${idx}`;
       const g = map.get(key) || {
         key,
         itemTypeId: it.itemTypeId || null,
@@ -1196,7 +1197,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
 
   // The TOGGLE is offered only when switching actually changes something —
   // with one line per Item Type the two views list the same rows.
-  const showGroupToggle = !billsMode && items.length > 1 && groupingCollapses;
+  const showGroupToggle = !billsMode && items.length > 0;
   // ...but the grouped row is where the adjustment controls live (Qty & Unit
   // Price vs Exact Line Total), so it renders on the Invoices tab regardless.
   // Gating it on `showGroupToggle` meant a SINGLE-LINE bill fell through to the
@@ -1432,6 +1433,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
         await updateInvoiceItemTypes(
           invoiceId,
           items.map((i) => ({ id: i.id || 0, itemTypeId: i.itemTypeId || null })),
+          billsMode ? invoice.groupTaxInvoiceByItemType : groupedView,
         );
       } else if (itemTypeAndQtyMode) {
         // Narrow path — Item Type + Qty + UnitPrice. Same back-end
@@ -1474,6 +1476,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
             exactLineTotal: i.exactLineTotal != null ? Number(i.exactLineTotal) : null,
           })),
           writeMode,
+          billsMode ? invoice.groupTaxInvoiceByItemType : groupedView,
         );
       } else {
         // Full edit path — same validation as before.
@@ -1498,6 +1501,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
           furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
           withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
           withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
+          groupTaxInvoiceByItemType: billsMode ? invoice.groupTaxInvoiceByItemType : groupedView,
           paymentTerms: ptToSave,
           notes: notes.trim() || null,
           documentType: documentType || null,
@@ -1550,7 +1554,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xxl}px`, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
           <h5 style={formStyles.title}>
-            {readOnly ? "View Bill" : "Edit Bill"} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
+            {readOnly ? (billsMode ? "View Bill" : "View Invoice") : (billsMode ? "Edit Bill" : "Edit Invoice")} {invoice?.fbrInvoiceNumber || `#${invoice?.invoiceNumber || ""}`}
           </h5>
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
@@ -1816,7 +1820,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                         onClick={() => setGroupedView(true)}
                         style={{ ...styles.viewToggleBtn, ...(groupedView ? styles.viewToggleBtnActive : {}) }}
                         aria-pressed={groupedView}
-                        title="Group lines by Item Type (summed qty + value) — matches the FBR submission"
+                        title="Group compatible lines by Item Type for Invoice View, print, PDF and Excel"
                       >
                         Grouped by Item Type
                       </button>
@@ -1829,6 +1833,20 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly = f
                       >
                         Individual lines
                       </button>
+                      {(canFullEdit || canEditItemTypeAndQty || canEditItemType) && groupedView !== !!invoice?.groupTaxInvoiceByItemType && (
+                        <button type="button" style={styles.viewToggleBtn} disabled={saving}
+                          onClick={async () => {
+                            setSaving(true);
+                            try {
+                              await setTaxInvoiceLayout(invoiceId, groupedView);
+                              setInvoice((prev) => ({ ...prev, groupTaxInvoiceByItemType: groupedView }));
+                              onLayoutSaved?.();
+                            } catch (err) { setError(err.response?.data?.error || "Could not save invoice layout."); }
+                            finally { setSaving(false); }
+                          }}>
+                          Save print layout
+                        </button>
+                      )}
                     </div>
                   )}
                   {/* "+ New Item Type" fallback — single-item bills don't
@@ -3992,8 +4010,8 @@ const styles = {
   },
   bulkApplyLabel: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 },
   // Grouped ⇄ Individual lines segmented toggle.
-  viewToggle: { display: "inline-flex", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: "#fff" },
-  viewToggleBtn: { padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap" },
+  viewToggle: { display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: "#fff" },
+  viewToggleBtn: { minHeight: 44, padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "normal" },
   viewToggleBtnActive: { backgroundColor: colors.blue, color: "#fff" },
   // Grouped table affordances.
   groupedRow: { backgroundColor: "#fbfcfe" },

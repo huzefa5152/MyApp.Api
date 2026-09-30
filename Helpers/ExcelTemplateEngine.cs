@@ -970,18 +970,16 @@ namespace MyApp.Api.Helpers
                 ["itemCount"] = dto.Items.Count,
             };
 
-            d["items"] = dto.Items.Select((item, idx) => new Dictionary<string, object?>
-            {
-                ["sNo"] = idx + 1,
-                ["itemTypeName"] = item.ItemTypeName,
-                ["quantity"] = item.Quantity,
-                ["uom"] = item.UOM,
-                ["description"] = item.Description,
-                ["valueExclTax"] = item.ValueExclTax,
-                ["gstRate"] = item.GSTRate,
-                ["gstAmount"] = item.GSTAmount,
-                ["totalInclTax"] = item.TotalInclTax,
-            }).Cast<Dictionary<string, object?>>().ToList();
+            static List<Dictionary<string, object?>> Rows(IEnumerable<DTOs.PrintTaxItemDto> items) =>
+                items.Select((item, idx) => {
+                    var row = typeof(DTOs.PrintTaxItemDto).GetProperties().ToDictionary(
+                        p => System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(p.Name),
+                        p => p.GetValue(item));
+                    row["sNo"] = idx + 1;
+                    return row;
+                }).ToList();
+            d["items"] = Rows(dto.Items);
+            d["billItems"] = Rows(dto.BillItems);
 
             return d;
         }

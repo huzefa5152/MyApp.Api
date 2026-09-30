@@ -1,7 +1,14 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
+    public class TaxInvoiceGroupingDto
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public bool? GroupTaxInvoiceByItemType { get; set; }
+    }
+
     public class InvoiceDto
     {
+        public bool GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public int Id { get; set; }
         public int InvoiceNumber { get; set; }
@@ -272,6 +279,7 @@
 
     public class CreateInvoiceDto
     {
+        public bool? GroupTaxInvoiceByItemType { get; set; }
         public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
@@ -349,6 +357,7 @@
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
         /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
         /// server resolves the amount from the subtotal and adds it to the
@@ -573,6 +582,7 @@
     /// </summary>
     public class UpdateInvoiceDto
     {
+        public bool? GroupTaxInvoiceByItemType { get; set; }
         // ── Document taxes — both optional, both default to NONE ──
         /// <summary>Further tax (s.3(1A)) rate %. Null or 0 = not charged. The
         /// server resolves the amount from the subtotal and adds it to the
@@ -663,6 +673,7 @@
     /// </summary>
     public class UpdateInvoiceItemTypesDto
     {
+        public bool? GroupTaxInvoiceByItemType { get; set; }
         public List<UpdateInvoiceItemTypeRow> Items { get; set; } = new();
 
         /// <summary>

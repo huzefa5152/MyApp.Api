@@ -18,6 +18,7 @@ import PermissionLackedHint from "./PermissionLackedHint";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import TaxInvoiceGrouping from "./TaxInvoiceGrouping";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 
 // Bill-without-challan flow ("Standalone Bill"). Per FBR DI-API V1.12:
@@ -134,6 +135,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
+  const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
+  useEffect(() => { setGroupTaxInvoiceByItemType(!!company?.defaultGroupTaxInvoiceByItemType); }, [companyId, company?.defaultGroupTaxInvoiceByItemType]);
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
   // Credit Note (10) and Debit Note (9) get their own dedicated screens
   // — see InvoiceForm.jsx for the same rationale.
@@ -514,6 +517,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         gstRate: parseFloat(gstRate),
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
+        groupTaxInvoiceByItemType,
         paymentTerms: paymentTerms || null,
         notes: notes.trim() || null,
         scenarioId: scenarioCode || null,
@@ -1327,6 +1331,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               </>
             )}
 
+            <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />

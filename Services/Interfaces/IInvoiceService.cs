@@ -4,6 +4,7 @@ namespace MyApp.Api.Services.Interfaces
 {
     public interface IInvoiceService
     {
+        Task<bool> SetTaxInvoiceGroupingAsync(int id, bool grouped);
         Task<List<InvoiceDto>> GetByCompanyAsync(int companyId);
         /// <summary>
         /// Paged list. <paramref name="noteType"/> selects the document group:

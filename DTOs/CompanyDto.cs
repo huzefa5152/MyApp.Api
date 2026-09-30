@@ -4,6 +4,7 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        public bool DefaultGroupTaxInvoiceByItemType { get; set; }
         public string? BrandName { get; set; }
         public string? LogoPath { get; set; }
         public string? FullAddress { get; set; }

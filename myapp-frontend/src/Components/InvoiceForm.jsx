@@ -26,6 +26,7 @@ import DocumentTaxFields from "./DocumentTaxFields";
 import LookupAutocomplete from "./LookupAutocomplete";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
+import TaxInvoiceGrouping from "./TaxInvoiceGrouping";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 
 const colors = {
@@ -125,6 +126,8 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
+  const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
+  useEffect(() => { setGroupTaxInvoiceByItemType(!!company?.defaultGroupTaxInvoiceByItemType); }, [companyId, company?.defaultGroupTaxInvoiceByItemType]);
   // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
   // slice rolled the calendar day back by one for PKT operators billing
   // before 5am.
@@ -676,6 +679,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : parseFloat(furtherTaxRate),
         withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : parseFloat(withholdingTaxRate),
         withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : parseFloat(withholdingTaxAmount),
+        groupTaxInvoiceByItemType,
         paymentTerms: paymentTermsToSave,
         notes: notes.trim() || null,
         documentType: documentType || null,
@@ -1721,6 +1725,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
               </>
             )}
 
+            <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>
               <AttachmentManager ref={attachmentRef} companyId={companyId} entityType="Invoice" entityId={null} mode="edit" />
