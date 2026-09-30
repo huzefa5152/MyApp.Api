@@ -1852,38 +1852,9 @@ using (var scope = app.Services.CreateScope())
         END
     ");
 
-    // ── Idempotent backfill: orphaned companies → all Administrator users ──
-    //
-    // 2026-05-14: CompanyService.CreateAsync did not historically create a
-    // UserCompanies row for the creator. Combined with the fail-closed
-    // CompanyAccessGuard, that meant any non-seed-admin who created a
-    // company was instantly locked out of it: print-template uploads,
-    // imports, FBR setup, every companyId-scoped endpoint returned 403.
-    //
-    // The controller now auto-grants the creator on each new POST
-    // /api/companies (see CompaniesController.CreateCompany). This backfill
-    // handles companies that were already created before that fix:
-    // any company with ZERO UserCompanies rows gets grants for every
-    // user currently in the Administrator role.
-    //
-    // Re-runs every boot (intentionally — newly-orphaned companies after
-    // a UserCompanies cleanup will be re-granted on next start). The NOT
-    // EXISTS guards make each individual INSERT idempotent.
-    db.Database.ExecuteSqlRaw(@"
-        DECLARE @adminRoleId INT = (SELECT TOP 1 Id FROM Roles WHERE [Name] = 'Administrator');
-        IF @adminRoleId IS NOT NULL
-        BEGIN
-            INSERT INTO UserCompanies (UserId, CompanyId, AssignedAt, AssignedByUserId)
-            SELECT ur.UserId, c.Id, SYSUTCDATETIME(), " + seedAdminUserId + @"
-              FROM Companies c
-              CROSS JOIN UserRoles ur
-             WHERE ur.RoleId = @adminRoleId
-               AND NOT EXISTS (SELECT 1 FROM UserCompanies u WHERE u.CompanyId = c.Id)
-               AND NOT EXISTS (
-                   SELECT 1 FROM UserCompanies x
-                    WHERE x.UserId = ur.UserId AND x.CompanyId = c.Id);
-        END
-    ");
+    // Company creation grants its creator in CompaniesController. A company
+    // with no saved memberships stays private to the seed admin until assigned;
+    // startup must never recreate grants an operator deliberately removed.
 
     // ── One-time perm grant: tenantaccess.manage.* → Administrator role ──
     // The new keys are inserted by RbacSeeder (it walks PermissionCatalog),
