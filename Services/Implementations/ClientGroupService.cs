@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,17 +81,8 @@ namespace MyApp.Api.Services.Implementations
                 // about to commit.
                 await _db.SaveChangesAsync();
             }
-            else
-            {
-                // Refresh DisplayName to track the most-recently-saved name
-                // — operators occasionally tidy up casing / spelling and we
-                // want the panel to reflect that. NormalizedNtn / Name only
-                // change when the operator edits NTN or Name themselves;
-                // EnsureGroup is invoked AFTER such edits so re-syncing is
-                // safe.
-                group.DisplayName = (client.Name ?? "").Trim();
-                group.UpdatedAt = DateTime.UtcNow;
-            }
+            // Existing shared identity metadata must not be renamed by a
+            // per-company save. Display fields come from reachable clients.
 
             client.ClientGroupId = group.Id;
             return group;
@@ -123,6 +115,8 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new
                 {
                     GroupId = g.Key,
+                    DisplayName = g.OrderBy(c => c.Id).Select(c => c.Name).First(),
+                    NTN = g.OrderBy(c => c.Id).Select(c => c.NTN).First(),
                     CompanyCount = g.Select(c => c.CompanyId).Distinct().Count(),
                     ThisCompanyClientId = g
                         .Where(c => c.CompanyId == companyId)
@@ -134,10 +128,6 @@ namespace MyApp.Api.Services.Implementations
             if (groupSummaries.Count == 0) return new List<CommonClientDto>();
 
             var groupIds = groupSummaries.Select(s => s.GroupId).ToList();
-
-            var groups = await _db.ClientGroups
-                .Where(g => groupIds.Contains(g.Id))
-                .ToDictionaryAsync(g => g.Id);
 
             // One-shot fetch of the member-company names for the cards —
             // restricted to reachable companies so a card never names a
@@ -158,8 +148,8 @@ namespace MyApp.Api.Services.Implementations
                 .Select(s => new CommonClientDto
                 {
                     GroupId = s.GroupId,
-                    DisplayName = groups[s.GroupId].DisplayName,
-                    NTN = groups[s.GroupId].NormalizedNtn,
+                    DisplayName = s.DisplayName,
+                    NTN = ComputeGroupKey(s.DisplayName, s.NTN).NormalizedNtn,
                     CompanyCount = s.CompanyCount,
                     CompanyNames = companyNamesByGroup.GetValueOrDefault(s.GroupId, new List<string>()),
                     ThisCompanyClientId = s.ThisCompanyClientId,
@@ -190,18 +180,16 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new
                 {
                     GroupId = g.Key,
+                    DisplayName = g.OrderBy(c => c.Id).Select(c => c.Name).First(),
+                    NTN = g.OrderBy(c => c.Id).Select(c => c.NTN).First(),
                     CompanyCount = g.Select(c => c.CompanyId).Distinct().Count(),
-                    AnyClientId = g.Select(c => (int?)c.Id).FirstOrDefault(),
+                    AnyClientId = g.OrderBy(c => c.Id).Select(c => (int?)c.Id).FirstOrDefault(),
                 })
                 .ToListAsync();
 
             if (groupSummaries.Count == 0) return new List<CommonClientDto>();
 
             var groupIds = groupSummaries.Select(s => s.GroupId).ToList();
-
-            var groups = await _db.ClientGroups
-                .Where(g => groupIds.Contains(g.Id))
-                .ToDictionaryAsync(g => g.Id);
 
             var memberCompanies = await _db.Clients
                 .Where(c => c.ClientGroupId != null
@@ -219,8 +207,8 @@ namespace MyApp.Api.Services.Implementations
                 .Select(s => new CommonClientDto
                 {
                     GroupId = s.GroupId,
-                    DisplayName = groups[s.GroupId].DisplayName,
-                    NTN = groups[s.GroupId].NormalizedNtn,
+                    DisplayName = s.DisplayName,
+                    NTN = ComputeGroupKey(s.DisplayName, s.NTN).NormalizedNtn,
                     CompanyCount = s.CompanyCount,
                     CompanyNames = companyNamesByGroup.GetValueOrDefault(s.GroupId, new List<string>()),
                     // ThisCompanyClientId is repurposed here as "any
@@ -305,7 +293,7 @@ namespace MyApp.Api.Services.Implementations
             return new CommonClientDetailDto
             {
                 GroupId = group.Id,
-                DisplayName = group.DisplayName,
+                DisplayName = representative.Name,
                 NTN = representative.NTN,
                 STRN = representative.STRN,
                 CNIC = representative.CNIC,
@@ -331,6 +319,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto, IReadOnlyCollection<int> accessibleCompanyIds)
         {
+            await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             var group = await _db.ClientGroups.FirstOrDefaultAsync(g => g.Id == groupId)
                 ?? throw new KeyNotFoundException("Common client group not found.");
 
@@ -338,12 +327,10 @@ namespace MyApp.Api.Services.Implementations
             // clients in companies the caller can access — never overwrite another
             // tenant's client NTN/STRN/contact data via a shared common-client group.
             var allowed = new HashSet<int>(accessibleCompanyIds);
-            var members = (await _db.Clients
+            var members = await _db.Clients
                 .Include(c => c.Company)
-                .Where(c => c.ClientGroupId == groupId)
-                .ToListAsync())
-                .Where(c => allowed.Contains(c.CompanyId))
-                .ToList();
+                .Where(c => c.ClientGroupId == groupId && allowed.Contains(c.CompanyId))
+                .ToListAsync();
 
             if (members.Count == 0)
                 throw new InvalidOperationException("Common client group has no members you can edit.");
@@ -388,14 +375,42 @@ namespace MyApp.Api.Services.Implementations
                         $"Another common client already uses NTN/name '{dto.NTN ?? dto.Name}'. " +
                         "Merge them via the configuration page first.");
                 }
-                group.GroupKey = newKey;
+                var hasForeignMembers = await _db.Clients.AnyAsync(c =>
+                    c.ClientGroupId == groupId && !allowed.Contains(c.CompanyId));
+                if (hasForeignMembers)
+                {
+                    // Change the reachable clients' identity without changing
+                    // the legal identity of another company's clients.
+                    group = new ClientGroup
+                    {
+                        GroupKey = newKey,
+                        NormalizedNtn = newNtn,
+                        NormalizedName = newName,
+                        DisplayName = (dto.Name ?? "").Trim(),
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow,
+                    };
+                    _db.ClientGroups.Add(group);
+                    foreach (var member in members)
+                        member.ClientGroup = group;
+
+                    var memberIds = members.Select(c => c.Id).ToList();
+                    var formats = await _db.POFormats.Where(f =>
+                        f.CompanyId.HasValue && allowed.Contains(f.CompanyId.Value)
+                        && f.ClientId.HasValue && memberIds.Contains(f.ClientId.Value)).ToListAsync();
+                    foreach (var format in formats)
+                        format.ClientGroup = group;
+                }
+                else
+                {
+                    group.GroupKey = newKey;
+                    group.NormalizedNtn = newNtn;
+                    group.NormalizedName = newName;
+                }
             }
-            group.NormalizedNtn = newNtn;
-            group.NormalizedName = newName;
-            group.DisplayName = (dto.Name ?? "").Trim();
-            group.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return new CommonClientUpdateResultDto
             {

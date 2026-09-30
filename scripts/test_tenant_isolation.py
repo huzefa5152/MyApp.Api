@@ -31,6 +31,7 @@ import json, sys, urllib.request, urllib.error
 from typing import Any
 
 import os
+from uuid import uuid4
 BASE = os.environ.get("MYAPP_BASE", "http://localhost:5134")
 
 PASS = "PASS"
@@ -690,6 +691,83 @@ status, alice_groups2 = request("GET", "/api/clients/groups", token=tokens["alic
 check("Common tenant scoping", "alice /clients/groups omits the Beta-only group",
       status == 200 and not any(g.get("ntn") == foreign_ntn for g in (alice_groups2 or [])),
       "Beta-only group leaked into alice's group list")
+
+print("\n  Suite 10 — Shared customer identity isolation")
+
+status, beta_record = request("GET", f"/api/clients/{beta_shared['id']}", token=tokens["bob"])
+check("Customer identity isolation", "bob can read his own shared client", status == 200)
+beta_record["name"] = "Beta Private Customer Name"
+status, _ = request("PUT", f"/api/clients/{beta_shared['id']}", token=tokens["bob"], body=beta_record)
+check("Customer identity isolation", "bob can rename his company client", status == 200)
+status, rows = request("GET", "/api/clients/groups", token=tokens["alice"])
+alice_card = next((r for r in (rows or []) if r.get("groupId") == group_id), {})
+check("Customer identity isolation", "alice group label never reads bob's private name",
+      status == 200 and alice_card.get("displayName") == shared_name)
+status, rows = request("GET", "/api/clients/groups", token=tokens["bob"])
+bob_card = next((r for r in (rows or []) if r.get("groupId") == group_id), {})
+check("Customer identity isolation", "bob group label uses his own client name",
+      status == 200 and bob_card.get("displayName") == beta_record["name"])
+status, own_detail = request("GET", f"/api/clients/common/{group_id}", token=tokens["alice"])
+check("Customer identity isolation", "alice detail label uses her reachable member",
+      status == 200 and own_detail.get("displayName") == shared_name)
+common_edit = {
+    "name": "Alpha Private Customer Name", "ntn": shared_ntn,
+    "address": "Alpha private address", "phone": "0000000000",
+    "email": "alpha@example.test", "strn": "0000002000002",
+    "cnic": "0000002000002", "registrationType": "Registered", "site": "Alpha only",
+}
+status, edited = request("PUT", f"/api/clients/common/{group_id}", token=tokens["alice"], body=common_edit)
+check("Customer identity isolation", "common rename changes one accessible client only",
+      status == 200 and edited.get("clientsUpdated") == 1)
+status, beta_after = request("GET", f"/api/clients/{beta_shared['id']}", token=tokens["bob"])
+check("Customer identity isolation", "common rename preserves bob's client fields",
+      status == 200 and beta_after == beta_record)
+status, bob_detail = request("GET", f"/api/clients/common/{group_id}", token=tokens["bob"])
+check("Customer identity isolation", "bob detail never displays alice's renamed client",
+      status == 200 and bob_detail.get("displayName") == beta_record["name"])
+
+status, alpha_format = request("POST", "/api/poformats/simple", token=tokens["alice"], body={
+    "companyId": alpha["id"], "clientId": alpha_shared["id"],
+    "name": "Alpha private format", "rawText": "Alpha Purchase Order Description Qty",
+    "descriptionHeader": "Description", "quantityHeader": "Qty",
+})
+check("Customer identity isolation", "client has a company-private PO format", status == 201)
+common_edit["ntn"] = str(1000000000000 + uuid4().int % 9000000000000)
+status, split = request("PUT", f"/api/clients/common/{group_id}", token=tokens["alice"], body=common_edit)
+check("Customer identity isolation", "restricted tax identity edit creates a private group",
+      status == 200 and split.get("groupId") != group_id and split.get("clientsUpdated") == 1)
+status, alpha_after = request("GET", f"/api/clients/{alpha_shared['id']}", token=tokens["alice"])
+check("Customer identity isolation", "alpha client points to its new legal identity",
+      status == 200 and alpha_after.get("ntn") == common_edit["ntn"]
+      and alpha_after.get("clientGroupId") == (split or {}).get("groupId"))
+status, beta_after_split = request("GET", f"/api/clients/{beta_shared['id']}", token=tokens["bob"])
+check("Customer identity isolation", "tax identity split leaves foreign client unchanged",
+      status == 200 and beta_after_split == beta_record)
+status, bob_old_detail = request("GET", f"/api/clients/common/{group_id}", token=tokens["bob"])
+check("Customer identity isolation", "foreign group's original tax identity survives",
+      status == 200 and bob_old_detail.get("ntn") == shared_ntn)
+status, _ = request("GET", f"/api/clients/common/{(split or {}).get('groupId', 0)}", token=tokens["bob"])
+check("Customer identity isolation", "bob cannot read alpha's separated group", status == 404)
+status, _ = request("GET", f"/api/clients/common/{group_id}", token=tokens["alice"])
+check("Customer identity isolation", "alice cannot read the remaining foreign group", status == 404)
+if alpha_format and alpha_format.get("id"):
+    status, format_after = request("GET", f"/api/poformats/{alpha_format['id']}", token=tokens["alice"])
+    check("Customer identity isolation", "tax identity split preserves the client's PO format",
+          status == 200 and format_after.get("companyId") == alpha["id"]
+          and format_after.get("clientId") == alpha_shared["id"]
+          and format_after.get("ruleSetJson") == alpha_format.get("ruleSetJson")
+          and format_after.get("currentVersion") == alpha_format.get("currentVersion"))
+    status, _ = request("GET", f"/api/poformats/{alpha_format['id']}", token=tokens["bob"])
+    check("Customer identity isolation", "bob cannot read alpha's PO format", status == 403)
+    request("DELETE", f"/api/poformats/{alpha_format['id']}", token=admin)
+
+collision_edit = dict(common_edit, name="Rejected name", ntn=foreign_ntn)
+status, _ = request("PUT", f"/api/clients/common/{(split or {}).get('groupId', 0)}",
+                    token=tokens["alice"], body=collision_edit)
+check("Customer identity isolation", "identity collision remains rejected", status == 400)
+status, after_collision = request("GET", f"/api/clients/{alpha_shared['id']}", token=tokens["alice"])
+check("Customer identity isolation", "rejected collision leaves client unchanged",
+      status == 200 and after_collision == alpha_after)
 
 request("DELETE", f"/api/suppliers/{beta_only_sup['id']}", token=admin)
 request("DELETE", f"/api/clients/{beta_only_client['id']}", token=admin)
