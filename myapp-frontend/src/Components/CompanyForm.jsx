@@ -40,6 +40,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
         name: "",
         brandName: "",
         defaultGroupTaxInvoiceByItemType: false,
+        defaultWithholdingTaxRate: null,
         fullAddress: "",
         phone: "",
         ntn: "",
@@ -128,6 +129,7 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                 name: freshCompany.name || "",
                 brandName: freshCompany.brandName || "",
                 defaultGroupTaxInvoiceByItemType: !!freshCompany.defaultGroupTaxInvoiceByItemType,
+                defaultWithholdingTaxRate: freshCompany.defaultWithholdingTaxRate ?? null,
                 fullAddress: freshCompany.fullAddress || "",
                 phone: freshCompany.phone || "",
                 ntn: freshCompany.ntn || "",
@@ -364,6 +366,13 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                                 <input type="text" name="brandName" value={form.brandName} onChange={handleChange} style={input} placeholder="Name as it should print on documents" />
                             </div>
                             <TaxInvoiceGrouping value={form.defaultGroupTaxInvoiceByItemType} onChange={(value) => setForm((prev) => ({ ...prev, defaultGroupTaxInvoiceByItemType: value }))} companyDefault />
+                            <div style={formGroup}>
+                                <label style={label}>Default withholding tax rate (%)</label>
+                                <input type="number" min="0" max="100" step="0.01" value={form.defaultWithholdingTaxRate ?? ""}
+                                    onChange={(e) => setForm((prev) => ({ ...prev, defaultWithholdingTaxRate: e.target.value === "" ? null : Number(e.target.value) }))}
+                                    style={input} placeholder="None" />
+                                <small>Pre-fills new sales bills. Leave blank for None; each bill can override it.</small>
+                            </div>
 
                             <div style={formGroup}>
                                 <label style={label}>Full Address</label>

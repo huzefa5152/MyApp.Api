@@ -4,6 +4,9 @@ namespace MyApp.Api.DTOs
     {
         public string Name { get; set; } = string.Empty;
         public bool DefaultGroupTaxInvoiceByItemType { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Range(0, 100)]
+        public decimal? DefaultWithholdingTaxRate { get; set; }
         public string? BrandName { get; set; }
         public string? FullAddress { get; set; }
         public string? Phone { get; set; }

@@ -69,6 +69,7 @@ namespace MyApp.Api.Services.Implementations
             HasInvoices = hasInvoices,
             FbrDefaultSaleType = c.FbrDefaultSaleType,
             DefaultGroupTaxInvoiceByItemType = c.DefaultGroupTaxInvoiceByItemType,
+            DefaultWithholdingTaxRate = c.DefaultWithholdingTaxRate,
             FbrDefaultUOM = c.FbrDefaultUOM,
             FbrDefaultPaymentModeRegistered = c.FbrDefaultPaymentModeRegistered,
             FbrDefaultPaymentModeUnregistered = c.FbrDefaultPaymentModeUnregistered,
@@ -178,6 +179,7 @@ namespace MyApp.Api.Services.Implementations
                 FbrSellerRegistrationNo = fbrSellerRegNo,
                 FbrDefaultSaleType = dto.FbrDefaultSaleType,
                 DefaultGroupTaxInvoiceByItemType = dto.DefaultGroupTaxInvoiceByItemType,
+                DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate,
                 FbrDefaultUOM = dto.FbrDefaultUOM,
                 FbrDefaultPaymentModeRegistered = dto.FbrDefaultPaymentModeRegistered,
                 FbrDefaultPaymentModeUnregistered = dto.FbrDefaultPaymentModeUnregistered,
@@ -234,6 +236,8 @@ namespace MyApp.Api.Services.Implementations
 
             // Per-company FBR defaults — null is a valid "clear this default" signal
             company.FbrDefaultSaleType = dto.FbrDefaultSaleType;
+            if (dto.HasDefaultWithholdingTaxRate)
+                company.DefaultWithholdingTaxRate = dto.DefaultWithholdingTaxRate;
             if (dto.DefaultGroupTaxInvoiceByItemType.HasValue)
                 company.DefaultGroupTaxInvoiceByItemType = dto.DefaultGroupTaxInvoiceByItemType.Value;
             company.FbrDefaultUOM = dto.FbrDefaultUOM;
@@ -403,6 +407,7 @@ namespace MyApp.Api.Services.Implementations
                 await _context.SalesQuotes.Where(q => q.CompanyId == id).ExecuteDeleteAsync();
 
                 // 4. Delete clients
+                await _context.WithholdingTaxReceipts.Where(r => r.CompanyId == id).ExecuteDeleteAsync();
                 await _context.Clients.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
 
                 // 5. Delete print templates

@@ -17,3 +17,6 @@ const classic = (starters, prefix) =>
 
 export const defaultReceiptTemplate = classic(receiptStarters, "receipt");
 export const defaultPaymentTemplate = classic(paymentStarters, "payment");
+
+import { withholdingTaxStarters } from "./starters/withholdingTax";
+export const defaultWithholdingTaxTemplate = classic(withholdingTaxStarters, "wht");

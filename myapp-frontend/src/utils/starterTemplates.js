@@ -24,6 +24,8 @@ import { goodsReceiptStarters } from "./starters/goodsReceipt";
 import { receiptStarters } from "./starters/receipt";
 import { paymentStarters } from "./starters/payment";
 
+import { withholdingTaxStarters } from "./starters/withholdingTax";
+
 export const STARTER_TEMPLATES = [
   ...challanStarters,
   ...billStarters,
@@ -36,4 +38,5 @@ export const STARTER_TEMPLATES = [
   ...goodsReceiptStarters,
   ...receiptStarters,
   ...paymentStarters,
+  ...withholdingTaxStarters,
 ];

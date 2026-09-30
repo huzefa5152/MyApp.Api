@@ -28,6 +28,7 @@ namespace MyApp.Api.Helpers
         // single Payment entity (distinguished by Direction), so they share ONE
         // type — mirroring how Invoice covers bills/invoices/notes.
         public const string Payment = "Payment";
+        public const string WithholdingTaxReceipt = "WithholdingTaxReceipt";
 
         /// <summary>
         /// Pseudo-source meaning "no entity link" (EntityType IS NULL) — a file
@@ -38,7 +39,7 @@ namespace MyApp.Api.Helpers
 
         public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
         {
-            SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, GoodsReceipt, Payment
+            SalesQuote, SalesOrder, DeliveryChallan, Invoice, PurchaseBill, GoodsReceipt, Payment, WithholdingTaxReceipt
         };
 
         /// <summary>

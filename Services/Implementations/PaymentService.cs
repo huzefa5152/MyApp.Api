@@ -137,18 +137,18 @@ namespace MyApp.Api.Services.Implementations
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
                 var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount);
-                if (newTotal > inv.GrandTotal)
+                if (newTotal > WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount))
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {inv.GrandTotal - inv.AmountPaid:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (balance due is {WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount) - inv.AmountPaid:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue)
                          .GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = bills.First(b => b.Id == grp.Key);
                 var newTotal = bill.AmountPaid + grp.Sum(a => a.Amount);
-                if (newTotal > bill.GrandTotal)
+                if (newTotal > WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount))
                     throw new InvalidOperationException(
-                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (balance due is {bill.GrandTotal - bill.AmountPaid:0.00}).");
+                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (balance due is {WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount) - bill.AmountPaid:0.00}).");
             }
 
             var paymentDate = dto.Date == default ? PakistanClock.Today : dto.Date;
@@ -276,21 +276,21 @@ namespace MyApp.Api.Services.Implementations
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
                 var paidByOthers = await _context.PaymentAllocations
-                    .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
+                    .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
                     .SumAsync(pa => (decimal?)pa.Amount) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount) > inv.GrandTotal)
+                if (paidByOthers + grp.Sum(a => a.Amount) > WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount))
                     throw new InvalidOperationException(
-                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {inv.GrandTotal - paidByOthers:0.00}).");
+                        $"Receipt would over-pay Invoice #{inv.InvoiceNumber} (available is {WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount) - paidByOthers:0.00}).");
             }
             foreach (var grp in dto.Allocations.Where(a => a.PurchaseBillId.HasValue).GroupBy(a => a.PurchaseBillId!.Value))
             {
                 var bill = bills.First(b => b.Id == grp.Key);
                 var paidByOthers = await _context.PaymentAllocations
-                    .Where(pa => pa.PurchaseBillId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
+                    .Where(pa => pa.PurchaseBillId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled && pa.Payment.ChequeStatus != ChequeStatus.Bounced)
                     .SumAsync(pa => (decimal?)pa.Amount) ?? 0m;
-                if (paidByOthers + grp.Sum(a => a.Amount) > bill.GrandTotal)
+                if (paidByOthers + grp.Sum(a => a.Amount) > WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount))
                     throw new InvalidOperationException(
-                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (available is {bill.GrandTotal - paidByOthers:0.00}).");
+                        $"Payment would over-pay Bill #{bill.PurchaseBillNumber} (available is {WithholdingTaxCalculator.Collectible(bill.GrandTotal, bill.WithholdingTaxAmount) - paidByOthers:0.00}).");
             }
 
             // Documents this payment used to touch — reflow them too even if the

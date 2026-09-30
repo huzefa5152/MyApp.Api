@@ -1,3 +1,4 @@
+import DocumentTaxFields from "./DocumentTaxFields";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
@@ -135,6 +136,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
+  const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
+  const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
   useEffect(() => { setGroupTaxInvoiceByItemType(!!company?.defaultGroupTaxInvoiceByItemType); }, [companyId, company?.defaultGroupTaxInvoiceByItemType]);
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
@@ -518,6 +521,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         groupTaxInvoiceByItemType,
+        withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : Number(withholdingTaxRate),
+        withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : Number(withholdingTaxAmount),
         paymentTerms: paymentTerms || null,
         notes: notes.trim() || null,
         scenarioId: scenarioCode || null,
@@ -1331,6 +1336,9 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
               </>
             )}
 
+            <DocumentTaxFields subtotal={subtotal} gstAmount={gstAmount}
+              withholdingTaxRate={withholdingTaxRate} withholdingTaxAmount={withholdingTaxAmount}
+              onWithholdingChange={({ rate, amount }) => { setWithholdingTaxRate(rate); setWithholdingTaxAmount(amount); }} />
             <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>

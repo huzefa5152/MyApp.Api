@@ -339,6 +339,8 @@ builder.Services.AddScoped<IMergeFieldRepository, MergeFieldRepository>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddScoped<ISalesQuoteRepository, SalesQuoteRepository>();
 builder.Services.AddScoped<ISalesOrderRepository, SalesOrderRepository>();
+builder.Services.AddScoped<IWithholdingTaxReceiptRepository, WithholdingTaxReceiptRepository>();
+builder.Services.AddScoped<IWithholdingTaxReceiptService, WithholdingTaxReceiptService>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IFolderRepository, FolderRepository>();
@@ -783,6 +785,7 @@ using (var scope = app.Services.CreateScope())
     await MyApp.Api.Data.NoteAndPurchaseMergeFieldSeeder.SeedAsync(db); // Credit/Debit Note, PurchaseBill, GoodsReceipt
     await MyApp.Api.Data.TaxInvoiceBillItemsMergeFieldSeeder.SeedAsync(db); // TaxInvoice {{#each billItems}}
     await MyApp.Api.Data.ChallanSerialNoMergeFieldSeeder.SeedAsync(db);
+    await MyApp.Api.Data.WithholdingReceiptMergeFieldSeeder.SeedAsync(db);
     await MyApp.Api.Data.DocumentNotesMergeFieldSeeder.SeedAsync(db);        // {{{richText notes}}} on every document type
 
     // ── GL back-post ────────────────────────────────────────────────────

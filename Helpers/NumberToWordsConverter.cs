@@ -32,6 +32,17 @@ namespace MyApp.Api.Helpers
             return ConvertWholeNumber(rupees) + " Rupees Only";
         }
 
+        /// <summary>Exact monetary wording for certificates, including paisa.</summary>
+        public static string ConvertWithPaisa(decimal amount)
+        {
+            var rounded = Math.Round(Math.Max(0m, amount), 2, MidpointRounding.AwayFromZero);
+            var rupees = (long)decimal.Truncate(rounded);
+            var paisa = (long)((rounded - rupees) * 100m);
+            return ConvertWholeNumber(rupees) + " Rupees"
+                + (paisa > 0 ? " and " + ConvertWholeNumber(paisa) + " Paisa" : "")
+                + " Only";
+        }
+
         /// <summary>
         /// Standard half-up rounding to whole rupees — the canonical rounding
         /// for printed-bill display. Use this everywhere the grand total /

@@ -318,6 +318,9 @@ namespace MyApp.Api.Services.Implementations
                     "Cannot delete a client that has FBR-submitted invoices (filed tax records). " +
                     "Reassign or handle those invoices first.");
 
+            if (await _context.WithholdingTaxReceipts.AnyAsync(r => r.ClientId == id))
+                throw new InvalidOperationException("Cannot delete a customer with withholding tax receipts. Handle those receipts first.");
+
             // Cascade delete in a single transaction for atomicity
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try

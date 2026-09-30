@@ -79,6 +79,7 @@ namespace MyApp.Api.Services.Implementations
                     AttachmentEntityTypes.Invoice => await _context.Invoices.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.PurchaseBill => await _context.PurchaseBills.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.GoodsReceipt => await _context.GoodsReceipts.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
+                    AttachmentEntityTypes.WithholdingTaxReceipt => await _context.WithholdingTaxReceipts.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     AttachmentEntityTypes.Payment => await _context.Payments.AnyAsync(x => x.Id == id && x.CompanyId == companyId),
                     _ => false,
                 };

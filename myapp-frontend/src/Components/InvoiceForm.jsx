@@ -119,10 +119,10 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [poNumber, setPoNumber] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
-  // Both optional document taxes start as NONE — nothing is charged or withheld
-  // unless the operator adds it. See Components/DocumentTaxFields.
+  // Further tax starts as None; withholding uses the company preference.
+  // The operator can override either value.
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
-  const [withholdingTaxRate, setWithholdingTaxRate] = useState(null);
+  const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
@@ -1278,7 +1278,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             backgroundColor: "#fff8e1", border: "1px solid #ffcc80",
                             borderRadius: 8, fontSize: "0.82rem", color: "#bf360c"
                           }}>
-                            <span style={{ fontSize: "1rem", lineHeight: 1 }}>⚠</span>
+                            <span style={{ fontSize: "1rem", lineHeight: 1 }}>âš </span>
                             <div>
                               <b>Rates pre-filled from last bill.</b>
                               {" "}Verify each unit price below — material prices may have changed since the previous order. Override any row that needs a new rate.
@@ -1706,6 +1706,14 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           </div>
                         </div>
 
+
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
                         <DocumentTaxFields
                           subtotal={subtotal}
                           gstAmount={gstAmount}
@@ -1718,13 +1726,6 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             setWithholdingTaxAmount(amount);
                           }}
                         />
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
             <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />
             <DocumentNotesEditor value={notes} onChange={setNotes} />
             <div style={{ marginTop: "1rem" }}>

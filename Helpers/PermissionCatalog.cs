@@ -298,6 +298,12 @@ namespace MyApp.Api.Helpers
             new("customerportals.manage.update", "CustomerPortals", "Manage", "Update", "Enable, disable, or change the document a portal serves"),
             new("customerportals.manage.delete", "CustomerPortals", "Manage", "Delete", "Revoke a portal for good — the link stops working permanently"),
 
+            new("withholdingtax.list.view", "Withholding Tax", "List", "View", "View customer withholding certificates"),
+            new("withholdingtax.manage.create", "Withholding Tax", "Manage", "Create", "Record a withholding certificate"),
+            new("withholdingtax.manage.update", "Withholding Tax", "Manage", "Update", "Edit a withholding certificate"),
+            new("withholdingtax.manage.delete", "Withholding Tax", "Manage", "Delete", "Delete the latest withholding certificate"),
+            new("withholdingtax.print.view", "Withholding Tax", "Print", "View", "Print a withholding receipt"),
+
             // ── Receipts & Payments (AR/AP subledger) ───────────────────────
             // Receipts (money in, settle sales invoices) and Payments (money
             // out, settle purchase bills) are split into separate keys for

@@ -5,6 +5,8 @@ namespace MyApp.Api.Models
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public bool DefaultGroupTaxInvoiceByItemType { get; set; }
+
+        public decimal? DefaultWithholdingTaxRate { get; set; }
         public string? BrandName { get; set; }
         public string? LogoPath { get; set; }
         public string? FullAddress { get; set; }

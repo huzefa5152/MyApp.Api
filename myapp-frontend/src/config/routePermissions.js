@@ -55,6 +55,7 @@ export const ROUTE_PERMISSIONS = {
 
   // Money in / money out — part of the Sales edition, they predate the
   // accounting module and do not require the general ledger.
+  "/withholding-tax-receipts": "withholdingtax.list.view",
   "/receipts": "accounting.receipts.view",
   "/payments": "accounting.payments.view",
 

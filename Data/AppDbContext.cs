@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Helpers;
 using MyApp.Api.Models;
 
@@ -152,6 +152,7 @@ namespace MyApp.Api.Data
         // allocation lines, which settle invoices/bills and drive balance-due +
         // payment status.
         public DbSet<MyApp.Api.Models.Accounting.Payment> Payments { get; set; }
+        public DbSet<WithholdingTaxReceipt> WithholdingTaxReceipts { get; set; }
         public DbSet<MyApp.Api.Models.Accounting.PaymentAllocation> PaymentAllocations { get; set; }
 
         // ── Customer Portal ──
@@ -508,6 +509,14 @@ namespace MyApp.Api.Data
             // money; the amounts are (18,2) money like every other total.
             modelBuilder.Entity<Invoice>().Property(i => i.FurtherTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.FurtherTaxAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<WithholdingTaxReceipt>(e =>
+            {
+                e.Property(r => r.Amount).HasPrecision(18, 2);
+                e.HasIndex(r => new { r.CompanyId, r.ReceiptNumber }).IsUnique();
+                e.HasOne(r => r.Company).WithMany().HasForeignKey(r => r.CompanyId).OnDelete(DeleteBehavior.Restrict);
+                e.HasOne(r => r.Client).WithMany().HasForeignKey(r => r.ClientId).OnDelete(DeleteBehavior.Restrict);
+            });
+            modelBuilder.Entity<Company>().Property(c => c.DefaultWithholdingTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxRate).HasPrecision(5, 2);
             modelBuilder.Entity<Invoice>().Property(i => i.WithholdingTaxAmount).HasPrecision(18, 2);
             modelBuilder.Entity<PurchaseBill>().Property(b => b.WithholdingTaxRate).HasPrecision(5, 2);

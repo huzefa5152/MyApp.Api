@@ -4,6 +4,16 @@ namespace MyApp.Api.DTOs
     {
         public string Name { get; set; } = string.Empty;
         public bool? DefaultGroupTaxInvoiceByItemType { get; set; }
+
+        private decimal? _defaultWithholdingTaxRate;
+        [System.ComponentModel.DataAnnotations.Range(0, 100)]
+        public decimal? DefaultWithholdingTaxRate
+        {
+            get => _defaultWithholdingTaxRate;
+            set { _defaultWithholdingTaxRate = value; HasDefaultWithholdingTaxRate = true; }
+        }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HasDefaultWithholdingTaxRate { get; private set; }
         public string? BrandName { get; set; }
         public string? FullAddress { get; set; }
         public string? Phone { get; set; }

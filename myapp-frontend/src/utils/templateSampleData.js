@@ -1,3 +1,4 @@
+import { withholdingTaxStarters } from "./starters/withholdingTax";
 /**
  * Shared print-template metadata + preview machinery.
  *
@@ -35,6 +36,7 @@ export const TEMPLATE_TYPES = [
   { value: "GoodsReceipt", label: "Goods Receipt" },
   { value: "Receipt", label: "Receipt Voucher" },
   { value: "Payment", label: "Payment Voucher" },
+  { value: "WithholdingTaxReceipt", label: "Withholding Tax Receipt" },
 ];
 
 export const TEMPLATE_TYPE_LABEL = Object.fromEntries(
@@ -70,6 +72,12 @@ export const SAMPLE_DATA = {
       { sNo: 1, documentLabel: "Invoice #501", date: new Date().toISOString(), amount: 100000 },
       { sNo: 2, documentLabel: "Invoice #498", date: new Date().toISOString(), amount: 77000 },
     ],
+  },
+  WithholdingTaxReceipt: {
+    companyBrandName: "SAMPLE COMPANY", companyAddress: "123 Business Street, City",
+    customerName: "Sample Customer", customerNTN: "1234567", receiptNumber: 1,
+    date: new Date().toISOString(), description: "Sample certificate reference",
+    amount: 5500, amountInWords: "Five Thousand Five Hundred Rupees Only",
   },
   Payment: {
     ...SAMPLE_BRANDING,
@@ -382,6 +390,7 @@ export const DEFAULT_TEMPLATES = {
   GoodsReceipt: goodsReceiptStarters[0]?.html || "",
   Receipt: receiptStarters[0]?.html || "",
   Payment: paymentStarters[0]?.html || "",
+  WithholdingTaxReceipt: withholdingTaxStarters[0]?.html || "",
 };
 
 /**

@@ -10,6 +10,7 @@ const ImportChallansPage = lazy(() => import("./pages/ImportChallansPage"));
 const InvoicePage = lazy(() => import("./pages/InvoicePage"));
 const SalesQuotePage = lazy(() => import("./pages/SalesQuotePage"));
 const SalesOrderPage = lazy(() => import("./pages/SalesOrderPage"));
+const WithholdingTaxReceiptsPage = lazy(() => import("./pages/WithholdingTaxReceiptsPage"));
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
 const ChartOfAccountsPage = lazy(() => import("./pages/ChartOfAccountsPage"));
 const JournalEntriesPage = lazy(() => import("./pages/JournalEntriesPage"));
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="/challans" element={<ChallansPage />} />
             <Route path="/challans/import" element={<ImportChallansPage />} />
             <Route path="/sales-quotes" element={<SalesQuotePage />} />
+            <Route path="/withholding-tax-receipts" element={<WithholdingTaxReceiptsPage />} />
             <Route path="/sales-orders" element={<SalesOrderPage />} />
             {/* Receipts (money in) / Payments (money out) — one component,
                 mounted twice with distinct keys so filter/search state doesn't

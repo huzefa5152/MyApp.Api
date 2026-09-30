@@ -19,7 +19,7 @@ namespace MyApp.Api.Helpers
             // payment voucher prints "Payment Voucher" (its own starters), not a
             // mislabeled Receipt. Both bind the same PrintPaymentVoucherDto; the
             // DTO's Direction distinguishes them.
-            "Receipt", "Payment",
+            "Receipt", "Payment", "WithholdingTaxReceipt",
         };
 
         /// <summary>Human-readable list for validation error messages.</summary>

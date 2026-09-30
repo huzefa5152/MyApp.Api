@@ -193,6 +193,7 @@ export default function DashboardLayout() {
     "accounting.coa.view",
     "accounting.journal.view",
     "accounting.receipts.view",
+    "withholdingtax.list.view",
     "accounting.payments.view",
   ];
   const reportsKeys = [
@@ -255,7 +256,7 @@ export default function DashboardLayout() {
     const p = location.pathname.toLowerCase();
     if (p.startsWith("/challans") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history" || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders")) return "sales";
     if (p.startsWith("/purchase-bills") || p.startsWith("/goods-receipts") || p.startsWith("/stock") || p.startsWith("/fbr-import/purchase")) return "purchases";
-    if (p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
+    if (p.startsWith("/withholding-tax-receipts") || p.startsWith("/receipts") || p.startsWith("/payments") || p.startsWith("/chart-of-accounts") || p.startsWith("/journal-entries") || p.startsWith("/accounting")) return "accounting";
     if (p.startsWith("/reports")) return "reports";
     if (p.startsWith("/companies") || p.startsWith("/clients") || p.startsWith("/suppliers")
       || p.startsWith("/item-types") || p.startsWith("/units") || p.startsWith("/po-formats")
@@ -482,6 +483,11 @@ export default function DashboardLayout() {
                 <NavLink to="/journal-entries" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
                   <span>Journal Entries</span>
+                </NavLink>
+              </Can>
+              <Can permission="withholdingtax.list.view">
+                <NavLink to="/withholding-tax-receipts" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdReceipt /><span>Withholding Tax Receipts</span>
                 </NavLink>
               </Can>
               <Can permission="accounting.receipts.view">
@@ -786,6 +792,7 @@ function getBreadcrumb(pathname) {
     "/Clients/list": "Configuration / Clients List",
     "/Suppliers/list": "Configuration / Suppliers List",
     "/purchase-bills": "Purchases / Purchase Bills",
+    "/withholding-tax-receipts": "Accounting / Withholding Tax Receipts",
     "/goods-receipts": "Purchases / Goods Receipts",
     "/chart-of-accounts": "Accounting / Chart of Accounts",
     "/journal-entries": "Accounting / Journal Entries",
