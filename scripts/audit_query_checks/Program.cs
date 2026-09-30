@@ -83,6 +83,7 @@ await tx.RollbackAsync();
 await tx.DisposeAsync();
 db.ChangeTracker.Clear();
 await ImportBatchChecks.RunAsync(options, counter);
+await FbrCatalogScopeChecks.RunAsync(options);
 public class QueryCounter : DbCommandInterceptor {
  public int Count;
  public bool FailStockWrite;

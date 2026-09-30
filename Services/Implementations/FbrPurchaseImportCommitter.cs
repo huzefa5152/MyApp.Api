@@ -113,7 +113,7 @@ namespace MyApp.Api.Services.Implementations
                 //    The created ItemTypes feed the inventory ledger
                 //    (StockMovement.ItemTypeId) so we MUST persist them
                 //    before the bill so we can write the FK.
-                var lineToItemType = await ResolveOrCreateItemTypesAsync(importableLines, runningCounts);
+                var lineToItemType = await ResolveOrCreateItemTypesAsync(companyId, importableLines, runningCounts);
 
                 // 3. PurchaseBill — allocate next number per company.
                 //    Same pattern as PurchaseBillService.CreateAsync;
@@ -290,7 +290,8 @@ namespace MyApp.Api.Services.Implementations
             // matcher and was passed through as MatchedSupplierId.
             if (invoice.MatchedSupplierId.HasValue)
             {
-                var existing = await _context.Suppliers.FirstAsync(s => s.Id == invoice.MatchedSupplierId.Value);
+                var existing = await _context.Suppliers.FirstOrDefaultAsync(s => s.Id == invoice.MatchedSupplierId.Value && s.CompanyId == companyId)
+                    ?? throw new InvalidOperationException("The matched supplier does not belong to this company.");
                 return existing;
             }
 
@@ -317,7 +318,7 @@ namespace MyApp.Api.Services.Implementations
         // Build a map { sourceRowNumber → ItemTypeId }. Side-effect:
         // creates new ItemTypes for product-will-be-created lines.
         private async Task<Dictionary<int, int?>> ResolveOrCreateItemTypesAsync(
-            List<FbrImportPreviewLineDto> lines, FbrImportCommitCounts counts)
+            int companyId, List<FbrImportPreviewLineDto> lines, FbrImportCommitCounts counts)
         {
             var map = new Dictionary<int, int?>();
 
@@ -346,7 +347,7 @@ namespace MyApp.Api.Services.Implementations
                 // left untouched. When two legacy twins share this HS, the
                 // oldest (lowest Id) wins so we settle onto the original.
                 int? itemTypeId = await _context.ItemTypes
-                    .Where(it => !it.IsDeleted && it.HSCode == hs)
+                    .Where(it => it.CompanyId == companyId && !it.IsDeleted && it.HSCode == hs)
                     .OrderBy(it => it.Id)
                     .Select(it => (int?)it.Id)
                     .FirstOrDefaultAsync();
@@ -363,6 +364,7 @@ namespace MyApp.Api.Services.Implementations
                     var isPartial = !hs.Contains('.');
                     var itemType = new ItemType
                     {
+                        CompanyId = companyId,
                         Name = fallbackName,
                         HSCode = hs,
                         UOM = first.Uom,
