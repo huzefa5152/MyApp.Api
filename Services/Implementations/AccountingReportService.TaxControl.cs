@@ -30,6 +30,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<TaxControlDto> GetTaxControlAsync(int companyId, DateTime? from, DateTime? to)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var dto = new TaxControlDto { From = from?.Date, To = to?.Date };
 
             var accounts = await _context.Accounts.AsNoTracking()

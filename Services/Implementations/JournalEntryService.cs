@@ -23,6 +23,7 @@ namespace MyApp.Api.Services.Implementations
             int companyId, int page, int pageSize, string? search = null,
             DateTime? dateFrom = null, DateTime? dateTo = null, bool manualOnly = false)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var query = _context.JournalEntries.AsNoTracking()
                 .Where(e => e.CompanyId == companyId);
 
@@ -67,6 +68,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<JournalEntryDto?> GetByIdAsync(int id)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var entry = await _context.JournalEntries.AsNoTracking()
                 .Include(e => e.Lines).ThenInclude(l => l.Account)
                 .FirstOrDefaultAsync(e => e.Id == id);
@@ -123,9 +125,13 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<JournalEntryDto?> UpdateManualAsync(int id, CreateJournalEntryDto dto)
         {
-            var entry = await _context.JournalEntries
-                .Include(e => e.Lines)
-                .FirstOrDefaultAsync(e => e.Id == id);
+            JournalEntry? entry;
+            await using (var ledgerRead = await _context.LedgerReadScopeAsync())
+            {
+                entry = await _context.JournalEntries
+                    .Include(e => e.Lines)
+                    .FirstOrDefaultAsync(e => e.Id == id);
+            }
             if (entry == null) return null;
             if (entry.SourceDocType != SourceDocType.ManualJournal)
                 throw new InvalidOperationException(
@@ -186,6 +192,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<bool> DeleteManualAsync(int id)
         {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
             var entry = await _context.JournalEntries.FirstOrDefaultAsync(e => e.Id == id);
             if (entry == null) return false;
             if (entry.SourceDocType != SourceDocType.ManualJournal)
@@ -196,6 +203,7 @@ namespace MyApp.Api.Services.Implementations
 
             _context.JournalEntries.Remove(entry);   // lines cascade
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
             return true;
         }
 

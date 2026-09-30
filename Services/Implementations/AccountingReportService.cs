@@ -93,6 +93,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<BalanceSheetDto> GetBalanceSheetAsync(int companyId, DateTime? asOf)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var at = (asOf ?? DateTime.UtcNow).Date;
             var accounts = await LoadAccountsAsync(companyId);
             // The ledger's own primitive, not a sum of our own: opening balance
@@ -126,6 +127,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<ProfitAndLossDto> GetProfitAndLossAsync(int companyId, DateTime? from, DateTime? to)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var accounts = await LoadAccountsAsync(companyId);
             // A P&L is a WINDOW, not a position: it reports movement in the
             // period and never the account's opening balance, which belongs to
@@ -147,6 +149,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<ExpenseReportDto> GetExpenseReportAsync(int companyId, DateTime? from, DateTime? to)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var accounts = await LoadAccountsAsync(companyId);
             var movement = await MovementAsync(companyId, from, to);
 
@@ -177,6 +180,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<AccountingDashboardDto> GetDashboardAsync(int companyId, DateTime? from, DateTime? to)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             // Every figure is the total of a report that can be opened in full,
             // taken FROM that report rather than recomputed — so the dashboard
             // and the report it summarises can never disagree.

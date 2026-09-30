@@ -10,6 +10,57 @@ namespace MyApp.Api.Data
 
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+        internal bool IsLedgerExclusiveTransaction { get; private set; }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            base.OnConfiguring(optionsBuilder);
+            optionsBuilder.AddInterceptors(LedgerRebuildTransactionInterceptor.Instance);
+        }
+
+        internal IDisposable ExclusiveLedgerScope()
+        {
+            // Never upgrade a shared barrier after document locks: two upgrades
+            // would recreate the cycle this barrier is meant to prevent.
+            if (Database.CurrentTransaction != null && !IsLedgerExclusiveTransaction)
+                throw new InvalidOperationException("Start the exclusive ledger scope before its transaction.");
+            var previous = IsLedgerExclusiveTransaction;
+            IsLedgerExclusiveTransaction = true;
+            return new RebuildScope(this, previous);
+        }
+
+        internal async Task<IAsyncDisposable?> LedgerReadScopeAsync()
+        {
+            if (Database.CurrentTransaction != null || !Database.IsSqlServer()) return null;
+            // A join can read lines before headers while a cascade deletes
+            // headers before lines. Keep reports clear of both writes and rebuilds.
+            var scope = ExclusiveLedgerScope();
+            try
+            {
+                return new LedgerReadScope(await Database.BeginTransactionAsync(), scope);
+            }
+            catch
+            {
+                scope.Dispose();
+                throw;
+            }
+        }
+
+        private sealed class LedgerReadScope(
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, IDisposable scope) : IAsyncDisposable
+        {
+            public async ValueTask DisposeAsync()
+            {
+                try { await transaction.DisposeAsync(); }
+                finally { scope.Dispose(); }
+            }
+        }
+
+        private sealed class RebuildScope(AppDbContext context, bool previous) : IDisposable
+        {
+            public void Dispose() => context.IsLedgerExclusiveTransaction = previous;
+        }
+
         // Audit C-1 (2026-05-13): preferred constructor — when DI can
         // supply IFbrTokenProtector, the Company.FbrToken column is
         // transparently encrypted on write / decrypted on read via the

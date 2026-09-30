@@ -10,6 +10,7 @@ namespace MyApp.Api.Services.Implementations
     {
         public async Task<CashBookDto> GetCashBookAsync(int companyId, DateTime? from, DateTime? to)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var dto = new CashBookDto { From = from?.Date, To = to?.Date };
 
             // Which accounts count as money. Same two-armed test the picker

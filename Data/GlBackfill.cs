@@ -60,6 +60,7 @@ namespace MyApp.Api.Data
 
             foreach (var c in companies.Where(c => !c.GlPostingEnabled))
             {
+                using var rebuildScope = db.ExclusiveLedgerScope();
                 await using var tx = await db.Database.BeginTransactionAsync();
                 try
                 {

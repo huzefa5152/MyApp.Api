@@ -14,6 +14,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<PartyLedgerDto?> GetPartyLedgerAsync(
             int companyId, string partyType, int partyId, DateTime? from, DateTime? to)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var kind = (partyType ?? "").Trim();
             var isClient = string.Equals(kind, "Client", StringComparison.OrdinalIgnoreCase);
             var isSupplier = string.Equals(kind, "Supplier", StringComparison.OrdinalIgnoreCase);

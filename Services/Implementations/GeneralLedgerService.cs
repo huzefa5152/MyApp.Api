@@ -38,6 +38,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<GlStatusDto> GetStatusAsync(int companyId)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var company = await _context.Companies.AsNoTracking()
                 .Where(c => c.Id == companyId)
                 .Select(c => new { c.GlPostingEnabled, c.GlLockDate })
@@ -175,6 +176,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<Dictionary<int, decimal>> GetAccountBalancesAsync(int companyId, DateTime? asAt = null)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var opening = await _context.Accounts.AsNoTracking()
                 .Where(a => a.CompanyId == companyId)
                 .Select(a => new { a.Id, Signed = a.OpeningBalanceIsDebit ? a.OpeningBalance : -a.OpeningBalance })
@@ -193,6 +195,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<AccountLedgerDto?> GetAccountLedgerAsync(
             int accountId, DateTime? from, DateTime? to, int page, int pageSize)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var account = await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == accountId);
             if (account == null) return null;
 
@@ -283,6 +286,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<TrialBalanceDto> GetTrialBalanceAsync(int companyId, DateTime? from, DateTime? to)
         {
+            await using var ledgerRead = await _context.LedgerReadScopeAsync();
             var accounts = await _context.Accounts.AsNoTracking()
                 .Where(a => a.CompanyId == companyId)
                 .OrderBy(a => a.Code == null).ThenBy(a => a.Code).ThenBy(a => a.Name)

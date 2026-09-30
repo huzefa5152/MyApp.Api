@@ -483,29 +483,30 @@ namespace MyApp.Api.Services.Implementations
             var result = new PostingRebuildResult();
             if (!await IsEnabledAsync(companyId)) return result;
 
-            await EnsureDefaultAccountsAsync(companyId);
-
-            // A CLOSED PERIOD IS OFF LIMITS TO A REBUILD, and this is not a
-            // formality. The removal below is raw SQL, which the ledger's own
-            // lock check never sees; the re-post that follows goes through the
-            // writer, which does. Rebuilding across a lock without this filter
-            // therefore DELETES the closed period and then refuses to write it
-            // back — the one way in this module to lose a filed figure.
-            // So: entries dated in the closed period stay, and the documents
-            // behind them are not re-posted.
-            var lockDate = await _context.Companies.AsNoTracking()
-                .Where(c => c.Id == companyId)
-                .Select(c => c.GlLockDate)
-                .FirstOrDefaultAsync();
-            bool IsOpen(DateTime date) => lockDate == null || date.Date > lockDate.Value.Date;
-
-            // And a transaction over the whole thing, because a rebuild removes
-            // before it writes: a document that fails half-way through would
-            // otherwise leave the books emptied of everything not yet re-posted.
+            using var rebuildScope = _context.ExclusiveLedgerScope();
             var owned = _context.Database.CurrentTransaction == null;
             var tx = owned ? await _context.Database.BeginTransactionAsync() : null;
             try
             {
+                await EnsureDefaultAccountsAsync(companyId);
+
+                // A CLOSED PERIOD IS OFF LIMITS TO A REBUILD, and this is not a
+                // formality. The removal below is raw SQL, which the ledger's own
+                // lock check never sees; the re-post that follows goes through the
+                // writer, which does. Rebuilding across a lock without this filter
+                // therefore DELETES the closed period and then refuses to write it
+                // back — the one way in this module to lose a filed figure.
+                // So: entries dated in the closed period stay, and the documents
+                // behind them are not re-posted.
+                var lockDate = await _context.Companies.AsNoTracking()
+                    .Where(c => c.Id == companyId)
+                    .Select(c => c.GlLockDate)
+                    .FirstOrDefaultAsync();
+                bool IsOpen(DateTime date) => lockDate == null || date.Date > lockDate.Value.Date;
+
+                // And a transaction over the whole thing, because a rebuild removes
+                // before it writes: a document that fails half-way through would
+                // otherwise leave the books emptied of everything not yet re-posted.
                 // System-posted entries only. A manual journal is the operator's
                 // own work and nothing here can reproduce it, so a rebuild that
                 // took them out would destroy data no document can restore.
