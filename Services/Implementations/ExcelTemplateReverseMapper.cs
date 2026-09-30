@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using MyApp.Api.Helpers.ExcelImport;
@@ -6,7 +6,7 @@ using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Services.Implementations
 {
-    public class ExcelTemplateReverseMapper : IExcelTemplateReverseMapper
+    public class ExcelTemplateReverseMapper : IExcelTemplateReverseMapper, IDisposable
     {
         // Mirrors ExcelTemplateEngine so forward/reverse stay in sync.
         // Mirrors ExcelTemplateEngine.FieldRegex — 2 OR 3 braces on each side
@@ -43,7 +43,9 @@ namespace MyApp.Api.Services.Implementations
                    e == "@index";
         }
 
-        private readonly ConcurrentDictionary<string, (DateTime WrittenAt, TemplateCellMap Map)> _cache = new();
+        private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = 128 });
+
+        public void Dispose() => _cache.Dispose();
 
         public TemplateCellMap Build(string templateFilePath)
         {
@@ -51,11 +53,11 @@ namespace MyApp.Api.Services.Implementations
                 throw new FileNotFoundException("Excel template not found", templateFilePath);
 
             var writtenAt = File.GetLastWriteTimeUtc(templateFilePath);
-            if (_cache.TryGetValue(templateFilePath, out var cached) && cached.WrittenAt == writtenAt)
+            if (_cache.TryGetValue(templateFilePath, out (DateTime WrittenAt, TemplateCellMap Map) cached) && cached.WrittenAt == writtenAt)
                 return cached.Map;
 
             var map = ParseTemplate(templateFilePath);
-            _cache[templateFilePath] = (writtenAt, map);
+            _cache.Set(templateFilePath, (writtenAt, map), new MemoryCacheEntryOptions { Size = 1 });
             return map;
         }
 
