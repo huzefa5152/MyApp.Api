@@ -2454,6 +2454,28 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
                     <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
                   </div>
+                  {(!billsMode || lockNonItemType || effectiveReadOnly) && Number(invoice?.withholdingTaxAmount) > 0 && (
+                    <>
+                      <div style={styles.totalsRow}>
+                        <span>Less withholding tax{invoice.withholdingTaxRate != null ? ` (${invoice.withholdingTaxRate}%)` : " (fixed amount)"}:</span>
+                        <strong>− Rs. {Number(invoice.withholdingTaxAmount).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </div>
+                      <div style={styles.totalsRow}>
+                        <span>Collectible:</span>
+                        <strong>Rs. {Number(invoice.collectible).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </div>
+                      {Number(invoice.amountPaid) > 0 && (
+                        <div style={styles.totalsRow}>
+                          <span>Paid:</span>
+                          <strong>Rs. {Number(invoice.amountPaid).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        </div>
+                      )}
+                      <div style={{ ...styles.totalsRow, fontWeight: 700, color: colors.blue }}>
+                        <span>Balance due:</span>
+                        <strong>Rs. {Number(invoice.balanceDue).toLocaleString("en-PK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Only in the full bill edit. The Invoices-tab narrow edit
