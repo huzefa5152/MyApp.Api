@@ -1292,6 +1292,7 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
             modelBuilder.Entity<SalesQuoteItem>().Property(i => i.LineTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<SalesQuoteItem>().Property(i => i.ImagePath).HasMaxLength(QuoteLineImages.MaxUrlLength);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.Quantity).HasPrecision(18, 4);
             modelBuilder.Entity<SalesOrderItem>().Property(i => i.UnitPrice).HasPrecision(18, 2);
 

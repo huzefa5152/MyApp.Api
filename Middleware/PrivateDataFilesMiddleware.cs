@@ -13,10 +13,11 @@ public sealed class PrivateDataFilesMiddleware(RequestDelegate next)
     public static bool IsImagePath(PathString path) =>
         path.StartsWithSegments("/data/uploads/logos", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/data/uploads/stamps", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/data/uploads/quoteitems", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/data/images/avatars", StringComparison.OrdinalIgnoreCase);
 
     public async Task InvokeAsync(HttpContext context, AppDbContext db,
-        ICompanyAccessGuard access, IManagementScopeService management)
+        ICompanyAccessGuard access, IManagementScopeService management, IPermissionService permissions)
     {
         var path = context.Request.Path;
         if (!path.StartsWithSegments("/data", StringComparison.OrdinalIgnoreCase))
@@ -32,6 +33,17 @@ public sealed class PrivateDataFilesMiddleware(RequestDelegate next)
         { context.Response.StatusCode = 401; return; }
         var value = path.Value!;
         int? companyId = null;
+        if (path.StartsWithSegments("/data/uploads/quoteitems", StringComparison.OrdinalIgnoreCase))
+        {
+            companyId = MyApp.Api.Helpers.QuoteLineImages.CompanyId(value);
+            var allowed = await permissions.HasPermissionAsync(userId, "salesquotes.list.view")
+                || await permissions.HasPermissionAsync(userId, "salesquotes.manage.create")
+                || await permissions.HasPermissionAsync(userId, "salesquotes.manage.update")
+                || await permissions.HasPermissionAsync(userId, "salesquotes.print.view");
+            if (!allowed || !companyId.HasValue || !await access.HasAccessAsync(userId, companyId.Value))
+            { context.Response.StatusCode = 404; return; }
+            await next(context); return;
+        }
         if (path.StartsWithSegments("/data/uploads/logos", StringComparison.OrdinalIgnoreCase))
             companyId = await db.Companies.AsNoTracking().Where(c => c.LogoPath == value).Select(c => (int?)c.Id).FirstOrDefaultAsync();
         else if (path.StartsWithSegments("/data/uploads/stamps", StringComparison.OrdinalIgnoreCase))

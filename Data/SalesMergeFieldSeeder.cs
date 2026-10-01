@@ -52,6 +52,7 @@ namespace MyApp.Api.Data
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{this.uom}}", Label = "Item UOM (in loop)", Category = "Items", SortOrder = 45 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{fmt this.unitPrice}}", Label = "Unit Price (in loop)", Category = "Items", SortOrder = 46 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{fmt this.lineTotal}}", Label = "Line Total (in loop)", Category = "Items", SortOrder = 47 },
+                new() { TemplateType = "SalesQuote", FieldExpression = "{{this.imagePath}}", Label = "Item Photo URL (optional, in loop)", Category = "Items", SortOrder = 48 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if companyLogoPath}}", Label = "If: Has Logo", Category = "Conditionals", SortOrder = 50 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if validUntil}}", Label = "If: Has Valid Until", Category = "Conditionals", SortOrder = 51 },
                 new() { TemplateType = "SalesQuote", FieldExpression = "{{#if customerEnquiryRef}}", Label = "If: Has Enquiry Ref", Category = "Conditionals", SortOrder = 52 },

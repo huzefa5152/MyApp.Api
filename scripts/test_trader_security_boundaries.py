@@ -96,7 +96,7 @@ def main():
             if path.lower() == '/api/auth/login': continue
             resolved = re.sub(r'\{[^}]+\}','1',path)
             method = match[1].upper()
-            multipart = method == 'POST' and (path.lower().endswith(('/avatar','/logo','/stamps','/fingerprint-pdf','/parse-pdf','/parse-image','/excel-template')) or path.lower() == '/api/import-feedback' or '/attachments/company/' in path.lower())
+            multipart = method == 'POST' and (path.lower().endswith(('/avatar','/logo','/stamps','/quote-images','/fingerprint-pdf','/parse-pdf','/parse-image','/excel-template')) or path.lower() == '/api/import-feedback' or '/attachments/company/' in path.lower())
             if multipart:
                 status, _ = call(method,resolved,raw=b'--audit-anonymous--\r\n',content_type='multipart/form-data; boundary=audit-anonymous')
             else:
@@ -217,6 +217,30 @@ def main():
         check('image cookie works without Bearer header',call('GET',stamp['url'],cookie=cookies['B'])[0] == 200)
         check('private image response prevents caching',response_headers.get('Cache-Control') == 'no-store, private',response_headers)
         check('image cookie cannot authenticate API',call('GET','/api/companies',cookie=cookies['B'])[0] == 401)
+        status, photo = form(f'/api/companies/{b}/quote-images',tokens['B'],{},('product.png','image/png',png))
+        check('owner uploads optional quote photo',status==200,(status,photo))
+        assert status==200
+        photo_url=photo['url']
+        for who,tok,expected in [('anonymous',None,401),('A',tokens['A'],404),('None',tokens['None'],404),('B',tokens['B'],200),('seed',seed,200)]:
+            check(who+' private quote image access',call('GET',photo_url,tok)[0]==expected)
+        check('quote image cookie works',call('GET',photo_url,cookie=cookies['B'])[0]==200)
+        check('foreign quote photo upload refused',form(f'/api/companies/{b}/quote-images',tokens['A'],{},('product.png','image/png',png))[0]==403)
+        check('invalid image bytes refused',form(f'/api/companies/{b}/quote-images',tokens['B'],{},('product.png','image/png',b'not a photo'))[0]==400)
+        quoted=next(row for root,row,_ in documents if root=='/api/salesquotes')
+        quoted['items'][0]['imagePath']=photo_url
+        status,saved=call('PUT',f"/api/salesquotes/{quoted['id']}",tokens['B'],quoted)
+        check('quote image persists without changing totals',status==200 and saved['items'][0]['imagePath']==photo_url and saved['subtotal']==200,(status,saved))
+        status,printed=call('GET',f"/api/salesquotes/{quoted['id']}/print",tokens['B'])
+        check('quote print exposes optional image merge field',status==200 and printed['items'][0]['imagePath']==photo_url,(status,printed))
+        for forged_path in ('https://example.invalid/photo.png','/data/uploads/quoteitems/company_'+str(a)+'/0123456789abcdef0123456789abcdef.png','/data/uploads/quoteitems/company_'+str(b)+'/../secret.png','/data/uploads/quoteitems/company_'+str(b)+'/0123456789abcdef0123456789abcdef.png'):
+            quoted['items'][0]['imagePath']=forged_path
+            check('forged or missing quote image refused '+forged_path,call('PUT',f"/api/salesquotes/{quoted['id']}",tokens['B'],quoted)[0]==400)
+        quoted['items'][0]['imagePath']=None
+        status,saved=call('PUT',f"/api/salesquotes/{quoted['id']}",tokens['B'],quoted)
+        check('quote photo removal leaves totals unchanged',status==200 and saved['items'][0]['imagePath'] is None and saved['subtotal']==200)
+        assert call('PUT',f'/api/users/{users[1]}/roles',seed,{'roleIds':[]})[0]==200
+        check('assigned user without quote permission cannot read image',call('GET',photo_url,tokens['B'])[0]==404)
+        assert call('PUT',f'/api/users/{users[1]}/roles',seed,{'roleIds':[admin_role]})[0]==200
         status, logo = form(f'/api/companies/{b}/logo',seed,{},('logo.png','image/png',png))
         assert status == 200, (status,logo)
         logo_url = logo['logoPath']

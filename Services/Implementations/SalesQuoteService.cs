@@ -20,17 +20,19 @@ namespace MyApp.Api.Services.Implementations
         private readonly ISalesOrderService _salesOrderService;
         private readonly AppDbContext _context;
         private readonly ILogger<SalesQuoteService> _logger;
+        private readonly IWebHostEnvironment _environment;
 
         public SalesQuoteService(
             ISalesQuoteRepository repository,
             ISalesOrderService salesOrderService,
             AppDbContext context,
-            ILogger<SalesQuoteService> logger)
+            ILogger<SalesQuoteService> logger, IWebHostEnvironment environment)
         {
             _repository = repository;
             _salesOrderService = salesOrderService;
             _context = context;
             _logger = logger;
+            _environment = environment;
         }
 
         private static SalesQuoteDto ToDto(SalesQuote q, int maxNumber, bool hasLinkedOrder)
@@ -69,7 +71,8 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = i.Quantity,
                     Unit = i.Unit,
                     UnitPrice = i.UnitPrice,
-                    LineTotal = i.LineTotal
+                    LineTotal = i.LineTotal,
+                    ImagePath = i.ImagePath
                 }).ToList()
             };
         }
@@ -154,6 +157,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task<SalesQuoteDto> CreateAsync(int companyId, SalesQuoteDto dto)
         {
             Validate(dto);
+            foreach (var item in dto.Items) item.ImagePath = QuoteLineImages.Normalize(item.ImagePath, companyId, _environment.ContentRootPath);
             var company = await _context.Companies.FindAsync(companyId)
                 ?? throw new KeyNotFoundException("Company not found.");
             var client = await _context.Clients.FindAsync(dto.ClientId)
@@ -190,7 +194,8 @@ namespace MyApp.Api.Services.Implementations
                         Description = i.Description.Trim(),
                         Quantity = i.Quantity,
                         Unit = i.Unit,
-                        UnitPrice = i.UnitPrice
+                        UnitPrice = i.UnitPrice,
+                        ImagePath = i.ImagePath
                     }).ToList()
                 };
                 ApplyTotals(quote, dto.GSTRate);
@@ -226,6 +231,8 @@ namespace MyApp.Api.Services.Implementations
             if (quote.ConvertedToSalesOrderId != null || await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id))
                 throw new InvalidOperationException("A quote linked to a sales order can no longer be edited.");
             Validate(dto);
+
+            foreach (var item in dto.Items) item.ImagePath = QuoteLineImages.Normalize(item.ImagePath, quote.CompanyId, _environment.ContentRootPath);
 
             if (dto.ClientId > 0 && dto.ClientId != quote.ClientId)
             {
@@ -263,6 +270,7 @@ namespace MyApp.Api.Services.Implementations
                     existing.Quantity = itemDto.Quantity;
                     existing.Unit = itemDto.Unit;
                     existing.UnitPrice = itemDto.UnitPrice;
+                    existing.ImagePath = itemDto.ImagePath;
                 }
                 else
                 {
@@ -273,7 +281,8 @@ namespace MyApp.Api.Services.Implementations
                         Description = itemDto.Description.Trim(),
                         Quantity = itemDto.Quantity,
                         Unit = itemDto.Unit,
-                        UnitPrice = itemDto.UnitPrice
+                        UnitPrice = itemDto.UnitPrice,
+                        ImagePath = itemDto.ImagePath
                     });
                 }
             }
@@ -398,7 +407,8 @@ namespace MyApp.Api.Services.Implementations
                     Quantity = i.Quantity,
                     Uom = i.Unit,
                     UnitPrice = i.UnitPrice,
-                    LineTotal = i.LineTotal
+                    LineTotal = i.LineTotal,
+                    ImagePath = i.ImagePath
                 }).ToList()
             };
         }

@@ -288,6 +288,7 @@ namespace MyApp.Api.DTOs
 
     public class PrintQuoteItemDto
     {
+        public string? ImagePath { get; set; }
         public int SNo { get; set; }
         public string ItemTypeName { get; set; } = "";
         public string Description { get; set; } = "";

@@ -28,6 +28,7 @@ namespace MyApp.Api.Models
         // Pricing — the whole point of a quote.
         public decimal UnitPrice { get; set; }
         public decimal LineTotal { get; set; }
+        public string? ImagePath { get; set; }
 
         // Navigation
         public SalesQuote SalesQuote { get; set; } = null!;

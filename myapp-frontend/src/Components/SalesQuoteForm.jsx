@@ -9,7 +9,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { getAllUnits } from "../api/unitsApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { getQuoteItemRate } from "../api/salesQuoteApi";
+import { getQuoteItemRate, uploadQuoteLineImage } from "../api/salesQuoteApi";
 import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
@@ -21,7 +21,7 @@ const colors = {
   inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
 };
 
-const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
+const blankItem = () => ({ id: 0, _imageKey: crypto.randomUUID(), imagePath: null, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
 
 // Create + edit a Sales Quote. Pass `quote` to edit; omit to create.
 export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
@@ -49,7 +49,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [contactPerson, setContactPerson] = useState(quote?.contactPerson || "");
   const [items, setItems] = useState(
     quote?.items?.length
-      ? quote.items.map((i) => ({ id: i.id, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
+      ? quote.items.map((i) => ({ id: i.id, _imageKey: crypto.randomUUID(), imagePath: i.imagePath || null, itemTypeId: i.itemTypeId, description: i.description, quantity: i.quantity, unit: i.unit, unitPrice: i.unitPrice, rateHint: "" }))
       : [blankItem()]
   );
   const [units, setUnits] = useState([]);
@@ -59,6 +59,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
+  const [imageUploads, setImageUploads] = useState(0);
   const attachmentRef = useRef(null);
 
   useEffect(() => { getAllUnits(companyId).then(({ data }) => setUnits(data)).catch(() => setUnits([])); }, [companyId]);
@@ -92,7 +93,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || imageUploads > 0) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
     if (!client) { setError("Please select a client."); return; }
@@ -116,6 +117,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
           quantity: typeof i.quantity === "number" ? i.quantity : (parseFloat(i.quantity) || 1),
           unit: i.unit,
           unitPrice: Number(i.unitPrice) || 0,
+          imagePath: i.imagePath || null,
         })),
       });
       // Upload any files staged before the record had an id (no-op in edit
@@ -130,7 +132,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     }
   };
 
-  const disabled = !client || items.every((i) => !i.description.trim()) || saving;
+  const disabled = !client || items.every((i) => !i.description.trim()) || saving || imageUploads > 0;
 
   // Contact-person dropdown options come from the selected client's
   // semicolon-separated ContactPerson list (mirrors the challan Site dropdown).
@@ -209,6 +211,9 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
             </div>
 
             <LineItemsEditor companyId={companyId}
+              showImage
+              onUploadImage={async file => (await uploadQuoteLineImage(companyId, file)).data.url}
+              onImageBusyChange={delta => setImageUploads(count => Math.max(0, count + delta))}
               items={items}
               onItemsChange={setItems}
               makeBlankItem={blankItem}

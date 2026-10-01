@@ -1,5 +1,10 @@
 import httpClient from "./httpClient";
 
+export const uploadQuoteLineImage = (companyId, file) => {
+  const body = new FormData(); body.append("file", file);
+  return httpClient.post(`/companies/${companyId}/quote-images`, body, { headers: { "Content-Type": "multipart/form-data" } });
+};
+
 export const getPagedSalesQuotesByCompany = (companyId, params = {}) =>
   httpClient.get(`/salesquotes/company/${companyId}/paged`, { params });
 

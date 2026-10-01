@@ -69,7 +69,7 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
                 {items.map((i, idx) => (
                   <tr key={i.id ?? idx}>
                     <td style={{ ...st.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
-                    <td style={st.td}><span style={st.desc}><RichText text={i.description} /></span></td>
+                    <td style={st.td}>{i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}<span style={st.desc}><RichText text={i.description} /></span></td>
                     <td style={{ ...st.td, textAlign: "right" }}>{Number(i.quantity).toLocaleString()}</td>
                     <td style={st.td}>{i.unit}</td>
                     <td style={{ ...st.td, textAlign: "right" }}>{money(i.unitPrice)}</td>

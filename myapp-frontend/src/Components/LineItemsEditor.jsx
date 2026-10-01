@@ -3,6 +3,7 @@ import { MdAdd, MdDelete, MdContentPaste, MdRepeat } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import QuantityInput from "./QuantityInput";
+import LineItemImageCell from "./LineItemImageCell";
 
 /**
  * Shared line-item entry for the sales module (Quote / Order / Challan).
@@ -47,6 +48,9 @@ export default function LineItemsEditor({
   showUnitPrice = false,
   currency = "Rs",
   getRate,
+  showImage = false,
+  onUploadImage,
+  onImageBusyChange,
   // Description field — multi-line by default so create and edit accept the
   // same text. Pass false only for a single-line box.
   descriptionMultiline = true,
@@ -96,6 +100,15 @@ export default function LineItemsEditor({
 
   const setItem = (idx, patch) =>
     onItemsChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+
+  const imageCell = (item, idx, locked) => <LineItemImageCell
+    value={item.imagePath} label={`photo for line ${idx + 1}`} disabled={locked}
+    onUpload={onUploadImage} onBusyChange={onImageBusyChange}
+    onChange={imagePath => {
+      // Async uploads follow the stable row identity, even after insert/remove
+      // or typing; they must not restore stale row values or target a new row.
+      onItemsChange(itemsRef.current.map(row => row._imageKey === item._imageKey ? { ...row, imagePath } : row));
+    }} />;
 
   // Picking an item type only TAGS the row (records ItemTypeId) — it must not
   // overwrite the operator's typed description/unit (matches Quote/Order).
@@ -191,6 +204,7 @@ export default function LineItemsEditor({
       unit: last.unit || "",
     };
     if (showUnitPrice) seed.unitPrice = last.unitPrice || 0;
+    if (showImage) seed.imagePath = last.imagePath || null;
     if (last.rateHint) seed.rateHint = last.rateHint;
     addItem(seed);
   };
@@ -341,9 +355,10 @@ export default function LineItemsEditor({
             const locked = rowLocked(item);
             const hint = rowLockHint ? rowLockHint(item) : null;
             return (
-              <div style={s.mcard} key={idx}>
+              <div style={s.mcard} key={item._imageKey ?? idx}>
                 <div style={s.mcardHead}>
                   <span style={s.mnum}>{idx + 1}</span>
+                  {showImage && imageCell(item, idx, locked)}
                   {showItemType && (
                     <div style={{ flex: 1 }}>
                       <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder={itemTypePlaceholder} style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }} />
@@ -395,6 +410,7 @@ export default function LineItemsEditor({
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
+                {showImage && <th style={{ ...s.th, width: 64 }}>Photo</th>}
                 {showItemType && <th style={{ ...s.th, width: 180 }}>Item Type</th>}
                 <th style={{ ...s.th, minWidth: 260 }}>Description</th>
                 <th style={{ ...s.th, width: 92, textAlign: "right" }}>Qty</th>
@@ -409,8 +425,9 @@ export default function LineItemsEditor({
                 const locked = rowLocked(item);
                 const hint = rowLockHint ? rowLockHint(item) : null;
                 return (
-                  <tr key={idx}>
+                  <tr key={item._imageKey ?? idx}>
                     <td style={{ ...s.td, textAlign: "center", color: colors.textSecondary, fontWeight: 700 }}>{idx + 1}</td>
+                    {showImage && <td style={s.td}>{imageCell(item, idx, locked)}</td>}
                     {showItemType && (
                       <td style={{ ...s.td, verticalAlign: "top" }}>
                         <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder="— optional —" style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }} />

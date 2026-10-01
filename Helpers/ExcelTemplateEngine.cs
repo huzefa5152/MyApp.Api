@@ -1028,6 +1028,7 @@ namespace MyApp.Api.Helpers
                 ["sNo"] = idx + 1,
                 ["itemTypeName"] = item.ItemTypeName,
                 ["description"] = item.Description,
+                ["imagePath"] = item.ImagePath,
                 ["quantity"] = item.Quantity,
                 ["uom"] = item.Uom,
                 ["unitPrice"] = item.UnitPrice,
