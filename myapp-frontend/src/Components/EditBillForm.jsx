@@ -1383,6 +1383,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
     [stockProjection]);
   const fmtQty = (n) => Number(n).toLocaleString("en-PK", { maximumFractionDigits: 4 });
   const stockWarnFor = (itemTypeId) => {
+    if (effectiveReadOnly) return null;
     const w = stockProjection.get(itemTypeId);
     if (!w || w.projected >= 0) return null;
     return (
@@ -2395,7 +2396,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                 </div>
                 )}
 
-                {showTotalsGuard && (
+                {!effectiveReadOnly && showTotalsGuard && (
                   <div style={{
                     ...styles.totalsBox,
                     background: totalsMatch ? "#e8f5e9" : "#fff4e0",
@@ -2511,7 +2512,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     (+price) mode. Lets the operator see in real time
                     whether their qty/price edits balance back to the
                     original subtotal. Save is blocked until they do. */}
-                {!billsMode && stockNegatives.length > 0 && (
+                {!effectiveReadOnly && !billsMode && stockNegatives.length > 0 && (
                   <div style={{
                     ...styles.totalsBox,
                     background: "#fff4e0",
@@ -2537,7 +2538,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                 )}
 
 
-                {invoice?.fbrStatus === "Validated" && (
+                {!effectiveReadOnly && invoice?.fbrStatus === "Validated" && (
                   <div style={styles.warnNote}>
                     ⓘ Editing this bill will clear its FBR validation status. You'll need to re-validate before submitting to FBR.
                   </div>
