@@ -1,8 +1,9 @@
 # Company document numbering
 
 Sales quotes, delivery challans, purchase bills and goods receipts offer Auto
-and Custom numbering when created. Existing edit and view screens retain the
-saved number. Each company and document type has its own sequence.
+and Custom numbering when created. Edit screens allow a validated replacement
+number; omitting CustomNumber leaves it unchanged. View screens remain read-only.
+Each company and document type has its own sequence.
 
 Auto continues one number beyond the company counter, respecting its starting
 number, and skips numbers already used. Custom requires an unused positive whole
@@ -21,8 +22,14 @@ existing explicit Duplicate Challan operation intentionally retains the same
 number and remains an exception. Demo challans retain their separate sequence.
 No database index or migration is added for numbering.
 
-Number previews require company access and the corresponding document-create
-permission. Existing print templates are unchanged.
+Edit saves use the same company lock as creation, exclude the document itself
+from duplicate checks, and do not move the Auto counter. Converted quotes and
+existing filed-document restrictions remain locked. Duplicated challans and their
+source retain their common number. Concurrent number changes detected during a
+save require the operator to reload rather than overwrite a stale number.
+
+Number previews require company access and the corresponding create or update
+permission. Edit previews also verify the excluded record belongs to that company. Existing print templates are unchanged.
 
 ## Local verification
 
@@ -37,3 +44,13 @@ permission. Existing print templates are unchanged.
 - Backend and frontend builds passed. Existing stored company cursors are retained.
 
 All write tests used disposable local data. No production writes, push or deploy.
+
+## Edit-path verification
+
+- Dedicated renumbering suite: 98/98, including duplicate/invalid input,
+  cross-company access, unchanged numbers, Auto skipping edited numbers,
+  concurrent edit/edit and edit/create races, converted and duplicate locks.
+- Create regression: 122/122. Existing bill-number regression: 47/47.
+- Basic flows: 72/72. Inventory: 183/183. Expanded security boundaries: 622/622.
+- Browser edit-number validation checked for quote, challan, purchase bill and
+  goods receipt at 375, 768 and 1280 pixels; quote renumber save verified.

@@ -6,12 +6,12 @@ namespace MyApp.Api.Helpers;
 
 public static class CompanyDocumentNumbers
 {
-    public static string Permission(string kind) => kind switch
+    public static string Permission(string kind, bool edit = false) => kind switch
     {
-        "quote" => "salesquotes.manage.create",
-        "challan" => "challans.manage.create",
-        "purchase-bill" => "purchasebills.manage.create",
-        "goods-receipt" => "goodsreceipts.manage.create",
+        "quote" => edit ? "salesquotes.manage.update" : "salesquotes.manage.create",
+        "challan" => edit ? "challans.manage.update" : "challans.manage.create",
+        "purchase-bill" => edit ? "purchasebills.manage.update" : "purchasebills.manage.create",
+        "goods-receipt" => edit ? "goodsreceipts.manage.update" : "goodsreceipts.manage.create",
         _ => throw new InvalidOperationException("Unknown document type.")
     };
 
@@ -24,12 +24,12 @@ public static class CompanyDocumentNumbers
         _ => throw new InvalidOperationException("Unknown document type.")
     };
 
-    private static IQueryable<int> Numbers(AppDbContext db, int companyId, string kind) => kind switch
+    private static IQueryable<int> Numbers(AppDbContext db, int companyId, string kind, int? excludeId = null) => kind switch
     {
-        "quote" => db.SalesQuotes.Where(d => d.CompanyId == companyId).Select(d => d.QuoteNumber),
-        "challan" => db.DeliveryChallans.Where(d => d.CompanyId == companyId && !d.IsDemo).Select(d => d.ChallanNumber),
-        "purchase-bill" => db.PurchaseBills.Where(d => d.CompanyId == companyId).Select(d => d.PurchaseBillNumber),
-        "goods-receipt" => db.GoodsReceipts.Where(d => d.CompanyId == companyId).Select(d => d.GoodsReceiptNumber),
+        "quote" => db.SalesQuotes.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId).Select(d => d.QuoteNumber),
+        "challan" => db.DeliveryChallans.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId && !d.IsDemo).Select(d => d.ChallanNumber),
+        "purchase-bill" => db.PurchaseBills.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId).Select(d => d.PurchaseBillNumber),
+        "goods-receipt" => db.GoodsReceipts.Where(d => (excludeId == null || d.Id != excludeId) && d.CompanyId == companyId).Select(d => d.GoodsReceiptNumber),
         _ => throw new InvalidOperationException("Unknown document type.")
     };
 
@@ -59,10 +59,10 @@ public static class CompanyDocumentNumbers
         return NextAvailableAsync(Numbers(db, company.Id, kind), settings.Start, settings.Current, Maximum(kind));
     }
 
-    private static async Task<string?> ErrorAsync(AppDbContext db, int companyId, string kind, int number)
+    private static async Task<string?> ErrorAsync(AppDbContext db, int companyId, string kind, int number, int? excludeId = null)
     {
         if (number <= 0 || number > Maximum(kind)) return $"Enter a whole number from 1 to {Maximum(kind)}.";
-        return await Numbers(db, companyId, kind).AnyAsync(n => n == number)
+        return await Numbers(db, companyId, kind, excludeId).AnyAsync(n => n == number)
             ? "That document number already exists for this company." : null;
     }
 
@@ -91,12 +91,46 @@ public static class CompanyDocumentNumbers
         return number;
     }
 
-    public static async Task<object> PreviewAsync(AppDbContext db, int companyId, string kind, int? check)
+    public static async Task RenumberAsync(AppDbContext db, int companyId, string kind, int id, int currentNumber, int? requested)
+    {
+        if (db.Database.CurrentTransaction == null) throw new InvalidOperationException("Renumbering requires a transaction.");
+        _ = await db.Companies.FromSqlInterpolated(
+            $"SELECT * FROM Companies WITH (UPDLOCK, ROWLOCK) WHERE Id = {companyId}")
+            .AsNoTracking().SingleAsync();
+        var storedNumber = kind switch
+        {
+            "quote" => await db.SalesQuotes.Where(d => d.Id == id && d.CompanyId == companyId).Select(d => d.QuoteNumber).SingleAsync(),
+            "challan" => await db.DeliveryChallans.Where(d => d.Id == id && d.CompanyId == companyId).Select(d => d.ChallanNumber).SingleAsync(),
+            "purchase-bill" => await db.PurchaseBills.Where(d => d.Id == id && d.CompanyId == companyId).Select(d => d.PurchaseBillNumber).SingleAsync(),
+            "goods-receipt" => await db.GoodsReceipts.Where(d => d.Id == id && d.CompanyId == companyId).Select(d => d.GoodsReceiptNumber).SingleAsync(),
+            _ => throw new InvalidOperationException("Unknown document type.")
+        };
+        if (storedNumber != currentNumber)
+            throw new InvalidOperationException("The document number changed during this save. Reload the document and retry.");
+        if (!requested.HasValue || requested.Value == currentNumber) return;
+        if (kind == "challan" && await db.DeliveryChallans.AnyAsync(d => d.CompanyId == companyId
+            && (d.Id == id && (d.IsDemo || d.DuplicatedFromId != null) || d.DuplicatedFromId == id)))
+            throw new InvalidOperationException("Demo or duplicated challan numbers cannot be changed.");
+        var error = await ErrorAsync(db, companyId, kind, requested.Value, id);
+        if (error != null) throw new InvalidOperationException(error);
+        // Renumbering is custom: it never advances or rewinds the Auto cursor.
+    }
+
+    public static Task<bool> ExistsAsync(AppDbContext db, int companyId, string kind, int id) => kind switch
+    {
+        "quote" => db.SalesQuotes.AnyAsync(d => d.Id == id && d.CompanyId == companyId),
+        "challan" => db.DeliveryChallans.AnyAsync(d => d.Id == id && d.CompanyId == companyId),
+        "purchase-bill" => db.PurchaseBills.AnyAsync(d => d.Id == id && d.CompanyId == companyId),
+        "goods-receipt" => db.GoodsReceipts.AnyAsync(d => d.Id == id && d.CompanyId == companyId),
+        _ => throw new InvalidOperationException("Unknown document type.")
+    };
+
+    public static async Task<object> PreviewAsync(AppDbContext db, int companyId, string kind, int? check, int? excludeId = null)
     {
         var company = await db.Companies.AsNoTracking().SingleOrDefaultAsync(c => c.Id == companyId)
             ?? throw new KeyNotFoundException("Company not found.");
         var next = await NextAsync(db, company, kind);
-        var error = check.HasValue ? await ErrorAsync(db, companyId, kind, check.Value) : null;
+        var error = check.HasValue ? await ErrorAsync(db, companyId, kind, check.Value, excludeId) : null;
         return new { nextNumber = next, maxAllowed = Maximum(kind), startingNumberSet = true,
             checkedAvailable = check.HasValue ? error == null : (bool?)null, checkedError = error };
     }

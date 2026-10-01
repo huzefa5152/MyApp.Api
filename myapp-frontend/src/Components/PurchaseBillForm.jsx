@@ -60,6 +60,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const [numberMode, setNumberMode] = useState("auto");
+  const [currentNumber, setCurrentNumber] = useState(null);
   const [customNumber, setCustomNumber] = useState("");
   const [numberValid, setNumberValid] = useState(true);
   // Source-bill metadata when in "Purchase Against Sale" mode
@@ -107,6 +108,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
     (async () => {
       try {
         const { data } = await getPurchaseBillById(billId);
+        setCurrentNumber(data.purchaseBillNumber);
+        setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
         setDate(data.date.slice(0, 10));
         setSupplierBillNumber(data.supplierBillNumber || "");
@@ -211,7 +214,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || (!isEdit && !numberValid)) return;
+    if (saving || !numberValid) return;
     if (readOnly) return;
     setError("");
     if (!supplierId) return setError("Select a supplier.");
@@ -232,7 +235,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const payload = {
         date,
         companyId,
-        ...(!isEdit ? { customNumber: billNumberPayload(numberMode, customNumber) } : {}),
+        customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
         supplierId: parseInt(supplierId),
         supplierBillNumber: supplierBillNumber || null,
         supplierIRN: supplierIRN || null,
@@ -288,7 +291,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            {!isEdit && <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="purchase-bill" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
+            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
 
             {sourceBill && (
               <div style={{
@@ -532,7 +535,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (
-              <button type="submit" disabled={saving || (!isEdit && !numberValid)} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+              <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
                 {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
               </button>
             )}

@@ -4,8 +4,8 @@ import { getNextInvoiceNumber } from "../api/invoiceApi";
 import httpClient from "../api/httpClient";
 
 const labels = { quote: "Sales Quote", challan: "Delivery Challan", "purchase-bill": "Purchase Bill", "goods-receipt": "Goods Receipt" };
-const readNumber = (companyId, kind, check) => kind
-  ? httpClient.get(`/companies/${companyId}/document-numbers/${kind}`, { params: { check } })
+const readNumber = (companyId, kind, check, excludeId) => kind
+  ? httpClient.get(`/companies/${companyId}/document-numbers/${kind}`, { params: { check, excludeId } })
   : getNextInvoiceNumber(companyId, check);
 
 // The "Bill / Invoice No." control, shared by BOTH bill-create forms
@@ -62,6 +62,7 @@ const colors = {
 export default function BillNumberField({
   companyId,
   documentType,
+  editRecordId,
   variant = "create",
   mode = "auto",
   onModeChange,
@@ -89,11 +90,11 @@ export default function BillNumberField({
   const loadNext = useCallback(async () => {
     // The edit screen never offers "the next number" — it only needs the prefix
     // and the ceiling, which the same call carries.
-    if (!companyId) return;
+    if (!companyId || lockedReason) return;
     setLoading(true);
     setLoadError("");
     try {
-      const res = await readNumber(companyId, documentType);
+      const res = await readNumber(companyId, documentType, undefined, isEdit ? editRecordId : undefined);
       setInfo(res.data);
     } catch {
       setLoadError(documentType ? "Could not read the next document number." : "Could not read the next bill number.");
@@ -101,7 +102,7 @@ export default function BillNumberField({
     } finally {
       setLoading(false);
     }
-  }, [companyId, documentType]);
+  }, [companyId, documentType, editRecordId, isEdit, lockedReason]);
 
   useEffect(() => { loadNext(); }, [loadNext]);
 
@@ -130,7 +131,7 @@ export default function BillNumberField({
     setProbing(true);
     const t = setTimeout(async () => {
       try {
-        const res = await readNumber(companyId, documentType, parsed);
+        const res = await readNumber(companyId, documentType, parsed, isEdit ? editRecordId : undefined);
         if (seq !== probeSeq.current) return;      // a newer keystroke won
         setProbe({
           available: res.data?.checkedAvailable === true,
@@ -148,7 +149,7 @@ export default function BillNumberField({
     }, 400);
 
     return () => clearTimeout(t);
-  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId, documentType]);
+  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId, documentType, editRecordId]);
 
   // Report usability upward so the parent can block Save.
   const customUsable =

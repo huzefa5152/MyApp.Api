@@ -675,6 +675,9 @@ namespace MyApp.Api.Services.Implementations
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
 
+            await CompanyDocumentNumbers.RenumberAsync(_context, bill.CompanyId, "purchase-bill", bill.Id, bill.PurchaseBillNumber, dto.CustomNumber);
+            if (dto.CustomNumber.HasValue) bill.PurchaseBillNumber = dto.CustomNumber.Value;
+
             // Apply header changes
             if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;
             // Capture the old IRN BEFORE we overwrite it — the

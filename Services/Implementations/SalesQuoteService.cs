@@ -226,6 +226,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<SalesQuoteDto?> UpdateAsync(int id, SalesQuoteDto dto)
         {
+            await using var numberTx = await _context.Database.BeginTransactionAsync();
             var quote = await _repository.GetByIdAsync(id);
             if (quote == null) return null;
             if (quote.ConvertedToSalesOrderId != null || await _context.SalesOrders.AnyAsync(so => so.SalesQuoteId == id))
@@ -242,6 +243,9 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException("Client does not belong to this company.");
                 quote.ClientId = dto.ClientId;
             }
+
+            await CompanyDocumentNumbers.RenumberAsync(_context, quote.CompanyId, "quote", quote.Id, quote.QuoteNumber, dto.CustomNumber);
+            if (dto.CustomNumber.HasValue) quote.QuoteNumber = dto.CustomNumber.Value;
 
             quote.Date = dto.Date == default ? quote.Date : dto.Date;
             quote.ValidUntil = dto.ValidUntil;
@@ -289,6 +293,7 @@ namespace MyApp.Api.Services.Implementations
 
             ApplyTotals(quote, dto.GSTRate);
             await _repository.UpdateAsync(quote);
+            await numberTx.CommitAsync();
             await RememberDescriptionsAsync(dto.Items.Select(i => i.Description));
             return await GetByIdAsync(id);
         }

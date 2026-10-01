@@ -139,6 +139,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdatePurchaseBillDto
     {
+        public int? CustomNumber { get; set; }
         // ── Withholding income tax (s.153) — optional, defaults to none ──
         /// <summary>Rate %. Null with an amount means fixed-amount mode; null
         /// with no amount means nothing is withheld. The server resolves and

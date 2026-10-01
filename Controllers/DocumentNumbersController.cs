@@ -15,12 +15,13 @@ public class DocumentNumbersController(AppDbContext db, IPermissionService permi
 {
     [HttpGet("{kind}")]
     [AuthorizeCompany]
-    [HasAnyPermission("salesquotes.manage.create", "challans.manage.create", "purchasebills.manage.create", "goodsreceipts.manage.create")]
-    public async Task<IActionResult> Get(int companyId, string kind, [FromQuery] int? check)
+    [HasAnyPermission("salesquotes.manage.create", "challans.manage.create", "purchasebills.manage.create", "goodsreceipts.manage.create", "salesquotes.manage.update", "challans.manage.update", "purchasebills.manage.update", "goodsreceipts.manage.update")]
+    public async Task<IActionResult> Get(int companyId, string kind, [FromQuery] int? check, [FromQuery] int? excludeId)
     {
-        var permission = CompanyDocumentNumbers.Permission(kind);
+        var permission = CompanyDocumentNumbers.Permission(kind, excludeId.HasValue);
         if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
             || !await permissions.HasPermissionAsync(userId, permission)) return Forbid();
-        return Ok(await CompanyDocumentNumbers.PreviewAsync(db, companyId, kind, check));
+        if (excludeId.HasValue && !await CompanyDocumentNumbers.ExistsAsync(db, companyId, kind, excludeId.Value)) return NotFound();
+        return Ok(await CompanyDocumentNumbers.PreviewAsync(db, companyId, kind, check, excludeId));
     }
 }

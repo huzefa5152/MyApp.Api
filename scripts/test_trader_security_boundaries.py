@@ -159,7 +159,15 @@ def main():
             row = create(path,payload)
             root = path.split('/company/')[0].removesuffix('/standalone')
             documents.append((root,row,root in ('/api/salesquotes','/api/salesorders','/api/invoices','/api/purchasebills','/api/goodsreceipts','/api/deliverychallans')))
+        edit_previews = []
+        edit_kinds = {'/api/salesquotes':'quote', '/api/deliverychallans':'challan',
+            '/api/purchasebills':'purchase-bill', '/api/goodsreceipts':'goods-receipt'}
         for root,row,prints in documents:
+            if root in edit_kinds:
+                edit_preview = f'/api/companies/{b}/document-numbers/{edit_kinds[root]}?excludeId={row["id"]}&check=1'
+                edit_previews.append(edit_preview)
+                for who, expected in (('B',200), ('Multi',200), ('A',403), ('None',403)):
+                    check(who+' edit number preview '+root,call('GET',edit_preview,tokens[who])[0]==expected)
             path = root+'/'+str(row['id'])
             status,_ = call('GET',path,seed)
             check('owner can read '+path,status==200,status)
@@ -246,6 +254,8 @@ def main():
         check('assigned user without quote permission cannot read image',call('GET',photo_url,tokens['B'])[0]==404)
         for kind in ('quote', 'challan', 'purchase-bill', 'goods-receipt'):
             check(kind+' preview requires create permission',call('GET',f'/api/companies/{b}/document-numbers/{kind}',tokens['B'])[0]==403)
+        for path in edit_previews:
+            check('edit preview permission revocation '+path,call('GET',path,tokens['B'])[0]==403)
         assert call('PUT',f'/api/users/{users[1]}/roles',seed,{'roleIds':[admin_role]})[0]==200
         status, logo = form(f'/api/companies/{b}/logo',seed,{},('logo.png','image/png',png))
         assert status == 200, (status,logo)

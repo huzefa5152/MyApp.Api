@@ -247,6 +247,9 @@ namespace MyApp.Api.Services.Implementations
                 .Include(g => g.Items)
                 .FirstOrDefaultAsync(g => g.Id == id);
             if (gr == null) return null;
+            await CompanyDocumentNumbers.RenumberAsync(_context, gr.CompanyId, "goods-receipt", gr.Id, gr.GoodsReceiptNumber, dto.CustomNumber);
+            if (dto.CustomNumber.HasValue) gr.GoodsReceiptNumber = dto.CustomNumber.Value;
+
             if (dto.PurchaseBillId.HasValue)
             {
                 // Same cross-tenant linkage guard as Create.

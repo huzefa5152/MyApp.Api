@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
 import SearchableSelect from "./SearchableSelect";
@@ -53,6 +54,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // Client / Site / Delivery Date / Indent are inherited from the source
   // and locked so the original physical-delivery context stays consistent
   // across all copies of this challan number.
+  const [customNumber, setCustomNumber] = useState(String(challan.challanNumber));
+  const [numberValid, setNumberValid] = useState(true);
   const isDuplicate = challan.duplicatedFromId != null;
 
   // ── Header fields ──
@@ -169,7 +172,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Submit ──
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (savedAwaitingPurchase) return;
+    if (savedAwaitingPurchase || saving || !numberValid) return;
     setError("");
 
     if (!clientId) { setError("Client is required."); return; }
@@ -182,6 +185,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     try {
       await updateChallan(challan.id, {
         companyId: challan.companyId,
+        customNumber: isDuplicate ? null : billNumberPayload("custom", customNumber),
         clientId: parseInt(clientId),
         site: site || null,
         notes: notes.trim() || null,
@@ -244,6 +248,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}
@@ -411,7 +417,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             <button
               type="submit"
               style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
-              disabled={saving}
+              disabled={saving || !numberValid}
             >
               {saving ? "Saving..." : "Save Changes"}
             </button>

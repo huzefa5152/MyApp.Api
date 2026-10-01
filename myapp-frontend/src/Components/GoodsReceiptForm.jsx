@@ -39,6 +39,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
   const [numberMode, setNumberMode] = useState("auto");
+  const [currentNumber, setCurrentNumber] = useState(null);
   const [customNumber, setCustomNumber] = useState("");
   const [numberValid, setNumberValid] = useState(true);
   const attachmentRef = useRef(null);
@@ -63,6 +64,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     (async () => {
       try {
         const { data } = await getGoodsReceiptById(receiptId);
+        setCurrentNumber(data.goodsReceiptNumber);
+        setCustomNumber(String(data.goodsReceiptNumber));
         setSupplierId(String(data.supplierId));
         setPurchaseBillId(data.purchaseBillId ? String(data.purchaseBillId) : "");
         setReceiptDate(data.receiptDate.slice(0, 10));
@@ -84,7 +87,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || (!isEdit && !numberValid)) return;
+    if (saving || !numberValid) return;
     setError("");
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
@@ -95,7 +98,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
       const payload = {
         receiptDate,
         companyId,
-        ...(!isEdit ? { customNumber: billNumberPayload(numberMode, customNumber) } : {}),
+        customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
         supplierId: parseInt(supplierId),
         purchaseBillId: purchaseBillId ? parseInt(purchaseBillId) : null,
         supplierChallanNumber: supplierChallanNumber || null,
@@ -136,7 +139,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
-            {!isEdit && <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="goods-receipt" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
+            {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
@@ -271,7 +274,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={saving || (!isEdit && !numberValid)} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+            <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
               {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
             </button>
           </div>

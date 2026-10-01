@@ -51,6 +51,7 @@ namespace MyApp.Api.DTOs
 
     public class UpdateGoodsReceiptDto
     {
+        public int? CustomNumber { get; set; }
         public string? Notes { get; set; }
         public DateTime ReceiptDate { get; set; }
         public int SupplierId { get; set; }
