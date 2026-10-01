@@ -295,17 +295,19 @@ s, rows = request("GET", "/api/roles", token=seed)
 check("roles", "seed sees both custom roles", {"Scope Role A", "Scope Role B"} <= {r["name"] for r in rows})
 s, d = request("PUT", f"/api/roles/{roleA['id']}", token=tA, body={"name": "Scope Role A2"})
 check("roles", "A renames own role -> 200", s == 200, f"{s} {d}")
-# seed grants B's role to userA1 directly; A must keep it when editing the visible part
+# Private roles must be copied before they can be assigned across tenants.
 s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=seed, body={"roleIds": [roleA["id"], roleB["id"]]})
-check("roles", "seed adds B's role to userA1", s == 200 and len(d["roles"]) == 2, f"{s} {d}")
+check("roles", "seed direct cross-tenant role assignment refused", s == 400, f"{s} {d}")
+s, copies = request("POST", f"/api/roles/{roleB['id']}/copy", token=seed,
+                    body={"tenantAdminUserIds": [A['id']], "name": "Scope Role B Copy"})
+check("roles", "seed copies B role into A tenant", s == 200 and len(copies) == 1, f"{s} {copies}")
+copy_id = copies[0]["id"]
+s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=seed, body={"roleIds": [roleA["id"], copy_id]})
+check("roles", "seed assigns independent A-tenant copy", s == 200 and len(d["roles"]) == 2, f"{s} {d}")
 s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=tA, body={"roleIds": []})
-got = {r["id"] for r in (d or {}).get("roles", [])}
-check("roles", "A clears own roles from userA1, hidden role survives", s == 200 and roleA["id"] not in got, f"{s} {d}")
-s, d = request("GET", f"/api/users/{uA1['id']}/roles", token=seed)
-check("roles", "userA1 still holds B's role (seed view)", roleB["id"] in {r["id"] for r in d["roles"]}, f"{d}")
-s, d = request("PUT", f"/api/users/{uA1['id']}/roles", token=seed, body={"roleIds": []})
+check("roles", "A clears both own-tenant roles", s == 200 and not d.get("roles"), f"{s} {d}")
+request("DELETE", f"/api/roles/{copy_id}", token=seed)
 
-# ─────────────────────────────────────────────────────────────────────
 print("\n=== COMMON CLIENTS: shared only across companies the caller holds ===")
 def mk_client(tok, company_id, name, ntn):
     s, d = request("POST", "/api/clients", token=tok, body={

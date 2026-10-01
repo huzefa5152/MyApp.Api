@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
+using Microsoft.Data.SqlClient;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
 using MyApp.Api.Models;
@@ -27,78 +29,44 @@ namespace MyApp.Api.Controllers
             _scope = scope;
         }
 
-        // ── Role scope (2026-09-11) ──
-        // System roles and legacy rows (no creator) are shared with everyone.
-        // A custom role is visible along its creator's chain: to the creator,
-        // to everyone the creator manages (so it can be assigned to them and
-        // they can see what they hold) and to the creator's ancestors. It is
-        // editable/deletable only by its creator, an ancestor of the creator,
-        // or the seed admin. Two sibling Administrators therefore never see
-        // each other's roles.
-        private async Task<HashSet<int>> VisibleCreatorIdsAsync(int userId)
-        {
-            var set = await _scope.GetManageableUserIdsAsync(userId);
-            set.Add(userId);
-            foreach (var a in await _scope.GetAncestorUserIdsAsync(userId)) set.Add(a);
-            return set;
-        }
+        private async Task<bool> RoleVisibleAsync(Role role, int userId) =>
+            _scope.IsSeedAdmin(userId) || role.IsSystemRole ||
+            (role.TenantAdminUserId.HasValue && role.TenantAdminUserId ==
+                await RoleTenantScope.ResolveAsync(_context, _scope, userId));
 
-        /// <summary>
-        /// Whose TREE the role belongs to. Necessary but not sufficient — see
-        /// <see cref="RoleGrantableBy"/>: every system role passes this test for
-        /// everyone, which is what lets a tenant administrator hand out the
-        /// edition they are on, and would otherwise also show them the editions
-        /// they are not.
-        /// </summary>
-        private static bool RoleVisibleTo(Role r, HashSet<int> creators) =>
-            r.IsSystemRole || r.CreatedByUserId == null || creators.Contains(r.CreatedByUserId.Value);
-
-        /// <summary>
-        /// Can this caller actually hand this role out? Only when everything it
-        /// grants is something they hold themselves.
-        ///
-        /// Listing is filtered on this and not only on the tree, because a role
-        /// the caller can never assign is a checkbox that always fails on save —
-        /// and for a tenant administrator it also advertises the edition they
-        /// did not buy. An administrator on Sales Edition therefore sees Sales
-        /// Edition and Tenant Administrator, and neither Administrator nor
-        /// Complete Edition. The seed admin sees everything.
-        /// </summary>
         private static bool RoleGrantableBy(Role r, HashSet<string> grantable) =>
-            r.RolePermissions
-                .Where(rp => rp.Permission != null)
+            r.RolePermissions.Where(rp => rp.Permission != null)
                 .All(rp => grantable.Contains(rp.Permission!.Key));
 
         private async Task<bool> CanEditRoleAsync(Role r, int userId)
         {
+            if (r.IsSystemRole) return false;
             if (_scope.IsSeedAdmin(userId)) return true;
-            if (r.CreatedByUserId == null) return false;
-            if (r.CreatedByUserId == userId) return true;
-            return await _scope.CanManageUserAsync(userId, r.CreatedByUserId.Value);
+            if (r.TenantAdminUserId == userId) return true;
+            if (!await RoleVisibleAsync(r, userId)) return false;
+            return r.TenantAdminUserId == userId || r.CreatedByUserId == userId ||
+                (r.CreatedByUserId.HasValue && await _scope.CanManageUserAsync(userId, r.CreatedByUserId.Value));
         }
 
-        /// <summary>Ids of the roles the caller may see or assign (seed: all).</summary>
         internal static async Task<HashSet<int>> VisibleRoleIdsAsync(
             AppDbContext db, IManagementScopeService scope, IPermissionService permissions, int userId)
         {
             if (scope.IsSeedAdmin(userId))
                 return (await db.Roles.Select(r => r.Id).ToListAsync()).ToHashSet();
-            var creators = await scope.GetManageableUserIdsAsync(userId);
-            creators.Add(userId);
-            foreach (var a in await scope.GetAncestorUserIdsAsync(userId)) creators.Add(a);
-            var rows = await db.Roles
-                .Include(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
-                .Where(r => r.IsSystemRole || r.CreatedByUserId == null || creators.Contains(r.CreatedByUserId.Value))
+            var tenant = await RoleTenantScope.ResolveAsync(db, scope, userId);
+            var rows = await db.Roles.Include(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
+                .Where(r => r.IsSystemRole || (tenant != null && r.TenantAdminUserId == tenant))
                 .ToListAsync();
-            // Same cut as the listing: in the caller's tree AND within what they
-            // could grant. Assignment already refused the rest; this stops it
-            // being offered. It also means UserRolesController's "roles the
-            // target already holds that the caller cannot see stay untouched"
-            // now protects a higher-granted edition from being stripped by an
-            // administrator editing the part of the set they can see.
             var grantable = await GrantableKeysAsync(permissions, userId);
             return rows.Where(r => RoleGrantableBy(r, grantable)).Select(r => r.Id).ToHashSet();
         }
+
+        private Task<bool> NameClashesAsync(string name, int? tenant, int? excludeId = null) =>
+            _context.Roles.AnyAsync(r => r.Id != excludeId && r.Name == name &&
+                (r.IsSystemRole || r.TenantAdminUserId == tenant));
+
+        private static bool IsNameConflict(DbUpdateException ex) =>
+            ex.InnerException is SqlException sql && (sql.Number == 2601 || sql.Number == 2627);
 
         /// <summary>
         /// The permission keys this caller is allowed to hand out. Seed admin:
@@ -146,7 +114,11 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<List<RoleDto>>> GetAll()
         {
             var me = CurrentUserId() ?? 0;
-            var roles = await _context.Roles
+            var tenant = await RoleTenantScope.ResolveAsync(_context, _scope, me);
+            var roleQuery = _context.Roles.AsQueryable();
+            if (!_scope.IsSeedAdmin(me))
+                roleQuery = roleQuery.Where(r => r.IsSystemRole || (tenant != null && r.TenantAdminUserId == tenant));
+            var roles = await roleQuery
                 .Include(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
                 .Include(r => r.UserRoles)
                 .OrderByDescending(r => r.IsSystemRole)
@@ -155,19 +127,22 @@ namespace MyApp.Api.Controllers
 
             if (!_scope.IsSeedAdmin(me))
             {
-                var creators = await VisibleCreatorIdsAsync(me);
                 var grantable = await GrantableKeysAsync(_permissions, me);
                 roles = roles
-                    .Where(r => RoleVisibleTo(r, creators) && RoleGrantableBy(r, grantable))
+                    .Where(r => (r.IsSystemRole || (tenant != null && r.TenantAdminUserId == tenant)) && RoleGrantableBy(r, grantable))
                     .ToList();
             }
             // UserCount counts only users the caller can see, so a shared
             // role never reveals how many accounts exist in other trees.
             var visibleUsers = await _scope.GetVisibleUserIdsAsync(me);
 
+            var editable = new HashSet<int>();
+            foreach (var r in roles) if (await CanEditRoleAsync(r, me)) editable.Add(r.Id);
             var dto = roles.Select(r => new RoleDto
             {
                 Id = r.Id,
+                TenantAdminUserId = r.TenantAdminUserId,
+                CanEdit = editable.Contains(r.Id),
                 Name = r.Name,
                 Description = r.Description,
                 IsSystemRole = r.IsSystemRole,
@@ -183,6 +158,24 @@ namespace MyApp.Api.Controllers
             return Ok(dto);
         }
 
+        [HttpGet("tenants")]
+        [HasPermission("rbac.roles.create")]
+        public async Task<ActionResult> Tenants()
+        {
+            if (!_scope.IsSeedAdmin(CurrentUserId() ?? 0)) return Forbid();
+            var rows = await _context.Users.AsNoTracking()
+                .Select(u => new { u.Id, u.Username, u.FullName, u.CreatedByUserId }).ToListAsync();
+            var grants = await _context.UserCompanies.AsNoTracking()
+                .Select(uc => new { uc.UserId, Name = uc.Company!.Name }).ToListAsync();
+            var roots = rows.Where(u => _scope.IsSeedAdmin(u.Id) || u.CreatedByUserId == null ||
+                _scope.IsSeedAdmin(u.CreatedByUserId.Value)).Select(u => new
+                {
+                    userId = u.Id, u.Username, u.FullName,
+                    companies = grants.Where(g => g.UserId == u.Id).Select(g => g.Name).OrderBy(n => n).ToList()
+                });
+            return Ok(roots);
+        }
+
         [HttpGet("{id}")]
         [HasPermission("rbac.roles.view")]
         public async Task<ActionResult<RoleDto>> Get(int id)
@@ -193,13 +186,15 @@ namespace MyApp.Api.Controllers
                 .Include(r => r.UserRoles)
                 .FirstOrDefaultAsync(r => r.Id == id);
             if (role == null) return NotFound(new { message = "Role not found" });
-            if (!_scope.IsSeedAdmin(me) && !RoleVisibleTo(role, await VisibleCreatorIdsAsync(me)))
+            if (!_scope.IsSeedAdmin(me) && !await RoleVisibleAsync(role, me))
                 return NotFound(new { message = "Role not found" });
             var visibleUsers = await _scope.GetVisibleUserIdsAsync(me);
 
             return Ok(new RoleDto
             {
                 Id = role.Id,
+                TenantAdminUserId = role.TenantAdminUserId,
+                CanEdit = await CanEditRoleAsync(role, CurrentUserId() ?? 0),
                 Name = role.Name,
                 Description = role.Description,
                 IsSystemRole = role.IsSystemRole,
@@ -220,8 +215,18 @@ namespace MyApp.Api.Controllers
             if (string.IsNullOrWhiteSpace(dto.Name))
                 return BadRequest(new { message = "Role name is required" });
 
+            var actor = CurrentUserId() ?? 0;
+            var ownTenant = await RoleTenantScope.ResolveAsync(_context, _scope, actor);
+            if (ownTenant == null) return Forbid();
+            if (dto.TenantAdminUserId.HasValue && !_scope.IsSeedAdmin(actor) && dto.TenantAdminUserId != ownTenant)
+                return Forbid();
+            var tenant = dto.TenantAdminUserId ?? ownTenant.Value;
+            if (await RoleTenantScope.ResolveAsync(_context, _scope, tenant) != tenant)
+                return BadRequest(new { message = "Select a tenant administrator" });
             var name = dto.Name.Trim();
-            if (await _context.Roles.AnyAsync(r => r.Name == name))
+            if (name.Length > 100 || dto.Description?.Length > 500)
+                return BadRequest(new { message = "Role name or description is too long" });
+            if (await NameClashesAsync(name, tenant))
                 return Conflict(new { message = "A role with this name already exists" });
 
             // Only permission keys that exist in the catalog are accepted...
@@ -246,27 +251,71 @@ namespace MyApp.Api.Controllers
                 Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
                 IsSystemRole = false,
                 CreatedAt = DateTime.UtcNow,
-                CreatedByUserId = CurrentUserId()
+                CreatedByUserId = CurrentUserId(),
+                TenantAdminUserId = tenant
             };
-            _context.Roles.Add(role);
-            await _context.SaveChangesAsync();
-
             foreach (var pid in validPermIds)
-                _context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = pid });
-            if (validPermIds.Count > 0) await _context.SaveChangesAsync();
+                role.RolePermissions.Add(new RolePermission { PermissionId = pid });
+            _context.Roles.Add(role);
+            try { await _context.SaveChangesAsync(); }
+            catch (DbUpdateException ex) when (IsNameConflict(ex))
+            { return Conflict(new { message = "A role with this name already exists in this tenant" }); }
 
             _permissions.InvalidateAll();
 
             return CreatedAtAction(nameof(Get), new { id = role.Id }, new RoleDto
             {
                 Id = role.Id,
+                TenantAdminUserId = role.TenantAdminUserId,
+                CanEdit = await CanEditRoleAsync(role, CurrentUserId() ?? 0),
                 Name = role.Name,
                 Description = role.Description,
                 IsSystemRole = role.IsSystemRole,
                 CreatedAt = role.CreatedAt,
                 UserCount = 0,
-                PermissionKeys = dto.PermissionKeys.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(k => k).ToList()
+                PermissionKeys = (dto.PermissionKeys ?? new List<string>()).Where(k => !string.IsNullOrWhiteSpace(k))
+                    .Select(k => k.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(k => k).ToList()
             });
+        }
+
+        [HttpPost("{id:int}/copy")]
+        [HasPermission("rbac.roles.create")]
+        public async Task<ActionResult<List<RoleDto>>> Copy(int id, [FromBody] CopyRoleDto dto)
+        {
+            var actor = CurrentUserId() ?? 0;
+            if (!_scope.IsSeedAdmin(actor)) return Forbid();
+            var source = await _context.Roles.Include(r => r.RolePermissions)
+                .FirstOrDefaultAsync(r => r.Id == id);
+            if (source == null) return NotFound(new { message = "Role not found" });
+            var targets = (dto.TenantAdminUserIds ?? new List<int>()).Distinct().ToList();
+            if (targets.Count == 0 || targets.Count > 100)
+                return BadRequest(new { message = "Select between one and 100 tenant administrators" });
+            var name = string.IsNullOrWhiteSpace(dto.Name) ? source.Name : dto.Name.Trim();
+            if (name.Length > 100) return BadRequest(new { message = "Role name is too long" });
+            foreach (var target in targets)
+            {
+                if (await RoleTenantScope.ResolveAsync(_context, _scope, target) != target)
+                    return BadRequest(new { message = "Select a tenant administrator" });
+                if (await NameClashesAsync(name, target))
+                    return Conflict(new { message = "A role with this name already exists in a selected tenant. Choose another name." });
+            }
+            var copies = targets.Select(target => new Role
+            {
+                Name = name, Description = source.Description, CreatedByUserId = actor,
+                TenantAdminUserId = target, CreatedAt = DateTime.UtcNow,
+                RolePermissions = source.RolePermissions.Select(rp => new RolePermission { PermissionId = rp.PermissionId }).ToList()
+            }).ToList();
+            _context.Roles.AddRange(copies);
+            try { await _context.SaveChangesAsync(); }
+            catch (DbUpdateException ex) when (IsNameConflict(ex))
+            { return Conflict(new { message = "A role with this name already exists in a selected tenant" }); }
+            _permissions.InvalidateAll();
+            var permissionIds = source.RolePermissions.Select(rp => rp.PermissionId).ToList();
+            var keys = await _context.Permissions.Where(p => permissionIds.Contains(p.Id))
+                .Select(p => p.Key).OrderBy(k => k).ToListAsync();
+            return Ok(copies.Select(r => new RoleDto { Id = r.Id, Name = r.Name,
+                Description = r.Description, TenantAdminUserId = r.TenantAdminUserId, CanEdit = true,
+                CreatedAt = r.CreatedAt, PermissionKeys = keys }).ToList());
         }
 
         [HttpPut("{id}")]
@@ -291,12 +340,14 @@ namespace MyApp.Api.Controllers
                 var newName = dto.Name.Trim();
                 if (!string.Equals(newName, role.Name, StringComparison.Ordinal))
                 {
-                    var clash = await _context.Roles.AnyAsync(r => r.Name == newName && r.Id != id);
+                    if (newName.Length > 100) return BadRequest(new { message = "Role name is too long" });
+                    var clash = await NameClashesAsync(newName, role.TenantAdminUserId, id);
                     if (clash) return Conflict(new { message = "A role with this name already exists" });
                     role.Name = newName;
                 }
             }
 
+            if (dto.Description?.Length > 500) return BadRequest(new { message = "Description is too long" });
             if (dto.Description != null)
                 role.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
 
@@ -322,7 +373,9 @@ namespace MyApp.Api.Controllers
                     _context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = pid });
             }
 
-            await _context.SaveChangesAsync();
+            try { await _context.SaveChangesAsync(); }
+            catch (DbUpdateException ex) when (IsNameConflict(ex))
+            { return Conflict(new { message = "A role with this name already exists in this tenant" }); }
             _permissions.InvalidateAll();
 
             return await Get(id);

@@ -34,7 +34,7 @@ static class PoFormatAccessChecks
         db.AddRange(ca,cb,ca2); await db.SaveChangesAsync();
         db.UserCompanies.AddRange(new UserCompany{UserId=restricted.Id,CompanyId=a.Id},new UserCompany{UserId=viewer.Id,CompanyId=a.Id});
         var keys = new[]{"view","create","update","delete"};
-        var editRole=new Role{Name="PO-only editor"}; var viewRole=new Role{Name="PO-only reader"};
+        var editRole=new Role{Name="PO-only editor",TenantAdminUserId=restricted.Id}; var viewRole=new Role{Name="PO-only reader",TenantAdminUserId=viewer.Id};
         foreach(var action in keys)
         {
             var permission = new Permission{Key="poformats.manage."+action,Module="poformats",Page="manage",Action=action};
@@ -48,7 +48,7 @@ static class PoFormatAccessChecks
         using var cache=new MemoryCache(new MemoryCacheOptions());
         var accessor=new HttpContextAccessor();
         var guard=new CompanyAccessGuard(db,cache,config,accessor);
-        var permissions=new PermissionService(db,cache,config);
+        var permissions=new PermissionService(db,cache,config,new ManagementScopeService(db,cache,guard,config));
         var fp=new POFormatFingerprintService();
         var registry=new POFormatRegistry(db,fp,null!,NullLogger<POFormatRegistry>.Instance);
         using var provider=new ServiceCollection().AddSingleton<IPermissionService>(permissions).BuildServiceProvider();

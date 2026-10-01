@@ -23,6 +23,53 @@ namespace MyApp.Api.Data
             await EnsureAdministratorRoleAsync(db, seedAdminUserId);
             await EnsureEditionRolesAsync(db, seedAdminUserId);
             await BootstrapExistingAdminUsersAsync(db);
+            await ScopeCustomRolesAsync(db, seedAdminUserId);
+        }
+
+        private static async Task ScopeCustomRolesAsync(AppDbContext db, int seedAdminUserId)
+        {
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await db.Database.ExecuteSqlRawAsync("""
+                DECLARE @result int;
+                EXEC @result = sys.sp_getapplock @Resource = 'custom-role-tenant-upgrade',
+                    @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 30000;
+                IF @result < 0 THROW 51000, 'Role tenant upgrade lock unavailable', 1;
+                """);
+            var roles = await db.Roles.Include(r => r.RolePermissions).Include(r => r.UserRoles)
+                .Where(r => !r.IsSystemRole && r.TenantAdminUserId == null).ToListAsync();
+            var parents = await db.Users.ToDictionaryAsync(u => u.Id, u => u.CreatedByUserId);
+            int Root(int userId)
+            {
+                var seen = new HashSet<int>();
+                while (parents.TryGetValue(userId, out var parent) && seen.Add(userId))
+                {
+                    if (userId == seedAdminUserId || parent == null || parent == seedAdminUserId) return userId;
+                    userId = parent.Value;
+                }
+                return seedAdminUserId;
+            }
+            foreach (var role in roles)
+            {
+                var owner = Root(role.CreatedByUserId ?? seedAdminUserId);
+                role.TenantAdminUserId = owner;
+                var foreignAssignments = role.UserRoles.GroupBy(ur => Root(ur.UserId))
+                    .Where(g => g.Key != owner).ToList();
+                foreach (var group in foreignAssignments)
+                {
+                    var copy = new Role { Name = role.Name, Description = role.Description,
+                        CreatedAt = role.CreatedAt, CreatedByUserId = seedAdminUserId, TenantAdminUserId = group.Key,
+                        RolePermissions = role.RolePermissions.Select(rp => new RolePermission { PermissionId = rp.PermissionId }).ToList() };
+                    db.Roles.Add(copy);
+                    foreach (var assignment in group)
+                    {
+                        db.UserRoles.Add(new UserRole { UserId = assignment.UserId, Role = copy,
+                            AssignedAt = assignment.AssignedAt, AssignedByUserId = assignment.AssignedByUserId });
+                        db.UserRoles.Remove(assignment);
+                    }
+                }
+            }
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
         }
 
         /// <summary>
@@ -69,7 +116,7 @@ namespace MyApp.Api.Data
                 return;
             }
 
-            var adminRole = await db.Roles.FirstOrDefaultAsync(r => r.Name == AdministratorRoleName);
+            var adminRole = await db.Roles.FirstOrDefaultAsync(r => (r.IsSystemRole || r.TenantAdminUserId == null) && r.Name == AdministratorRoleName);
             if (adminRole == null) return; // EnsureAdministratorRoleAsync should have just created it
 
             // Candidates: User.Role='Admin' AND no UserRole rows at all
@@ -131,7 +178,7 @@ namespace MyApp.Api.Data
             {
                 var role = await db.Roles
                     .Include(r => r.RolePermissions)
-                    .FirstOrDefaultAsync(r => r.Name == name);
+                    .FirstOrDefaultAsync(r => (r.IsSystemRole || r.TenantAdminUserId == null) && r.Name == name);
 
                 if (role == null)
                 {
@@ -226,7 +273,7 @@ namespace MyApp.Api.Data
 
             var adminRole = await db.Roles
                 .Include(r => r.RolePermissions)
-                .FirstOrDefaultAsync(r => r.Name == AdministratorRoleName);
+                .FirstOrDefaultAsync(r => (r.IsSystemRole || r.TenantAdminUserId == null) && r.Name == AdministratorRoleName);
 
             if (adminRole == null)
             {

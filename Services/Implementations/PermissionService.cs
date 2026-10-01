@@ -13,10 +13,12 @@ namespace MyApp.Api.Services.Implementations
 
         private readonly AppDbContext _context;
         private readonly int _seedAdminUserId;
+        private readonly IManagementScopeService _scope;
 
-        public PermissionService(AppDbContext context, IMemoryCache cache, IConfiguration configuration)
+        public PermissionService(AppDbContext context, IMemoryCache cache, IConfiguration configuration, IManagementScopeService scope)
         {
             _context = context;
+            _scope = scope;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
@@ -41,8 +43,10 @@ namespace MyApp.Api.Services.Implementations
             if (_requestPermissions.TryGetValue(userId, out var cached))
                 return cached;
 
+            var tenant = await RoleTenantScope.ResolveAsync(_context, _scope, userId);
             var perms = await _context.UserRoles
-                .Where(ur => ur.UserId == userId)
+                .Where(ur => ur.UserId == userId && (ur.Role!.IsSystemRole ||
+                    (tenant != null && ur.Role.TenantAdminUserId == tenant)))
                 .SelectMany(ur => ur.Role!.RolePermissions)
                 .Select(rp => rp.Permission!.Key)
                 .Distinct()

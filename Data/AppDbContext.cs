@@ -925,7 +925,10 @@ namespace MyApp.Api.Data
 
             modelBuilder.Entity<Role>()
                 .HasIndex(r => r.Name)
-                .IsUnique();
+                .IsUnique().HasFilter("[TenantAdminUserId] IS NULL");
+            modelBuilder.Entity<Role>()
+                .HasIndex(r => new { r.TenantAdminUserId, r.Name })
+                .IsUnique().HasFilter("[TenantAdminUserId] IS NOT NULL");
             modelBuilder.Entity<Role>().Property(r => r.Name).HasMaxLength(100);
             modelBuilder.Entity<Role>().Property(r => r.Description).HasMaxLength(500);
 

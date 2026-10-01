@@ -16,3 +16,6 @@ export const deleteRole = (id) => httpClient.delete(`/roles/${id}`);
 export const getUserRoles = (userId) => httpClient.get(`/users/${userId}/roles`);
 export const assignUserRoles = (userId, roleIds) =>
   httpClient.put(`/users/${userId}/roles`, { roleIds });
+
+export const getRoleTenants = () => httpClient.get("/roles/tenants");
+export const copyRole = (id, payload) => httpClient.post(`/roles/${id}/copy`, payload);

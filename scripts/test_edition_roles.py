@@ -244,6 +244,12 @@ def main() -> int:
             if not check("6", f"{username} created", s in (200, 201), f"{s} {err_text(u)}"):
                 return None
             made_users.append(u)
+            if not role.get("isSystemRole"):
+                sc, copies = http("POST", f"/api/roles/{role['id']}/copy", base, token=seed,
+                                  body={"tenantAdminUserIds": [u['id']]})
+                assert sc == 200, (sc, copies)
+                role = copies[0]
+                made_roles.append(role)
             s2, d2 = http("PUT", f"/api/users/{u['id']}/roles", base, token=seed,
                           body={"roleIds": [role["id"]]})
             check("6", f"{username} put on {role['name']}", s2 == 200, f"{s2} {err_text(d2)}")

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
 using MyApp.Api.Models;
@@ -54,8 +55,10 @@ namespace MyApp.Api.Controllers
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null) return NotFound(new { message = "User not found" });
 
+            var tenant = await RoleTenantScope.ResolveAsync(_context, _scope, userId);
             var roles = await _context.UserRoles
-                .Where(ur => ur.UserId == userId)
+                .Where(ur => ur.UserId == userId && (_scope.IsSeedAdmin(actor) || ur.Role!.IsSystemRole ||
+                    (tenant != null && ur.Role.TenantAdminUserId == tenant)))
                 .Include(ur => ur.Role)
                 .Select(ur => new RoleSummaryDto
                 {
@@ -97,6 +100,11 @@ namespace MyApp.Api.Controllers
                 return NotFound(new { message = "User not found" });
 
             var targetRoleIds = (dto.RoleIds ?? new List<int>()).Distinct().ToList();
+            var tenant = await RoleTenantScope.ResolveAsync(_context, _scope, userId);
+            if (targetRoleIds.Count > 0 && await _context.Roles.AnyAsync(r =>
+                targetRoleIds.Contains(r.Id) && !r.IsSystemRole &&
+                (tenant == null || r.TenantAdminUserId == null || r.TenantAdminUserId != tenant)))
+                return BadRequest(new { message = "A private role belongs to another tenant. Copy it into this tenant first." });
             if (targetRoleIds.Count > 0)
             {
                 // Only roles the caller can see may be handed out: system
