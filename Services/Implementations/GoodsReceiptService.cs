@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.DTOs;
 using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
@@ -180,12 +181,7 @@ namespace MyApp.Api.Services.Implementations
                     throw new InvalidOperationException("At least one item is required.");
 
                 // Number allocation, mirror PurchaseBill numbering.
-                var maxNumber = await _context.GoodsReceipts
-                    .Where(g => g.CompanyId == dto.CompanyId)
-                    .Select(g => (int?)g.GoodsReceiptNumber)
-                    .MaxAsync() ?? 0;
-                var nextNumber = Math.Max(maxNumber + 1, company.StartingGoodsReceiptNumber);
-                company.CurrentGoodsReceiptNumber = nextNumber;
+                var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "goods-receipt", dto.CustomNumber);
 
                 var receipt = new GoodsReceipt
                 {

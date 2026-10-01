@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
 using MyApp.Api.DTOs;
@@ -372,7 +372,7 @@ namespace MyApp.Api.Services.Implementations
                 }).ToList()
             };
 
-            var created = await _repository.CreateDeliveryChallanAsync(deliveryChallan);
+            var created = await _repository.CreateDeliveryChallanAsync(deliveryChallan, dto.CustomNumber);
 
             // Upsert ItemDescription rows for any new item names. This makes
             // PO-imported items immediately visible in the bill form's

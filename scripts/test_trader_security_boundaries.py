@@ -128,6 +128,10 @@ def main():
             check(label + ' sees exactly assigned companies despite Administrator role', status == 200 and {x['id'] for x in rows} == set(assigned), rows)
         # Real rows make an IDOR refusal meaningful; every GET is proven to
         # return the row for its owner before its id is manipulated.
+        for kind in ('quote', 'challan', 'purchase-bill', 'goods-receipt'):
+            path = f'/api/companies/{b}/document-numbers/{kind}?check=500'
+            for label, expected in (('B',200), ('Multi',200), ('A',403), ('None',403)):
+                check(label+' '+kind+' number preview scope',call('GET',path,tokens[label])[0]==expected)
         today = '2026-10-01T00:00:00Z'
         def create(path, payload):
             status, row = call('POST',path,seed,payload)
@@ -240,6 +244,8 @@ def main():
         check('quote photo removal leaves totals unchanged',status==200 and saved['items'][0]['imagePath'] is None and saved['subtotal']==200)
         assert call('PUT',f'/api/users/{users[1]}/roles',seed,{'roleIds':[]})[0]==200
         check('assigned user without quote permission cannot read image',call('GET',photo_url,tokens['B'])[0]==404)
+        for kind in ('quote', 'challan', 'purchase-bill', 'goods-receipt'):
+            check(kind+' preview requires create permission',call('GET',f'/api/companies/{b}/document-numbers/{kind}',tokens['B'])[0]==403)
         assert call('PUT',f'/api/users/{users[1]}/roles',seed,{'roleIds':[admin_role]})[0]==200
         status, logo = form(f'/api/companies/{b}/logo',seed,{},('logo.png','image/png',png))
         assert status == 200, (status,logo)

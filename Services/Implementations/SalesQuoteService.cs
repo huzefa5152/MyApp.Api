@@ -169,12 +169,11 @@ namespace MyApp.Api.Services.Implementations
 
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
+                await using var numberTx = await _context.Database.BeginTransactionAsync();
                 // Company-scoped numbering. The unique index (CompanyId,
                 // QuoteNumber) guards the concurrent-create race — the loser
                 // recomputes and retries.
-                var max = await _repository.GetMaxNumberAsync(companyId);
-                var seed = company.StartingSalesQuoteNumber > 0 ? company.StartingSalesQuoteNumber : 1;
-                var next = max > 0 ? max + 1 : seed;
+                var next = await CompanyDocumentNumbers.AllocateAsync(_context, companyId, "quote", dto.CustomNumber);
 
                 var quote = new SalesQuote
                 {
@@ -199,11 +198,12 @@ namespace MyApp.Api.Services.Implementations
                     }).ToList()
                 };
                 ApplyTotals(quote, dto.GSTRate);
-                company.CurrentSalesQuoteNumber = next;
+                // Counter is advanced atomically by the allocator.
                 _context.SalesQuotes.Add(quote);
                 try
                 {
                     await _context.SaveChangesAsync();
+                    await numberTx.CommitAsync();
                 }
                 catch (DbUpdateException)
                 {

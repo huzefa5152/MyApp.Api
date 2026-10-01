@@ -14,6 +14,7 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 
 import { todayYmd } from "../utils/dateInput";
 const colors = {
@@ -59,6 +60,9 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   const [imageUploads, setImageUploads] = useState(0);
   const attachmentRef = useRef(null);
 
@@ -93,7 +97,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || imageUploads > 0) return;
+    if (saving || imageUploads > 0 || (!quote && !numberValid)) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
     if (!client) { setError("Please select a client."); return; }
@@ -103,6 +107,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     try {
       const saved = await onSaved({
         clientId: client.id,
+        ...(!quote ? { customNumber: billNumberPayload(numberMode, customNumber) } : {}),
         date: date ? new Date(date).toISOString() : null,
         validUntil: validForDays && date ? new Date(new Date(date).getTime() + Number(validForDays) * 86400000).toISOString() : null,
         customerEnquiryRef: enquiryRef.trim() || null,
@@ -132,7 +137,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
     }
   };
 
-  const disabled = !client || items.every((i) => !i.description.trim()) || saving || imageUploads > 0;
+  const disabled = !client || items.every((i) => !i.description.trim()) || saving || imageUploads > 0 || (!quote && !numberValid);
 
   // Contact-person dropdown options come from the selected client's
   // semicolon-separated ContactPerson list (mirrors the challan Site dropdown).
@@ -151,6 +156,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div ref={errRef} style={s.err}>{error}</div>}
+            {!quote && <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div style={s.row}>
               <div style={{ flex: 2, minWidth: 220 }}>
                 <label style={s.label}>Client</label>

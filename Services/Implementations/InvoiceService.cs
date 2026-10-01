@@ -539,9 +539,7 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>
         /// Lowest number a hand-typed bill number may NOT take. The FBR Sandbox
         /// issues its demo bills from 900000 up (FbrSandboxService.DemoBaseNumber)
-        /// and the automatic sequence is MAX(InvoiceNumber) + 1 over the NON-demo
-        /// rows, so a real bill parked in that band would leave every later
-        /// automatic number colliding with a demo one.
+        /// and normal bills must stay outside that reserved range.
         /// </summary>
         private const int DemoInvoiceNumberBase = 900000;
 
@@ -549,11 +547,9 @@ namespace MyApp.Api.Services.Implementations
         /// The number a new SALE bill is issued under — the ONE place both bill
         /// creation paths resolve it, so Auto and Custom cannot drift apart.
         ///
-        /// A null <paramref name="requested"/> is "Auto": MAX(InvoiceNumber) + 1 so
-        /// a deleted trailing number is reused (no gaps after deleting the last
-        /// bill), falling back to the company's StartingInvoiceNumber for its
-        /// first bill. IsDemo bills live in their own 900000+ range and must not
-        /// influence that sequence.
+        /// A null <paramref name="requested"/> is Auto: continue the company cursor
+        /// and skip numbers already reserved by custom bills. Custom does not
+        /// advance that cursor. Demo bills remain outside the normal sequence.
         ///
         /// A requested number is issued VERBATIM and is checked here for being
         /// free. Both the MAX read and the in-use probe are check-then-insert
@@ -569,13 +565,11 @@ namespace MyApp.Api.Services.Implementations
         {
             if (requested is null)
             {
-                int maxExistingInvoice = await _context.Invoices
-                    .Where(i => i.CompanyId == companyId && !i.IsDemo)
-                    .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-                return maxExistingInvoice > 0
-                    ? maxExistingInvoice + 1
-                    : company.StartingInvoiceNumber;
+                var cursor = await _context.Companies.AsNoTracking()
+                    .Where(c => c.Id == companyId).Select(c => c.CurrentInvoiceNumber).SingleAsync();
+                return await CompanyDocumentNumbers.NextAvailableAsync(
+                    _context.Invoices.Where(i => i.CompanyId == companyId && !i.IsDemo && i.NoteKind == 0)
+                        .Select(i => i.InvoiceNumber), company.StartingInvoiceNumber, cursor, DemoInvoiceNumberBase - 1);
             }
 
             var number = requested.Value;
@@ -604,13 +598,7 @@ namespace MyApp.Api.Services.Implementations
             var company = await _companyRepo.GetByIdAsync(companyId)
                 ?? throw new KeyNotFoundException("Company not found.");
 
-            int maxExistingInvoice = await _context.Invoices
-                .Where(i => i.CompanyId == companyId && !i.IsDemo)
-                .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-
-            var next = maxExistingInvoice > 0
-                ? maxExistingInvoice + 1
-                : company.StartingInvoiceNumber;
+            var next = await ResolveSaleInvoiceNumberAsync(companyId, company, null);
 
             var result = new NextInvoiceNumberDto
             {
@@ -949,7 +937,7 @@ namespace MyApp.Api.Services.Implementations
                     // Resolved under the app-lock so neither the MAX read nor the
                     // in-use probe can go stale between here and the INSERT.
                     nextInvoiceNumber = await ResolveSaleInvoiceNumberAsync(dto.CompanyId, company, dto.InvoiceNumber);
-                    company.CurrentInvoiceNumber = nextInvoiceNumber;
+                    if (!dto.InvoiceNumber.HasValue) company.CurrentInvoiceNumber = nextInvoiceNumber;
 
                     // Fresh, navigation-free line clones for THIS attempt. The
                     // canonical invoiceItems were built once above; reusing the
@@ -1346,7 +1334,7 @@ namespace MyApp.Api.Services.Implementations
                     // real bills, not demos — and the same Auto / Custom resolver
                     // as the challan-linked path.
                     nextInvoiceNumber = await ResolveSaleInvoiceNumberAsync(dto.CompanyId, company, dto.InvoiceNumber);
-                    company.CurrentInvoiceNumber = nextInvoiceNumber;
+                    if (!dto.InvoiceNumber.HasValue) company.CurrentInvoiceNumber = nextInvoiceNumber;
 
                     // Fresh, navigation-free line clones per attempt (see CreateAsync).
                     var itemsForAttempt = invoiceItems.Select(src => new InvoiceItem
@@ -3502,10 +3490,7 @@ namespace MyApp.Api.Services.Implementations
                     var company = await _context.Companies.FirstOrDefaultAsync(c => c.Id == original.CompanyId)
                         ?? throw new InvalidOperationException("Company not found for the original invoice.");
 
-                    int maxExistingInvoice = await _context.Invoices
-                        .Where(i => i.CompanyId == original.CompanyId && i.NoteKind == 0 && !i.IsDemo)
-                        .MaxAsync(i => (int?)i.InvoiceNumber) ?? 0;
-                    nextInvoiceNumber = maxExistingInvoice > 0 ? maxExistingInvoice + 1 : company.StartingInvoiceNumber;
+                    nextInvoiceNumber = await ResolveSaleInvoiceNumberAsync(original.CompanyId, company, null);
                     company.CurrentInvoiceNumber = nextInvoiceNumber;
 
                     var invoice = new Invoice

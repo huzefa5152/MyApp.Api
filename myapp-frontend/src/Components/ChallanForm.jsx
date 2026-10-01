@@ -14,6 +14,7 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
 import { useConfirm } from "./ConfirmDialog";
@@ -61,6 +62,9 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   const attachmentRef = useRef(null);
   const suppliers = useChallanSuppliers(companyId);
   const confirm = useConfirm();
@@ -152,7 +156,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || savedChallanId) return;
+    if (saving || savedChallanId || !numberValid) return;
     setError("");
 
     const validItems = items.filter((item) => item.description.trim());
@@ -189,6 +193,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         // fulfilment flow (which links each line + auto-closes the order).
         salesOrderId: salesOrderId ? parseInt(salesOrderId) : null,
         clientId: client.id,
+        customNumber: billNumberPayload(numberMode, customNumber),
         clientName: client.label,
         site: site || null,
         notes: notes.trim() || null,
@@ -216,7 +221,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
     }
   };
 
-  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving || !!savedChallanId;
+  const isDisabled = items.some((i) => !i.description.trim()) || !client || saving || !!savedChallanId || !numberValid;
 
   // Backdrop click is intentionally a no-op — the user can lose minutes
   // of typed data with one stray click otherwise. Use the X in the
@@ -232,6 +237,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
 
             {/* Optional: fulfil a Sales Order. Picking one autofills the client,
                 PO, site and the order's undelivered lines below, and links the

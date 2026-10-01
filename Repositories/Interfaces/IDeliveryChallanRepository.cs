@@ -12,7 +12,7 @@ namespace MyApp.Api.Repositories.Interfaces
             int? salesOrderId = null);
         Task<DeliveryChallan?> GetByIdAsync(int id);
         Task<List<DeliveryChallan>> GetByIdsAsync(IEnumerable<int> ids);
-        Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan);
+        Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan, int? customNumber = null);
         Task<DeliveryChallan> UpdateAsync(DeliveryChallan deliveryChallan);
         Task DeleteAsync(DeliveryChallan deliveryChallan);
         Task DeleteItemAsync(DeliveryItem item);

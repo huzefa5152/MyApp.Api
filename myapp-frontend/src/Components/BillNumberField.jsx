@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { MdCheckCircle, MdErrorOutline, MdRefresh } from "react-icons/md";
 import { getNextInvoiceNumber } from "../api/invoiceApi";
+import httpClient from "../api/httpClient";
+
+const labels = { quote: "Sales Quote", challan: "Delivery Challan", "purchase-bill": "Purchase Bill", "goods-receipt": "Goods Receipt" };
+const readNumber = (companyId, kind, check) => kind
+  ? httpClient.get(`/companies/${companyId}/document-numbers/${kind}`, { params: { check } })
+  : getNextInvoiceNumber(companyId, check);
 
 // The "Bill / Invoice No." control, shared by BOTH bill-create forms
 // (InvoiceForm = from a challan, StandaloneInvoiceForm = without one). One
@@ -14,7 +20,7 @@ import { getNextInvoiceNumber } from "../api/invoiceApi";
 //
 // Auto is the default and is what every existing caller got before this
 // control existed: the parent holds `number` as "" and sends null, and the
-// server allocates MAX + 1 under its per-company lock.
+// server advances the Auto cursor and skips used numbers under its company lock.
 //
 // The availability check is ADVISORY. It reads outside that lock, so a number
 // that reads free here can still be taken by the time Save is pressed; the
@@ -55,6 +61,7 @@ const colors = {
  */
 export default function BillNumberField({
   companyId,
+  documentType,
   variant = "create",
   mode = "auto",
   onModeChange,
@@ -65,6 +72,7 @@ export default function BillNumberField({
   lockedReason,
   disabled = false,
 }) {
+  const documentLabel = labels[documentType] || "Bill / Invoice";
   const isEdit = variant === "edit";
   // On edit there is no Auto: the bill has a number and the box always shows one.
   const effectiveMode = isEdit ? "custom" : mode;
@@ -85,26 +93,26 @@ export default function BillNumberField({
     setLoading(true);
     setLoadError("");
     try {
-      const res = await getNextInvoiceNumber(companyId);
+      const res = await readNumber(companyId, documentType);
       setInfo(res.data);
     } catch {
-      setLoadError("Could not read the next bill number.");
+      setLoadError(documentType ? "Could not read the next document number." : "Could not read the next bill number.");
       setInfo(null);
     } finally {
       setLoading(false);
     }
-  }, [companyId]);
+  }, [companyId, documentType]);
 
   useEffect(() => { loadNext(); }, [loadNext]);
 
   // Debounced availability probe. Only the custom box asks — Auto is resolved
   // server-side at save time and has nothing to check.
   useEffect(() => {
+    const seq = ++probeSeq.current;
     if (effectiveMode !== "custom" || lockedReason) { setProbe(null); return; }
     const raw = (number || "").trim();
     if (!raw) { setProbe(null); return; }
 
-    const seq = ++probeSeq.current;
     const parsed = Number(raw);
     // Leaving an existing bill on its own number is not a clash with itself.
     // The server excludes the row being renumbered for the same reason; this
@@ -122,7 +130,7 @@ export default function BillNumberField({
     setProbing(true);
     const t = setTimeout(async () => {
       try {
-        const res = await getNextInvoiceNumber(companyId, parsed);
+        const res = await readNumber(companyId, documentType, parsed);
         if (seq !== probeSeq.current) return;      // a newer keystroke won
         setProbe({
           available: res.data?.checkedAvailable === true,
@@ -140,7 +148,7 @@ export default function BillNumberField({
     }, 400);
 
     return () => clearTimeout(t);
-  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId]);
+  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId, documentType]);
 
   // Report usability upward so the parent can block Save.
   const customUsable =
@@ -183,7 +191,7 @@ export default function BillNumberField({
   return (
     <div>
       <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
-        Bill / Invoice No.
+        {documentLabel} No.
       </label>
 
       {isEdit ? null : (
@@ -229,7 +237,7 @@ export default function BillNumberField({
               readOnly
               value={loading ? "…" : info ? String(info.nextNumber) : "—"}
               style={{ ...inputStyle, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
-              title="Allocated by the server when the bill is saved"
+              title={documentType ? "Allocated by the server when the document is saved" : "Allocated by the server when the bill is saved"}
             />
             <button
               type="button"
@@ -259,20 +267,21 @@ export default function BillNumberField({
                 ? "Set this company's starting invoice number first."
                 : info && prefix
                   ? `Next in sequence · prints as ${info.formattedNext}`
-                  : "Next in sequence · final number is allocated on save"}
+                  : "Next in sequence · skips used numbers on save"}
           </div>
         </>
       ) : (
         <>
           <input
             type="number"
+            aria-label={`${documentLabel} number`}
             min={1}
             max={info?.maxAllowed || undefined}
             step={1}
             value={number}
             disabled={disabled}
             onChange={(e) => onNumberChange?.(e.target.value)}
-            placeholder={info ? `e.g. ${info.nextNumber}` : "Bill number"}
+            placeholder={info ? `e.g. ${info.nextNumber}` : `${documentLabel} number`}
             style={{
               ...inputStyle,
               borderColor:
@@ -283,7 +292,7 @@ export default function BillNumberField({
           />
           <div style={{ fontSize: "0.72rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
             {!(number || "").trim() ? (
-              <span style={{ color: colors.warn }}>Enter a bill number.</span>
+              <span style={{ color: colors.warn }}>{documentType ? `Enter a ${documentLabel.toLowerCase()} number.` : "Enter a bill number."}</span>
             ) : probe?.unchanged ? (
               <span style={{ color: colors.textSecondary }}>Unchanged.</span>
             ) : probing ? (
@@ -306,6 +315,7 @@ export default function BillNumberField({
               <span style={{ color: colors.textSecondary }}>&nbsp;</span>
             )}
           </div>
+          {!isEdit && <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.25rem" }}>Custom reserves this number. Auto continues its sequence and skips numbers already used.</div>}
         </>
       )}
     </div>

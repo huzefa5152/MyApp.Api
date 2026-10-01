@@ -30,6 +30,7 @@ namespace MyApp.Api.DTOs
 
     public class CreateGoodsReceiptDto
     {
+        public int? CustomNumber { get; set; }
         public string? Notes { get; set; }
         public DateTime ReceiptDate { get; set; }
         public int CompanyId { get; set; }

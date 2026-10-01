@@ -288,12 +288,7 @@ namespace MyApp.Api.Services.Implementations
 
             // Allocate next purchase-bill number — independent of the
             // sales-side InvoiceNumber sequence.
-            var maxNumber = await _context.PurchaseBills
-                .Where(p => p.CompanyId == dto.CompanyId)
-                .Select(p => (int?)p.PurchaseBillNumber)
-                .MaxAsync() ?? 0;
-            var nextNumber = Math.Max(maxNumber + 1, company.StartingPurchaseBillNumber);
-            company.CurrentPurchaseBillNumber = nextNumber;
+            var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber);
 
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
             // anything. Any line with SourceInvoiceItemIds:
@@ -575,14 +570,11 @@ namespace MyApp.Api.Services.Implementations
 
                 var company = await _context.Companies.FindAsync(challan.CompanyId)
                     ?? throw new KeyNotFoundException("Company not found.");
-                var number = await _context.PurchaseBills
-                    .Where(p => p.CompanyId == challan.CompanyId)
-                    .Select(p => (int?)p.PurchaseBillNumber)
-                    .MaxAsync() ?? 0;
+                var number = 0;
                 var createdIds = new List<int>();
                 foreach (var group in groups)
                 {
-                    number = Math.Max(number + 1, company.StartingPurchaseBillNumber);
+                    number = await CompanyDocumentNumbers.AllocateAsync(_context, challan.CompanyId, "purchase-bill");
                     var lines = group.Select(i =>
                     {
                         var itemType = i.ItemTypeId.HasValue ? itemTypes[i.ItemTypeId.Value] : null;
@@ -617,7 +609,7 @@ namespace MyApp.Api.Services.Implementations
                         CreatedAt = DateTime.UtcNow,
                     };
                     _context.PurchaseBills.Add(bill);
-                    company.CurrentPurchaseBillNumber = number;
+                    // The allocator maintains the company counter.
                     await _context.SaveChangesAsync();
 
                     // Stock IN, same gate as a hand-made purchase bill.

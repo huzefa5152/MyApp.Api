@@ -14,6 +14,7 @@ import QuantityInput from "./QuantityInput";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 
 const colors = {
   blue: "#0d47a1",
@@ -58,6 +59,9 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
   const [saving, setSaving] = useState(false);
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
   const attachmentRef = useRef(null);
@@ -207,6 +211,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving || (!isEdit && !numberValid)) return;
     if (readOnly) return;
     setError("");
     if (!supplierId) return setError("Select a supplier.");
@@ -227,6 +232,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
       const payload = {
         date,
         companyId,
+        ...(!isEdit ? { customNumber: billNumberPayload(numberMode, customNumber) } : {}),
         supplierId: parseInt(supplierId),
         supplierBillNumber: supplierBillNumber || null,
         supplierIRN: supplierIRN || null,
@@ -282,6 +288,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            {!isEdit && <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="purchase-bill" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
 
             {sourceBill && (
               <div style={{
@@ -525,7 +532,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (
-              <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+              <button type="submit" disabled={saving || (!isEdit && !numberValid)} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
                 {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
               </button>
             )}

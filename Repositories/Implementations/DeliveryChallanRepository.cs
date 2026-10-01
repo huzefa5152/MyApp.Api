@@ -128,7 +128,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .ToListAsync();
         }
 
-        public async Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan)
+        public async Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan, int? customNumber = null)
         {
             // Wrap in transaction to prevent duplicate challan numbers from concurrent requests
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -154,17 +154,14 @@ namespace MyApp.Api.Repositories.Implementations
                                                          && c.IsDemo == isDemo)
                                                 .MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
 
-                int nextNumber = maxExisting > 0
-                                 ? maxExisting + 1
-                                 : company.StartingChallanNumber;
+                int nextNumber = isDemo
+                    ? (maxExisting > 0 ? maxExisting + 1 : company.StartingChallanNumber)
+                    : await MyApp.Api.Helpers.CompanyDocumentNumbers.AllocateAsync(_context, deliveryChallan.CompanyId, "challan", customNumber);
 
                 deliveryChallan.ChallanNumber = nextNumber;
                 // Don't touch the company's CurrentChallanNumber when seeding
                 // demo data — that field reflects the LIVE business sequence.
-                if (!isDemo)
-                {
-                    company.CurrentChallanNumber = nextNumber;
-                }
+                // Live counters are advanced by the allocator; demo counters stay separate.
 
                 _context.DeliveryChallans.Add(deliveryChallan);
                 await _context.SaveChangesAsync();

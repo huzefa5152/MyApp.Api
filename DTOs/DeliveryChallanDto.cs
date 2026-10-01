@@ -1,9 +1,10 @@
-﻿namespace MyApp.Api.DTOs
+namespace MyApp.Api.DTOs
 {
     public class DeliveryChallanDto
     {
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
+        public int? CustomNumber { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";

@@ -11,6 +11,7 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }
         public int QuoteNumber { get; set; }
+        public int? CustomNumber { get; set; }
         public int CompanyId { get; set; }
         public int ClientId { get; set; }
         public string ClientName { get; set; } = "";
