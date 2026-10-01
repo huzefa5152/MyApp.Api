@@ -75,7 +75,7 @@ export default function DocumentTaxFields({
       <div style={st.chipRow}>
         {supportsFurtherTax && !furtherTaxOn && (
           <button type="button" style={st.addChip} disabled={disabled}
-            onClick={() => onFurtherTaxRateChange?.(3)}>
+            onClick={() => onFurtherTaxRateChange?.(4)}>
             <MdAdd size={15} /> Further tax
           </button>
         )}

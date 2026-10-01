@@ -1,3 +1,4 @@
+import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import DocumentTaxFields from "./DocumentTaxFields";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
@@ -59,7 +60,7 @@ const colors = {
 //   needsSRO — line carries SRO Schedule + Item Serial #.
 const SCENARIO_META = {
   SN001: { buyerKind: "b2b-registered",   needsMRP: false, needsSRO: false, hint: "Wholesale B2B to a registered buyer (NTN required, validated by FBR)." },
-  SN002: { buyerKind: "b2b-unregistered", needsMRP: false, needsSRO: false, hint: "B2B to an unregistered buyer. 4% further tax common at submit time." },
+  SN002: { buyerKind: "b2b-unregistered", needsMRP: false, needsSRO: false, hint: "B2B to an unregistered buyer. 4% further tax defaults on the bill and is included in FBR filing." },
   SN003: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale of Steel (Melted and Re-Rolled)." },
   SN004: { buyerKind: "either",           needsMRP: false, needsSRO: false, hint: "Sale by Ship Breakers." },
   SN005: { buyerKind: "either",           needsMRP: false, needsSRO: true,  hint: "Reduced rate sale — SRO reference required." },
@@ -136,6 +137,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [gstRate, setGstRate] = useState(18);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
+  const [furtherTaxRate, setFurtherTaxRate] = useState(null);
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
   const [withholdingTaxAmount, setWithholdingTaxAmount] = useState(null);
   const [groupTaxInvoiceByItemType, setGroupTaxInvoiceByItemType] = useState(() => !!company?.defaultGroupTaxInvoiceByItemType);
@@ -285,6 +287,11 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
       if (sn001) setScenarioCode("SN001");
     }
   }, [enrichedScenarios, scenarioCode]);
+
+  const buyerRegistrationType = clients.find((c) => String(c.id) === String(selectedClientId))?.registrationType;
+  useEffect(() => {
+    setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
+  }, [scenarioCode, selectedClientId, buyerRegistrationType]);
 
   const chosenScenario = useMemo(
     () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
@@ -471,7 +478,8 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
     return sum + (Number.isFinite(t) ? t : lineTotalFrom(q, p));
   }, 0);
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
-  const grandTotal = subtotal + gstAmount;
+  const furtherTaxAmount = Math.round(subtotal * (Number(furtherTaxRate) || 0)) / 100;
+  const grandTotal = subtotal + gstAmount + furtherTaxAmount;
 
   const rowErrors = (r) => {
     const errs = [];
@@ -521,6 +529,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // null = Auto (server allocates the next number in sequence).
         invoiceNumber: billNumberPayload(billNumberMode, billNumber),
         groupTaxInvoiceByItemType,
+        furtherTaxRate: furtherTaxRate === null || furtherTaxRate === "" ? null : Number(furtherTaxRate),
         withholdingTaxRate: withholdingTaxRate === null || withholdingTaxRate === "" ? null : Number(withholdingTaxRate),
         withholdingTaxAmount: withholdingTaxAmount === null || withholdingTaxAmount === "" ? null : Number(withholdingTaxAmount),
         paymentTerms: paymentTerms || null,
@@ -1326,6 +1335,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       <div style={styles.totalsBox}>
                         <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                         <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                        {furtherTaxAmount > 0 && <div style={styles.totalRow}><span>Further tax ({furtherTaxRate}%):</span><span>Rs. {furtherTaxAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
                         <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
                           <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
@@ -1337,6 +1347,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
             )}
 
             <DocumentTaxFields subtotal={subtotal} gstAmount={gstAmount}
+              furtherTaxRate={furtherTaxRate} onFurtherTaxRateChange={setFurtherTaxRate}
               withholdingTaxRate={withholdingTaxRate} withholdingTaxAmount={withholdingTaxAmount}
               onWithholdingChange={({ rate, amount }) => { setWithholdingTaxRate(rate); setWithholdingTaxAmount(amount); }} />
             <TaxInvoiceGrouping value={groupTaxInvoiceByItemType} onChange={setGroupTaxInvoiceByItemType} />

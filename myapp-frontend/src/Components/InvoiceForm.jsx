@@ -1,3 +1,4 @@
+import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
@@ -119,7 +120,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [poNumber, setPoNumber] = useState("");
   const [dcSearch, setDcSearch] = useState("");
   const [gstRate, setGstRate] = useState(18);
-  // Further tax starts as None; withholding uses the company preference.
+  // Further tax follows the buyer/scenario; withholding uses the company preference.
   // The operator can override either value.
   const [furtherTaxRate, setFurtherTaxRate] = useState(null);
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(() => company?.defaultWithholdingTaxRate ?? null);
@@ -376,6 +377,11 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
 
   // The chosen scenario's full record (sale type + rate + buyerKind) — drives
   // GST rate, item-type filter, AND the client dropdown filter.
+  const buyerRegistrationType = clients.find((c) => String(c.id) === String(selectedClientId))?.registrationType;
+  useEffect(() => {
+    setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyerRegistrationType));
+  }, [scenarioCode, selectedClientId, buyerRegistrationType]);
+
   const chosenScenario = useMemo(
     () => enrichedScenarios.find((s) => s.code === scenarioCode) || null,
     [enrichedScenarios, scenarioCode],

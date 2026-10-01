@@ -30,6 +30,8 @@ namespace MyApp.Api.DTOs
     // Data for printing a Bill (Invoice)
     public class PrintBillDto
     {
+        public decimal? FurtherTaxRate { get; set; }
+        public decimal FurtherTaxAmount { get; set; }
         // Identifies this DTO to the shared renderer, including saved layouts.
         public string PrintTemplateType => "Bill";
         public string? FbrIRN { get; set; }
@@ -112,6 +114,8 @@ namespace MyApp.Api.DTOs
 
     public class PrintTaxInvoiceDto
     {
+        public decimal? FurtherTaxRate { get; set; }
+        public decimal FurtherTaxAmount { get; set; }
         public string? Notes { get; set; }
         // Supplier (company) details
         public string SupplierName { get; set; } = "";

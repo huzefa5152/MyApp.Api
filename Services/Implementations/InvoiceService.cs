@@ -3683,6 +3683,8 @@ namespace MyApp.Api.Services.Implementations
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,
+                FurtherTaxRate = inv.FurtherTaxRate,
+                FurtherTaxAmount = inv.FurtherTaxAmount,
                 // Round to whole rupees for the printed bill so the displayed
                 // grand total matches AmountInWords. Stored DB value keeps
                 // 2-dp precision; this is purely a print transformation.
@@ -3767,6 +3769,8 @@ namespace MyApp.Api.Services.Implementations
                 Subtotal = inv.Subtotal,
                 GSTRate = inv.GSTRate,
                 GSTAmount = inv.GSTAmount,
+                FurtherTaxRate = inv.FurtherTaxRate,
+                FurtherTaxAmount = inv.FurtherTaxAmount,
                 // Round whole-rupees to keep the printed total in sync with
                 // the in-words line — same transformation as PrintBillDto.
                 GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),

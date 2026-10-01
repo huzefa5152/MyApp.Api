@@ -41,5 +41,28 @@ namespace MyApp.Api.Helpers
         /// <summary>What a sales document comes to once further tax is on it.</summary>
         public static decimal GrandTotal(decimal subtotal, decimal gstAmount, decimal furtherTaxAmount)
             => subtotal + gstAmount + furtherTaxAmount;
+
+        /// <summary>Allocate the saved tax to payload rows without losing pennies
+        /// when rows are grouped or their effective values have been adjusted.</summary>
+        public static decimal[] Allocate(decimal amount, IReadOnlyList<decimal> values)
+        {
+            var result = new decimal[values.Count];
+            if (amount == 0m) return result;
+            var total = values.Sum(v => Math.Max(0m, v));
+            if (amount < 0m || total <= 0m)
+                throw new InvalidOperationException("Further tax requires a positive value of supply.");
+            var remaining = Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+            var remainingBase = total;
+            for (var i = 0; i < values.Count; i++)
+            {
+                var value = Math.Max(0m, values[i]);
+                if (value == 0m) continue;
+                result[i] = Math.Min(remaining, Math.Round(remaining * value / remainingBase,
+                    2, MidpointRounding.AwayFromZero));
+                remaining -= result[i];
+                remainingBase -= value;
+            }
+            return result;
+        }
     }
 }

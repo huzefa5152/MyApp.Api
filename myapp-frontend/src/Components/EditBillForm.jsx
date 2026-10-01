@@ -1,3 +1,4 @@
+import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome } from "react-icons/md";
@@ -1672,7 +1673,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                       <select
                         style={{ ...styles.input, ...(lockItemType ? styles.readOnlyInput : {}) }}
                         value={scenarioCode}
-                        onChange={(e) => setScenarioCode(e.target.value)}
+                        onChange={(e) => {
+                          setScenarioCode(e.target.value);
+                          const buyer = clients.find((c) => String(c.id) === String(clientId));
+                          if (!lockNonItemType)
+                            setFurtherTaxRate(defaultFurtherTaxRate(e.target.value, buyer?.registrationType));
+                        }}
                         disabled={lockItemType}
                       >
                         <option value="">— auto-detect from items —</option>
@@ -1720,7 +1726,11 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     <select
                       style={{ ...styles.input, ...(lockClient ? styles.readOnlyInput : {}) }}
                       value={clientId}
-                      onChange={(e) => setClientId(e.target.value)}
+                      onChange={(e) => {
+                        setClientId(e.target.value);
+                        const buyer = clients.find((c) => String(c.id) === String(e.target.value));
+                        setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyer?.registrationType));
+                      }}
                       disabled={lockClient}
                     >
                       {/* Show the existing buyer as a fallback option even
