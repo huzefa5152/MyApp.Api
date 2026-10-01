@@ -1,7 +1,7 @@
 // src/contexts/AuthContext.jsx
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginApi, getCurrentUser } from "../api/authApi";
+import { loginApi, getCurrentUser, logoutApi } from "../api/authApi";
 
 const AuthContext = createContext(null);
 
@@ -88,11 +88,19 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
-    navigate("/login");
+  const logout = useCallback(async () => {
+    try {
+      // Keep the token until the request interceptor has sent it, so the
+      // server can revoke the session and its private-image cookie.
+      await logoutApi();
+    } catch {
+      // Local sign-out still works if the server cannot be reached.
+    } finally {
+      localStorage.removeItem("token");
+      setToken(null);
+      setUser(null);
+      navigate("/login");
+    }
   }, [navigate]);
 
   const refreshUser = useCallback(async () => {

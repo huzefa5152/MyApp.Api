@@ -12,17 +12,19 @@ namespace MyApp.Api.Services.Implementations
         private readonly AppDbContext _context;
         private readonly IInvoiceService _invoices;
         private readonly ILogger<CustomerPortalService> _logger;
+        private readonly IWebHostEnvironment _environment;
 
         /// <summary>The two documents a customer can be given a copy of.</summary>
         private const string DocBill = "Bill";
         private const string DocTaxInvoice = "TaxInvoice";
 
         public CustomerPortalService(AppDbContext context, IInvoiceService invoices,
-            ILogger<CustomerPortalService> logger)
+            ILogger<CustomerPortalService> logger, IWebHostEnvironment environment)
         {
             _context = context;
             _invoices = invoices;
             _logger = logger;
+            _environment = environment;
         }
 
         private static string Label(string? documentType) => documentType switch
@@ -293,7 +295,7 @@ namespace MyApp.Api.Services.Implementations
             return new PortalHeaderDto
             {
                 CompanyName = head.CompanyName ?? "",
-                CompanyLogoPath = head.LogoPath,
+                CompanyLogoPath = await PrivateImageDataUrl.ReadAsync(_environment.ContentRootPath, head.LogoPath),
                 CompanyAddress = head.FullAddress,
                 CompanyPhone = head.Phone,
                 CompanyNtn = head.NTN,
@@ -452,6 +454,21 @@ namespace MyApp.Api.Services.Implementations
                 ? await _invoices.GetPrintBillAsync(invoiceId.Value)
                 : await _invoices.GetPrintTaxInvoiceAsync(invoiceId.Value);
             if (data == null) return null;
+
+            // Portal tokens authorize this company's document, not public file URLs.
+            var logoPath = await _context.Companies.Where(c => c.Id == portal.CompanyId)
+                .Select(c => c.LogoPath).SingleAsync();
+            var logo = await PrivateImageDataUrl.ReadAsync(_environment.ContentRootPath, logoPath);
+            if (data is PrintBillDto bill) bill.CompanyLogoPath = logo;
+            if (data is PrintTaxInvoiceDto tax) { tax.CompanyLogoPath = logo; tax.SupplierLogoPath = logo; }
+            var imagePaths = await _context.CompanyStamps.AsNoTracking()
+                .Where(s => s.CompanyId == portal.CompanyId).Select(s => s.FilePath).ToListAsync();
+            if (logoPath != null) imagePaths.Add(logoPath);
+            foreach (var imagePath in imagePaths.Distinct())
+            {
+                var embedded = await PrivateImageDataUrl.ReadAsync(_environment.ContentRootPath, imagePath);
+                template = template.Replace(imagePath, embedded ?? "", StringComparison.Ordinal);
+            }
 
             return new PortalPrintPayloadDto
             {

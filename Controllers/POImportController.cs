@@ -38,6 +38,7 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
         private readonly ILogger<POImportController> _logger;
 
         public POImportController(
@@ -47,6 +48,7 @@ namespace MyApp.Api.Controllers
             AppDbContext context,
             IWebHostEnvironment env,
             ICompanyAccessGuard access,
+            IPermissionService permissions,
             ILogger<POImportController> logger)
         {
             _parser = parser;
@@ -55,6 +57,7 @@ namespace MyApp.Api.Controllers
             _context = context;
             _env = env;
             _access = access;
+            _permissions = permissions;
             _logger = logger;
         }
 
@@ -507,10 +510,12 @@ namespace MyApp.Api.Controllers
 
             // Tenant scope (audit H7): only serve the PDF if the caller can reach
             // the owning company — otherwise any viewArchive holder could download
-            // another tenant's customer POs by id enumeration. (Null company =
-            // unattributed archive, no tenant to protect.)
+            // another tenant's customer POs by id enumeration. Unattributed
+            // legacy archives are visible only to the configured seed admin.
             if (row.CompanyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId() ?? 0, row.CompanyId.Value);
+            else if (!_permissions.IsSeedAdmin(CurrentUserId() ?? 0))
+                return NotFound();
 
             var abs = Path.Combine(GetArchiveRoot(), row.StoredPath.Replace('/', Path.DirectorySeparatorChar));
             if (!System.IO.File.Exists(abs))

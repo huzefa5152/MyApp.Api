@@ -6,22 +6,14 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Services.Implementations
 {
     /// <summary>
-    /// See <see cref="ICompanyAccessGuard"/>. The cache is per-user with
-    /// a 60s sliding TTL — same approach <see cref="PermissionService"/>
-    /// uses, so changing a user's company assignments takes ≤60s to
-    /// propagate. Acceptable for v1; tighten or invalidate explicitly if
-    /// snappier propagation is needed.
+    /// See <see cref="ICompanyAccessGuard"/>. Grants are cached only within
+    /// a request, so another process cannot keep a revoked grant alive.
     /// </summary>
     public class CompanyAccessGuard : ICompanyAccessGuard
     {
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
         private const string CachePrefix = "company-access:user:";
-        // Generation counter — bumping invalidates every per-user cache
-        // entry at once. Same trick PermissionService uses.
-        private const string GenerationKey = "company-access:generation";
 
         private readonly AppDbContext _context;
-        private readonly IMemoryCache _cache;
         private readonly int _seedAdminUserId;
         private readonly IHttpContextAccessor _http;
 
@@ -29,25 +21,16 @@ namespace MyApp.Api.Services.Implementations
             IHttpContextAccessor http)
         {
             _context = context;
-            _cache = cache;
             _http = http;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
-        private long CurrentGeneration() =>
-            _cache.GetOrCreate(GenerationKey, e =>
-            {
-                e.Priority = CacheItemPriority.NeverRemove;
-                return 0L;
-            });
-
         public async Task<bool> HasAccessAsync(int userId, int companyId)
         {
+            if (userId <= 0 || companyId <= 0) return false;
             if (userId == _seedAdminUserId) return true;
-            // Single-source-of-truth: defer to the cached accessible-set
-            // computation so the "explicit grants override open companies"
-            // semantics are applied consistently. See
-            // GetAccessibleCompanyIdsAsync for the rules.
+            // Reuse the request's explicit assignment set. Company flags and
+            // administrative RBAC roles never grant a tenant-wide bypass.
             var accessible = await GetAccessibleCompanyIdsAsync(userId);
             return accessible.Contains(companyId);
         }
@@ -65,13 +48,14 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<HashSet<int>> GetAccessibleCompanyIdsAsync(int userId)
         {
+            if (userId <= 0) return new HashSet<int>();
             if (userId == _seedAdminUserId)
             {
                 return await _context.Companies.Select(c => c.Id).ToHashSetAsync();
             }
 
-            var cacheKey = $"{CachePrefix}{userId}:g{CurrentGeneration()}";
-            if (_cache.TryGetValue<HashSet<int>>(cacheKey, out var cached) && cached is not null)
+            var cacheKey = $"{CachePrefix}{userId}";
+            if (_http.HttpContext?.Items[cacheKey] is HashSet<int> cached)
                 return cached;
 
             // Fail-closed rule: a non-admin user sees ONLY the companies
@@ -96,27 +80,20 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
             var set = new HashSet<int>(explicitGrants);
 
-            _cache.Set(cacheKey, set, new MemoryCacheEntryOptions
-            {
-                SlidingExpiration = CacheTtl
-            });
+            if (_http.HttpContext is { } http) http.Items[cacheKey] = set;
             return set;
         }
 
         public void InvalidateUser(int userId)
         {
-            // Drop only the current-generation key. Older-generation keys
-            // (from a previous InvalidateAll bump) expire naturally.
-            _cache.Remove($"{CachePrefix}{userId}:g{CurrentGeneration()}");
+            _http.HttpContext?.Items.Remove($"{CachePrefix}{userId}");
         }
 
         public void InvalidateAll()
         {
-            var gen = CurrentGeneration();
-            _cache.Set(GenerationKey, gen + 1, new MemoryCacheEntryOptions
-            {
-                Priority = CacheItemPriority.NeverRemove
-            });
+            if (_http.HttpContext is not { } http) return;
+            foreach (var key in http.Items.Keys.OfType<string>().Where(k => k.StartsWith(CachePrefix)).ToArray())
+                http.Items.Remove(key);
         }
     }
 }

@@ -118,6 +118,7 @@ namespace MyApp.Api.Controllers
             var token = GenerateJwtToken(user);
             var expiration = DateTime.UtcNow.AddHours(
                 double.Parse(_configuration["Jwt:ExpirationHours"] ?? "8"));
+            SetImageSession(token, expiration);
 
             _logger.LogInformation("User {UserId} ({Username}) signed in", user.Id, user.Username);
 
@@ -140,6 +141,12 @@ namespace MyApp.Api.Controllers
 
             if (user == null)
                 return NotFound();
+
+            // Existing signed-in tabs gain image access without another login.
+            var bearer = Request.Headers.Authorization.ToString();
+            if (bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                SetImageSession(bearer[7..], DateTime.UtcNow.AddHours(
+                    double.Parse(_configuration["Jwt:ExpirationHours"] ?? "8")));
 
             return Ok(new
             {
@@ -345,6 +352,12 @@ namespace MyApp.Api.Controllers
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
+        private void SetImageSession(string token, DateTime expires) =>
+            Response.Cookies.Append(MyApp.Api.Middleware.PrivateDataFilesMiddleware.CookieName, token,
+                new CookieOptions { HttpOnly = true, Secure = Request.IsHttps
+                    || !HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment(),
+                    SameSite = SameSiteMode.Strict, Path = "/data", Expires = expires });
+
         /// <summary>
         /// Server-side logout — bumps the SecurityStamp so every token
         /// previously issued for this user (including the one used to
@@ -355,6 +368,8 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<IActionResult> Logout()
         {
+            Response.Cookies.Delete(MyApp.Api.Middleware.PrivateDataFilesMiddleware.CookieName,
+                new CookieOptions { Path = "/data" });
             var username = User.FindFirstValue(ClaimTypes.Name);
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
             if (user != null)

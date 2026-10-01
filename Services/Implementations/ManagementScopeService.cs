@@ -7,20 +7,15 @@ namespace MyApp.Api.Services.Implementations
 {
     /// <summary>
     /// See <see cref="IManagementScopeService"/>. The whole (Id,
-    /// CreatedByUserId) map is loaded once per request and cached for
-    /// 60 s under a generation counter — the same pattern
-    /// <see cref="PermissionService"/> and <see cref="CompanyAccessGuard"/>
-    /// use. The Users table is tiny (a few rows per installation), so an
+    /// CreatedByUserId) map is loaded once per request. The Users table is
+    /// tiny (a few rows per installation), so an
     /// in-memory walk is cheaper and clearer than a recursive CTE.
     /// </summary>
     public class ManagementScopeService : IManagementScopeService
     {
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
-        private const string TreeKeyPrefix = "mgmt-scope:tree";
-        private const string GenerationKey = "mgmt-scope:generation";
+        private Dictionary<int, int?>? _requestParentMap;
 
         private readonly AppDbContext _context;
-        private readonly IMemoryCache _cache;
         private readonly ICompanyAccessGuard _access;
         private readonly int _seedAdminUserId;
 
@@ -31,26 +26,16 @@ namespace MyApp.Api.Services.Implementations
             IConfiguration configuration)
         {
             _context = context;
-            _cache = cache;
             _access = access;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
-        public bool IsSeedAdmin(int userId) => userId == _seedAdminUserId;
-
-        private long CurrentGeneration() =>
-            _cache.GetOrCreate(GenerationKey, e =>
-            {
-                e.Priority = CacheItemPriority.NeverRemove;
-                return 0L;
-            });
+        public bool IsSeedAdmin(int userId) => userId > 0 && userId == _seedAdminUserId;
 
         /// <summary>Id → CreatedByUserId for every user, cached.</summary>
         private async Task<Dictionary<int, int?>> GetParentMapAsync()
         {
-            var key = $"{TreeKeyPrefix}:g{CurrentGeneration()}";
-            if (_cache.TryGetValue<Dictionary<int, int?>>(key, out var cached) && cached is not null)
-                return cached;
+            if (_requestParentMap != null) return _requestParentMap;
 
             var rows = await _context.Users
                 .AsNoTracking()
@@ -58,7 +43,7 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
             var map = rows.ToDictionary(r => r.Id, r => r.CreatedByUserId);
 
-            _cache.Set(key, map, new MemoryCacheEntryOptions { SlidingExpiration = CacheTtl });
+            _requestParentMap = map;
             return map;
         }
 
@@ -132,13 +117,6 @@ namespace MyApp.Api.Services.Implementations
             return chain;
         }
 
-        public void InvalidateAll()
-        {
-            var gen = CurrentGeneration();
-            _cache.Set(GenerationKey, gen + 1, new MemoryCacheEntryOptions
-            {
-                Priority = CacheItemPriority.NeverRemove
-            });
-        }
+        public void InvalidateAll() => _requestParentMap = null;
     }
 }

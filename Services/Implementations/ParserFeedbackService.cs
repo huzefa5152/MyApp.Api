@@ -82,13 +82,13 @@ namespace MyApp.Api.Services.Implementations
             return ToDto(fb);
         }
 
-        public async Task<ParserFeedbackPageDto> GetIncorrectAsync(ParserFeedbackQuery query)
+        public async Task<ParserFeedbackPageDto> GetIncorrectAsync(ParserFeedbackQuery query, IReadOnlyCollection<int>? accessibleCompanyIds)
         {
             var page = query.Page < 1 ? 1 : query.Page;
             var size = query.PageSize < 1 ? 50 : Math.Min(query.PageSize, MaxPageSize);
             var (rows, total) = await _repo.ListAsync(
                 ParserFeedbackStatus.Incorrect, query.From, query.To, query.ParserVersion,
-                query.SortBy, query.Descending, page, size);
+                query.SortBy, query.Descending, page, size, accessibleCompanyIds);
             return new ParserFeedbackPageDto
             {
                 Total = total,
@@ -98,9 +98,9 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<ParserFeedbackStatisticsDto> GetStatisticsAsync()
+        public async Task<ParserFeedbackStatisticsDto> GetStatisticsAsync(IReadOnlyCollection<int>? accessibleCompanyIds)
         {
-            var agg = await _repo.AggregateAsync();
+            var agg = await _repo.AggregateAsync(accessibleCompanyIds);
             int total = agg.Sum(a => a.Count);
             int success = agg.Where(a => a.Status == ParserFeedbackStatus.Correct).Sum(a => a.Count);
             int failed = agg.Where(a => a.Status == ParserFeedbackStatus.Incorrect).Sum(a => a.Count);
@@ -143,16 +143,14 @@ namespace MyApp.Api.Services.Implementations
             return new ParserFeedbackPdf { FilePath = abs, FileName = SafePdfName(fb.OriginalFileName, fb.Id), CompanyId = fb.CompanyId };
         }
 
-        public async Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids, IReadOnlyCollection<int> accessibleCompanyIds)
+        public async Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids, IReadOnlyCollection<int>? accessibleCompanyIds)
         {
             var rows = await _repo.GetManyAsync(ids);
-            // Tenant scope (audit H7): only zip rows the caller can reach — a
-            // null-company (dev-only) row has no tenant to leak; a set company
-            // must be in the caller's accessible set.
-            var accessible = new HashSet<int>(accessibleCompanyIds);
+            // Company-less records are platform data, visible only to seed admin.
             var withPdf = rows
                 .Where(r => !string.IsNullOrEmpty(r.OriginalPdfLocation)
-                         && (r.CompanyId == null || accessible.Contains(r.CompanyId.Value)))
+                         && (accessibleCompanyIds == null || r.CompanyId.HasValue
+                             && accessibleCompanyIds.Contains(r.CompanyId.Value)))
                 .ToList();
             if (withPdf.Count == 0) return null;
 

@@ -4,6 +4,9 @@ import httpClient from "./httpClient";
 export const loginApi = (username, password) =>
   httpClient.post("/auth/login", { username, password });
 
+export const logoutApi = () =>
+  httpClient.post("/auth/logout", undefined, { timeout: 5000, _skipAuthRedirect: true });
+
 // `silent`: when true, the httpClient 401 interceptor will NOT bounce
 // the user to /login + save a postLoginReturnTo. Used by the
 // AuthContext mount-time probe (we want to validate the stored token

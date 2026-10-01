@@ -8,24 +8,19 @@ namespace MyApp.Api.Services.Implementations
 {
     public class PermissionService : IPermissionService
     {
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
-        private const string CachePrefix = "perms:user:";
-        // Sentinel key used so InvalidateAll can bump a generation counter
-        // without enumerating every per-user cache entry.
-        private const string GenerationKey = "perms:generation";
+        // This service is scoped: cache once per request, never across requests.
+        private readonly Dictionary<int, HashSet<string>> _requestPermissions = new();
 
         private readonly AppDbContext _context;
-        private readonly IMemoryCache _cache;
         private readonly int _seedAdminUserId;
 
         public PermissionService(AppDbContext context, IMemoryCache cache, IConfiguration configuration)
         {
             _context = context;
-            _cache = cache;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
-        public bool IsSeedAdmin(int userId) => userId == _seedAdminUserId;
+        public bool IsSeedAdmin(int userId) => userId > 0 && userId == _seedAdminUserId;
 
         public async Task<bool> HasPermissionAsync(int userId, string permissionKey)
         {
@@ -36,20 +31,14 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<IReadOnlyCollection<string>> GetUserPermissionsAsync(int userId)
         {
+            if (userId <= 0) return Array.Empty<string>();
             if (IsSeedAdmin(userId))
             {
                 // Seed admin implicitly has every catalog key — no DB hit needed.
                 return PermissionCatalog.All.Select(p => p.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
             }
 
-            var generation = _cache.GetOrCreate(GenerationKey, e =>
-            {
-                e.Priority = CacheItemPriority.NeverRemove;
-                return 0L;
-            });
-
-            var cacheKey = $"{CachePrefix}{userId}:g{generation}";
-            if (_cache.TryGetValue<HashSet<string>>(cacheKey, out var cached) && cached is not null)
+            if (_requestPermissions.TryGetValue(userId, out var cached))
                 return cached;
 
             var perms = await _context.UserRoles
@@ -60,31 +49,12 @@ namespace MyApp.Api.Services.Implementations
                 .ToListAsync();
 
             var set = new HashSet<string>(perms, StringComparer.OrdinalIgnoreCase);
-            _cache.Set(cacheKey, set, new MemoryCacheEntryOptions
-            {
-                SlidingExpiration = CacheTtl
-            });
+            _requestPermissions[userId] = set;
             return set;
         }
 
-        public void InvalidateUser(int userId)
-        {
-            // Current-generation key is removed; older-generation keys expire naturally.
-            if (_cache.TryGetValue<long>(GenerationKey, out var gen))
-            {
-                _cache.Remove($"{CachePrefix}{userId}:g{gen}");
-            }
-        }
+        public void InvalidateUser(int userId) => _requestPermissions.Remove(userId);
 
-        public void InvalidateAll()
-        {
-            // Bumping the generation invalidates every per-user cache entry at once.
-            var gen = _cache.GetOrCreate(GenerationKey, e =>
-            {
-                e.Priority = CacheItemPriority.NeverRemove;
-                return 0L;
-            });
-            _cache.Set(GenerationKey, gen + 1, new MemoryCacheEntryOptions { Priority = CacheItemPriority.NeverRemove });
-        }
+        public void InvalidateAll() => _requestPermissions.Clear();
     }
 }

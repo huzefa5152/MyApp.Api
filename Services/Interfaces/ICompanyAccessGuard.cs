@@ -11,9 +11,8 @@ namespace MyApp.Api.Services.Interfaces
     {
         /// <summary>
         /// True if the user may access the given company. Seed admin
-        /// always passes. Companies with <c>IsTenantIsolated=false</c>
-        /// pass for any authenticated user (legacy behaviour). Otherwise
-        /// requires a <c>UserCompany</c> row.
+        /// always passes. Every other user requires an explicit
+        /// <c>UserCompany</c> row, independent of IsTenantIsolated.
         /// </summary>
         Task<bool> HasAccessAsync(int userId, int companyId);
 
@@ -32,15 +31,13 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>
         /// Drop the cached accessible-company set for one user. Call
-        /// after writing UserCompanies rows so the next request reflects
-        /// the change without waiting for the 60s TTL.
+        /// after writing UserCompanies rows. No cache survives the request.
         /// </summary>
         void InvalidateUser(int userId);
 
         /// <summary>
         /// Drop every cached accessible-company set. Call when a company
-        /// flips IsTenantIsolated, since that changes who passes the
-        /// "open mode" branch for everyone at once.
+        /// is deleted or assignments change within this request.
         /// </summary>
         void InvalidateAll();
     }

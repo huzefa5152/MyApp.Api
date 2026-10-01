@@ -186,13 +186,19 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.FromSeconds(30),
     };
 
-    // Audit C-6 (2026-05-13): server-side token revocation. On every
-    // validated token, compare the "stamp" claim to the user's current
-    // Users.SecurityStamp column. Mismatch = token was minted before
-    // the most recent logout / password change → reject. Cached for
-    // 60s per user so the per-request overhead is one in-memory hit.
+    // Authentication checks the persisted stamp on each request: deleting a
+    // user or revoking a session on another process must take effect immediately.
     options.Events = new JwtBearerEvents
     {
+        OnMessageReceived = context =>
+        {
+            // Read-only image requests cannot attach a Bearer header from <img>.
+            // This HttpOnly cookie is deliberately not accepted by any API route.
+            if (PrivateDataFilesMiddleware.IsImagePath(context.Request.Path)
+                && !context.Request.Headers.ContainsKey("Authorization"))
+                context.Token = context.Request.Cookies[PrivateDataFilesMiddleware.CookieName];
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             var principal = context.Principal;
@@ -207,36 +213,20 @@ builder.Services.AddAuthentication(options =>
             var stamp = principal.FindFirstValue("stamp");
             if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(stamp))
             {
-                // Tokens minted before C-6 (no stamp claim) are
-                // tolerated for one rotation cycle — they still
-                // authenticate but cannot be revoked. Treat absent
-                // stamp as "stamp-less legacy token".
+                context.Fail("Missing authentication context");
                 return;
             }
 
-            if (!int.TryParse(sub, out var userId))
+            if (!int.TryParse(sub, out var userId) || userId <= 0)
             {
                 context.Fail("Invalid subject claim");
                 return;
             }
 
-            var cache = context.HttpContext.RequestServices
-                .GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
-            var cacheKey = $"user-stamp:{userId}";
-            if (!cache.TryGetValue<string>(cacheKey, out var currentStamp))
-            {
-                var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-                currentStamp = await db.Users
-                    .Where(u => u.Id == userId)
-                    .Select(u => u.SecurityStamp)
-                    .FirstOrDefaultAsync();
-                if (currentStamp != null)
-                {
-                    cache.Set(cacheKey, currentStamp, TimeSpan.FromSeconds(60));
-                }
-            }
-
-            if (currentStamp != null && !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
+            var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            var currentStamp = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId).Select(u => u.SecurityStamp).FirstOrDefaultAsync();
+            if (currentStamp == null || !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
             {
                 context.Fail("Token has been revoked");
             }
@@ -2038,6 +2028,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<CatalogAccessMiddleware>();
+app.UseMiddleware<PrivateDataFilesMiddleware>();
 
 // Serve React frontend static files from wwwroot
 app.UseDefaultFiles();
@@ -2050,9 +2041,9 @@ Directory.CreateDirectory(dataPath);
 // first upload doesn't race the directory into existence).
 Directory.CreateDirectory(Path.Combine(dataPath, "attachments"));
 
-// SECURITY (audit C3, 2026-07-27): tenant business documents under /data must
-// NOT be reachable via the public static provider — only low-sensitivity logos
-// (/data/uploads/logos) + avatars (/data/images/avatars) are public. 404
+// Tenant business documents under /data must not be reachable through static
+// serving. PrivateDataFilesMiddleware authorizes owned image files and denies
+// every other directory. Keep these explicit historical document denies too:
 // attachments, tenant Excel print-templates (predictable company_N names,
 // embed GL mappings), archived customer POs, and retained parser-feedback PDFs
 // BEFORE the static middleware — each has its own authenticated, company-

@@ -15,8 +15,8 @@ namespace MyApp.Api.Controllers
     // Company-level stamp / signature images. Each stamp is usable in any print
     // template as the merge field {{stamps.<slug>}} (resolves to the image URL),
     // so operators build multiple templates with different stamps and never paste
-    // base64. Files are served publicly by the /data static provider — same class
-    // as the company logo (required so <img src> works in the print popup).
+    // base64. The /data file guard checks the company; the image-session
+    // cookie preserves ordinary <img src> rendering in print popups.
     [ApiController]
     [Route("api/companies/{companyId:int}/stamps")]
     [Authorize]
