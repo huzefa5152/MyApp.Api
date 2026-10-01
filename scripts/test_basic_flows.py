@@ -622,7 +622,8 @@ def test_billform_itemtype_override(base: str, token: str, company: dict,
                   for it in dc["items"]]
     status, bill = http("POST", "/api/invoices", base, token=token, body={
         "date": today, "companyId": company["id"], "clientId": client["id"],
-        "gstRate": 18, "challanIds": [dc["id"]], "items": bill_items})
+        "gstRate": 18, "groupTaxInvoiceByItemType": True,
+        "challanIds": [dc["id"]], "items": bill_items})
     check(suite, "bill create 200/201", status in (200, 201), f"got {status} {bill}")
     if status not in (200, 201):
         return

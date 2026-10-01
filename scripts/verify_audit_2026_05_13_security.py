@@ -103,8 +103,9 @@ def check_phase_a() -> None:
     record(phase, "H2 DeleteItem resolves CompanyId before access check", ok, where)
 
     # H4 — POFormats tenant guards
-    ok, where = grep(["Controllers/POFormatsController.cs"], r"AssertClientAccessAsync")
-    record(phase, "H4 POFormats has AssertClientAccessAsync helper", ok, where)
+    ok, where = grep(["Controllers/POFormatsController.cs"], r"AssertClientAccessAsync|ValidateClientAsync")
+    scoped, scope_where = grep(["Controllers/POFormatsController.cs"], r"AssertAccessAsync")
+    record(phase, "H4 POFormats validates client ownership and company access", ok and scoped, where + scope_where)
 
     # H15 — Batch create per-id check
     ok, where = grep(["Controllers/ClientsController.cs"],

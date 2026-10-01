@@ -8,14 +8,14 @@ guard responds correctly.
 Test matrix:
   Test Alpha Co.   IsTenantIsolated=True   alice + carol have access
   Test Beta Co.    IsTenantIsolated=True   bob + carol have access
-  Test Gamma Co.   IsTenantIsolated=False  every authenticated user
+  Test Gamma Co.   IsTenantIsolated=False  no non-seed user assigned
 
 Expectations per user:
-  alice  : sees Alpha, Gamma + every other open company
+  alice  : sees Alpha only
            is BLOCKED (403) on Beta routes
-  bob    : sees Beta, Gamma + every other open company
+  bob    : sees Beta only
            is BLOCKED (403) on Alpha routes
-  carol  : sees Alpha, Beta, Gamma + every other open company
+  carol  : sees Alpha and Beta only
            is NOT blocked
   admin  : sees everything; tenant guard always bypassed (seed admin id)
 
