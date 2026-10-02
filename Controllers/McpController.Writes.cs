@@ -22,9 +22,13 @@ namespace MyApp.Api.Controllers
         private string _resultRef = "";
         private string _resultSummary = "";
 
-        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "commit_action", "cancel_action" };
+        private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
+        // Self-contained on purpose: static fields in different files of a partial class are
+        // initialised in an unspecified order across builds, so nothing here may read a static
+        // field declared in another file while it is being initialised.
+        private static readonly object WCompanyId = new { type = "integer", minimum = 1, description = "Company id from list_companies." };
         private static readonly object PrepareAnnotations = new { readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false };
         private static readonly object CommitAnnotations = new { readOnlyHint = false, destructiveHint = false, idempotentHint = false, openWorldHint = false };
         private static readonly object IdemKeyProp = new { type = "string", maxLength = 100, description = "Optional. A stable id for this request (an email message id, say). Repeating it returns the original plan or result instead of creating a duplicate." };
@@ -35,7 +39,7 @@ namespace MyApp.Api.Controllers
             description = "Prepare a new client, or an update when clientId is given. Nothing is saved: returns a plan to show the user. Call commit_action only after they approve.",
             inputSchema = Schema(new
             {
-                companyId = CompanyId, clientId = new { type = "integer", minimum = 1, description = "Omit to create; give to update only the fields you pass." },
+                companyId = WCompanyId, clientId = new { type = "integer", minimum = 1, description = "Omit to create; give to update only the fields you pass." },
                 name = new { type = "string", maxLength = 200 }, address = new { type = "string", maxLength = 500 }, phone = new { type = "string", maxLength = 50 },
                 email = new { type = "string", maxLength = 200 }, ntn = new { type = "string", maxLength = 50 }, strn = new { type = "string", maxLength = 50 },
                 cnic = new { type = "string", maxLength = 50 }, site = new { type = "string", maxLength = 200 }, contactPerson = new { type = "string", maxLength = 300 },
@@ -51,7 +55,7 @@ namespace MyApp.Api.Controllers
             description = "Prepare a sales quotation (never a bill or FBR invoice). Nothing is saved: returns exact totals to show the user. Call commit_action only after they approve.",
             inputSchema = Schema(new
             {
-                companyId = CompanyId, clientId = new { type = "integer", minimum = 1 },
+                companyId = WCompanyId, clientId = new { type = "integer", minimum = 1 },
                 date = new { type = "string", format = "date", description = "Defaults to today." }, validUntil = new { type = "string", format = "date" },
                 customerEnquiryRef = new { type = "string", maxLength = 200 }, enquiryDate = new { type = "string", format = "date" },
                 notes = new { type = "string", maxLength = 2000 }, contactPerson = new { type = "string", maxLength = 300 },
@@ -94,12 +98,14 @@ namespace MyApp.Api.Controllers
         /// <summary>Read tools for everyone; write tools only when the token carries a write scope.</summary>
         private object[] ToolCatalogue()
         {
-            var tools = new List<object>(ReadTools);
+            var tools = new List<object>(ReadTools) { SearchChallansTool, GetChallanTool };
             var agent = Agent;
             if (agent is { AllowWrites: true })
             {
                 if (agent.HasScope(McpScopes.Clients)) tools.Add(PrepareClientTool);
                 if (agent.HasScope(McpScopes.Quotes)) tools.Add(PrepareQuoteTool);
+                if (agent.HasScope(McpScopes.Challans)) tools.Add(PrepareChallanTool);
+                if (agent.HasScope(McpScopes.Bills)) tools.Add(PrepareBillTool);
                 tools.Add(CommitTool);
                 tools.Add(CancelTool);
             }
@@ -322,7 +328,11 @@ namespace MyApp.Api.Controllers
 
         // ── commit / cancel ────────────────────────────────────────────────
 
-        private static string ScopeFor(string kind) => kind.StartsWith("client.", StringComparison.Ordinal) ? McpScopes.Clients : McpScopes.Quotes;
+        private static string ScopeFor(string kind) =>
+            kind.StartsWith("client.", StringComparison.Ordinal) ? McpScopes.Clients
+            : kind.StartsWith("challan.", StringComparison.Ordinal) ? McpScopes.Challans
+            : kind.StartsWith("bill.", StringComparison.Ordinal) ? McpScopes.Bills
+            : McpScopes.Quotes;
 
         private async Task<McpPendingAction> OwnPlanAsync(string? planId)
         {
@@ -351,14 +361,17 @@ namespace MyApp.Api.Controllers
             if (plan.UserId != CurrentUserId) throw new ToolError("That plan was not found. It may have expired.");
             if (plan.CommittedAt != null) throw new ToolError("That plan was already committed.");
             if (plan.ExpiresAt <= DateTime.UtcNow) throw new ToolError("That plan has expired. Prepare it again.");
-            if (!AgentAllows(plan.CompanyId) || !await _access.HasAccessAsync(CurrentUserId, plan.CompanyId))
-                throw new ToolError("Resource unavailable or access denied.");
+            await PinCompanyAsync(plan.CompanyId);
             await Need(plan.Kind switch
             {
                 "client.create" => "clients.manage.create",
                 "client.update" => "clients.manage.update",
+                "challan.create" => "challans.manage.create",
+                "bill.create" => "bills.manage.create",
+                "bill.standalone" => "bills.manage.create.standalone",
                 _ => "salesquotes.manage.create",
             });
+            await EnforceHourlyCapAsync(agent, plan.Kind);
 
             // Claim it atomically: of two simultaneous commits only one proceeds, so a double
             // submit can never create a second document. At most once; never retried.
@@ -390,6 +403,27 @@ namespace MyApp.Api.Controllers
                         var created = await _quotes.CreateAsync(plan.CompanyId, QuoteFromPlan(p));
                         (resultRef, resultSummary) = ($"SalesQuote:{created.Id}",
                             $"Created quotation #{created.QuoteNumber} (id {created.Id}) for \"{created.ClientName}\", total {created.GrandTotal:0.00} PKR");
+                        break;
+                    }
+                    case "challan.create":
+                    {
+                        var created = await _challans.CreateDeliveryChallanAsync(plan.CompanyId, ChallanFromPlan(p, plan.CompanyId));
+                        (resultRef, resultSummary) = ($"DeliveryChallan:{created.Id}",
+                            $"Created challan #{created.ChallanNumber} (id {created.Id}) for \"{created.ClientName}\", status {created.Status}");
+                        break;
+                    }
+                    case "bill.create":
+                    {
+                        var created = await _invoices.CreateAsync(BillFromChallansPlan(p, plan.CompanyId));
+                        (resultRef, resultSummary) = ($"Invoice:{created.Id}",
+                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {created.GrandTotal:0.00} PKR. Not submitted to FBR");
+                        break;
+                    }
+                    case "bill.standalone":
+                    {
+                        var created = await _invoices.CreateStandaloneAsync(StandaloneBillFromPlan(p, plan.CompanyId));
+                        (resultRef, resultSummary) = ($"Invoice:{created.Id}",
+                            $"Created bill #{created.InvoiceNumber} (id {created.Id}) for \"{created.ClientName}\", total {created.GrandTotal:0.00} PKR. Not submitted to FBR");
                         break;
                     }
                     default: throw new ToolError("Unknown plan type.");

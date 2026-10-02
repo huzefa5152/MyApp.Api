@@ -52,13 +52,14 @@ namespace MyApp.Api.Controllers
         private readonly IClientService _clients;
         private readonly IInvoiceService _invoices;
         private readonly ISalesQuoteService _quotes;
+        private readonly IDeliveryChallanService _challans;
         private readonly AppDbContext _context;
         private readonly ISensitiveDataRedactor _redactor;
         private readonly IServiceScopeFactory _scopes;
         private readonly ILogger<McpController> _logger;
 
         public McpController(ICompanyAccessGuard access, IPermissionService permissions, ICompanyService companies,
-            IClientService clients, IInvoiceService invoices, ISalesQuoteService quotes, AppDbContext context,
+            IClientService clients, IInvoiceService invoices, ISalesQuoteService quotes, IDeliveryChallanService challans, AppDbContext context,
             ISensitiveDataRedactor redactor, IServiceScopeFactory scopes, ILogger<McpController> logger)
         {
             _redactor = redactor;
@@ -69,6 +70,7 @@ namespace MyApp.Api.Controllers
             _clients = clients;
             _invoices = invoices;
             _quotes = quotes;
+            _challans = challans;
             _context = context;
             _logger = logger;
         }
@@ -190,7 +192,7 @@ namespace MyApp.Api.Controllers
 
         private static readonly HashSet<string> ToolNames = new(StringComparer.Ordinal)
             { "list_companies", "search_clients", "search_invoices", "get_invoice", "get_stock", "search_quotes",
-              "prepare_client", "prepare_quote", "commit_action", "cancel_action" };
+              "search_challans", "get_challan", "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
 
         // ── dispatch ───────────────────────────────────────────────────────
 
@@ -216,6 +218,10 @@ namespace MyApp.Api.Controllers
                     if (!IsWriteTool(name)) RequireScope("read");
                     object data = name switch
                     {
+                        "search_challans" => await SearchChallansAsync(args),
+                        "get_challan" => await GetChallanAsync(args),
+                        "prepare_challan" => await PrepareChallanAsync(args),
+                        "prepare_bill" => await PrepareBillAsync(args),
                         "prepare_client" => await PrepareClientAsync(args),
                         "prepare_quote" => await PrepareQuoteAsync(args),
                         "commit_action" => await CommitActionAsync(args),
@@ -320,10 +326,22 @@ namespace MyApp.Api.Controllers
         private async Task<int> CompanyArg(JsonElement args)
         {
             var companyId = IntArg(args, "companyId") ?? throw new ToolError("companyId is required.");
-            // An agent token narrows its user's access to the companies named on it; the stricter side wins.
-            if (companyId <= 0 || !AgentAllows(companyId) || !await _access.HasAccessAsync(CurrentUserId, companyId))
-                throw new ToolError("Resource unavailable or access denied.");
+            await PinCompanyAsync(companyId);
             return companyId;
+        }
+
+        /// <summary>
+        /// The single company gate. An agent token narrows its user's access to the companies named
+        /// on it (the stricter side wins), and the user must really reach the company. It uses
+        /// AssertAccessAsync, not HasAccessAsync, deliberately: that call also pins the request's
+        /// catalog company, which the unit, item-type and description catalogs rely on exactly as
+        /// they do for the web screens. Without it a service reads every company's catalog at once.
+        /// </summary>
+        private async Task PinCompanyAsync(int companyId)
+        {
+            if (companyId <= 0 || !AgentAllows(companyId)) throw new ToolError("Resource unavailable or access denied.");
+            try { await _access.AssertAccessAsync(CurrentUserId, companyId); }
+            catch (UnauthorizedAccessException) { throw new ToolError("Resource unavailable or access denied."); }
         }
 
         private bool AgentAllows(int companyId) => Agent == null || Agent.CompanyIdList().Contains(companyId);

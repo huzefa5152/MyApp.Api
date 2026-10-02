@@ -12,15 +12,21 @@ public static class McpScopes
     public const string Read = "read";
     public const string Clients = "clients.write";
     public const string Quotes = "quotes.write";
+    public const string Challans = "challans.write";
+    public const string Bills = "bills.write";
 
     /// <summary>Write scopes that have tools behind them today. Others are refused, not pre-granted.</summary>
-    public static readonly string[] Write = { Clients, Quotes };
-    public static readonly string[] Implemented = { Read, Clients, Quotes };
+    public static readonly string[] Write = { Clients, Quotes, Challans, Bills };
+    public static readonly string[] Implemented = { Read, Clients, Quotes, Challans, Bills };
 
-    private static readonly Dictionary<string, string[]> Needs = new()
+    // Permissions the owner must hold: ALL of "All", and at least one of "Any" (when listed).
+    private static readonly Dictionary<string, (string[] All, string[] Any)> Needs = new()
     {
-        [Clients] = new[] { "clients.manage.create", "clients.manage.update" },
-        [Quotes] = new[] { "salesquotes.manage.create" },
+        [Clients] = (new[] { "clients.manage.create", "clients.manage.update" }, Array.Empty<string>()),
+        [Quotes] = (new[] { "salesquotes.manage.create" }, Array.Empty<string>()),
+        [Challans] = (new[] { "challans.manage.create", "challans.list.view" }, Array.Empty<string>()),
+        // A bill is made from challans or on its own; the two are separately grantable screens.
+        [Bills] = (new[] { "challans.list.view" }, new[] { "bills.manage.create", "bills.manage.create.standalone" }),
     };
 
     public static bool IsWrite(string scope) => Write.Contains(scope, StringComparer.Ordinal);
@@ -32,9 +38,16 @@ public static class McpScopes
         if (!await permissions.HasPermissionAsync(userId, "mcp.write.use")) return scopes;
         foreach (var scope in Write)
         {
+            var (all, any) = Needs[scope];
             var ok = true;
-            foreach (var key in Needs[scope])
+            foreach (var key in all)
                 if (!await permissions.HasPermissionAsync(userId, key)) { ok = false; break; }
+            if (ok && any.Length > 0)
+            {
+                ok = false;
+                foreach (var key in any)
+                    if (await permissions.HasPermissionAsync(userId, key)) { ok = true; break; }
+            }
             if (ok) scopes.Add(scope);
         }
         return scopes;

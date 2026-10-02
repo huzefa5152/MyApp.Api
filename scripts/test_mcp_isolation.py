@@ -219,7 +219,7 @@ check("malformed JSON -> JSON-RPC parse error", s == 200 and d.get("error", {}).
 print("\n== catalogue ==")
 s, d = rpc(a, "tools/list")
 names = sorted(t["name"] for t in d["result"]["tools"])
-check("exactly the six read tools", names == ["get_invoice", "get_stock", "list_companies", "search_clients", "search_invoices", "search_quotes"], names)
+check("exactly the eight read tools (no write tool for a login token)", names == ["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes"], names)
 check("every tool is annotated read-only", all(t["annotations"]["readOnlyHint"] and not t["annotations"]["destructiveHint"] for t in d["result"]["tools"]))
 for bad in ("create_quote", "execute_sql", "submit_invoice", "http_get"):
     err, msg = tool(a, bad, {})

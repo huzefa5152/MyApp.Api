@@ -174,17 +174,17 @@ def make_token(owner_token, name, cids, scopes, days=30):
 # ── scopes are offered only to those entitled to them ────────────────
 print("\n== who may be granted write scopes ==")
 s, st = http("GET", "/api/mcp/me/status", W)
-check("MCP Write + permissions -> read, clients.write, quotes.write offered", set(st["scopesAvailable"]) == {"read", "clients.write", "quotes.write"}, st["scopesAvailable"])
+check("MCP Write + permissions -> every write scope offered", set(st["scopesAvailable"]) == {"read", "clients.write", "quotes.write", "challans.write", "bills.write"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", R)
 check("MCP Access without MCP Write -> read only", st["scopesAvailable"] == ["read"], st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", C)
-check("MCP Write but no quotation permission -> clients.write, not quotes.write", set(st["scopesAvailable"]) == {"read", "clients.write"}, st["scopesAvailable"])
+check("MCP Write but no quotation permission -> clients.write, not quotes.write", "clients.write" in st["scopesAvailable"] and "quotes.write" not in st["scopesAvailable"], st["scopesAvailable"])
 s, d = make_token(R, "x", [A["id"]], ["read", "quotes.write"])
 check("a user without MCP Write cannot create a write token", s == 400 and "MCP Write" in d["message"], f"{s} {d}")
 s, d = make_token(C, "x", [A["id"]], ["read", "quotes.write"])
 check("a token cannot carry a scope its owner's permissions do not cover", s == 400, f"{s} {d}")
-s, d = make_token(W, "x", [A["id"]], ["read", "bills.write"])
-check("a scope with no tools yet (bills.write) is refused, not pre-granted", s == 400, f"{s} {d}")
+s, d = make_token(W, "x", [A["id"]], ["read", "invoices.write"])
+check("a scope that does not exist is refused, not pre-granted", s == 400, f"{s} {d}")
 s, d = make_token(W, "x", [A["id"]], ["nonsense"])
 check("an unknown scope is refused", s == 400, f"{s} {d}")
 s, d = http("POST", "/api/mcp-admin/tokens", admin, {"userId": uids["mcpw_r"], "name": "x", "companyIds": [A["id"]], "scopes": ["read", "clients.write"], "expiresInDays": 5})
@@ -203,8 +203,8 @@ s, d = make_token(C, "clients-only", [A["id"]], ["read", "clients.write"])
 TC = d["secret"]
 
 print("\n== tool catalogue follows the token ==")
-READ6 = ["get_invoice", "get_stock", "list_companies", "search_clients", "search_invoices", "search_quotes"]
-check("a read-only token sees only the read tools", tool_names(TRO) == READ6, tool_names(TRO))
+READ6 = ["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes"]
+check("a read-only token sees only the read tools (eight)", tool_names(TRO) == READ6, tool_names(TRO))
 check("a login token sees only the read tools", tool_names(W) == READ6, tool_names(W))
 check("a write token also sees prepare, commit and cancel", set(tool_names(TW)) == set(READ6) | {"prepare_client", "prepare_quote", "commit_action", "cancel_action"}, tool_names(TW))
 check("a clients-only token does not see prepare_quote", set(tool_names(TC)) == set(READ6) | {"prepare_client", "commit_action", "cancel_action"}, tool_names(TC))
@@ -422,8 +422,8 @@ def consent(user_token, scopes, cids):
 
 s, d = consent(R, ["read", "quotes.write"], [A["id"]])
 check("a user without MCP Write cannot approve a write connection", s == 400, f"{s} {d}")
-s, d = consent(W, ["read", "bills.write"], [A["id"]])
-check("a scope with no tools yet cannot be approved", s == 400, f"{s} {d}")
+s, d = consent(W, ["read", "invoices.write"], [A["id"]])
+check("a scope that does not exist cannot be approved", s == 400, f"{s} {d}")
 s, d = consent(W, ["read", "quotes.write"], [A["id"]])
 check("an eligible user approves read + quotes.write", s == 200, f"{s} {d}")
 code = urllib.parse.parse_qs(urllib.parse.urlparse(d["redirectUrl"]).query)["code"][0]

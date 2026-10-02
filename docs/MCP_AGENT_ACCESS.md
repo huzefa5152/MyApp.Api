@@ -9,7 +9,7 @@ password.
 ## What an agent can do
 
 **Look things up (always):** `list_companies`, `search_clients`, `search_invoices`,
-`get_invoice`, `get_stock`, `search_quotes`.
+`get_invoice`, `get_stock`, `search_quotes`, `search_challans`, `get_challan`.
 
 **Create records (opt-in, per token):**
 
@@ -17,11 +17,17 @@ password.
 |---|---|---|
 | `clients.write` | `prepare_client` (create or update) | `clients.manage.create` / `.update` |
 | `quotes.write` | `prepare_quote` | `salesquotes.manage.create` |
+| `challans.write` | `prepare_challan` | `challans.manage.create`, `challans.list.view` |
+| `bills.write` | `prepare_bill` (from challans, or standalone) | `bills.manage.create` and/or `bills.manage.create.standalone`, `challans.list.view` |
 
 Writes are two steps. `prepare_*` validates and prices a plan and saves **nothing**;
 `commit_action(planId)` then runs it once, through the same service the web screen uses,
-only after a person approved it. `cancel_action` discards a plan. Challans and bills are the
-next phase; FBR submission, voiding, deleting, credit notes, users, roles and company
+only after a person approved it. `cancel_action` discards a plan.
+
+A bill takes the next number of the company's legal invoice sequence and may reduce stock, so
+a token may commit at most 10 bills and 30 challans per hour, and a challan is billed in full
+or not at all (every line priced). Bills are never dated in the future and are never submitted
+to FBR. FBR submission, voiding, deleting, credit and debit notes, users, roles and company
 settings are not exposed through MCP at all.
 
 ## What keeps it safe
@@ -91,5 +97,5 @@ Check it works by asking the tool to list your companies. Only your own should a
   accepted on `/mcp` only, and an agent token cannot create more tokens.
 - The activity log is never edited or deleted by the application; no endpoint offers to.
 - Verify with `python scripts/test_mcp_isolation.py`, `test_mcp_agent_tokens.py`,
-  `test_mcp_self_service.py`, `test_mcp_oauth.py` and `test_mcp_writes.py` against a local
-  backend. Design record: `docs/MCP_WRITE_DESIGN.md`.
+  `test_mcp_self_service.py`, `test_mcp_oauth.py`, `test_mcp_writes.py` and
+  `test_mcp_documents.py` against a local backend. Design record: `docs/MCP_WRITE_DESIGN.md`.

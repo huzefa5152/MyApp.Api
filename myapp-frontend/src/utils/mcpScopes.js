@@ -4,6 +4,8 @@ export const SCOPE_INFO = {
   read: { label: "Look things up", help: "Companies, clients, invoices, stock and quotations: read only." },
   "clients.write": { label: "Create and update clients", help: "Each change is shown to you first and saved only after you approve it." },
   "quotes.write": { label: "Create quotations", help: "Sales quotations only, never bills or FBR invoices. Each one is shown to you first." },
+  "challans.write": { label: "Create delivery challans", help: "Delivery notes without prices. Each one is shown to you first." },
+  "bills.write": { label: "Create bills", help: "Uses the next number of your invoice sequence and may reduce stock. Each bill is shown to you first and is never submitted to FBR." },
 };
 
 export const scopeLabel = scope => SCOPE_INFO[scope]?.label || scope;
