@@ -37,6 +37,8 @@ public class McpAdminController(
         public List<int> CompanyIds { get; set; } = new();
         public List<string> Scopes { get; set; } = new() { "read" };
         public int ExpiresInDays { get; set; } = 30;
+        /// <summary>Only when the token's owner is the primary admin.</summary>
+        public bool AllCompanies { get; set; }
     }
 
     [HttpGet("tokens")]
@@ -51,7 +53,7 @@ public class McpAdminController(
         Response.Headers.CacheControl = "no-store";
         return Ok(rows.Select(t => new
         {
-            t.Id, t.Name, t.Hint, t.UserId, username = t.User?.Username, fullName = t.User?.FullName,
+            t.Id, t.Name, t.Hint, t.UserId, username = t.User?.Username, fullName = t.User?.FullName, allCompanies = t.AllCompanies,
             companies = t.CompanyIdList().Select(id => new { id, name = names.GetValueOrDefault(id, "(deleted)") }),
             scopes = t.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries), t.AllowWrites,
             t.CreatedAt, t.ExpiresAt, t.LastUsedAt, t.RevokedAt,
@@ -65,11 +67,12 @@ public class McpAdminController(
     public async Task<IActionResult> Eligibility(int userId)
     {
         if (!IsSeedAdmin) return Forbid();
-        if (!await db.Users.AnyAsync(u => u.Id == userId) || permissions.IsSeedAdmin(userId)) return NotFound();
+        if (!await db.Users.AnyAsync(u => u.Id == userId)) return NotFound();
         var reachable = await access.GetAccessibleCompanyIdsAsync(userId);
         var companies = await db.Companies.AsNoTracking().Where(c => reachable.Contains(c.Id)).OrderBy(c => c.Name)
             .Select(c => new { c.Id, c.Name }).ToListAsync();
         return Ok(new { enabled = await permissions.HasPermissionAsync(userId, "mcp.access.use"), companies,
+                        canUseAllCompanies = permissions.IsSeedAdmin(userId), maxLifetimeDays = McpScopes.MaxLifetimeDays(permissions.IsSeedAdmin(userId)),
                         scopesAvailable = await McpScopes.AvailableAsync(permissions, userId) });
     }
 
@@ -80,31 +83,28 @@ public class McpAdminController(
         if (!IsSeedAdmin) return Forbid();
         var name = (req.Name ?? "").Trim();
         if (name.Length is < 1 or > 100) return BadRequest(new { message = "Give the token a name of 1 to 100 characters." });
-        if (req.ExpiresInDays < 1 || req.ExpiresInDays > McpAgentToken.MaxLifetimeDays)
-            return BadRequest(new { message = $"Lifetime must be 1 to {McpAgentToken.MaxLifetimeDays} days." });
 
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == req.UserId);
         if (user == null) return BadRequest(new { message = "User not found." });
-        if (permissions.IsSeedAdmin(user.Id))
-            return BadRequest(new { message = "Never connect the primary admin to an agent. Create a dedicated user." });
+        var ownerIsSeed = permissions.IsSeedAdmin(user.Id);
+        var maxDays = McpScopes.MaxLifetimeDays(ownerIsSeed);
+        if (req.ExpiresInDays < 1 || req.ExpiresInDays > maxDays)
+            return BadRequest(new { message = $"Lifetime must be 1 to {maxDays} days." });
         if (!await permissions.HasPermissionAsync(user.Id, "mcp.access.use"))
             return BadRequest(new { message = "That user does not hold MCP Access. Assign the MCP Access role first." });
 
         var (scopes, scopeError) = await McpScopes.ValidateAsync(permissions, user.Id, req.Scopes);
         if (scopeError != null) return BadRequest(new { message = scopeError });
 
-        var companyIds = (req.CompanyIds ?? new()).Distinct().ToList();
-        if (companyIds.Count is < 1 or > 50) return BadRequest(new { message = "Choose between 1 and 50 companies." });
-        var reachable = await access.GetAccessibleCompanyIdsAsync(user.Id);
-        if (companyIds.Any(id => !reachable.Contains(id)))
-            return BadRequest(new { message = "A token can only name companies its user can reach." });
+        var (companyValue, companyError) = McpScopes.ResolveCompanies(req.AllCompanies, req.CompanyIds, ownerIsSeed, await access.GetAccessibleCompanyIdsAsync(user.Id));
+        if (companyError != null) return BadRequest(new { message = companyError });
 
         var secret = McpAgentAuthHandler.NewSecret();
         var now = DateTime.UtcNow;
         var token = new McpAgentToken
         {
             UserId = user.Id, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret), Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
-            CompanyIds = string.Join(',', companyIds), Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
+            CompanyIds = companyValue!, Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
             CreatedAt = now, CreatedByUserId = CurrentUserId, ExpiresAt = now.AddDays(req.ExpiresInDays),
         };
         db.McpAgentTokens.Add(token);

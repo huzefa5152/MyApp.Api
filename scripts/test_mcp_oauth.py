@@ -217,7 +217,8 @@ check("consent info for a foreign redirect is 404", s == 404, s)
 s, info_off, _ = raw("GET", f"/api/oauth/authorize-info?client_id={CID}&redirect_uri={urllib.parse.quote(REDIRECT, safe='')}", off)
 check("a user without MCP Access is told so", s == 200 and info_off["enabled"] is False and info_off["reason"] == "not-enabled", info_off)
 s, info_admin, _ = raw("GET", f"/api/oauth/authorize-info?client_id={CID}&redirect_uri={urllib.parse.quote(REDIRECT, safe='')}", admin)
-check("the primary admin is told to use a dedicated user", s == 200 and info_admin["reason"] == "seed-admin", info_admin)
+check("the primary admin is enabled and offered the all-companies choice (policy: allowed, tenants stay confined)", s == 200 and info_admin["enabled"] is True and info_admin["canUseAllCompanies"] is True, info_admin)
+check("a tenant user is NOT offered the all-companies choice", info["canUseAllCompanies"] is False, info)
 
 
 def approve(token, cids, challenge=None, client=CID, redirect=REDIRECT, state="st-xyz", method="S256"):
@@ -228,7 +229,9 @@ def approve(token, cids, challenge=None, client=CID, redirect=REDIRECT, state="s
 s, d, _ = approve(off, [A["id"]])
 check("user without MCP Access cannot approve (403)", s == 403, f"{s} {d}")
 s, d, _ = approve(admin, [A["id"]])
-check("the primary admin cannot approve", s == 400, f"{s} {d}")
+check("the primary admin may approve a connection for specific companies", s == 200, f"{s} {d}")
+s, d, _ = raw("POST", "/api/oauth/authorize", user, {"clientId": CID, "redirectUri": REDIRECT, "state": "s", "codeChallenge": chal, "codeChallengeMethod": "S256", "companyIds": [], "allCompanies": True})
+check("a tenant user cannot approve all companies", s == 400, f"{s} {d}")
 s, d, _ = approve(user, [999999])
 check("a company the user cannot reach is refused", s == 400, f"{s} {d}")
 s, d, _ = approve(user, [])

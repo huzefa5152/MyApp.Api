@@ -7,6 +7,7 @@ import { useConfirm } from "./ConfirmDialog";
 import { SecretDialog } from "./McpAgentsPanel";
 import { notify } from "../utils/notify";
 import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
+import AllCompaniesOption from "./AllCompaniesOption";
 import { colors, cardStyles, formStyles, modalSizes } from "../theme";
 
 // "MCP & AI" tab on My Profile: whether MCP is switched on for this user, how to
@@ -45,17 +46,18 @@ function NewTokenDialog({ status, onClose, onCreated }) {
   const [picked, setPicked] = useState(status.companies.length === 1 ? [status.companies[0].id] : []);
   const [days, setDays] = useState(30);
   const [scopes, setScopes] = useState(["read"]);
+  const [all, setAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const toggleScope = k => setScopes(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k]);
   const toggle = id => setPicked(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
   const submit = async e => {
     e.preventDefault(); setBusy(true); setError("");
-    try { onCreated((await httpClient.post("/mcp/me/tokens", { name, companyIds: picked, scopes, expiresInDays: Number(days) })).data); }
+    try { onCreated((await httpClient.post("/mcp/me/tokens", { name, companyIds: all ? [] : picked, allCompanies: all, scopes, expiresInDays: Number(days) })).data); }
     catch (err) { setError(err.response?.data?.message || "Could not create the token."); }
     finally { setBusy(false); }
   };
-  const valid = name.trim() && picked.length > 0;
+  const valid = name.trim() && (all || picked.length > 0);
   return <div style={formStyles.backdrop}>
     <form style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onSubmit={submit}>
       <div style={formStyles.header}><h3 style={formStyles.title}>New AI token</h3>
@@ -65,8 +67,9 @@ function NewTokenDialog({ status, onClose, onCreated }) {
         <label style={s.label}>Name</label>
         <input style={s.input} value={name} maxLength={100} placeholder="e.g. Codex on my laptop" onChange={e => setName(e.target.value)} />
         <label style={s.label}>Companies it may reach</label>
-        <div style={s.checks}>{status.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
-          <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>
+        {status.canUseAllCompanies && <AllCompaniesOption checked={all} onChange={setAll} />}
+        {!all && <div style={s.checks}>{status.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
+          <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>}
         <label style={s.label}>What it may do</label>
         <div style={s.scopes}>{orderedScopes(status.scopesAvailable).map(k => <label key={k} style={{ ...s.scope, ...(scopes.includes(k) ? s.checkOn : {}) }}>
           <input type="checkbox" checked={scopes.includes(k)} disabled={k === "read"} onChange={() => toggleScope(k)} />
@@ -74,7 +77,7 @@ function NewTokenDialog({ status, onClose, onCreated }) {
         {status.scopesAvailable.length === 1 && <p style={s.hint}>Creating records needs the MCP Write role. Ask your administrator if you want your AI to draft clients or quotations.</p>}
         <label style={s.label}>Expires after</label>
         <select style={s.input} value={days} onChange={e => setDays(e.target.value)}>
-          {[[7, "7 days"], [30, "30 days"], [60, "60 days"], [status.maxLifetimeDays, `${status.maxLifetimeDays} days (maximum)`]].map(([v, l]) => <option key={l} value={v}>{l}</option>)}
+          {[...[7, 30, 60, 90].filter(d => d < status.maxLifetimeDays), status.maxLifetimeDays].map(d => [d, d === status.maxLifetimeDays ? `${d} days (maximum)` : `${d} days`]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         {error && <div role="alert" style={s.alert}>{error}</div>}
       </div>
@@ -148,12 +151,10 @@ export default function McpMyAccessPanel() {
     <div style={status.enabled ? s.ok : s.warn}>
       {status.enabled ? <MdCheckCircle style={s.bannerIcon} /> : <MdInfo style={s.bannerIcon} />}
       <div>
-        <strong>{status.enabled ? "MCP is enabled for your account" : status.reason === "seed-admin" ? "The primary admin cannot connect an AI agent" : "MCP is not enabled for your account"}</strong>
+        <strong>{status.enabled ? "MCP is enabled for your account" : "MCP is not enabled for your account"}</strong>
         <div style={s.sub}>{status.enabled
           ? "Your AI tools can use the companies you choose, with the same limits as your own login. Everything they do is recorded."
-          : status.reason === "seed-admin"
-            ? "Create a dedicated user for agents and give that user the MCP Access role."
-            : "Ask your administrator to give you the MCP Access role. Once they do, this page lets you create a token and connect your AI tool."}</div>
+          : "Ask your administrator to give you the MCP Access role. Once they do, this page lets you create a token and connect your AI tool."}</div>
       </div>
     </div>
 
@@ -174,7 +175,7 @@ export default function McpMyAccessPanel() {
       <div style={s.cards}>{t.map(k => <article key={k.id} style={s.card}>
         <div style={s.cardTop}><div style={{ minWidth: 0 }}><div style={s.strong}>{k.name}</div><div style={s.muted}><code>{k.hint}…</code></div></div>
           <Badge tone={TONE[k.status]}>{k.status}</Badge></div>
-        <div style={s.chips}>{k.companies.map(c => <span key={c.id} style={s.chip}>{c.name}</span>)}</div>
+        <div style={s.chips}>{k.allCompanies ? <span style={{ ...s.chip, color: "#8a4b00", background: "#fff4e5" }}>All companies</span> : k.companies.map(c => <span key={c.id} style={s.chip}>{c.name}</span>)}</div>
         <div style={s.meta}>Last used {relative(k.lastUsedAt)} · expires {absolute(k.expiresAt)}</div>
         {k.status === "Active" && <button style={s.danger} disabled={busy} onClick={() => revoke(k)}><MdBlock aria-hidden /> Revoke</button>}
       </article>)}</div>

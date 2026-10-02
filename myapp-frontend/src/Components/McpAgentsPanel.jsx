@@ -8,6 +8,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useConfirm } from "./ConfirmDialog";
 import { notify } from "../utils/notify";
 import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
+import AllCompaniesOption from "./AllCompaniesOption";
 import { colors, cardStyles, formStyles, modalSizes } from "../theme";
 
 // Seed-admin console for AI agents (Codex, Claude, automations) connected through
@@ -57,6 +58,8 @@ function NewTokenDialog({ onClose, onCreated }) {
   const [userId, setUserId] = useState("");
   const [companies, setCompanies] = useState([]);
   const [available, setAvailable] = useState(["read"]);
+  const [meta, setMeta] = useState({ canUseAllCompanies: false, maxLifetimeDays: 90 });
+  const [all, setAll] = useState(false);
   const [scopes, setScopes] = useState(["read"]);
   const [picked, setPicked] = useState([]);
   const [name, setName] = useState("");
@@ -64,13 +67,13 @@ function NewTokenDialog({ onClose, onCreated }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => { getUsers().then(r => setUsers(r.data.filter(u => u.id !== 1))).catch(() => setError("Could not load users.")); }, []);
+  useEffect(() => { getUsers().then(r => setUsers(r.data)).catch(() => setError("Could not load users.")); }, []);
   useEffect(() => {
-    setPicked([]); setCompanies([]); setAvailable(["read"]); setScopes(["read"]);
+    setPicked([]); setCompanies([]); setAvailable(["read"]); setScopes(["read"]); setAll(false); setMeta({ canUseAllCompanies: false, maxLifetimeDays: 90 });
     if (!userId) return;
     let live = true;
     httpClient.get(`/mcp-admin/eligibility/${userId}`).then(r => {
-      if (live) { setCompanies(r.data.companies.map(c => ({ companyId: c.id, companyName: c.name }))); setAvailable(r.data.scopesAvailable); }
+      if (live) { setCompanies(r.data.companies.map(c => ({ companyId: c.id, companyName: c.name }))); setAvailable(r.data.scopesAvailable); setMeta({ canUseAllCompanies: r.data.canUseAllCompanies, maxLifetimeDays: r.data.maxLifetimeDays }); setDays(d => Math.min(Number(d), r.data.maxLifetimeDays)); }
     }).catch(() => live && setError("Could not load that user's companies."));
     return () => { live = false; };
   }, [userId]);
@@ -81,12 +84,12 @@ function NewTokenDialog({ onClose, onCreated }) {
     e.preventDefault();
     setBusy(true); setError("");
     try {
-      const r = await httpClient.post("/mcp-admin/tokens", { userId: Number(userId), name, companyIds: picked, scopes, expiresInDays: Number(days) });
+      const r = await httpClient.post("/mcp-admin/tokens", { userId: Number(userId), name, companyIds: all ? [] : picked, allCompanies: all, scopes, expiresInDays: Number(days) });
       onCreated(r.data);
     } catch (err) { setError(err.response?.data?.message || "Could not create the token."); }
     finally { setBusy(false); }
   };
-  const valid = userId && name.trim() && picked.length > 0;
+  const valid = userId && name.trim() && (all || picked.length > 0);
   return <div style={formStyles.backdrop}>
     <form style={{ ...formStyles.modal, maxWidth: modalSizes.md }} onSubmit={submit}>
       <div style={formStyles.header}>
@@ -102,13 +105,14 @@ function NewTokenDialog({ onClose, onCreated }) {
           <option value="">Choose a dedicated agent user…</option>
           {users.map(u => <option key={u.id} value={u.id}>{u.fullName} (@{u.username})</option>)}
         </select>
-        <p style={s.hint}>The user needs the MCP Access role. Never use the primary admin.</p>
+        <p style={s.hint}>The user needs the MCP Access role. The primary admin is allowed and can span every tenant.</p>
         <label style={s.label}>Companies the agent may reach</label>
         {!userId && <p style={s.hint}>Choose a user first.</p>}
-        {userId && companies.length === 0 && <p style={s.hint}>That user has no company access yet.</p>}
-        <div style={s.checks}>{companies.map(c => <label key={c.companyId} style={{ ...s.check, ...(picked.includes(c.companyId) ? s.checkOn : {}) }}>
+        {userId && meta.canUseAllCompanies && <AllCompaniesOption checked={all} onChange={setAll} />}
+        {userId && companies.length === 0 && !all && <p style={s.hint}>That user has no company access yet.</p>}
+        {!all && <div style={s.checks}>{companies.map(c => <label key={c.companyId} style={{ ...s.check, ...(picked.includes(c.companyId) ? s.checkOn : {}) }}>
           <input type="checkbox" checked={picked.includes(c.companyId)} onChange={() => toggle(c.companyId)} /> {c.companyName}
-        </label>)}</div>
+        </label>)}</div>}
         <label style={s.label}>What it may do</label>
         <div style={s.scopes}>{orderedScopes(available).map(k => <label key={k} style={{ ...s.scope, ...(scopes.includes(k) ? s.checkOn : {}) }}>
           <input type="checkbox" checked={scopes.includes(k)} disabled={k === "read"} onChange={() => toggleScope(k)} />
@@ -116,7 +120,7 @@ function NewTokenDialog({ onClose, onCreated }) {
         {userId && available.length === 1 && <p style={s.hint}>This user has no write access. Assign the MCP Write role to let their agents create records.</p>}
         <label style={s.label}>Expires after</label>
         <select style={s.input} value={days} onChange={e => setDays(e.target.value)}>
-          {[[7, "7 days"], [30, "30 days"], [60, "60 days"], [90, "90 days (maximum)"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          {[...[7, 30, 60, 90].filter(d => d < meta.maxLifetimeDays), meta.maxLifetimeDays].map(d => [d, d === meta.maxLifetimeDays ? `${d} days (maximum)` : `${d} days`]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         {error && <div role="alert" style={s.alert}>{error}</div>}
       </div>
@@ -199,7 +203,7 @@ export default function McpAgentsPanel() {
   const refresh = () => { loadTokens(); loadActivity(); };
   const from = activity && activity.total ? (activity.page - 1) * activity.pageSize + 1 : 0;
   const to = activity ? Math.min(activity.page * activity.pageSize, activity.total) : 0;
-  const chips = t => [...t.companies.map(c => <span key={`c${c.id}`} style={s.chip}>{c.name}</span>),
+  const chips = t => [...(t.allCompanies ? [<span key="all" style={{ ...s.chip, color: "#8a4b00", background: "#fff4e5" }}>All companies</span>] : t.companies.map(c => <span key={`c${c.id}`} style={s.chip}>{c.name}</span>)),
     ...t.scopes.filter(x => x !== "read").map(x => <span key={x} style={{ ...s.chip, color: "#8a4b00", background: "#fff4e5" }}>{x}</span>)];
   const revokeBtn = t => t.status === "Active" && <button style={s.danger} disabled={busy} onClick={() => revoke(t)}><MdBlock aria-hidden /> Revoke</button>;
 

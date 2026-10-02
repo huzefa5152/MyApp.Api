@@ -281,6 +281,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | MCP self-service tab (a user manages only their own tokens and activity) | `python scripts/test_mcp_self_service.py --base <url>` | `33/33 checks passed` |
 | MCP sign-in connect: OAuth + PKCE + client registration, refresh rotation, replay (needs `sqlcmd`) | `python scripts/test_mcp_oauth.py --base <url>` | `67/67 checks passed` |
 | MCP write tools: prepare / approve / commit for clients and quotations, gates re-checked at commit, idempotency (needs `sqlcmd`) | `python scripts/test_mcp_writes.py --base <url>` | `91/91 checks passed` |
+| MCP primary admin across all tenants, with tenant users still confined (needs `sqlcmd`-free; creates one throwaway company) | `python scripts/test_mcp_seed_admin.py --base <url>` | `52/52 checks passed` |
 | MCP report tools: figures equal the screens' own reports, bounded output, per-tool permission, no payment details | `python scripts/test_mcp_reports.py --base <url>` | `79/79 checks passed` |
 | MCP challans and bills: find, prepare, commit, bill a challan in full, rounding, hourly ceiling, never submitted to FBR (needs `sqlcmd`; locally marks its own challan Pending) | `python scripts/test_mcp_documents.py --base <url>` | `94/94 checks passed` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |

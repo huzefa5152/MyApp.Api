@@ -4,8 +4,8 @@ Hosted MCP - self-service for the signed-in user ("MCP & AI" tab on My Profile).
 Proves a user can switch on and manage MCP for THEMSELVES and no one else: status says
 honestly whether MCP is enabled; they create and revoke only their own tokens, capped by
 the companies they reach; an agent token can never mint more tokens; one user can never
-see, revoke or read the activity of another's; and a user without MCP Access, or the
-primary admin, cannot create a token at all.
+see, revoke or read the activity of another's; and a user without MCP Access cannot create a
+token at all. (The primary admin is allowed: see test_mcp_seed_admin.py.)
 
 Needs a LOCAL Trader database with 2+ companies holding invoices. Creates only throwaway
 users ("mcpself"), removed on success.
@@ -128,7 +128,7 @@ check("status offers read scope only for now", d["scopesAvailable"] == ["read"],
 s, d = http("GET", "/api/mcp/me/status", off)
 check("user without MCP Access sees not-enabled, with the reason", s == 200 and d["enabled"] is False and d["reason"] == "not-enabled", d)
 s, d = http("GET", "/api/mcp/me/status", admin)
-check("primary admin sees seed-admin, not enabled", s == 200 and d["enabled"] is False and d["reason"] == "seed-admin", d)
+check("primary admin is enabled by default, may use all companies, and gets the shorter 30-day lifetime", s == 200 and d["enabled"] is True and d["canUseAllCompanies"] is True and d["maxLifetimeDays"] == 30, d)
 s, _ = http("GET", "/api/mcp/me/status")
 check("anonymous refused", s == 401, s)
 
@@ -155,7 +155,9 @@ for label, user, req in (
 s, d = http("POST", "/api/mcp/me/tokens", off, body())
 check("user without MCP Access cannot create a token (403)", s == 403, f"{s} {d}")
 s, d = http("POST", "/api/mcp/me/tokens", admin, body())
-check("primary admin cannot create a token", s == 400, f"{s} {d}")
+check("primary admin may create a token (policy: allowed, with the all-companies option)", s == 200, f"{s} {d}")
+if s == 200:
+    http("POST", f"/api/mcp/me/tokens/{d['id']}/revoke", admin)
 
 print("\n== an agent cannot mint tokens ==")
 s, _ = http("GET", "/api/mcp/me/status", SEC)

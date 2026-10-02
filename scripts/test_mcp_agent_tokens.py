@@ -149,7 +149,6 @@ T1, T1_ID, T1_SECRET = d["secret"], d["id"], d["secret"]
 check("hint shows only the start of the secret", T1_SECRET.startswith(d["hint"]) and len(d["hint"]) < len(T1_SECRET) - 20, d["hint"])
 
 for label, body in (
-    ("seed admin as owner refused", {"userId": 1, "name": "x", "companyIds": [A["id"]], "scopes": ["read"], "expiresInDays": 5}),
     ("owner without MCP Access refused", {"userId": user_ids["mcptok_nomcp"], "name": "x", "companyIds": [A["id"]], "scopes": ["read"], "expiresInDays": 5}),
     ("company the user cannot reach refused", {"userId": user_ids["mcptok_plain"], "name": "x", "companyIds": [B["id"]], "scopes": ["read"], "expiresInDays": 5}),
     ("write scope refused (read-only phase)", {"userId": uid, "name": "x", "companyIds": [A["id"]], "scopes": ["read", "quotes.write"], "expiresInDays": 5}),

@@ -39,6 +39,8 @@ public class McpSelfController(
         public List<int> CompanyIds { get; set; } = new();
         public List<string> Scopes { get; set; } = new() { "read" };
         public int ExpiresInDays { get; set; } = 30;
+        /// <summary>Primary admin only: every company, including ones added later.</summary>
+        public bool AllCompanies { get; set; }
     }
 
     // Any signed-in user may ask; the answer says whether MCP is switched on for them and why not.
@@ -58,14 +60,16 @@ public class McpSelfController(
         Response.Headers.CacheControl = "no-store";
         return Ok(new
         {
-            enabled = hasAccess && !isSeed,
-            reason = isSeed ? "seed-admin" : hasAccess ? "" : "not-enabled",
+            enabled = hasAccess,
+            reason = hasAccess ? "" : "not-enabled",
+            canUseAllCompanies = isSeed,
             companies,
             scopesAvailable = await McpScopes.AvailableAsync(permissions, uid),
-            maxLifetimeDays = McpAgentToken.MaxLifetimeDays,
+            maxLifetimeDays = McpScopes.MaxLifetimeDays(isSeed),
             tokens = tokens.Select(t => new
             {
                 t.Id, t.Name, t.Hint,
+                allCompanies = t.AllCompanies,
                 companies = t.CompanyIdList().Select(id => new { id, name = names.GetValueOrDefault(id, "(no longer reachable)") }),
                 scopes = t.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries),
                 t.CreatedAt, t.ExpiresAt, t.LastUsedAt, t.RevokedAt,
@@ -79,20 +83,17 @@ public class McpSelfController(
     public async Task<IActionResult> Create([FromBody] CreateRequest req)
     {
         var uid = CurrentUserId;
-        if (permissions.IsSeedAdmin(uid))
-            return BadRequest(new { message = "The primary admin cannot connect an agent. Use a dedicated user." });
+        var isSeed = permissions.IsSeedAdmin(uid);
         var name = (req.Name ?? "").Trim();
         if (name.Length is < 1 or > 100) return BadRequest(new { message = "Give the token a name of 1 to 100 characters." });
-        if (req.ExpiresInDays < 1 || req.ExpiresInDays > McpAgentToken.MaxLifetimeDays)
-            return BadRequest(new { message = $"Lifetime must be 1 to {McpAgentToken.MaxLifetimeDays} days." });
+        var maxDays = McpScopes.MaxLifetimeDays(isSeed);
+        if (req.ExpiresInDays < 1 || req.ExpiresInDays > maxDays)
+            return BadRequest(new { message = $"Lifetime must be 1 to {maxDays} days." });
         var (scopes, scopeError) = await McpScopes.ValidateAsync(permissions, uid, req.Scopes);
         if (scopeError != null) return BadRequest(new { message = scopeError });
 
-        var companyIds = (req.CompanyIds ?? new()).Distinct().ToList();
-        if (companyIds.Count is < 1 or > 50) return BadRequest(new { message = "Choose between 1 and 50 companies." });
-        var reachable = await access.GetAccessibleCompanyIdsAsync(uid);
-        if (companyIds.Any(id => !reachable.Contains(id)))
-            return BadRequest(new { message = "You can only choose companies you have access to." });
+        var (companyValue, companyError) = McpScopes.ResolveCompanies(req.AllCompanies, req.CompanyIds, isSeed, await access.GetAccessibleCompanyIdsAsync(uid));
+        if (companyError != null) return BadRequest(new { message = companyError });
 
         var now = DateTime.UtcNow;
         if (await db.McpAgentTokens.CountAsync(t => t.UserId == uid && t.RevokedAt == null && t.ExpiresAt > now) >= MaxActiveTokens)
@@ -103,7 +104,7 @@ public class McpSelfController(
         {
             UserId = uid, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret),
             Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
-            CompanyIds = string.Join(',', companyIds), Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
+            CompanyIds = companyValue!, Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
             CreatedAt = now, CreatedByUserId = uid, ExpiresAt = now.AddDays(req.ExpiresInDays),
         };
         db.McpAgentTokens.Add(token);

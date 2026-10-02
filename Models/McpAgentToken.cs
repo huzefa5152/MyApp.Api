@@ -13,6 +13,10 @@ public class McpAgentToken
 {
     public const string Prefix = "tmcp_";
     public const int MaxLifetimeDays = 90;
+    /// <summary>Longest a token owned by the primary admin may live: it can reach every tenant.</summary>
+    public const int SeedAdminMaxLifetimeDays = 30;
+    /// <summary>Stored in CompanyIds for "every company the owner can reach, now and later". Primary admin only.</summary>
+    public const string AllCompaniesMarker = "*";
 
     /// <summary>Scopes an agent may be granted. "read" covers every read-only tool.</summary>
     public static readonly string[] AllScopes =
@@ -52,6 +56,8 @@ public class McpAgentToken
         : "Expired";
 
     public User? User { get; set; }
+
+    public bool AllCompanies => CompanyIds == AllCompaniesMarker;
 
     public IReadOnlyList<int> CompanyIdList() =>
         CompanyIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

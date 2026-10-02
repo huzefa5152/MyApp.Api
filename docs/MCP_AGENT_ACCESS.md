@@ -60,11 +60,24 @@ settings are not exposed through MCP at all.
 2. **The tenant administrator creates staff** with an edition role + `MCP Access` (+ `MCP
    Write` for those who may write) and only the companies each person should reach. For a
    narrower agent, build a private role from just the keys needed.
-3. **Use a dedicated user per person or purpose.** Never connect the primary admin: it sees
-   every company in every tenant, so MCP refuses it.
+3. **Tenant staff: use a dedicated user per person or purpose,** and give each only the
+   companies they need. Their reach never grows beyond what you assigned.
 4. **Optional:** under Users, AI agents, create a token for a user yourself (choose the
    user, the companies, the scopes, the lifetime).
 5. Revoke any time: revoke the token, remove the role, remove a company, or delete the user.
+
+## Primary admin: one assistant across every tenant
+
+The primary admin is enabled by default (no role to assign) and may connect an AI tool that
+manages ALL tenants. It is the only account that can choose **All companies**, which is read live,
+so a tenant created later is included at once. Tenant users can never choose it: they reach only
+the companies assigned to them, and nothing the primary admin does changes that.
+
+Because this is the widest reach the system has, the primary admin's tokens live at most 30 days
+(tenant users: 90), the dialog shows a plain warning when All companies is ticked, and the same
+rules apply to every write: a plan shown to a person first, the hourly ceilings, and a log row for
+each call. Prefer read-only unless a task needs more, and watch Users, AI agents. Create the token
+under My Profile, MCP & AI, or for it under Users, AI agents.
 
 ## Each user: connect an AI tool
 

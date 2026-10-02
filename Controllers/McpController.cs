@@ -351,7 +351,7 @@ namespace MyApp.Api.Controllers
             catch (UnauthorizedAccessException) { throw new ToolError("Resource unavailable or access denied."); }
         }
 
-        private bool AgentAllows(int companyId) => Agent == null || Agent.CompanyIdList().Contains(companyId);
+        private bool AgentAllows(int companyId) => Agent == null || Agent.AllCompanies || Agent.CompanyIdList().Contains(companyId);
 
         private void RequireScope(string scope)
         {

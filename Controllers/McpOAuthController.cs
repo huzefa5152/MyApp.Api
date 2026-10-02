@@ -144,6 +144,8 @@ public class McpOAuthController(
         public string CodeChallengeMethod { get; set; } = "";
         public List<int> CompanyIds { get; set; } = new();
         public List<string> Scopes { get; set; } = new() { "read" };
+        /// <summary>Primary admin only: every company, including ones added later.</summary>
+        public bool AllCompanies { get; set; }
     }
 
     /// <summary>What the consent screen needs: who is asking, and whether this user may approve.</summary>
@@ -156,7 +158,7 @@ public class McpOAuthController(
             return NotFound(new { message = "This application or its redirect address is not recognised." });
         var uid = CurrentUserId;
         var isSeed = permissions.IsSeedAdmin(uid);
-        var enabled = !isSeed && await permissions.HasPermissionAsync(uid, "mcp.access.use");
+        var enabled = await permissions.HasPermissionAsync(uid, "mcp.access.use");
         var reachable = await access.GetAccessibleCompanyIdsAsync(uid);
         var companies = await db.Companies.AsNoTracking().Where(c => reachable.Contains(c.Id)).OrderBy(c => c.Name)
             .Select(c => new { c.Id, c.Name }).ToListAsync();
@@ -164,7 +166,7 @@ public class McpOAuthController(
         return Ok(new
         {
             clientName = client.Name, redirectHost = new Uri(redirect_uri!).Authority,
-            enabled, reason = isSeed ? "seed-admin" : enabled ? "" : "not-enabled", companies,
+            enabled, reason = enabled ? "" : "not-enabled", canUseAllCompanies = isSeed, companies,
             scopes = enabled ? await McpScopes.AvailableAsync(permissions, uid) : new List<string>(),
         });
     }
@@ -175,17 +177,14 @@ public class McpOAuthController(
     public async Task<IActionResult> Approve([FromBody] AuthorizeRequest req)
     {
         var uid = CurrentUserId;
-        if (permissions.IsSeedAdmin(uid)) return BadRequest(new { message = "The primary admin cannot connect an AI application. Use a dedicated user." });
         var client = await FindClientAsync(req.ClientId);
         if (client == null || !client.RedirectUriList().Contains(req.RedirectUri ?? "", StringComparer.Ordinal))
             return BadRequest(new { message = "This application or its redirect address is not recognised." });
         if (ValidateAuthRequest("code", req.CodeChallenge, req.CodeChallengeMethod) != null)
             return BadRequest(new { message = "The connection request is malformed. Start again from your AI application." });
 
-        var ids = (req.CompanyIds ?? new()).Distinct().ToList();
-        if (ids.Count is < 1 or > 50) return BadRequest(new { message = "Choose at least one company." });
-        var reachable = await access.GetAccessibleCompanyIdsAsync(uid);
-        if (ids.Any(id => !reachable.Contains(id))) return BadRequest(new { message = "You can only choose companies you have access to." });
+        var (companyValue, companyError) = McpScopes.ResolveCompanies(req.AllCompanies, req.CompanyIds, permissions.IsSeedAdmin(uid), await access.GetAccessibleCompanyIdsAsync(uid));
+        if (companyError != null) return BadRequest(new { message = companyError });
 
         var (granted, scopeError) = await McpScopes.ValidateAsync(permissions, uid, req.Scopes);
         if (scopeError != null) return BadRequest(new { message = scopeError });
@@ -194,7 +193,7 @@ public class McpOAuthController(
         db.McpOAuthCodes.Add(new McpOAuthCode
         {
             CodeHash = McpAgentAuthHandler.Hash(code), ClientId = client.Id, UserId = uid, RedirectUri = req.RedirectUri!,
-            CodeChallenge = req.CodeChallenge, CompanyIds = string.Join(',', ids), Scopes = string.Join(',', granted),
+            CodeChallenge = req.CodeChallenge, CompanyIds = companyValue!, Scopes = string.Join(',', granted),
             ExpiresAt = DateTime.UtcNow.AddMinutes(CodeMinutes),
         });
         // Housekeeping: spent and expired codes carry no value.
@@ -263,11 +262,18 @@ public class McpOAuthController(
 
         var client = await FindClientAsync(clientId);
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == row.UserId);
-        if (client == null || user == null || permissions.IsSeedAdmin(user.Id) || !await permissions.HasPermissionAsync(user.Id, "mcp.access.use"))
+        if (client == null || user == null || !await permissions.HasPermissionAsync(user.Id, "mcp.access.use"))
             return OAuthError("invalid_grant", "MCP access is no longer enabled for this user.");
-        var reachable = await access.GetAccessibleCompanyIdsAsync(user.Id);
-        var companies = row.CompanyIds.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).Where(reachable.Contains).ToList();
-        if (companies.Count == 0) return OAuthError("invalid_grant", "None of the approved companies is reachable any more.");
+        string companyValue;
+        if (row.CompanyIds == McpAgentToken.AllCompaniesMarker && permissions.IsSeedAdmin(user.Id))
+            companyValue = McpAgentToken.AllCompaniesMarker;
+        else
+        {
+            var reachable = await access.GetAccessibleCompanyIdsAsync(user.Id);
+            var companies = row.CompanyIds.Split(',', StringSplitOptions.RemoveEmptyEntries).Where(c => int.TryParse(c, out _)).Select(int.Parse).Where(reachable.Contains).ToList();
+            if (companies.Count == 0) return OAuthError("invalid_grant", "None of the approved companies is reachable any more.");
+            companyValue = string.Join(',', companies);
+        }
 
         // One live connection per user and application: signing in again replaces the old one.
         await db.McpAgentTokens.Where(t => t.UserId == user.Id && t.OAuthClientId == clientId && t.RevokedAt == null)
@@ -278,7 +284,7 @@ public class McpOAuthController(
         var token = new McpAgentToken
         {
             UserId = user.Id, Name = $"{client.Name} (sign-in)", TokenHash = McpAgentAuthHandler.Hash(access1),
-            Hint = access1.Substring(0, McpAgentToken.Prefix.Length + 4), CompanyIds = string.Join(',', companies),
+            Hint = access1.Substring(0, McpAgentToken.Prefix.Length + 4), CompanyIds = companyValue,
             Scopes = row.Scopes, AllowWrites = row.Scopes.Split(',').Any(McpScopes.IsWrite), CreatedAt = now, CreatedByUserId = user.Id,
             ExpiresAt = now.AddMinutes(AccessMinutes), OAuthClientId = clientId,
             RefreshHash = McpAgentAuthHandler.Hash(refresh), RefreshExpiresAt = now.AddDays(RefreshDays),
@@ -299,7 +305,7 @@ public class McpOAuthController(
         var token = await db.McpAgentTokens.AsNoTracking().FirstOrDefaultAsync(t => t.RefreshHash == oldHash);
         if (token == null || token.RevokedAt != null || token.OAuthClientId != clientId || token.RefreshExpiresAt <= now)
             return OAuthError("invalid_grant", "The refresh token is not valid.");
-        if (permissions.IsSeedAdmin(token.UserId) || !await permissions.HasPermissionAsync(token.UserId, "mcp.access.use"))
+        if (!await permissions.HasPermissionAsync(token.UserId, "mcp.access.use"))
             return OAuthError("invalid_grant", "MCP access is no longer enabled for this user.");
 
         var newAccess = McpAgentAuthHandler.NewSecret();

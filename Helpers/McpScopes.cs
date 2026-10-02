@@ -1,3 +1,4 @@
+using MyApp.Api.Models;
 using MyApp.Api.Services.Interfaces;
 
 namespace MyApp.Api.Helpers;
@@ -28,6 +29,24 @@ public static class McpScopes
         // A bill is made from challans or on its own; the two are separately grantable screens.
         [Bills] = (new[] { "challans.list.view" }, new[] { "bills.manage.create", "bills.manage.create.standalone" }),
     };
+
+    /// <summary>
+    /// The companies a token or connection is bound to. Everyone names between 1 and 50 companies they
+    /// really reach. Only the primary admin may instead choose "all companies": the marker is read live,
+    /// so tenants added later are included, which is exactly what a platform-wide assistant needs.
+    /// </summary>
+    public static (string? Value, string? Error) ResolveCompanies(bool all, IEnumerable<int>? requested, bool ownerIsSeedAdmin, HashSet<int> reachable)
+    {
+        if (all)
+            return ownerIsSeedAdmin ? (McpAgentToken.AllCompaniesMarker, null) : (null, "Only the primary admin can choose all companies.");
+        var ids = (requested ?? Array.Empty<int>()).Distinct().ToList();
+        if (ids.Count is < 1 or > 50) return (null, "Choose between 1 and 50 companies.");
+        if (ids.Any(id => !reachable.Contains(id))) return (null, "A token can only name companies its user can reach.");
+        return (string.Join(',', ids), null);
+    }
+
+    public static int MaxLifetimeDays(bool ownerIsSeedAdmin) =>
+        ownerIsSeedAdmin ? McpAgentToken.SeedAdminMaxLifetimeDays : McpAgentToken.MaxLifetimeDays;
 
     public static bool IsWrite(string scope) => Write.Contains(scope, StringComparer.Ordinal);
 

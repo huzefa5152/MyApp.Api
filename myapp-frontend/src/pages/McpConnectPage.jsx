@@ -4,6 +4,7 @@ import { MdSmartToy, MdCheckCircle, MdBlock, MdInfo, MdShield } from "react-icon
 import httpClient from "../api/httpClient";
 import { colors, cardStyles } from "../theme";
 import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
+import AllCompaniesOption from "../Components/AllCompaniesOption";
 
 // "Sign in to connect": where an AI product (claude.ai, ChatGPT, Codex...) sends a user
 // to approve a connection. The user is already signed in to the ERP (the app routes an
@@ -23,6 +24,7 @@ export default function McpConnectPage() {
   const [error, setError] = useState("");
   const [picked, setPicked] = useState([]);
   const [scopes, setScopes] = useState(["read"]);
+  const [all, setAll] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function McpConnectPage() {
     setBusy(true); setError("");
     try {
       const body = { clientId: request.clientId, redirectUri: request.redirectUri, state: request.state || null,
-        codeChallenge: request.codeChallenge, codeChallengeMethod: request.codeChallengeMethod, companyIds: picked, scopes };
+        codeChallenge: request.codeChallenge, codeChallengeMethod: request.codeChallengeMethod, companyIds: all ? [] : picked, allCompanies: all, scopes };
       const r = await httpClient.post(approve ? "/oauth/authorize" : "/oauth/deny", body);
       window.location.assign(r.data.redirectUrl);
     } catch (e) { setError(e.response?.data?.message || "Could not complete the connection."); setBusy(false); }
@@ -60,9 +62,7 @@ export default function McpConnectPage() {
       </div>
 
       {!info.enabled ? <div style={s.warn}><MdInfo style={s.wi} />
-        <div>{info.reason === "seed-admin"
-          ? "The primary admin cannot connect an AI application. Sign in as a dedicated user."
-          : "MCP is not enabled for your account. Ask your administrator to give you the MCP Access role, then try again."}</div></div>
+        <div>MCP is not enabled for your account. Ask your administrator to give you the MCP Access role, then try again.</div></div>
       : <>
         <div style={s.points}>
           <div style={s.point}><MdShield aria-hidden style={s.pi} /><span>It can <strong>look things up</strong> in the companies you choose below, with the same limits as your own login.{scopes.length === 1 ? " It cannot change anything." : " It can also do the extra things you tick, and each change is shown to you to approve first."}</span></div>
@@ -76,13 +76,14 @@ export default function McpConnectPage() {
             <span><strong>{SCOPE_INFO[k].label}</strong><span style={s.scopeHelp}>{SCOPE_INFO[k].help}</span></span></label>)}</div>
         </>}
         <label style={s.label}>Companies it may reach</label>
-        <div style={s.checks}>{info.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
-          <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>
+        {info.canUseAllCompanies && <AllCompaniesOption checked={all} onChange={setAll} />}
+        {!all && <div style={s.checks}>{info.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
+          <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>}
         {error && <div role="alert" style={s.alert}>{error}</div>}
         <p style={s.hint}>Only approve if you just started this from {info.clientName}. Signed in as you; not you? <Link to="/profile">Switch account from your profile</Link>.</p>
         <div style={s.foot}>
           <button style={s.ghost} disabled={busy} onClick={() => send(false)}>Cancel</button>
-          <button style={{ ...s.primary, opacity: picked.length && !busy ? 1 : 0.55 }} disabled={!picked.length || busy} onClick={() => send(true)}>Approve and connect</button>
+          <button style={{ ...s.primary, opacity: (all || picked.length) && !busy ? 1 : 0.55 }} disabled={!(all || picked.length) || busy} onClick={() => send(true)}>Approve and connect</button>
         </div>
       </>}
     </div>
