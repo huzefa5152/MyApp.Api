@@ -238,11 +238,10 @@ namespace MyApp.Api.Controllers
                 return NotFound(new { message = "User not found" });
 
             // Prevent self-deletion
-            var currentUsername = User.FindFirstValue(ClaimTypes.Name);
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound(new { message = "User not found" });
 
-            if (user.Username == currentUsername)
+            if (user.Id == CurrentUserId)
                 return BadRequest(new { message = "You cannot delete your own account" });
 
             // Re-parent whatever this account created to its own parent so

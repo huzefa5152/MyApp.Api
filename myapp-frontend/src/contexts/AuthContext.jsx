@@ -1,6 +1,7 @@
 // src/contexts/AuthContext.jsx
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { sameSession } from "../utils/sessionIdentity";
 import { loginApi, getCurrentUser, logoutApi } from "../api/authApi";
 
 const AuthContext = createContext(null);
@@ -15,6 +16,7 @@ export function AuthProvider({ children }) {
   // (user-{id}.{ext}), so without this the cached copy is shown forever.
   const [avatarVersion, setAvatarVersion] = useState(() => Date.now());
   const navigate = useNavigate();
+  const loginAttempt = useRef(0);
 
   // On mount: validate existing token via /auth/me.
   //
@@ -33,13 +35,21 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    getCurrentUser({ silent: true })
+    let cancelled = false;
+    let retryTimer;
+    const probe = () => { retryTimer = null; return getCurrentUser({ silent: true })
       .then((res) => {
+        if (cancelled) return;
         setUser(res.data);
-        setToken(storedToken);
+        setToken(localStorage.getItem("token"));
         setAvatarVersion(Date.now());
       })
-      .catch(() => {
+      .catch((error) => {
+        if (cancelled) return;
+        if (error.response?.status !== 401 || (error.config?.headers?.Authorization && error.config.headers.Authorization !== `Bearer ${localStorage.getItem("token")}`)) {
+          if (!cancelled) retryTimer = setTimeout(probe, 5000);
+          return;
+        }
         setUser(null);
         setToken(null);
         localStorage.removeItem("token");
@@ -65,15 +75,41 @@ export function AuthProvider({ children }) {
         } catch { /* private mode — non-fatal */ }
       })
       .finally(() => {
-        setLoading(false);
-      });
+        if (!retryTimer && !cancelled) setLoading(false);
+      }); };
+    probe();
+    return () => { cancelled = true; clearTimeout(retryTimer); };
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const keepAlive = () => { if (document.visibilityState === "visible" && navigator.onLine !== false) getCurrentUser().catch(() => {}); };
+    const timer = setInterval(keepAlive, 60 * 1000);
+    window.addEventListener("focus", keepAlive);
+    return () => { clearInterval(timer); window.removeEventListener("focus", keepAlive); };
+  }, [token]);
+
+  useEffect(() => {
+    const storageChanged = event => {
+      if (event.key === "token" && !sameSession(event.oldValue, event.newValue)) window.location.reload();
+    };
+    window.addEventListener("storage", storageChanged);
+    return () => window.removeEventListener("storage", storageChanged);
   }, []);
 
   const login = useCallback(async (username, password) => {
+    const attempt = ++loginAttempt.current;
+    const previousToken = localStorage.getItem("token");
     const res = await loginApi(username, password);
+    if (attempt !== loginAttempt.current) return;
     const { token: newToken, ...userData } = res.data;
 
     localStorage.setItem("token", newToken);
+    if (previousToken && !sameSession(previousToken, newToken)) {
+      localStorage.removeItem("selectedCompanyId");
+      window.location.reload();
+      return;
+    }
     setToken(newToken);
     setUser(userData);
 
@@ -81,6 +117,7 @@ export function AuthProvider({ children }) {
     // flags like isSeedAdmin are available immediately (without a page reload).
     try {
       const meRes = await getCurrentUser();
+      if (attempt !== loginAttempt.current) return;
       setUser(meRes.data);
       setAvatarVersion(Date.now());
     } catch {
@@ -89,6 +126,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    const signingOutToken = localStorage.getItem("token");
+    ++loginAttempt.current;
     try {
       // Keep the token until the request interceptor has sent it, so the
       // server can revoke the session and its private-image cookie.
@@ -96,6 +135,7 @@ export function AuthProvider({ children }) {
     } catch {
       // Local sign-out still works if the server cannot be reached.
     } finally {
+      if (!sameSession(signingOutToken, localStorage.getItem("token"))) return;
       localStorage.removeItem("token");
       setToken(null);
       setUser(null);

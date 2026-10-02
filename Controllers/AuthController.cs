@@ -14,6 +14,7 @@ namespace MyApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class AuthController : LoggedControllerBase
     {
         private readonly AppDbContext _context;
@@ -44,6 +45,43 @@ namespace MyApp.Api.Controllers
             _cache = cache;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
             _logger = logger;
+        }
+
+        private int CurrentUserId => int.TryParse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub),
+            out var id) ? id : 0;
+
+        private Task<Models.User?> CurrentUserAsync() => _context.Users.FirstOrDefaultAsync(u =>
+            u.Id == CurrentUserId && u.SecurityStamp == User.FindFirstValue("stamp"));
+
+        private async Task<Models.UserSession?> CurrentSessionAsync(Models.User user)
+        {
+            var sid = User.FindFirstValue("sid");
+            var jti = User.FindFirstValue(JwtRegisteredClaimNames.Jti);
+            if (sid == null && string.IsNullOrWhiteSpace(jti)) return null;
+            var id = sid ?? "legacy:" + jti;
+            var session = await _context.UserSessions.FirstOrDefaultAsync(s => s.Id == id);
+            if (session == null && sid == null)
+            {
+                var now = DateTime.UtcNow;
+                session = new Models.UserSession {
+                    Id = id, UserId = user.Id, SecurityStamp = user.SecurityStamp,
+                    CreatedAt = now, LastSeenAt = now, ExpiresAt = now.AddDays(30),
+                    TokenExpiresAt = now.AddHours(_configuration.GetValue<double>("Jwt:SessionExpirationHours", 168)),
+                    UserAgent = Request.Headers.UserAgent.ToString()[..Math.Min(Request.Headers.UserAgent.ToString().Length, 512)],
+                    IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? ""
+                };
+                _context.UserSessions.Add(session);
+                try { await _context.SaveChangesAsync(); }
+                catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sql && sql.Number is 2601 or 2627)
+                {
+                    // Concurrent tabs upgrading one legacy token share its durable session.
+                    _context.Entry(session).State = EntityState.Detached;
+                    session = await _context.UserSessions.FirstOrDefaultAsync(s => s.Id == id);
+                }
+            }
+            return session is { IsRevoked: false } && session.UserId == user.Id
+                && session.SecurityStamp == user.SecurityStamp && session.ExpiresAt > DateTime.UtcNow ? session : null;
         }
 
         [HttpPost("login")]
@@ -81,43 +119,42 @@ namespace MyApp.Api.Controllers
 
             if (!BCrypt.Net.BCrypt.Verify(dto.Password ?? string.Empty, user.PasswordHash))
             {
-                // An expired lock starts a fresh counting window — without
-                // this, the first failure after expiry would re-lock at once.
-                if (user.LockoutUntil.HasValue)
-                {
-                    user.FailedLoginAttempts = 0;
-                    user.LockoutUntil = null;
-                }
-
-                user.FailedLoginAttempts++;
-                user.LastFailedLogin = now;
-
-                if (user.FailedLoginAttempts >= MaxFailedLoginAttempts)
-                {
-                    user.LockoutUntil = now.Add(LockoutDuration);
-                    _logger.LogWarning("Account locked after {Attempts} consecutive failed logins: UserId={UserId} until {LockoutUntil:u}",
-                        user.FailedLoginAttempts, user.Id, user.LockoutUntil.Value);
-                }
-
-                await _context.SaveChangesAsync();
+                // Count failures atomically: concurrent devices must not overwrite one another's increment.
+                await _context.Users.Where(u => u.Id == user.Id &&
+                    (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(u => u.FailedLoginAttempts, u => u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1)
+                        .SetProperty(u => u.LastFailedLogin, now)
+                        .SetProperty(u => u.LockoutUntil, u =>
+                            (u.LockoutUntil.HasValue ? 1 : u.FailedLoginAttempts + 1) >= MaxFailedLoginAttempts
+                                ? (DateTime?)now.Add(LockoutDuration) : null));
 
                 _logger.LogWarning("Failed login attempt for username={Username} from {Ip}",
                     dto.Username, HttpContext.Connection.RemoteIpAddress);
                 return Unauthorized(new { message = "Invalid username or password" });
             }
 
-            // Successful authentication — clear any failure state.
-            if (user.FailedLoginAttempts != 0 || user.LockoutUntil.HasValue || user.LastFailedLogin.HasValue)
-            {
-                user.FailedLoginAttempts = 0;
-                user.LockoutUntil = null;
-                user.LastFailedLogin = null;
-                await _context.SaveChangesAsync();
-            }
+            // Clear failures only while the verified credentials and lock state still match.
+            // A concurrent password reset or newly activated lock cannot issue a fresh session.
+            var cleared = await _context.Users.Where(u => u.Id == user.Id && u.SecurityStamp == user.SecurityStamp
+                && u.PasswordHash == user.PasswordHash && (!u.LockoutUntil.HasValue || u.LockoutUntil <= now))
+                .ExecuteUpdateAsync(update => update.SetProperty(u => u.FailedLoginAttempts, 0)
+                    .SetProperty(u => u.LockoutUntil, (DateTime?)null).SetProperty(u => u.LastFailedLogin, (DateTime?)null));
+            if (cleared == 0) return Unauthorized(new { message = "Sign-in could not be completed. Please try again." });
 
-            var token = GenerateJwtToken(user);
+            var session = new Models.UserSession
+            {
+                Id = Guid.NewGuid().ToString("N"), UserId = user.Id, SecurityStamp = user.SecurityStamp ?? "",
+                ExpiresAt = DateTime.UtcNow.AddDays(30), CreatedAt = now, LastSeenAt = now,
+                TokenExpiresAt = now.AddHours(_configuration.GetValue<double>("Jwt:SessionExpirationHours", 168)),
+                UserAgent = Request.Headers.UserAgent.ToString()[..Math.Min(Request.Headers.UserAgent.ToString().Length, 512)],
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? ""
+            };
+            _context.UserSessions.Add(session);
+            await _context.SaveChangesAsync();
+            var token = GenerateJwtToken(user, session.Id);
             var expiration = DateTime.UtcNow.AddHours(
-                double.Parse(_configuration["Jwt:ExpirationHours"] ?? "8"));
+                _configuration.GetValue<double>("Jwt:SessionExpirationHours", 168));
             SetImageSession(token, expiration);
 
             _logger.LogInformation("User {UserId} ({Username}) signed in", user.Id, user.Username);
@@ -135,18 +172,16 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<ActionResult> GetCurrentUser()
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == username);
+            var user = await CurrentUserAsync();
 
             if (user == null)
-                return NotFound();
+                return Unauthorized();
 
             // Existing signed-in tabs gain image access without another login.
             var bearer = Request.Headers.Authorization.ToString();
             if (bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                 SetImageSession(bearer[7..], DateTime.UtcNow.AddHours(
-                    double.Parse(_configuration["Jwt:ExpirationHours"] ?? "8")));
+                    _configuration.GetValue<double>("Jwt:SessionExpirationHours", 168)));
 
             return Ok(new
             {
@@ -174,14 +209,13 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<ActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             // Check if new username is taken by another user
-            if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username != user.Username)
+            if (!string.IsNullOrWhiteSpace(dto.Username) && dto.Username.Trim() != user.Username)
             {
-                var exists = await _context.Users.AnyAsync(u => u.Username == dto.Username);
+                var exists = await _context.Users.AnyAsync(u => u.Id != user.Id && u.Username == dto.Username.Trim());
                 if (exists)
                     return BadRequest(new { message = "Username is already taken" });
                 user.Username = dto.Username.Trim();
@@ -190,10 +224,17 @@ namespace MyApp.Api.Controllers
             if (!string.IsNullOrWhiteSpace(dto.FullName))
                 user.FullName = dto.FullName.Trim();
 
+            var session = await CurrentSessionAsync(user);
+            if (session == null) return Unauthorized();
             await _context.SaveChangesAsync();
 
-            // Return new token with updated claims
-            var newToken = GenerateJwtToken(user);
+            // Return new token with updated claims, preserving this device identity.
+            var sessionId = session.Id;
+            var newToken = GenerateJwtToken(user, sessionId);
+            if (sessionId != null)
+                await _context.UserSessions.Where(s => s.Id == sessionId && !s.IsRevoked)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.TokenExpiresAt,
+                        DateTime.UtcNow.AddHours(_configuration.GetValue<double>("Jwt:SessionExpirationHours", 168))));
             return Ok(new
             {
                 token = newToken,
@@ -210,9 +251,8 @@ namespace MyApp.Api.Controllers
         [EnableRateLimiting("passwordChange")]
         public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
                 return BadRequest(new { message = "Current password is incorrect" });
@@ -224,12 +264,13 @@ namespace MyApp.Api.Controllers
             if (policyError != null)
                 return BadRequest(new { message = policyError });
 
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
-            // Bump the security stamp so every JWT issued under the old
-            // password (including the one used to authenticate THIS
-            // request) stops working on the next request. Audit C-6.
-            user.SecurityStamp = Guid.NewGuid().ToString("N");
-            await _context.SaveChangesAsync();
+            var newHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            var newStamp = Guid.NewGuid().ToString("N");
+            // A concurrent password reset must not be overwritten using the old credentials.
+            var changed = await _context.Users.Where(u => u.Id == user.Id && u.SecurityStamp == user.SecurityStamp
+                && u.PasswordHash == user.PasswordHash).ExecuteUpdateAsync(update =>
+                    update.SetProperty(u => u.PasswordHash, newHash).SetProperty(u => u.SecurityStamp, newStamp));
+            if (changed == 0) return Unauthorized();
             _cache.Remove($"user-stamp:{user.Id}");
 
             return Ok(new { message = "Password changed successfully" });
@@ -270,9 +311,8 @@ namespace MyApp.Api.Controllers
 
             var ext = Path.GetExtension(Path.GetFileName(file.FileName ?? "")).ToLowerInvariant();
 
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             // Save to data/images/avatars/ (persistent, outside wwwroot)
             var avatarsDir = Path.Combine(Directory.GetCurrentDirectory(), "data", "images", "avatars");
@@ -303,9 +343,8 @@ namespace MyApp.Api.Controllers
         [Authorize]
         public async Task<ActionResult> RemoveAvatar()
         {
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
 
             if (!string.IsNullOrEmpty(user.AvatarPath))
             {
@@ -323,13 +362,13 @@ namespace MyApp.Api.Controllers
             return Ok(new { message = "Avatar removed" });
         }
 
-        private string GenerateJwtToken(Models.User user)
+        private string GenerateJwtToken(Models.User user, string? sessionId = null)
         {
             var key = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            var claims = new[]
+            var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Name, user.Username),
                 new Claim(ClaimTypes.Role, user.Role),
@@ -340,12 +379,14 @@ namespace MyApp.Api.Controllers
                 new Claim("stamp", user.SecurityStamp ?? "")
             };
 
+            if (sessionId != null) claims.Add(new Claim("sid", sessionId));
+
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
                 claims: claims,
                 expires: DateTime.UtcNow.AddHours(
-                    double.Parse(_configuration["Jwt:ExpirationHours"] ?? "8")),
+                    _configuration.GetValue<double>("Jwt:SessionExpirationHours", 168)),
                 signingCredentials: credentials
             );
 
@@ -358,27 +399,35 @@ namespace MyApp.Api.Controllers
                     || !HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment(),
                     SameSite = SameSiteMode.Strict, Path = "/data", Expires = expires });
 
-        /// <summary>
-        /// Server-side logout — bumps the SecurityStamp so every token
-        /// previously issued for this user (including the one used to
-        /// hit this endpoint) stops authenticating on the next request.
-        /// Audit C-6 (2026-05-13).
-        /// </summary>
+        [HttpPost("refresh")]
+        [Authorize]
+        public async Task<IActionResult> Refresh()
+        {
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
+            var session = await CurrentSessionAsync(user);
+            if (session == null) return Unauthorized();
+            var id = session.Id;
+            var token = GenerateJwtToken(user, id);
+            var expiration = DateTime.UtcNow.AddHours(_configuration.GetValue<double>("Jwt:SessionExpirationHours", 168));
+            await _context.UserSessions.Where(s => s.Id == id && !s.IsRevoked)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.TokenExpiresAt, expiration));
+            SetImageSession(token, expiration);
+            return Ok(new { token, expiration });
+        }
+
         [HttpPost("logout")]
         [Authorize]
         public async Task<IActionResult> Logout()
         {
             Response.Cookies.Delete(MyApp.Api.Middleware.PrivateDataFilesMiddleware.CookieName,
                 new CookieOptions { Path = "/data" });
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user != null)
-            {
-                user.SecurityStamp = Guid.NewGuid().ToString("N");
-                await _context.SaveChangesAsync();
-                _cache.Remove($"user-stamp:{user.Id}");
-                _logger.LogInformation("User {UserId} signed out — security stamp rotated", user.Id);
-            }
+            var user = await CurrentUserAsync();
+            if (user == null) return Unauthorized();
+            var session = await CurrentSessionAsync(user);
+            if (session == null) return Unauthorized();
+            await _context.UserSessions.Where(s => s.Id == session.Id && s.UserId == CurrentUserId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRevoked, true).SetProperty(x => x.RevokedAt, DateTime.UtcNow));
             return Ok(new { message = "Signed out" });
         }
     }

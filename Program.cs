@@ -229,7 +229,30 @@ builder.Services.AddAuthentication(options =>
             if (currentStamp == null || !string.Equals(currentStamp, stamp, StringComparison.Ordinal))
             {
                 context.Fail("Token has been revoked");
+                return;
             }
+            var explicitSessionId = principal.FindFirstValue("sid");
+            var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
+            if (explicitSessionId == null && string.IsNullOrWhiteSpace(jti))
+            {
+                context.Fail("Missing session identity");
+                return;
+            }
+            var sessionId = explicitSessionId ?? "legacy:" + jti;
+            var now = DateTime.UtcNow;
+            var session = await db.UserSessions.AsNoTracking().Where(s => s.Id == sessionId)
+                .Select(s => new { s.UserId, s.SecurityStamp, s.IsRevoked, s.ExpiresAt, s.LastSeenAt }).FirstOrDefaultAsync();
+            if (session == null && explicitSessionId != null || session != null &&
+                (session.UserId != userId || session.SecurityStamp != stamp || session.IsRevoked || session.ExpiresAt <= now))
+            {
+                context.Fail("Session expired or revoked");
+                return;
+            }
+            // Older signed tokens remain valid until renewed, unless their token-specific session was revoked.
+            // At most one activity write per minute; no document identifiers or request paths are stored.
+            if (session != null && session.LastSeenAt < now.AddMinutes(-1))
+                await db.UserSessions.Where(s => s.Id == sessionId && s.UserId == userId && !s.IsRevoked && s.LastSeenAt < now.AddMinutes(-1))
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastSeenAt, now));
         }
     };
 });

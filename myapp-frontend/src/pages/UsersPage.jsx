@@ -1,3 +1,4 @@
+import UserSessionsPanel from "../Components/UserSessionsPanel";
 import { useState, useEffect } from "react";
 import {
   MdPeople,
@@ -48,6 +49,7 @@ export default function UsersPage() {
   const canUpdate = has("users.manage.update");
   const canDelete = has("users.manage.delete");
   const canAssignRoles = has("rbac.userroles.assign");
+  const [showSessions, setShowSessions] = useState(false);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -275,6 +277,11 @@ export default function UsersPage() {
           </button>
         )}
       </div>
+
+      {currentUser?.isSeedAdmin === true && <div style={{ marginBottom: "1rem" }}>
+        <button style={{ minHeight: 44 }} onClick={() => setShowSessions(s => !s)}>{showSessions ? "Hide sessions & devices" : "Sessions & devices"}</button>
+      </div>}
+      {currentUser?.isSeedAdmin === true && showSessions && <UserSessionsPanel />}
 
       {/* Search */}
       <div style={styles.searchWrap}>

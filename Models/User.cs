@@ -13,7 +13,7 @@ namespace MyApp.Api.Models
         // Token-revocation marker. Audit C-6 (2026-05-13): bumping this
         // value invalidates every JWT previously issued for this user on
         // the next request. The token validator compares the embedded
-        // "stamp" claim to this column; mismatch → 401. Bump on logout,
+        // "stamp" claim to this column; mismatch → 401. Bump on signing out all devices,
         // password change, and role change.
         public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
 

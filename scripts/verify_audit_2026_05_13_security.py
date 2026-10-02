@@ -146,11 +146,13 @@ def check_phase_b() -> None:
     record(phase, "C6 JWT pipeline validates 'stamp' claim against DB", ok, where)
 
     ok, where = grep(["Controllers/AuthController.cs"], r"\[HttpPost\(\"logout\"\)\]")
-    record(phase, "C6 /auth/logout exists (rotates stamp)", ok, where)
+    record(phase, "C6 authenticated device logout exists", ok, where)
 
-    ok, where = grep(["Controllers/AuthController.cs"],
-        r"user\.SecurityStamp = Guid\.NewGuid\(\)\.ToString\(\"N\"\)")
-    record(phase, "C6 ChangePassword and Logout bump SecurityStamp", ok, where)
+    password_ok, _ = grep(["Controllers/AuthController.cs"],
+        r"ChangePassword\(.*?SetProperty\(u => u.SecurityStamp, newStamp\)", flags=re.DOTALL)
+    logout_ok, where = grep(["Controllers/AuthController.cs"],
+        r"Logout\(.*?CurrentSessionAsync\(user\).*?s.Id == session.Id && s.UserId == CurrentUserId.*?SetProperty\(x => x.IsRevoked, true\)", flags=re.DOTALL)
+    record(phase, "C6 password revokes all devices; logout revokes current device", password_ok and logout_ok, where)
 
     # H10 — ClockSkew
     ok, where = grep(["Program.cs"], r"ClockSkew = TimeSpan\.FromSeconds\(30\)")

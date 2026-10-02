@@ -1,5 +1,6 @@
 // src/api/httpClient.js
 import axios from "axios";
+import { sameSession } from "../utils/sessionIdentity";
 import { notify } from "../utils/notify";
 
 function getApiBase() {
@@ -23,15 +24,38 @@ const httpClient = axios.create({
   withCredentials: false,
 });
 
-// Request interceptor: attach Bearer token from localStorage
+// Renew valid device sessions before expiry; never retry document writes.
+let renewal = null;
+function tokenExpiry(token) {
+  try { return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp * 1000; }
+  catch { return 0; }
+}
+async function renewSession(token) {
+  if (!token || tokenExpiry(token) - Date.now() > 60 * 60 * 1000 || tokenExpiry(token) <= Date.now()) return;
+  if (!renewal) {
+    renewal = axios.post(`${getApiBase()}/auth/refresh`, {}, {
+      headers: { Authorization: `Bearer ${token}` }, timeout: 10000,
+    }).then(({ data }) => {
+      if (localStorage.getItem("token") === token) localStorage.setItem("token", data.token);
+    }).catch(() => { /* Original token remains valid until its actual expiry. */ })
+      .finally(() => { renewal = null; });
+  }
+  await renewal;
+}
+// Attach the latest token after renewal, so parallel requests share one renewal.
 httpClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
+  async (config) => {
+    const originalToken = localStorage.getItem("token");
     const companyId = localStorage.getItem("selectedCompanyId");
+    const isLogin = /\/auth\/login$/.test(config.url || "");
+    if (!/\/auth\/(login|logout|password|refresh)$/.test(config.url || ""))
+      await renewSession(originalToken);
+    const token = localStorage.getItem("token");
+    if (!isLogin && !sameSession(originalToken, token))
+      throw new axios.CanceledError("Session changed while the request was waiting.");
     if (companyId) config.headers["X-Company-Id"] = companyId;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    if (token && !isLogin) config.headers.Authorization = `Bearer ${token}`;
+    if (isLogin) delete config.headers.Authorization;
     return config;
   },
   (error) => Promise.reject(error)
@@ -92,8 +116,17 @@ function ensureMessage(data) {
 
 // Response interceptor: normalize error bodies + handle a few global cases
 httpClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const bearer = response.config?.headers?.Authorization;
+    if (bearer?.startsWith("Bearer ") && !sameSession(bearer.slice(7), localStorage.getItem("token")))
+      return Promise.reject(new axios.CanceledError("Response belongs to a previous session."));
+    return response;
+  },
   (error) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
+    const bearer = error.config?.headers?.Authorization;
+    if (bearer?.startsWith("Bearer ") && !sameSession(bearer.slice(7), localStorage.getItem("token")))
+      return Promise.reject(new axios.CanceledError("Error belongs to a previous session."));
     const status = error.response?.status;
     if (error.response?.data) ensureMessage(error.response.data);
 
@@ -124,7 +157,8 @@ httpClient.interceptors.response.use(
       return p;
     })();
 
-    if (status === 401 && !routerHere.startsWith("/login") && !skipAuthRedirect) {
+    if (status === 401 && !routerHere.startsWith("/login") && !skipAuthRedirect
+        && error.config?.headers?.Authorization === `Bearer ${localStorage.getItem("token")}`) {
       // Preserve where the operator was so re-login lands them back
       // there instead of dropping to /dashboard. Captured via sessionStorage
       // (survives the hard reload) — query-string would work too but a

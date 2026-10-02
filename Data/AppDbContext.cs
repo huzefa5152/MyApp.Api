@@ -74,6 +74,8 @@ namespace MyApp.Api.Data
             _catalogHttp = http;
         }
 
+        public DbSet<UserSession> UserSessions { get; set; }
+
         public DbSet<Company> Companies { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
         public DbSet<DeliveryItem> DeliveryItems { get; set; }
@@ -168,6 +170,11 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<UserSession>().Property(s => s.SecurityStamp).HasMaxLength(64);
+            modelBuilder.Entity<UserSession>().Property(s => s.UserAgent).HasMaxLength(512);
+            modelBuilder.Entity<UserSession>().Property(s => s.IpAddress).HasMaxLength(64);
+            modelBuilder.Entity<UserSession>().HasIndex(s => new { s.UserId, s.IsRevoked, s.ExpiresAt });
+            modelBuilder.Entity<UserSession>().HasIndex(s => s.LastSeenAt);
             // Audit C-1 (2026-05-13): transparent encryption for the
             // PRAL bearer token. Reads decrypt the stored payload,
             // writes encrypt the operator-typed value. When DI didn't
