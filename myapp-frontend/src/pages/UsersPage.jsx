@@ -1,4 +1,5 @@
 import UserSessionsPanel from "../Components/UserSessionsPanel";
+import McpAgentsPanel from "../Components/McpAgentsPanel";
 import { useState, useEffect } from "react";
 import {
   MdPeople,
@@ -14,6 +15,7 @@ import {
   MdShield,
   MdAdminPanelSettings,
   MdDevices,
+  MdSmartToy,
 } from "react-icons/md";
 import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
@@ -283,7 +285,7 @@ export default function UsersPage() {
       {/* Tabs — Sessions & devices exists for the primary admin only */}
       {isSeedAdmin && (
         <div role="tablist" aria-label="User management sections" style={styles.tabs}>
-          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices]].map(([key, label, Icon]) => (
+          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices], ["agents", "AI agents", MdSmartToy]].map(([key, label, Icon]) => (
             <button key={key} role="tab" id={`users-tab-${key}`} aria-selected={tab === key} aria-controls={`users-panel-${key}`}
               style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
               <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
@@ -295,8 +297,11 @@ export default function UsersPage() {
       {isSeedAdmin && tab === "sessions" && (
         <div role="tabpanel" id="users-panel-sessions" aria-labelledby="users-tab-sessions"><UserSessionsPanel /></div>
       )}
+      {isSeedAdmin && tab === "agents" && (
+        <div role="tabpanel" id="users-panel-agents" aria-labelledby="users-tab-agents"><McpAgentsPanel /></div>
+      )}
 
-      <div role="tabpanel" id="users-panel-users" hidden={isSeedAdmin && tab === "sessions"}>
+      <div role="tabpanel" id="users-panel-users" hidden={isSeedAdmin && tab !== "users"}>
       {/* Search */}
       <div style={styles.searchWrap}>
         <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />

@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -32,7 +34,7 @@ namespace MyApp.Api.Controllers
     /// come from operators and customers.
     /// </summary>
     [ApiController]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme + "," + McpAgentAuthHandler.Scheme)]
     [Route("mcp")]
     [EnableRateLimiting("mcp")]
     public class McpController : ControllerBase
@@ -51,12 +53,14 @@ namespace MyApp.Api.Controllers
         private readonly IInvoiceService _invoices;
         private readonly ISalesQuoteService _quotes;
         private readonly AppDbContext _context;
+        private readonly ISensitiveDataRedactor _redactor;
         private readonly ILogger<McpController> _logger;
 
         public McpController(ICompanyAccessGuard access, IPermissionService permissions, ICompanyService companies,
             IClientService clients, IInvoiceService invoices, ISalesQuoteService quotes, AppDbContext context,
-            ILogger<McpController> logger)
+            ISensitiveDataRedactor redactor, ILogger<McpController> logger)
         {
+            _redactor = redactor;
             _access = access;
             _permissions = permissions;
             _companies = companies;
@@ -71,6 +75,9 @@ namespace MyApp.Api.Controllers
             int.TryParse(
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
                 out var id) ? id : 0;
+
+        /// <summary>The agent credential behind this call, or null for an ordinary login token.</summary>
+        private McpAgentToken? Agent => HttpContext.Items[McpAgentAuthHandler.ItemKey] as McpAgentToken;
 
         /// <summary>A failure whose message is safe to show to the agent.</summary>
         private sealed class ToolError(string message) : Exception(message);
@@ -190,41 +197,55 @@ namespace MyApp.Api.Controllers
                 return Rpc(id, error: (-32602, "Tool name is required."));
             var name = n.GetString()!;
             var args = p.TryGetProperty("arguments", out var a) && a.ValueKind == JsonValueKind.Object ? a : default;
-            if (!ToolNames.Contains(name))
-                return Rpc(id, error: (-32602, "Unknown tool."));
 
+            var watch = Stopwatch.StartNew();
+            string outcome = "ok", detail = "";
+            IActionResult result;
             try
             {
-                object data = name switch
+                if (!ToolNames.Contains(name))
                 {
-                    "list_companies" => await ListCompaniesAsync(),
-                    "search_clients" => await SearchClientsAsync(args),
-                    "search_invoices" => await SearchInvoicesAsync(args),
-                    "get_invoice" => await GetInvoiceAsync(args),
-                    "get_stock" => await GetStockAsync(args),
-                    "search_quotes" => await SearchQuotesAsync(args),
-                    _ => throw new ToolError("Unknown tool."),
-                };
-                _logger.LogInformation("MCP tool {Tool} by user {UserId}", name, CurrentUserId);
-                return Rpc(id, result: new
+                    outcome = "denied"; detail = "Unknown tool.";
+                    result = Rpc(id, error: (-32602, "Unknown tool."));
+                }
+                else
                 {
-                    content = new[] { new { type = "text", text = JsonSerializer.Serialize(data, Json) } },
-                    isError = false,
-                });
+                    RequireScope("read");
+                    object data = name switch
+                    {
+                        "list_companies" => await ListCompaniesAsync(),
+                        "search_clients" => await SearchClientsAsync(args),
+                        "search_invoices" => await SearchInvoicesAsync(args),
+                        "get_invoice" => await GetInvoiceAsync(args),
+                        "get_stock" => await GetStockAsync(args),
+                        "search_quotes" => await SearchQuotesAsync(args),
+                        _ => throw new ToolError("Unknown tool."),
+                    };
+                    result = Rpc(id, result: new
+                    {
+                        content = new[] { new { type = "text", text = JsonSerializer.Serialize(data, Json) } },
+                        isError = false,
+                    });
+                }
             }
             catch (ToolError ex)
             {
-                return ToolFailure(id, ex.Message);
+                outcome = "denied"; detail = ex.Message;
+                result = ToolFailure(id, ex.Message);
             }
             catch (UnauthorizedAccessException)
             {
-                return ToolFailure(id, "Resource unavailable or access denied.");
+                outcome = "denied"; detail = "Resource unavailable or access denied.";
+                result = ToolFailure(id, "Resource unavailable or access denied.");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "MCP tool {Tool} failed for user {UserId}", name, CurrentUserId);
-                return ToolFailure(id, "The tool failed. Try a narrower request.");
+                outcome = "error"; detail = "The tool failed.";
+                result = ToolFailure(id, "The tool failed. Try a narrower request.");
             }
+            await RecordActivityAsync(name, args, outcome, detail, watch.ElapsedMilliseconds);
+            return result;
         }
 
         private IActionResult ToolFailure(object? id, string message) => Rpc(id, result: new
@@ -232,6 +253,45 @@ namespace MyApp.Api.Controllers
             content = new[] { new { type = "text", text = message } },
             isError = true,
         });
+
+        private static string Trunc(string? s, int max) => string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..max];
+
+        /// <summary>
+        /// Append one row to the activity log for every tools/call — allowed, refused or
+        /// failed. A logging failure never changes the tool's answer, but is itself logged.
+        /// </summary>
+        private async Task RecordActivityAsync(string tool, JsonElement args, string outcome, string detail, long ms)
+        {
+            try
+            {
+                var agent = Agent;
+                var username = User.Identity?.Name;
+                if (string.IsNullOrEmpty(username))
+                    username = await _context.Users.AsNoTracking().Where(u => u.Id == CurrentUserId).Select(u => u.Username).FirstOrDefaultAsync() ?? "";
+                _context.McpActivities.Add(new McpActivity
+                {
+                    At = DateTime.UtcNow,
+                    AgentTokenId = agent?.Id,
+                    AgentName = agent?.Name ?? "",
+                    AuthKind = agent != null ? "agent" : "login",
+                    UserId = CurrentUserId,
+                    Username = Trunc(username, 100),
+                    Tool = Trunc(tool, 60),
+                    CompanyId = IntArg(args, "companyId"),
+                    Arguments = Trunc(_redactor.Scrub(args.ValueKind == JsonValueKind.Object ? args.GetRawText() : ""), 2000),
+                    Outcome = outcome,
+                    Detail = Trunc(detail, 300),
+                    DurationMs = (int)Math.Min(ms, int.MaxValue),
+                    IpAddress = Trunc(HttpContext.Connection.RemoteIpAddress?.ToString(), 64),
+                    CorrelationId = Trunc(HttpContext.Items["CorrelationId"] as string, 64),
+                });
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "MCP activity could not be recorded for user {UserId}", CurrentUserId);
+            }
+        }
 
         // ── guards ─────────────────────────────────────────────────────────
 
@@ -246,9 +306,18 @@ namespace MyApp.Api.Controllers
         private async Task<int> CompanyArg(JsonElement args)
         {
             var companyId = IntArg(args, "companyId") ?? throw new ToolError("companyId is required.");
-            if (companyId <= 0 || !await _access.HasAccessAsync(CurrentUserId, companyId))
+            // An agent token narrows its user's access to the companies named on it; the stricter side wins.
+            if (companyId <= 0 || !AgentAllows(companyId) || !await _access.HasAccessAsync(CurrentUserId, companyId))
                 throw new ToolError("Resource unavailable or access denied.");
             return companyId;
+        }
+
+        private bool AgentAllows(int companyId) => Agent == null || Agent.CompanyIdList().Contains(companyId);
+
+        private void RequireScope(string scope)
+        {
+            if (Agent != null && !Agent.HasScope(scope))
+                throw new ToolError("This agent token is not allowed to use this tool.");
         }
 
         private static int? IntArg(JsonElement args, string name) =>
@@ -281,7 +350,7 @@ namespace MyApp.Api.Controllers
         {
             var allowed = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
             var rows = await _companies.GetAllAsync();
-            return new { companies = rows.Where(c => allowed.Contains(c.Id)).Select(c => new { id = c.Id, name = c.Name }) };
+            return new { companies = rows.Where(c => allowed.Contains(c.Id) && AgentAllows(c.Id)).Select(c => new { id = c.Id, name = c.Name }) };
         }
 
         // GET /api/clients/company/{id} — clients.manage.view.

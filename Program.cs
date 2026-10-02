@@ -192,6 +192,14 @@ builder.Services.AddAuthentication(options =>
     {
         OnMessageReceived = context =>
         {
+            // "Bearer tmcp_..." is an MCP agent credential, not a JWT. Step aside:
+            // the McpAgent scheme (used only by /mcp) owns it, so on every other
+            // route an agent token simply fails to authenticate.
+            if (McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString()))
+            {
+                context.NoResult();
+                return Task.CompletedTask;
+            }
             // Read-only image requests cannot attach a Bearer header from <img>.
             // This HttpOnly cookie is deliberately not accepted by any API route.
             if (PrivateDataFilesMiddleware.IsImagePath(context.Request.Path)
@@ -255,7 +263,9 @@ builder.Services.AddAuthentication(options =>
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.LastSeenAt, now));
         }
     };
-});
+})
+// Per-agent MCP credentials. Referenced only by [Authorize(AuthenticationSchemes = ...)] on /mcp.
+.AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, McpAgentAuthHandler>(McpAgentAuthHandler.Scheme, null);
 
 // Rate limiter — applied selectively to /api/auth/login + the
 // expensive endpoints flagged by audit H-6 (2026-05-13). Other

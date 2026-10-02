@@ -75,6 +75,8 @@ namespace MyApp.Api.Data
         }
 
         public DbSet<UserSession> UserSessions { get; set; }
+        public DbSet<McpAgentToken> McpAgentTokens { get; set; }
+        public DbSet<McpActivity> McpActivities { get; set; }
 
         public DbSet<Company> Companies { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
@@ -175,6 +177,35 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<UserSession>().Property(s => s.IpAddress).HasMaxLength(64);
             modelBuilder.Entity<UserSession>().HasIndex(s => new { s.UserId, s.IsRevoked, s.ExpiresAt });
             modelBuilder.Entity<UserSession>().HasIndex(s => s.LastSeenAt);
+            // Hosted MCP: per-agent credentials (hash only) and the append-only
+            // activity record. Activities carry no foreign keys on purpose.
+            modelBuilder.Entity<McpAgentToken>(e =>
+            {
+                e.Property(t => t.Name).HasMaxLength(100);
+                e.Property(t => t.TokenHash).HasMaxLength(64);
+                e.Property(t => t.Hint).HasMaxLength(16);
+                e.Property(t => t.CompanyIds).HasMaxLength(400);
+                e.Property(t => t.Scopes).HasMaxLength(200);
+                e.HasIndex(t => t.TokenHash).IsUnique();
+                e.HasIndex(t => t.UserId);
+                e.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<McpActivity>(e =>
+            {
+                e.Property(a => a.AgentName).HasMaxLength(100);
+                e.Property(a => a.AuthKind).HasMaxLength(10);
+                e.Property(a => a.Username).HasMaxLength(100);
+                e.Property(a => a.Tool).HasMaxLength(60);
+                e.Property(a => a.Arguments).HasMaxLength(2000);
+                e.Property(a => a.Outcome).HasMaxLength(10);
+                e.Property(a => a.Detail).HasMaxLength(300);
+                e.Property(a => a.ResultRef).HasMaxLength(100);
+                e.Property(a => a.IpAddress).HasMaxLength(64);
+                e.Property(a => a.CorrelationId).HasMaxLength(64);
+                e.HasIndex(a => a.At);
+                e.HasIndex(a => new { a.CompanyId, a.At });
+                e.HasIndex(a => new { a.AgentTokenId, a.At });
+            });
             // Audit C-1 (2026-05-13): transparent encryption for the
             // PRAL bearer token. Reads decrypt the stored payload,
             // writes encrypt the operator-typed value. When DI didn't
