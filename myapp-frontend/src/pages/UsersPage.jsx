@@ -13,6 +13,7 @@ import {
   MdBadge,
   MdShield,
   MdAdminPanelSettings,
+  MdDevices,
 } from "react-icons/md";
 import { getUsers, createUser, updateUser, deleteUser } from "../api/usersApi";
 import { getRoles, getUserRoles, assignUserRoles } from "../api/rbacApi";
@@ -49,7 +50,8 @@ export default function UsersPage() {
   const canUpdate = has("users.manage.update");
   const canDelete = has("users.manage.delete");
   const canAssignRoles = has("rbac.userroles.assign");
-  const [showSessions, setShowSessions] = useState(false);
+  const isSeedAdmin = currentUser?.isSeedAdmin === true;
+  const [tab, setTab] = useState("users");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -278,11 +280,23 @@ export default function UsersPage() {
         )}
       </div>
 
-      {currentUser?.isSeedAdmin === true && <div style={{ marginBottom: "1rem" }}>
-        <button style={{ minHeight: 44 }} onClick={() => setShowSessions(s => !s)}>{showSessions ? "Hide sessions & devices" : "Sessions & devices"}</button>
-      </div>}
-      {currentUser?.isSeedAdmin === true && showSessions && <UserSessionsPanel />}
+      {/* Tabs — Sessions & devices exists for the primary admin only */}
+      {isSeedAdmin && (
+        <div role="tablist" aria-label="User management sections" style={styles.tabs}>
+          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices]].map(([key, label, Icon]) => (
+            <button key={key} role="tab" id={`users-tab-${key}`} aria-selected={tab === key} aria-controls={`users-panel-${key}`}
+              style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
+              <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
+            </button>
+          ))}
+        </div>
+      )}
 
+      {isSeedAdmin && tab === "sessions" && (
+        <div role="tabpanel" id="users-panel-sessions" aria-labelledby="users-tab-sessions"><UserSessionsPanel /></div>
+      )}
+
+      <div role="tabpanel" id="users-panel-users" hidden={isSeedAdmin && tab === "sessions"}>
       {/* Search */}
       <div style={styles.searchWrap}>
         <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
@@ -364,6 +378,7 @@ export default function UsersPage() {
       <p style={{ color: colors.textSecondary, fontSize: "0.85rem", marginTop: "1rem" }}>
         {filtered.length} user{filtered.length !== 1 ? "s" : ""} total
       </p>
+      </div>
 
       {/* ---- Create/Edit Modal ---- */}
       {showModal && (
@@ -664,6 +679,34 @@ const styles = {
     fontWeight: 600,
     fontSize: "0.9rem",
     cursor: "pointer",
+  },
+  tabs: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.4rem",
+    borderBottom: `1px solid ${colors.cardBorder}`,
+    marginBottom: "1.25rem",
+  },
+  tab: {
+    minHeight: 44,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.5rem 1.1rem",
+    background: "transparent",
+    color: colors.textSecondary,
+    border: "none",
+    borderBottom: "3px solid transparent",
+    borderRadius: "8px 8px 0 0",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "none",
+  },
+  tabActive: {
+    color: colors.blue,
+    borderBottomColor: colors.blue,
+    background: "rgba(13,71,161,0.06)",
   },
   searchWrap: {
     display: "flex",
