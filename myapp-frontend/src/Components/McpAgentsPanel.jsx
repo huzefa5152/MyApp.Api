@@ -119,7 +119,7 @@ function NewTokenDialog({ onClose, onCreated }) {
   </div>;
 }
 
-function SecretDialog({ created, onClose }) {
+export function SecretDialog({ created, onClose }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "https://<your-site>";
   const toml = `[mcp_servers.trader]\nurl = "${origin}/mcp"\nbearer_token_env_var = "TRADER_MCP_TOKEN"`;
   const copy = async (text, what) => { try { await navigator.clipboard.writeText(text); notify(`${what} copied.`, "success"); } catch { notify("Copy failed. Select the text and copy it by hand.", "error"); } };

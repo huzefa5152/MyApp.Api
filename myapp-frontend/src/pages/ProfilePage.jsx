@@ -12,10 +12,12 @@ import {
   MdShield,
   MdDelete,
   MdCloudUpload,
+  MdSmartToy,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
 import { getAvatarUrl } from "../utils/avatarUrl";
+import McpMyAccessPanel from "../Components/McpMyAccessPanel";
 
 const colors = {
   blue: "#0d47a1",
@@ -273,6 +275,7 @@ export default function ProfilePage() {
   //   2. server avatar with cache-buster
   //   3. initials fallback
   const serverAvatarSrc = getAvatarUrl(user, avatarVersion);
+  const [tab, setTab] = useState("profile");
   const displayedSrc = previewUrl || serverAvatarSrc;
   const showInitials = !displayedSrc;
   const hasServerAvatar = !!user?.avatarPath && !previewUrl;
@@ -289,6 +292,20 @@ export default function ProfilePage() {
           <p style={styles.pageSubtitle}>Manage your account settings</p>
         </div>
       </div>
+
+      {/* Tabs — every user gets "MCP & AI": how to connect their AI tools, and their own tokens */}
+      <div role="tablist" aria-label="Profile sections" style={styles.tabs}>
+        {[["profile", "Profile", MdAccountCircle], ["mcp", "MCP & AI", MdSmartToy]].map(([key, label, Icon]) => (
+          <button key={key} role="tab" id={`profile-tab-${key}`} aria-selected={tab === key} aria-controls={`profile-panel-${key}`}
+            style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
+            <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
+          </button>
+        ))}
+      </div>
+      {tab === "mcp" ? (
+        <div role="tabpanel" id="profile-panel-mcp" aria-labelledby="profile-tab-mcp"><McpMyAccessPanel /></div>
+      ) : (
+      <div role="tabpanel" id="profile-panel-profile" aria-labelledby="profile-tab-profile">
 
       {/* Avatar + Info Card */}
       <div style={styles.profileCard}>
@@ -533,11 +550,16 @@ export default function ProfilePage() {
           </div>
         </form>
       </div>
+      </div>
+      )}
     </div>
   );
 }
 
 const styles = {
+  tabs: { display: "flex", flexWrap: "wrap", gap: "0.4rem", borderBottom: `1px solid ${colors.cardBorder}`, marginBottom: "1.25rem" },
+  tab: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1.1rem", background: "transparent", color: colors.textSecondary, border: "none", borderBottom: "3px solid transparent", borderRadius: "8px 8px 0 0", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
+  tabActive: { color: colors.blue, borderBottomColor: colors.blue, background: "rgba(13,71,161,0.06)" },
   pageHeader: {
     display: "flex",
     alignItems: "center",
