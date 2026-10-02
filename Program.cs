@@ -596,6 +596,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await using var startupLock = await DatabaseStartupLock.AcquireAsync(db.Database.GetConnectionString()!);
 
     // Fix: remove bad migration records that ran as no-ops (Users table was never created).
     // Gated on __EFMigrationsHistory existing — fresh databases don't have it yet
