@@ -276,6 +276,7 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Invoice exact line total — the consultant's adjustment re-sums to the bill | `python scripts/test_invoice_exact_line_total.py` | `73/73 checks` |
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `147 passed, 0 failed` |
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
+| Hosted MCP (`POST /mcp`) company / tenant / permission isolation, MCP Access opt-in | `python scripts/test_mcp_isolation.py --base <url>` | `90/90 checks passed` (needs 3 companies with invoices locally; see `docs/MCP_AGENT_ACCESS.md`) |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
 | A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |

@@ -39,6 +39,14 @@ namespace MyApp.Api.Helpers
         public const string SalesEditionRoleName = "Sales Edition";
         public const string CompleteEditionRoleName = "Complete Edition";
         public const string TenantAdminRoleName = "Tenant Administrator";
+        public const string McpAccessRoleName = "MCP Access";
+
+        public const string McpAccessDescription =
+            "MCP Access — lets a user connect an AI coding agent (Claude, Codex, ChatGPT) " +
+            "to the hosted read-only /mcp endpoint. Holds NO product features of its own: " +
+            "assign it ALONGSIDE an edition, which bounds what the agent can read. The " +
+            "platform owner gives it to a tenant's administrator, who can then hand it to " +
+            "that tenant's staff. Built-in.";
 
         public const string SalesEditionDescription =
             "Sales edition — the full sales, purchase, inventory and FBR product, " +
@@ -148,6 +156,14 @@ namespace MyApp.Api.Helpers
                 .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+        /// <summary>The single key behind the opt-in "MCP Access" role. Declared before
+        /// <see cref="All"/>: static initialisers run in file order.</summary>
+        public static IReadOnlyList<string> McpAccessEffectiveKeys { get; } =
+            PermissionCatalog.All
+                .Where(d => string.Equals(d.Key, "mcp.access.use", StringComparison.OrdinalIgnoreCase))
+                .Select(d => d.Key)
+                .ToList();
+
         /// <summary>The seeded roles, in the order they should be listed.</summary>
         public static IReadOnlyList<(string Name, string Description, IReadOnlyList<string> Keys)> All { get; } =
             new List<(string, string, IReadOnlyList<string>)>
@@ -155,6 +171,7 @@ namespace MyApp.Api.Helpers
                 (SalesEditionRoleName,    SalesEditionDescription,    SalesEditionKeys),
                 (CompleteEditionRoleName, CompleteEditionDescription, CompleteEditionKeys),
                 (TenantAdminRoleName,     TenantAdminDescription,     TenantAdminEffectiveKeys),
+                (McpAccessRoleName,       McpAccessDescription,       McpAccessEffectiveKeys),
             };
     }
 }

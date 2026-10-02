@@ -351,6 +351,15 @@ namespace MyApp.Api.Helpers
             new("stock.opening.manage",     "Inventory", "Opening Balance", "Manage", "Set or edit opening stock balance per item"),
             new("stock.adjust.create",      "Inventory", "Adjustment",      "Create", "Record a stock adjustment (count correction, write-off)"),
 
+            // ── AI agent access (hosted MCP) ────────────────────────────────
+            // Gate for POST /mcp. Each tool still demands the same permission
+            // as the matching screen and the same company access, so this key
+            // only decides whether a user may drive the ERP through an agent.
+            // Module "Tenant Access" is vendor-only (EditionCatalog), so neither
+            // edition carries it: the platform owner opts a tenant in by
+            // assigning the built-in "MCP Access" role, alongside an edition.
+            new("mcp.access.use",           "Tenant Access", "MCP", "Use", "Connect AI coding agents (read-only tools) to this system through the hosted MCP endpoint"),
+
             // ── Reports ─────────────────────────────────────────────────────
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),
             new("reports.sales.export",     "Reports", "Sales", "Export", "Export the Sales report to CSV/Excel"),

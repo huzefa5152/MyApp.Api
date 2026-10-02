@@ -300,6 +300,23 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         }));
 
+    // Hosted MCP endpoint. The limiter runs before authentication, so the user
+    // id is not known yet: partition on a hash of the bearer credential (never
+    // the raw token), falling back to the remote address for anonymous calls.
+    options.AddPolicy("mcp", httpContext =>
+    {
+        var auth = httpContext.Request.Headers.Authorization.ToString();
+        var key = string.IsNullOrEmpty(auth)
+            ? "ip:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown")
+            : "tok:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(auth)));
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
+
     // Audit H-6: file imports (FBR purchase xls, PO PDF parser,
     // challan Excel). Each call can do 25 MB I/O + CPU. 10/min/user
     // is generous for a one-off upload pass, tight enough to stop a
