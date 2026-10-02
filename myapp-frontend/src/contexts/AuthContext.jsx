@@ -97,18 +97,22 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("storage", storageChanged);
   }, []);
 
-  const login = useCallback(async (username, password) => {
+  const login = useCallback(async (username, password, returnTo = "/dashboard") => {
     const attempt = ++loginAttempt.current;
     const previousToken = localStorage.getItem("token");
     const res = await loginApi(username, password);
     if (attempt !== loginAttempt.current) return;
     const { token: newToken, ...userData } = res.data;
 
+    try { sessionStorage.removeItem("postLoginReturnTo"); } catch { /* non-fatal */ }
     localStorage.setItem("token", newToken);
     if (previousToken && !sameSession(previousToken, newToken)) {
       localStorage.removeItem("selectedCompanyId");
-      window.location.reload();
-      return;
+      const destination = returnTo.startsWith("/") && !returnTo.startsWith("//")
+        && returnTo !== "/" && !returnTo.startsWith("/login") ? returnTo : "/dashboard";
+      const appBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
+      window.location.replace(appBase + destination);
+      return false;
     }
     setToken(newToken);
     setUser(userData);
@@ -123,6 +127,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* non-fatal — /me will be retried on next mount */
     }
+    return true;
   }, []);
 
   const logout = useCallback(async () => {
