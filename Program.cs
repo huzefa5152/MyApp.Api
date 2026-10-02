@@ -207,6 +207,19 @@ builder.Services.AddAuthentication(options =>
                 context.Token = context.Request.Cookies[PrivateDataFilesMiddleware.CookieName];
             return Task.CompletedTask;
         },
+        // An unauthenticated call to /mcp is answered the way the MCP authorization spec
+        // asks, so an AI client learns where to start the sign-in flow from the 401 itself.
+        OnChallenge = context =>
+        {
+            if (!context.Request.Path.StartsWithSegments("/mcp")) return Task.CompletedTask;
+            context.HandleResponse();
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            var error = context.AuthenticateFailure != null || McpAgentAuthHandler.IsAgentHeader(context.Request.Headers.Authorization.ToString())
+                ? ", error=\"invalid_token\"" : "";
+            context.Response.Headers.WWWAuthenticate =
+                $"Bearer realm=\"trader-mcp\", resource_metadata=\"{McpPublicUrl.ProtectedResourceMetadata(context.HttpContext)}\"{error}";
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             var principal = context.Principal;
@@ -326,6 +339,17 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0,
         });
     });
+
+    // OAuth sign-in connect: open dynamic registration plus the authorize and token
+    // endpoints. Anonymous by nature, so partitioned by remote address.
+    options.AddPolicy("oauth", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            "oauth:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
 
     // Audit H-6: file imports (FBR purchase xls, PO PDF parser,
     // challan Excel). Each call can do 25 MB I/O + CPU. 10/min/user

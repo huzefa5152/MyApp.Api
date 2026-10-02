@@ -35,6 +35,7 @@ const ItemTypesPage = lazy(() => import("./pages/ItemTypesPage"));
 const UnitsPage = lazy(() => import("./pages/UnitsPage"));
 const POFormatsPage = lazy(() => import("./pages/POFormatsPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const McpConnectPage = lazy(() => import("./pages/McpConnectPage"));
 const UsersPage = lazy(() => import("./pages/UsersPage"));
 const RolesPage = lazy(() => import("./pages/RolesPage"));
 const TenantAccessPage = lazy(() => import("./pages/TenantAccessPage"));
@@ -140,6 +141,7 @@ export default function App() {
             <Route path="/reports/tax-sheet" element={<TaxSheetPage />} />
             <Route path="/reports/outstanding" element={<OutstandingLedgerPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/connect" element={<McpConnectPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/roles" element={<RolesPage />} />
             <Route path="/tenant-access" element={<TenantAccessPage />} />

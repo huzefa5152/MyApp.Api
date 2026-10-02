@@ -55,7 +55,7 @@ public class McpAdminController(
             companies = t.CompanyIdList().Select(id => new { id, name = names.GetValueOrDefault(id, "(deleted)") }),
             scopes = t.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries), t.AllowWrites,
             t.CreatedAt, t.ExpiresAt, t.LastUsedAt, t.RevokedAt,
-            status = t.RevokedAt != null ? "Revoked" : t.ExpiresAt <= now ? "Expired" : "Active",
+            status = t.Status(now), signIn = t.OAuthClientId != null,
         }));
     }
 

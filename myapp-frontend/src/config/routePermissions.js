@@ -32,6 +32,8 @@ export const ROUTE_PERMISSIONS = {
   "/dashboard": "dashboard.view",
   // The operator's own account — never a tenant feature.
   "/profile": PUBLIC_TO_SIGNED_IN,
+  // "Sign in to connect" consent screen for AI applications; it explains itself when MCP is off.
+  "/connect": PUBLIC_TO_SIGNED_IN,
 
   // Sales
   "/sales-quotes": "salesquotes.list.view",

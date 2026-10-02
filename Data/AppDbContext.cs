@@ -77,6 +77,8 @@ namespace MyApp.Api.Data
         public DbSet<UserSession> UserSessions { get; set; }
         public DbSet<McpAgentToken> McpAgentTokens { get; set; }
         public DbSet<McpActivity> McpActivities { get; set; }
+        public DbSet<McpOAuthClient> McpOAuthClients { get; set; }
+        public DbSet<McpOAuthCode> McpOAuthCodes { get; set; }
 
         public DbSet<Company> Companies { get; set; }
         public DbSet<DeliveryChallan> DeliveryChallans { get; set; }
@@ -186,9 +188,30 @@ namespace MyApp.Api.Data
                 e.Property(t => t.Hint).HasMaxLength(16);
                 e.Property(t => t.CompanyIds).HasMaxLength(400);
                 e.Property(t => t.Scopes).HasMaxLength(200);
+                e.Property(t => t.OAuthClientId).HasMaxLength(64);
+                e.Property(t => t.RefreshHash).HasMaxLength(64);
+                e.HasIndex(t => t.RefreshHash);
                 e.HasIndex(t => t.TokenHash).IsUnique();
                 e.HasIndex(t => t.UserId);
                 e.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<McpOAuthClient>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Id).HasMaxLength(64);
+                e.Property(c => c.Name).HasMaxLength(100);
+                e.Property(c => c.RedirectUris).HasMaxLength(2000);
+            });
+            modelBuilder.Entity<McpOAuthCode>(e =>
+            {
+                e.Property(c => c.CodeHash).HasMaxLength(64);
+                e.Property(c => c.ClientId).HasMaxLength(64);
+                e.Property(c => c.RedirectUri).HasMaxLength(500);
+                e.Property(c => c.CodeChallenge).HasMaxLength(128);
+                e.Property(c => c.CompanyIds).HasMaxLength(400);
+                e.Property(c => c.Scopes).HasMaxLength(200);
+                e.HasIndex(c => c.CodeHash).IsUnique();
+                e.HasIndex(c => c.ExpiresAt);
             });
             modelBuilder.Entity<McpActivity>(e =>
             {

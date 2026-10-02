@@ -38,6 +38,19 @@ public class McpAgentToken
     public DateTime? RevokedAt { get; set; }
     public int? RevokedByUserId { get; set; }
 
+    // Sign-in (OAuth) connections: the access secret above is short-lived (an hour) and is
+    // renewed with the refresh secret, which is stored as a hash like the access one. The
+    // row, and so its history, stays the same across renewals.
+    public string? OAuthClientId { get; set; }
+    public string? RefreshHash { get; set; }
+    public DateTime? RefreshExpiresAt { get; set; }
+
+    /// <summary>"Active" while the access secret is live, or an OAuth connection can still renew.</summary>
+    public string Status(DateTime now) =>
+        RevokedAt != null ? "Revoked"
+        : ExpiresAt > now || (OAuthClientId != null && RefreshExpiresAt > now) ? "Active"
+        : "Expired";
+
     public User? User { get; set; }
 
     public IReadOnlyList<int> CompanyIdList() =>

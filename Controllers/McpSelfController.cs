@@ -69,7 +69,7 @@ public class McpSelfController(
                 companies = t.CompanyIdList().Select(id => new { id, name = names.GetValueOrDefault(id, "(no longer reachable)") }),
                 scopes = t.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries),
                 t.CreatedAt, t.ExpiresAt, t.LastUsedAt, t.RevokedAt,
-                status = t.RevokedAt != null ? "Revoked" : t.ExpiresAt <= now ? "Expired" : "Active",
+                status = t.Status(now), signIn = t.OAuthClientId != null,
             }),
         });
     }

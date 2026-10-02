@@ -128,8 +128,11 @@ export default function McpMyAccessPanel() {
       <CopyBlock label="config" text={`{\n  "mcpServers": {\n    "trader": {\n      "command": "npx",\n      "args": ["-y", "mcp-remote", "${url}", "--header", "Authorization:\${AUTH}"],\n      "env": { "AUTH": "Bearer <paste your token>" }\n    }\n  }\n}`} />
       <p style={s.p}>Restart Claude Desktop and ask it to list your companies.</p></> },
     web: { label: "Claude.ai / ChatGPT", steps: <>
-      <p style={s.p}>The browser versions connect by signing in with your ERP login instead of a pasted token. That sign-in connector is not switched on yet. Until then, use Codex, Claude Code or Claude Desktop above.</p>
-      <p style={s.p}>Connector address (for when it is):</p><CopyBlock label="address" text={url} /></> },
+      <p style={s.p}>These connect by signing in with your ERP login, so there is no token to paste.</p>
+      <p style={s.p}>1. In Claude (Settings, Connectors, Add custom connector) or ChatGPT (Settings, Connectors, Developer mode, Create), enter this address:</p>
+      <CopyBlock label="address" text={url} />
+      <p style={s.p}>2. When it asks you to sign in, you land on this site. Sign in with your ERP username and password, choose the companies, and press Approve.</p>
+      <p style={s.p}>3. Back in the chat, ask it to list your companies. To disconnect, revoke the “(sign-in)” token below.</p></> },
   };
 
   const t = status.tokens;
