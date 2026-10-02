@@ -53,13 +53,14 @@ namespace MyApp.Api.Controllers
         private readonly IInvoiceService _invoices;
         private readonly ISalesQuoteService _quotes;
         private readonly IDeliveryChallanService _challans;
+        private readonly IReportService _reports;
         private readonly AppDbContext _context;
         private readonly ISensitiveDataRedactor _redactor;
         private readonly IServiceScopeFactory _scopes;
         private readonly ILogger<McpController> _logger;
 
         public McpController(ICompanyAccessGuard access, IPermissionService permissions, ICompanyService companies,
-            IClientService clients, IInvoiceService invoices, ISalesQuoteService quotes, IDeliveryChallanService challans, AppDbContext context,
+            IClientService clients, IInvoiceService invoices, ISalesQuoteService quotes, IDeliveryChallanService challans, IReportService reports, AppDbContext context,
             ISensitiveDataRedactor redactor, IServiceScopeFactory scopes, ILogger<McpController> logger)
         {
             _redactor = redactor;
@@ -71,6 +72,7 @@ namespace MyApp.Api.Controllers
             _invoices = invoices;
             _quotes = quotes;
             _challans = challans;
+            _reports = reports;
             _context = context;
             _logger = logger;
         }
@@ -192,7 +194,7 @@ namespace MyApp.Api.Controllers
 
         private static readonly HashSet<string> ToolNames = new(StringComparer.Ordinal)
             { "list_companies", "search_clients", "search_invoices", "get_invoice", "get_stock", "search_quotes",
-              "search_challans", "get_challan", "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
+              "search_challans", "get_challan", "sales_summary", "outstanding_ledger", "receivables_by_client", "tax_sheet_summary", "item_rate_history", "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
 
         // ── dispatch ───────────────────────────────────────────────────────
 
@@ -218,6 +220,11 @@ namespace MyApp.Api.Controllers
                     if (!IsWriteTool(name)) RequireScope("read");
                     object data = name switch
                     {
+                        "sales_summary" => await SalesSummaryAsync(args),
+                        "outstanding_ledger" => await OutstandingLedgerAsync(args),
+                        "receivables_by_client" => await ReceivablesByClientAsync(args),
+                        "tax_sheet_summary" => await TaxSheetSummaryAsync(args),
+                        "item_rate_history" => await ItemRateHistoryAsync(args),
                         "search_challans" => await SearchChallansAsync(args),
                         "get_challan" => await GetChallanAsync(args),
                         "prepare_challan" => await PrepareChallanAsync(args),

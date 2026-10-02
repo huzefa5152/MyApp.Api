@@ -179,7 +179,7 @@ TW, TW_ID = mk(W, [A["id"]], ["read", "challans.write", "bills.write", "quotes.w
 TC, _ = mk(C, [A["id"]], ["read", "challans.write"], "challans-only")
 TRO, _ = mk(W, [A["id"]], ["read"], "reader")
 TW2, _ = mk(W, [A["id"]], ["read", "challans.write", "bills.write"], "other")
-READ8 = {"get_invoice", "get_stock", "list_companies", "search_clients", "search_invoices", "search_quotes", "search_challans", "get_challan"}
+READ8 = {"get_invoice", "get_stock", "list_companies", "search_clients", "search_invoices", "search_quotes", "search_challans", "get_challan", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"}
 check("every token and login sees the two challan read tools", names(TRO) == READ8 and names(W) == READ8, (names(TRO) ^ READ8, names(W) ^ READ8))
 check("a challans token sees prepare_challan but not prepare_bill", {"prepare_challan", "commit_action"} <= names(TC) and "prepare_bill" not in names(TC), names(TC))
 check("a bills token sees prepare_bill", "prepare_bill" in names(TW) and "prepare_challan" in names(TW), names(TW))

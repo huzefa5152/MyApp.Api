@@ -99,6 +99,7 @@ namespace MyApp.Api.Controllers
         private object[] ToolCatalogue()
         {
             var tools = new List<object>(ReadTools) { SearchChallansTool, GetChallanTool };
+            tools.AddRange(ReportTools());
             var agent = Agent;
             if (agent is { AllowWrites: true })
             {

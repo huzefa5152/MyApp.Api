@@ -203,9 +203,9 @@ s, d = make_token(C, "clients-only", [A["id"]], ["read", "clients.write"])
 TC = d["secret"]
 
 print("\n== tool catalogue follows the token ==")
-READ6 = ["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes"]
-check("a read-only token sees only the read tools (eight)", tool_names(TRO) == READ6, tool_names(TRO))
-check("a login token sees only the read tools", tool_names(W) == READ6, tool_names(W))
+READ6 = ["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"]
+check("a read-only token sees only the read tools (thirteen)", tool_names(TRO) == sorted(READ6), tool_names(TRO))
+check("a login token sees only the read tools", tool_names(W) == sorted(READ6), tool_names(W))
 check("a write token also sees prepare, commit and cancel", set(tool_names(TW)) == set(READ6) | {"prepare_client", "prepare_quote", "commit_action", "cancel_action"}, tool_names(TW))
 check("a clients-only token does not see prepare_quote", set(tool_names(TC)) == set(READ6) | {"prepare_client", "commit_action", "cancel_action"}, tool_names(TC))
 

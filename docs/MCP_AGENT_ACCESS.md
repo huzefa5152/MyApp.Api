@@ -9,7 +9,11 @@ password.
 ## What an agent can do
 
 **Look things up (always):** `list_companies`, `search_clients`, `search_invoices`,
-`get_invoice`, `get_stock`, `search_quotes`, `search_challans`, `get_challan`.
+`get_invoice`, `get_stock`, `search_quotes`, `search_challans`, `get_challan`, and five report
+tools that answer questions about your data: `sales_summary`, `outstanding_ledger` (one client's
+statement with ageing), `receivables_by_client` (who owes you most), `tax_sheet_summary` (lines
+still missing an HS code) and `item_rate_history` (what an item was billed at before). Each runs
+the same report as its screen, needs that screen's permission, and returns a bounded summary.
 
 **Create records (opt-in, per token):**
 
