@@ -78,6 +78,7 @@ namespace MyApp.Api.Data
         public DbSet<McpAgentToken> McpAgentTokens { get; set; }
         public DbSet<McpActivity> McpActivities { get; set; }
         public DbSet<McpOAuthClient> McpOAuthClients { get; set; }
+        public DbSet<McpPendingAction> McpPendingActions { get; set; }
         public DbSet<McpOAuthCode> McpOAuthCodes { get; set; }
 
         public DbSet<Company> Companies { get; set; }
@@ -194,6 +195,19 @@ namespace MyApp.Api.Data
                 e.HasIndex(t => t.TokenHash).IsUnique();
                 e.HasIndex(t => t.UserId);
                 e.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<McpPendingAction>(e =>
+            {
+                e.Property(a => a.PlanId).HasMaxLength(64);
+                e.Property(a => a.Kind).HasMaxLength(30);
+                e.Property(a => a.Summary).HasMaxLength(1000);
+                e.Property(a => a.IdempotencyKey).HasMaxLength(100);
+                e.Property(a => a.ResultRef).HasMaxLength(100);
+                e.Property(a => a.ResultSummary).HasMaxLength(300);
+                e.HasIndex(a => a.PlanId).IsUnique();
+                // One plan (or result) per agent token and idempotency key.
+                e.HasIndex(a => new { a.AgentTokenId, a.IdempotencyKey }).IsUnique().HasFilter("[IdempotencyKey] IS NOT NULL");
+                e.HasIndex(a => a.ExpiresAt);
             });
             modelBuilder.Entity<McpOAuthClient>(e =>
             {

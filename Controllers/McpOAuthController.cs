@@ -35,7 +35,7 @@ public class McpOAuthController(
     private const int AccessMinutes = 60;
     private const int RefreshDays = 30;
     private const int CodeMinutes = 5;
-    private static readonly string[] Scopes = { "read" };
+    private static readonly string[] Scopes = McpScopes.Implemented;
 
     private int CurrentUserId =>
         int.TryParse(User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : 0;
@@ -143,6 +143,7 @@ public class McpOAuthController(
         public string CodeChallenge { get; set; } = "";
         public string CodeChallengeMethod { get; set; } = "";
         public List<int> CompanyIds { get; set; } = new();
+        public List<string> Scopes { get; set; } = new() { "read" };
     }
 
     /// <summary>What the consent screen needs: who is asking, and whether this user may approve.</summary>
@@ -163,7 +164,8 @@ public class McpOAuthController(
         return Ok(new
         {
             clientName = client.Name, redirectHost = new Uri(redirect_uri!).Authority,
-            enabled, reason = isSeed ? "seed-admin" : enabled ? "" : "not-enabled", companies, scopes = Scopes,
+            enabled, reason = isSeed ? "seed-admin" : enabled ? "" : "not-enabled", companies,
+            scopes = enabled ? await McpScopes.AvailableAsync(permissions, uid) : new List<string>(),
         });
     }
 
@@ -185,11 +187,14 @@ public class McpOAuthController(
         var reachable = await access.GetAccessibleCompanyIdsAsync(uid);
         if (ids.Any(id => !reachable.Contains(id))) return BadRequest(new { message = "You can only choose companies you have access to." });
 
+        var (granted, scopeError) = await McpScopes.ValidateAsync(permissions, uid, req.Scopes);
+        if (scopeError != null) return BadRequest(new { message = scopeError });
+
         var code = B64Url(RandomNumberGenerator.GetBytes(32));
         db.McpOAuthCodes.Add(new McpOAuthCode
         {
             CodeHash = McpAgentAuthHandler.Hash(code), ClientId = client.Id, UserId = uid, RedirectUri = req.RedirectUri!,
-            CodeChallenge = req.CodeChallenge, CompanyIds = string.Join(',', ids), Scopes = "read",
+            CodeChallenge = req.CodeChallenge, CompanyIds = string.Join(',', ids), Scopes = string.Join(',', granted),
             ExpiresAt = DateTime.UtcNow.AddMinutes(CodeMinutes),
         });
         // Housekeeping: spent and expired codes carry no value.
@@ -274,7 +279,7 @@ public class McpOAuthController(
         {
             UserId = user.Id, Name = $"{client.Name} (sign-in)", TokenHash = McpAgentAuthHandler.Hash(access1),
             Hint = access1.Substring(0, McpAgentToken.Prefix.Length + 4), CompanyIds = string.Join(',', companies),
-            Scopes = row.Scopes, AllowWrites = false, CreatedAt = now, CreatedByUserId = user.Id,
+            Scopes = row.Scopes, AllowWrites = row.Scopes.Split(',').Any(McpScopes.IsWrite), CreatedAt = now, CreatedByUserId = user.Id,
             ExpiresAt = now.AddMinutes(AccessMinutes), OAuthClientId = clientId,
             RefreshHash = McpAgentAuthHandler.Hash(refresh), RefreshExpiresAt = now.AddDays(RefreshDays),
         };

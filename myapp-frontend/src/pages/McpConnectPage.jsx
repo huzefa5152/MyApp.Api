@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { MdSmartToy, MdCheckCircle, MdBlock, MdInfo, MdShield } from "react-icons/md";
 import httpClient from "../api/httpClient";
 import { colors, cardStyles } from "../theme";
+import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
 
 // "Sign in to connect": where an AI product (claude.ai, ChatGPT, Codex...) sends a user
 // to approve a connection. The user is already signed in to the ERP (the app routes an
@@ -21,6 +22,7 @@ export default function McpConnectPage() {
   const [info, setInfo] = useState(null);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState([]);
+  const [scopes, setScopes] = useState(["read"]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -32,11 +34,12 @@ export default function McpConnectPage() {
   }, [request.clientId, request.redirectUri]);
 
   const toggle = id => setPicked(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleScope = k => setScopes(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k]);
   const send = async approve => {
     setBusy(true); setError("");
     try {
       const body = { clientId: request.clientId, redirectUri: request.redirectUri, state: request.state || null,
-        codeChallenge: request.codeChallenge, codeChallengeMethod: request.codeChallengeMethod, companyIds: picked };
+        codeChallenge: request.codeChallenge, codeChallengeMethod: request.codeChallengeMethod, companyIds: picked, scopes };
       const r = await httpClient.post(approve ? "/oauth/authorize" : "/oauth/deny", body);
       window.location.assign(r.data.redirectUrl);
     } catch (e) { setError(e.response?.data?.message || "Could not complete the connection."); setBusy(false); }
@@ -62,10 +65,16 @@ export default function McpConnectPage() {
           : "MCP is not enabled for your account. Ask your administrator to give you the MCP Access role, then try again."}</div></div>
       : <>
         <div style={s.points}>
-          <div style={s.point}><MdShield aria-hidden style={s.pi} /><span>It can <strong>read</strong> the companies you choose below, with the same limits as your own login. It cannot change anything.</span></div>
+          <div style={s.point}><MdShield aria-hidden style={s.pi} /><span>It can <strong>look things up</strong> in the companies you choose below, with the same limits as your own login.{scopes.length === 1 ? " It cannot change anything." : " It can also do the extra things you tick, and each change is shown to you to approve first."}</span></div>
           <div style={s.point}><MdCheckCircle aria-hidden style={s.pi} /><span>Everything it does is recorded under your name, and you can see it in My Profile, MCP &amp; AI.</span></div>
           <div style={s.point}><MdBlock aria-hidden style={s.pi} /><span>You can disconnect it at any time from the same page.</span></div>
         </div>
+        {info.scopes.length > 1 && <>
+          <label style={s.label}>Also allow</label>
+          <div style={s.scopesBox}>{orderedScopes(info.scopes).filter(k => k !== "read").map(k => <label key={k} style={{ ...s.check, ...(scopes.includes(k) ? s.checkOn : {}), alignItems: "flex-start" }}>
+            <input type="checkbox" checked={scopes.includes(k)} onChange={() => toggleScope(k)} />
+            <span><strong>{SCOPE_INFO[k].label}</strong><span style={s.scopeHelp}>{SCOPE_INFO[k].help}</span></span></label>)}</div>
+        </>}
         <label style={s.label}>Companies it may reach</label>
         <div style={s.checks}>{info.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
           <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>
@@ -94,6 +103,8 @@ const s = {
   checks: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.5rem" },
   check: { display: "flex", alignItems: "center", gap: "0.5rem", minHeight: 44, padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" },
   checkOn: { borderColor: colors.blue, background: "rgba(13,71,161,0.07)" },
+  scopesBox: { display: "grid", gap: "0.5rem", marginBottom: "0.4rem" },
+  scopeHelp: { display: "block", fontSize: "0.76rem", fontWeight: 400, color: colors.textSecondary, marginTop: 2 },
   hint: { margin: "1rem 0 0", fontSize: "0.78rem", color: colors.textSecondary, lineHeight: 1.45 },
   foot: { display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "0.6rem", marginTop: "1.1rem" },
   primary: { ...btn, background: colors.blue, color: "#fff", border: "none" },

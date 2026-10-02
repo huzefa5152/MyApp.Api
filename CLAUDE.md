@@ -277,6 +277,10 @@ Max defaults: 100 normal, 200 audit. Caller-supplied `pageSize=999999` is silent
 | Every screen is behind a permission (offline) | `node scripts/test_route_permissions.mjs` | `147 passed, 0 failed` |
 | Product editions + the no-escalation rule, proven end to end | `python scripts/test_edition_roles.py` | `80/80 checks` |
 | Hosted MCP (`POST /mcp`) company / tenant / permission isolation, MCP Access opt-in | `python scripts/test_mcp_isolation.py --base <url>` | `90/90 checks passed` (needs 3 companies with invoices locally; see `docs/MCP_AGENT_ACCESS.md`) |
+| MCP agent tokens + the append-only activity log (needs `sqlcmd` for expiry) | `python scripts/test_mcp_agent_tokens.py --base <url>` | `56/56 checks passed` |
+| MCP self-service tab (a user manages only their own tokens and activity) | `python scripts/test_mcp_self_service.py --base <url>` | `33/33 checks passed` |
+| MCP sign-in connect: OAuth + PKCE + client registration, refresh rotation, replay (needs `sqlcmd`) | `python scripts/test_mcp_oauth.py --base <url>` | `67/67 checks passed` |
+| MCP write tools: prepare / approve / commit for clients and quotations, gates re-checked at commit, idempotency (needs `sqlcmd`) | `python scripts/test_mcp_writes.py --base <url>` | `91/91 checks passed` |
 | Every company-scoped action asserts the companyId it was handed (offline) | `python scripts/verify_tenant_scope.py` | `every company-scoped action is guarded` |
 | HS code on both prints + FBR-ready without a quantity adjustment | `python scripts/test_hscode_on_prints.py` | `21/21 checks` |
 | A company saves with a name only, FBR details added later | `python scripts/test_company_create_minimal.py` | `8/8 checks` |

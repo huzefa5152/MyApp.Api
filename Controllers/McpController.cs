@@ -37,7 +37,7 @@ namespace MyApp.Api.Controllers
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme + "," + McpAgentAuthHandler.Scheme)]
     [Route("mcp")]
     [EnableRateLimiting("mcp")]
-    public class McpController : ControllerBase
+    public partial class McpController : ControllerBase
     {
         private const string LatestProtocol = "2025-06-18";
         private static readonly string[] SupportedProtocols = { "2025-06-18", "2025-03-26", "2024-11-05" };
@@ -54,13 +54,15 @@ namespace MyApp.Api.Controllers
         private readonly ISalesQuoteService _quotes;
         private readonly AppDbContext _context;
         private readonly ISensitiveDataRedactor _redactor;
+        private readonly IServiceScopeFactory _scopes;
         private readonly ILogger<McpController> _logger;
 
         public McpController(ICompanyAccessGuard access, IPermissionService permissions, ICompanyService companies,
             IClientService clients, IInvoiceService invoices, ISalesQuoteService quotes, AppDbContext context,
-            ISensitiveDataRedactor redactor, ILogger<McpController> logger)
+            ISensitiveDataRedactor redactor, IServiceScopeFactory scopes, ILogger<McpController> logger)
         {
             _redactor = redactor;
+            _scopes = scopes;
             _access = access;
             _permissions = permissions;
             _companies = companies;
@@ -143,7 +145,7 @@ namespace MyApp.Api.Controllers
                 case "ping":
                     return Rpc(id, result: new { });
                 case "tools/list":
-                    return Rpc(id, result: new { tools = Tools });
+                    return Rpc(id, result: new { tools = ToolCatalogue() });
                 case "tools/call":
                     return await CallToolAsync(id, p);
                 default:
@@ -162,7 +164,7 @@ namespace MyApp.Api.Controllers
         private static readonly object PageSize = new { type = "integer", minimum = 1, maximum = MaxToolRows, @default = 25 };
         private static readonly object Annotations = new { readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false };
 
-        private static readonly object[] Tools =
+        private static readonly object[] ReadTools =
         {
             new { name = "list_companies", description = "List the companies this user can access (id and name only).",
                   inputSchema = Schema(new { }), annotations = Annotations },
@@ -187,7 +189,8 @@ namespace MyApp.Api.Controllers
         };
 
         private static readonly HashSet<string> ToolNames = new(StringComparer.Ordinal)
-            { "list_companies", "search_clients", "search_invoices", "get_invoice", "get_stock", "search_quotes" };
+            { "list_companies", "search_clients", "search_invoices", "get_invoice", "get_stock", "search_quotes",
+              "prepare_client", "prepare_quote", "commit_action", "cancel_action" };
 
         // ── dispatch ───────────────────────────────────────────────────────
 
@@ -210,9 +213,13 @@ namespace MyApp.Api.Controllers
                 }
                 else
                 {
-                    RequireScope("read");
+                    if (!IsWriteTool(name)) RequireScope("read");
                     object data = name switch
                     {
+                        "prepare_client" => await PrepareClientAsync(args),
+                        "prepare_quote" => await PrepareQuoteAsync(args),
+                        "commit_action" => await CommitActionAsync(args),
+                        "cancel_action" => await CancelActionAsync(args),
                         "list_companies" => await ListCompaniesAsync(),
                         "search_clients" => await SearchClientsAsync(args),
                         "search_invoices" => await SearchInvoicesAsync(args),
@@ -244,6 +251,7 @@ namespace MyApp.Api.Controllers
                 outcome = "error"; detail = "The tool failed.";
                 result = ToolFailure(id, "The tool failed. Try a narrower request.");
             }
+            if (outcome == "ok" && detail.Length == 0) detail = _resultSummary;
             await RecordActivityAsync(name, args, outcome, detail, watch.ElapsedMilliseconds);
             return result;
         }
@@ -258,17 +266,22 @@ namespace MyApp.Api.Controllers
 
         /// <summary>
         /// Append one row to the activity log for every tools/call — allowed, refused or
-        /// failed. A logging failure never changes the tool's answer, but is itself logged.
+        /// failed. It is written through its OWN database context: the request's context may
+        /// still carry state from the service a tool just ran (a catalog write guard, a failed
+        /// save), and an audit row must never depend on that. A logging failure never changes
+        /// the tool's answer, but is itself logged.
         /// </summary>
         private async Task RecordActivityAsync(string tool, JsonElement args, string outcome, string detail, long ms)
         {
             try
             {
                 var agent = Agent;
+                await using var scope = _scopes.CreateAsyncScope();
+                var log = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var username = User.Identity?.Name;
                 if (string.IsNullOrEmpty(username))
-                    username = await _context.Users.AsNoTracking().Where(u => u.Id == CurrentUserId).Select(u => u.Username).FirstOrDefaultAsync() ?? "";
-                _context.McpActivities.Add(new McpActivity
+                    username = await log.Users.AsNoTracking().Where(u => u.Id == CurrentUserId).Select(u => u.Username).FirstOrDefaultAsync() ?? "";
+                log.McpActivities.Add(new McpActivity
                 {
                     At = DateTime.UtcNow,
                     AgentTokenId = agent?.Id,
@@ -281,11 +294,12 @@ namespace MyApp.Api.Controllers
                     Arguments = Trunc(_redactor.Scrub(args.ValueKind == JsonValueKind.Object ? args.GetRawText() : ""), 2000),
                     Outcome = outcome,
                     Detail = Trunc(detail, 300),
+                    ResultRef = Trunc(_resultRef, 100),
                     DurationMs = (int)Math.Min(ms, int.MaxValue),
                     IpAddress = Trunc(HttpContext.Connection.RemoteIpAddress?.ToString(), 64),
                     CorrelationId = Trunc(HttpContext.Items["CorrelationId"] as string, 64),
                 });
-                await _context.SaveChangesAsync();
+                await log.SaveChangesAsync();
             }
             catch (Exception ex)
             {

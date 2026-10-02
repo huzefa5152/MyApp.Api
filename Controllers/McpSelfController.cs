@@ -61,7 +61,7 @@ public class McpSelfController(
             enabled = hasAccess && !isSeed,
             reason = isSeed ? "seed-admin" : hasAccess ? "" : "not-enabled",
             companies,
-            scopesAvailable = new[] { "read" },
+            scopesAvailable = await McpScopes.AvailableAsync(permissions, uid),
             maxLifetimeDays = McpAgentToken.MaxLifetimeDays,
             tokens = tokens.Select(t => new
             {
@@ -85,9 +85,8 @@ public class McpSelfController(
         if (name.Length is < 1 or > 100) return BadRequest(new { message = "Give the token a name of 1 to 100 characters." });
         if (req.ExpiresInDays < 1 || req.ExpiresInDays > McpAgentToken.MaxLifetimeDays)
             return BadRequest(new { message = $"Lifetime must be 1 to {McpAgentToken.MaxLifetimeDays} days." });
-        var scopes = (req.Scopes ?? new()).Select(s => s.Trim()).Distinct(StringComparer.Ordinal).ToList();
-        if (scopes.Count == 0 || scopes.Any(s => s != "read"))
-            return BadRequest(new { message = "Only the read scope is available." });
+        var (scopes, scopeError) = await McpScopes.ValidateAsync(permissions, uid, req.Scopes);
+        if (scopeError != null) return BadRequest(new { message = scopeError });
 
         var companyIds = (req.CompanyIds ?? new()).Distinct().ToList();
         if (companyIds.Count is < 1 or > 50) return BadRequest(new { message = "Choose between 1 and 50 companies." });
@@ -104,7 +103,7 @@ public class McpSelfController(
         {
             UserId = uid, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret),
             Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
-            CompanyIds = string.Join(',', companyIds), Scopes = string.Join(',', scopes), AllowWrites = false,
+            CompanyIds = string.Join(',', companyIds), Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
             CreatedAt = now, CreatedByUserId = uid, ExpiresAt = now.AddDays(req.ExpiresInDays),
         };
         db.McpAgentTokens.Add(token);

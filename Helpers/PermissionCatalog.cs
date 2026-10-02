@@ -359,6 +359,7 @@ namespace MyApp.Api.Helpers
             // edition carries it: the platform owner opts a tenant in by
             // assigning the built-in "MCP Access" role, alongside an edition.
             new("mcp.access.use",           "Tenant Access", "MCP", "Use", "Connect AI coding agents (read-only tools) to this system through the hosted MCP endpoint"),
+            new("mcp.write.use",            "Tenant Access", "MCP", "Write", "Let connected AI agents create records (clients, quotations) through MCP, each write approved by a person before it commits"),
             new("mcp.admin.manage",         "Tenant Access", "MCP", "Manage", "Create and revoke MCP agent tokens and read the agent activity log (primary admin console)"),
 
             // ── Reports ─────────────────────────────────────────────────────

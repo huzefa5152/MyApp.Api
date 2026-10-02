@@ -59,6 +59,20 @@ public class McpAdminController(
         }));
     }
 
+    /// <summary>What a given user may be granted: their reachable companies and the scopes open to them.</summary>
+    [HttpGet("eligibility/{userId:int}")]
+    [HasPermission("mcp.admin.manage")]
+    public async Task<IActionResult> Eligibility(int userId)
+    {
+        if (!IsSeedAdmin) return Forbid();
+        if (!await db.Users.AnyAsync(u => u.Id == userId) || permissions.IsSeedAdmin(userId)) return NotFound();
+        var reachable = await access.GetAccessibleCompanyIdsAsync(userId);
+        var companies = await db.Companies.AsNoTracking().Where(c => reachable.Contains(c.Id)).OrderBy(c => c.Name)
+            .Select(c => new { c.Id, c.Name }).ToListAsync();
+        return Ok(new { enabled = await permissions.HasPermissionAsync(userId, "mcp.access.use"), companies,
+                        scopesAvailable = await McpScopes.AvailableAsync(permissions, userId) });
+    }
+
     [HttpPost("tokens")]
     [HasPermission("mcp.admin.manage")]
     public async Task<IActionResult> Create([FromBody] CreateTokenRequest req)
@@ -69,18 +83,15 @@ public class McpAdminController(
         if (req.ExpiresInDays < 1 || req.ExpiresInDays > McpAgentToken.MaxLifetimeDays)
             return BadRequest(new { message = $"Lifetime must be 1 to {McpAgentToken.MaxLifetimeDays} days." });
 
-        // Read-only until the write phases ship: refusing here means a token can never be
-        // pre-granted an authority that no tool yet checks.
-        var scopes = (req.Scopes ?? new()).Select(s => s.Trim()).Distinct(StringComparer.Ordinal).ToList();
-        if (scopes.Count == 0 || scopes.Any(s => s != "read"))
-            return BadRequest(new { message = "Only the read scope is available." });
-
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == req.UserId);
         if (user == null) return BadRequest(new { message = "User not found." });
         if (permissions.IsSeedAdmin(user.Id))
             return BadRequest(new { message = "Never connect the primary admin to an agent. Create a dedicated user." });
         if (!await permissions.HasPermissionAsync(user.Id, "mcp.access.use"))
             return BadRequest(new { message = "That user does not hold MCP Access. Assign the MCP Access role first." });
+
+        var (scopes, scopeError) = await McpScopes.ValidateAsync(permissions, user.Id, req.Scopes);
+        if (scopeError != null) return BadRequest(new { message = scopeError });
 
         var companyIds = (req.CompanyIds ?? new()).Distinct().ToList();
         if (companyIds.Count is < 1 or > 50) return BadRequest(new { message = "Choose between 1 and 50 companies." });
@@ -93,7 +104,7 @@ public class McpAdminController(
         var token = new McpAgentToken
         {
             UserId = user.Id, Name = name, TokenHash = McpAgentAuthHandler.Hash(secret), Hint = secret.Substring(0, McpAgentToken.Prefix.Length + 4),
-            CompanyIds = string.Join(',', companyIds), Scopes = string.Join(',', scopes), AllowWrites = false,
+            CompanyIds = string.Join(',', companyIds), Scopes = string.Join(',', scopes), AllowWrites = scopes.Any(McpScopes.IsWrite),
             CreatedAt = now, CreatedByUserId = CurrentUserId, ExpiresAt = now.AddDays(req.ExpiresInDays),
         };
         db.McpAgentTokens.Add(token);

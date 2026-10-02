@@ -1,86 +1,95 @@
-# Hosted MCP — connecting AI agents to Trader
+# Hosted MCP: connecting AI tools to Trader
 
-The Trader site exposes a **read-only** Model Context Protocol endpoint at
-`https://<your-site>/mcp` (Streamable HTTP, stateless). An agent connected to it
-acts as ONE signed-in user and can read only what that user can already open in
-the web app. Replace `<your-site>` with the site's origin; never commit the real
-host, a token or a password.
+The Trader site exposes a Model Context Protocol endpoint at `https://<your-site>/mcp`
+(Streamable HTTP, stateless). An AI tool connected to it acts as ONE signed-in user and can
+do only what that user could do by hand, inside the companies chosen for the connection.
+Replace `<your-site>` with the site's origin. Never commit the real host, a token or a
+password.
 
 ## What an agent can do
 
-`list_companies`, `search_clients`, `search_invoices`, `get_invoice`,
-`get_stock`, `search_quotes`. No write, FBR-submission, delete, permission, SQL
-or arbitrary-URL tool exists. Output is data, never instructions.
+**Look things up (always):** `list_companies`, `search_clients`, `search_invoices`,
+`get_invoice`, `get_stock`, `search_quotes`.
 
-## How data stays inside the right company and tenant
+**Create records (opt-in, per token):**
 
-Every call re-checks, as the signed-in user: (1) the `mcp.access.use` key,
-(2) the same permission key as the matching screen, (3) access to the requested
-company through `UserCompany` (never cached; a foreign and a non-existent id
-answer identically), (4) for document ids, the company stored on the document.
-Removing a company, a role, or logging out takes effect on the very next call.
-`scripts/test_mcp_isolation.py` proves all of this (90 checks).
+| Scope | Tools | Needs |
+|---|---|---|
+| `clients.write` | `prepare_client` (create or update) | `clients.manage.create` / `.update` |
+| `quotes.write` | `prepare_quote` | `salesquotes.manage.create` |
 
-## Seed admin: switching MCP on for a tenant
+Writes are two steps. `prepare_*` validates and prices a plan and saves **nothing**;
+`commit_action(planId)` then runs it once, through the same service the web screen uses,
+only after a person approved it. `cancel_action` discards a plan. Challans and bills are the
+next phase; FBR submission, voiding, deleting, credit notes, users, roles and company
+settings are not exposed through MCP at all.
 
-MCP is **off by default**. Neither edition carries `mcp.access.use`; it lives in
-the built-in **MCP Access** system role, which you assign ALONGSIDE an edition.
+## What keeps it safe
 
-1. **Create the tenant administrator** (Users > New): the tenant's owner. Roles:
-   `Tenant Administrator` + an edition (`Sales Edition` or `Complete Edition`) +
-   **`MCP Access`**. Under Companies, grant only that tenant's companies.
-   Leave out `MCP Access` and that tenant can never use MCP, and cannot create a
-   role or assign one that carries it ("you hold only what you grant").
-2. **The tenant administrator creates staff** (Users > New). For each person:
-   edition role + `MCP Access`, and only the companies that person should reach.
-   For a narrower agent, build a private role from the keys needed (for example
-   `mcp.access.use`, `invoices.list.view`, `clients.manage.view`) instead of a
-   whole edition.
-3. **Use a dedicated agent account** per person or purpose. Never connect the
-   seed admin: it sees every company in every tenant by design.
-4. Revoke any time: remove `MCP Access` from the user, remove a company, or
-   delete the user. The next agent call is refused.
+- **Acts as the user.** Every call re-applies the user's permissions and company access.
+- **Narrowed, never widened.** A token names its companies and scopes; the stricter of the
+  user's access and the token's limits wins.
+- **Two opt-in roles, owned by the platform admin.** `MCP Access` lets a user connect at all;
+  `MCP Write` additionally lets their agents create records. Neither edition carries them.
+  A tenant administrator can hand them on only if they hold them.
+- **Plans are single-use.** A plan lasts ten minutes, belongs to one token, and every gate is
+  checked again at commit. A repeated `idempotencyKey` returns the original plan or result,
+  so an email processed twice creates one quotation.
+- **Everything is logged**, refused calls included, in an append-only activity table (who,
+  which agent, tool, company, redacted arguments, outcome, the document produced). The seed
+  admin sees all of it under Users, AI agents; each user sees their own under My Profile,
+  MCP & AI.
+- **Secrets are shown once** and stored as hashes. Revoking, expiring, deleting the user or
+  withdrawing the role ends a connection on its very next call.
 
-## Each user: connect an agent
+## Primary admin: switching MCP on for a tenant
 
-Get a token by signing in (it is the same bearer token the web app uses; it
-expires and then you sign in again; logging out revokes it). Keep it in an
-environment variable, never in a chat or a file in a repository:
+1. **Create the tenant administrator** (Users, New): roles `Tenant Administrator` + an
+   edition (`Sales Edition` or `Complete Edition`) + `MCP Access`, and add `MCP Write` if the
+   tenant's agents may create records. Grant only that tenant's companies.
+2. **The tenant administrator creates staff** with an edition role + `MCP Access` (+ `MCP
+   Write` for those who may write) and only the companies each person should reach. For a
+   narrower agent, build a private role from just the keys needed.
+3. **Use a dedicated user per person or purpose.** Never connect the primary admin: it sees
+   every company in every tenant, so MCP refuses it.
+4. **Optional:** under Users, AI agents, create a token for a user yourself (choose the
+   user, the companies, the scopes, the lifetime).
+5. Revoke any time: revoke the token, remove the role, remove a company, or delete the user.
 
-```bash
-curl -s -X POST https://<your-site>/api/auth/login -H "Content-Type: application/json" \
-  -d '{"username":"<agent-user>","password":"<password>"}'
-# copy the "token" value into TRADER_MCP_TOKEN
-```
+## Each user: connect an AI tool
 
-**Claude Code**
+Open **My Profile, MCP & AI**. It says whether MCP is enabled for you and gives copy-ready
+steps for each tool. There are two ways to connect:
 
-```bash
-claude mcp add --transport http --scope user trader https://<your-site>/mcp \
-  --header "Authorization: Bearer $TRADER_MCP_TOKEN"
-```
+**Sign in (no token to paste), for claude.ai, ChatGPT and any tool that supports MCP sign-in.**
+Add `https://<your-site>/mcp` as a custom connector. The tool sends you to this site, you sign
+in with your ERP login, tick the companies and any extra abilities, and approve. Disconnect by
+revoking the "(sign-in)" token on the same page. This is OAuth 2.1 with PKCE and dynamic client
+registration; discovery is at `/.well-known/oauth-protected-resource`.
 
-**Codex** (`~/.codex/config.toml`; the token stays in the environment)
+**Paste a token (Codex, Claude Code, Claude Desktop).** Create a token on the same page, then:
 
 ```toml
+# Codex: ~/.codex/config.toml (token in the TRADER_MCP_TOKEN environment variable)
 [mcp_servers.trader]
 url = "https://<your-site>/mcp"
 bearer_token_env_var = "TRADER_MCP_TOKEN"
 ```
 
-**Claude Desktop** (Settings > Developer > Edit Config; needs Node.js, uses the
-`mcp-remote` bridge because the connectors screen cannot send a static header)
-
-```json
-{ "mcpServers": { "trader": { "command": "npx",
-  "args": ["-y", "mcp-remote", "https://<your-site>/mcp", "--header", "Authorization:${AUTH}"],
-  "env": { "AUTH": "Bearer <paste token here>" } } } }
+```bash
+claude mcp add --transport http --scope user trader https://<your-site>/mcp \
+  --header "Authorization: Bearer <your token>"
 ```
 
-**claude.ai in the browser and ChatGPT** connect to remote servers through
-OAuth. This endpoint uses bearer tokens, so those two cannot connect yet; an
-OAuth front door is separate work. Until then use Claude Code, Codex or Claude
-Desktop.
+Claude Desktop needs Node.js and the `mcp-remote` bridge; the exact config is on the page.
 
-Check it works: ask the agent to call `list_companies`. Only the user's own
-companies must appear.
+Check it works by asking the tool to list your companies. Only your own should appear.
+
+## Operating notes
+
+- Tokens are `tmcp_...` (agent) and sign-in connections renew with `tmcr_...`; both are
+  accepted on `/mcp` only, and an agent token cannot create more tokens.
+- The activity log is never edited or deleted by the application; no endpoint offers to.
+- Verify with `python scripts/test_mcp_isolation.py`, `test_mcp_agent_tokens.py`,
+  `test_mcp_self_service.py`, `test_mcp_oauth.py` and `test_mcp_writes.py` against a local
+  backend. Design record: `docs/MCP_WRITE_DESIGN.md`.

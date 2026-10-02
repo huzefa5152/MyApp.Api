@@ -6,6 +6,7 @@ import httpClient from "../api/httpClient";
 import { useConfirm } from "./ConfirmDialog";
 import { SecretDialog } from "./McpAgentsPanel";
 import { notify } from "../utils/notify";
+import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
 import { colors, cardStyles, formStyles, modalSizes } from "../theme";
 
 // "MCP & AI" tab on My Profile: whether MCP is switched on for this user, how to
@@ -43,12 +44,14 @@ function NewTokenDialog({ status, onClose, onCreated }) {
   const [name, setName] = useState("");
   const [picked, setPicked] = useState(status.companies.length === 1 ? [status.companies[0].id] : []);
   const [days, setDays] = useState(30);
+  const [scopes, setScopes] = useState(["read"]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const toggleScope = k => setScopes(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k]);
   const toggle = id => setPicked(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
   const submit = async e => {
     e.preventDefault(); setBusy(true); setError("");
-    try { onCreated((await httpClient.post("/mcp/me/tokens", { name, companyIds: picked, scopes: ["read"], expiresInDays: Number(days) })).data); }
+    try { onCreated((await httpClient.post("/mcp/me/tokens", { name, companyIds: picked, scopes, expiresInDays: Number(days) })).data); }
     catch (err) { setError(err.response?.data?.message || "Could not create the token."); }
     finally { setBusy(false); }
   };
@@ -58,12 +61,17 @@ function NewTokenDialog({ status, onClose, onCreated }) {
       <div style={formStyles.header}><h3 style={formStyles.title}>New AI token</h3>
         <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose /></button></div>
       <div style={formStyles.body}>
-        <p style={s.sub}>The token acts as you, and can read only the companies you tick, and only what you can read yourself.</p>
+        <p style={s.sub}>The token acts as you, only in the companies you tick, and never beyond what you can do yourself.</p>
         <label style={s.label}>Name</label>
         <input style={s.input} value={name} maxLength={100} placeholder="e.g. Codex on my laptop" onChange={e => setName(e.target.value)} />
         <label style={s.label}>Companies it may reach</label>
         <div style={s.checks}>{status.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
           <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>
+        <label style={s.label}>What it may do</label>
+        <div style={s.scopes}>{orderedScopes(status.scopesAvailable).map(k => <label key={k} style={{ ...s.scope, ...(scopes.includes(k) ? s.checkOn : {}) }}>
+          <input type="checkbox" checked={scopes.includes(k)} disabled={k === "read"} onChange={() => toggleScope(k)} />
+          <span><strong>{SCOPE_INFO[k].label}</strong><span style={s.scopeHelp}>{SCOPE_INFO[k].help}</span></span></label>)}</div>
+        {status.scopesAvailable.length === 1 && <p style={s.hint}>Creating records needs the MCP Write role. Ask your administrator if you want your AI to draft clients or quotations.</p>}
         <label style={s.label}>Expires after</label>
         <select style={s.input} value={days} onChange={e => setDays(e.target.value)}>
           {[[7, "7 days"], [30, "30 days"], [60, "60 days"], [status.maxLifetimeDays, `${status.maxLifetimeDays} days (maximum)`]].map(([v, l]) => <option key={l} value={v}>{l}</option>)}
@@ -142,7 +150,7 @@ export default function McpMyAccessPanel() {
       <div>
         <strong>{status.enabled ? "MCP is enabled for your account" : status.reason === "seed-admin" ? "The primary admin cannot connect an AI agent" : "MCP is not enabled for your account"}</strong>
         <div style={s.sub}>{status.enabled
-          ? "Your AI tools can read the companies you choose, with the same limits as your own login. Every action they take is recorded."
+          ? "Your AI tools can use the companies you choose, with the same limits as your own login. Everything they do is recorded."
           : status.reason === "seed-admin"
             ? "Create a dedicated user for agents and give that user the MCP Access role."
             : "Ask your administrator to give you the MCP Access role. Once they do, this page lets you create a token and connect your AI tool."}</div>
@@ -155,7 +163,7 @@ export default function McpMyAccessPanel() {
         style={{ ...s.pill, ...(client === k ? s.pillOn : {}) }} onClick={() => setClient(k)}>{g.label}</button>)}
     </div>
     <div style={s.guide}>{guides[client].steps}</div>
-    <p style={s.hint}>Server address: <code>{url}</code>. Today MCP is read-only: your AI can look things up but cannot change anything.</p>
+    <p style={s.hint}>Server address: <code>{url}</code>. Looking things up is always allowed. Creating clients or quotations is a separate permission you choose per token, and every such change is shown to you to approve first.</p>
 
     {status.enabled && <>
       <div style={s.sectionHead}>
@@ -179,6 +187,7 @@ export default function McpMyAccessPanel() {
           <div style={s.cardTop}><div style={{ minWidth: 0 }}><div style={s.strong}>{a.tool}</div><div style={s.muted}>{a.agentName || "Login session"}{a.companyId ? ` · company ${a.companyId}` : ""}</div></div>
             <Badge tone={TONE[a.outcome] || TONE.error}>{(TONE[a.outcome] || TONE.error).label}</Badge></div>
           {a.detail && <div style={s.muted}>{a.detail}</div>}
+          {a.resultRef && a.resultRef !== "FAILED" && <div><span style={s.chip}>{a.resultRef}</span></div>}
           <div style={s.meta} title={absolute(a.at)}>{relative(a.at)} · {a.durationMs} ms</div>
         </article>)}</div>
         <div style={s.pager}>
@@ -221,6 +230,9 @@ const s = {
   checks: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.5rem" },
   check: { display: "flex", alignItems: "center", gap: "0.5rem", minHeight: 44, padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" },
   checkOn: { borderColor: colors.blue, background: "rgba(13,71,161,0.07)" },
+  scopes: { display: "grid", gap: "0.5rem" },
+  scope: { display: "flex", alignItems: "flex-start", gap: "0.6rem", minHeight: 44, padding: "0.55rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" },
+  scopeHelp: { display: "block", fontSize: "0.76rem", fontWeight: 400, color: colors.textSecondary, marginTop: 2 },
   foot: { display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "0.6rem", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },
   alert: { padding: "0.7rem 1rem", margin: "0.8rem 0", borderRadius: 8, background: colors.dangerLight, color: "#842029", border: "1px solid #f5c6cb", fontSize: "0.88rem" },
   empty: { ...cardStyles.card, padding: "1.4rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" },

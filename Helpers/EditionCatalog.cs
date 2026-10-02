@@ -40,6 +40,12 @@ namespace MyApp.Api.Helpers
         public const string CompleteEditionRoleName = "Complete Edition";
         public const string TenantAdminRoleName = "Tenant Administrator";
         public const string McpAccessRoleName = "MCP Access";
+        public const string McpWriteRoleName = "MCP Write";
+
+        public const string McpWriteDescription =
+            "MCP Write — lets a user's connected AI agents create records (clients, quotations) " +
+            "through MCP, each write approved by a person before it commits. Assign it ALONGSIDE " +
+            "MCP Access and an edition: the user's own permissions still bound every write. Built-in.";
 
         public const string McpAccessDescription =
             "MCP Access — lets a user connect an AI coding agent (Claude, Codex, ChatGPT) " +
@@ -164,6 +170,13 @@ namespace MyApp.Api.Helpers
                 .Select(d => d.Key)
                 .ToList();
 
+        /// <summary>The single key behind the opt-in "MCP Write" role.</summary>
+        public static IReadOnlyList<string> McpWriteEffectiveKeys { get; } =
+            PermissionCatalog.All
+                .Where(d => string.Equals(d.Key, "mcp.write.use", StringComparison.OrdinalIgnoreCase))
+                .Select(d => d.Key)
+                .ToList();
+
         /// <summary>The seeded roles, in the order they should be listed.</summary>
         public static IReadOnlyList<(string Name, string Description, IReadOnlyList<string> Keys)> All { get; } =
             new List<(string, string, IReadOnlyList<string>)>
@@ -172,6 +185,7 @@ namespace MyApp.Api.Helpers
                 (CompleteEditionRoleName, CompleteEditionDescription, CompleteEditionKeys),
                 (TenantAdminRoleName,     TenantAdminDescription,     TenantAdminEffectiveKeys),
                 (McpAccessRoleName,       McpAccessDescription,       McpAccessEffectiveKeys),
+                (McpWriteRoleName,        McpWriteDescription,        McpWriteEffectiveKeys),
             };
     }
 }

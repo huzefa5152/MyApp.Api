@@ -7,6 +7,7 @@ import { getUsers } from "../api/usersApi";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfirm } from "./ConfirmDialog";
 import { notify } from "../utils/notify";
+import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
 import { colors, cardStyles, formStyles, modalSizes } from "../theme";
 
 // Seed-admin console for AI agents (Codex, Claude, automations) connected through
@@ -55,6 +56,8 @@ function NewTokenDialog({ onClose, onCreated }) {
   const [users, setUsers] = useState([]);
   const [userId, setUserId] = useState("");
   const [companies, setCompanies] = useState([]);
+  const [available, setAvailable] = useState(["read"]);
+  const [scopes, setScopes] = useState(["read"]);
   const [picked, setPicked] = useState([]);
   const [name, setName] = useState("");
   const [days, setDays] = useState(30);
@@ -63,21 +66,22 @@ function NewTokenDialog({ onClose, onCreated }) {
 
   useEffect(() => { getUsers().then(r => setUsers(r.data.filter(u => u.id !== 1))).catch(() => setError("Could not load users.")); }, []);
   useEffect(() => {
-    setPicked([]); setCompanies([]);
+    setPicked([]); setCompanies([]); setAvailable(["read"]); setScopes(["read"]);
     if (!userId) return;
     let live = true;
-    httpClient.get(`/usercompanies/user/${userId}`).then(r => {
-      if (live) setCompanies(r.data.companies.filter(c => c.hasExplicitGrant));
+    httpClient.get(`/mcp-admin/eligibility/${userId}`).then(r => {
+      if (live) { setCompanies(r.data.companies.map(c => ({ companyId: c.id, companyName: c.name }))); setAvailable(r.data.scopesAvailable); }
     }).catch(() => live && setError("Could not load that user's companies."));
     return () => { live = false; };
   }, [userId]);
 
   const toggle = id => setPicked(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleScope = k => setScopes(p => p.includes(k) ? p.filter(x => x !== k) : [...p, k]);
   const submit = async e => {
     e.preventDefault();
     setBusy(true); setError("");
     try {
-      const r = await httpClient.post("/mcp-admin/tokens", { userId: Number(userId), name, companyIds: picked, scopes: ["read"], expiresInDays: Number(days) });
+      const r = await httpClient.post("/mcp-admin/tokens", { userId: Number(userId), name, companyIds: picked, scopes, expiresInDays: Number(days) });
       onCreated(r.data);
     } catch (err) { setError(err.response?.data?.message || "Could not create the token."); }
     finally { setBusy(false); }
@@ -90,7 +94,7 @@ function NewTokenDialog({ onClose, onCreated }) {
         <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose /></button>
       </div>
       <div style={formStyles.body}>
-        <p style={s.sub}>The token acts as one user and can read only the companies you tick, and only what that user may read. Read-only for now.</p>
+        <p style={s.sub}>The token acts as one user, only in the companies you tick, and never beyond what that user may do. Every write is shown to a person to approve first.</p>
         <label style={s.label}>Agent name</label>
         <input style={s.input} value={name} maxLength={100} placeholder="e.g. Codex on my laptop" onChange={e => setName(e.target.value)} />
         <label style={s.label}>Runs as user</label>
@@ -105,6 +109,11 @@ function NewTokenDialog({ onClose, onCreated }) {
         <div style={s.checks}>{companies.map(c => <label key={c.companyId} style={{ ...s.check, ...(picked.includes(c.companyId) ? s.checkOn : {}) }}>
           <input type="checkbox" checked={picked.includes(c.companyId)} onChange={() => toggle(c.companyId)} /> {c.companyName}
         </label>)}</div>
+        <label style={s.label}>What it may do</label>
+        <div style={s.scopes}>{orderedScopes(available).map(k => <label key={k} style={{ ...s.scope, ...(scopes.includes(k) ? s.checkOn : {}) }}>
+          <input type="checkbox" checked={scopes.includes(k)} disabled={k === "read"} onChange={() => toggleScope(k)} />
+          <span><strong>{SCOPE_INFO[k].label}</strong><span style={s.scopeHelp}>{SCOPE_INFO[k].help}</span></span></label>)}</div>
+        {userId && available.length === 1 && <p style={s.hint}>This user has no write access. Assign the MCP Write role to let their agents create records.</p>}
         <label style={s.label}>Expires after</label>
         <select style={s.input} value={days} onChange={e => setDays(e.target.value)}>
           {[[7, "7 days"], [30, "30 days"], [60, "60 days"], [90, "90 days (maximum)"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -190,7 +199,8 @@ export default function McpAgentsPanel() {
   const refresh = () => { loadTokens(); loadActivity(); };
   const from = activity && activity.total ? (activity.page - 1) * activity.pageSize + 1 : 0;
   const to = activity ? Math.min(activity.page * activity.pageSize, activity.total) : 0;
-  const chips = t => t.companies.map(c => <span key={c.id} style={s.chip}>{c.name}</span>);
+  const chips = t => [...t.companies.map(c => <span key={`c${c.id}`} style={s.chip}>{c.name}</span>),
+    ...t.scopes.filter(x => x !== "read").map(x => <span key={x} style={{ ...s.chip, color: "#8a4b00", background: "#fff4e5" }}>{x}</span>)];
   const revokeBtn = t => t.status === "Active" && <button style={s.danger} disabled={busy} onClick={() => revoke(t)}><MdBlock aria-hidden /> Revoke</button>;
 
   return <section style={{ minWidth: 0 }} aria-label="AI agents">
@@ -255,6 +265,7 @@ export default function McpAgentsPanel() {
           <div style={s.cardTop}><div style={{ minWidth: 0 }}><div style={s.strong}>{a.tool}</div><div style={s.muted}>{a.agentName || "Login session"} · @{a.username}</div></div>
             <Badge tone={OUTCOME_TONE[a.outcome] || OUTCOME_TONE.error}>{(OUTCOME_TONE[a.outcome] || OUTCOME_TONE.error).label}</Badge></div>
           {a.detail && <div style={s.muted}>{a.detail}</div>}
+          {a.resultRef && a.resultRef !== "FAILED" && <div><span style={s.chip}>{a.resultRef}</span></div>}
           <div style={s.metaGrid}>
             <div><span style={s.metaLabel}>When</span><span style={s.metaValue} title={absolute(a.at)}>{relative(a.at)}</span></div>
             <div><span style={s.metaLabel}>Company</span><span style={s.metaValue}>{a.companyId ?? "—"}</span></div>
@@ -271,6 +282,7 @@ export default function McpAgentsPanel() {
             <td style={s.td}>{a.companyId ?? "—"}</td>
             <td style={s.td}><Badge tone={OUTCOME_TONE[a.outcome] || OUTCOME_TONE.error}>{(OUTCOME_TONE[a.outcome] || OUTCOME_TONE.error).label}</Badge></td>
             <td style={s.td}>{a.detail && <div style={s.muted}>{a.detail}</div>}
+              {a.resultRef && a.resultRef !== "FAILED" && <div style={{ marginTop: 4 }}><span style={s.chip}>{a.resultRef}</span></div>}
               {a.arguments && <details><summary style={s.muted}>Arguments · {a.durationMs} ms</summary><pre style={s.pre}>{a.arguments}</pre></details>}</td>
           </tr>)}</tbody>
         </table></div>)}
@@ -306,6 +318,9 @@ const s = {
   checks: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.5rem" },
   check: { display: "flex", alignItems: "center", gap: "0.5rem", minHeight: 44, padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" },
   checkOn: { borderColor: colors.blue, background: "rgba(13,71,161,0.07)" },
+  scopes: { display: "grid", gap: "0.5rem" },
+  scope: { display: "flex", alignItems: "flex-start", gap: "0.6rem", minHeight: 44, padding: "0.55rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" },
+  scopeHelp: { display: "block", fontSize: "0.76rem", fontWeight: 400, color: colors.textSecondary, marginTop: 2 },
   foot: { display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "0.6rem", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },
   warn: { padding: "0.7rem 1rem", borderRadius: 8, background: "#fff3cd", color: "#664d03", border: "1px solid #ffecb5", fontSize: "0.86rem", lineHeight: 1.45 },
   secretRow: { display: "flex", alignItems: "flex-start", gap: "0.5rem" },
