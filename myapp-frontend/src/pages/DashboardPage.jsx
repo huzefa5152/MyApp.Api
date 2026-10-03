@@ -11,36 +11,34 @@
 //   • If the user has dashboard.view but no .kpi.* perms → welcome
 //     banner only. No metrics, no chart, no leak.
 //
-// Layout (mobile-first):
-//   • Hero band: 1 col on mobile, 2 cols at 480px, 4 cols at 768px+.
-//     Uses CSS grid auto-fit/minmax — no media queries needed.
-//   • Section grid: 1 col on mobile, 2 cols at 1024px+. Each section
-//     is a card with header, content, optional empty-state line.
-//   • Period picker: full-width on mobile, inline on desktop.
+// Layout (mobile-first, built from the shared UI kit so it follows the
+// selected theme — Classic roomy, Workspace compact):
+//   • PageHeader (greeting + period picker) + CompanyPicker.
+//   • Hero KPI band: StatGrid of KpiCards (auto-fit, collapses on phones).
+//   • Section grid: kit Cards — 1 col on mobile, 2 cols when wide.
 //
 // Visuals:
-//   • Each section has a small accent strip in its KPI cards so the
-//     identity (Sales / Purchases / FBR / Inventory) is readable
-//     without colour ambiguity.
+//   • Each section card carries its identity tone (Sales blue /
+//     Purchases teal / FBR purple / Inventory orange).
 //   • Numbers are monospace + PKR locale formatted.
 //   • Sparklines are inline SVG (no charting lib) — tight bundle size,
 //     full mobile control.
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   MdTrendingUp, MdShoppingCart, MdReceipt, MdInventory, MdCloudDone,
-  MdHourglassEmpty, MdError, MdCheckCircle, MdLock, MdRefresh,
-  MdOpenInNew, MdInfo, MdAttachMoney, MdAccountBalance,
+  MdHourglassEmpty, MdError, MdCheckCircle, MdLock,
+  MdOpenInNew, MdInfo, MdAttachMoney, MdAccountBalance, MdDashboard,
 } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { getDashboardKpis } from "../api/dashboardApi";
 import KpiCard from "../Components/dashboard/KpiCard";
-import Sparkline from "../Components/dashboard/Sparkline";
 import TopList from "../Components/dashboard/TopList";
 import ByCounterpartyCard from "../Components/dashboard/ByCounterpartyCard";
 import { notify } from "../utils/notify";
+import { PageHeader, CompanyPicker, Card, StatGrid, EmptyState, Loading, Alert } from "../ui/Kit";
 import "./DashboardPage.css";
 
 const PERIOD_OPTIONS = [
@@ -65,6 +63,8 @@ const accents = {
   inventory: "#e65100",
 };
 
+const MONO = '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
+
 function formatPkr(v) {
   if (v == null || isNaN(v)) return "Rs. 0";
   return `Rs. ${Number(v).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
@@ -83,7 +83,7 @@ function formatDate(s) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { selectedCompany, companies, setSelectedCompany } = useCompany();
+  const { selectedCompany, companies } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
 
   const [period, setPeriod] = useState(() => localStorage.getItem(PERIOD_STORAGE_KEY) || "all-time");
@@ -126,15 +126,19 @@ export default function DashboardPage() {
   // ── Permission gates (fast-paths before render) ─────────────────────
 
   if (permsLoading) {
-    return <Shell><LoadingShimmer /></Shell>;
+    return <Shell><Loading>Loading dashboard…</Loading></Shell>;
   }
 
   if (!canViewPage) {
-    return <Shell><AccessDeniedBanner displayName={displayName} reason="page" /></Shell>;
+    return <Shell><AccessDeniedBanner displayName={displayName} /></Shell>;
   }
 
   if (!selectedCompany) {
-    return <Shell><EmptyState heading="Pick a company" body="Use the company picker in the top bar to start." /></Shell>;
+    return (
+      <Shell>
+        <EmptyState icon={MdInfo} title="Pick a company">Use the company picker in the top bar to start.</EmptyState>
+      </Shell>
+    );
   }
 
   // We allow the page to render the welcome banner before data lands,
@@ -148,22 +152,18 @@ export default function DashboardPage() {
       <Header
         displayName={displayName}
         companies={companies}
-        selectedCompanyId={selectedCompany?.id}
-        onCompanyChange={(id) => {
-          const c = companies.find((cc) => cc.id === id);
-          if (c) setSelectedCompany(c);
-        }}
+        selectedCompany={selectedCompany}
         period={period}
         onPeriodChange={setPeriod}
       />
 
       {error && (
-        <div style={{ ...styles.card, borderLeft: "4px solid #c62828", color: "#c62828", fontSize: "0.85rem" }}>
+        <Alert tone="error" icon={MdError}>
           <strong>Couldn't load dashboard:</strong> {error}
-        </div>
+        </Alert>
       )}
 
-      {loading && !data && <LoadingShimmer />}
+      {loading && !data && <Loading>Loading dashboard…</Loading>}
 
       {!loading && data && !hasAnyKpi && (
         <WelcomeOnlyBanner displayName={displayName} />
@@ -229,7 +229,7 @@ export default function DashboardPage() {
 
 function Shell({ children }) {
   // .dl-main already provides outer padding (1.75rem 2rem desktop / 1.25rem 1rem mobile),
-  // so the dashboard itself only needs a max-width cap and the inner element gap.
+  // so the dashboard itself only needs a max-width cap.
   return (
     <div style={{ maxWidth: 1480, margin: "0 auto" }}>
       {children}
@@ -237,118 +237,58 @@ function Shell({ children }) {
   );
 }
 
-function Header({ displayName, companies, selectedCompanyId, onCompanyChange, period, onPeriodChange }) {
+function Header({ displayName, companies, selectedCompany, period, onPeriodChange }) {
   const periodLabel = PERIOD_OPTIONS.find((p) => p.code === period)?.label || "";
-  const selectedCompany = companies?.find((c) => c.id === selectedCompanyId);
   // Hide the picker when there's only one company — showing a 1-option
   // dropdown is just visual noise.
   const showCompanyPicker = (companies?.length ?? 0) > 1;
   return (
-    <header className="dash-hero" style={styles.heroBanner}>
-      <div className="dash-hero__title-block" style={{ flex: 1, minWidth: 0, position: "relative" }}>
-        <p style={styles.heroEyebrow}>Overview</p>
-        <h1 className="dash-hero__heading" style={styles.heroHeading}>
-          Welcome back, <span style={{ color: "#9ef2ff" }}>{displayName}</span>
-        </h1>
-        <p className="dash-hero__subtitle" style={styles.heroSubtitle}>
-          {selectedCompany?.name ? <><strong>{selectedCompany.name}</strong> · </> : null}
-          Showing <strong>{periodLabel}</strong>
-        </p>
-      </div>
-      {/* Picker bar — wraps to a new line on phones (flex-wrap on
-          parent), sits inline on desktop. Each control is full-width
-          on phones so taps land easily. */}
-      <div className="dash-hero__pickers" style={styles.heroPickers}>
-        {showCompanyPicker && (
+    <>
+      <PageHeader
+        icon={MdDashboard}
+        tone="brand"
+        className="k-header--hero"
+        title={<>Welcome back, <span style={{ color: "var(--k-tone)" }}>{displayName}</span></>}
+        subtitle={(
+          <>
+            Overview · {selectedCompany?.name ? <><strong>{selectedCompany.name}</strong> · </> : null}
+            Showing <strong>{periodLabel}</strong>
+          </>
+        )}
+        actions={(
           <select
-            value={selectedCompanyId ?? ""}
-            onChange={(e) => onCompanyChange(parseInt(e.target.value, 10))}
-            className="dash-hero__select"
-            style={styles.heroSelect}
-            aria-label="Company"
+            value={period}
+            onChange={(e) => onPeriodChange(e.target.value)}
+            className="k-select"
+            style={{ width: "auto", minWidth: 150 }}
+            aria-label="Period"
           >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+            {PERIOD_OPTIONS.map((p) => (
+              <option key={p.code} value={p.code}>{p.label}</option>
             ))}
           </select>
         )}
-        <select
-          value={period}
-          onChange={(e) => onPeriodChange(e.target.value)}
-          className="dash-hero__select"
-          style={styles.heroSelect}
-          aria-label="Period"
-        >
-          {PERIOD_OPTIONS.map((p) => (
-            <option key={p.code} value={p.code}>{p.label}</option>
-          ))}
-        </select>
-      </div>
-    </header>
+      />
+      {showCompanyPicker && <CompanyPicker />}
+    </>
   );
 }
 
 function WelcomeOnlyBanner({ displayName }) {
   return (
-    <div className="dash-card" style={{ ...styles.card, padding: "2.5rem 1.5rem", textAlign: "center" }}>
-      <span style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 52, height: 52, borderRadius: 16, marginBottom: "0.8rem",
-        background: "rgba(13, 71, 161, 0.08)", border: "1px solid rgba(13, 71, 161, 0.18)",
-        color: "#0d47a1",
-      }}>
-        <MdInfo size={26} />
-      </span>
-      <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700, color: "#0c1830", fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif' }}>
-        Welcome back, {displayName}
-      </h2>
-      <p style={{ margin: "0.4rem auto 0", maxWidth: 480, fontSize: "0.9rem", color: "#5b6b86", lineHeight: 1.55 }}>
-        Your role doesn't include any dashboard KPI permissions yet. Ask an admin to grant Sales,
-        Purchases, FBR, or Inventory KPI access to see metrics here.
-      </p>
-    </div>
+    <EmptyState icon={MdInfo} title={`Welcome back, ${displayName}`}>
+      Your role doesn't include any dashboard KPI permissions yet. Ask an admin to grant Sales,
+      Purchases, FBR, or Inventory KPI access to see metrics here.
+    </EmptyState>
   );
 }
 
-function AccessDeniedBanner({ displayName, reason }) {
+function AccessDeniedBanner({ displayName }) {
   return (
-    <div style={{ ...styles.card, padding: "2.5rem 1.5rem", textAlign: "center" }}>
-      <MdLock size={48} color="#9e9e9e" style={{ marginBottom: "0.5rem" }} />
-      <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700, color: "#1a2332" }}>
-        No dashboard access
-      </h2>
-      <p style={{ margin: "0.4rem auto 0", maxWidth: 480, fontSize: "0.9rem", color: "#5f6d7e", lineHeight: 1.5 }}>
-        Hi {displayName}, your role doesn't have permission to view the dashboard.
-        Use the sidebar to navigate to a section you have access to.
-      </p>
-    </div>
-  );
-}
-
-function EmptyState({ heading, body, icon = MdInfo }) {
-  const Icon = icon;
-  return (
-    <div style={{ ...styles.card, padding: "2rem 1.5rem", textAlign: "center" }}>
-      <Icon size={36} color="#9e9e9e" />
-      <h3 style={{ margin: "0.5rem 0 0.25rem", fontSize: "1rem", fontWeight: 700, color: "#1a2332" }}>{heading}</h3>
-      <p style={{ margin: 0, fontSize: "0.85rem", color: "#5f6d7e" }}>{body}</p>
-    </div>
-  );
-}
-
-function LoadingShimmer() {
-  // Plain skeleton — same layout as the real cards so paint is stable.
-  return (
-    <>
-      <div style={styles.heroGrid}>
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} style={{ ...styles.card, height: 140, animation: "fadeIn 0.4s ease" }}>
-            <div style={{ width: "60%", height: 12, background: "#eef2f7", borderRadius: 4, marginBottom: 16 }} />
-            <div style={{ width: "75%", height: 28, background: "#eef2f7", borderRadius: 4 }} />
-          </div>
-        ))}
-      </div>
-    </>
+    <EmptyState icon={MdLock} title="No dashboard access">
+      Hi {displayName}, your role doesn't have permission to view the dashboard.
+      Use the sidebar to navigate to a section you have access to.
+    </EmptyState>
   );
 }
 
@@ -369,113 +309,85 @@ function HeroBand({ data }) {
   const showGstNet = showSales && showPurchases;
 
   return (
-    <section className="dash-hero-grid" style={styles.heroGrid} aria-label="Headline KPIs">
-      {showSales && (
-        <KpiCard
-          label="Total Sales"
-          value={hero.totalSales}
-          prevValue={hero.totalSalesPrev}
-          accent={accents.sales}
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          trend={sales?.trend12m}
-          icon={<MdAttachMoney size={16} />}
-          title="Sum of GrandTotal across all sales invoices in the selected period"
-        />
-      )}
-      {showPurchases && (
-        <KpiCard
-          label="Total Purchases"
-          value={hero.totalPurchases}
-          prevValue={hero.totalPurchasesPrev}
-          accent={accents.purchases}
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          trend={purchases?.trend12m}
-          icon={<MdShoppingCart size={16} />}
-          higherIsBetter={false}
-          title="Sum of GrandTotal across all purchase bills in the selected period"
-        />
-      )}
-      {showNet && (
-        <KpiCard
-          label="Net (Sales − Purchases)"
-          value={hero.net}
-          prevValue={hero.netPrev}
-          accent="#37474f"
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          icon={<MdTrendingUp size={16} />}
-          title="What's left after subtracting purchases from sales — a rough cash-flow signal"
-        />
-      )}
-      {showGstNet && (
-        <KpiCard
-          label="GST Net (Output − Input)"
-          value={hero.gstNet}
-          prevValue={hero.gstNetPrev}
-          accent="#6a1b9a"
-          format={(v) => `Rs. ${formatPkrCompact(v)}`}
-          icon={<MdAccountBalance size={16} />}
-          higherIsBetter={false}
-          title="Output Tax (collected on sales) minus Input Tax (paid on purchases) — what you owe FBR"
-        />
-      )}
+    <section aria-label="Headline KPIs">
+      <StatGrid className="dash-hero-grid">
+        {showSales && (
+          <KpiCard
+            label="Total Sales"
+            value={hero.totalSales}
+            prevValue={hero.totalSalesPrev}
+            accent={accents.sales}
+            format={(v) => `Rs. ${formatPkrCompact(v)}`}
+            trend={sales?.trend12m}
+            icon={<MdAttachMoney size={16} />}
+            title="Sum of GrandTotal across all sales invoices in the selected period"
+          />
+        )}
+        {showPurchases && (
+          <KpiCard
+            label="Total Purchases"
+            value={hero.totalPurchases}
+            prevValue={hero.totalPurchasesPrev}
+            accent={accents.purchases}
+            format={(v) => `Rs. ${formatPkrCompact(v)}`}
+            trend={purchases?.trend12m}
+            icon={<MdShoppingCart size={16} />}
+            higherIsBetter={false}
+            title="Sum of GrandTotal across all purchase bills in the selected period"
+          />
+        )}
+        {showNet && (
+          <KpiCard
+            label="Net (Sales − Purchases)"
+            value={hero.net}
+            prevValue={hero.netPrev}
+            accent="#37474f"
+            format={(v) => `Rs. ${formatPkrCompact(v)}`}
+            icon={<MdTrendingUp size={16} />}
+            title="What's left after subtracting purchases from sales — a rough cash-flow signal"
+          />
+        )}
+        {showGstNet && (
+          <KpiCard
+            label="GST Net (Output − Input)"
+            value={hero.gstNet}
+            prevValue={hero.gstNetPrev}
+            accent="#6a1b9a"
+            format={(v) => `Rs. ${formatPkrCompact(v)}`}
+            icon={<MdAccountBalance size={16} />}
+            higherIsBetter={false}
+            title="Output Tax (collected on sales) minus Input Tax (paid on purchases) — what you owe FBR"
+          />
+        )}
+      </StatGrid>
     </section>
   );
 }
 
 // ── Sections ───────────────────────────────────────────────────────
 
-function SectionCard({ title, accent, icon, children, headerExtra = null }) {
-  const Icon = icon;
+function SectionCard({ title, tone, icon, children, headerExtra = null }) {
   return (
-    <section className="dash-card" style={{ ...styles.card, "--acc": accent, padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      <header className="dash-section-card__header" style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "0.65rem",
-        padding: "0.85rem 1.15rem",
-        borderBottom: "1px solid #eef2f8",
-      }}>
-        <span className="dash-section-card__header-icon" style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          background: `${accent}12`,
-          border: `1px solid ${accent}2e`,
-          color: accent,
-          flexShrink: 0,
-        }}>
-          <Icon size={17} />
-        </span>
-        <h2 style={{
-          margin: 0,
-          fontSize: "1rem",
-          fontWeight: 700,
-          color: "#0c1830",
-          flex: 1,
-          letterSpacing: "-0.01em",
-          minWidth: 0,
-          fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
-        }}>{title}</h2>
-        {headerExtra}
-      </header>
-      <div className="dash-section-card__body" style={{ padding: "0.95rem 1.15rem 1.05rem", display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+    <Card className="dash-card" title={title} icon={icon} tone={tone} actions={headerExtra} style={{ marginTop: 0 }}>
+      <div style={styles.sectionBody}>
         {children}
       </div>
-    </section>
+    </Card>
+  );
+}
+
+function OpenLink({ to, title }) {
+  return (
+    <Link to={to} className="k-btn k-btn--secondary k-btn--sm dash-section-card__open" title={title}>
+      <MdOpenInNew size={14} aria-hidden="true" /> <span className="dash-section-card__open-label">Open</span>
+    </Link>
   );
 }
 
 function SalesSection({ data, canOpen = false }) {
   return (
-    <SectionCard title="Sales" accent={accents.sales} icon={MdReceipt}
-      headerExtra={canOpen ? (
-        <Link to="/invoices" className="dash-section-card__open" style={styles.headerLink} title="Open Invoices page">
-          <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
-        </Link>
-      ) : null}
+    <SectionCard title="Sales" tone="blue" icon={MdReceipt}
+      headerExtra={canOpen ? <OpenLink to="/invoices" title="Open Invoices page" /> : null}
     >
       <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Invoices" value={data.invoiceCount} />
@@ -495,12 +407,8 @@ function SalesSection({ data, canOpen = false }) {
 
 function PurchasesSection({ data, canOpen = false }) {
   return (
-    <SectionCard title="Purchases" accent={accents.purchases} icon={MdShoppingCart}
-      headerExtra={canOpen ? (
-        <Link to="/purchase-bills" className="dash-section-card__open" style={{ ...styles.headerLink, color: accents.purchases, borderColor: accents.purchases }} title="Open Purchase Bills page">
-          <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
-        </Link>
-      ) : null}
+    <SectionCard title="Purchases" tone="teal" icon={MdShoppingCart}
+      headerExtra={canOpen ? <OpenLink to="/purchase-bills" title="Open Purchase Bills page" /> : null}
     >
       <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Bills" value={data.billCount} />
@@ -523,7 +431,7 @@ function FbrSection({ data }) {
   // submitted, with failed as a separate signal. Reconciliation is
   // the bottom row.
   return (
-    <SectionCard title="FBR / Compliance" accent={accents.fbr} icon={MdCloudDone}>
+    <SectionCard title="FBR / Compliance" tone="purple" icon={MdCloudDone}>
       <div className="dash-funnel-grid" style={styles.fbrGrid}>
         <Funnel label="Pending"   value={data.pendingSubmission} color="#f57c00" icon={MdHourglassEmpty} />
         <Funnel label="Validated" value={data.validated}         color="#0277bd" icon={MdCheckCircle} />
@@ -532,7 +440,7 @@ function FbrSection({ data }) {
       </div>
 
       {data.excluded > 0 && (
-        <div style={{ fontSize: "0.78rem", color: "#5f6d7e", paddingLeft: "0.25rem" }}>
+        <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", paddingLeft: "0.25rem" }}>
           <strong>{data.excluded}</strong> bill{data.excluded !== 1 ? "s" : ""} excluded from bulk submit (operator marked as skip).
         </div>
       )}
@@ -551,12 +459,8 @@ function FbrSection({ data }) {
 
 function InventorySection({ data, canOpen = false }) {
   return (
-    <SectionCard title="Inventory" accent={accents.inventory} icon={MdInventory}
-      headerExtra={canOpen ? (
-        <Link to="/stock" className="dash-section-card__open" style={{ ...styles.headerLink, color: accents.inventory, borderColor: accents.inventory }} title="Open Stock Dashboard">
-          <MdOpenInNew size={14} /> <span className="dash-section-card__open-label">Open</span>
-        </Link>
-      ) : null}
+    <SectionCard title="Inventory" tone="orange" icon={MdInventory}
+      headerExtra={canOpen ? <OpenLink to="/stock" title="Open Stock Dashboard" /> : null}
     >
       <div className="dash-meta-row" style={styles.metaRow}>
         <Stat label="Stock value" value={formatPkr(data.totalStockValue)} highlight />
@@ -577,19 +481,15 @@ function InventorySection({ data, canOpen = false }) {
         {(data.recentMovements || []).length === 0
           ? <EmptyLine>No recent stock movements.</EmptyLine>
           : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <div style={styles.rowList}>
               {data.recentMovements.map((m, i) => (
-                <div key={`${m.id}-${i}`} className="dash-mov-row" style={{
-                  display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.83rem",
-                  padding: "0.45rem 0.6rem", background: "#f8fafd",
-                  border: "1px solid #eef2f8", borderRadius: 10,
-                }}>
+                <div key={`${m.id}-${i}`} className="dash-mov-row" style={styles.listRow}>
                   <span style={{ ...styles.miniChip, color: m.direction === "In" ? "#15803d" : "#c62828", backgroundColor: m.direction === "In" ? "rgba(21,128,61,0.10)" : "rgba(198,40,40,0.09)" }}>
                     {m.direction}
                   </span>
-                  <span className="dash-mov-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{m.itemTypeName}</span>
-                  <span className="dash-mov-row__qty" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830" }}>{m.quantity}</span>
-                  <span style={{ color: "#69788f", fontSize: "0.73rem" }}>{formatDate(m.date)}</span>
+                  <span className="dash-mov-row__name" style={{ ...styles.clampName, flex: 1 }}>{m.itemTypeName}</span>
+                  <span className="dash-mov-row__qty" style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "var(--k-ink)" }}>{m.quantity}</span>
+                  <span style={{ color: "var(--k-muted)", fontSize: "0.73rem" }}>{formatDate(m.date)}</span>
                 </div>
               ))}
             </div>
@@ -607,7 +507,7 @@ function Stat({ label, value, highlight = false, warn = false }) {
       <div className="dash-stat-label" style={styles.statLabel}>{label}</div>
       <div className="dash-stat-value" style={{
         ...styles.statValue,
-        color: warn ? "#c62828" : highlight ? "#0c1830" : "#3b4a63",
+        color: warn ? "var(--k-danger)" : highlight ? "var(--k-ink)" : "var(--k-muted)",
         fontWeight: highlight ? 700 : 500,
       }}>{value ?? "—"}</div>
     </div>
@@ -629,14 +529,14 @@ function Funnel({ label, value, color, icon }) {
         <Icon size={15} />
       </div>
       <div style={{
-        fontSize: "0.64rem", color: "#69788f", textTransform: "uppercase",
+        fontSize: "0.64rem", color: "var(--k-muted)", textTransform: "uppercase",
         letterSpacing: "0.1em", fontWeight: 600,
-        fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+        fontFamily: MONO,
       }}>{label}</div>
       <div className="dash-funnel-card__value" style={{
-        fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+        fontFamily: MONO,
         fontVariantNumeric: "tabular-nums",
-        fontSize: "1.35rem", fontWeight: 600, color,
+        fontSize: "var(--k-stat-value)", fontWeight: 600, color,
       }}>
         {value || 0}
       </div>
@@ -647,25 +547,21 @@ function Funnel({ label, value, color, icon }) {
 function ReconChip({ label, value, color }) {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", padding: "0.3rem 0.75rem", borderRadius: 999, border: `1px solid ${color}40`, backgroundColor: `${color}0d` }}>
-      <span style={{ fontSize: "0.74rem", color: "#3b4a63", fontWeight: 600 }}>{label}</span>
-      <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontSize: "0.85rem", fontWeight: 600, color }}>{value || 0}</span>
+      <span style={{ fontSize: "0.74rem", color: "var(--k-ink)", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", fontSize: "var(--k-font)", fontWeight: 600, color }}>{value || 0}</span>
     </div>
   );
 }
 
 function RecentList({ rows }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+    <div style={styles.rowList}>
       {rows.map((r, i) => (
-        <div key={`${r.id}-${i}`} className="dash-recent-row" style={{
-          display: "flex", alignItems: "center", gap: "0.55rem", fontSize: "0.83rem",
-          flexWrap: "wrap", padding: "0.45rem 0.6rem", background: "#f8fafd",
-          border: "1px solid #eef2f8", borderRadius: 10,
-        }}>
-          <span className="dash-recent-row__number" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontSize: "0.75rem", color: "#69788f", flexShrink: 0 }}>#{r.number}</span>
-          <span className="dash-recent-row__name" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600, color: "#0c1830" }}>{r.counterpartyName || "(unknown)"}</span>
-          <span className="dash-recent-row__date" style={{ color: "#69788f", fontSize: "0.73rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
-          <span className="dash-recent-row__amount" style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "#0c1830", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
+        <div key={`${r.id}-${i}`} className="dash-recent-row" style={{ ...styles.listRow, flexWrap: "wrap" }}>
+          <span className="dash-recent-row__number" style={{ fontFamily: MONO, fontSize: "0.75rem", color: "var(--k-muted)", flexShrink: 0 }}>#{r.number}</span>
+          <span className="dash-recent-row__name" style={{ ...styles.clampName, flex: 1 }}>{r.counterpartyName || "(unknown)"}</span>
+          <span className="dash-recent-row__date" style={{ color: "var(--k-muted)", fontSize: "0.73rem", flexShrink: 0 }}>{formatDate(r.date)}</span>
+          <span className="dash-recent-row__amount" style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", fontWeight: 600, color: "var(--k-ink)", flexShrink: 0 }}>{formatPkr(r.grandTotal)}</span>
         </div>
       ))}
     </div>
@@ -673,142 +569,84 @@ function RecentList({ rows }) {
 }
 
 function EmptyLine({ children }) {
-  return <div style={{ fontSize: "0.83rem", color: "#5f6d7e", fontStyle: "italic" }}>{children}</div>;
+  return <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontStyle: "italic" }}>{children}</div>;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────
 //
-// Mobile-first: all grids use auto-fit/minmax so they collapse to one
-// column on small screens without needing media queries. clamp()
-// handles fluid font sizes / paddings.
+// Page-specific layout only; surfaces, sizes and colours come from the
+// kit tokens (--k-*) so Classic and Workspace both apply. All grids use
+// auto-fit/minmax so they collapse to one column on small screens.
 
 const styles = {
-  heroBanner: {
-    position: "relative",
-    // Layer order: cyan glow (top-right) → teal glow (bottom-left) →
-    // blueprint grid lines → brand gradient base. Same visual language
-    // as the public landing/login, so the product feels like one piece.
-    background: `
-      radial-gradient(80% 160% at 100% 0%, rgba(34, 224, 255, 0.16) 0%, transparent 55%),
-      radial-gradient(60% 140% at 0% 100%, rgba(0, 137, 123, 0.30) 0%, transparent 60%),
-      linear-gradient(to right, rgba(160, 195, 255, 0.07) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(160, 195, 255, 0.07) 1px, transparent 1px),
-      linear-gradient(135deg, #0a2d66 0%, #0d47a1 48%, #0b6e62 100%)
-    `,
-    backgroundSize: "auto, auto, 44px 44px, 44px 44px, auto",
-    borderRadius: 18,
-    padding: "1.15rem 1.3rem",
-    color: "#fff",
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: "0.85rem",
-    marginBottom: "0.85rem",
-    boxShadow: "0 18px 40px -18px rgba(8, 34, 84, 0.55)",
-    overflow: "hidden",
-  },
-  heroEyebrow: {
-    margin: "0 0 0.25rem",
-    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
-    fontSize: "0.62rem",
-    fontWeight: 600,
-    letterSpacing: "0.24em",
-    textTransform: "uppercase",
-    color: "rgba(158, 242, 255, 0.85)",
-  },
-  heroHeading: {
-    margin: 0,
-    fontSize: "clamp(1.15rem, 3.5vw, 1.5rem)",
-    fontWeight: 700,
-    color: "#fff",
-    lineHeight: 1.2,
-    letterSpacing: "-0.01em",
-    fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
-  },
-  heroSubtitle: {
-    margin: "0.3rem 0 0",
-    fontSize: "0.84rem",
-    color: "rgba(222, 235, 255, 0.78)",
-  },
-  // Picker bar in the hero. The hero banner itself is flex-wrap, so
-  // this block sits inline next to the greeting on desktop and wraps
-  // to its own row on phones. flex-basis 240px keeps it from
-  // squeezing the greeting too thin.
-  heroPickers: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.5rem",
-    flex: "1 1 240px",
-    minWidth: 0,
-  },
-  // Glass pills on the gradient — option list colors are fixed in
-  // DashboardPage.css (white dropdown panel needs dark text).
-  heroSelect: {
-    background: "rgba(255, 255, 255, 0.12)",
-    color: "#fff",
-    border: "1px solid rgba(255, 255, 255, 0.28)",
-    borderRadius: 10,
-    padding: "0.5rem 0.85rem",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    outline: "none",
-    flex: 1,
-    minWidth: 140,
-    // Cap on big screens — without this the company picker stretches
-    // to absorb all available width.
-    maxWidth: 260,
-    backdropFilter: "blur(6px)",
-    WebkitBackdropFilter: "blur(6px)",
-  },
-  heroGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-    gap: "0.85rem",
-    marginBottom: "0.85rem",
-  },
   sectionGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
-    gap: "0.85rem",
-    marginTop: "0.85rem",
+    gap: "var(--k-gap)",
+    marginBottom: "var(--k-gap)",
   },
-  card: {
-    background: "#ffffff",
-    border: "1px solid #e6ecf4",
-    borderRadius: 16,
-    padding: "1rem 1.15rem",
-    boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
+  sectionBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "calc(var(--k-gap) * 0.75)",
   },
   metaRow: {
     display: "flex",
     flexWrap: "wrap",
     gap: "0.85rem",
     paddingBottom: "0.6rem",
-    borderBottom: "1px dashed #e6ecf4",
+    borderBottom: "1px dashed var(--k-line)",
   },
   statLabel: {
-    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontFamily: MONO,
     fontSize: "0.62rem",
-    color: "#69788f",
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.12em",
     fontWeight: 600,
     marginBottom: "0.2rem",
   },
   statValue: {
-    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontFamily: MONO,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "0.95rem",
+    fontSize: "calc(var(--k-font) + 0.05rem)",
   },
   subHeading: {
-    fontFamily: '"IBM Plex Mono", ui-monospace, monospace',
+    fontFamily: MONO,
     fontSize: "0.66rem",
-    color: "#8593ab",
+    color: "var(--k-faint)",
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: "0.16em",
     marginBottom: "0.55rem",
+  },
+  rowList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.35rem",
+  },
+  listRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.55rem",
+    fontSize: "var(--k-td-font)",
+    padding: "0.45rem 0.6rem",
+    background: "var(--k-surface-2)",
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+  },
+  // Counterparty / item names — 2-line clamp, never nowrap+ellipsis
+  // (similar-prefix names must stay distinguishable).
+  clampName: {
+    minWidth: 0,
+    overflow: "hidden",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    wordBreak: "break-word",
+    lineHeight: 1.3,
+    fontWeight: 600,
+    color: "var(--k-ink)",
   },
   fbrGrid: {
     display: "grid",
@@ -818,10 +656,10 @@ const styles = {
     gap: "0.55rem",
   },
   funnelCard: {
-    background: "#fafcff",
+    background: "var(--k-surface-2)",
     border: "1px solid",
-    borderRadius: 12,
-    padding: "0.7rem 0.6rem",
+    borderRadius: "var(--k-radius)",
+    padding: "var(--k-stat-pad)",
     display: "flex",
     flexDirection: "column",
     gap: "0.3rem",
@@ -839,20 +677,6 @@ const styles = {
     borderRadius: 999,
     fontSize: "0.7rem",
     fontWeight: 700,
-    flexShrink: 0,
-  },
-  headerLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    padding: "0.3rem 0.6rem",
-    borderRadius: 9,
-    border: "1px solid #dbe4f0",
-    color: "#0d47a1",
-    backgroundColor: "#fff",
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    textDecoration: "none",
     flexShrink: 0,
   },
 };

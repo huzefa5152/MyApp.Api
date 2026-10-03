@@ -12,6 +12,7 @@
 
 import { useState, useMemo } from "react";
 import DonutChart, { DONUT_PALETTE, DONUT_OTHERS_COLOR } from "./DonutChart";
+import { Card } from "../../ui/Kit";
 
 function formatPkr(v) {
   if (v == null || isNaN(v)) return "—";
@@ -45,34 +46,31 @@ export default function ByCounterpartyCard({
     return list.map((_, i) => i < topN ? DONUT_PALETTE[i % DONUT_PALETTE.length] : DONUT_OTHERS_COLOR);
   }, [list, topN]);
 
-  const shell = {
-    background: "#ffffff",
-    border: "1px solid #e6ecf4",
-    borderRadius: 16,
-    boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
-    overflow: "hidden",
-  };
+  // Kit Card — surface, head and padding follow the theme tokens. The
+  // marginTop reset keeps grid siblings aligned (kit adds a gap between
+  // stacked cards).
+  const cardTitle = <TitleWithSwatch title={title} accent={accent} />;
 
   if (list.length === 0) {
     return (
-      <section className="dash-card" style={{ ...shell, "--acc": accent }}>
-        <Header title={title} subtitle={subtitle} accent={accent} />
-        <div style={{ fontSize: "0.85rem", color: "#69788f", fontStyle: "italic", padding: "1.25rem 0", textAlign: "center" }}>
+      <Card className="dash-card" title={cardTitle} style={{ "--acc": accent, marginTop: 0, overflow: "hidden" }}>
+        <Subtitle text={subtitle} />
+        <div style={{ fontSize: "var(--k-font)", color: "var(--k-muted)", fontStyle: "italic", padding: "1.25rem 0", textAlign: "center" }}>
           {emptyText}
         </div>
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section className="dash-card" style={{ ...shell, "--acc": accent, padding: 0 }}>
-      <Header title={title} subtitle={subtitle} accent={accent} />
+    <Card className="dash-card" title={cardTitle} style={{ "--acc": accent, marginTop: 0, overflow: "hidden" }}>
+      <Subtitle text={subtitle} />
 
-      <div className="dash-cp-grid" style={{
+      {/* auto-fit collapses to one column on phones; padding comes from the Card body. */}
+      <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
-        gap: "1rem",
-        padding: "0.85rem 1rem 1rem",
+        gap: "var(--k-gap)",
         alignItems: "center",
       }}>
         {/* Donut */}
@@ -98,7 +96,7 @@ export default function ByCounterpartyCard({
           overflowY: "auto",
           // Custom thin scrollbar to match the rest of the app
           scrollbarWidth: "thin",
-          scrollbarColor: `${accent}aa #f1f1f1`,
+          scrollbarColor: `${accent}aa var(--k-surface-3)`,
           paddingRight: "0.25rem",
         }}>
           {list.map((it, idx) => {
@@ -126,11 +124,14 @@ export default function ByCounterpartyCard({
                   padding: "0.45rem 0.55rem",
                   background: isHi ? `${accent}10` : "transparent",
                   border: isHi ? `1px solid ${accent}55` : "1px solid transparent",
-                  borderRadius: 8,
+                  borderRadius: "calc(var(--k-radius) - 2px)",
                   textAlign: "left",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   width: "100%",
+                  // Override the global button rule (shadow / lift).
+                  boxShadow: "none",
+                  transform: "none",
                   transition: "background 0.12s, border-color 0.12s",
                 }}
                 title={`${it.name}: Rs. ${Number(it.value).toLocaleString("en-PK", { maximumFractionDigits: 0 })} (${pct.toFixed(1)}%)`}
@@ -142,9 +143,9 @@ export default function ByCounterpartyCard({
                 }} aria-hidden="true" />
                 <span className="dash-cp-row__name" style={{
                   flex: 1, minWidth: 0,
-                  fontSize: "0.83rem",
+                  fontSize: "var(--k-td-font)",
                   fontWeight: 600,
-                  color: "#1a2332",
+                  color: "var(--k-ink)",
                   // Bug 2026-05-13: nowrap + ellipsis collapsed names
                   // like "NORTHSIDE FABRICS (Pvt) Ltd." and "NORTHSIDE DENIM
                   // MILLS (Pvt) Ltd." to identical-looking "NORTHSIDE ..." on the
@@ -159,14 +160,14 @@ export default function ByCounterpartyCard({
                   lineHeight: 1.25,
                   wordBreak: "break-word",
                 }}>
-                  <span style={{ color: "#5f6d7e", fontSize: "0.75rem", marginRight: "0.4rem" }}>#{idx + 1}</span>
+                  <span style={{ color: "var(--k-muted)", fontSize: "0.75rem", marginRight: "0.4rem" }}>#{idx + 1}</span>
                   {it.name || "(unknown)"}
                 </span>
                 <span className="dash-cp-row__pct" style={{
                   fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
                   fontVariantNumeric: "tabular-nums",
                   fontSize: "0.76rem",
-                  color: "#69788f",
+                  color: "var(--k-muted)",
                   flexShrink: 0,
                   width: 48,
                   textAlign: "right",
@@ -176,9 +177,9 @@ export default function ByCounterpartyCard({
                 <span className="dash-cp-row__value" style={{
                   fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
                   fontVariantNumeric: "tabular-nums",
-                  fontSize: "0.82rem",
+                  fontSize: "var(--k-td-font)",
                   fontWeight: 600,
-                  color: "#0c1830",
+                  color: "var(--k-ink)",
                   flexShrink: 0,
                 }}>
                   {formatPkr(it.value)}
@@ -188,33 +189,28 @@ export default function ByCounterpartyCard({
           })}
         </div>
       </div>
-    </section>
+    </Card>
   );
 }
 
-function Header({ title, subtitle, accent }) {
+function TitleWithSwatch({ title, accent }) {
   return (
-    <header style={{
-      padding: "0.85rem 1.15rem",
-      borderBottom: "1px solid #eef2f8",
-    }}>
-      <h2 style={{
-        margin: 0, fontSize: "1rem", fontWeight: 700, color: "#0c1830",
-        letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: "0.55rem",
-        fontFamily: '"Space Grotesk", "Inter", system-ui, sans-serif',
-      }}>
-        <span style={{
-          display: "inline-flex", width: 10, height: 10, borderRadius: 3,
-          background: accent, boxShadow: `0 0 0 4px ${accent}1a`,
-          flexShrink: 0,
-        }} aria-hidden="true" />
-        {title}
-      </h2>
-      {subtitle && (
-        <div style={{ fontSize: "0.74rem", color: "#69788f", marginTop: "0.3rem", marginLeft: "1.45rem" }}>
-          {subtitle}
-        </div>
-      )}
-    </header>
+    <>
+      <span style={{
+        display: "inline-flex", width: 10, height: 10, borderRadius: 3,
+        background: accent, boxShadow: `0 0 0 4px ${accent}1a`,
+        flexShrink: 0, marginRight: "0.1rem",
+      }} aria-hidden="true" />
+      {title}
+    </>
+  );
+}
+
+function Subtitle({ text }) {
+  if (!text) return null;
+  return (
+    <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", margin: "0 0 calc(var(--k-gap) * 0.6)" }}>
+      {text}
+    </div>
   );
 }

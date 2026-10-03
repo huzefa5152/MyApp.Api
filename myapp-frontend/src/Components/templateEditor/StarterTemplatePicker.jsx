@@ -28,11 +28,12 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
   // before the operator commits to a starter template.
   return (
     <div style={s.overlay}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.header}>
-          <h3 style={s.title}>Start from Template</h3>
-          <button style={s.closeBtn} onClick={onClose}><MdClose size={20} /></button>
+      <div style={s.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="starter-picker-title">
+        <div style={formStyles.header}>
+          <h3 id="starter-picker-title" style={formStyles.title}>Start from Template</h3>
+          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>
+        <div style={formStyles.body}>
         <p style={s.subtitle}>Choose a starter template to begin customizing</p>
 
         <div style={s.grid}>
@@ -42,8 +43,9 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
             const isHovered = hoveredId === t.id;
             return (
               <button
+                type="button"
                 key={t.id}
-                style={{ ...s.card, ...(isHovered ? s.cardHover : {}), borderColor: isHovered ? color : "#e0e0e0" }}
+                style={{ ...s.card, ...(isHovered ? s.cardHover : {}), borderColor: isHovered ? color : "var(--k-line)" }}
                 onClick={() => onSelect(t)}
                 onMouseEnter={() => setHoveredId(t.id)}
                 onMouseLeave={() => setHoveredId(null)}
@@ -58,41 +60,32 @@ export default function StarterTemplatePicker({ templateType, onSelect, onClose 
             );
           })}
         </div>
+        </div>
       </div>
     </div>
   );
 }
 
+// Dialog chrome from the shared formStyles (themed); card colours from the
+// kit tokens (--k-*).
 const s = {
   overlay: formStyles.backdrop,
   modal: {
     ...formStyles.modal,
     maxWidth: `${modalSizes.lg}px`,
-    overflow: "auto",
-    padding: "1.5rem",
-  },
-  header: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-  },
-  title: {
-    margin: 0, fontSize: "1.25rem", fontWeight: 700, color: "#1a2332",
-  },
-  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center",
-    border: "none", background: "transparent", cursor: "pointer",
-    color: "#888", padding: 4, borderRadius: 6,
   },
   subtitle: {
-    margin: "0.25rem 0 1.25rem", fontSize: "0.85rem", color: "#5f6d7e",
+    margin: "0 0 1.25rem", fontSize: "var(--k-font)", color: "var(--k-muted)",
   },
   grid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(200px, 100%), 1fr))",
     gap: "0.75rem",
   },
   card: {
     display: "flex", flexDirection: "column", alignItems: "center",
-    padding: "1.25rem 1rem", borderRadius: 10, border: "2px solid #e0e0e0",
-    background: "#fff", cursor: "pointer", transition: "all 0.2s",
-    textAlign: "center",
+    padding: "1.25rem 1rem", borderRadius: "var(--k-radius)", border: "2px solid var(--k-line)",
+    background: "var(--k-surface)", cursor: "pointer", transition: "all 0.2s",
+    textAlign: "center", boxShadow: "none",
   },
   cardHover: {
     transform: "translateY(-2px)", boxShadow: "0 6px 20px rgba(0,0,0,0.1)",
@@ -103,13 +96,13 @@ const s = {
     marginBottom: 8,
   },
   cardName: {
-    fontSize: "0.92rem", fontWeight: 700, color: "#1a2332", marginBottom: 4,
+    fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)", marginBottom: 4,
   },
   typeBadge: {
     fontSize: "0.68rem", fontWeight: 600, padding: "2px 8px", borderRadius: 4,
     textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6,
   },
   cardDesc: {
-    fontSize: "0.78rem", color: "#5f6d7e", lineHeight: 1.4,
+    fontSize: "var(--k-font-sm)", color: "var(--k-muted)", lineHeight: 1.4,
   },
 };

@@ -1,5 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
-import { MdSearch, MdClose, MdVisibility, MdCheckCircle } from "react-icons/md";
+import { MdClose, MdVisibility, MdCheckCircle } from "react-icons/md";
+import { formStyles } from "../../theme";
+import { Button, IconButton, SearchBox, EmptyState } from "../../ui/Kit";
 import { STARTER_TEMPLATES } from "../../utils/starterTemplates";
 import { TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml } from "../../utils/templateSampleData";
 import { useCompany } from "../../contexts/CompanyContext";
@@ -122,45 +124,41 @@ export default function StarterGallery({
   const body = (
     <>
         <div style={s.header}>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <h3 style={s.title}>Starter Templates</h3>
             <p style={s.subtitle}>
               {lockType ? `${TEMPLATE_TYPE_LABEL[lockType] || lockType} designs` : "Professionally designed layouts to start from"}
               {` · ${list.length} shown`}
             </p>
           </div>
-          {!embedded && <button style={s.closeBtn} onClick={onClose} aria-label="Close"><MdClose size={22} /></button>}
+          {!embedded && <IconButton label="Close" icon={MdClose} size={22} onClick={onClose} />}
         </div>
 
         <div style={s.toolbar}>
-          <div style={s.searchWrap}>
-            <MdSearch size={16} style={{ color: "#9aa5b4", flexShrink: 0 }} />
-            <input
-              style={s.searchInput}
-              placeholder="Search designs…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+          <SearchBox value={search} onChange={setSearch} placeholder="Search designs…" />
           {!lockType && (
-            <select style={s.select} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by document type">
+            <select className="k-select" style={s.select} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by document type">
               <option value="">All document types</option>
               {TEMPLATE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           )}
-          <select style={s.select} value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
+          <select className="k-select" style={s.select} value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
             <option value="catalog">Sort: Catalog order</option>
             <option value="name">Sort: Name (A–Z)</option>
           </select>
         </div>
 
         <div style={s.grid}>
-          {list.length === 0 && <div style={s.empty}>No starter templates match your search.</div>}
+          {list.length === 0 && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <EmptyState boxed={false}>No starter templates match your search.</EmptyState>
+            </div>
+          )}
           {list.map((t, i) => (
             <div key={t.id} style={s.card}>
               <div style={s.thumb}>
                 {i < renderCount ? <LivePreview starter={t} company={selectedCompany} /> : <PreviewSkeleton />}
-                <button style={s.previewBtn} title="Preview larger" onClick={() => setPreviewStarter(t)}>
+                <button type="button" style={s.previewBtn} title="Preview larger" onClick={() => setPreviewStarter(t)}>
                   <MdVisibility size={15} /> Preview
                 </button>
               </div>
@@ -169,7 +167,7 @@ export default function StarterGallery({
                 {!lockType && <span style={s.typeBadge}>{TEMPLATE_TYPE_LABEL[t.type] || t.type}</span>}
                 <div style={s.cardDesc} title={t.description}>{t.description}</div>
               </div>
-              <button style={{ ...s.useBtn, ...(busy ? s.useBtnBusy : {}) }} disabled={busy} onClick={() => onSelect(t)}>
+              <button type="button" style={{ ...s.useBtn, ...(busy ? s.useBtnBusy : {}) }} disabled={busy} onClick={() => onSelect(t)}>
                 {busyStarterId === t.id
                   ? <><span style={s.spinLight} /> Creating…</>
                   : <><MdCheckCircle size={16} /> {selectLabel}</>}
@@ -182,17 +180,17 @@ export default function StarterGallery({
 
   const largePreview = previewStarter && (
     <div style={s.previewOverlay} onClick={() => setPreviewStarter(null)}>
-      <div style={s.previewModal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.previewHead}>
-          <div>
-            <strong style={{ fontSize: "1rem" }}>{previewStarter.name}</strong>
+      <div style={s.previewModal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Preview of ${previewStarter.name}`}>
+        <div style={{ ...formStyles.header, gap: "0.5rem", flexWrap: "wrap" }}>
+          <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.25rem" }}>
+            {previewStarter.name}
             <span style={s.typeBadge}>{TEMPLATE_TYPE_LABEL[previewStarter.type] || previewStarter.type}</span>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button style={s.useBtnSm} disabled={busy} onClick={() => { const t = previewStarter; setPreviewStarter(null); onSelect(t); }}>
-              <MdCheckCircle size={15} /> {selectLabel}
-            </button>
-            <button style={s.closeBtn} onClick={() => setPreviewStarter(null)} aria-label="Close preview"><MdClose size={20} /></button>
+          </h3>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <Button size="sm" icon={MdCheckCircle} disabled={busy} onClick={() => { const t = previewStarter; setPreviewStarter(null); onSelect(t); }}>
+              {selectLabel}
+            </Button>
+            <button type="button" style={formStyles.closeButton} onClick={() => setPreviewStarter(null)} aria-label="Close preview"><MdClose size={20} /></button>
           </div>
         </div>
         <A4PreviewFrame
@@ -215,29 +213,22 @@ export default function StarterGallery({
   );
 }
 
+// Gallery chrome reads the kit tokens (--k-*) and the shared formStyles; the
+// live previews (LivePreview / A4PreviewFrame) are document content — untouched.
 const s = {
-  overlay: {
-    position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(2px)",
-    display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1200, padding: "1rem",
-  },
-  modal: {
-    background: "#fff", borderRadius: 16, width: "min(1100px, 96vw)", maxHeight: "92vh",
-    display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-  },
+  overlay: { ...formStyles.backdrop, zIndex: 1200 },
+  modal: { ...formStyles.modal, maxWidth: 1100, maxHeight: "92vh" },
   embedded: {
-    background: "#fff", borderRadius: 14, border: "1px solid #e6eaf0",
+    background: "var(--k-surface)", borderRadius: "var(--k-card-radius)", border: "1px solid var(--k-line)", boxShadow: "var(--k-card-shadow)",
     display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: "calc(100vh - 220px)",
   },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "1.1rem 1.25rem 0.75rem", borderBottom: "1px solid #eef1f6" },
-  title: { margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#1a2332" },
-  subtitle: { margin: "0.2rem 0 0", fontSize: "0.82rem", color: "#5f6d7e" },
-  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center", border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, borderRadius: 8, display: "inline-flex" },
-  toolbar: { display: "flex", flexWrap: "wrap", gap: "0.5rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid #eef1f6" },
-  searchWrap: { display: "flex", alignItems: "center", gap: "0.4rem", flex: "1 1 220px", minWidth: 0, border: "1px solid #d0d7e2", borderRadius: 9, padding: "0.35rem 0.6rem", background: "#fff" },
-  searchInput: { flex: 1, minWidth: 0, border: "none", outline: "none", fontSize: "0.86rem", background: "transparent" },
-  select: { border: "1px solid #d0d7e2", borderRadius: 9, padding: "0.4rem 0.6rem", fontSize: "0.82rem", background: "#fff", color: "#1a2332" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", padding: "var(--k-card-pad)", borderBottom: "1px solid var(--k-line)", flexShrink: 0 },
+  title: { margin: 0, fontSize: "calc(var(--k-title) * 0.8)", fontWeight: 800, color: "var(--k-ink)" },
+  subtitle: { margin: "0.2rem 0 0", fontSize: "var(--k-sub)", color: "var(--k-muted)" },
+  toolbar: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.25rem", borderBottom: "1px solid var(--k-line)", flexShrink: 0 },
+  select: { width: "auto", maxWidth: "100%" },
   grid: {
-    display: "grid", gap: "0.9rem", padding: "1rem 1.25rem", overflow: "auto",
+    display: "grid", gap: "calc(var(--k-gap) * 0.75)", padding: "1rem 1.25rem", overflow: "auto",
     gridTemplateColumns: "repeat(auto-fill, minmax(min(240px, 100%), 1fr))",
     // Size each row to its tallest card. Without this, the grid sits inside a
     // height-constrained flex column (the modal / embedded wrapper) and its
@@ -245,27 +236,24 @@ const s = {
     // children can all shrink to ~0, clipping the name and the select button.
     gridAutoRows: "max-content",
   },
-  empty: { gridColumn: "1 / -1", textAlign: "center", padding: "2.5rem", color: "#5f6d7e", fontSize: "0.9rem" },
-  card: { border: "1px solid #e6eaf0", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", background: "#fff", transition: "box-shadow .15s, transform .15s" },
-  thumb: { position: "relative", borderBottom: "1px solid #eef1f6", background: "#f4f6fa" },
+  card: { border: "1px solid var(--k-line)", borderRadius: "var(--k-card-radius)", overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--k-surface)", transition: "box-shadow .15s, transform .15s" },
+  thumb: { position: "relative", borderBottom: "1px solid var(--k-line)", background: "#f4f6fa" },
   previewBtn: {
     position: "absolute", right: 8, bottom: 8, display: "inline-flex", alignItems: "center", gap: "0.25rem",
     fontSize: "0.72rem", fontWeight: 700, color: "#0d47a1", background: "rgba(255,255,255,0.94)",
     border: "1px solid #cfe0ff", borderRadius: 7, padding: "0.25rem 0.5rem", cursor: "pointer",
   },
   cardBody: { padding: "0.6rem 0.75rem", flex: 1, minWidth: 0 },
-  cardName: { fontSize: "0.9rem", fontWeight: 700, color: "#1a2332", marginBottom: "0.25rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  cardName: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)", marginBottom: "0.25rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   typeBadge: { display: "inline-block", marginLeft: 6, fontSize: "0.64rem", fontWeight: 700, color: "#3949ab", background: "#e8eaf6", padding: "1px 7px", borderRadius: 5, verticalAlign: "middle" },
-  cardDesc: { marginTop: "0.35rem", fontSize: "0.76rem", color: "#5f6d7e", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  cardDesc: { marginTop: "0.35rem", fontSize: "0.76rem", color: "var(--k-muted)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
   useBtn: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem",
-    border: "none", borderTop: "1px solid #eef1f6", background: "#0d47a1", color: "#fff",
-    padding: "0.55rem", fontSize: "0.84rem", fontWeight: 700, cursor: "pointer",
+    border: "none", borderTop: "1px solid var(--k-line)", borderRadius: 0, background: "var(--k-blue)", color: "#fff",
+    minHeight: "var(--k-h)", padding: "0 0.55rem", fontSize: "var(--k-btn-font)", fontWeight: 700, cursor: "pointer", boxShadow: "none",
   },
   useBtnBusy: { opacity: 0.75, cursor: "default" },
-  spinLight: { width: 14, height: 14, borderRadius: "50%", display: "inline-block", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#fff", animation: "spin 0.7s linear infinite" },
-  useBtnSm: { display: "inline-flex", alignItems: "center", gap: "0.3rem", border: "none", background: "#0d47a1", color: "#fff", borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer" },
-  previewOverlay: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: "1rem" },
-  previewModal: { background: "#e8e8e8", borderRadius: 14, width: "min(920px, 96vw)", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  previewHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1rem", background: "#fff", borderBottom: "1px solid #eef1f6" },
+  spinLight: { width: 14, height: 14, borderRadius: "50%", display: "inline-block", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#fff", animation: "k-spin 0.7s linear infinite" },
+  previewOverlay: { ...formStyles.backdrop, zIndex: 1300 },
+  previewModal: { ...formStyles.modal, maxWidth: 920, height: "94vh", background: "#e8e8e8" },
 };

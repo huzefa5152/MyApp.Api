@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  MdDescription, MdBusiness, MdSearch, MdAdd, MdAutoAwesome, MdGridOn,
+  MdDescription, MdAdd, MdAutoAwesome, MdGridOn,
   MdEdit, MdDelete, MdStar, MdStarBorder, MdVisibility, MdBrush, MdContentCopy,
   MdUploadFile, MdClose, MdLock, MdSwapHoriz, MdApproval, MdFilterAltOff,
 } from "react-icons/md";
@@ -20,7 +20,11 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { dropdownStyles, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
+import {
+  PageHeader, CompanyPicker, Button, IconButton, Toolbar, SearchBox, Tabs, Field,
+  EmptyState, Loading, Alert,
+} from "../ui/Kit";
 import {
   TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, buildTemplatePreviewHtml,
 } from "../utils/templateSampleData";
@@ -30,7 +34,6 @@ import A4PreviewFrame from "../Components/templateEditor/A4PreviewFrame";
 import NewTemplateDialog, { uniqueTemplateName } from "../Components/templateEditor/NewTemplateDialog";
 import { setEditorEntry, peekRecentTemplate, clearRecentTemplate } from "../utils/templateEditorNav";
 
-const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 const fmtDate = (d) => { if (!d) return ""; const dt = new Date(d); const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`; };
 
 const TABS = [
@@ -43,7 +46,7 @@ const TABS = [
 export default function PrintTemplatesPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies, companyStamps, refreshStamps } = useCompany();
+  const { companies, selectedCompany, loading: loadingCompanies, companyStamps, refreshStamps } = useCompany();
   const { has } = usePermissions();
   const canManage = has("printtemplates.manage.update");
   const canDelete = has("printtemplates.manage.delete");
@@ -425,21 +428,16 @@ export default function PrintTemplatesPage() {
 
   if (!canManage) {
     return (
-      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
-        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
-        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
-        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to manage print templates.</p>
-      </div>
+      <EmptyState icon={MdLock} title="Access denied">
+        You don&apos;t have permission to manage print templates.
+      </EmptyState>
     );
   }
 
   const filtersBar = (
-    <div className="filters-row">
-      <div className="filter-search-wrap">
-        <MdSearch size={15} className="filter-search-icon" />
-        <input type="text" placeholder="Search by name or type…" className="filter-search-input" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search templates" />
-      </div>
-      <select className="filter-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Document type">
+    <Toolbar>
+      <SearchBox value={search} onChange={setSearch} placeholder="Search by name or type…" label="Search templates" />
+      <select className="k-select" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Document type">
         <option value="">All document types ({templates.length})</option>
         {TEMPLATE_TYPES.map((t) => (
           <option key={t.value} value={t.value}>
@@ -453,11 +451,9 @@ export default function PrintTemplatesPage() {
         </label>
       )}
       {filtersActive && (
-        <button type="button" className="filter-clear-btn" onClick={clearFilters} style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 32 }}>
-          <MdFilterAltOff size={14} /> Clear
-        </button>
+        <Button variant="ghost" size="sm" icon={MdFilterAltOff} onClick={clearFilters}>Clear</Button>
       )}
-    </div>
+    </Toolbar>
   );
 
   const renderTemplateCard = (t) => (
@@ -473,7 +469,7 @@ export default function PrintTemplatesPage() {
       </div>
       <div style={st.metaLine}>
         {t.hasExcelTemplate && <span style={st.excelChip}><MdGridOn size={11} /> Excel</span>}
-        <span style={{ color: colors.textSecondary }}>Updated {fmtDate(t.updatedAt)}</span>
+        <span style={{ color: "var(--k-muted)" }}>Updated {fmtDate(t.updatedAt)}</span>
       </div>
       {canViewStamps && (
         <div style={st.stampRow}>
@@ -492,101 +488,91 @@ export default function PrintTemplatesPage() {
         </div>
       )}
       <div style={st.actions}>
-        {busyId === t.id && <span style={st.cardSpin} aria-label="Working…" />}
-        <button style={st.actBtn} title="Edit" aria-label={`Edit ${t.name}`} disabled={busy} onClick={() => openInEditor(t)}><MdEdit size={15} /></button>
-        <button style={st.actBtn} title="Preview" aria-label={`Preview ${t.name}`} disabled={busy} onClick={() => setPreviewTarget(t)}><MdVisibility size={15} /></button>
-        {canApplyStarter && <button style={st.actBtn} title="Import starter design" aria-label={`Import a starter design into ${t.name}`} disabled={busy} onClick={() => setApplyTarget(t)}><MdBrush size={15} /></button>}
-        {canManage && <button style={st.actBtn} title="Copy — duplicate (same type) or copy to another document type" aria-label={`Copy ${t.name}`} disabled={busy} onClick={() => setCopyTarget(t)}><MdContentCopy size={15} /></button>}
-        {!t.isDefault && <button style={st.actBtn} title="Set as default" aria-label={`Set ${t.name} as default`} disabled={busy} onClick={() => handleSetDefault(t)}><MdStar size={15} /></button>}
-        {canDelete && <button style={{ ...st.actBtn, color: "#dc3545" }} title="Delete" aria-label={`Delete ${t.name}`} disabled={busy} onClick={() => handleDelete(t)}><MdDelete size={15} /></button>}
+        {busyId === t.id && <CardSpin />}
+        <IconButton label="Edit" aria-label={`Edit ${t.name}`} icon={MdEdit} size={15} disabled={busy} onClick={() => openInEditor(t)} />
+        <IconButton label="Preview" aria-label={`Preview ${t.name}`} icon={MdVisibility} size={15} disabled={busy} onClick={() => setPreviewTarget(t)} />
+        {canApplyStarter && <IconButton label="Import starter design" aria-label={`Import a starter design into ${t.name}`} icon={MdBrush} size={15} disabled={busy} onClick={() => setApplyTarget(t)} />}
+        {canManage && <IconButton label="Copy — duplicate (same type) or copy to another document type" aria-label={`Copy ${t.name}`} icon={MdContentCopy} size={15} disabled={busy} onClick={() => setCopyTarget(t)} />}
+        {!t.isDefault && <IconButton label="Set as default" aria-label={`Set ${t.name} as default`} icon={MdStar} size={15} disabled={busy} onClick={() => handleSetDefault(t)} />}
+        {canDelete && <IconButton danger label="Delete" aria-label={`Delete ${t.name}`} icon={MdDelete} size={15} disabled={busy} onClick={() => handleDelete(t)} style={st.dangerGlyph} />}
       </div>
     </div>
   );
 
   return (
     <div>
-      <div style={st.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={st.icon}><MdDescription size={26} color="#fff" /></div>
-          <div>
-            <h2 style={st.title}>Print Templates</h2>
-            <p style={st.subtitle}>Manage printable layouts and Excel import/export templates.</p>
-          </div>
-        </div>
-        {selectedCompany && (
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button style={{ ...st.btn, ...st.btnPrimary }} onClick={() => openNewDialog()}><MdAdd size={17} /> New Template</button>
-            <button style={{ ...st.btn, ...st.btnOutline }} onClick={() => setTab("starter")}><MdAutoAwesome size={16} /> Starter Templates</button>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        icon={MdDescription}
+        tone="brand"
+        title="Print Templates"
+        subtitle="Manage printable layouts and Excel import/export templates."
+        actions={selectedCompany ? (
+          <>
+            <Button variant="primary" icon={MdAdd} onClick={() => openNewDialog()}>New Template</Button>
+            <Button icon={MdAutoAwesome} onClick={() => setTab("starter")}>Starter Templates</Button>
+          </>
+        ) : null}
+      />
 
-      {loadingCompanies ? <Spinner label="Loading companies…" /> : companies.length === 0 ? (
-        <Empty label="No companies available. Add a company first." />
+      {loadingCompanies ? <Loading>Loading companies…</Loading> : companies.length === 0 ? (
+        <EmptyState icon={MdDescription}>No companies available. Add a company first.</EmptyState>
       ) : (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))} aria-label="Company">
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </div>
+          <CompanyPicker />
 
           {/* Tabs */}
-          <div style={st.tabs} role="tablist">
-            {TABS.filter((t) => t.key !== "stamps" || canViewStamps).map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.key;
-              return (
-                <button key={t.key} role="tab" aria-selected={active}
-                  style={{ ...st.tab, ...(active ? st.tabActive : {}) }}
-                  onClick={() => setTab(t.key)}>
-                  <Icon size={16} /> {t.label}
-                </button>
-              );
-            })}
-          </div>
+          <Tabs
+            label="Template sections"
+            idPrefix="pt-tab"
+            tabs={TABS.filter((t) => t.key !== "stamps" || canViewStamps)}
+            value={tab}
+            onChange={setTab}
+          />
 
           {/* ── Tab: Print Templates ── */}
           {tab === "print" && (
             <>
               {filtersBar}
-              {loading ? <Spinner label="Loading templates…" /> : templates.length === 0 ? (
-                <div style={st.empty}>
-                  <MdDescription size={40} color={colors.cardBorder} />
-                  <p style={{ color: colors.textSecondary, margin: "0.5rem 0 0.9rem" }}>
-                    {selectedCompany?.brandName || selectedCompany?.name} has no print templates yet. Documents print with the built-in layouts until you add one.
-                  </p>
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
-                    <button style={{ ...st.btn, ...st.btnPrimary }} onClick={() => openNewDialog()}><MdAdd size={17} /> New Template</button>
-                    <button style={{ ...st.btn, ...st.btnOutline }} onClick={() => setTab("starter")}><MdAutoAwesome size={16} /> Browse starter designs</button>
-                  </div>
-                </div>
+              {loading ? <Loading>Loading templates…</Loading> : templates.length === 0 ? (
+                <EmptyState
+                  icon={MdDescription}
+                  action={(
+                    <div style={st.emptyActions}>
+                      <Button variant="primary" icon={MdAdd} onClick={() => openNewDialog()}>New Template</Button>
+                      <Button icon={MdAutoAwesome} onClick={() => setTab("starter")}>Browse starter designs</Button>
+                    </div>
+                  )}
+                >
+                  {selectedCompany?.brandName || selectedCompany?.name} has no print templates yet. Documents print with the built-in layouts until you add one.
+                </EmptyState>
               ) : printRows.length === 0 ? (
-                <div style={st.empty}>
-                  <MdDescription size={40} color={colors.cardBorder} />
-                  <p style={{ color: colors.textSecondary, margin: "0.5rem 0 0.9rem" }}>No print templates match your filters.</p>
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
-                    <button style={{ ...st.btn, ...st.btnOutline }} onClick={clearFilters}><MdFilterAltOff size={16} /> Clear filters</button>
-                    {typeFilter && (
-                      <button style={{ ...st.btn, ...st.btnPrimary }} onClick={() => openNewDialog(typeFilter)}>
-                        <MdAdd size={17} /> New {TEMPLATE_TYPE_LABEL[typeFilter]} template
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <EmptyState
+                  icon={MdDescription}
+                  action={(
+                    <div style={st.emptyActions}>
+                      <Button icon={MdFilterAltOff} onClick={clearFilters}>Clear filters</Button>
+                      {typeFilter && (
+                        <Button variant="primary" icon={MdAdd} onClick={() => openNewDialog(typeFilter)}>
+                          New {TEMPLATE_TYPE_LABEL[typeFilter]} template
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                >
+                  No print templates match your filters.
+                </EmptyState>
               ) : (
                 printGroups.map(([type, rows]) => (
                   <section key={type} style={st.section} aria-label={TEMPLATE_TYPE_LABEL[type] || type}>
                     <div style={st.sectionHead}>
                       <span style={st.sectionTitle}>{TEMPLATE_TYPE_LABEL[type] || type}</span>
-                      <span style={st.sectionCount}>{rows.length}</span>
+                      <span className="k-count">{rows.length}</span>
                       {!typeFilter && (
-                        <button type="button" style={st.sectionLink} onClick={() => setTypeFilter(type)}>Only this type</button>
+                        <Button variant="ghost" size="sm" onClick={() => setTypeFilter(type)} style={st.sectionLink}>Only this type</Button>
                       )}
-                      <button type="button" style={{ ...st.sectionLink, ...(typeFilter ? { marginLeft: "auto" } : {}) }} onClick={() => openNewDialog(type)}>
-                        <MdAdd size={15} /> New
-                      </button>
+                      <Button variant="ghost" size="sm" icon={MdAdd} onClick={() => openNewDialog(type)} style={{ ...st.sectionLink, ...(typeFilter ? { marginLeft: "auto" } : {}) }}>
+                        New
+                      </Button>
                     </div>
                     <div style={st.grid}>{rows.map(renderTemplateCard)}</div>
                   </section>
@@ -615,11 +601,11 @@ export default function PrintTemplatesPage() {
           {tab === "excel" && (
             <>
               {filtersBar}
-              <p style={st.hint}>
+              <Alert tone="info">
                 <strong>One Excel layout per document type.</strong> When set, that type&apos;s documents show an &ldquo;Export Excel&rdquo; button — all print formats of the type share the single Excel layout.
-              </p>
-              {loading ? <Spinner label="Loading…" /> : excelTypeRows.length === 0 ? (
-                <Empty label="No document types match your filters." />
+              </Alert>
+              {loading ? <Loading>Loading…</Loading> : excelTypeRows.length === 0 ? (
+                <EmptyState icon={MdDescription}>No document types match your filters.</EmptyState>
               ) : (
                 <div style={st.grid}>
                   {excelTypeRows.map((row) => (
@@ -636,18 +622,24 @@ export default function PrintTemplatesPage() {
                       <div style={st.actions}>
                         {row.hasTemplate ? (
                           <>
-                            <button style={{ ...st.actBtnWide }} disabled={busy} onClick={() => triggerExcelUpload(row.type)}>
-                              {busyId === `excel:${row.type}` ? <span style={st.cardSpin} aria-label="Working…" /> : <MdUploadFile size={15} />}
+                            <Button
+                              size="sm"
+                              icon={busyId === `excel:${row.type}` ? undefined : MdUploadFile}
+                              disabled={busy}
+                              onClick={() => triggerExcelUpload(row.type)}
+                              style={st.wideBtn}
+                            >
+                              {busyId === `excel:${row.type}` && <CardSpin />}
                               {busyId === `excel:${row.type}` ? "Working…" : row.hasExcel ? "Replace .xlsx" : "Upload .xlsx"}
-                            </button>
+                            </Button>
                             {row.hasExcel && canDelete && (
-                              <button style={{ ...st.actBtn, color: "#dc3545" }} title="Remove Excel layout" disabled={busy} onClick={() => handleExcelDelete(row)}><MdDelete size={15} /></button>
+                              <IconButton danger label="Remove Excel layout" icon={MdDelete} size={15} disabled={busy} onClick={() => handleExcelDelete(row)} style={st.dangerGlyph} />
                             )}
                           </>
                         ) : (
-                          <button type="button" style={st.actBtnWide} onClick={() => openNewDialog(row.type)}>
-                            <MdAdd size={15} /> Create a print template first
-                          </button>
+                          <Button size="sm" icon={MdAdd} onClick={() => openNewDialog(row.type)} style={st.wideBtn}>
+                            Create a print template first
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -661,20 +653,20 @@ export default function PrintTemplatesPage() {
           {/* ── Tab: Stamps ── */}
           {tab === "stamps" && canViewStamps && (
             <>
-              <p style={st.hint}>
+              <Alert tone="info">
                 Upload stamps or signatures once, then insert them into any template as{" "}
                 <code style={{ fontFamily: "monospace" }}>{"{{stamps.slug}}"}</code> — no more pasting images into the HTML.
                 Each template can use a different stamp, and renaming a stamp never breaks templates that already use it.
-              </p>
+              </Alert>
               {canManageStamps && (
-                <div style={{ marginBottom: "0.85rem" }}>
-                  <button style={{ ...st.btn, ...st.btnPrimary }} disabled={stampUploading} onClick={() => setStampModalOpen(true)}>
-                    <MdUploadFile size={16} /> Upload Stamp
-                  </button>
-                </div>
+                <Toolbar>
+                  <Button variant="primary" icon={MdUploadFile} disabled={stampUploading} onClick={() => setStampModalOpen(true)}>
+                    Upload Stamp
+                  </Button>
+                </Toolbar>
               )}
               {companyStamps.length === 0 ? (
-                <Empty label="No stamps yet. Upload a stamp to use it in your print templates." />
+                <EmptyState icon={MdDescription}>No stamps yet. Upload a stamp to use it in your print templates.</EmptyState>
               ) : (
                 <div style={st.grid}>
                   {companyStamps.map((s) => (
@@ -686,16 +678,16 @@ export default function PrintTemplatesPage() {
                       <div style={st.stampThumbWrap}>
                         <img src={s.url} alt={s.name} style={st.stampThumbImg} />
                       </div>
-                      <button style={st.stampToken} onClick={() => copyStampToken(s)} title="Copy merge field">
-                        <code style={{ fontFamily: "monospace", fontSize: "0.72rem", color: colors.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`{{stamps.${s.slug}}}`}</code>
-                        <MdContentCopy size={13} color={colors.textSecondary} />
+                      <button type="button" style={st.stampToken} onClick={() => copyStampToken(s)} title="Copy merge field">
+                        <code style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--k-blue)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{`{{stamps.${s.slug}}}`}</code>
+                        <MdContentCopy size={13} color="var(--k-muted)" />
                       </button>
                       <div style={st.actions}>
-                        {stampBusyId === s.id && <span style={st.cardSpin} aria-label="Working…" />}
-                        <button style={st.actBtn} title="Copy merge field" disabled={stampBusyId != null} onClick={() => copyStampToken(s)}><MdContentCopy size={15} /></button>
-                        {canManageStamps && !s.isDefault && <button style={st.actBtn} title="Set as default stamp" disabled={stampBusyId != null} onClick={() => handleStampSetDefault(s)}><MdStar size={15} /></button>}
-                        {canManageStamps && <button style={st.actBtn} title="Rename" disabled={stampBusyId != null} onClick={() => handleStampRename(s)}><MdEdit size={15} /></button>}
-                        {canManageStamps && <button style={{ ...st.actBtn, color: "#dc3545" }} title="Delete" disabled={stampBusyId != null} onClick={() => handleStampDelete(s)}><MdDelete size={15} /></button>}
+                        {stampBusyId === s.id && <CardSpin />}
+                        <IconButton label="Copy merge field" icon={MdContentCopy} size={15} disabled={stampBusyId != null} onClick={() => copyStampToken(s)} />
+                        {canManageStamps && !s.isDefault && <IconButton label="Set as default stamp" icon={MdStar} size={15} disabled={stampBusyId != null} onClick={() => handleStampSetDefault(s)} />}
+                        {canManageStamps && <IconButton label="Rename" icon={MdEdit} size={15} disabled={stampBusyId != null} onClick={() => handleStampRename(s)} />}
+                        {canManageStamps && <IconButton danger label="Delete" icon={MdDelete} size={15} disabled={stampBusyId != null} onClick={() => handleStampDelete(s)} style={st.dangerGlyph} />}
                       </div>
                     </div>
                   ))}
@@ -729,35 +721,41 @@ export default function PrintTemplatesPage() {
 
       {/* Copy — same type (duplicate) or a different document type */}
       {copyTarget && (
-        <div style={st.previewOverlay} onClick={() => setCopyTarget(null)}>
-          <div style={st.copyModal} onClick={(e) => e.stopPropagation()}>
-            <div style={st.previewHead}>
-              <div><strong>Copy “{copyTarget.name}”</strong> <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[copyTarget.templateType]}</span></div>
-              <button style={st.closeBtn} onClick={() => setCopyTarget(null)} aria-label="Close"><MdClose size={20} /></button>
+        <div style={st.overlay} onClick={() => setCopyTarget(null)}>
+          <div style={{ ...formStyles.modal, maxWidth: 520 }} role="dialog" aria-modal="true" aria-label={`Copy ${copyTarget.name}`} onClick={(e) => e.stopPropagation()}>
+            <div style={formStyles.header}>
+              <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                Copy “{copyTarget.name}” <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[copyTarget.templateType]}</span>
+              </h3>
+              <button type="button" style={formStyles.closeButton} onClick={() => setCopyTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
-            <p style={st.copyHint}>
-              Pick the document type for the new template. Choose the <strong>same type</strong> to duplicate it, or a <strong>different type</strong> to reuse this design there (open it afterward to adjust the merge fields — they differ per document type).
-            </p>
-            <div style={st.copyGrid}>
-              {/* Same type first — behaves exactly like Duplicate */}
-              <button
-                key={copyTarget.templateType}
-                style={{ ...st.copyTypeBtn, ...st.copyTypeBtnSame }}
-                disabled={busy}
-                onClick={() => { const t = copyTarget; setCopyTarget(null); handleDuplicate(t); }}
-              >
-                <MdContentCopy size={15} /> {TEMPLATE_TYPE_LABEL[copyTarget.templateType]} · duplicate (same type)
-              </button>
-              {TEMPLATE_TYPES.filter((tt) => tt.value !== copyTarget.templateType).map((tt) => (
+            <div style={formStyles.body}>
+              <p style={st.copyHint}>
+                Pick the document type for the new template. Choose the <strong>same type</strong> to duplicate it, or a <strong>different type</strong> to reuse this design there (open it afterward to adjust the merge fields — they differ per document type).
+              </p>
+              <div style={st.copyGrid}>
+                {/* Same type first — behaves exactly like Duplicate */}
                 <button
-                  key={tt.value}
-                  style={st.copyTypeBtn}
+                  type="button"
+                  key={copyTarget.templateType}
+                  style={{ ...st.copyTypeBtn, ...st.copyTypeBtnSame }}
                   disabled={busy}
-                  onClick={() => handleCopyToType(copyTarget, tt.value)}
+                  onClick={() => { const t = copyTarget; setCopyTarget(null); handleDuplicate(t); }}
                 >
-                  <MdSwapHoriz size={15} /> {tt.label}
+                  <MdContentCopy size={15} /> {TEMPLATE_TYPE_LABEL[copyTarget.templateType]} · duplicate (same type)
                 </button>
-              ))}
+                {TEMPLATE_TYPES.filter((tt) => tt.value !== copyTarget.templateType).map((tt) => (
+                  <button
+                    type="button"
+                    key={tt.value}
+                    style={st.copyTypeBtn}
+                    disabled={busy}
+                    onClick={() => handleCopyToType(copyTarget, tt.value)}
+                  >
+                    <MdSwapHoriz size={15} /> {tt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -765,11 +763,13 @@ export default function PrintTemplatesPage() {
 
       {/* Full preview */}
       {previewTarget && (
-        <div style={st.previewOverlay} onClick={() => setPreviewTarget(null)}>
-          <div style={st.previewModal} onClick={(e) => e.stopPropagation()}>
-            <div style={st.previewHead}>
-              <div><strong>{previewTarget.name}</strong> <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[previewTarget.templateType]}</span></div>
-              <button style={st.closeBtn} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
+        <div style={st.overlay} onClick={() => setPreviewTarget(null)}>
+          <div style={st.previewModal} role="dialog" aria-modal="true" aria-label={`Preview of ${previewTarget.name}`} onClick={(e) => e.stopPropagation()}>
+            <div style={formStyles.header}>
+              <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                {previewTarget.name} <span style={st.typeChip}>{TEMPLATE_TYPE_LABEL[previewTarget.templateType]}</span>
+              </h3>
+              <button type="button" style={formStyles.closeButton} onClick={() => setPreviewTarget(null)} aria-label="Close"><MdClose size={20} /></button>
             </div>
             <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
               <A4PreviewFrame
@@ -828,7 +828,7 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
         <div style={formStyles.header}>
           <div>
             <h3 id="stamp-upload-title" style={formStyles.title}>Upload Stamp</h3>
-            <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "rgba(255,255,255,0.85)" }}>PNG, JPG or WebP. A transparent PNG works best for signatures.</p>
+            <p style={{ margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--ui-modal-title-color, #ffffff)", opacity: 0.85 }}>PNG, JPG or WebP. A transparent PNG works best for signatures.</p>
           </div>
           <button type="button" style={formStyles.closeButton} onClick={onClose} disabled={uploading} aria-label="Close"><MdClose size={20} /></button>
         </div>
@@ -837,28 +837,28 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            style={{ border: `2px dashed ${colors.inputBorder}`, borderRadius: 10, padding: "1.2rem", textAlign: "center", cursor: "pointer", background: "#f7f9fc", boxShadow: "none", minHeight: 120, width: "100%" }}
+            style={{ border: "2px dashed var(--k-line-strong)", borderRadius: "var(--k-radius)", padding: "1.2rem", textAlign: "center", cursor: "pointer", background: "var(--k-surface-2)", boxShadow: "none", minHeight: 120, width: "100%" }}
           >
             {preview ? (
               <img src={preview} alt="Stamp preview" style={{ maxWidth: "100%", maxHeight: 140, objectFit: "contain" }} />
             ) : (
-              <span style={{ color: colors.textSecondary, fontSize: "0.85rem", display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              <span style={{ color: "var(--k-muted)", fontSize: "var(--k-font)", display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                 <MdUploadFile size={28} /> Click to choose an image
               </span>
             )}
           </button>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8rem", color: colors.textSecondary, fontWeight: 600 }}>
-            Name
+          <Field label="Name" htmlFor="stamp-upload-name">
             <input
-              type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Director Signature" maxLength={80}
-              style={{ padding: "0.55rem 0.7rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, fontSize: "0.9rem", minHeight: 44, color: colors.textPrimary }}
+              id="stamp-upload-name"
+              type="text" className="k-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Director Signature" maxLength={80}
             />
-          </label>
+          </Field>
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", padding: "0.75rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 }}>
-          <button style={{ ...st.btn, ...st.btnOutline, minHeight: 44 }} onClick={onClose} disabled={uploading}>Cancel</button>
+        <div style={formStyles.footer}>
+          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={uploading}>Cancel</button>
           <button
-            style={{ ...st.btn, ...st.btnPrimary, minHeight: 44, opacity: (!file || uploading) ? 0.6 : 1, cursor: (!file || uploading) ? "default" : "pointer" }}
+            type="button"
+            style={{ ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: "0.4rem", opacity: (!file || uploading) ? 0.6 : 1, cursor: (!file || uploading) ? "default" : "pointer" }}
             disabled={!file || uploading}
             onClick={() => onUpload(file, name.trim())}
           >
@@ -870,59 +870,43 @@ function StampUploadModal({ onClose, onUpload, uploading }) {
   );
 }
 
-const Spinner = ({ label }) => <div style={st.loading}><div style={st.spin} /><span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>{label}</span></div>;
-const Empty = ({ label }) => <div style={st.empty}><MdDescription size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>{label}</p></div>;
+// Small inline busy indicator on a card's action row (kit spinner, scaled down).
+const CardSpin = () => <span className="k-spinner" style={{ width: 16, height: 16, borderWidth: 2, display: "inline-block", flexShrink: 0 }} aria-label="Working…" />;
 
+// Page-specific layout and chips; surfaces, borders and text colours read the
+// kit tokens (--k-*) so Classic and Workspace both apply.
 const st = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" },
-  icon: { width: 46, height: 46, borderRadius: 13, background: "linear-gradient(135deg,#0d47a1,#00897b)", display: "flex", alignItems: "center", justifyContent: "center" },
-  title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  subtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  btn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1rem", borderRadius: 10, fontSize: "0.88rem", fontWeight: 600, cursor: "pointer", border: "none" },
-  btnPrimary: { background: "linear-gradient(135deg,#0d47a1,#00897b)", color: "#fff", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  btnOutline: { background: "#fff", color: colors.blue, border: `1px solid ${colors.inputBorder}` },
-  tabs: { display: "flex", gap: "0.25rem", borderBottom: `2px solid ${colors.cardBorder}`, marginBottom: "1rem", flexWrap: "wrap" },
-  tab: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", border: "none", background: "transparent", color: colors.textSecondary, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", borderBottom: "2px solid transparent", marginBottom: -2, minHeight: 44 },
-  tabActive: { color: colors.blue, borderBottom: `2px solid ${colors.blue}` },
-  checkLabel: { display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 600, cursor: "pointer", minHeight: 32 },
-  hint: { margin: "0 0 0.85rem", fontSize: "0.8rem", color: colors.textSecondary, background: "#f4f8ff", border: "1px solid #dbe8ff", borderRadius: 8, padding: "0.5rem 0.7rem" },
-  section: { marginBottom: "1.25rem" },
+  checkLabel: { display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600, cursor: "pointer", minHeight: "var(--k-h)" },
+  section: { marginBottom: "var(--k-gap)" },
   sectionHead: { display: "flex", alignItems: "center", gap: "0.5rem", margin: "0 0 0.6rem", flexWrap: "wrap" },
-  sectionTitle: { fontWeight: 800, color: colors.textPrimary, fontSize: "0.95rem" },
-  sectionCount: { fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#e8f0fe", borderRadius: 10, padding: "1px 8px" },
-  sectionLink: { display: "inline-flex", alignItems: "center", gap: 2, background: "none", border: "none", boxShadow: "none", color: colors.blue, fontWeight: 600, fontSize: "0.78rem", cursor: "pointer", minHeight: 32, padding: "0 0.4rem", fontFamily: "inherit" },
-  grid: { display: "grid", gap: "0.85rem", gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))" },
-  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, background: "#fff", padding: "0.85rem 0.9rem", display: "flex", flexDirection: "column", gap: "0.5rem", boxShadow: "0 1px 4px rgba(16,42,80,0.04)", transition: "box-shadow .2s, border-color .2s" },
-  cardRecent: { boxShadow: "0 0 0 3px #b7d4f0, 0 1px 4px rgba(16,42,80,0.04)", borderColor: colors.blue },
+  sectionTitle: { fontWeight: 800, color: "var(--k-ink)", fontSize: "calc(var(--k-font) + 0.05rem)" },
+  sectionLink: { color: "var(--k-blue)" },
+  emptyActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center", marginTop: "0.5rem" },
+  grid: { display: "grid", gap: "calc(var(--k-gap) * 0.7)", gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))" },
+  card: { border: "1px solid var(--k-line)", borderRadius: "var(--k-card-radius)", background: "var(--k-surface)", padding: "var(--k-stat-pad)", display: "flex", flexDirection: "column", gap: "0.5rem", boxShadow: "var(--k-card-shadow)", transition: "box-shadow .2s, border-color .2s", minWidth: 0 },
+  cardRecent: { boxShadow: "0 0 0 3px #b7d4f0", borderColor: "var(--k-blue)" },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" },
-  tName: { fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary, minWidth: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.3 },
+  tName: { fontSize: "calc(var(--k-font) + 0.05rem)", fontWeight: 700, color: "var(--k-ink)", minWidth: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.3 },
   badgeDefault: { display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.64rem", fontWeight: 800, color: "#f57f17", background: "#fff8e1", padding: "2px 7px", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 },
   metaRow: { display: "flex", gap: "0.4rem", flexWrap: "wrap" },
   typeChip: { fontSize: "0.68rem", fontWeight: 700, color: "#3949ab", background: "#e8eaf6", padding: "2px 8px", borderRadius: 5 },
   excelChip: { display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.66rem", fontWeight: 700, color: "#1b5e20", background: "#e8f5e9", padding: "2px 7px", borderRadius: 5 },
   noExcelChip: { fontSize: "0.66rem", fontWeight: 700, color: "#90a4ae", background: "#eceff1", padding: "2px 7px", borderRadius: 5 },
   metaLine: { display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.72rem", flexWrap: "wrap" },
-  actions: { display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center", marginTop: "auto", paddingTop: "0.35rem", borderTop: `1px solid ${colors.cardBorder}` },
-  // 44 wide / 40 tall: a real thumb target (RESPONSIVE_UI_GUIDE §5) — six of
-  // them still fit one row on a 343px phone card.
-  actBtn: { display: "grid", placeItems: "center", width: 44, height: 40, padding: 0, boxShadow: "none", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer" },
-  cardSpin: { width: 16, height: 16, border: `2px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.7s linear infinite", display: "inline-block", flexShrink: 0 },
-  stampRow: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", paddingTop: "0.35rem", borderTop: `1px dashed ${colors.cardBorder}` },
-  stampLabel: { fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.4px" },
-  stampThumbWrap: { display: "flex", alignItems: "center", justifyContent: "center", height: 96, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, background: "#fff", padding: "0.4rem" },
+  actions: { display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center", marginTop: "auto", paddingTop: "0.35rem", borderTop: "1px solid var(--k-line)" },
+  // Delete glyphs stay red at rest (the kit's danger variant only tints on hover).
+  dangerGlyph: { color: "var(--k-danger)" },
+  wideBtn: { flex: 1 },
+  stampRow: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", paddingTop: "0.35rem", borderTop: "1px dashed var(--k-line)" },
+  stampLabel: { fontSize: "0.72rem", fontWeight: 600, color: "var(--k-muted)", textTransform: "uppercase", letterSpacing: "0.4px" },
+  stampThumbWrap: { display: "flex", alignItems: "center", justifyContent: "center", height: 96, border: "1px solid var(--k-line)", borderRadius: 8, background: "#fff", padding: "0.4rem" },
   stampThumbImg: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" },
-  stampToken: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", width: "100%", padding: "0.3rem 0.5rem", borderRadius: 7, border: `1px dashed ${colors.inputBorder}`, background: "#f8fbff", cursor: "pointer", overflow: "hidden", boxShadow: "none", minHeight: 36 },
-  actBtnWide: { display: "inline-flex", alignItems: "center", gap: "0.35rem", flex: 1, justifyContent: "center", minHeight: 36, padding: "0 0.5rem", borderRadius: 7, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
-  loading: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem", padding: "3rem 0" },
-  spin: { width: 24, height: 24, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center" },
-  previewOverlay: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: "1rem", overflowY: "auto" },
-  previewModal: { background: "#e8e8e8", borderRadius: 14, width: "min(860px, 96vw)", height: "94vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  copyModal: { background: "#fff", borderRadius: 14, width: "min(520px, 96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden", margin: "auto" },
-  copyHint: { margin: 0, padding: "0.75rem 1rem 0", fontSize: "0.8rem", color: colors.textSecondary },
-  copyGrid: { display: "grid", gap: "0.5rem", gridTemplateColumns: "repeat(auto-fill, minmax(min(200px, 100%), 1fr))", padding: "0.85rem 1rem 1.1rem", overflowY: "auto" },
-  copyTypeBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 0.75rem", borderRadius: 9, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", textAlign: "left", minHeight: 44, boxShadow: "none" },
-  copyTypeBtnSame: { gridColumn: "1 / -1", borderColor: colors.teal, color: "#00695c", background: "#e0f2f1" },
-  previewHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", padding: "0.7rem 1rem", background: "#fff", borderBottom: `1px solid ${colors.cardBorder}` },
-  closeBtn: { width: 44, height: 44, display: "grid", placeItems: "center", border: "none", background: "transparent", cursor: "pointer", color: "#8a94a6", padding: 4, display: "inline-flex", boxShadow: "none" },
+  stampToken: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.4rem", width: "100%", padding: "0.3rem 0.5rem", borderRadius: 7, border: "1px dashed var(--k-line-strong)", background: "var(--k-surface-2)", cursor: "pointer", overflow: "hidden", boxShadow: "none", minHeight: "calc(var(--k-h) - 4px)" },
+  // Above the fixed sidebar and any page chrome — same backdrop as every dialog.
+  overlay: { ...formStyles.backdrop, zIndex: 1300 },
+  previewModal: { ...formStyles.modal, maxWidth: 860, height: "94vh", background: "#e8e8e8" },
+  copyHint: { margin: "0 0 0.85rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  copyGrid: { display: "grid", gap: "0.5rem", gridTemplateColumns: "repeat(auto-fill, minmax(min(200px, 100%), 1fr))" },
+  copyTypeBtn: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 0.75rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line-strong)", background: "var(--k-surface)", color: "var(--k-blue)", fontSize: "var(--k-font)", fontWeight: 600, cursor: "pointer", textAlign: "left", minHeight: 44, boxShadow: "none" },
+  copyTypeBtnSame: { gridColumn: "1 / -1", borderColor: "var(--k-teal)", color: "#00695c", background: "#e0f2f1" },
 };

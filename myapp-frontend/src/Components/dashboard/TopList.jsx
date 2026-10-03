@@ -24,7 +24,7 @@ export default function TopList({
 }) {
   const list = Array.isArray(items) ? items : [];
   if (list.length === 0) {
-    return <div style={{ fontSize: "0.85rem", color: "#5f6d7e", fontStyle: "italic", padding: "0.5rem 0" }}>{emptyText}</div>;
+    return <div style={{ fontSize: "var(--k-font)", color: "var(--k-muted)", fontStyle: "italic", padding: "0.5rem 0" }}>{emptyText}</div>;
   }
   const max = Math.max(...list.map((x) => Number(x.value) || 0), 1);
 
@@ -35,20 +35,22 @@ export default function TopList({
         return (
           <div key={`${it.id}-${idx}`} style={{ display: "flex", flexDirection: "column", gap: "0.28rem" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#0c1830", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', color: "#8593ab", fontSize: "0.72rem", marginRight: "0.45rem" }}>{String(idx + 1).padStart(2, "0")}</span>
+              {/* 2-line clamp, never nowrap+ellipsis — similar-prefix
+                  item names must stay distinguishable. */}
+              <span style={{ fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)", flex: 1, minWidth: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word", lineHeight: 1.3 }}>
+                <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, monospace', color: "var(--k-faint)", fontSize: "0.72rem", marginRight: "0.45rem" }}>{String(idx + 1).padStart(2, "0")}</span>
                 {it.name || "(unknown)"}
               </span>
-              <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace', fontVariantNumeric: "tabular-nums", fontSize: "0.82rem", fontWeight: 600, color: "#0c1830", flexShrink: 0 }}>
+              <span style={{ fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace', fontVariantNumeric: "tabular-nums", fontSize: "var(--k-td-font)", fontWeight: 600, color: "var(--k-ink)", flexShrink: 0 }}>
                 {formatNumber(it.value, valueMode)}
               </span>
             </div>
             {/* progress bar — proportion of #1's value */}
-            <div style={{ height: 5, borderRadius: 99, backgroundColor: "#edf2f9", overflow: "hidden" }}>
+            <div style={{ height: 5, borderRadius: 99, backgroundColor: "var(--k-surface-3)", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${widthPct}%`, background: `linear-gradient(90deg, ${accent} 0%, ${accent}99 100%)`, borderRadius: 99 }} />
             </div>
             {secondary(it) && (
-              <span style={{ fontSize: "0.73rem", color: "#69788f" }}>{secondary(it)}</span>
+              <span style={{ fontSize: "0.73rem", color: "var(--k-muted)" }}>{secondary(it)}</span>
             )}
           </div>
         );

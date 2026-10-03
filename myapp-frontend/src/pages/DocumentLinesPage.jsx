@@ -4,18 +4,16 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { challanPrivateColumns, defaultColumnsForType, lineColumns, lineSources, linesToTsv, saveLinesExcel } from "../utils/documentLines";
 import { loadDocumentLines } from "../api/documentLinesApi";
-import SearchableSelect from "../Components/SearchableSelect";
 import { MdTableRows } from "react-icons/md";
+import { PageHeader, CompanyPicker, Button, Card, Field, SearchBox, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
 import "./DocumentLinesPage.css";
 
 const ymd = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const today = new Date();
 const startOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
-const input = { minHeight: 40, width: "100%", boxSizing: "border-box", padding: "7px 9px", fontSize: 13, border: "1px solid #d0d7e2", borderRadius: 7, background: "#fff", color: "#1a2332" };
-const action = { minHeight: 44, padding: "8px 12px", border: "1px solid #d0d7e2", borderRadius: 8, background: "#fff", color: "#0d47a1", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 
 export default function DocumentLinesPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { selectedCompany } = useCompany();
   const { has } = usePermissions();
   const [params, setParams] = useSearchParams();
   const allowed = Object.entries(lineSources).filter(([, source]) => has(source.permission));
@@ -91,56 +89,65 @@ export default function DocumentLinesPage() {
     finally { setExporting(false); }
   };
 
-  if (!allowed.length) return <p>You do not have access to document lines.</p>;
-  return <div className="document-lines-page">
-    <header className="document-lines-heading">
-      <span className="document-lines-icon"><MdTableRows size={22} /></span>
-      <div><h2>Document Lines</h2><p>Filter line items, then copy or export to Excel.</p></div>
-    </header>
-    <div className="document-lines-filters">
-      <div className="document-lines-company"><span className="document-lines-label">Company</span><SearchableSelect items={companies} value={selectedCompany?.id || ""} onChange={(id) => setSelectedCompany(companies.find((c) => c.id === Number(id)))} allowClear={false} style={input} /></div>
-      <label>Document type<br /><select aria-label="Document type" style={input} value={type} onChange={(e) => { setStatus(""); setParams({ type: e.target.value }); }}>
-        {allowed.map(([key, source]) => <option key={key} value={key}>{source.label}</option>)}
-      </select></label>
-      <label>Period<br /><select aria-label="Period" style={input} value={period} onChange={(e) => setPeriod(e.target.value)}>
-        {documentId && <option value="document">This document</option>}
-        <option value="week">This week</option><option value="month">This month</option><option value="custom">Custom range</option>
-      </select></label>
-      {period === "custom" && <><label>From<br /><input type="date" style={input} value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-        <label>To<br /><input type="date" style={input} value={to} onChange={(e) => setTo(e.target.value)} /></label></>}
-      {period !== "document" && <label>Document / buyer search<br /><input style={input} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Number, buyer, PO…" /></label>}
-      {period !== "document" && type === "challan" && <label>Status<br /><select style={input} value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">All statuses</option>{["Pending", "Imported", "Invoiced", "No PO", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
-      </select></label>}
-    </div>
-    <details className="document-lines-columns"><summary>Columns <span>{visibleColumns.length} selected</span></summary>
-      <div className="document-lines-column-grid">
+  if (!allowed.length) return <EmptyState icon={MdTableRows}>You do not have access to document lines.</EmptyState>;
+  return <div>
+    <PageHeader icon={MdTableRows} tone="brand" title="Document Lines" subtitle="Filter line items, then copy or export to Excel." />
+    <CompanyPicker />
+    <Card style={{ marginBottom: "var(--k-gap)" }}>
+      <div style={filterGrid}>
+        <Field label="Document type"><select className="k-select" aria-label="Document type" value={type} onChange={(e) => { setStatus(""); setParams({ type: e.target.value }); }}>
+          {allowed.map(([key, source]) => <option key={key} value={key}>{source.label}</option>)}
+        </select></Field>
+        <Field label="Period"><select className="k-select" aria-label="Period" value={period} onChange={(e) => setPeriod(e.target.value)}>
+          {documentId && <option value="document">This document</option>}
+          <option value="week">This week</option><option value="month">This month</option><option value="custom">Custom range</option>
+        </select></Field>
+        {period === "custom" && <><Field label="From"><input type="date" className="k-input" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+          <Field label="To"><input type="date" className="k-input" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} /></Field></>}
+        {period !== "document" && <Field label="Document / buyer search"><input className="k-input" aria-label="Document / buyer search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Number, buyer, PO…" /></Field>}
+        {period !== "document" && type === "challan" && <Field label="Status"><select className="k-select" aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">All statuses</option>{["Pending", "Imported", "Invoiced", "No PO", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
+        </select></Field>}
+      </div>
+    </Card>
+    <details className="document-lines-columns" style={columnsBox}><summary>Columns <span>{visibleColumns.length} selected</span></summary>
+      <div className="document-lines-column-grid" style={{ borderTopColor: "var(--k-line)" }}>
         {availableColumns.map(([key, label]) => <label key={key}>
           <input type="checkbox" checked={columns.includes(key)} onChange={() => setColumns((current) => current.includes(key) ? current.length > 1 ? current.filter((x) => x !== key) : current : lineColumns.map(([id]) => id).filter((id) => current.includes(id) || id === key))} />{label}
         </label>)}
       </div>
-      <button type="button" style={action} onClick={() => setColumns(defaultColumnsForType(type))}>Reset columns</button>
+      <Button size="sm" onClick={() => setColumns(defaultColumnsForType(type))}>Reset columns</Button>
     </details>
-    {error && <p role="alert" style={{ color: "#b91c1c" }}>{error}</p>}
-    {message && <p role="status" style={{ color: "#00695c" }}>{message}</p>}
-    <section className="document-lines-results" aria-busy={busy}>
-      <div className="document-lines-toolbar">
-        <strong role="status">{busy ? "Loading lines…" : loaded ? `${shown.length} line${shown.length === 1 ? "" : "s"}` : "Line items"}</strong>
-        <input aria-label="Find an item" style={{ ...input, width: "min(100%, 240px)" }} value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Find description or item type…" disabled={!loaded} />
-        <button type="button" style={action} disabled={!shown.length || busy || exporting} onClick={copy}>Copy for Excel</button>
-        <button type="button" style={action} disabled={!shown.length || busy || exporting} onClick={download}>{exporting ? "Exporting…" : "Download Excel"}</button>
-      </div>
-    {!loaded ? <div className="document-lines-empty">{busy ? "Loading matching line items…" : error ? "Update the filters to try again." : "Select a company to view its lines."}</div> : !shown.length ? <div className="document-lines-empty">No lines match these filters. Try another period or search.</div> : <>
-      <div className="document-lines-table">
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 650 }}>
-          <thead><tr>{visibleColumns.map(([key, label]) => <th key={key} style={{ textAlign: "left", padding: 10, background: "#e0f2f1", borderBottom: "1px solid #cbd5e1" }}>{label}</th>)}</tr></thead>
+    {error && <Alert tone="error">{error}</Alert>}
+    {message && <Alert tone="success">{message}</Alert>}
+    <Card
+      flush
+      aria-busy={busy}
+      style={{ overflow: "hidden" }}
+      title={<span role="status">{busy ? "Loading lines…" : loaded ? `${shown.length} line${shown.length === 1 ? "" : "s"}` : "Line items"}</span>}
+      actions={<>
+        <SearchBox label="Find an item" value={itemSearch} onChange={setItemSearch} placeholder="Find description or item type…" disabled={!loaded} />
+        <Button disabled={!shown.length || busy || exporting} onClick={copy}>Copy for Excel</Button>
+        <Button disabled={!shown.length || busy || exporting} onClick={download}>{exporting ? "Exporting…" : "Download Excel"}</Button>
+      </>}
+    >
+    {!loaded ? (busy ? <Loading>Loading matching line items…</Loading> : <EmptyState boxed={false}>{error ? "Update the filters to try again." : "Select a company to view its lines."}</EmptyState>)
+      : !shown.length ? <EmptyState boxed={false}>No lines match these filters. Try another period or search.</EmptyState> : <>
+      <TableWrap style={{ overflow: "auto", maxHeight: "65vh" }}>
+        <table className="k-table" style={{ minWidth: 650 }}>
+          <thead><tr>{visibleColumns.map(([key, label]) => <th key={key}>{label}</th>)}</tr></thead>
           <tbody>{shown.slice(0, 200).map((row, index) => <tr key={`${row.documentId}-${row.line}-${index}`}>
-            {visibleColumns.map(([key]) => <td key={key} style={{ padding: "7px 10px", borderBottom: "1px solid #e8edf3" }}>{row[key]}</td>)}
+            {visibleColumns.map(([key]) => <td key={key} style={{ maxWidth: 300, overflowWrap: "anywhere" }}>{row[key]}</td>)}
           </tr>)}</tbody>
         </table>
-      </div>
-      {shown.length > 200 && <p>Showing the first 200 lines here. Copy and Excel include all {shown.length} matching lines.</p>}
+      </TableWrap>
+      {shown.length > 200 && <p style={{ margin: 0, padding: "0.6rem var(--k-td-pad-x)", color: "var(--k-muted)", fontSize: "var(--k-font-sm)", borderTop: "1px solid var(--k-line)" }}>Showing the first 200 lines here. Copy and Excel include all {shown.length} matching lines.</p>}
     </>}
-    </section>
+    </Card>
   </div>;
 }
+
+// Filter grid — auto-fit, one column on phones.
+const filterGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", gap: "0.75rem", alignItems: "end" };
+// Column chooser (native <details>) — surface follows the kit tokens.
+const columnsBox = { margin: "0 0 var(--k-gap)", borderColor: "var(--k-line)", borderRadius: "var(--k-radius)", background: "var(--k-surface)", color: "var(--k-ink)", fontSize: "var(--k-font)" };

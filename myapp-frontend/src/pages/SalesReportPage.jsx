@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
-import { MdAssessment, MdBusiness, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson, MdPictureAsPdf, MdFolderZip, MdClose } from "react-icons/md";
+import { MdAssessment, MdRefresh, MdDownload, MdChevronRight, MdExpandMore, MdUnfoldMore, MdUnfoldLess, MdPerson, MdPictureAsPdf, MdFolderZip, MdClose } from "react-icons/md";
 import { getSalesReport, getSalesReportExcel } from "../api/reportApi";
 import { getInvoicePrintTaxInvoiceBatch } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { dropdownStyles, formStyles, modalSizes } from "../theme";
+import { formStyles, modalSizes } from "../theme";
+import { PageHeader, CompanyPicker, Button, IconButton, Card, Field, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
@@ -23,19 +24,6 @@ const PRINT_BATCH_SIZE = 100;
 // ZIP builds one rasterized PDF per invoice at ~1-2s each, so it's capped.
 // Merged print has no such limit — it never rasterizes.
 const ZIP_MAX_INVOICES = 150;
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  rowAlt: "#fafbfd",
-  bandBg: "#f0f7ff",
-  totalBg: "#eef4ff",
-};
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -67,7 +55,7 @@ const prettyDate = (s) => {
 };
 
 export default function SalesReportPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { selectedCompany } = useCompany();
   const { has } = usePermissions();
   const canView = has("reports.sales.view");
   const canExport = has("reports.sales.export");
@@ -299,219 +287,206 @@ export default function SalesReportPage() {
   const collapseAll = () => setExpanded(new Set());
 
   if (!canView) {
-    return <div style={{ padding: 24, color: colors.textSecondary }}>You don't have permission to view reports.</div>;
+    return <EmptyState icon={MdAssessment}>You don't have permission to view reports.</EmptyState>;
   }
 
   return (
-    <div style={{ padding: "clamp(12px, 3vw, 24px)" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <MdAssessment size={26} color={colors.blue} />
-        <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Sales Report</h1>
-      </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
-        FBR-submitted invoices, grouped by document date. Quantities shown are what was <strong>filed to FBR</strong>.
-      </p>
+    <div>
+      <PageHeader
+        icon={MdAssessment}
+        tone="blue"
+        title="Sales Report"
+        subtitle={<>FBR-submitted invoices, grouped by document date. Quantities shown are what was <strong>filed to FBR</strong>.</>}
+      />
+
+      <CompanyPicker />
 
       {/* Controls */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
-        background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
-      }}>
-        <Field label="Company" icon={<MdBusiness size={15} />}>
-          <select
-            style={{ ...dropdownStyles.base, minWidth: 180 }}
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-          </select>
-        </Field>
-
-        <Field label="Period">
-          <div style={{ display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-            <button type="button" onClick={() => setMode("period")} style={segBtn(mode === "period")}>Month / Year</button>
-            <button type="button" onClick={() => setMode("custom")} style={segBtn(mode === "custom")}>Custom range</button>
-          </div>
-        </Field>
-
-        {mode === "period" ? (
-          <>
-            <Field label="Year">
-              <select style={dropdownStyles.base} value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
-                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </Field>
-            <Field label="Month">
-              <select
-                style={{ ...dropdownStyles.base, opacity: fullYear ? 0.5 : 1 }}
-                value={month}
-                disabled={fullYear}
-                onChange={(e) => setMonth(parseInt(e.target.value))}
-              >
-                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-              </select>
-            </Field>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: colors.textPrimary, paddingBottom: 8, cursor: "pointer" }}>
-              <input type="checkbox" checked={fullYear} onChange={(e) => setFullYear(e.target.checked)} />
-              Full year
-            </label>
-          </>
-        ) : (
-          <>
-            <Field label="From">
-              <input
-                type="date"
-                style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }}
-                value={dateFrom}
-                max={dateTo || undefined}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-            </Field>
-            <Field label="To">
-              <input
-                type="date"
-                style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }}
-                value={dateTo}
-                min={dateFrom || undefined}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </Field>
-          </>
-        )}
-
-        <Field label="Buyer type">
-          <select style={dropdownStyles.base} value={buyerType} onChange={(e) => setBuyerType(e.target.value)}>
-            {BUYER_TYPES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-          </select>
-        </Field>
-
-        <Field label="Client" icon={<MdPerson size={15} />}>
-          <SearchableClientSelect
-            clients={clients}
-            value={clientId}
-            onChange={(id) => setClientId(id)}
-            placeholder="All clients"
-            style={{ minWidth: 180, maxWidth: 240 }}
-          />
-        </Field>
-
-        {canPrintInvoice && (
-          <Field label="Invoice template">
-            <PrintTemplateSelect picker={tplPicker} style={{ flex: 1, maxWidth: 260 }} />
+      <Card style={{ marginBottom: "var(--k-gap)" }}>
+        <div style={controlsRow}>
+          <Field label="Period">
+            <div role="group" aria-label="Period mode" style={segWrap}>
+              <button type="button" onClick={() => setMode("period")} aria-pressed={mode === "period"} style={segBtn(mode === "period")}>Month / Year</button>
+              <button type="button" onClick={() => setMode("custom")} aria-pressed={mode === "custom"} style={segBtn(mode === "custom")}>Custom range</button>
+            </div>
           </Field>
-        )}
 
-        <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
-            <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
-          </button>
-          {canExport && (
-            <button onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid} style={btn(colors.teal)}>
-              <MdDownload size={16} /> {exporting ? "Exporting…" : "Export Excel"}
-            </button>
-          )}
-          {canPrintInvoice && (
+          {mode === "period" ? (
             <>
-              <button
-                onClick={handleBulkMerged}
-                disabled={!invoiceIds.length || loading || !!bulk || rangeInvalid || tplPicker.noTemplate}
-                title={`Print every Tax Invoice in this period as one A4 document — choose "Save as PDF" in the dialog`}
-                style={btn("#6a1b9a")}
-              >
-                <MdPictureAsPdf size={16} /> Tax Invoices (merged)
-              </button>
-              <button
-                onClick={handleBulkZip}
-                disabled={!invoiceIds.length || loading || !!bulk || rangeInvalid || tplPicker.noTemplate}
-                title={`Download one PDF per invoice, zipped (max ${ZIP_MAX_INVOICES})`}
-                style={btn("#455a64")}
-              >
-                <MdFolderZip size={16} /> ZIP of PDFs
-              </button>
+              <Field label="Year">
+                <select className="k-select" style={ctlAuto} value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
+                  {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </Field>
+              <Field label="Month">
+                <select
+                  className="k-select"
+                  style={{ ...ctlAuto, opacity: fullYear ? 0.5 : 1 }}
+                  value={month}
+                  disabled={fullYear}
+                  onChange={(e) => setMonth(parseInt(e.target.value))}
+                >
+                  {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+              </Field>
+              <label style={checkLabel}>
+                <input type="checkbox" checked={fullYear} onChange={(e) => setFullYear(e.target.checked)} />
+                Full year
+              </label>
+            </>
+          ) : (
+            <>
+              <Field label="From">
+                <input
+                  type="date"
+                  className="k-input"
+                  style={{ ...ctlAuto, ...(rangeInvalid ? { borderColor: "var(--k-danger)" } : {}) }}
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </Field>
+              <Field label="To">
+                <input
+                  type="date"
+                  className="k-input"
+                  style={{ ...ctlAuto, ...(rangeInvalid ? { borderColor: "var(--k-danger)" } : {}) }}
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </Field>
             </>
           )}
-        </div>
-      </div>
 
-      {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
-          {error}
+          <Field label="Buyer type">
+            <select className="k-select" style={ctlAuto} value={buyerType} onChange={(e) => setBuyerType(e.target.value)}>
+              {BUYER_TYPES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+            </select>
+          </Field>
+
+          <Field label={<><MdPerson size={15} aria-hidden="true" style={{ verticalAlign: "-3px" }} /> Client</>}>
+            <SearchableClientSelect
+              clients={clients}
+              value={clientId}
+              onChange={(id) => setClientId(id)}
+              placeholder="All clients"
+              style={{ minWidth: 180, maxWidth: 240 }}
+            />
+          </Field>
+
+          {canPrintInvoice && (
+            <Field label="Invoice template">
+              <PrintTemplateSelect picker={tplPicker} style={{ flex: 1, maxWidth: 260 }} />
+            </Field>
+          )}
+
+          <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
+            <Button variant="primary" icon={MdRefresh} onClick={fetchReport} disabled={loading || rangeInvalid}>
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+            {canExport && (
+              <Button variant="teal" icon={MdDownload} onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
+                {exporting ? "Exporting…" : "Export Excel"}
+              </Button>
+            )}
+            {canPrintInvoice && (
+              <>
+                <Button
+                  variant="secondary"
+                  icon={MdPictureAsPdf}
+                  onClick={handleBulkMerged}
+                  disabled={!invoiceIds.length || loading || !!bulk || rangeInvalid || tplPicker.noTemplate}
+                  title={`Print every Tax Invoice in this period as one A4 document — choose "Save as PDF" in the dialog`}
+                >
+                  Tax Invoices (merged)
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={MdFolderZip}
+                  onClick={handleBulkZip}
+                  disabled={!invoiceIds.length || loading || !!bulk || rangeInvalid || tplPicker.noTemplate}
+                  title={`Download one PDF per invoice, zipped (max ${ZIP_MAX_INVOICES})`}
+                >
+                  ZIP of PDFs
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-      )}
+      </Card>
+
+      {error && <Alert tone="error">{error}</Alert>}
 
       {/* Report body */}
       {report && !loading && (
-        <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}`, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <div style={{ fontWeight: 700, color: colors.textPrimary }}>{report.companyName}</div>
-              <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
-                Sale Report · {periodLabel} · {BUYER_TYPES.find((b) => b.value === report.buyerType)?.label || report.buyerType}
-                {" · "}{report.invoiceCount} invoice(s), {report.lineCount} line(s)
-              </div>
-            </div>
-            {report.invoices.length > 0 && (
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={expandAll} style={ghostBtn}><MdUnfoldMore size={15} /> Expand all</button>
-                <button onClick={collapseAll} style={ghostBtn}><MdUnfoldLess size={15} /> Collapse all</button>
-              </div>
-            )}
+        <Card
+          flush
+          style={{ overflow: "hidden" }}
+          title={report.companyName}
+          actions={report.invoices.length > 0 ? (
+            <>
+              <Button variant="ghost" size="sm" icon={MdUnfoldMore} onClick={expandAll}>Expand all</Button>
+              <Button variant="ghost" size="sm" icon={MdUnfoldLess} onClick={collapseAll}>Collapse all</Button>
+            </>
+          ) : null}
+        >
+          <div style={reportMeta}>
+            Sale Report · {periodLabel} · {BUYER_TYPES.find((b) => b.value === report.buyerType)?.label || report.buyerType}
+            {" · "}{report.invoiceCount} invoice(s), {report.lineCount} line(s)
           </div>
 
           {report.invoices.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
+            <EmptyState boxed={false}>
               No FBR-submitted sales for {periodLabel}.
-            </div>
+            </EmptyState>
           ) : isNarrow ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", padding: "0.6rem" }}>
               {report.invoices.map((inv) => {
                 const open = expanded.has(inv.documentNumber);
                 const hsCodes = [...new Set(inv.lines.map((l) => l.hsCode).filter(Boolean))].join(", ");
                 return (
                   <div key={inv.documentNumber} style={srCard}>
                     <button type="button" onClick={() => toggleInv(inv.documentNumber)} style={srCardHead}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: colors.blue }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: "var(--k-blue)" }}>
                         {open ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                         {inv.documentNumber}
                       </span>
-                      <span style={{ fontSize: "0.76rem", color: colors.textSecondary }}>{new Date(inv.documentDate).toLocaleDateString()}</span>
+                      <span style={{ fontSize: "0.76rem", color: "var(--k-muted)" }}>{new Date(inv.documentDate).toLocaleDateString()}</span>
                     </button>
                     {canPrintInvoice && (
-                      <button
-                        type="button"
+                      <Button
+                        size="sm"
+                        icon={MdPictureAsPdf}
                         onClick={() => handleRowPdf(inv)}
                         disabled={!!rowBusyId || !!bulk || tplPicker.noTemplate}
                         title="Download this Tax Invoice as PDF"
                         aria-label={`Download Tax Invoice ${inv.documentNumber} as PDF`}
-                        style={{ ...rowPdfBtn, alignSelf: "flex-start" }}
+                        style={{ alignSelf: "flex-start", color: pdfRed, minHeight: 44 }}
                       >
-                        <MdPictureAsPdf size={18} />
-                        <span style={{ fontSize: "0.76rem", fontWeight: 600 }}>
-                          {rowBusyId === inv.invoiceId ? "Preparing…" : "Tax Invoice PDF"}
-                        </span>
-                      </button>
+                        {rowBusyId === inv.invoiceId ? "Preparing…" : "Tax Invoice PDF"}
+                      </Button>
                     )}
-                    <div style={{ fontSize: "0.86rem", fontWeight: 600, color: colors.textPrimary, ...clamp2 }}>{inv.customer}</div>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: colors.textSecondary, ...clamp2 }}>FBR {inv.fbrInvoiceNumber || "—"}{hsCodes ? ` · HS ${hsCodes}` : ""}</div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 600, color: "var(--k-ink)", ...clamp2 }}>{inv.customer}</div>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--k-muted)", ...clamp2 }}>FBR {inv.fbrInvoiceNumber || "—"}{hsCodes ? ` · HS ${hsCodes}` : ""}</div>
                     <div style={srMeta}>
                       <div><span style={srLbl}>Items</span><span style={srVal}>{inv.lineCount}</span></div>
                       <div><span style={srLbl}>Qty</span><span style={srVal}>{qty(inv.totalQuantity)}</span></div>
                       <div><span style={srLbl}>Amount</span><span style={srVal}>{money(inv.totalAmount)}</span></div>
                       <div><span style={srLbl}>Tax</span><span style={srVal}>{money(inv.totalTax)}</span></div>
-                      <div><span style={srLbl}>Total</span><span style={{ ...srVal, fontWeight: 700, color: colors.blue }}>{money(inv.totalGross)}</span></div>
+                      <div><span style={srLbl}>Total</span><span style={{ ...srVal, fontWeight: 700, color: "var(--k-blue)" }}>{money(inv.totalGross)}</span></div>
                     </div>
                     {open && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${colors.cardBorder}` }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6, paddingTop: 6, borderTop: "1px dashed var(--k-line)" }}>
                         {inv.lines.map((l, idx) => (
                           <div key={idx} style={srLine}>
                             <div style={{ fontSize: "0.82rem", fontWeight: 600, ...clamp2 }}>{l.sr}. {l.product}</div>
-                            <div style={{ fontFamily: "monospace", fontSize: "0.7rem", color: colors.textSecondary }}>HS {l.hsCode || "—"}</div>
+                            <div style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "var(--k-muted)" }}>HS {l.hsCode || "—"}</div>
                             <div style={srLineMeta}>
                               <span>{qty(l.quantity)} {l.unit}</span>
                               <span>@ {money(l.rate)}</span>
                               <span>Tax {money(l.taxAmount)}</span>
-                              <span style={{ fontWeight: 700, color: colors.blue }}>{money(l.totalAmount)}</span>
+                              <span style={{ fontWeight: 700, color: "var(--k-blue)" }}>{money(l.totalAmount)}</span>
                             </div>
                           </div>
                         ))}
@@ -520,25 +495,25 @@ export default function SalesReportPage() {
                   </div>
                 );
               })}
-              <div style={{ ...srCard, background: colors.totalBg, borderColor: colors.blue }}>
-                <div style={{ fontWeight: 800, color: colors.blue, marginBottom: 4 }}>TOTAL ({report.lineCount} lines)</div>
+              <div style={{ ...srCard, background: totalBg, borderColor: "var(--k-blue)" }}>
+                <div style={{ fontWeight: 800, color: "var(--k-blue)", marginBottom: 4 }}>TOTAL ({report.lineCount} lines)</div>
                 <div style={srMeta}>
                   <div><span style={srLbl}>Qty</span><span style={{ ...srVal, fontWeight: 800 }}>{qty(report.grandQuantity)}</span></div>
                   <div><span style={srLbl}>Amount</span><span style={{ ...srVal, fontWeight: 800 }}>{money(report.grandAmount)}</span></div>
                   <div><span style={srLbl}>Tax</span><span style={{ ...srVal, fontWeight: 800 }}>{money(report.grandTax)}</span></div>
-                  <div><span style={srLbl}>Total</span><span style={{ ...srVal, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</span></div>
+                  <div><span style={srLbl}>Total</span><span style={{ ...srVal, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</span></div>
                 </div>
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820, fontSize: "0.82rem" }}>
+            <TableWrap>
+              <table className="k-table" style={{ minWidth: 820 }}>
                 <thead>
-                  <tr style={{ background: colors.rowAlt }}>
+                  <tr>
                     {["", "Doc. No", "Date", "FBR Inv. No.", "Customer", "HS Code", "Items", "Qty", "Amount", "Tax", "Total"].map((h, i) => (
-                      <th key={i} style={{ ...th, textAlign: i >= 6 ? "right" : "left" }}>{h}</th>
+                      <th key={i} className={i >= 6 ? "k-num" : undefined}>{h}</th>
                     ))}
-                    {canPrintInvoice && <th style={{ ...th, textAlign: "center" }}>PDF</th>}
+                    {canPrintInvoice && <th className="is-center">PDF</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -552,64 +527,62 @@ export default function SalesReportPage() {
                         {/* Invoice summary row — click to expand its items */}
                         <tr
                           onClick={() => toggleInv(inv.documentNumber)}
-                          style={{ cursor: "pointer", borderTop: `1px solid ${colors.cardBorder}`, background: open ? colors.bandBg : "#fff" }}
+                          style={{ cursor: "pointer", background: open ? bandBg : undefined }}
                         >
-                          <td style={{ ...td, width: 30, color: colors.blue }}>
+                          <td style={{ width: 30, color: "var(--k-blue)" }}>
                             {open ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
                           </td>
-                          <td style={{ ...td, fontWeight: 700, color: colors.blue }}>{inv.documentNumber}</td>
-                          <td style={td}>{new Date(inv.documentDate).toLocaleDateString()}</td>
-                          <td style={{ ...td, fontFamily: "monospace", fontSize: "0.75rem" }}>{inv.fbrInvoiceNumber}</td>
-                          <td style={{ ...td, maxWidth: 220 }}><div style={clamp2}>{inv.customer}</div></td>
-                          <td style={{ ...td, fontFamily: "monospace", fontSize: "0.75rem", maxWidth: 160 }}><div style={clamp2}>{hsCodes}</div></td>
-                          <td style={tdR}>{inv.lineCount}</td>
-                          <td style={tdR}>{qty(inv.totalQuantity)}</td>
-                          <td style={tdR}>{money(inv.totalAmount)}</td>
-                          <td style={tdR}>{money(inv.totalTax)}</td>
-                          <td style={{ ...tdR, fontWeight: 700 }}>{money(inv.totalGross)}</td>
+                          <td style={{ fontWeight: 700, color: "var(--k-blue)" }}>{inv.documentNumber}</td>
+                          <td>{new Date(inv.documentDate).toLocaleDateString()}</td>
+                          <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{inv.fbrInvoiceNumber}</td>
+                          <td style={{ maxWidth: 220 }}><div style={clamp2}>{inv.customer}</div></td>
+                          <td style={{ fontFamily: "monospace", fontSize: "0.75rem", maxWidth: 160 }}><div style={clamp2}>{hsCodes}</div></td>
+                          <td className="k-num">{inv.lineCount}</td>
+                          <td className="k-num" style={nowrap}>{qty(inv.totalQuantity)}</td>
+                          <td className="k-num" style={nowrap}>{money(inv.totalAmount)}</td>
+                          <td className="k-num" style={nowrap}>{money(inv.totalTax)}</td>
+                          <td className="k-num" style={{ ...nowrap, fontWeight: 700 }}>{money(inv.totalGross)}</td>
                           {canPrintInvoice && (
-                            <td style={{ ...td, textAlign: "center" }}>
-                              <button
-                                type="button"
+                            <td className="is-center">
+                              <IconButton
+                                label="Download this Tax Invoice as PDF"
+                                aria-label={`Download Tax Invoice ${inv.documentNumber} as PDF`}
+                                icon={MdPictureAsPdf}
                                 // The row itself toggles expansion — don't let the
                                 // download also collapse/expand the line items.
                                 onClick={(e) => { e.stopPropagation(); handleRowPdf(inv); }}
                                 disabled={!!rowBusyId || !!bulk || tplPicker.noTemplate}
-                                title="Download this Tax Invoice as PDF"
-                                aria-label={`Download Tax Invoice ${inv.documentNumber} as PDF`}
-                                style={iconBtn}
-                              >
-                                <MdPictureAsPdf size={18} />
-                              </button>
+                                style={{ color: pdfRed, border: "1px solid var(--k-line-strong)" }}
+                              />
                             </td>
                           )}
                         </tr>
                         {/* Expanded line items */}
                         {open && (
                           <tr>
-                            <td colSpan={canPrintInvoice ? 12 : 11} style={{ padding: 0, background: colors.rowAlt }}>
+                            <td colSpan={canPrintInvoice ? 12 : 11} style={{ padding: 0, background: "var(--k-surface-2)" }}>
                               <div style={{ overflowX: "auto", padding: "4px 8px 10px 38px" }}>
-                                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 720, fontSize: "0.8rem" }}>
+                                <table className="k-table k-table--compact" style={{ minWidth: 720, background: "transparent" }}>
                                   <thead>
                                     <tr>
                                       {["Sr.", "HS Code", "Product", "Qty", "Unit", "Rate", "Amount", "Dis Amt", "Tax Amt", "Total"].map((h, i) => (
-                                        <th key={i} style={{ ...th, textAlign: i >= 3 && i !== 4 ? "right" : "left" }}>{h}</th>
+                                        <th key={i} className={i >= 3 && i !== 4 ? "k-num" : undefined} style={{ position: "static" }}>{h}</th>
                                       ))}
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {inv.lines.map((l, idx) => (
-                                      <tr key={idx} style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                                        <td style={td}>{l.sr}</td>
-                                        <td style={{ ...td, fontFamily: "monospace" }}>{l.hsCode}</td>
-                                        <td style={{ ...td, maxWidth: 280 }}><div style={clamp2}>{l.product}</div></td>
-                                        <td style={tdR}>{qty(l.quantity)}</td>
-                                        <td style={td}>{l.unit}</td>
-                                        <td style={tdR}>{money(l.rate)}</td>
-                                        <td style={tdR}>{money(l.amount)}</td>
-                                        <td style={tdR}>{money(l.discountAmount)}</td>
-                                        <td style={tdR}>{money(l.taxAmount)}</td>
-                                        <td style={{ ...tdR, fontWeight: 600 }}>{money(l.totalAmount)}</td>
+                                      <tr key={idx}>
+                                        <td>{l.sr}</td>
+                                        <td style={{ fontFamily: "monospace" }}>{l.hsCode}</td>
+                                        <td style={{ maxWidth: 280 }}><div style={clamp2}>{l.product}</div></td>
+                                        <td className="k-num" style={nowrap}>{qty(l.quantity)}</td>
+                                        <td>{l.unit}</td>
+                                        <td className="k-num" style={nowrap}>{money(l.rate)}</td>
+                                        <td className="k-num" style={nowrap}>{money(l.amount)}</td>
+                                        <td className="k-num" style={nowrap}>{money(l.discountAmount)}</td>
+                                        <td className="k-num" style={nowrap}>{money(l.taxAmount)}</td>
+                                        <td className="k-num" style={{ ...nowrap, fontWeight: 600 }}>{money(l.totalAmount)}</td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -621,55 +594,61 @@ export default function SalesReportPage() {
                       </Fragment>
                     );
                   })}
-                  {/* Grand total across all invoices */}
-                  <tr style={{ background: colors.totalBg, borderTop: `2px solid ${colors.blue}` }}>
-                    <td style={{ ...td, fontWeight: 800, color: colors.blue }} colSpan={6}>TOTAL (all invoices)</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{report.lineCount}</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{qty(report.grandQuantity)}</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandAmount)}</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandTax)}</td>
-                    <td style={{ ...tdR, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</td>
-                    {canPrintInvoice && <td style={td} />}
-                  </tr>
                 </tbody>
+                <tfoot>
+                  {/* Grand total across all invoices */}
+                  <tr>
+                    <td style={{ ...totalCell, fontWeight: 800, color: "var(--k-blue)" }} colSpan={6}>TOTAL (all invoices)</td>
+                    <td className="k-num" style={{ ...totalCell, fontWeight: 800 }}>{report.lineCount}</td>
+                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{qty(report.grandQuantity)}</td>
+                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandAmount)}</td>
+                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandTax)}</td>
+                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</td>
+                    {canPrintInvoice && <td style={totalCell} />}
+                  </tr>
+                </tfoot>
               </table>
-            </div>
+            </TableWrap>
           )}
-        </div>
+        </Card>
       )}
 
-      {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading report…</div>}
+      {loading && <Loading>Loading report…</Loading>}
 
       {bulk && (
         <div style={formStyles.backdrop} role="dialog" aria-modal="true" aria-label="Building Tax Invoice PDFs">
           <div style={{ ...formStyles.modal, maxWidth: modalSizes.sm }}>
-            <div style={{ padding: "1rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}`, display: "flex", alignItems: "center", gap: 8 }}>
-              {bulk.mode === "zip" ? <MdFolderZip size={20} color={colors.blue} /> : <MdPictureAsPdf size={20} color={colors.blue} />}
-              <strong style={{ color: colors.textPrimary }}>
+            <div style={formStyles.header}>
+              <h3 style={{ ...formStyles.title, display: "flex", alignItems: "center", gap: 8 }}>
+                {bulk.mode === "zip" ? <MdFolderZip size={20} aria-hidden="true" /> : <MdPictureAsPdf size={20} aria-hidden="true" />}
                 {bulk.mode === "zip" ? "Building ZIP of Tax Invoices" : "Building merged Tax Invoices"}
-              </strong>
+              </h3>
             </div>
-            <div style={{ padding: "1.25rem", overflowY: "auto", flex: 1 }}>
-              <div style={{ color: colors.textSecondary, fontSize: "0.88rem", marginBottom: 10 }}>{bulk.phase}</div>
-              <div style={{ height: 8, background: colors.inputBg, borderRadius: 999, overflow: "hidden" }}>
+            <div style={formStyles.body}>
+              <div style={{ color: "var(--k-muted)", fontSize: "var(--k-font)", marginBottom: 10 }}>{bulk.phase}</div>
+              <div style={{ height: 8, background: "var(--k-surface-3)", borderRadius: 999, overflow: "hidden" }}>
                 <div style={{
                   height: "100%",
                   width: `${bulk.total ? Math.round((bulk.done / bulk.total) * 100) : 0}%`,
-                  background: colors.blue,
+                  background: "var(--k-blue)",
                   transition: "width 0.2s ease",
                 }} />
               </div>
-              <div style={{ marginTop: 8, fontSize: "0.82rem", color: colors.textPrimary }}>
+              <div style={{ marginTop: 8, fontSize: "var(--k-font-sm)", color: "var(--k-ink)" }}>
                 {bulk.done} of {bulk.total} invoice(s)
               </div>
               {bulk.mode === "merged" && (
-                <div style={{ marginTop: 12, fontSize: "0.78rem", color: colors.textSecondary }}>
+                <div style={{ marginTop: 12, fontSize: "0.78rem", color: "var(--k-muted)" }}>
                   Your browser's print dialog opens when this finishes — pick <strong>Save as PDF</strong> as the destination to keep a file.
                 </div>
               )}
             </div>
-            <div style={{ padding: "0.85rem 1.25rem", borderTop: `1px solid ${colors.cardBorder}`, display: "flex", justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => { cancelRef.current = true; }} style={{ ...ghostBtn, minHeight: 40 }}>
+            <div style={formStyles.footer}>
+              <button
+                type="button"
+                onClick={() => { cancelRef.current = true; }}
+                style={{ ...formStyles.button, ...formStyles.cancel, display: "inline-flex", alignItems: "center", gap: 4 }}
+              >
                 <MdClose size={15} /> Cancel
               </button>
             </div>
@@ -680,87 +659,44 @@ export default function SalesReportPage() {
   );
 }
 
-function Field({ label, icon, children }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, display: "flex", alignItems: "center", gap: 4 }}>
-        {icon} {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const th = { padding: "6px 10px", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, whiteSpace: "nowrap" };
-const td = { padding: "6px 10px", color: colors.textPrimary, verticalAlign: "top" };
-const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
+const nowrap = { whiteSpace: "nowrap" };
+// Page-specific tints (expanded invoice band, grand-total band, PDF glyph).
+const bandBg = "#f0f7ff";
+const totalBg = "#eef4ff";
+const pdfRed = "#b71c1c";
+const totalCell = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
+
+// Filter row inside the controls card — wraps on narrow screens.
+const controlsRow = { display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "flex-end" };
+const ctlAuto = { width: "auto", maxWidth: "100%" };
+const checkLabel = { display: "flex", alignItems: "center", gap: 6, fontSize: "var(--k-font)", color: "var(--k-ink)", minHeight: "var(--k-h)", cursor: "pointer" };
+const reportMeta = { padding: "0.6rem var(--k-td-pad-x)", color: "var(--k-muted)", fontSize: "var(--k-font-sm)", borderBottom: "1px solid var(--k-line)" };
 
 // Mobile card styles — phones get stacked, tappable invoice cards (no
 // horizontal scroll) instead of the wide table.
-const srCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: 3 };
+const srCard = { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.8rem", background: "var(--k-surface)", display: "flex", flexDirection: "column", gap: 3 };
 const srCardHead = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "none", border: "none", padding: 0, boxShadow: "none", cursor: "pointer", width: "100%", textAlign: "left" };
 const srMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(90px, 100%), 1fr))", gap: "0.35rem 0.7rem", marginTop: 4 };
-const srLbl = { display: "block", fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary };
-const srVal = { display: "block", fontSize: "0.84rem", fontWeight: 600, color: colors.textPrimary };
-const srLine = { background: colors.rowAlt, borderRadius: 8, padding: "0.5rem 0.6rem", display: "flex", flexDirection: "column", gap: 2 };
-const srLineMeta = { display: "flex", flexWrap: "wrap", gap: "0.3rem 0.7rem", fontSize: "0.78rem", color: colors.textSecondary, marginTop: 2 };
+const srLbl = { display: "block", fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--k-muted)" };
+const srVal = { display: "block", fontSize: "0.84rem", fontWeight: 600, color: "var(--k-ink)" };
+const srLine = { background: "var(--k-surface-2)", borderRadius: 8, padding: "0.5rem 0.6rem", display: "flex", flexDirection: "column", gap: 2 };
+const srLineMeta = { display: "flex", flexWrap: "wrap", gap: "0.3rem 0.7rem", fontSize: "0.78rem", color: "var(--k-muted)", marginTop: 2 };
 
-// Icon-only download in the desktop table. padding:0 + boxShadow:none override
-// the global button rule in index.css, which otherwise off-centres the glyph
-// and adds a shadow. 44x44 keeps the tap target usable on touch laptops.
-const iconBtn = {
-  display: "grid",
-  placeItems: "center",
-  padding: 0,
-  boxShadow: "none",
-  width: 44,
-  height: 44,
-  border: `1px solid ${colors.inputBorder}`,
-  borderRadius: 8,
-  background: "#fff",
-  color: "#b71c1c",
-  cursor: "pointer",
-};
-
-// Labelled pill for the mobile card, where an unlabelled icon reads as noise.
-const rowPdfBtn = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  minHeight: 44,
-  padding: "0 12px",
-  boxShadow: "none",
-  border: `1px solid ${colors.inputBorder}`,
-  borderRadius: 8,
-  background: "#fff",
-  color: "#b71c1c",
-  cursor: "pointer",
-};
-
-const btn = (bg) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: "#fff",
-  border: "none", borderRadius: 8, padding: "9px 14px", fontSize: "0.85rem", fontWeight: 600,
-  cursor: "pointer", minHeight: 40,
-});
-
-// Small outline button for expand/collapse-all.
-const ghostBtn = {
-  display: "inline-flex", alignItems: "center", gap: 4,
-  background: "#fff", color: colors.textSecondary,
-  border: `1px solid ${colors.inputBorder}`, borderRadius: 8,
-  padding: "6px 10px", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
-};
-
-// Segmented-control button — active segment filled blue, inactive plain.
+// Segmented control (Month / Year vs Custom range) — kit has no segmented
+// control, so it is built locally from the --k-* tokens.
+const segWrap = { display: "inline-flex", border: "1px solid var(--k-line-strong)", borderRadius: "var(--k-radius)", overflow: "hidden", background: "var(--k-surface)" };
 const segBtn = (active) => ({
   border: "none",
-  background: active ? colors.blue : "transparent",
-  color: active ? "#fff" : colors.textSecondary,
-  padding: "9px 14px",
-  fontSize: "0.82rem",
+  borderRadius: 0,
+  background: active ? "var(--k-blue)" : "transparent",
+  color: active ? "#fff" : "var(--k-muted)",
+  padding: "0 0.85rem",
+  fontSize: "var(--k-font-sm)",
   fontWeight: 600,
   cursor: "pointer",
-  minHeight: 40,
+  minHeight: "var(--k-h)",
   whiteSpace: "nowrap",
+  boxShadow: "none",
+  transform: "none",
 });

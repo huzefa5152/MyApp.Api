@@ -14,7 +14,7 @@ import { mergeTemplate, MERGE_FIELDS } from "../utils/templateEngine";
 import {
   TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, SAMPLE_DATA, DEFAULT_TEMPLATES,
 } from "../utils/templateSampleData";
-import { dropdownStyles } from "../theme";
+import { Button, EmptyState, Loading } from "../ui/Kit";
 import CodeEditor from "../Components/templateEditor/CodeEditor";
 import MergeFieldSidebar from "../Components/templateEditor/MergeFieldSidebar";
 import StampPicker from "../Components/templateEditor/StampPicker";
@@ -33,15 +33,6 @@ import NewTemplateDialog, { uniqueTemplateName } from "../Components/templateEdi
 import { markRecentTemplate } from "../utils/templateEditorNav";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBorder: "#d0d7e2",
-};
 
 // The type's default template, else its oldest, else nothing.
 const pickForType = (list, type) => {
@@ -613,29 +604,18 @@ export default function TemplateEditorPage() {
 
   if (!canManage) {
     return (
-      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
-        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
-        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
-        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to edit print templates.</p>
-      </div>
+      <EmptyState icon={MdLock} title="Access denied">
+        You don&apos;t have permission to edit print templates.
+      </EmptyState>
     );
   }
 
   if (loading) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
-        <span style={{ color: colors.textSecondary }}>Loading...</span>
-      </div>
-    );
+    return <Loading>Loading...</Loading>;
   }
 
   if (companies.length === 0) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "3rem", flexDirection: "column" }}>
-        <MdBusiness size={48} color={colors.inputBorder} />
-        <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No companies available. Add a company first.</p>
-      </div>
-    );
+    return <EmptyState icon={MdBusiness} boxed={false}>No companies available. Add a company first.</EmptyState>;
   }
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -643,6 +623,7 @@ export default function TemplateEditorPage() {
   // Toolbar pieces shared by the phone and desktop layouts.
   const typeSelect = (style) => (
     <select
+      className="k-select"
       style={style}
       value={templateType}
       onChange={(e) => handleTypeChange(e.target.value)}
@@ -658,6 +639,7 @@ export default function TemplateEditorPage() {
   );
   const templateSelect = (style) => (
     <select
+      className="k-select"
       style={style}
       value={currentTemplateId ? String(currentTemplateId) : "__draft__"}
       onChange={(e) => handleSwitchTemplate(e.target.value)}
@@ -738,24 +720,24 @@ export default function TemplateEditorPage() {
 
       {/* Top Bar */}
       <div style={styles.topBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <button
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+          <Button
+            size="sm"
+            icon={MdArrowBack}
             onClick={() => navigate("/templates")}
             title="Back to Print Templates"
             aria-label="Back to Print Templates"
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, borderRadius: 8, padding: isMobile ? "0 0.6rem" : "0 0.7rem", minHeight: isMobile ? 40 : 36, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", flexShrink: 0, boxShadow: "none" }}
+            style={{ flexShrink: 0 }}
           >
-            <MdArrowBack size={16} /> {isMobile ? "" : "Print Templates"}
-          </button>
-          <div style={{ ...styles.headerIcon, ...(isMobile ? { width: 34, height: 34, borderRadius: 8 } : {}) }}>
-            <MdCode size={isMobile ? 18 : 24} color="#fff" />
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: isMobile ? "1rem" : "1.3rem", fontWeight: 700, color: colors.textPrimary }}>
+            {isMobile ? "" : "Print Templates"}
+          </Button>
+          <span className="k-header__icon k-tone-brand" aria-hidden="true"><MdCode /></span>
+          <div style={{ minWidth: 0 }}>
+            <h2 className="k-header__title" style={{ fontSize: isMobile ? "1rem" : "calc(var(--k-title) * 0.87)" }}>
               {isDraft ? `New ${typeLabel}` : "Edit Template"}
             </h2>
             {!isMobile && (
-              <p style={{ margin: 0, fontSize: "0.82rem", color: colors.textSecondary }}>
+              <p className="k-header__sub" style={{ margin: 0 }}>
                 {isDraft
                   ? `${typeLabel} has no saved template yet — this is the built-in default. Save to keep it.`
                   : "Customize print templates for each company"}
@@ -769,116 +751,124 @@ export default function TemplateEditorPage() {
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Company</label>
               <div style={styles.readonlyValue}>
-                <MdBusiness size={16} color={colors.blue} style={{ flexShrink: 0 }} />
+                <MdBusiness size={16} color="var(--k-blue)" style={{ flexShrink: 0 }} />
                 <span>{selectedCompany?.brandName || selectedCompany?.name || "—"}</span>
               </div>
             </div>
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Document Type</label>
-              {typeSelect({ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" })}
+              {typeSelect({ width: "100%" })}
             </div>
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Saved Templates</label>
-              {templateSelect({ ...dropdownStyles.base, minWidth: 0, width: "100%", fontSize: "0.82rem" })}
+              {templateSelect({ width: "100%" })}
             </div>
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Template Name</label>
               <input
                 type="text"
+                className="k-input"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
                 placeholder="Name this template…"
-                style={{ ...styles.nameInput, width: "100%", fontSize: "0.82rem" }}
+                style={{ width: "100%" }}
               />
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-              <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flex: 1, justifyContent: "center" }} onClick={() => setShowManager(true)} title="Manage this document type's templates">
-                <MdViewList size={14} /> Templates
-              </button>
-              <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flex: 1, justifyContent: "center" }} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
-                <MdAutoAwesome size={14} /> Designs
-              </button>
+              <Button size="sm" icon={MdViewList} style={{ flex: 1 }} onClick={() => setShowManager(true)} title="Manage this document type's templates">
+                Templates
+              </Button>
+              <Button size="sm" icon={MdAutoAwesome} style={{ flex: 1 }} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
+                Designs
+              </Button>
               {currentTemplateId && !currentIsDefault && (
-                <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flexShrink: 0 }} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
-                  <MdStar size={14} /> Set default
-                </button>
+                <Button size="sm" icon={MdStar} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
+                  Set default
+                </Button>
               )}
-              <button style={{ ...styles.btn, ...styles.btnOutline, ...styles.btnSm, flexShrink: 0 }} onClick={handleReset} title="Reset to default">
-                <MdRefresh size={14} /> Reset
-              </button>
-              <button
-                style={{ ...styles.btn, ...styles.btnPrimary, ...styles.btnSm, opacity: (saving || !templateName.trim()) ? 0.7 : 1, flexShrink: 0 }}
+              <Button size="sm" icon={MdRefresh} onClick={handleReset} title="Reset to default">
+                Reset
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={MdSave}
                 onClick={handleSave}
                 disabled={saving || !templateName.trim()}
               >
-                <MdSave size={14} /> {saving ? "..." : "Save"}
-              </button>
+                {saving ? "..." : "Save"}
+              </Button>
             </div>
-            {hasChanges && <span style={{ fontSize: "0.75rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
+            {hasChanges && <span style={styles.unsaved}>Unsaved changes</span>}
           </div>
         ) : (
           <div style={{ display: "flex", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}>
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Company</label>
               <div style={styles.readonlyValue}>
-                <MdBusiness size={18} color={colors.blue} style={{ flexShrink: 0 }} />
+                <MdBusiness size={18} color="var(--k-blue)" style={{ flexShrink: 0 }} />
                 <span>{selectedCompany?.brandName || selectedCompany?.name || "—"}</span>
               </div>
             </div>
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Document Type</label>
-              {typeSelect({ ...dropdownStyles.base, minWidth: "180px" })}
+              {typeSelect({ width: "auto", minWidth: "180px" })}
             </div>
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Saved Templates</label>
-              {templateSelect({ ...dropdownStyles.base, minWidth: "200px" })}
+              {templateSelect({ width: "auto", minWidth: "200px" })}
             </div>
 
             <div style={styles.fieldGroup}>
               <label style={styles.fieldLabel}>Template Name</label>
               <input
                 type="text"
+                className="k-input"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
                 placeholder="Name this template…"
-                style={{ ...styles.nameInput, minWidth: "200px" }}
+                style={{ width: "auto", minWidth: "200px" }}
               />
             </div>
 
             {/* Mode Toggle */}
-            <div style={styles.modeToggle}>
+            <div style={styles.modeToggle} role="group" aria-label="Editor mode">
               <button
+                type="button"
                 style={{ ...styles.modeBtn, ...(editorMode === "code" ? styles.modeBtnActive : {}) }}
                 onClick={() => handleModeSwitch("code")}
                 title="Code Editor"
+                aria-pressed={editorMode === "code"}
               >
                 <MdCode size={16} /> Code
               </button>
               <button
+                type="button"
                 style={{ ...styles.modeBtn, ...(editorMode === "visual" ? styles.modeBtnActive : {}) }}
                 onClick={() => handleModeSwitch("visual")}
                 title="Visual Builder"
+                aria-pressed={editorMode === "visual"}
               >
                 <MdBrush size={16} /> Visual
               </button>
             </div>
 
-            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowManager(true)} title="Open, rename, duplicate, copy, delete or create this document type's templates">
-              <MdViewList size={16} /> Templates{ofType.length ? ` (${ofType.length})` : ""}
-            </button>
-            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
-              <MdAutoAwesome size={16} /> Design Gallery
-            </button>
+            <Button icon={MdViewList} onClick={() => setShowManager(true)} title="Open, rename, duplicate, copy, delete or create this document type's templates">
+              Templates{ofType.length ? ` (${ofType.length})` : ""}
+            </Button>
+            <Button icon={MdAutoAwesome} onClick={() => setShowTemplatePicker(true)} title="Browse designed layouts and apply one">
+              Design Gallery
+            </Button>
             {currentTemplateId && !currentIsDefault && (
-              <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
-                <MdStar size={16} /> Set as default
-              </button>
+              <Button icon={MdStar} onClick={() => handleSetDefault(currentTemplateId)} disabled={managerBusy} title="Make this the default template used for printing this document type">
+                Set as default
+              </Button>
             )}
-            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={() => htmlImportRef.current?.click()} title="Import HTML file">
-              <MdUploadFile size={16} /> Import HTML
-            </button>
+            <Button icon={MdUploadFile} onClick={() => htmlImportRef.current?.click()} title="Import HTML file">
+              Import HTML
+            </Button>
             <input
               ref={htmlImportRef}
               type="file"
@@ -886,63 +876,69 @@ export default function TemplateEditorPage() {
               style={{ display: "none" }}
               onChange={handleImportHtml}
             />
-            <button style={{ ...styles.btn, ...styles.btnOutline }} onClick={handleReset} title="Reset to default">
-              <MdRefresh size={16} /> Reset
-            </button>
-            <button
-              style={{ ...styles.btn, ...styles.btnPrimary, opacity: (saving || !templateName.trim()) ? 0.7 : 1 }}
+            <Button icon={MdRefresh} onClick={handleReset} title="Reset to default">
+              Reset
+            </Button>
+            <Button
+              variant="primary"
+              icon={MdSave}
               onClick={handleSave}
               disabled={saving || !templateName.trim()}
             >
-              <MdSave size={16} /> {saving ? "Saving..." : "Save"}
-            </button>
-            {hasChanges && <span style={{ fontSize: "0.78rem", color: "#e65100", fontWeight: 600 }}>Unsaved changes</span>}
+              {saving ? "Saving..." : "Save"}
+            </Button>
+            {hasChanges && <span style={styles.unsaved}>Unsaved changes</span>}
           </div>
         )}
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", padding: "0.65rem 1rem", background: "#f7f9fc" }}>
+      <div style={styles.stampBar}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", minWidth: 0 }}>
-          <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Signature stamp</span>
+          <span style={{ fontSize: "var(--k-font-sm)", fontWeight: 600, color: "var(--k-ink)" }}>Signature stamp</span>
           <StampPicker stamps={companyStamps} value={stampId} state={stampState}
             pinnedSlug={pinnedSlugs(htmlContent)[0]} busy={stampSaving || saving}
             onChange={handleEditorStampChange} onAddBlock={handleEditorAddBlock} onConvert={handleEditorConvert} />
         </div>
         {stampAreas.length > 0 && stampState !== STAMP_STATE.PINNED && (
-          <label style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", fontSize: "0.8rem" }}>
+          <label style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", fontSize: "var(--k-font-sm)", color: "var(--k-ink)" }}>
             Stamp position
-            <select aria-label="Stamp position" value={currentStampArea(htmlContent)}
+            <select className="k-select" aria-label="Stamp position" value={currentStampArea(htmlContent)}
               disabled={saving || stampSaving} onChange={e => handleStampPosition(e.target.value)}
-              style={{ minHeight: 44, flex: 1, maxWidth: 260, padding: "0.4rem", border: "1px solid #d0d7e2", borderRadius: 7 }}>
+              style={{ flex: 1, width: "auto", maxWidth: 260 }}>
               <option value="" disabled>Choose signature area…</option>
               {stampAreas.map(area => <option key={area.id} value={area.id}>Above {area.label}</option>)}
             </select>
           </label>
         )}
-        <span style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>Duplicate a template to keep signed and unsigned versions. “No signature” leaves the stamp blank.</span>
+        <span style={{ fontSize: "0.75rem", color: "var(--k-muted)" }}>Duplicate a template to keep signed and unsigned versions. “No signature” leaves the stamp blank.</span>
       </div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, display: "flex", gap: "0", overflow: "hidden", borderTop: `1px solid ${colors.cardBorder}` }}>
+      <div style={{ flex: 1, display: "flex", gap: "0", overflow: "hidden", borderTop: "1px solid var(--k-line)" }}>
 
         {listLoading ? (
           // Never paint an empty code box before the template has arrived —
           // an operator who starts typing into it would be editing nothing.
-          <div style={styles.editorLoading} role="status">
-            <span style={styles.editorSpin} />
-            <span>Loading template…</span>
+          <div style={styles.editorLoading}>
+            <Loading>Loading template…</Loading>
           </div>
         ) : editorMode === "visual" ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {/* Tabs for visual mode */}
-            <div style={styles.tabs}>
+            <div style={styles.tabs} role="tablist" aria-label="Visual editor view">
               <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "editor"}
                 style={{ ...styles.tab, ...(activeTab === "editor" ? styles.tabActive : {}) }}
                 onClick={() => setActiveTab("editor")}
               >
                 <MdBrush size={15} /> Visual Builder
               </button>
               <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "preview"}
                 style={{ ...styles.tab, ...(activeTab === "preview" ? styles.tabActive : {}) }}
                 onClick={() => setActiveTab("preview")}
               >
@@ -973,21 +969,28 @@ export default function TemplateEditorPage() {
             {/* Code Editor / Preview Area */}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {/* Tabs */}
-              <div style={styles.tabs}>
+              <div style={styles.tabs} role="tablist" aria-label="Code editor view">
                 <button
-                  style={{ ...styles.tab, ...(activeTab === "editor" ? styles.tabActive : {}), padding: isMobile ? "0.5rem 0.75rem" : undefined }}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "editor"}
+                  style={{ ...styles.tab, ...(activeTab === "editor" ? styles.tabActive : {}), padding: isMobile ? "0 0.75rem" : undefined }}
                   onClick={() => setActiveTab("editor")}
                 >
                   <MdEditIcon size={15} /> Editor
                 </button>
                 <button
-                  style={{ ...styles.tab, ...(activeTab === "preview" ? styles.tabActive : {}), padding: isMobile ? "0.5rem 0.75rem" : undefined }}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "preview"}
+                  style={{ ...styles.tab, ...(activeTab === "preview" ? styles.tabActive : {}), padding: isMobile ? "0 0.75rem" : undefined }}
                   onClick={() => setActiveTab("preview")}
                 >
                   <MdVisibility size={15} /> Preview
                 </button>
                 <button
-                  style={{ ...styles.tab, ...styles.tabCopy, padding: isMobile ? "0.5rem 0.6rem" : undefined }}
+                  type="button"
+                  style={{ ...styles.tab, ...styles.tabCopy, padding: isMobile ? "0 0.6rem" : undefined }}
                   onClick={() => { navigator.clipboard.writeText(htmlContent); showToast("Copied to clipboard!"); }}
                   title="Copy HTML"
                 >
@@ -1022,146 +1025,109 @@ const styles = {
   fieldGroup: { display: "flex", flexDirection: "column", gap: "0.18rem" },
   fieldLabel: {
     fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase",
-    letterSpacing: "0.05em", color: "#7a8696", paddingLeft: "0.15rem",
+    letterSpacing: "0.05em", color: "var(--k-faint)", paddingLeft: "0.15rem",
   },
   readonlyValue: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.4rem",
-    padding: "0.45rem 0.7rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.cardBorder}`,
-    background: "#f5f7fa",
-    fontSize: "0.85rem",
+    minHeight: "var(--k-h)",
+    padding: "0 var(--k-input-pad-x)",
+    boxSizing: "border-box",
+    borderRadius: "var(--k-radius)",
+    border: "1px solid var(--k-line)",
+    background: "var(--k-surface-3)",
+    fontSize: "var(--k-font)",
     fontWeight: 600,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
   },
-  nameInput: {
-    padding: "0.45rem 0.7rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    fontSize: "0.85rem",
-    color: colors.textPrimary,
-    background: "#fff",
-    outline: "none",
-  },
+  unsaved: { fontSize: "var(--k-font-sm)", color: "#e65100", fontWeight: 600 },
   topBar: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "0.75rem 1.25rem",
+    padding: "var(--k-card-pad)",
     flexWrap: "wrap",
     gap: "0.75rem",
-    background: "#fff",
+    background: "var(--k-surface)",
   },
-  headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+  stampBar: {
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+    gap: "0.75rem",
+    padding: "0.5rem 1rem",
+    background: "var(--k-surface-2)",
+    borderTop: "1px solid var(--k-line)",
   },
-  btn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0.45rem 1rem",
-    borderRadius: 8,
-    border: "none",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "all 0.2s",
-    minHeight: 36,
-  },
-  btnSm: { padding: "0.4rem 0.6rem", fontSize: "0.78rem", minHeight: 40 },
-  btnPrimary: {
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    color: "#fff",
-    boxShadow: "0 2px 8px rgba(13,71,161,0.2)",
-  },
-  btnOutline: {
-    background: "#fff",
-    color: colors.textSecondary,
-    border: `1px solid ${colors.inputBorder}`,
-    boxShadow: "none",
-  },
+  // Code / Visual segmented toggle — the kit has no segmented control, so it
+  // is built locally from the --k-* tokens.
   modeToggle: {
     display: "inline-flex",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: "var(--k-radius)",
+    border: "1px solid var(--k-line-strong)",
     overflow: "hidden",
   },
   modeBtn: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.25rem",
-    padding: "0.4rem 0.75rem",
+    minHeight: "var(--k-btn-h)",
+    padding: "0 0.75rem",
     border: "none",
-    background: "#fff",
-    color: colors.textSecondary,
-    fontSize: "0.82rem",
+    borderRadius: 0,
+    background: "var(--k-surface)",
+    color: "var(--k-muted)",
+    fontSize: "var(--k-btn-font)",
     fontWeight: 600,
     cursor: "pointer",
     transition: "all 0.2s",
     boxShadow: "none",
+    transform: "none",
   },
   modeBtnActive: {
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    background: "var(--k-primary-bg)",
     color: "#fff",
   },
   tabs: {
     display: "flex",
     gap: 0,
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    background: "#f5f7fa",
+    borderBottom: "1px solid var(--k-line)",
+    background: "var(--k-surface-2)",
   },
   tab: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.3rem",
-    padding: "0.6rem 1.25rem",
+    minHeight: "var(--k-tab-h)",
+    padding: "0 1.25rem",
     border: "none",
+    borderRadius: 0,
     background: "transparent",
     cursor: "pointer",
     fontWeight: 600,
-    fontSize: "0.85rem",
-    color: colors.textSecondary,
+    fontSize: "var(--k-font)",
+    color: "var(--k-muted)",
     borderBottom: "2px solid transparent",
     transition: "all 0.2s",
     boxShadow: "none",
+    transform: "none",
   },
   tabActive: {
-    color: colors.blue,
-    borderBottomColor: colors.blue,
-    background: "#fff",
+    color: "var(--k-blue)",
+    borderBottomColor: "var(--k-blue)",
+    background: "var(--k-surface)",
   },
   tabCopy: {
     marginLeft: "auto",
-    fontSize: "0.8rem",
-    color: colors.textSecondary,
+    fontSize: "var(--k-font-sm)",
+    color: "var(--k-muted)",
   },
   editorLoading: {
     flex: 1,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "0.6rem",
-    color: colors.textSecondary,
-    fontSize: "0.9rem",
-    fontWeight: 600,
-    background: "#fff",
-  },
-  editorSpin: {
-    width: 22,
-    height: 22,
-    border: `3px solid ${colors.cardBorder}`,
-    borderTopColor: colors.blue,
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
-    display: "inline-block",
+    background: "var(--k-surface)",
   },
 };

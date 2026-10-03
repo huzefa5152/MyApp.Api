@@ -1,26 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdFactCheck, MdBusiness, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose } from "react-icons/md";
+import { MdFactCheck, MdRefresh, MdDownload, MdPerson, MdEventRepeat, MdClose } from "react-icons/md";
 import { getTaxSheet, getTaxSheetExcel, transferTaxSheet } from "../api/reportApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { dropdownStyles } from "../theme";
+import { formStyles } from "../theme";
+import { PageHeader, CompanyPicker, Button, Card, Field, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import useIsNarrow from "../hooks/useIsNarrow";
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBorder: "#d0d7e2",
-  rowAlt: "#fafbfd",
-  totalBg: "#eef4ff",
-  pill: "#fff4e5",
-  pillText: "#a15c00",
-};
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -40,7 +28,7 @@ const prettyDate = (s) => {
 };
 
 export default function TaxSheetPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { selectedCompany } = useCompany();
   const { has } = usePermissions();
   const canView = has("reports.taxsheet.view");
   const canExport = has("reports.taxsheet.export");
@@ -167,228 +155,229 @@ export default function TaxSheetPage() {
   };
 
   if (!canView) {
-    return <div style={{ padding: 24, color: colors.textSecondary }}>You don't have permission to view reports.</div>;
+    return <EmptyState icon={MdFactCheck}>You don't have permission to view reports.</EmptyState>;
   }
 
   return (
-    <div style={{ padding: "clamp(12px, 3vw, 24px)" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <MdFactCheck size={26} color={colors.blue} />
-        <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Tax Sheet</h1>
-      </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
-        Invoice lines whose item type still has <strong>no HS code</strong> — send to the tax consultant to classify.
-        The <strong>HS Code</strong> column shows the item-type name that needs a real HS code.
-      </p>
-
-      {/* Controls */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
-        background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
-      }}>
-        <Field label="Company" icon={<MdBusiness size={15} />}>
-          <select
-            style={{ ...dropdownStyles.base, minWidth: 180 }}
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-          </select>
-        </Field>
-
-        <Field label="Client" icon={<MdPerson size={15} />}>
-          <SearchableClientSelect
-            clients={clients}
-            value={clientId}
-            onChange={(id) => setClientId(id)}
-            placeholder="All clients"
-            style={{ minWidth: 180, maxWidth: 240 }}
-          />
-        </Field>
-
-        <Field label="Period">
-          <div style={{ display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-            <button type="button" onClick={() => setMode("period")} style={segBtn(mode === "period")}>Month / Year</button>
-            <button type="button" onClick={() => setMode("custom")} style={segBtn(mode === "custom")}>Custom range</button>
-          </div>
-        </Field>
-
-        {mode === "period" ? (
+    <div>
+      <PageHeader
+        icon={MdFactCheck}
+        tone="blue"
+        title="Tax Sheet"
+        subtitle={(
           <>
-            <Field label="Year">
-              <select style={dropdownStyles.base} value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
-                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </Field>
-            <Field label="Month">
-              <select
-                style={{ ...dropdownStyles.base, opacity: fullYear ? 0.5 : 1 }}
-                value={month}
-                disabled={fullYear}
-                onChange={(e) => setMonth(parseInt(e.target.value))}
-              >
-                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-              </select>
-            </Field>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: colors.textPrimary, paddingBottom: 8, cursor: "pointer" }}>
-              <input type="checkbox" checked={fullYear} onChange={(e) => setFullYear(e.target.checked)} />
-              Full year
-            </label>
-          </>
-        ) : (
-          <>
-            <Field label="From">
-              <input type="date" style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }}
-                value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
-            </Field>
-            <Field label="To">
-              <input type="date" style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }}
-                value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
-            </Field>
+            Invoice lines whose item type still has <strong>no HS code</strong> — send to the tax consultant to classify.
+            The <strong>HS Code</strong> column shows the item-type name that needs a real HS code.
           </>
         )}
+      />
 
-        <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
-            <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
-          </button>
-          {canExport && (
-            <button onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid} style={btn(colors.teal)}>
-              <MdDownload size={16} /> {exporting ? "Exporting…" : "Export Excel"}
-            </button>
-          )}
-          {canTransfer && (
-            <button
-              onClick={openTransfer}
-              disabled={!report || loading || rangeInvalid || (report?.rows?.length || 0) === 0}
-              style={btn("#e65100")}
-              title="Move the remaining (unclassified) invoices to a new date so you can file them next period"
-            >
-              <MdEventRepeat size={16} /> Transfer → next month
-            </button>
-          )}
-        </div>
-      </div>
+      <CompanyPicker />
 
-      {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
-          {error}
+      {/* Controls */}
+      <Card style={{ marginBottom: "var(--k-gap)" }}>
+        <div style={controlsRow}>
+          <Field label={<><MdPerson size={15} aria-hidden="true" style={{ verticalAlign: "-3px" }} /> Client</>}>
+            <SearchableClientSelect
+              clients={clients}
+              value={clientId}
+              onChange={(id) => setClientId(id)}
+              placeholder="All clients"
+              style={{ minWidth: 180, maxWidth: 240 }}
+            />
+          </Field>
+
+          <Field label="Period">
+            <div role="group" aria-label="Period mode" style={segWrap}>
+              <button type="button" onClick={() => setMode("period")} aria-pressed={mode === "period"} style={segBtn(mode === "period")}>Month / Year</button>
+              <button type="button" onClick={() => setMode("custom")} aria-pressed={mode === "custom"} style={segBtn(mode === "custom")}>Custom range</button>
+            </div>
+          </Field>
+
+          {mode === "period" ? (
+            <>
+              <Field label="Year">
+                <select className="k-select" style={ctlAuto} value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
+                  {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </Field>
+              <Field label="Month">
+                <select
+                  className="k-select"
+                  style={{ ...ctlAuto, opacity: fullYear ? 0.5 : 1 }}
+                  value={month}
+                  disabled={fullYear}
+                  onChange={(e) => setMonth(parseInt(e.target.value))}
+                >
+                  {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+              </Field>
+              <label style={checkLabel}>
+                <input type="checkbox" checked={fullYear} onChange={(e) => setFullYear(e.target.checked)} />
+                Full year
+              </label>
+            </>
+          ) : (
+            <>
+              <Field label="From">
+                <input type="date" className="k-input" style={{ ...ctlAuto, ...(rangeInvalid ? { borderColor: "var(--k-danger)" } : {}) }}
+                  value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
+              </Field>
+              <Field label="To">
+                <input type="date" className="k-input" style={{ ...ctlAuto, ...(rangeInvalid ? { borderColor: "var(--k-danger)" } : {}) }}
+                  value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
+              </Field>
+            </>
+          )}
+
+          <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
+            <Button variant="primary" icon={MdRefresh} onClick={fetchReport} disabled={loading || rangeInvalid}>
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+            {canExport && (
+              <Button variant="teal" icon={MdDownload} onClick={exportExcel} disabled={!report || loading || exporting || rangeInvalid}>
+                {exporting ? "Exporting…" : "Export Excel"}
+              </Button>
+            )}
+            {canTransfer && (
+              <Button
+                variant="secondary"
+                icon={MdEventRepeat}
+                onClick={openTransfer}
+                disabled={!report || loading || rangeInvalid || (report?.rows?.length || 0) === 0}
+                title="Move the remaining (unclassified) invoices to a new date so you can file them next period"
+                style={{ color: transferOrange }}
+              >
+                Transfer → next month
+              </Button>
+            )}
+          </div>
         </div>
-      )}
+      </Card>
+
+      {error && <Alert tone="error">{error}</Alert>}
 
       {report && !loading && (
-        <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}` }}>
-            <div style={{ fontWeight: 700, color: colors.textPrimary }}>{report.companyName}</div>
-            <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
-              Tax Sheet · {periodLabel} · {report.invoiceCount} invoice(s), {report.rowCount} line(s) pending HS code
-            </div>
+        <Card flush style={{ overflow: "hidden" }} title={report.companyName}>
+          <div style={reportMeta}>
+            Tax Sheet · {periodLabel} · {report.invoiceCount} invoice(s), {report.rowCount} line(s) pending HS code
           </div>
 
           {report.rows.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
+            <EmptyState boxed={false}>
               No invoices pending HS classification for {periodLabel}. 🎉
-            </div>
+            </EmptyState>
           ) : isNarrow ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 2px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", padding: "0.6rem" }}>
               {report.rows.map((row, idx) => (
                 <div key={idx} style={tsCard}>
                   <div style={tsCardTop}>
-                    <span style={{ fontWeight: 700, color: colors.blue }}>{row.documentNumber}</span>
-                    <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{new Date(row.documentDate).toLocaleDateString()}</span>
+                    <span style={{ fontWeight: 700, color: "var(--k-blue)" }}>{row.documentNumber}</span>
+                    <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>{new Date(row.documentDate).toLocaleDateString()}</span>
                   </div>
-                  <div style={{ fontSize: "0.88rem", fontWeight: 600, color: colors.textPrimary, ...clamp2 }}>{row.partyName}</div>
+                  <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--k-ink)", ...clamp2 }}>{row.partyName}</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "2px 0 2px" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.74rem", color: colors.textSecondary }}>{row.ntn}</span>
-                    <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.74rem", fontWeight: 600 }}>{row.itemTypeName}</span>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.74rem", color: "var(--k-muted)" }}>{row.ntn}</span>
+                    <span style={{ ...pill, fontSize: "0.74rem" }}>{row.itemTypeName}</span>
                   </div>
                   <div style={tsCardMeta}>
                     <div><span style={tsLbl}>Qty</span><span style={tsVal}>{row.quantityLabel}</span></div>
                     <div><span style={tsLbl}>Excl. Amount</span><span style={tsVal}>{money(row.excludingAmount)}</span></div>
                     <div><span style={tsLbl}>Sales Tax</span><span style={tsVal}>{money(row.salesTax)}</span></div>
-                    <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 700, color: colors.blue }}>{money(row.total)}</span></div>
+                    <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 700, color: "var(--k-blue)" }}>{money(row.total)}</span></div>
                   </div>
                 </div>
               ))}
-              <div style={{ ...tsCard, background: colors.totalBg, borderColor: colors.blue }}>
-                <div style={{ fontWeight: 800, color: colors.blue, marginBottom: 4 }}>TOTAL</div>
+              <div style={{ ...tsCard, background: totalBg, borderColor: "var(--k-blue)" }}>
+                <div style={{ fontWeight: 800, color: "var(--k-blue)", marginBottom: 4 }}>TOTAL</div>
                 <div style={tsCardMeta}>
                   <div><span style={tsLbl}>Excl. Amount</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandExcluding)}</span></div>
                   <div><span style={tsLbl}>Sales Tax</span><span style={{ ...tsVal, fontWeight: 800 }}>{money(report.grandTax)}</span></div>
-                  <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</span></div>
+                  <div><span style={tsLbl}>Total</span><span style={{ ...tsVal, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</span></div>
                 </div>
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860, fontSize: "0.82rem" }}>
+            <TableWrap>
+              <table className="k-table" style={{ minWidth: 860 }}>
                 <thead>
-                  <tr style={{ background: colors.rowAlt }}>
+                  <tr>
                     {["NTN Number", "Party Name", "Inv Number", "Inv Date", "Item Total QTY", "HS Code", "Excluding Amount", "Sales Tax", "Total"].map((h, i) => (
-                      <th key={i} style={{ ...th, textAlign: i >= 6 ? "right" : "left" }}>{h}</th>
+                      <th key={i} className={i >= 6 ? "k-num" : undefined}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {report.rows.map((row, idx) => (
-                    <tr key={idx} style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
-                      <td style={{ ...td, fontFamily: "monospace", fontSize: "0.75rem" }}>{row.ntn}</td>
-                      <td style={{ ...td, maxWidth: 220 }}><div style={clamp2}>{row.partyName}</div></td>
-                      <td style={{ ...td, fontWeight: 600, color: colors.blue }}>{row.documentNumber}</td>
-                      <td style={td}>{new Date(row.documentDate).toLocaleDateString()}</td>
-                      <td style={td}>{row.quantityLabel}</td>
-                      <td style={td}>
-                        <span style={{ background: colors.pill, color: colors.pillText, padding: "2px 8px", borderRadius: 6, fontSize: "0.78rem", fontWeight: 600 }}>
+                    <tr key={idx}>
+                      <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{row.ntn}</td>
+                      <td style={{ maxWidth: 220 }}><div style={clamp2}>{row.partyName}</div></td>
+                      <td style={{ fontWeight: 600, color: "var(--k-blue)" }}>{row.documentNumber}</td>
+                      <td>{new Date(row.documentDate).toLocaleDateString()}</td>
+                      <td>{row.quantityLabel}</td>
+                      <td>
+                        <span style={{ ...pill, fontSize: "0.78rem" }}>
                           {row.itemTypeName}
                         </span>
                       </td>
-                      <td style={tdR}>{money(row.excludingAmount)}</td>
-                      <td style={tdR}>{money(row.salesTax)}</td>
-                      <td style={{ ...tdR, fontWeight: 600 }}>{money(row.total)}</td>
+                      <td className="k-num" style={nowrap}>{money(row.excludingAmount)}</td>
+                      <td className="k-num" style={nowrap}>{money(row.salesTax)}</td>
+                      <td className="k-num" style={{ ...nowrap, fontWeight: 600 }}>{money(row.total)}</td>
                     </tr>
                   ))}
-                  <tr style={{ background: colors.totalBg, borderTop: `2px solid ${colors.blue}` }}>
-                    <td style={{ ...td, fontWeight: 800, color: colors.blue }} colSpan={6}>TOTAL</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandExcluding)}</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandTax)}</td>
-                    <td style={{ ...tdR, fontWeight: 800, color: colors.blue }}>{money(report.grandTotal)}</td>
-                  </tr>
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td style={{ ...totalCell, fontWeight: 800, color: "var(--k-blue)" }} colSpan={6}>TOTAL</td>
+                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandExcluding)}</td>
+                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800 }}>{money(report.grandTax)}</td>
+                    <td className="k-num" style={{ ...totalCell, ...nowrap, fontWeight: 800, color: "var(--k-blue)" }}>{money(report.grandTotal)}</td>
+                  </tr>
+                </tfoot>
               </table>
-            </div>
+            </TableWrap>
           )}
-        </div>
+        </Card>
       )}
 
-      {loading && <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading tax sheet…</div>}
+      {loading && <Loading>Loading tax sheet…</Loading>}
 
       {transferOpen && (
-        <div style={overlay} onClick={() => !transferring && setTransferOpen(false)}>
-          <div style={modalBox} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <h3 style={{ margin: 0, fontSize: "1.05rem", color: colors.textPrimary }}>Transfer remaining invoices</h3>
-              <button onClick={() => setTransferOpen(false)} style={{ border: "none", background: "none", cursor: "pointer", color: colors.textSecondary, display: "flex" }}>
+        <div style={formStyles.backdrop} onClick={() => !transferring && setTransferOpen(false)}>
+          <div
+            style={{ ...formStyles.modal, maxWidth: 460 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Transfer remaining invoices"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={formStyles.header}>
+              <h3 style={formStyles.title}>Transfer remaining invoices</h3>
+              <button type="button" onClick={() => setTransferOpen(false)} style={formStyles.closeButton} aria-label="Close">
                 <MdClose size={20} />
               </button>
             </div>
-            <p style={{ margin: "0 0 14px", fontSize: "0.88rem", color: colors.textSecondary, lineHeight: 1.55 }}>
-              Move the <strong>{report?.invoiceCount || 0}</strong> still-unclassified invoice(s){clientId ? " for the selected client" : ""} off <strong>{periodLabel}</strong> onto a new date, so they roll into that month's tax sheet for the consultant to classify next. This updates each bill's date; invoices already submitted to FBR are skipped.
-            </p>
-            <Field label="Transfer to date">
-              <input
-                type="date"
-                style={{ ...dropdownStyles.base, minWidth: 200 }}
-                value={transferDate}
-                onChange={(e) => setTransferDate(e.target.value)}
-              />
-            </Field>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 18 }}>
-              <button onClick={() => setTransferOpen(false)} disabled={transferring}
-                style={{ ...btn("#eef1f6"), color: colors.textPrimary }}>
+            <div style={formStyles.body}>
+              <p style={{ margin: "0 0 14px", fontSize: "var(--k-font)", color: "var(--k-muted)", lineHeight: 1.55 }}>
+                Move the <strong>{report?.invoiceCount || 0}</strong> still-unclassified invoice(s){clientId ? " for the selected client" : ""} off <strong>{periodLabel}</strong> onto a new date, so they roll into that month's tax sheet for the consultant to classify next. This updates each bill's date; invoices already submitted to FBR are skipped.
+              </p>
+              <Field label="Transfer to date">
+                <input
+                  type="date"
+                  className="k-input"
+                  style={{ width: "auto", minWidth: "min(200px, 100%)" }}
+                  value={transferDate}
+                  onChange={(e) => setTransferDate(e.target.value)}
+                />
+              </Field>
+            </div>
+            <div style={formStyles.footer}>
+              <button type="button" onClick={() => setTransferOpen(false)} disabled={transferring}
+                style={{ ...formStyles.button, ...formStyles.cancel }}>
                 Cancel
               </button>
-              <button onClick={handleTransfer} disabled={transferring || !transferDate} style={btn("#e65100")}>
+              <button type="button" onClick={handleTransfer} disabled={transferring || !transferDate}
+                style={{ ...formStyles.button, ...formStyles.submit, opacity: transferring || !transferDate ? 0.6 : 1 }}>
                 {transferring ? "Transferring…" : `Transfer to ${prettyDate(transferDate)}`}
               </button>
             </div>
@@ -399,49 +388,41 @@ export default function TaxSheetPage() {
   );
 }
 
-const overlay = {
-  position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)",
-  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16,
-  overflowY: "auto",
-};
-const modalBox = {
-  background: "#fff", borderRadius: 12, padding: 20, width: "min(460px, 100%)",
-  maxHeight: "94vh", overflowY: "auto",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-};
+// Page-specific tints (HS-code pill, grand-total band, transfer accent).
+const totalBg = "#eef4ff";
+const transferOrange = "#e65100";
+const pill = { background: "#fff4e5", color: "#a15c00", padding: "2px 8px", borderRadius: 6, fontWeight: 600 };
+const totalCell = { background: totalBg, borderTop: "2px solid var(--k-blue)" };
+const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
+const nowrap = { whiteSpace: "nowrap" };
+
+// Filter row inside the controls card — wraps on narrow screens.
+const controlsRow = { display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "flex-end" };
+const ctlAuto = { width: "auto", maxWidth: "100%" };
+const checkLabel = { display: "flex", alignItems: "center", gap: 6, fontSize: "var(--k-font)", color: "var(--k-ink)", minHeight: "var(--k-h)", cursor: "pointer" };
+const reportMeta = { padding: "0.6rem var(--k-td-pad-x)", color: "var(--k-muted)", fontSize: "var(--k-font-sm)", borderBottom: "1px solid var(--k-line)" };
 
 // Mobile card styles (phones get stacked cards instead of the wide table).
-const tsCard = { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: 3 };
+const tsCard = { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.8rem", background: "var(--k-surface)", display: "flex", flexDirection: "column", gap: 3 };
 const tsCardTop = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 };
 const tsCardMeta = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(120px, 100%), 1fr))", gap: "0.35rem 0.8rem", marginTop: 4 };
-const tsLbl = { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary };
-const tsVal = { display: "block", fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary };
+const tsLbl = { display: "block", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--k-muted)" };
+const tsVal = { display: "block", fontSize: "0.85rem", fontWeight: 600, color: "var(--k-ink)" };
 
-function Field({ label, icon, children }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, display: "flex", alignItems: "center", gap: 4 }}>
-        {icon} {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-const th = { padding: "6px 10px", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, whiteSpace: "nowrap" };
-const td = { padding: "6px 10px", color: colors.textPrimary, verticalAlign: "top" };
-const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
-const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" };
-
-const btn = (bg) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: "#fff",
-  border: "none", borderRadius: 8, padding: "9px 14px", fontSize: "0.85rem", fontWeight: 600,
-  cursor: "pointer", minHeight: 40,
-});
-
+// Segmented control (Month / Year vs Custom range) — kit has no segmented
+// control, so it is built locally from the --k-* tokens.
+const segWrap = { display: "inline-flex", border: "1px solid var(--k-line-strong)", borderRadius: "var(--k-radius)", overflow: "hidden", background: "var(--k-surface)" };
 const segBtn = (active) => ({
   border: "none",
-  background: active ? colors.blue : "transparent",
-  color: active ? "#fff" : colors.textSecondary,
-  padding: "9px 14px", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", minHeight: 40, whiteSpace: "nowrap",
+  borderRadius: 0,
+  background: active ? "var(--k-blue)" : "transparent",
+  color: active ? "#fff" : "var(--k-muted)",
+  padding: "0 0.85rem",
+  fontSize: "var(--k-font-sm)",
+  fontWeight: 600,
+  cursor: "pointer",
+  minHeight: "var(--k-h)",
+  whiteSpace: "nowrap",
+  boxShadow: "none",
+  transform: "none",
 });

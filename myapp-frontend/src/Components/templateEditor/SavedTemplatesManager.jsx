@@ -5,6 +5,7 @@ import {
 } from "react-icons/md";
 import { formStyles, modalSizes } from "../../theme";
 import { TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL } from "../../utils/templateSampleData";
+import { Button } from "../../ui/Kit";
 
 /**
  * Everything about one document type's templates, in one place, from inside
@@ -95,6 +96,7 @@ export default function SavedTemplatesManager({
                     {renamingId === t.id ? (
                       <input
                         autoFocus aria-label="Template name"
+                        className="k-input"
                         style={s.renameInput}
                         value={renameValue}
                         maxLength={120}
@@ -117,47 +119,48 @@ export default function SavedTemplatesManager({
                   </div>
 
                   <div style={s.actions}>
-                    {rowBusy && <span style={s.spinner} aria-label="Working…" />}
+                    {rowBusy && <span className="k-spinner" style={s.spinner} aria-label="Working…" />}
                     {!isCurrent && (
-                      <button type="button" style={s.iconBtn} disabled={busy} onClick={() => onSelect(t.id)} title="Open in the editor">
-                        <MdOpenInNew size={16} /> <span>Open</span>
-                      </button>
+                      <Button size="sm" icon={MdOpenInNew} disabled={busy} onClick={() => onSelect(t.id)} title="Open in the editor">
+                        Open
+                      </Button>
                     )}
                     {!t.isDefault && (
-                      <button type="button" style={s.iconBtn} disabled={busy} onClick={() => onSetDefault(t.id)} title="Use this template for printing">
-                        <MdCheck size={16} /> <span>Set default</span>
-                      </button>
+                      <Button size="sm" icon={MdCheck} disabled={busy} onClick={() => onSetDefault(t.id)} title="Use this template for printing">
+                        Set default
+                      </Button>
                     )}
-                    <button type="button" style={s.iconBtn} disabled={busy} onClick={() => startRename(t)} title="Rename">
-                      <MdEdit size={16} /> <span>Rename</span>
-                    </button>
-                    <button type="button" style={s.iconBtn} disabled={busy} onClick={() => onDuplicate(t)} title="Duplicate (same document type)">
-                      <MdContentCopy size={16} /> <span>Duplicate</span>
-                    </button>
+                    <Button size="sm" icon={MdEdit} disabled={busy} onClick={() => startRename(t)} title="Rename">
+                      Rename
+                    </Button>
+                    <Button size="sm" icon={MdContentCopy} disabled={busy} onClick={() => onDuplicate(t)} title="Duplicate (same document type)">
+                      Duplicate
+                    </Button>
                     {otherTypes.length > 0 && (
-                      <button type="button" style={{ ...s.iconBtn, ...(copyingId === t.id ? s.iconBtnOn : {}) }} disabled={busy}
+                      <Button size="sm" icon={MdSwapHoriz} style={copyingId === t.id ? s.btnOn : undefined} disabled={busy}
+                        aria-pressed={copyingId === t.id}
                         onClick={() => (copyingId === t.id ? setCopyingId(null) : startCopy(t))}
                         title="Reuse this design for another document type">
-                        <MdSwapHoriz size={16} /> <span>Copy to…</span>
-                      </button>
+                        Copy to…
+                      </Button>
                     )}
                     {canDelete && (
-                      <button type="button" style={{ ...s.iconBtn, ...s.iconBtnDanger }} disabled={busy} onClick={() => onDelete(t)} title="Delete">
-                        <MdDelete size={16} /> <span>Delete</span>
-                      </button>
+                      <Button variant="danger" size="sm" icon={MdDelete} disabled={busy} onClick={() => onDelete(t)} title="Delete">
+                        Delete
+                      </Button>
                     )}
                   </div>
 
                   {copyingId === t.id && (
                     <div style={s.copyRow}>
                       <span style={s.copyHint}>Copy “{t.name}” as a new</span>
-                      <select style={s.copySelect} value={copyType} disabled={busy} onChange={(e) => setCopyType(e.target.value)} aria-label="Document type to copy to">
+                      <select className="k-select" style={s.copySelect} value={copyType} disabled={busy} onChange={(e) => setCopyType(e.target.value)} aria-label="Document type to copy to">
                         {otherTypes.map((tt) => <option key={tt.value} value={tt.value}>{tt.label}</option>)}
                       </select>
-                      <button type="button" style={s.copyGo} disabled={busy || !copyType}
+                      <Button variant="primary" size="sm" icon={MdSwapHoriz} disabled={busy || !copyType}
                         onClick={() => { const target = copyType; setCopyingId(null); onCopyToType(t, target); }}>
-                        <MdSwapHoriz size={15} /> Copy &amp; open
-                      </button>
+                        Copy &amp; open
+                      </Button>
                       <span style={s.copyNote}>Merge fields differ per document type — adjust them after it opens.</span>
                     </div>
                   )}
@@ -167,9 +170,9 @@ export default function SavedTemplatesManager({
           </div>
         </div>
 
-        <div style={s.footer}>
+        <div style={{ ...formStyles.footer, justifyContent: "space-between", alignItems: "center" }}>
           <span style={s.count}>{templates.length} {typeLabel} template{templates.length === 1 ? "" : "s"}</span>
-          <button type="button" style={s.newBtn} disabled={busy} onClick={onNew}>
+          <button type="button" style={{ ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: "0.35rem" }} disabled={busy} onClick={onNew}>
             <MdAdd size={17} /> New template…
           </button>
         </div>
@@ -178,16 +181,18 @@ export default function SavedTemplatesManager({
   );
 }
 
+// Layout + badges are page-specific; surfaces, borders and text read the kit
+// tokens (--k-*) so the dialog body follows the selected theme.
 const s = {
-  subtitle: { margin: "0.15rem 0 0", fontSize: "0.78rem", color: "rgba(255,255,255,0.85)" },
+  subtitle: { margin: "0.15rem 0 0", fontSize: "0.78rem", color: "var(--ui-modal-title-color, #ffffff)", opacity: 0.85 },
   list: { display: "flex", flexDirection: "column", gap: "0.5rem" },
-  empty: { padding: "1rem 1.1rem", marginBottom: "0.75rem", color: "#5f6d7e", fontSize: "0.86rem", background: "#f7f9fc", borderRadius: 10, border: "1px dashed #d0d7e2" },
+  empty: { padding: "1rem 1.1rem", marginBottom: "0.75rem", color: "var(--k-muted)", fontSize: "var(--k-font)", background: "var(--k-surface-2)", borderRadius: "var(--k-radius)", border: "1px dashed var(--k-line-strong)" },
   row: {
     display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between",
-    gap: "0.5rem", padding: "0.6rem 0.75rem", borderRadius: 10,
-    border: "1px solid #e8edf3", background: "#fff", transition: "opacity 0.15s, border-color 0.15s",
+    gap: "0.5rem", padding: "0.6rem 0.75rem", borderRadius: "var(--k-radius)",
+    border: "1px solid var(--k-line)", background: "var(--k-surface)", transition: "opacity 0.15s, border-color 0.15s",
   },
-  rowCurrent: { borderColor: "#0d47a1", background: "#f3f7ff" },
+  rowCurrent: { borderColor: "var(--k-blue)", background: "#f3f7ff" },
   rowBusy: { opacity: 0.65 },
   rowMain: { display: "flex", alignItems: "center", gap: "0.5rem", flex: "1 1 220px", minWidth: 0 },
   nameBtn: {
@@ -196,31 +201,22 @@ const s = {
     minWidth: 0, textAlign: "left", minHeight: 32, color: "inherit",
   },
   name: {
-    fontSize: "0.92rem", fontWeight: 600, color: "#1a2332",
+    fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)",
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
   },
   defaultBadge: { fontSize: "0.62rem", fontWeight: 800, color: "#f57f17", background: "#fff8e1", padding: "1px 6px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 },
   editingBadge: { fontSize: "0.62rem", fontWeight: 800, color: "#0d47a1", background: "#e3edff", padding: "1px 6px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 },
   excelBadge: { display: "inline-flex", alignItems: "center", gap: 3, fontSize: "0.62rem", fontWeight: 800, color: "#1b5e20", background: "#e8f5e9", padding: "1px 6px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.4px", flexShrink: 0 },
-  renameInput: { flex: 1, minWidth: 0, padding: "0.4rem 0.55rem", fontSize: "0.9rem", border: "1px solid #0d47a1", borderRadius: 7, outline: "none", minHeight: 40 },
+  renameInput: { flex: 1, minWidth: 0, width: "auto", borderColor: "var(--k-blue)" },
   // No flexShrink:0 here: on a phone the five buttons are wider than the row,
   // and a non-shrinking group would overflow the modal instead of wrapping.
   actions: { display: "flex", flexWrap: "wrap", gap: "0.35rem", alignItems: "center", flex: "0 1 auto", minWidth: 0, maxWidth: "100%" },
-  spinner: { width: 15, height: 15, borderRadius: "50%", flexShrink: 0, border: "2px solid #d0d7e2", borderTopColor: "#0d47a1", animation: "spin 0.7s linear infinite" },
-  iconBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem",
-    border: "1px solid #d0d7e2", background: "#fff", color: "#5f6d7e",
-    borderRadius: 8, padding: "0 0.6rem", fontSize: "0.76rem", fontWeight: 600,
-    cursor: "pointer", minHeight: 40, boxShadow: "none",
-  },
-  iconBtnOn: { borderColor: "#0d47a1", color: "#0d47a1", background: "#f3f7ff" },
-  iconBtnDanger: { borderColor: "#ef9a9a", color: "#c62828" },
-  copyRow: { flexBasis: "100%", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.55rem 0.6rem", borderRadius: 8, background: "#f7f9fc", border: "1px solid #e8edf3" },
-  copyHint: { fontSize: "0.82rem", color: "#1a2332", fontWeight: 600 },
-  copySelect: { flex: "1 1 160px", minWidth: 0, padding: "0.4rem 0.55rem", borderRadius: 8, border: "1px solid #d0d7e2", fontSize: "0.84rem", minHeight: 40, background: "#fff" },
-  copyGo: { display: "inline-flex", alignItems: "center", gap: "0.3rem", minHeight: 40, padding: "0 0.8rem", borderRadius: 8, border: "none", background: "#0d47a1", color: "#fff", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", boxShadow: "none" },
-  copyNote: { flexBasis: "100%", fontSize: "0.74rem", color: "#5f6d7e" },
-  footer: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", padding: "0.75rem clamp(1rem, 2vw, 1.5rem)", borderTop: "1px solid #e8edf3", flexShrink: 0 },
-  count: { fontSize: "0.8rem", color: "#5f6d7e", fontWeight: 600 },
-  newBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 44, padding: "0 1rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#0d47a1,#00897b)", color: "#fff", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  spinner: { width: 15, height: 15, borderWidth: 2, flexShrink: 0 },
+  // "Copy to…" while its row is open.
+  btnOn: { borderColor: "var(--k-blue)", background: "#f3f7ff" },
+  copyRow: { flexBasis: "100%", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.55rem 0.6rem", borderRadius: "var(--k-radius)", background: "var(--k-surface-2)", border: "1px solid var(--k-line)" },
+  copyHint: { fontSize: "var(--k-font-sm)", color: "var(--k-ink)", fontWeight: 600 },
+  copySelect: { flex: "1 1 160px", minWidth: 0, width: "auto" },
+  copyNote: { flexBasis: "100%", fontSize: "0.74rem", color: "var(--k-muted)" },
+  count: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600 },
 };

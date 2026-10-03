@@ -70,18 +70,20 @@ export default function KpiCard({
     <div
       className="dash-kpi-card"
       style={{
+        // Surface, radius, shadow and padding come from the UI-kit tokens
+        // (--k-*) so the card follows the selected theme.
         "--acc": accent,
         position: "relative",
-        background: "#ffffff",
-        border: "1px solid #e6ecf4",
-        borderRadius: 16,
-        padding: "1rem 1.1rem 0.9rem",
+        background: "var(--k-surface)",
+        border: "1px solid var(--k-line)",
+        borderRadius: "var(--k-card-radius)",
+        padding: "var(--k-stat-pad)",
         display: "flex",
         flexDirection: "column",
-        gap: "0.55rem",
+        gap: "calc(var(--k-gap) * 0.45)",
         overflow: "hidden",
-        minHeight: 136,
-        boxShadow: "0 1px 2px rgba(12, 24, 48, 0.04), 0 10px 28px -18px rgba(12, 24, 48, 0.18)",
+        minWidth: 0,
+        boxShadow: "var(--k-card-shadow)",
       }}
       title={title}
     >
@@ -96,7 +98,7 @@ export default function KpiCard({
         display: "flex",
         alignItems: "center",
         gap: "0.55rem",
-        color: "#69788f",
+        color: "var(--k-muted)",
         fontSize: "0.7rem",
         fontWeight: 600,
         letterSpacing: "0.12em",
@@ -117,9 +119,11 @@ export default function KpiCard({
       </div>
 
       <div className="dash-kpi-card__value" style={{
-        fontSize: "clamp(1.3rem, 4.2vw, 1.8rem)",
+        // Classic: up to ~1.8rem (1.35rem token × 1.33); Workspace ~1.5rem.
+        fontSize: "clamp(1.1rem, 4.2vw, calc(var(--k-stat-value) * 1.33))",
         fontWeight: 600,
-        color: "#0c1830",
+        color: "var(--k-ink)",
+        overflowWrap: "anywhere",
         lineHeight: 1.1,
         letterSpacing: "-0.01em",
         fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -143,7 +147,7 @@ export default function KpiCard({
         }}>
           <DeltaIconComp size={13} />
           {deltaPct === Infinity ? "new" : formatPct(deltaPct)}
-          <span className="dash-kpi-card__delta-suffix" style={{ color: "#69788f", fontWeight: 500 }}>vs prev</span>
+          <span className="dash-kpi-card__delta-suffix" style={{ color: "var(--k-muted)", fontWeight: 500 }}>vs prev</span>
         </div>
       )}
 

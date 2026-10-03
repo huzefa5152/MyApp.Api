@@ -1,8 +1,11 @@
+// Light-panel colours come from the UI-kit tokens (--k-*) so the sidebar
+// follows the selected theme; the dark variant (visual editor panel) keeps its
+// own fixed palette below.
 const colors = {
-  blue: "#0d47a1",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
+  blue: "var(--k-blue)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
 };
 
 // Reusable field list — used in code-mode sidebar and visual-editor left panel
@@ -77,7 +80,7 @@ export default function MergeFieldSidebar({ fields, onInsert, hint, stamps = [] 
               >
                 <img src={s.url} alt="" style={fieldStyles.stampThumb} />
                 <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                  <span style={{ fontSize: "0.74rem", fontWeight: 600, color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  <span style={{ fontSize: "0.74rem", fontWeight: 600, color: colors.textPrimary, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", wordBreak: "break-word" }}>{s.name}</span>
                   <span style={{ ...fieldStyles.code, color: colors.blue }}>{`{{stamps.${s.slug}}}`}</span>
                 </span>
               </button>
@@ -138,7 +141,7 @@ const fieldStyles = {
     height: 34,
     objectFit: "contain",
     flexShrink: 0,
-    border: "1px solid #e8edf3",
+    border: `1px solid ${colors.cardBorder}`,
     borderRadius: 4,
     background: "#fff",
   },
@@ -150,23 +153,23 @@ const styles = {
     borderRight: `1px solid ${colors.cardBorder}`,
     display: "flex",
     flexDirection: "column",
-    background: "#fafbfc",
+    background: "var(--k-surface-2)",
     flexShrink: 0,
   },
   header: {
     padding: "0.65rem 0.85rem",
     fontWeight: 700,
-    fontSize: "0.82rem",
+    fontSize: "var(--k-th-font)",
     color: colors.textPrimary,
     borderBottom: `1px solid ${colors.cardBorder}`,
     textTransform: "uppercase",
     letterSpacing: "0.5px",
-    background: "#f0f2f5",
+    background: "var(--k-surface-3)",
   },
   hint: {
     padding: "0.5rem 0.7rem",
     fontSize: "0.72rem",
-    color: "#5f6d7e",
+    color: colors.textSecondary,
     background: "#e8f4fd",
     borderBottom: `1px solid ${colors.cardBorder}`,
     lineHeight: 1.4,

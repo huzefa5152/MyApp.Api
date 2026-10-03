@@ -6,6 +6,7 @@ import { formStyles, modalSizes } from "../../theme";
 import { TEMPLATE_TYPES, TEMPLATE_TYPE_LABEL, DEFAULT_TEMPLATES } from "../../utils/templateSampleData";
 import { createTemplate, getTemplateById } from "../../api/printTemplateApi";
 import StarterGallery from "./StarterGallery";
+import { Button } from "../../ui/Kit";
 
 /**
  * A name no other template of the company already uses. "Bill / Invoice" when
@@ -122,7 +123,7 @@ export default function NewTemplateDialog({
             <div style={s.grid}>
               <label style={s.field}>
                 <span style={s.label}>Document type</span>
-                <select style={s.select} value={type} onChange={(e) => changeType(e.target.value)} disabled={busy}>
+                <select className="k-select" value={type} onChange={(e) => changeType(e.target.value)} disabled={busy}>
                   {TEMPLATE_TYPES.map((t) => {
                     const n = templates.filter((x) => x.templateType === t.value).length;
                     return <option key={t.value} value={t.value}>{t.label}{n ? ` (${n})` : ""}</option>;
@@ -132,7 +133,7 @@ export default function NewTemplateDialog({
               <label style={s.field}>
                 <span style={s.label}>Name</span>
                 <input
-                  style={s.input} value={name} maxLength={120} disabled={busy}
+                  className="k-input" value={name} maxLength={120} disabled={busy}
                   onChange={(e) => { setName(e.target.value); setNameTouched(true); }}
                   onKeyDown={(e) => { if (e.key === "Enter") create(); }}
                   placeholder={`e.g. ${typeLabel} — Letterhead`}
@@ -155,7 +156,7 @@ export default function NewTemplateDialog({
                   : `Start from one of your ${ofType.length} ${typeLabel} template${ofType.length === 1 ? "" : "s"}; the signature comes along.`}
               >
                 {source === "copy" && (
-                  <select style={{ ...s.select, marginTop: "0.5rem" }} value={copyId} disabled={busy}
+                  <select className="k-select" style={{ marginTop: "0.5rem" }} value={copyId} disabled={busy}
                     onChange={(e) => setCopyId(e.target.value)} onClick={(e) => e.stopPropagation()}>
                     <option value="">Choose a template…</option>
                     {ofType.map((t) => <option key={t.id} value={t.id}>{t.isDefault ? `★ ${t.name}` : t.name}</option>)}
@@ -169,9 +170,9 @@ export default function NewTemplateDialog({
                 hint={starter ? `Using “${starter.name}”.` : "Pick one of the designed layouts for this document type."}
               >
                 {source === "starter" && (
-                  <button type="button" style={s.pickBtn} disabled={busy} onClick={(e) => { e.stopPropagation(); setShowGallery(true); }}>
-                    <MdAutoAwesome size={15} /> {starter ? "Choose a different design" : "Browse designs"} <MdArrowDropDown size={18} />
-                  </button>
+                  <Button size="sm" icon={MdAutoAwesome} style={{ marginTop: "0.5rem" }} disabled={busy} onClick={(e) => { e.stopPropagation(); setShowGallery(true); }}>
+                    {starter ? "Choose a different design" : "Browse designs"} <MdArrowDropDown size={18} aria-hidden="true" />
+                  </Button>
                 )}
               </OptionCard>
             </div>
@@ -179,9 +180,9 @@ export default function NewTemplateDialog({
             {error && <div style={formStyles.error} role="alert">{error}</div>}
           </div>
 
-          <div style={s.footer}>
-            <button type="button" style={s.btnOutline} onClick={onClose} disabled={busy}>Cancel</button>
-            <button type="button" style={{ ...s.btnPrimary, ...(canCreate ? {} : s.btnDisabled) }} onClick={create} disabled={!canCreate}>
+          <div style={formStyles.footer}>
+            <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose} disabled={busy}>Cancel</button>
+            <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...s.btnInline, ...(canCreate ? {} : s.btnDisabled) }} onClick={create} disabled={!canCreate}>
               {busy ? <><span style={s.spin} /> Creating…</> : <><MdCheckCircle size={17} /> Create &amp; open</>}
             </button>
           </div>
@@ -219,27 +220,24 @@ function OptionCard({ active, disabled, onClick, icon, title, hint, children }) 
   );
 }
 
+// Option cards (radio group) are dialog-specific; colours and sizes read the
+// kit tokens (--k-*) so the dialog follows the selected theme.
 const s = {
   grid: { display: "grid", gap: "0.85rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", marginBottom: "1rem" },
   field: { display: "flex", flexDirection: "column", gap: "0.3rem", minWidth: 0 },
-  label: { fontSize: "0.78rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" },
-  select: { width: "100%", boxSizing: "border-box", padding: "0.55rem 0.7rem", borderRadius: 9, border: "1px solid #d0d7e2", fontSize: "0.9rem", color: "#1a2332", background: "#fff", minHeight: 44 },
-  input: { width: "100%", boxSizing: "border-box", padding: "0.55rem 0.7rem", borderRadius: 9, border: "1px solid #d0d7e2", fontSize: "0.9rem", color: "#1a2332", background: "#fff", outline: "none", minHeight: 44 },
+  label: { fontSize: "0.72rem", fontWeight: 700, color: "var(--k-muted)", textTransform: "uppercase", letterSpacing: "0.04em" },
   options: { display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.4rem" },
-  option: { display: "flex", alignItems: "flex-start", gap: "0.7rem", padding: "0.7rem 0.8rem", borderRadius: 11, border: "1px solid #d0d7e2", background: "#fff", cursor: "pointer", minHeight: 44, outline: "none" },
-  optionActive: { borderColor: "#0d47a1", background: "#f3f7ff", boxShadow: "0 0 0 2px rgba(13,71,161,0.12)" },
+  option: { display: "flex", alignItems: "flex-start", gap: "0.7rem", padding: "0.7rem 0.8rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line-strong)", background: "var(--k-surface)", cursor: "pointer", minHeight: 44, outline: "none" },
+  optionActive: { borderColor: "var(--k-blue)", background: "#f3f7ff", boxShadow: "0 0 0 2px rgba(13,71,161,0.12)" },
   optionDisabled: { opacity: 0.55, cursor: "not-allowed" },
-  optionIcon: { display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: 9, background: "#eef2f8", color: "#5f6d7e", flexShrink: 0 },
-  optionIconActive: { background: "#0d47a1", color: "#fff" },
-  optionTitle: { fontSize: "0.92rem", fontWeight: 700, color: "#1a2332" },
-  optionHint: { fontSize: "0.78rem", color: "#5f6d7e", marginTop: 2, lineHeight: 1.35 },
+  optionIcon: { display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: "calc(var(--k-radius) - 1px)", background: "var(--k-surface-3)", color: "var(--k-muted)", flexShrink: 0 },
+  optionIconActive: { background: "var(--k-blue)", color: "#fff" },
+  optionTitle: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)" },
+  optionHint: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2, lineHeight: 1.35 },
   radio: { width: 20, height: 20, borderRadius: "50%", border: "2px solid #c2cad6", display: "grid", placeItems: "center", flexShrink: 0, marginTop: 2 },
-  radioActive: { borderColor: "#0d47a1" },
-  radioDot: { width: 10, height: 10, borderRadius: "50%", background: "#0d47a1" },
-  pickBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.5rem", minHeight: 40, padding: "0 0.8rem", borderRadius: 9, border: "1px solid #0d47a1", background: "#fff", color: "#0d47a1", fontWeight: 700, fontSize: "0.84rem", cursor: "pointer", boxShadow: "none" },
-  footer: { display: "flex", justifyContent: "flex-end", gap: "0.5rem", padding: "0.85rem clamp(1rem, 2vw, 1.5rem)", borderTop: "1px solid #e8edf3", flexShrink: 0, flexWrap: "wrap" },
-  btnOutline: { display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 44, padding: "0 1rem", borderRadius: 10, border: "1px solid #d0d7e2", background: "#fff", color: "#1a2332", fontWeight: 600, fontSize: "0.9rem", cursor: "pointer", boxShadow: "none" },
-  btnPrimary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", minHeight: 44, padding: "0 1.1rem", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#0d47a1,#00897b)", color: "#fff", fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
+  radioActive: { borderColor: "var(--k-blue)" },
+  radioDot: { width: 10, height: 10, borderRadius: "50%", background: "var(--k-blue)" },
+  btnInline: { display: "inline-flex", alignItems: "center", gap: "0.4rem" },
   btnDisabled: { opacity: 0.6, cursor: "not-allowed", boxShadow: "none" },
-  spin: { width: 15, height: 15, borderRadius: "50%", display: "inline-block", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#fff", animation: "spin 0.7s linear infinite" },
+  spin: { width: 15, height: 15, borderRadius: "50%", display: "inline-block", border: "2px solid rgba(255,255,255,0.45)", borderTopColor: "#fff", animation: "k-spin 0.7s linear infinite" },
 };
