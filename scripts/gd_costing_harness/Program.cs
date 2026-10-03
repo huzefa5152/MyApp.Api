@@ -159,6 +159,14 @@ CheckBool("totals.descOnly", GdCostingMapping.LooksLikeTotalsRow("Total", 0m), t
 // is still a real line and must still import — the selling-value half of the
 // AND is what protects it, and is why this one stays false.
 CheckBool("totals.descWithSellingValue", GdCostingMapping.LooksLikeTotalsRow("Total", 72905m), false);
+// A "Total" row that sums every column, selling value included (Pak Trade's
+// KAPE-HC-12274 sheet, 2026-10-03): no HS code and no quantity is no goods.
+CheckBool("totals.summedRowWithSelling", GdCostingMapping.LooksLikeTotalsRow("Total", 19472227.33m, "", 0m), true);
+CheckBool("totals.summedRowGrandTotal", GdCostingMapping.LooksLikeTotalsRow("GRAND TOTAL", 500m, null, 0m), true);
+// A real product called "Total" with its own code and quantity still imports.
+CheckBool("totals.productNamedTotal", GdCostingMapping.LooksLikeTotalsRow("Total", 72905m, "8481.2000", 10m), false);
+CheckBool("totals.productNoCodeButQty", GdCostingMapping.LooksLikeTotalsRow("Total", 72905m, "", 10m), false);
+CheckBool("totals.realLineNoCode", GdCostingMapping.LooksLikeTotalsRow("SCREW DRIVER", 72905m, "", 0m), false);
 
 // A mapping with no GD number column cannot drive an import.
 {

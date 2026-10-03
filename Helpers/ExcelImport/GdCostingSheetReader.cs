@@ -100,11 +100,14 @@ namespace MyApp.Api.Helpers.ExcelImport
                 // interchangeable facts about the row: a labelled row that
                 // read as "no description" would tell the operator something
                 // false about a row they can see for themselves.
-                if (GdCostingMapping.LooksLikeTotalsRow(description, sheetSellingValue))
+                var quantity = wb.GetDecimal(sheet, r, cols.Quantity) ?? 0m;
+                if (GdCostingMapping.LooksLikeTotalsRow(description, sheetSellingValue, hsCode, quantity))
                 {
                     var reason = description.Length == 0
                         ? "no description, no selling value"
-                        : $"labelled \"{description}\", no selling value";
+                        : sheetSellingValue > 0m
+                            ? $"labelled \"{description}\", no HS code, no quantity"
+                            : $"labelled \"{description}\", no selling value";
                     warnings.Add($"Row {r}: a totals row for {gd} was skipped ({reason}).");
                     continue;
                 }
@@ -124,7 +127,6 @@ namespace MyApp.Api.Helpers.ExcelImport
                     ? ClaimMonthParser.Parse(wb.GetString(sheet, r, cols.ClaimMonth.Value))
                       ?? ClaimMonthParser.FromDate(wb.GetDate(sheet, r, cols.ClaimMonth.Value))
                     : null;
-                var quantity = wb.GetDecimal(sheet, r, cols.Quantity) ?? 0m;
                 var unitText = cols.Unit is > 0 ? wb.GetString(sheet, r, cols.Unit.Value).Trim() : "";
                 var unit = unitText.Length > 0 ? unitText : null;
 

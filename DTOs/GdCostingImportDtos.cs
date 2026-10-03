@@ -128,13 +128,18 @@ namespace MyApp.Api.DTOs
 
         /// <summary>
         /// The line's HS code matched exactly ONE item already on the books, but
-        /// under a different product name (New Arrivals only). Nothing merges
-        /// silently: the line is held until the operator says it IS that item
-        /// (ChosenOpeningStockBalanceId) or a new one (<see cref="AsNewItem"/>).
-        /// Before 2026-10-03 such lines joined the existing item, which is how
-        /// nine different weight-scale products became one.
+        /// under a different product name (New Arrivals only). The goods come in
+        /// on that item without asking (maintainer's decision, 2026-10-03,
+        /// replacing the same-day hold); the flag tells the screen to say so and
+        /// to offer New item (<see cref="AsNewItem"/>) for a different product.
         /// </summary>
         public bool NameMismatch { get; set; }
+
+        /// <summary>The server chose the item on its own -- a different name
+        /// under the code (<see cref="NameMismatch"/>) or the closest name among
+        /// several items under it -- so the operator may still choose another
+        /// candidate or New item. New Arrivals only.</summary>
+        public bool ItemAutoMatched { get; set; }
 
         /// <summary>The claim month was not given, so it was taken from the GD
         /// date's month (FIFO companies: never blank -- it decides which GD a

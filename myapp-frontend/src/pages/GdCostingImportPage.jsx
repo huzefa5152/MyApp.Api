@@ -20,7 +20,7 @@ import GdReviewLines from "../Components/costing/GdReviewLines";
 import {
   MODE_NEW_ARRIVALS, MODE_BACKFILL, COSTING_ANCHORS, lineProblems, blankLine, nextLineFrom,
   editorLineFrom, toLinePayload, previewLineToPayload, effectiveLeaveOut, entryChecklist,
-  commitSummary, summarySentences, commitLabel, moneyText, qtyText, computeCosting,
+  commitSummary, summarySentences, commitLabel, moneyText, qtyText, computeCosting, bulkActions,
 } from "../utils/gdCostingEntry";
 
 /**
@@ -72,6 +72,12 @@ const selectStyle = {
   width: "100%", maxWidth: 420, minHeight: 44, padding: "0.5rem 0.65rem", borderRadius: 8,
   border: `1px solid ${billColors.inputBorder}`, background: billColors.inputBg, fontSize: 14,
 };
+
+const bulkBtn = (color) => ({
+  display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.45rem 0.9rem",
+  borderRadius: 8, border: `1px solid ${color}`, background: "#fff", color, fontWeight: 700,
+  fontSize: 13.5, cursor: "pointer",
+});
 
 function Banner({ tone = "warn", children }) {
   const c = {
@@ -228,7 +234,9 @@ export default function GdCostingImportPage() {
         sourceRow: l.sourceRow,
         leaveOut: effectiveLeaveOut(l, modeNow, leave),
         chosenOpeningStockBalanceId: chosen[l.sourceRow] ?? null,
-        confirmNewStock: confirm[l.sourceRow] ?? false,
+        // Unset = the server's default: New Arrivals brings a code that is not
+        // on the books in as a new item without a tick per line.
+        confirmNewStock: confirm[l.sourceRow] ?? null,
         asNewItem: fresh[l.sourceRow] ?? false,
       };
       return withEdits[l.sourceRow] ? toLinePayload(withEdits[l.sourceRow], extra) : previewLineToPayload(l, extra);
@@ -336,6 +344,21 @@ export default function GdCostingImportPage() {
     run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm }));
   };
 
+  // One click for a whole set of lines, and ONE re-check for all of them.
+  const onBulkLeaveOut = (rows) => {
+    const leave = { ...leaveOutChoice };
+    rows.forEach((r) => { leave[r] = true; });
+    setLeaveOutChoice(leave);
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave, chosen: chosenItem, src: source, confirm: confirmNew }));
+  };
+
+  const onBulkConfirm = (rows) => {
+    const confirm = { ...confirmNew };
+    rows.forEach((r) => { confirm[r] = true; });
+    setConfirmNew(confirm);
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm }));
+  };
+
   const onChoose = (line, balanceId) => {
     const chosen = { ...chosenItem };
     const fresh = { ...asNew };
@@ -413,6 +436,7 @@ export default function GdCostingImportPage() {
   );
   const summary = useMemo(() => (preview ? commitSummary(preview, mode) : null), [preview, mode]);
   const ready = !!preview && checklist.length === 0 && !busy;
+  const bulk = useMemo(() => bulkActions(preview), [preview]);
 
   if (!canRun) {
     return (
@@ -665,6 +689,28 @@ export default function GdCostingImportPage() {
             {busy === "recheck" && <Banner tone="info">Checking again…</Banner>}
             {/* A stale review describes lines that no longer exist as typed:
                 acting on it would re-check the old ones. */}
+            {(bulk.problems.length > 0 || bulk.unconfirmed.length > 0 || bulk.undecided.length > 0) && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "0 0 0.8rem" }}>
+                {bulk.unconfirmed.length > 0 && (
+                  <button type="button" disabled={!!busy || stale} onClick={() => onBulkConfirm(bulk.unconfirmed)}
+                    style={bulkBtn(billColors.success)}>
+                    <MdCheckCircle size={17} style={{ flexShrink: 0 }} /> Bring in all {bulk.unconfirmed.length} new item{bulk.unconfirmed.length === 1 ? "" : "s"}
+                  </button>
+                )}
+                {bulk.problems.length > 0 && (
+                  <button type="button" disabled={!!busy || stale} onClick={() => onBulkLeaveOut(bulk.problems)}
+                    style={bulkBtn(billColors.textSecondary)}>
+                    <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out {bulk.problems.length} line{bulk.problems.length === 1 ? "" : "s"} that need fixing
+                  </button>
+                )}
+                {bulk.undecided.length > 0 && (
+                  <button type="button" disabled={!!busy || stale} onClick={() => onBulkLeaveOut(bulk.undecided)}
+                    style={bulkBtn(billColors.textSecondary)}>
+                    <MdClose size={17} style={{ flexShrink: 0 }} /> Leave out {bulk.undecided.length} undecided line{bulk.undecided.length === 1 ? "" : "s"}
+                  </button>
+                )}
+              </div>
+            )}
             <GdReviewLines preview={preview} mode={mode} busy={!!busy || stale}
               onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew} />
           </>

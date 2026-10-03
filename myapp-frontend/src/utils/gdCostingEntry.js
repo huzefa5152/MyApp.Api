@@ -317,6 +317,23 @@ export function entryChecklist({ companyId, preview, stale = false } = {}) {
 export const needsNewStockConfirm = (l) =>
   !l.leaveOut && l.disposition === "stock-posted" && !l.confirmNewStock;
 
+/**
+ * The review's one-click actions (2026-10-03): rows each bulk button acts on,
+ * so a 27-line GD is never 27 separate decisions. Empty lists = no button.
+ *   problems    -- lines still carrying a problem: "Leave them out"
+ *   unconfirmed -- new stock not yet confirmed (Backfill asks): "Bring them all in"
+ *   undecided   -- several items share the code and none was chosen: "Leave them out"
+ */
+export function bulkActions(preview) {
+  const lines = (preview?.lines || []).filter((l) => !l.leaveOut);
+  const rows = (pred) => lines.filter(pred).map((l) => l.sourceRow);
+  return {
+    problems: rows((l) => (l.problems || []).length > 0),
+    unconfirmed: rows((l) => (l.problems || []).length === 0 && needsNewStockConfirm(l)),
+    undecided: rows((l) => (l.problems || []).length === 0 && l.disposition === "ambiguous"),
+  };
+}
+
 /** The figures the "Bring it in" step states, from the reviewed lines. */
 export function commitSummary(preview, mode) {
   const lines = preview?.lines || [];

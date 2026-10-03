@@ -1215,15 +1215,30 @@ feedback -- change both, or the screen promises what the server refuses.
   movement. Lines committed before this change have no movement and keep the old
   balance arithmetic. Backfill is unchanged. Unit cost is stored at 4dp, so a
   line's value can sit qty x 0.00005 off the sheet. Suite: section 14a.
-- **A different product under a held HS code is HELD, never merged**
-  (2026-10-03, maintainer's decision). In New Arrivals, a line whose only match
-  is ONE item found through the HS code alone (no lot of this GD) and named
-  differently is `Ambiguous` with `NameMismatch`: nothing is written until the
-  operator chooses that item (`ChosenOpeningStockBalanceId`) or "New item"
-  (`AsNewItem` + `ConfirmNewStock`), which creates a separate item under the same
-  code. `Effective` resolves an undecided mismatch to NOTHING, so no commit path
-  can write it on the HS code alone. Backfill is exempt: it prices stock already
-  on the books, where sheet wording legitimately differs. Suite section 32.
+- **New Arrivals never asks per line** (2026-10-03, maintainer's decision; it
+  REPLACES the same-day rule that held a differently-named line until the
+  operator chose -- a real 27-line GD needed 38 decisions, each a full re-check,
+  before Save). An HS code already on the books lands on that item: the one item
+  under it (`NameMismatch`, note "Added to ... Choose New item if ..."), the one
+  named like the line, or else the CLOSEST name among several
+  (`ClosestByName`: shared words, ties to the larger balance, then the older
+  row). `ItemAutoMatched` marks a server-chosen item, and the line keeps its
+  candidates plus "New item" (`AsNewItem`, which implies `ConfirmNewStock`) as
+  the escape hatch -- `Effective` honours `AsNewItem` only on such a line. A
+  code NOT on the books is new stock with `ConfirmNewStock` defaulted true (the
+  GD is the evidence the goods arrived); the screen sends `null`, never `false`,
+  for an untouched line so the default applies. **Backfill is unchanged**: it
+  writes a cost over a whole balance, so several candidates stay `Ambiguous`
+  and new stock still needs its tick. The review offers one-click bulk buttons
+  (`utils/gdCostingEntry.bulkActions`) for whatever is left. Suite sections 29g,
+  29h and 32.
+- **A totals row is not a GD line, even when it sums the selling value**
+  (2026-10-03). `GdCostingMapping.LooksLikeTotalsRow(description, selling, hs,
+  qty)`: a totals label with no HS code AND no quantity is skipped with a named
+  warning. Pak Trade's KAPE-HC-12274 sheet sums every column on its "Total" row,
+  so the old no-selling-value test kept it as a 28th line that blocked the
+  import. A product actually named "Total" has a code and a quantity and still
+  imports. Harness `totals.*`.
 - **A FIFO company's GD line is never stored without a claim month**
   (2026-10-03, maintainer's decision). Preview fills a blank one with the GD
   date's month and flags it `ClaimMonthDefaulted`; commit applies the same

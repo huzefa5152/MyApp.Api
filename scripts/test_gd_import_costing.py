@@ -3647,7 +3647,9 @@ def main():
               and "different units" in lines[0]["problems"][0]["message"],
               f"{[l.get('problems') for l in lines]}")
 
-        # 29g -- the name settles a shared code; another name stays ambiguous.
+        # 29g -- the name settles a shared code. Another name, in New Arrivals,
+        # lands on the closest item (maintainer's decision 2026-10-03: never ask
+        # per line), keeping every candidate on offer; Backfill still asks.
         r = gd_preview_manual(api, h, rules_co, [
             manual_line("GD-R-5", "8536.1010", f"Rules Twin A {tag}", qty=4, assessed=3200),
             manual_line("GD-R-5", "8536.1010", f"Rules Mystery {tag}", qty=6, assessed=4800),
@@ -3660,10 +3662,21 @@ def main():
               a_line.get("disposition") == "cost-only" and a_line.get("itemTypeId") == twin_a
               and "Matched by name" in (a_line.get("matchNote") or ""),
               f"{a_line.get('disposition')} item={a_line.get('itemTypeId')} note={a_line.get('matchNote')}")
-        check("29g: a line named like neither stays ambiguous, offering both",
-              m_line.get("disposition") == "ambiguous"
+        # "Rules Mystery" shares as many words with Twin A as with Twin B, so
+        # the tie goes to the larger balance: Twin B holds 60 against 40.
+        check("29g: a line named like neither lands on the closest item, offering both",
+              m_line.get("disposition") == "cost-only" and m_line.get("itemTypeId") == twin_b
+              and m_line.get("itemAutoMatched") is True
+              and "closest name" in (m_line.get("matchNote") or "")
               and sorted(c.get("itemTypeId") for c in m_line.get("candidates", [])) == sorted([twin_a, twin_b]),
-              f"{m_line.get('disposition')} candidates={m_line.get('candidates')}")
+              f"{m_line.get('disposition')} item={m_line.get('itemTypeId')} candidates={m_line.get('candidates')}")
+        r = gd_preview_manual(api, h, rules_co, [
+            manual_line("GD-R-5", "8536.1010", f"Rules Mystery {tag}", qty=6, assessed=4800),
+        ], mode="backfill")
+        bf = ((r.json() or {}).get("lines") or [{}])[0] if r.ok else {}
+        check("29g: Backfill still asks which item a name like neither is",
+              bf.get("disposition") == "ambiguous" and bf.get("itemAutoMatched") is False,
+              f"{bf.get('disposition')} auto={bf.get('itemAutoMatched')}")
 
         # 29h -- a chosen candidate commits onto that item; a forged one cannot.
         cand_b = next((c for c in m_line.get("candidates", []) if c.get("itemTypeId") == twin_b), {})
@@ -3688,15 +3701,26 @@ def main():
                            description=f"Rules Mystery {tag}", qty=6, assessed=4800)
         forged["chosenOpeningStockBalanceId"] = pump_bal_id
         a_before, b_before, p_before = qty_of(twin_a), qty_of(twin_b), qty_of(pump)
+        # Backfill asks, so a forged choice there leaves the line ambiguous.
         r = gd_commit(api, h, {"companyId": rules_co, "fileSha256": fresh_hash(), "fileName": "forged-choice",
                                "fileSizeBytes": 1, "lines": [forged], "createMissingStock": True,
-                               "mode": "new-arrivals"})
+                               "mode": "backfill"})
         res = r.json() if r.ok else {}
         check("29h: a 'choice' that is not a candidate is not honoured -- the line stays ambiguous",
               r.ok and res.get("linesAmbiguous") == 1 and res.get("balancesCosted") == 0,
               f"http {r.status_code} {str(res)[:200]}")
         check("29h: and no item moved", close(qty_of(twin_a), a_before) and close(qty_of(twin_b), b_before)
               and close(qty_of(pump), p_before), f"a={qty_of(twin_a)} b={qty_of(twin_b)} pump={qty_of(pump)}")
+        # New Arrivals: the forged choice is ignored and the server's own pick
+        # stands -- never the balance the request named.
+        forged2 = dict(forged, gdNumber="GD-R-6B")
+        r = gd_commit(api, h, {"companyId": rules_co, "fileSha256": fresh_hash(), "fileName": "forged-choice-na",
+                               "fileSizeBytes": 1, "lines": [forged2], "createMissingStock": True,
+                               "mode": "new-arrivals"})
+        check("29h: in New Arrivals a forged choice lands on the server's own pick, never the forged item",
+              r.ok and close(qty_of(pump), p_before) and close(qty_of(twin_b), b_before + 6)
+              and close(qty_of(twin_a), a_before),
+              f"http {r.status_code} a={qty_of(twin_a)} b={qty_of(twin_b)} pump={qty_of(pump)}")
 
         # 29i -- an uploaded file fixed in the review keeps its own identity.
         sheet = build_sheet(BASE_HEADINGS, [
@@ -3823,10 +3847,13 @@ def main():
               any(d.get("gdNumber") == "GD-C-4" and (d.get("claimMonth") or "")[:7] == "2026-05" for d in det_rows),
               str([d for d in det_rows if d.get("gdNumber") == "GD-C-4"])[:200])
 
-        # 32 -- New Arrivals never merges a DIFFERENT product into the one item
-        # already under its HS code (2026-10-03). Before, a GD line named
-        # "KITCHEN SCALE PARTS" silently joined "WEIGHT SCALE PARTS" because it
-        # shared 8423.9000 -- nine products became one item at a real client.
+        # 32 -- New Arrivals uses the item already under an HS code without
+        # asking, and a code not on the books becomes a new item without a tick
+        # (maintainer's decision, 2026-10-03). This REPLACES the same-day rule
+        # that held a differently-named line until the operator chose: on a real
+        # 27-line GD that was 38 clicks, each a full re-check, before Save. The
+        # escape hatch is kept and pinned: "New item" on the line still creates
+        # a separate item, and Backfill still asks.
         mm_co = make_company(api, h, f"GD Name Match {tag}")
         created_companies.append(mm_co)
         scale = make_item(api, h, mm_co, f"WEIGHT SCALE PARTS {tag}", hs="8423.9000")
@@ -3836,13 +3863,15 @@ def main():
         pv = r.json() if r.ok else {}
         line = (pv.get("lines") or [{}])[0]
         cands = line.get("candidates") or []
-        check("32a: a different name under a held HS code is held as a choice, not merged",
-              line.get("disposition") == "ambiguous" and line.get("nameMismatch") is True
+        check("32a: a different name under a held HS code lands on that item, and says so",
+              line.get("disposition") == "cost-only" and line.get("itemTypeId") == scale
+              and line.get("nameMismatch") is True and line.get("itemAutoMatched") is True
+              and "Choose New item" in (line.get("matchNote") or "")
               and len(cands) == 1 and cands[0].get("itemTypeId") == scale,
-              f"{line.get('disposition')} mismatch={line.get('nameMismatch')} cands={cands}")
+              f"{line.get('disposition')} item={line.get('itemTypeId')} note={line.get('matchNote')} cands={cands}")
         r = commit_preview(api, h, mm_co, pv, "new-arrivals")
-        check("32b: committed undecided, nothing comes into stock",
-              r.ok and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 10),
+        check("32b: committed as previewed, its 4 units come in on that item",
+              r.ok and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 14),
               f"http {r.status_code} qty={(position_of(api, h, mm_co, scale) or {}).get('quantity')}")
 
         same = dict(manual_line("GD-M-2", "8423.9000", f"KITCHEN SCALE PARTS {tag}", qty=4, assessed=2000),
@@ -3850,20 +3879,19 @@ def main():
         r = gd_preview_manual(api, h, mm_co, [same], mode="new-arrivals")
         pv = r.json() if r.ok else {}
         line = (pv.get("lines") or [{}])[0]
-        check("32c: choosing the existing item settles the line onto it",
+        check("32c: choosing the existing item explicitly still settles the line onto it",
               line.get("disposition") == "cost-only" and line.get("itemTypeId") == scale, str(line)[:200])
         r = commit_preview(api, h, mm_co, pv, "new-arrivals")
         check("32d: and its 4 units come in on that item",
-              r.ok and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 14),
+              r.ok and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 18),
               f"http {r.status_code} qty={(position_of(api, h, mm_co, scale) or {}).get('quantity')}")
 
         bath_name = f"BATH SCALE {tag}"
-        fresh = dict(manual_line("GD-M-3", "8423.9000", bath_name, qty=5, assessed=2500),
-                     asNewItem=True, confirmNewStock=True)
+        fresh = dict(manual_line("GD-M-3", "8423.9000", bath_name, qty=5, assessed=2500), asNewItem=True)
         r = gd_preview_manual(api, h, mm_co, [fresh], mode="new-arrivals")
         pv = r.json() if r.ok else {}
         line = (pv.get("lines") or [{}])[0]
-        check("32e: 'New item' turns the held line into new stock",
+        check("32e: 'New item' alone turns the line into confirmed new stock -- no second tick",
               line.get("disposition") == "stock-posted" and line.get("asNewItem") is True
               and line.get("confirmNewStock") is True, str(line)[:200])
         r = commit_preview(api, h, mm_co, pv, "new-arrivals")
@@ -3874,16 +3902,33 @@ def main():
             CREATED_ITEM_TYPE_IDS.append(bath["itemTypeId"])
         check("32f: a separate item is created and the old one is untouched",
               r.ok and bath is not None and close(bath.get("onHand"), 5)
-              and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 14),
+              and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 18),
               f"http {r.status_code} bath={bath} {str(res)[:150]}")
 
         r = gd_preview_manual(api, h, mm_co, [manual_line("GD-M-4", "8423.9000", f"KITCHEN SCALE PARTS {tag}",
                                                           qty=1, assessed=100)], mode="backfill")
         line = ((r.json() or {}).get("lines") or [{}])[0] if r.ok else {}
-        # Two items now share 8423.9000, so the line is ambiguous for the old,
-        # unrelated reason; what Backfill is exempt from is the NAME hold.
-        check("32g: Backfill is exempt from the name hold -- it prices stock already on the books",
-              r.ok and line.get("nameMismatch") is False, str(line)[:200])
+        # Two items now share 8423.9000; Backfill writes a cost over a whole
+        # balance, so it still asks rather than picking one.
+        check("32g: Backfill neither auto-matches nor confirms -- it still asks",
+              r.ok and line.get("nameMismatch") is False and line.get("itemAutoMatched") is False
+              and line.get("disposition") == "ambiguous", str(line)[:200])
+
+        new_name = f"BRAND NEW SCALE {tag}"
+        r = gd_preview_manual(api, h, mm_co, [manual_line("GD-M-5", "8517.6250", new_name, qty=3, assessed=900)],
+                              mode="new-arrivals")
+        pv = r.json() if r.ok else {}
+        line = (pv.get("lines") or [{}])[0]
+        check("32h: a code not on the books is new stock, confirmed without a tick",
+              line.get("disposition") == "stock-posted" and line.get("confirmNewStock") is True
+              and not line.get("problems"), str(line)[:200])
+        r = commit_preview(api, h, mm_co, pv, "new-arrivals")
+        rows_now = requests.get(f"{api}/stock/company/{mm_co}/onhand", headers=h, timeout=60).json()
+        made = next((x for x in rows_now if x.get("itemTypeName") == new_name), None)
+        if made:
+            CREATED_ITEM_TYPE_IDS.append(made["itemTypeId"])
+        check("32h: and committing the preview as-is creates the item with its 3 units",
+              r.ok and made is not None and close(made.get("onHand"), 3), f"http {r.status_code} made={made}")
 
     finally:
         if not args.keep:

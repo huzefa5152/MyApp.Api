@@ -173,6 +173,24 @@ namespace MyApp.Api.Helpers.ExcelImport
             return t.Length == 0 || TotalsWords.Contains(t);
         }
 
+        /// <summary>
+        /// The same test, plus a totals row that DOES carry a selling value
+        /// (2026-10-03). Pak Trade's KAPE-HC-12274 sheet sums every column on
+        /// its "Total" row, selling value included, so the two-argument test
+        /// kept it -- and it reached the review as a 28th GD line with no HS
+        /// code, quantity or unit that held the whole import until it was left
+        /// out by hand. A labelled totals row with no HS code AND no quantity
+        /// describes no goods. A real product named "Total" still imports: it
+        /// has its own code and quantity.
+        /// </summary>
+        public static bool LooksLikeTotalsRow(string? description, decimal? sellingValue, string? hsCode, decimal quantity)
+        {
+            if (LooksLikeTotalsRow(description, sellingValue)) return true;
+            return TotalsWords.Contains(Normalise(description))
+                && CleanHsCode(hsCode).Length == 0
+                && quantity <= 0m;
+        }
+
         // -- Heading-driven column resolution ------------------------------
         //
         // Mirrors LotRowsMapping.ResolveColumns exactly in structure -- same

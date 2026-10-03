@@ -124,10 +124,13 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
         </ul>
       )}
 
-      {((line.candidates || []).length > 1 || line.nameMismatch) && !line.leaveOut && (
+      {((line.candidates || []).length > 1 || line.nameMismatch || line.itemAutoMatched) && !line.leaveOut && (
         <div style={{ marginTop: "0.6rem" }}>
-          <label htmlFor={`choose-${line.sourceRow}`} style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: billColors.warn, marginBottom: 4 }}>
-            Which item are these goods?
+          <label htmlFor={`choose-${line.sourceRow}`} style={{
+            display: "block", fontSize: 12.5, fontWeight: 700, marginBottom: 4,
+            color: line.disposition === "ambiguous" ? billColors.warn : billColors.textSecondary,
+          }}>
+            {line.disposition === "ambiguous" ? "Which item are these goods?" : "Item (change it if these are different goods)"}
           </label>
           <select id={`choose-${line.sourceRow}`} disabled={busy}
             value={line.asNewItem ? "new" : line.chosenOpeningStockBalanceId ?? (line.disposition === "cost-only" ? line.openingStockBalanceId ?? "" : "")}
@@ -142,7 +145,7 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
                 {c.itemTypeName} — {qtyText(c.quantity)}{c.unit ? ` ${c.unit}` : ""} on the books
               </option>
             ))}
-            {line.nameMismatch && (
+            {(line.nameMismatch || line.itemAutoMatched) && (
               <option value="new">+ New item: {line.description}</option>
             )}
           </select>

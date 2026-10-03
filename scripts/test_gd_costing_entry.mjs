@@ -15,7 +15,7 @@ const {
   FIELDS, MODE_NEW_ARRIVALS, MODE_BACKFILL, lineAnchor, cleanHsCode, lineProblems, messagesFor,
   computeCosting, blankLine, nextLineFrom, editorLineFrom, toLinePayload, previewLineToPayload,
   defaultLeaveOut, effectiveLeaveOut, lineOutcome, entryChecklist, commitSummary, summarySentences,
-  commitLabel, needsNewStockConfirm,
+  commitLabel, needsNewStockConfirm, bulkActions,
 } = await import(new URL("../myapp-frontend/src/utils/gdCostingEntry.js", import.meta.url).href);
 
 let pass = 0;
@@ -239,6 +239,23 @@ check("confirmed new stock states its value and names", () => {
 check("the button says what it does, per mode", () => {
   assert.strictEqual(commitLabel(commitSummary(preview, MODE_NEW_ARRIVALS)), "Bring 4 lines into stock");
   assert.strictEqual(commitLabel(commitSummary(preview, MODE_BACKFILL)), "Record 4 lines");
+});
+
+// The review's one-click buttons (2026-10-03): each names exactly the rows it
+// acts on, and a left-out line is never in any of them.
+check("bulk actions split the review into problems, unconfirmed and undecided", () => {
+  const pv = { lines: [
+    { sourceRow: 1, disposition: "stock-posted", confirmNewStock: false, problems: [] },
+    { sourceRow: 2, disposition: "stock-posted", confirmNewStock: true, problems: [] },
+    { sourceRow: 3, disposition: "stock-posted", confirmNewStock: false, problems: [{ field: "hsCode", message: "x" }] },
+    { sourceRow: 4, disposition: "ambiguous", problems: [] },
+    { sourceRow: 5, disposition: "ambiguous", problems: [], leaveOut: true },
+    { sourceRow: 6, disposition: "cost-only", problems: [] },
+  ] };
+  assert.deepStrictEqual(bulkActions(pv), { problems: [3], unconfirmed: [1], undecided: [4] });
+});
+check("no preview, no buttons", () => {
+  assert.deepStrictEqual(bulkActions(null), { problems: [], unconfirmed: [], undecided: [] });
 });
 
 console.log(`\n${pass}/${pass + failures.length} checks passed`);
