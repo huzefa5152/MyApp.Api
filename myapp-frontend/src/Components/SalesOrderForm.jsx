@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect } from "react";
 import SelectDropdown from "./SelectDropdown";
 import SearchableSelect from "./SearchableSelect";
@@ -42,6 +43,9 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
     order?.divisionId ? String(order.divisionId) : (defaultDivisionId ? String(defaultDivisionId) : ""));
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState(order ? String(order.salesOrderNumber) : "");
+  const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const [salesQuoteId, setSalesQuoteId] = useState(order?.salesQuoteId ? String(order.salesQuoteId) : "");
   const [quotes, setQuotes] = useState([]);
@@ -100,7 +104,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || !numberValid) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
     if (!client) { setError("Please select a client."); return; }
@@ -109,6 +113,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
     setSaving(true);
     try {
       const saved = await onSaved({
+        customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
         clientId: client.id,
         divisionId: divisionId ? parseInt(divisionId) : null,
         salesQuoteId: salesQuoteId ? parseInt(salesQuoteId) : null,
@@ -142,7 +147,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
     }
   };
 
-  const disabled = !client || items.every((i) => !i.description.trim()) || saving;
+  const disabled = !numberValid || !client || items.every((i) => !i.description.trim()) || saving;
 
   return (
     <div style={formStyles.backdrop}>
@@ -153,6 +158,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order, def
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? order?.divisionId : divisionId} documentType="order" variant={isEdit ? "edit" : "create"} currentNumber={order?.salesOrderNumber} editRecordId={order?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>

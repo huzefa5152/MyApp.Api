@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useEffect, useMemo, useState } from "react";
 import { MdClose, MdPostAdd, MdInfoOutline, MdArrowBack } from "react-icons/md";
 import { getInvoiceById, supplementInvoice, createNote } from "../api/invoiceApi";
@@ -32,6 +33,9 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
   const [carryChallan, setCarryChallan] = useState(true);
   const [reason, setReason] = useState("");
   const [remarks, setRemarks] = useState("");
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState("");
   const gstRate = Number(invoice?.gstRate ?? 0);
@@ -63,6 +67,8 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
 
   function pick(m) {
     setMode(m);
+    setNumberMode("auto");
+    setCustomNumber("");
     setReason(REASONS[m][0]);
     setStep("figures");
   }
@@ -98,7 +104,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
 
   async function submit() {
     const rows = computed.rows.filter((r) => r.show);
-    if (rows.length === 0) return;
+    if (rows.length === 0 || (mode !== "supp" && !numberValid)) return;
     setSaving(true);
     try {
       let res;
@@ -109,6 +115,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
         });
       } else {
         res = await createNote({
+          customNumber: billNumberPayload(numberMode, customNumber),
           originalInvoiceId: invoice.id,
           documentType: mode === "credit" ? 10 : 9,
           reason: reason?.trim() || null,
@@ -164,6 +171,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
 
         {step === "figures" && lines && (
           <>
+            {mode !== "supp" && <div style={{ maxWidth: 360, marginBottom: 12 }}><BillNumberField key={mode} companyId={invoice.companyId} divisionId={invoice.divisionId} documentType={mode === "credit" ? "credit-note" : "debit-note"} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div style={{ ...s.info, background: M.soft, color: "#16202b", border: "1px solid rgba(0,0,0,.06)" }}>
               <MdInfoOutline size={18} style={{ flex: "0 0 auto", marginTop: 1 }} />
               <span>
@@ -240,7 +248,7 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
               <button
                 style={{ ...s.btnPrimary, background: M.tint, opacity: !computed.valid || saving ? 0.5 : 1, cursor: !computed.valid || saving ? "not-allowed" : "pointer" }}
                 onClick={submit}
-                disabled={!computed.valid || saving}
+                disabled={!computed.valid || saving || (mode !== "supp" && !numberValid)}
                 title={!computed.valid ? "Adjust a line to create the correction." : `Create the ${M.doc}`}
               >
                 <MdPostAdd size={18} />

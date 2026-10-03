@@ -8,6 +8,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class SalesOrderDto
     {
+        public int? CustomNumber { get; set; }
         public int Id { get; set; }
         public int SalesOrderNumber { get; set; }
         public int CompanyId { get; set; }
@@ -98,6 +99,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreateChallanFromOrderDto
     {
+        public int? CustomNumber { get; set; }
         public string? Notes { get; set; }
         public DateTime? DeliveryDate { get; set; }
         public string? Site { get; set; }

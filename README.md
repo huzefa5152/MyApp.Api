@@ -294,6 +294,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-10-03 - Auto and Custom document numbers (Customize)
+
+Company and division starting numbers now support Auto or a custom number when creating quotes, orders, challans, bills, purchase bills, goods receipts, credit notes and debit notes. Auto continues its own cursor and skips occupied numbers; Custom does not advance that cursor. Editable document forms also validate number changes, with company/division isolation and existing filed-bill and duplicated-challan protections retained.
+
 > This project evolves across many focused sessions. **Every session that ships a
 > feature or bug fix appends a dated entry here (newest first)** — README is the
 > running, incremental record of the product's evolution. (See the rule in

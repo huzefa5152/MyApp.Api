@@ -210,15 +210,8 @@ namespace MyApp.Api.Services.Implementations
 
             var createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
             {
-                // Division-scoped numbering: a division-tagged quote draws from the
-                // division's own sequence (seeded by its StartingSalesQuoteNumber);
-                // a company-level quote uses the company's. The unique index is
-                // (CompanyId, DivisionId, QuoteNumber) so the two never collide.
-                var max = await _repository.GetMaxNumberAsync(companyId, dto.DivisionId);
-                var seed = division != null
-                    ? (division.StartingSalesQuoteNumber > 0 ? division.StartingSalesQuoteNumber : 1)
-                    : (company.StartingSalesQuoteNumber > 0 ? company.StartingSalesQuoteNumber : 1);
-                var next = max > 0 ? max + 1 : seed;
+                await using var numberTx = await _context.Database.BeginTransactionAsync();
+                var next = await CompanyDocumentNumbers.AllocateAsync(_context, companyId, "quote", dto.CustomNumber, dto.DivisionId);
 
                 var quote = new SalesQuote
                 {
@@ -245,8 +238,6 @@ namespace MyApp.Api.Services.Implementations
                     }).ToList()
                 };
                 ApplyTotals(quote, dto.GSTRate);
-                if (division != null) division.CurrentSalesQuoteNumber = next;
-                else company.CurrentSalesQuoteNumber = next;
                 _context.SalesQuotes.Add(quote);
                 try
                 {
@@ -258,6 +249,7 @@ namespace MyApp.Api.Services.Implementations
                     foreach (var it in quote.Items) _context.Entry(it).State = EntityState.Detached;
                     throw;
                 }
+                await numberTx.CommitAsync();
                 return quote.Id;
             });
 
@@ -339,8 +331,12 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
+            await using var numberTx = await _context.Database.BeginTransactionAsync();
+            await CompanyDocumentNumbers.RenumberAsync(_context, quote.CompanyId, "quote", quote.Id, quote.QuoteNumber, dto.CustomNumber, quote.DivisionId);
+            quote.QuoteNumber = dto.CustomNumber ?? quote.QuoteNumber;
             ApplyTotals(quote, dto.GSTRate);
             await _repository.UpdateAsync(quote);
+            await numberTx.CommitAsync();
             foreach (var stale in staleImages) QuoteLineImages.TryDelete(stale, quote.CompanyId);
             return await GetByIdAsync(id);
         }

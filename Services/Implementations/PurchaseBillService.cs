@@ -315,18 +315,7 @@ namespace MyApp.Api.Services.Implementations
             if (dto.Items.Any(i => i.UnitPrice < 0))
                 throw new InvalidOperationException("Unit price cannot be negative.");
 
-            // Allocate next purchase-bill number — independent of the sales-side
-            // sequence, and scoped per division when the bill is tagged with one.
-            var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
-            var maxQuery = _context.PurchaseBills.Where(p => p.CompanyId == dto.CompanyId);
-            maxQuery = dto.DivisionId.HasValue
-                ? maxQuery.Where(p => p.DivisionId == dto.DivisionId.Value)
-                : maxQuery.Where(p => p.DivisionId == null);
-            var maxNumber = await maxQuery.Select(p => (int?)p.PurchaseBillNumber).MaxAsync() ?? 0;
-            var seed = division != null ? division.StartingPurchaseBillNumber : company.StartingPurchaseBillNumber;
-            var nextNumber = MyApp.Api.Helpers.DivisionNumbering.Next(maxNumber, seed);
-            if (division != null) division.CurrentPurchaseBillNumber = nextNumber;
-            else company.CurrentPurchaseBillNumber = nextNumber;
+            var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "purchase-bill", dto.CustomNumber, dto.DivisionId);
 
             // Validate "Purchase Against Sale Bill" lines BEFORE we touch
             // anything. Any line with SourceInvoiceItemIds:
@@ -604,17 +593,11 @@ namespace MyApp.Api.Services.Implementations
 
                 var company = await _context.Companies.FindAsync(challan.CompanyId)
                     ?? throw new KeyNotFoundException("Company not found.");
-                var division = await DivisionNumbering.ResolveAsync(_context, challan.CompanyId, challan.DivisionId);
-                var maxQuery = _context.PurchaseBills.Where(p => p.CompanyId == challan.CompanyId);
-                maxQuery = challan.DivisionId.HasValue
-                    ? maxQuery.Where(p => p.DivisionId == challan.DivisionId.Value)
-                    : maxQuery.Where(p => p.DivisionId == null);
-                var number = await maxQuery.MaxAsync(p => (int?)p.PurchaseBillNumber) ?? 0;
-                var seed = division?.StartingPurchaseBillNumber ?? company.StartingPurchaseBillNumber;
+                var number = 0;
                 var createdIds = new List<int>();
                 foreach (var group in groups)
                 {
-                    number = DivisionNumbering.Next(number, seed);
+                    number = await CompanyDocumentNumbers.AllocateAsync(_context, challan.CompanyId, "purchase-bill", divisionId: challan.DivisionId);
                     var lines = group.Select(i => new PurchaseItem
                     {
                         ItemTypeId = i.ItemTypeId,
@@ -643,8 +626,6 @@ namespace MyApp.Api.Services.Implementations
                         Items = lines,
                     };
                     _context.PurchaseBills.Add(bill);
-                    if (division != null) division.CurrentPurchaseBillNumber = number;
-                    else company.CurrentPurchaseBillNumber = number;
                     await _context.SaveChangesAsync();
                     var tracked = await _stock.GetStockTrackedItemTypeIdsAsync(
                         bill.CompanyId, lines.Where(i => i.ItemTypeId.HasValue).Select(i => i.ItemTypeId!.Value));
@@ -677,6 +658,9 @@ namespace MyApp.Api.Services.Implementations
                 .Include(p => p.Items)
                 .FirstOrDefaultAsync(p => p.Id == id);
             if (bill == null) return null;
+
+            await CompanyDocumentNumbers.RenumberAsync(_context, bill.CompanyId, "purchase-bill", bill.Id, bill.PurchaseBillNumber, dto.CustomNumber, bill.DivisionId);
+            bill.PurchaseBillNumber = dto.CustomNumber ?? bill.PurchaseBillNumber;
 
             // Apply header changes
             if (dto.Date.HasValue) bill.Date = dto.Date.Value.Date;

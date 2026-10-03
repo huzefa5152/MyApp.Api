@@ -380,13 +380,7 @@ namespace MyApp.Api.Services.Implementations
             // Numbering + insert, shared by the guarded and unguarded paths.
             async Task<int> InsertOrderAsync()
             {
-                var maxQuery = _context.SalesOrders.Where(o => o.CompanyId == companyId);
-                maxQuery = dto.DivisionId.HasValue
-                    ? maxQuery.Where(o => o.DivisionId == dto.DivisionId.Value)
-                    : maxQuery.Where(o => o.DivisionId == null);
-                var max = await maxQuery.Select(o => (int?)o.SalesOrderNumber).MaxAsync() ?? 0;
-                var seed = division != null ? division.StartingSalesOrderNumber : company.StartingSalesOrderNumber;
-                var next = MyApp.Api.Helpers.DivisionNumbering.Next(max, seed);
+                var next = await CompanyDocumentNumbers.AllocateAsync(_context, companyId, "order", dto.CustomNumber, dto.DivisionId);
 
                 var order = new SalesOrder
                 {
@@ -413,8 +407,6 @@ namespace MyApp.Api.Services.Implementations
                         UnitPrice = i.UnitPrice
                     }).ToList()
                 };
-                if (division != null) division.CurrentSalesOrderNumber = next;
-                else company.CurrentSalesOrderNumber = next;
                 _context.SalesOrders.Add(order);
                 try
                 {
@@ -447,7 +439,13 @@ namespace MyApp.Api.Services.Implementations
             }
             else
             {
-                createdId = await NumberAllocationRetry.ExecuteAsync(async _ => await InsertOrderAsync());
+                createdId = await NumberAllocationRetry.ExecuteAsync(async _ =>
+                {
+                    await using var numberTx = await _context.Database.BeginTransactionAsync();
+                    var id = await InsertOrderAsync();
+                    await numberTx.CommitAsync();
+                    return id;
+                });
             }
 
             return (await MapOneAsync(await _repository.GetByIdAsync(createdId)))!;
@@ -587,7 +585,11 @@ namespace MyApp.Api.Services.Implementations
                 _context.SalesOrderItems.Remove(rem);
             }
 
+            await using var numberTx = await _context.Database.BeginTransactionAsync();
+            await CompanyDocumentNumbers.RenumberAsync(_context, order.CompanyId, "order", order.Id, order.SalesOrderNumber, dto.CustomNumber, order.DivisionId);
+            order.SalesOrderNumber = dto.CustomNumber ?? order.SalesOrderNumber;
             await _repository.UpdateAsync(order);
+            await numberTx.CommitAsync();
             return await MapOneAsync(await _repository.GetByIdAsync(id));
         }
 
@@ -716,6 +718,7 @@ namespace MyApp.Api.Services.Implementations
 
             var challanDto = new DeliveryChallanDto
             {
+                CustomNumber = dto.CustomNumber,
                 ClientId = order.ClientId,
                 // A fulfilment challan belongs to the same division as its
                 // order — it must number from that division's sequence and

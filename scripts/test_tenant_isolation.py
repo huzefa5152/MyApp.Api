@@ -375,6 +375,17 @@ for username, forbidden in forbidden_for.items():
             check(suite, f"[{username}] {method} {path}", expected_ok,
                   f"expected {expected_text}, got {status}")
 
+# Configurable numbering uses [AuthorizeCompany], like the existing bill
+# preview. Keep these new 403 checks separate from the company-detail GET's
+# historical 404 contract; that existing assertion remains unchanged.
+for username, forbidden in forbidden_for.items():
+    for cid in forbidden:
+        for kind in ("quote", "order", "challan", "invoice", "purchase-bill", "goods-receipt", "credit-note", "debit-note"):
+            for query in ("", "?check=1"):
+                path = f"/api/companies/{cid}/document-numbers/{kind}{query}"
+                status, _ = request("GET", path, token=tokens[username])
+                status_check("document numbering tenant guard", f"[{username}] GET {path}", status, 403)
+
 # Suite 3: tenant-scoped endpoints — 200 on allowed companies
 print("\n  Suite 3 — 200 on allowed companies (lightweight)")
 allowed_for = {

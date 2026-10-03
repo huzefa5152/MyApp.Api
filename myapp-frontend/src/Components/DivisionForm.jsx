@@ -23,6 +23,8 @@ const DOC_NUMBERS = [
   ["startingInvoiceNumber", "currentInvoiceNumber", "Sales Invoice"],
   ["startingPurchaseBillNumber", "currentPurchaseBillNumber", "Purchase Bill"],
   ["startingGoodsReceiptNumber", "currentGoodsReceiptNumber", "Goods Receipt"],
+  ["startingCreditNoteNumber", "currentCreditNoteNumber", "Credit Note"],
+  ["startingDebitNoteNumber", "currentDebitNoteNumber", "Debit Note"],
 ];
 
 /**
@@ -49,6 +51,8 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
     startingInvoiceNumber: division?.startingInvoiceNumber || 0,
     startingPurchaseBillNumber: division?.startingPurchaseBillNumber || 0,
     startingGoodsReceiptNumber: division?.startingGoodsReceiptNumber || 0,
+    startingCreditNoteNumber: division?.startingCreditNoteNumber || 0,
+    startingDebitNoteNumber: division?.startingDebitNoteNumber || 0,
   });
   const [logoFile, setLogoFile] = useState(null);
   const [error, setError] = useState("");
@@ -77,6 +81,8 @@ export default function DivisionForm({ companyId, division, onClose, onSaved }) 
         startingInvoiceNumber: Number(form.startingInvoiceNumber) || 0,
         startingPurchaseBillNumber: Number(form.startingPurchaseBillNumber) || 0,
         startingGoodsReceiptNumber: Number(form.startingGoodsReceiptNumber) || 0,
+        startingCreditNoteNumber: Number(form.startingCreditNoteNumber) || 0,
+        startingDebitNoteNumber: Number(form.startingDebitNoteNumber) || 0,
       };
       let saved;
       if (isEdit) ({ data: saved } = await updateDivision(division.id, payload));

@@ -2,6 +2,7 @@
 {
     public class DeliveryChallanDto
     {
+        public int? CustomNumber { get; set; }
         public int Id { get; set; }
         public int ChallanNumber { get; set; }
         public int CompanyId { get; set; }

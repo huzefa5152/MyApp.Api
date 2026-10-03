@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "../Components/BillNumberField";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MdUndo, MdSearch, MdReceipt, MdArrowBack } from "react-icons/md";
@@ -78,11 +79,16 @@ export default function CreditDebitNotePage() {
   const [remarks, setRemarks] = useState("");
   const [affectsStock, setAffectsStock] = useState(isCredit); // derived default, operator-overridable
   const [stockTouched, setStockTouched] = useState(false);
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const attachmentRef = useRef(null); // staged files flush against the note id post-create
 
   const pickInvoice = useCallback((inv) => {
     setSelected(inv);
+    setNumberMode("auto");
+    setCustomNumber("");
     setLines((inv.items || []).map((it) => ({
       id: it.id,
       description: effDesc(it),
@@ -166,7 +172,7 @@ export default function CreditDebitNotePage() {
   const overRate = lines.some((l) => l.include && Number(l.noteRate) > Number(l.invoicedRate));
   const needsRemarks = reason === "Others" && !remarks.trim();
   const canSubmit =
-    canCreate && selected && chosen.length > 0 && reason && !needsRemarks && !overQty && !overRate && !submitting;
+    numberValid && canCreate && selected && chosen.length > 0 && reason && !needsRemarks && !overQty && !overRate && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -179,6 +185,7 @@ export default function CreditDebitNotePage() {
         chosen.length === lines.length &&
         lines.every((l) => Number(l.noteQty) === Number(l.invoicedQty) && Number(l.noteRate) === Number(l.invoicedRate));
       const payload = {
+        customNumber: billNumberPayload(numberMode, customNumber),
         originalInvoiceId: selected.id,
         documentType: docType,
         reason,
@@ -307,6 +314,7 @@ export default function CreditDebitNotePage() {
         </>
       ) : (
         <>
+          <div style={{ maxWidth: 360, marginBottom: 12 }}><BillNumberField key={`${docType}-${selected.id}`} companyId={selected.companyId || selectedCompany.id} divisionId={selected.divisionId} documentType={isCredit ? "credit-note" : "debit-note"} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={submitting} /></div>
           <button onClick={clearSelection} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: "none", color: colors.blue, cursor: "pointer", padding: 0, marginBottom: 8 }}>
             <MdArrowBack /> Choose a different invoice
           </button>

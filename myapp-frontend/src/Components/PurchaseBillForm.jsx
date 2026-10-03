@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
@@ -72,6 +73,11 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
   const [paymentMode, setPaymentMode] = useState("");
   const [items, setItems] = useState([newRow()]);
   const [error, setError] = useState("");
+  const [numberMode, setNumberMode] = useState("auto");
+  const [currentNumber, setCurrentNumber] = useState(null);
+  const [storedNumberDivision, setStoredNumberDivision] = useState(null);
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
   // Source-bill metadata when in "Purchase Against Sale" mode
   const [sourceBill, setSourceBill] = useState(null);
@@ -138,8 +144,11 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
     (async () => {
       try {
         const { data } = await getPurchaseBillById(billId);
+        setCurrentNumber(data.purchaseBillNumber);
+        setCustomNumber(String(data.purchaseBillNumber));
         setSupplierId(String(data.supplierId));
         setDivisionId(data.divisionId ? String(data.divisionId) : "");
+        setStoredNumberDivision(data.divisionId ?? null);
         setDate(data.date.slice(0, 10));
         setSupplierBillNumber(data.supplierBillNumber || "");
         setSupplierIRN(data.supplierIRN || "");
@@ -324,6 +333,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!numberValid) return;
     if (readOnly) return;
     setError("");
     if (!supplierId) return setError("Select a supplier.");
@@ -344,6 +354,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
     setSaving(true);
     try {
       const payload = {
+        customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
         date,
         companyId,
         divisionId: divisionId ? parseInt(divisionId) : null,
@@ -403,6 +414,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, overflow: "hidden" }}>
           <div style={formStyles.body}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? storedNumberDivision : divisionId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} lockedReason={readOnly ? "Document number is read-only in View." : undefined} /></div>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             {sourceBill && (
@@ -766,7 +778,7 @@ export default function PurchaseBillForm({ companyId, company = null, billId, on
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>{readOnly ? "Close" : "Cancel"}</button>
             {!readOnly && (
-              <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+              <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
                 {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
               </button>
             )}

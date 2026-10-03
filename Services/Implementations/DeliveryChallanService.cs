@@ -425,7 +425,7 @@ namespace MyApp.Api.Services.Implementations
                 }).ToList()
             };
 
-            var created = await _repository.CreateDeliveryChallanAsync(deliveryChallan);
+            var created = await _repository.CreateDeliveryChallanAsync(deliveryChallan, dto.CustomNumber);
 
             // Upsert ItemDescription rows for any new item names. This makes
             // PO-imported items immediately visible in the bill form's
@@ -958,6 +958,8 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                await CompanyDocumentNumbers.RenumberAsync(_context, dc.CompanyId, "challan", dc.Id, dc.ChallanNumber, dto.CustomNumber, dc.DivisionId);
+                dc.ChallanNumber = dto.CustomNumber ?? dc.ChallanNumber;
                 // Items: diff-based update so the linked bill stays in sync.
                 // Earlier this block did a blanket RemoveRange + rebuild that
                 // silently broke any linked InvoiceItems (FK cascade SET NULL)

@@ -1,3 +1,4 @@
+using MyApp.Api.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyApp.Api.Data;
@@ -218,18 +219,7 @@ namespace MyApp.Api.Services.Implementations
                 // Cross-tenant link guard for non-inventory item refs on the lines.
                 await ValidateNonInvAsync(dto.CompanyId, dto.Items.Select(i => i.NonInventoryItemId));
 
-                // Per-division numbering: a division-tagged GRN draws from the
-                // division's own sequence; otherwise the company's (mirror SalesQuote).
-                var division = await MyApp.Api.Helpers.DivisionNumbering.ResolveAsync(_context, dto.CompanyId, dto.DivisionId);
-                var maxQuery = _context.GoodsReceipts.Where(g => g.CompanyId == dto.CompanyId);
-                maxQuery = dto.DivisionId.HasValue
-                    ? maxQuery.Where(g => g.DivisionId == dto.DivisionId.Value)
-                    : maxQuery.Where(g => g.DivisionId == null);
-                var maxNumber = await maxQuery.Select(g => (int?)g.GoodsReceiptNumber).MaxAsync() ?? 0;
-                var seed = division != null ? division.StartingGoodsReceiptNumber : company.StartingGoodsReceiptNumber;
-                var nextNumber = MyApp.Api.Helpers.DivisionNumbering.Next(maxNumber, seed);
-                if (division != null) division.CurrentGoodsReceiptNumber = nextNumber;
-                else company.CurrentGoodsReceiptNumber = nextNumber;
+                var nextNumber = await CompanyDocumentNumbers.AllocateAsync(_context, dto.CompanyId, "goods-receipt", dto.CustomNumber, dto.DivisionId);
 
                 var receipt = new GoodsReceipt
                 {
@@ -298,6 +288,8 @@ namespace MyApp.Api.Services.Implementations
                 .Include(g => g.Items)
                 .FirstOrDefaultAsync(g => g.Id == id);
             if (gr == null) return null;
+            await CompanyDocumentNumbers.RenumberAsync(_context, gr.CompanyId, "goods-receipt", gr.Id, gr.GoodsReceiptNumber, dto.CustomNumber, gr.DivisionId);
+            gr.GoodsReceiptNumber = dto.CustomNumber ?? gr.GoodsReceiptNumber;
             if (dto.PurchaseBillId.HasValue)
             {
                 // Same cross-tenant linkage guard as Create.

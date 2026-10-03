@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
@@ -36,6 +37,11 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState([{ id: 0, itemTypeId: null, nonInventoryItemId: null, description: "", quantity: 1, unit: "" }]);
   const [error, setError] = useState("");
+  const [numberMode, setNumberMode] = useState("auto");
+  const [currentNumber, setCurrentNumber] = useState(null);
+  const [storedNumberDivision, setStoredNumberDivision] = useState(null);
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
   const errRef = useScrollToError(error);
@@ -67,8 +73,11 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     (async () => {
       try {
         const { data } = await getGoodsReceiptById(receiptId);
+        setCurrentNumber(data.goodsReceiptNumber);
+        setCustomNumber(String(data.goodsReceiptNumber));
         setSupplierId(String(data.supplierId));
         setDivisionId(data.divisionId ? String(data.divisionId) : "");
+        setStoredNumberDivision(data.divisionId ?? null);
         setPurchaseBillId(data.purchaseBillId ? String(data.purchaseBillId) : "");
         setReceiptDate(data.receiptDate.slice(0, 10));
         setSupplierChallanNumber(data.supplierChallanNumber || "");
@@ -103,6 +112,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!numberValid) return;
     setError("");
     if (!supplierId) return setError("Select a supplier.");
     if (items.length === 0) return setError("Add at least one item.");
@@ -111,6 +121,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
     setSaving(true);
     try {
       const payload = {
+        customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
         receiptDate,
         companyId,
         divisionId: divisionId ? parseInt(divisionId) : null,
@@ -156,6 +167,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? storedNumberDivision : divisionId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={{ ...formStyles.formGroup, gridColumn: "1 / -1" }}>
@@ -264,7 +276,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
           </div>
           <div style={formStyles.footer}>
             <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
-            <button type="submit" disabled={saving} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
+            <button type="submit" disabled={saving || !numberValid} style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}>
               {saving ? "Saving..." : (isEdit ? "Update" : "Create")}
             </button>
           </div>

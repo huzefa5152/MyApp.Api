@@ -392,6 +392,7 @@
     {
         /// <summary>The number an Auto bill would be issued under right now.</summary>
         public int NextNumber { get; set; }
+        public string? AutoError { get; set; }
 
         /// <summary>The company's invoice-number prefix, if it has one.</summary>
         public string? Prefix { get; set; }
@@ -457,6 +458,7 @@
     /// </summary>
     public class CreateNoteDto
     {
+        public int? CustomNumber { get; set; }
         /// <summary>The FBR-submitted invoice this note references.</summary>
         public int OriginalInvoiceId { get; set; }
         /// <summary>

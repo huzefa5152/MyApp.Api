@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect } from "react";
 import SelectDropdown from "./SelectDropdown";
 import DivisionSelect from "./DivisionSelect";
@@ -51,6 +52,9 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
   const [nonInvItems, setNonInvItems] = useState([]);
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState(quote ? String(quote.quoteNumber) : "");
+  const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
 
@@ -92,7 +96,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || !numberValid) return;
     setError("");
     const valid = items.filter((i) => i.description.trim());
     if (!client) { setError("Please select a client."); return; }
@@ -101,6 +105,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
     setSaving(true);
     try {
       const saved = await onSaved({
+        customNumber: billNumberPayload(isEdit ? "custom" : numberMode, customNumber),
         clientId: client.id,
         divisionId: divisionId ? parseInt(divisionId) : null,
         date: date ? new Date(date).toISOString() : null,
@@ -134,7 +139,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
     }
   };
 
-  const disabled = !client || items.every((i) => !i.description.trim()) || saving;
+  const disabled = !numberValid || !client || items.every((i) => !i.description.trim()) || saving;
 
   return (
     <div style={formStyles.backdrop}>
@@ -145,6 +150,7 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote, def
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={isEdit ? quote?.divisionId : divisionId} documentType="quote" variant={isEdit ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: 2, minWidth: 220 }}>

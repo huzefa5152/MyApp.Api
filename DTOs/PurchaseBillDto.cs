@@ -96,6 +96,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class CreatePurchaseBillDto
     {
+        public int? CustomNumber { get; set; }
         public string? Notes { get; set; }
         public DateTime Date { get; set; }
         public int CompanyId { get; set; }
@@ -147,6 +148,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class UpdatePurchaseBillDto
     {
+        public int? CustomNumber { get; set; }
         public string? Notes { get; set; }
         public DateTime? Date { get; set; }
         public string? SupplierBillNumber { get; set; }

@@ -119,18 +119,8 @@ namespace MyApp.Api.Services.Implementations
                 //    before the bill so we can write the FK.
                 var lineToItemType = await ResolveOrCreateItemTypesAsync(importableLines, runningCounts);
 
-                // 3. PurchaseBill — allocate next number per company.
-                //    Same pattern as PurchaseBillService.CreateAsync;
-                //    we don't reuse that service because it builds from
-                //    a different DTO shape and would re-trigger a
-                //    parallel transaction.
-                var company = await _context.Companies.FirstAsync(c => c.Id == companyId);
-                var maxNumber = await _context.PurchaseBills
-                    .Where(p => p.CompanyId == companyId)
-                    .Select(p => (int?)p.PurchaseBillNumber)
-                    .MaxAsync() ?? 0;
-                var nextNumber = Math.Max(maxNumber + 1, company.StartingPurchaseBillNumber);
-                company.CurrentPurchaseBillNumber = nextNumber;
+                var nextNumber = await MyApp.Api.Helpers.CompanyDocumentNumbers.AllocateAsync(
+                    _context, companyId, "purchase-bill", divisionId: divisionId);
 
                 var subtotal = importableLines.Sum(l => l.ValueExclTax);
                 var gstAmount = importableLines.Sum(l => l.GstAmount ?? 0m);

@@ -103,7 +103,7 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<SalesQuote> UpdateAsync(SalesQuote quote)
         {
-            _context.SalesQuotes.Update(quote);
+            _context.Entry(quote).State = EntityState.Modified;
             await _context.SaveChangesAsync();
             return quote;
         }

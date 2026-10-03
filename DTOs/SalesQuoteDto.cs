@@ -9,6 +9,7 @@ namespace MyApp.Api.DTOs
     /// </summary>
     public class SalesQuoteDto
     {
+        public int? CustomNumber { get; set; }
         public int Id { get; set; }
         public int QuoteNumber { get; set; }
         public int CompanyId { get; set; }

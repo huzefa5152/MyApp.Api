@@ -83,7 +83,7 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<SalesOrder> UpdateAsync(SalesOrder order)
         {
-            _context.SalesOrders.Update(order);
+            _context.Entry(order).State = EntityState.Modified;
             await _context.SaveChangesAsync();
             return order;
         }

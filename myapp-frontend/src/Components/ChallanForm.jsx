@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect } from "react";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
 import SearchableSelect from "./SearchableSelect";
@@ -55,6 +56,9 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
   const [units, setUnits] = useState([]);
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
+  const [numberMode, setNumberMode] = useState("auto");
+  const [customNumber, setCustomNumber] = useState("");
+  const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
   const attachmentRef = useRef(null);
   const suppliers = useChallanSuppliers(companyId);
@@ -194,7 +198,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (saving || savedChallanId) return;
+    if (saving || savedChallanId || !numberValid) return;
     setError("");
 
     // ── Deliver-from-order path — create the challan against the order ──────
@@ -216,6 +220,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
       setSaving(true);
       try {
         const saved = await onSaved({
+          customNumber: billNumberPayload(numberMode, customNumber),
           salesOrderId: order.id,
           deliveryDate: deliveryDate ? new Date(deliveryDate).toISOString() : null,
           site: site.trim() || null,
@@ -252,6 +257,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
           actualUnitCost: i.actualUnitCost === "" ? null : i.actualUnitCost ?? null,
       }));
       const saved = await onSaved({
+        customNumber: billNumberPayload(numberMode, customNumber),
         clientId: client.id,
         divisionId: divisionId ? parseInt(divisionId) : null,
         clientName: client.label,
@@ -282,9 +288,9 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
     }
   };
 
-  const isDisabled = fromOrder
+  const isDisabled = !numberValid || (fromOrder
     ? (!anyOrderQty || saving)
-    : (items.some((i) => !i.description.trim()) || !client || saving);
+    : (items.some((i) => !i.description.trim()) || !client || saving));
 
   // Backdrop click is intentionally a no-op — the user can lose minutes
   // of typed data with one stray click otherwise. Use the X in the
@@ -299,6 +305,7 @@ export default function ChallanForm({ onClose, onSaved, companyId, defaultDivisi
 
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} divisionId={fromOrder ? order?.divisionId : divisionId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {/* Optional: build this challan by delivering an open Sales Order.

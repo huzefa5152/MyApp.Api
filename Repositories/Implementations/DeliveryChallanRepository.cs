@@ -128,7 +128,7 @@ namespace MyApp.Api.Repositories.Implementations
                                  .FirstOrDefaultAsync(dc => dc.Id == id);
         }
 
-        public async Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan)
+        public async Task<DeliveryChallan> CreateDeliveryChallanAsync(DeliveryChallan deliveryChallan, int? customNumber = null)
         {
             // Wrap in transaction to prevent duplicate challan numbers from concurrent requests
             await using var transaction = await _context.Database.BeginTransactionAsync();
@@ -140,41 +140,16 @@ namespace MyApp.Api.Repositories.Implementations
                 if (company == null)
                     throw new KeyNotFoundException("Company not found.");
 
-                // Use MAX(ChallanNumber) so a deleted trailing number is reused on the next
-                // create (no gaps after deleting the last challan). If nothing exists yet
-                // for this company, fall back to the configured StartingChallanNumber.
-                //
-                // EXCLUDE demo challans (FBR Sandbox) from the MAX — they live in
-                // their own 900000+ range so a seeded sandbox would otherwise push
-                // the next REAL challan number into the demo range and pollute the
-                // operator's actual numbering sequence.
-                bool isDemo = deliveryChallan.IsDemo;
-                // Per-division numbering: a division-tagged challan draws from the
-                // division's own sequence; otherwise the company's. Scoped MAX so
-                // each (company, division) scope keeps its own running number.
-                // ResolveAsync throws when the division belongs to another company —
-                // a forged dto.DivisionId must never be persisted (cross-tenant
-                // link guard, same as every other document module).
-                var divisionId = deliveryChallan.DivisionId;
-                var division = await Helpers.DivisionNumbering.ResolveAsync(
-                    _context, deliveryChallan.CompanyId, divisionId);
-                var maxQuery = _context.DeliveryChallans
-                    .Where(c => c.CompanyId == deliveryChallan.CompanyId && c.IsDemo == isDemo);
-                maxQuery = divisionId.HasValue
-                    ? maxQuery.Where(c => c.DivisionId == divisionId.Value)
-                    : maxQuery.Where(c => c.DivisionId == null);
-                var maxExisting = await maxQuery.MaxAsync(c => (int?)c.ChallanNumber) ?? 0;
-
-                var seedStarting = division != null ? division.StartingChallanNumber : company.StartingChallanNumber;
-                int nextNumber = maxExisting > 0 ? maxExisting + 1 : (seedStarting > 0 ? seedStarting : 1);
-
-                deliveryChallan.ChallanNumber = nextNumber;
-                // Don't touch the live CurrentChallanNumber when seeding demo data.
-                if (!isDemo)
+                if (deliveryChallan.IsDemo)
                 {
-                    if (division != null) division.CurrentChallanNumber = nextNumber;
-                    else company.CurrentChallanNumber = nextNumber;
+                    if (customNumber.HasValue) throw new InvalidOperationException("Demo challan numbers cannot be customized.");
+                    var maxDemo = await _context.DeliveryChallans.Where(c => c.CompanyId == deliveryChallan.CompanyId
+                        && c.DivisionId == deliveryChallan.DivisionId && c.IsDemo).MaxAsync(c => (int?)c.ChallanNumber) ?? 899999;
+                    deliveryChallan.ChallanNumber = Math.Max(maxDemo + 1, 900000);
                 }
+                else
+                    deliveryChallan.ChallanNumber = await Helpers.CompanyDocumentNumbers.AllocateAsync(
+                        _context, deliveryChallan.CompanyId, "challan", customNumber, deliveryChallan.DivisionId);
 
                 _context.DeliveryChallans.Add(deliveryChallan);
                 await _context.SaveChangesAsync();
@@ -194,7 +169,7 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<DeliveryChallan> UpdateAsync(DeliveryChallan deliveryChallan)
         {
-            _context.DeliveryChallans.Update(deliveryChallan);
+            _context.Entry(deliveryChallan).State = EntityState.Modified;
             await _context.SaveChangesAsync();
             return deliveryChallan;
         }

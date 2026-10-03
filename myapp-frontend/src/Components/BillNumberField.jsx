@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { MdCheckCircle, MdErrorOutline, MdRefresh } from "react-icons/md";
 import { getNextInvoiceNumber } from "../api/invoiceApi";
+import { getDocumentNumber } from "../api/documentNumbersApi";
+
+const INT32_MAX = 2147483647;
+const labels = { invoice: "Bill / Invoice", quote: "Sales Quote", order: "Sales Order", challan: "Delivery Challan", "purchase-bill": "Purchase Bill", "goods-receipt": "Goods Receipt", "credit-note": "Credit Note", "debit-note": "Debit Note" };
+const readNumber = (companyId, kind, options) => kind === "invoice"
+  ? getNextInvoiceNumber(companyId, options) : getDocumentNumber(companyId, kind, options);
 
 // The "Bill / Invoice No." control, shared by BOTH bill-create forms
 // (InvoiceForm = from a challan, StandaloneInvoiceForm = without one). One
@@ -58,6 +64,8 @@ const colors = {
 export default function BillNumberField({
   companyId,
   divisionId,
+  documentType = "invoice",
+  editRecordId,
   variant = "create",
   mode = "auto",
   onModeChange,
@@ -69,6 +77,7 @@ export default function BillNumberField({
   changeCaution,
   disabled = false,
 }) {
+  const documentLabel = labels[documentType] || "Document";
   const isEdit = variant === "edit";
   // On edit there is no Auto: the bill has a number and the box always shows one.
   const effectiveMode = isEdit ? "custom" : mode;
@@ -81,34 +90,41 @@ export default function BillNumberField({
 
   // Guards a slow response for an older keystroke from overwriting a newer one.
   const probeSeq = useRef(0);
+  const loadSeq = useRef(0);
 
   const loadNext = useCallback(async () => {
     // The edit screen never offers "the next number" — it only needs the prefix
     // and the ceiling, which the same call carries.
-    if (!companyId) return;
+    const seq = ++loadSeq.current;
+    setInfo(null);
+    if (!companyId || lockedReason) { setLoading(false); return; }
     setLoading(true);
     setLoadError("");
     try {
-      const res = await getNextInvoiceNumber(companyId, { divisionId });
+      const res = await readNumber(companyId, documentType, { divisionId, excludeId: isEdit ? editRecordId : undefined });
+      if (seq !== loadSeq.current) return;
       setInfo(res.data);
     } catch {
-      setLoadError("Could not read the next bill number.");
+      if (seq !== loadSeq.current) return;
+      setLoadError(documentType === "invoice" ? "Could not read the next bill number." : "Could not read the next document number.");
       setInfo(null);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [companyId, divisionId]);
+  }, [companyId, divisionId, documentType, editRecordId, isEdit, lockedReason]);
 
-  useEffect(() => { loadNext(); }, [loadNext]);
+  useEffect(() => { loadNext(); return () => { loadSeq.current += 1; }; }, [loadNext]);
 
   // Debounced availability probe. Only the custom box asks — Auto is resolved
   // server-side at save time and has nothing to check.
   useEffect(() => {
+    const seq = ++probeSeq.current;
+    setProbing(false);
+    setProbe(null);
     if (effectiveMode !== "custom" || lockedReason) { setProbe(null); return; }
     const raw = (number || "").trim();
     if (!raw) { setProbe(null); return; }
 
-    const seq = ++probeSeq.current;
     const parsed = Number(raw);
     // Leaving an existing bill on its own number is not a clash with itself.
     // The server excludes the row being renumbered for the same reason; this
@@ -118,15 +134,16 @@ export default function BillNumberField({
       setProbing(false);
       return;
     }
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      setProbe({ available: false, error: "Enter a whole number greater than zero." });
+    if (!Number.isInteger(parsed) || parsed <= 0 || parsed > INT32_MAX) {
+      setProbe({ available: false, error: `Enter a whole number from 1 to ${INT32_MAX}.` });
       return;
     }
 
+    if (!companyId) return;
     setProbing(true);
     const t = setTimeout(async () => {
       try {
-        const res = await getNextInvoiceNumber(companyId, { divisionId, check: parsed });
+        const res = await readNumber(companyId, documentType, { divisionId, check: parsed, excludeId: isEdit ? editRecordId : undefined });
         if (seq !== probeSeq.current) return;      // a newer keystroke won
         setProbe({
           available: res.data?.checkedAvailable === true,
@@ -143,13 +160,13 @@ export default function BillNumberField({
       }
     }, 400);
 
-    return () => clearTimeout(t);
-  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId, divisionId]);
+    return () => { clearTimeout(t); probeSeq.current += 1; };
+  }, [effectiveMode, isEdit, currentNumber, lockedReason, number, companyId, divisionId, documentType, editRecordId]);
 
   // Report usability upward so the parent can block Save.
   const customUsable =
     lockedReason ? true
-      : effectiveMode !== "custom" ? true
+      : effectiveMode !== "custom" ? !info?.autoError
         : !!(number || "").trim() && probe?.available === true && !probing;
 
   useEffect(() => {
@@ -173,6 +190,7 @@ export default function BillNumberField({
   });
 
   const inputStyle = {
+    minHeight: 44,
     width: "100%",
     padding: "0.55rem 0.75rem",
     borderRadius: 8,
@@ -187,7 +205,7 @@ export default function BillNumberField({
   return (
     <div>
       <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
-        Bill / Invoice No.
+        {documentLabel} No.
       </label>
 
       {isEdit ? null : (
@@ -231,9 +249,9 @@ export default function BillNumberField({
             <input
               type="text"
               readOnly
-              value={loading ? "…" : info ? String(info.nextNumber) : "—"}
+              value={loading ? "…" : info && !info.autoError ? String(info.nextNumber) : "—"}
               style={{ ...inputStyle, backgroundColor: "#eef5ff", cursor: "not-allowed" }}
-              title="Allocated by the server when the bill is saved"
+              title="Allocated by the server when the document is saved"
             />
             <button
               type="button"
@@ -257,10 +275,10 @@ export default function BillNumberField({
             </button>
           </div>
           <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
-            {loadError
-              ? loadError
+            {loadError || info?.autoError
+              ? loadError || info.autoError
               : startingMissing
-                ? "Set this company's starting invoice number first."
+                ? `Set the starting ${documentLabel.toLowerCase()} number for this ${divisionId ? "division" : "company"} first.`
                 : info && prefix
                   ? `Next in sequence · prints as ${info.formattedNext}`
                   : "Next in sequence · final number is allocated on save"}
@@ -271,12 +289,13 @@ export default function BillNumberField({
           <input
             type="number"
             min={1}
-            max={info?.maxAllowed || undefined}
+            max={info?.maxAllowed || INT32_MAX}
+            aria-label={`${documentLabel} number`}
             step={1}
             value={number}
             disabled={disabled}
             onChange={(e) => onNumberChange?.(e.target.value)}
-            placeholder={info ? `e.g. ${info.nextNumber}` : "Bill number"}
+            placeholder={info?.nextNumber > 0 ? `e.g. ${info.nextNumber}` : `${documentLabel} number`}
             style={{
               ...inputStyle,
               borderColor:
@@ -287,7 +306,7 @@ export default function BillNumberField({
           />
           <div style={{ fontSize: "0.72rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
             {!(number || "").trim() ? (
-              <span style={{ color: colors.warn }}>Enter a bill number.</span>
+              <span style={{ color: colors.warn }}>Enter a {documentLabel.toLowerCase()} number.</span>
             ) : probe?.unchanged ? (
               <span style={{ color: colors.textSecondary }}>Unchanged.</span>
             ) : probing ? (
@@ -331,5 +350,5 @@ export default function BillNumberField({
 export function billNumberPayload(mode, number) {
   if (mode !== "custom") return null;
   const parsed = Number((number || "").trim());
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= INT32_MAX ? parsed : null;
 }

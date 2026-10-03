@@ -1,3 +1,4 @@
+import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
 import LineItemsEditor from "./LineItemsEditor";
@@ -101,6 +102,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── UI state ──
   const [error, setError] = useState("");
   const errRef = useScrollToError(error);
+  const [customNumber, setCustomNumber] = useState(String(challan.challanNumber));
+  const [numberValid, setNumberValid] = useState(true);
   const [saving, setSaving] = useState(false);
 
   // Load lookups once
@@ -155,7 +158,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
   // ── Submit ──
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (savedAwaitingPurchase) return;
+    if (savedAwaitingPurchase || !numberValid || saving) return;
     setError("");
 
     if (!clientId) { setError("Client is required."); return; }
@@ -167,6 +170,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
     setSaving(true);
     try {
       await updateChallan(challan.id, {
+        customNumber: isDuplicate ? null : billNumberPayload("custom", customNumber),
         companyId: challan.companyId,
         clientId: parseInt(clientId),
         site: site || null,
@@ -227,6 +231,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} divisionId={challan.divisionId} documentType="challan" variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {/* Duplicate-mode banner — explains why so many fields are
@@ -398,7 +403,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
               Your challan was saved. Purchase bills still need to be created.
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button type="button" disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
+                <button type="button" disabled={saving || !numberValid} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
                 <button type="button" onClick={onSaved}>Close without purchase bills</button>
               </div>
             </div>}
@@ -419,7 +424,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             <button
               type="submit"
               style={{ ...formStyles.button, ...formStyles.submit, opacity: saving ? 0.6 : 1 }}
-              disabled={saving}
+              disabled={saving || !numberValid}
             >
               {saving ? "Saving..." : "Save Changes"}
             </button>
