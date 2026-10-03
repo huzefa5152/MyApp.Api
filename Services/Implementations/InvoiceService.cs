@@ -3873,7 +3873,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PrintBillDto?> GetPrintBillAsync(int invoiceId)
         {
-            var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
+            var inv = await _invoiceRepo.GetForPrintAsync(invoiceId);
             if (inv == null) return null;
 
             var poNumbers = inv.DeliveryChallans
@@ -3996,7 +3996,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<PrintTaxInvoiceDto?> GetPrintTaxInvoiceAsync(int invoiceId)
         {
-            var inv = await _invoiceRepo.GetByIdAsync(invoiceId);
+            var inv = await _invoiceRepo.GetForPrintAsync(invoiceId);
             if (inv == null) return null;
 
             var poNumbers = inv.DeliveryChallans

@@ -879,7 +879,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("bills.print.view")]
         public async Task<ActionResult<PrintBillDto>> GetPrintBill(int id)
         {
-            var existing = await _service.GetByIdAsync(id);
+            var existing = await _context.Invoices.AsNoTracking()
+                .Where(i => i.Id == id)
+                .Select(i => new { i.CompanyId, i.DivisionId })
+                .FirstOrDefaultAsync();
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);
@@ -892,7 +895,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("invoices.print.view")]
         public async Task<ActionResult<PrintTaxInvoiceDto>> GetPrintTaxInvoice(int id)
         {
-            var existing = await _service.GetByIdAsync(id);
+            var existing = await _context.Invoices.AsNoTracking()
+                .Where(i => i.Id == id)
+                .Select(i => new { i.CompanyId, i.DivisionId })
+                .FirstOrDefaultAsync();
             if (existing == null) return NotFound();
             await _access.AssertAccessAsync(CurrentUserId, existing.CompanyId);
             await _divisionAccess.AssertAccessAsync(CurrentUserId, existing.CompanyId, existing.DivisionId);

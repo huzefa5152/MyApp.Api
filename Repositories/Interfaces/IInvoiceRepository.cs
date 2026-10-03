@@ -17,6 +17,7 @@ namespace MyApp.Api.Repositories.Interfaces
             int? noteType = null, int? divisionId = null,
             HashSet<int>? allowedDivisionIds = null);
         Task<Invoice?> GetByIdAsync(int id);
+        Task<Invoice?> GetForPrintAsync(int id);
         Task<Invoice> CreateAsync(Invoice invoice);
         Task UpdateAsync(Invoice invoice);
         Task<int> GetTotalCountAsync();

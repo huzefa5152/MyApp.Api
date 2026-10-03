@@ -139,6 +139,23 @@ namespace MyApp.Api.Repositories.Implementations
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 
+        public async Task<Invoice?> GetForPrintAsync(int id)
+        {
+            // Separate the item and challan collections instead of joining their
+            // full detail graphs. Printing only needs challan headers and overlays.
+            return await _context.Invoices
+                .AsNoTracking()
+                .AsSplitQuery()
+                .Include(i => i.Company)
+                .Include(i => i.Client)
+                .Include(i => i.Items)
+                    .ThenInclude(ii => ii.Adjustment)
+                .Include(i => i.DeliveryChallans)
+                .Include(i => i.OriginalInvoice)
+                .Include(i => i.Division)
+                .FirstOrDefaultAsync(i => i.Id == id);
+        }
+
         public async Task<Invoice> CreateAsync(Invoice invoice)
         {
             _context.Invoices.Add(invoice);
