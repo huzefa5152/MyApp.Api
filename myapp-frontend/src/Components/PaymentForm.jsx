@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdClose } from "react-icons/md";
-import { formStyles, modalSizes, colors, dropdownStyles } from "../theme";
-import SearchableSelect from "./SearchableSelect";
+import { formStyles, modalSizes, colors } from "../theme";
+import SearchableClientSelect from "./SearchableClientSelect";
+import { Button, TableWrap } from "../ui/Kit";
 import { createPayment, updatePayment } from "../api/paymentApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
@@ -212,11 +213,13 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 aren't truncated inside a narrow grid column. */}
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>{contactLabel}</label>
-              <SearchableSelect
-                items={contacts}
+              <SearchableClientSelect
+                clients={contacts}
                 value={contactId}
                 onChange={(id) => setContactId(id ? String(id) : "")}
                 placeholder={`— Select ${contactLabel} —`}
+                noun={isReceipt ? "clients" : "suppliers"}
+                ariaLabel={contactLabel}
               />
             </div>
 
@@ -227,7 +230,7 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Method</label>
-                <select style={{ ...dropdownStyles.base, width: "100%" }} value={method} onChange={(e) => setMethod(e.target.value)}>
+                <select className="k-select" value={method} onChange={(e) => setMethod(e.target.value)}>
                   {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
@@ -274,59 +277,59 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
                 isNarrow ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                     {docs.map((d) => (
-                      <div key={d.id} style={{ border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" }}>
+                      <div key={d.id} style={{ border: "1px solid var(--k-line)", borderRadius: "var(--k-card-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.45rem" }}>
-                          <strong style={{ color: colors.textPrimary }}>#{d.number}</strong>
-                          <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
+                          <strong style={{ color: "var(--k-ink)" }}>#{d.number}</strong>
+                          <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</span>
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", color: colors.textSecondary, marginBottom: 2 }}><span>Total</span><span>{d.grandTotal.toLocaleString()}</span></div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", color: colors.textSecondary, marginBottom: "0.55rem" }}><span>Balance due</span><span>{d.available.toLocaleString()}</span></div>
+                        <div style={narrowRow}><span>Total</span><span>{d.grandTotal.toLocaleString()}</span></div>
+                        <div style={{ ...narrowRow, marginBottom: "0.55rem" }}><span>Balance due</span><span>{d.available.toLocaleString()}</span></div>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <input
-                            type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", flex: 1 }}
+                            type="number" min="0" step="0.01" className="k-input" style={{ textAlign: "right", flex: 1, fontVariantNumeric: "tabular-nums" }}
                             value={alloc[d.id] ?? ""}
                             onChange={(e) => setAllocAmount(d.id, e.target.value)}
                             placeholder="Apply amount"
                           />
-                          <button type="button" style={{ ...fillBtn, minHeight: 44, padding: "0 0.75rem" }} onClick={() => fillBalance(d)} title="Apply full balance">Max</button>
+                          <Button size="sm" onClick={() => fillBalance(d)} title="Apply full balance">Max</Button>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={tbl}>
+                <TableWrap>
+                  <table className="k-table k-table--compact">
                     <thead>
                       <tr>
-                        <th style={th}>{docLabel} #</th>
-                        <th style={th}>Date</th>
-                        <th style={{ ...th, textAlign: "right" }}>Total</th>
-                        <th style={{ ...th, textAlign: "right" }}>Balance due</th>
-                        <th style={{ ...th, textAlign: "right", width: 150 }}>Apply</th>
+                        <th>{docLabel} #</th>
+                        <th>Date</th>
+                        <th className="k-num">Total</th>
+                        <th className="k-num">Balance due</th>
+                        <th className="k-num" style={{ width: 150 }}>Apply</th>
                       </tr>
                     </thead>
                     <tbody>
                       {docs.map((d) => (
                         <tr key={d.id}>
-                          <td style={td}><strong>#{d.number}</strong></td>
-                          <td style={td}>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
-                          <td style={{ ...td, textAlign: "right" }}>{d.grandTotal.toLocaleString()}</td>
-                          <td style={{ ...td, textAlign: "right" }}>{d.available.toLocaleString()}</td>
-                          <td style={{ ...td, textAlign: "right" }}>
+                          <td><strong>#{d.number}</strong></td>
+                          <td>{d.date ? new Date(d.date).toLocaleDateString() : "—"}</td>
+                          <td className="k-num">{d.grandTotal.toLocaleString()}</td>
+                          <td className="k-num">{d.available.toLocaleString()}</td>
+                          <td className="k-num">
                             <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
                               <input
-                                type="number" min="0" step="0.01" style={{ ...formStyles.input, textAlign: "right", padding: "0.35rem 0.5rem", width: 100 }}
+                                type="number" min="0" step="0.01" className="k-input" style={{ textAlign: "right", width: 110, fontVariantNumeric: "tabular-nums" }}
                                 value={alloc[d.id] ?? ""}
                                 onChange={(e) => setAllocAmount(d.id, e.target.value)}
                               />
-                              <button type="button" style={fillBtn} onClick={() => fillBalance(d)} title="Apply full balance">Max</button>
+                              <Button size="sm" onClick={() => fillBalance(d)} title="Apply full balance">Max</Button>
                             </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableWrap>
                 )
               )}
             </div>
@@ -358,8 +361,5 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
   );
 }
 
-const hintBox = { padding: "0.75rem", background: colors.inputBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 8, color: colors.textSecondary, fontSize: "0.85rem" };
-const tbl = { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" };
-const th = { textAlign: "left", padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontWeight: 700, whiteSpace: "nowrap" };
-const td = { padding: "0.4rem 0.5rem", borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textPrimary };
-const fillBtn = { padding: "0.3rem 0.5rem", fontSize: "0.7rem", fontWeight: 700, borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" };
+const hintBox = { padding: "0.75rem", background: "var(--k-surface-2)", border: "1px dashed var(--k-line-strong)", borderRadius: "var(--k-radius)", color: "var(--k-muted)", fontSize: "var(--k-font)" };
+const narrowRow = { display: "flex", justifyContent: "space-between", fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginBottom: 2, fontVariantNumeric: "tabular-nums" };

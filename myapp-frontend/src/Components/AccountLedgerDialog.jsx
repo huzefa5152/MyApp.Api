@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { MdClose, MdChevronLeft, MdChevronRight } from "react-icons/md";
-import { formStyles, modalSizes, colors } from "../theme";
+import { formStyles, modalSizes } from "../theme";
+import { Button, Field, Facts, TableWrap, Loading, EmptyState } from "../ui/Kit";
 import useIsNarrow from "../hooks/useIsNarrow";
 import { getAccountLedger } from "../api/accountingApi";
 
@@ -58,9 +59,9 @@ export default function AccountLedgerDialog({ account, onClose }) {
   };
 
   const rows = loading
-    ? <div style={st.empty}>Loading…</div>
+    ? <Loading>Loading…</Loading>
     : items.length === 0
-      ? <div style={st.empty}>Nothing posted to this account{applied.from || applied.to ? " in this period" : " yet"}.</div>
+      ? <EmptyState boxed={false}>Nothing posted to this account{applied.from || applied.to ? " in this period" : " yet"}.</EmptyState>
       : isNarrow
         // A ledger is six columns wide; on a phone that becomes a card per
         // movement rather than a table the reader has to scroll sideways.
@@ -86,34 +87,34 @@ export default function AccountLedgerDialog({ account, onClose }) {
           </div>
         )
         : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={st.table}>
+          <TableWrap>
+            <table className="k-table" style={{ minWidth: 720 }}>
               <thead>
                 <tr>
-                  <th style={st.th}>Date</th>
-                  <th style={st.th}>Entry</th>
-                  <th style={st.th}>Source</th>
-                  <th style={st.th}>Description</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Debit</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Credit</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Balance</th>
+                  <th>Date</th>
+                  <th>Entry</th>
+                  <th>Source</th>
+                  <th>Description</th>
+                  <th className="k-num">Debit</th>
+                  <th className="k-num">Credit</th>
+                  <th className="k-num">Balance</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((r) => (
                   <tr key={`${r.journalEntryId}-${r.entryNo}-${r.debit}-${r.credit}-${r.date}`}>
-                    <td style={st.td}>{fmtDate(r.date)}</td>
-                    <td style={st.td}><span style={st.ref}>JE-{String(r.entryNo).padStart(4, "0")}</span></td>
-                    <td style={st.td}>{r.sourceDocType}</td>
-                    <td style={{ ...st.td, overflowWrap: "anywhere" }}>{r.description || r.narration || "—"}</td>
-                    <td style={{ ...st.td, textAlign: "right" }}>{r.debit ? money(r.debit) : ""}</td>
-                    <td style={{ ...st.td, textAlign: "right" }}>{r.credit ? money(r.credit) : ""}</td>
-                    <td style={{ ...st.td, textAlign: "right", fontWeight: 700 }}>{money(r.runningBalance)}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
+                    <td><span style={st.ref}>JE-{String(r.entryNo).padStart(4, "0")}</span></td>
+                    <td>{r.sourceDocType}</td>
+                    <td style={{ overflowWrap: "anywhere" }}>{r.description || r.narration || "—"}</td>
+                    <td className="k-num">{r.debit ? money(r.debit) : ""}</td>
+                    <td className="k-num">{r.credit ? money(r.credit) : ""}</td>
+                    <td className="k-num" style={{ fontWeight: 700 }}>{money(r.runningBalance)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
         );
 
   return (
@@ -131,63 +132,50 @@ export default function AccountLedgerDialog({ account, onClose }) {
 
         <div style={formStyles.body}>
           <form onSubmit={applyFilter} style={st.filterRow}>
-            <label style={st.filterLabel}>
-              From
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={formStyles.input} />
-            </label>
-            <label style={st.filterLabel}>
-              To
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={formStyles.input} />
-            </label>
-            <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, minHeight: 44 }}>Apply</button>
+            <div style={st.filterCell}>
+              <Field label="From">
+                <input type="date" className="k-input" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </Field>
+            </div>
+            <div style={st.filterCell}>
+              <Field label="To">
+                <input type="date" className="k-input" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+              </Field>
+            </div>
+            <Button type="submit" variant="primary">Apply</Button>
             {(applied.from || applied.to) && (
-              <button
-                type="button"
-                style={{ ...formStyles.button, ...formStyles.cancel, minHeight: 44 }}
-                onClick={() => { setFrom(""); setTo(""); setPage(1); setApplied({ from: "", to: "" }); }}
-              >
+              <Button onClick={() => { setFrom(""); setTo(""); setPage(1); setApplied({ from: "", to: "" }); }}>
                 Clear
-              </button>
+              </Button>
             )}
           </form>
 
           <div style={st.summary}>
-            <div>
-              <span style={st.summaryLabel}>Opening</span>
-              <span style={st.summaryValue}>{money(data?.openingBalance)}</span>
-            </div>
-            <div>
-              <span style={st.summaryLabel}>Movements</span>
-              <span style={st.summaryValue}>{totalCount.toLocaleString()}</span>
-            </div>
-            <div>
-              <span style={st.summaryLabel}>Closing</span>
-              <span style={{ ...st.summaryValue, color: colors.blue }}>{money(data?.closingBalance)}</span>
-            </div>
+            <Facts facts={[
+              ["Opening", <span style={st.summaryValue}>{money(data?.openingBalance)}</span>],
+              ["Movements", <span style={st.summaryValue}>{totalCount.toLocaleString()}</span>],
+              ["Closing", <span style={{ ...st.summaryValue, color: "var(--k-blue)" }}>{money(data?.closingBalance)}</span>],
+            ]} />
           </div>
 
           {rows}
         </div>
 
         <div style={{ ...formStyles.footer, justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
+          <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
             {totalCount.toLocaleString()} movement{totalCount === 1 ? "" : "s"}
             {totalPages > 1 ? ` · page ${page} of ${totalPages}` : ""}
           </span>
           {totalPages > 1 && (
             <span style={{ display: "flex", gap: "0.4rem" }}>
-              <button
-                type="button" style={st.pageBtn} disabled={page <= 1} aria-label="Previous page"
+              <Button
+                icon={MdChevronLeft} disabled={page <= 1} aria-label="Previous page" title="Previous page"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <MdChevronLeft size={18} />
-              </button>
-              <button
-                type="button" style={st.pageBtn} disabled={page >= totalPages} aria-label="Next page"
+              />
+              <Button
+                icon={MdChevronRight} disabled={page >= totalPages} aria-label="Next page" title="Next page"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                <MdChevronRight size={18} />
-              </button>
+              />
             </span>
           )}
         </div>
@@ -199,20 +187,14 @@ export default function AccountLedgerDialog({ account, onClose }) {
 const st = {
   codeChip: { fontFamily: "monospace", fontSize: "0.72rem", background: "rgba(255,255,255,0.22)", padding: "1px 6px", borderRadius: 4 },
   filterRow: { display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "0.6rem", marginBottom: "0.9rem" },
-  filterLabel: { display: "flex", flexDirection: "column", gap: 4, fontSize: "0.78rem", fontWeight: 600, color: colors.textSecondary, flex: "1 1 150px", minWidth: 0 },
-  summary: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))", gap: "0.6rem", padding: "0.7rem 0.9rem", background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 10, marginBottom: "0.9rem" },
-  summaryLabel: { display: "block", fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
-  summaryValue: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 720 },
-  th: { padding: "0.5rem", textAlign: "left", fontSize: "0.7rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, borderBottom: `1px solid ${colors.cardBorder}`, whiteSpace: "nowrap" },
-  td: { padding: "0.45rem 0.5rem", fontSize: "0.82rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "top" },
-  ref: { fontFamily: "monospace", fontSize: "0.74rem", color: colors.blue, background: "#eef2ff", padding: "1px 5px", borderRadius: 4, whiteSpace: "nowrap" },
-  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.6rem 0.7rem", background: colors.cardBg },
+  filterCell: { flex: "1 1 150px", minWidth: 0 },
+  summary: { padding: "0.7rem 0.9rem", background: "var(--k-surface-2)", border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", marginBottom: "0.9rem" },
+  summaryValue: { fontSize: "calc(var(--k-font) + 0.1rem)", fontWeight: 800, color: "var(--k-ink)", fontVariantNumeric: "tabular-nums" },
+  ref: { fontFamily: "monospace", fontSize: "0.74rem", color: "var(--k-blue)", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, whiteSpace: "nowrap" },
+  card: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.6rem 0.7rem", background: "var(--k-surface)" },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  cardDate: { fontSize: "0.78rem", color: colors.textSecondary },
-  cardDesc: { fontSize: "0.84rem", color: colors.textPrimary, margin: "0.35rem 0", overflowWrap: "anywhere" },
-  cardAmounts: { display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.82rem", color: colors.textSecondary },
-  cardSource: { fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary, marginTop: 4 },
-  pageBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, cursor: "pointer", boxShadow: "none" },
-  empty: { padding: "1.5rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.88rem" },
+  cardDate: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  cardDesc: { fontSize: "var(--k-font)", color: "var(--k-ink)", margin: "0.35rem 0", overflowWrap: "anywhere" },
+  cardAmounts: { display: "flex", justifyContent: "space-between", gap: 8, fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontVariantNumeric: "tabular-nums" },
+  cardSource: { fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--k-muted)", marginTop: 4 },
 };

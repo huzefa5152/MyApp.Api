@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdAccountBalanceWallet, MdBusiness, MdRefresh, MdDownload, MdPictureAsPdf, MdPerson } from "react-icons/md";
+import { MdAccountBalanceWallet, MdRefresh, MdDownload, MdPictureAsPdf, MdPerson } from "react-icons/md";
 import { getOutstandingLedger, getOutstandingLedgerExcel } from "../api/reportApi";
 import { getClientsByCompany } from "../api/clientApi";
-import { dropdownStyles } from "../theme";
 import SearchableClientSelect from "../Components/SearchableClientSelect";
+import {
+  PageHeader, CompanyPicker, Button, Field, Card, TableWrap, Alert, EmptyState, Loading,
+} from "../ui/Kit";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
@@ -47,10 +49,9 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const NOW = new Date();
 const YEARS = Array.from({ length: 6 }, (_, i) => NOW.getFullYear() - i);
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const segBtn = (active) => ({ border: "none", background: active ? colors.blue : "transparent", color: active ? "#fff" : colors.textSecondary, padding: "9px 14px", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", minHeight: 40 });
 
 export default function OutstandingLedgerPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { companies, selectedCompany } = useCompany();
   const { has } = usePermissions();
   const canView = has("reports.outstanding.view");
   const canExport = has("reports.outstanding.export");
@@ -144,127 +145,118 @@ export default function OutstandingLedgerPage() {
   };
 
   if (!canView) {
-    return <div style={{ padding: 24, color: colors.textSecondary }}>You don't have permission to view reports.</div>;
+    return <EmptyState icon={MdAccountBalanceWallet}>You don't have permission to view reports.</EmptyState>;
   }
 
+  const labelWithIcon = (Icon, text) => (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Icon size={15} aria-hidden="true" /> {text}</span>
+  );
+
   return (
-    <div style={{ padding: "clamp(12px, 3vw, 24px)" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <MdAccountBalanceWallet size={26} color={colors.blue} />
-        <h1 style={{ margin: 0, fontSize: "clamp(1.2rem, 3vw, 1.6rem)", color: colors.textPrimary }}>Outstanding Ledger</h1>
-      </div>
-      <p style={{ margin: "0 0 16px", color: colors.textSecondary, fontSize: "0.9rem" }}>
-        Per-client receivables — each bill's amount, what's paid, the balance, its payment status and the receipts that settled it.
-      </p>
+    <div>
+      <PageHeader
+        icon={MdAccountBalanceWallet}
+        tone="blue"
+        title="Outstanding Ledger"
+        subtitle="Per-client receivables — each bill's amount, what's paid, the balance, its payment status and the receipts that settled it."
+      />
+
+      {companies.length > 0 && <CompanyPicker label="Company" />}
 
       {/* Controls */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end",
-        background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: 14, marginBottom: 16,
-      }}>
-        <Field label="Company" icon={<MdBusiness size={15} />}>
-          <select
-            style={{ ...dropdownStyles.base, minWidth: "min(200px, 100%)" }}
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Client" icon={<MdPerson size={15} />}>
-          <div style={{ minWidth: "min(280px, 100%)" }}>
-            <SearchableClientSelect
-              clients={clients}
-              value={clientId}
-              onChange={(id) => setClientId(id)}
-              placeholder="All clients"
-              allowClear={true}
-            />
-          </div>
-        </Field>
-        <Field label="Period">
-          <div style={{ display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-            <button type="button" onClick={() => setMode("period")} style={segBtn(mode === "period")}>Month / Year</button>
-            <button type="button" onClick={() => setMode("custom")} style={segBtn(mode === "custom")}>Custom range</button>
-          </div>
-        </Field>
-        {mode === "period" ? (
-          <>
-            <Field label="Year">
-              <select style={dropdownStyles.base} value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
-                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </Field>
-            <Field label="Month">
-              <select style={{ ...dropdownStyles.base, opacity: fullYear ? 0.5 : 1 }} value={month} disabled={fullYear} onChange={(e) => setMonth(parseInt(e.target.value))}>
-                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-              </select>
-            </Field>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: colors.textPrimary, paddingBottom: 8, cursor: "pointer" }}>
-              <input type="checkbox" checked={fullYear} onChange={(e) => setFullYear(e.target.checked)} />
-              Full year
-            </label>
-          </>
-        ) : (
-          <>
-            <Field label="From">
-              <input type="date" style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }} value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
-            </Field>
-            <Field label="To">
-              <input type="date" style={{ ...dropdownStyles.base, ...(rangeInvalid ? { borderColor: "#dc2626" } : {}) }} value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
-            </Field>
-          </>
-        )}
-        <Field label="Status">
-          <div style={seg.group} role="tablist" aria-label="Payment status filter">
-            {STATUSES.map((s) => (
-              <button key={s.value} type="button" role="tab" aria-selected={status === s.value}
-                onClick={() => setStatus(s.value)}
-                style={{ ...seg.btn, ...(status === s.value ? seg.on : seg.off) }}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </Field>
-        <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
-          <button onClick={fetchReport} disabled={loading || rangeInvalid} style={btn(colors.blue)}>
-            <MdRefresh size={16} /> {loading ? "Loading…" : "Refresh"}
-          </button>
-          {canExport && (
+      <Card style={{ marginBottom: "var(--k-gap)" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
+          <Field label={labelWithIcon(MdPerson, "Client")}>
+            <div style={{ minWidth: "min(280px, 100%)" }}>
+              <SearchableClientSelect
+                clients={clients}
+                value={clientId}
+                onChange={(id) => setClientId(id)}
+                placeholder="All clients"
+                allowClear={true}
+                ariaLabel="Client"
+              />
+            </div>
+          </Field>
+          <Field label="Period">
+            <div style={seg.group}>
+              <button type="button" onClick={() => setMode("period")} aria-pressed={mode === "period"} style={{ ...seg.btn, ...(mode === "period" ? seg.on : seg.off) }}>Month / Year</button>
+              <button type="button" onClick={() => setMode("custom")} aria-pressed={mode === "custom"} style={{ ...seg.btn, ...(mode === "custom" ? seg.on : seg.off) }}>Custom range</button>
+            </div>
+          </Field>
+          {mode === "period" ? (
             <>
-              <button onClick={exportExcel} disabled={!report?.rows?.length || !!exporting} style={btn(colors.teal)}>
-                <MdDownload size={16} /> {exporting === "excel" ? "Exporting…" : "Excel"}
-              </button>
-              <button onClick={exportPdf} disabled={!report?.rows?.length || !!exporting} style={btn("#b71c1c")}>
-                <MdPictureAsPdf size={16} /> {exporting === "pdf" ? "Generating…" : "PDF"}
-              </button>
+              <Field label="Year">
+                <select className="k-select" aria-label="Year" style={{ width: "auto" }} value={year} onChange={(e) => setYear(parseInt(e.target.value))}>
+                  {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </Field>
+              <Field label="Month">
+                <select className="k-select" aria-label="Month" style={{ width: "auto", opacity: fullYear ? 0.5 : 1 }} value={month} disabled={fullYear} onChange={(e) => setMonth(parseInt(e.target.value))}>
+                  {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+              </Field>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--k-font)", color: "var(--k-ink)", minHeight: "var(--k-h)", cursor: "pointer" }}>
+                <input type="checkbox" checked={fullYear} onChange={(e) => setFullYear(e.target.checked)} />
+                Full year
+              </label>
+            </>
+          ) : (
+            <>
+              <Field label="From">
+                <input type="date" className="k-input" aria-label="From" style={rangeInvalid ? { borderColor: "#dc2626" } : undefined} value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
+              </Field>
+              <Field label="To">
+                <input type="date" className="k-input" aria-label="To" style={rangeInvalid ? { borderColor: "#dc2626" } : undefined} value={dateTo} min={dateFrom || undefined} onChange={(e) => setDateTo(e.target.value)} />
+              </Field>
             </>
           )}
+          <Field label="Status">
+            <div style={seg.group} role="tablist" aria-label="Payment status filter">
+              {STATUSES.map((s) => (
+                <button key={s.value} type="button" role="tab" aria-selected={status === s.value}
+                  onClick={() => setStatus(s.value)}
+                  style={{ ...seg.btn, ...(status === s.value ? seg.on : seg.off) }}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexWrap: "wrap" }}>
+            <Button variant="primary" icon={MdRefresh} onClick={fetchReport} disabled={loading || rangeInvalid}>
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+            {canExport && (
+              <>
+                <Button variant="teal" icon={MdDownload} onClick={exportExcel} disabled={!report?.rows?.length || !!exporting}>
+                  {exporting === "excel" ? "Exporting…" : "Excel"}
+                </Button>
+                <Button variant="danger" icon={MdPictureAsPdf} onClick={exportPdf} disabled={!report?.rows?.length || !!exporting}>
+                  {exporting === "pdf" ? "Generating…" : "PDF"}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </Card>
 
-      {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", padding: 12, borderRadius: 8, marginBottom: 16 }}>
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
 
       {loading ? (
-        <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>Loading…</div>
+        <Loading>Loading…</Loading>
       ) : report && (
-        <div style={{ background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", borderBottom: `1px solid ${colors.cardBorder}` }}>
-            <div style={{ fontWeight: 700, color: colors.textPrimary }}>{report.companyName}</div>
-            <div style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+        <Card flush style={{ overflow: "hidden" }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--k-line)" }}>
+            <div style={{ fontWeight: 700, color: "var(--k-ink)" }}>{report.companyName}</div>
+            <div style={{ color: "var(--k-muted)", fontSize: "var(--k-td-font)" }}>
               {report.periodLabel} · {report.clientName || clientName || "All clients"} · {STATUSES.find((s) => s.value === status)?.label} · {report.invoiceCount} invoice(s)
             </div>
           </div>
 
           {report.rows.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: colors.textSecondary }}>
+            <EmptyState boxed={false}>
               No {status === "paid" ? "paid" : status === "all" ? "" : "outstanding"} invoices for {report.periodLabel}.
-            </div>
+            </EmptyState>
           ) : isNarrow ? (
             /* ── Mobile: stacked cards ── */
             <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 8px" }}>
@@ -304,12 +296,12 @@ export default function OutstandingLedgerPage() {
             </div>
           ) : (
             /* ── Desktop/tablet: table (scrolls inside its own box) ── */
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: "0.82rem" }}>
+            <TableWrap>
+              <table className="k-table k-table--compact" style={{ minWidth: 900 }}>
                 <thead>
-                  <tr style={{ background: colors.rowAlt }}>
+                  <tr>
                     {["S.No", "P.O #", "Delivery", "Invoice Date", "D.C #", "Bill #", "Amount", "Paid", "Balance", "Status", "Payment Details"].map((h, i) => (
-                      <th key={i} style={{ ...th, textAlign: i >= 6 && i <= 8 ? "right" : "left" }}>{h}</th>
+                      <th key={i} className={i >= 6 && i <= 8 ? "k-num" : undefined}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -317,35 +309,37 @@ export default function OutstandingLedgerPage() {
                   {report.rows.map((row) => {
                     const ss = STATUS_STYLE[row.status] || STATUS_STYLE.Unpaid;
                     return (
-                      <tr key={row.invoiceId} style={{ borderTop: `1px solid ${colors.cardBorder}` }}>
+                      <tr key={row.invoiceId}>
                         <td style={td}>{row.serialNo}</td>
                         <td style={td}>{row.poNumber || "—"}</td>
-                        <td style={td}>{fmtDate(row.deliveryDate)}</td>
-                        <td style={td}>{fmtDate(row.invoiceDate)}</td>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(row.deliveryDate)}</td>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtDate(row.invoiceDate)}</td>
                         <td style={{ ...td, fontFamily: "monospace", fontSize: "0.75rem" }}>{row.dcNumbers || "—"}</td>
-                        <td style={{ ...td, fontWeight: 600, color: colors.blue }}>{row.billNumber}</td>
-                        <td style={tdR}>{money(row.amount)}</td>
-                        <td style={tdR}>{money(row.paid)}</td>
-                        <td style={{ ...tdR, fontWeight: 700, color: row.balance > 0 ? "#b71c1c" : colors.teal }}>{money(row.balance)}</td>
-                        <td style={{ ...td, textAlign: "center" }}>
+                        <td style={{ ...td, fontWeight: 600, color: "var(--k-blue)" }}>{row.billNumber}</td>
+                        <td className="k-num" style={tdR}>{money(row.amount)}</td>
+                        <td className="k-num" style={tdR}>{money(row.paid)}</td>
+                        <td className="k-num" style={{ ...tdR, fontWeight: 700, color: row.balance > 0 ? "#b71c1c" : colors.teal }}>{money(row.balance)}</td>
+                        <td className="is-center" style={td}>
                           <span style={{ background: ss.bg, color: ss.fg, padding: "2px 8px", borderRadius: 6, fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap" }}>{statusText(row.status)}</span>
                         </td>
-                        <td style={{ ...td, maxWidth: 320, fontSize: "0.76rem", color: colors.textSecondary }}>{row.paymentSummary || "—"}</td>
+                        <td style={{ ...td, maxWidth: 320, fontSize: "0.76rem", color: "var(--k-muted)" }}>{row.paymentSummary || "—"}</td>
                       </tr>
                     );
                   })}
-                  <tr style={{ background: colors.totalBg, borderTop: `2px solid ${colors.blue}` }}>
-                    <td style={{ ...td, fontWeight: 800, color: colors.blue }} colSpan={6}>TOTAL</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandAmount)}</td>
-                    <td style={{ ...tdR, fontWeight: 800 }}>{money(report.grandPaid)}</td>
-                    <td style={{ ...tdR, fontWeight: 800, color: colors.blue }}>{money(report.grandBalance)}</td>
-                    <td style={td} colSpan={2}></td>
-                  </tr>
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td style={{ ...totalCell, color: "var(--k-blue)" }} colSpan={6}>TOTAL</td>
+                    <td className="k-num" style={{ ...tdR, ...totalCell }}>{money(report.grandAmount)}</td>
+                    <td className="k-num" style={{ ...tdR, ...totalCell }}>{money(report.grandPaid)}</td>
+                    <td className="k-num" style={{ ...tdR, ...totalCell, color: "var(--k-blue)" }}>{money(report.grandBalance)}</td>
+                    <td style={totalCell} colSpan={2}></td>
+                  </tr>
+                </tfoot>
               </table>
-            </div>
+            </TableWrap>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -393,38 +387,24 @@ function buildLedgerHtml(report) {
   </body></html>`;
 }
 
-function Field({ label, icon, children }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: "0.72rem", fontWeight: 600, color: colors.textSecondary, display: "flex", alignItems: "center", gap: 4 }}>
-        {icon} {label}
-      </label>
-      {children}
-    </div>
-  );
-}
+// Ledger rows top-align (the payment-details cell can wrap to several lines).
+const td = { verticalAlign: "top" };
+const tdR = { ...td, whiteSpace: "nowrap" };
+const totalCell = { fontWeight: 800, background: colors.totalBg, borderTop: `2px solid ${colors.blue}` };
 
-const th = { padding: "7px 10px", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.02em", color: colors.textSecondary, whiteSpace: "nowrap" };
-const td = { padding: "6px 10px", color: colors.textPrimary, verticalAlign: "top" };
-const tdR = { ...td, textAlign: "right", whiteSpace: "nowrap" };
-
-const btn = (bg) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, background: bg, color: "#fff",
-  border: "none", borderRadius: 8, padding: "9px 14px", fontSize: "0.85rem", fontWeight: 600,
-  cursor: "pointer", minHeight: 40,
-});
-
+// Segmented control (the kit has none) — built on the kit tokens so it matches
+// the control height and palette of whichever theme is active.
 const seg = {
-  group: { display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 8, overflow: "hidden", background: "#fff" },
-  btn: { border: "none", padding: "9px 16px", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", minHeight: 40 },
-  on: { background: colors.blue, color: "#fff" },
-  off: { background: "transparent", color: colors.textSecondary },
+  group: { display: "inline-flex", border: "1px solid var(--k-line-strong)", borderRadius: "var(--k-radius)", overflow: "hidden", background: "var(--k-surface)" },
+  btn: { border: "none", borderRadius: 0, padding: "0 14px", fontSize: "var(--k-font-sm)", fontWeight: 600, cursor: "pointer", minHeight: "var(--k-h)", boxShadow: "none", whiteSpace: "nowrap" },
+  on: { background: "var(--k-blue)", color: "#fff" },
+  off: { background: "transparent", color: "var(--k-muted)" },
 };
 
 const card = {
-  box: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.8rem", background: "#fff", display: "flex", flexDirection: "column", gap: 3 },
+  box: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.8rem", background: "var(--k-surface)", display: "flex", flexDirection: "column", gap: 3 },
   top: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
   meta: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(90px, 100%), 1fr))", gap: "0.35rem 0.7rem", marginTop: 4 },
-  lbl: { display: "block", fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary },
-  val: { display: "block", fontSize: "0.84rem", fontWeight: 600, color: colors.textPrimary },
+  lbl: { display: "block", fontSize: "0.6rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--k-muted)" },
+  val: { display: "block", fontSize: "var(--k-td-font)", fontWeight: 600, color: "var(--k-ink)", fontVariantNumeric: "tabular-nums" },
 };

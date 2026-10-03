@@ -1,17 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  MdAdd, MdDelete, MdChevronLeft, MdChevronRight, MdReceiptLong, MdPayments,
-  MdSearch, MdBusiness, MdExpandMore, MdPerson, MdAccountBalanceWallet,
+  MdAdd, MdDelete, MdReceiptLong, MdPayments,
+  MdExpandMore, MdPerson, MdAccountBalanceWallet,
   MdCalendarToday, MdNotes, MdVisibility, MdEdit, MdClose,
-  MdPrint, MdPictureAsPdf,
+  MdPrint, MdPictureAsPdf, MdBusiness,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, dropdownStyles } from "../theme";
+import { colors, formStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
 import StatusBadge from "../Components/StatusBadge";
 import PaymentForm from "../Components/PaymentForm";
@@ -27,6 +26,9 @@ import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
 import { defaultReceiptTemplate, defaultPaymentTemplate } from "../utils/accountingDocTemplates";
 import RichText from "../Components/RichText";
+import {
+  PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, EmptyState, Loading,
+} from "../ui/Kit";
 
 const fmtMoney = (n) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -51,7 +53,7 @@ export default function PaymentsPage({ mode = "receipts" }) {
   const accent = isReceipt ? colors.success : colors.blue;
   const docNoun = isReceipt ? "invoice" : "bill";
 
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { companies, selectedCompany } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const canView = has(`accounting.${dir}.view`);
@@ -147,58 +149,41 @@ export default function PaymentsPage({ mode = "receipts" }) {
   };
 
   if (!canView) {
-    return <div style={{ padding: "2rem", color: colors.textSecondary }}>You don't have permission to view {title.toLowerCase()}.</div>;
+    return <EmptyState icon={Icon}>You don't have permission to view {title.toLowerCase()}.</EmptyState>;
   }
 
   // Sum of what's shown on this page — a quick "money on screen" cue.
   const pageTotal = rows.reduce((s, r) => s + Number(r.amount || 0), 0);
 
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
-      <div style={st.headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <span style={{ ...st.headerIcon, background: `${accent}15`, color: accent }}><Icon size={24} /></span>
-          <div>
-            <h2 style={st.h2}>{title}</h2>
-            <div style={st.subtitle}>{isReceipt ? "Money received from customers" : "Money paid to suppliers"}</div>
-          </div>
-        </div>
-        {canCreate && companyId && (
-          <button style={{ ...st.primaryBtn, background: accent }} onClick={() => setShowForm(true)}>
-            <MdAdd size={18} /> {isReceipt ? "Record Receipt" : "Record Payment"}
-          </button>
+    <div>
+      <PageHeader
+        icon={Icon}
+        tone={isReceipt ? "green" : "blue"}
+        title={title}
+        subtitle={isReceipt ? "Money received from customers" : "Money paid to suppliers"}
+        actions={canCreate && companyId && (
+          <Button variant="primary" icon={MdAdd} onClick={() => setShowForm(true)}>
+            {isReceipt ? "Record Receipt" : "Record Payment"}
+          </Button>
         )}
-      </div>
+      />
 
-      {companies.length > 0 && (
-        <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-          </select>
-        </div>
-      )}
+      {companies.length > 0 && <CompanyPicker />}
 
       {!companyId ? (
-        <div style={st.empty}>Select a company to view {title.toLowerCase()}.</div>
+        <EmptyState icon={MdBusiness}>Select a company to view {title.toLowerCase()}.</EmptyState>
       ) : (
         <>
-          <div style={st.toolbar}>
-            <div style={{ position: "relative", flex: "1 1 240px", minWidth: 0, maxWidth: 360 }}>
-              <MdSearch size={18} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
-              <input
-                style={{ ...dropdownStyles.base, width: "100%", paddingLeft: 34 }}
-                placeholder={`Search ${title.toLowerCase()}…`}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
-              />
-            </div>
+          <Toolbar>
+            <SearchBox
+              placeholder={`Search ${title.toLowerCase()}…`}
+              value={search}
+              onChange={setSearch}
+              onKeyDown={(e) => { if (e.key === "Enter") { setPage(1); fetchRows(1); } }}
+            />
             {tplPicker.canChoose && <PrintTemplateSelect picker={tplPicker} />}
+            <ToolbarSpacer />
             {rows.length > 0 && (
               <div style={st.pageSummary}>
                 <span style={st.pageSummaryCount}>{totalCount} {title.toLowerCase()}</span>
@@ -206,12 +191,12 @@ export default function PaymentsPage({ mode = "receipts" }) {
                 <span>Rs {fmtMoney(pageTotal)} on this page</span>
               </div>
             )}
-          </div>
+          </Toolbar>
 
           {loading ? (
-            <div style={st.empty}>Loading…</div>
+            <Loading>Loading…</Loading>
           ) : rows.length === 0 ? (
-            <div style={st.empty}>No {title.toLowerCase()} yet.</div>
+            <EmptyState icon={Icon}>No {title.toLowerCase()} yet.</EmptyState>
           ) : (
             <div style={st.grid}>
               {rows.map((p) => (
@@ -295,7 +280,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
     p.chequeStatus === "Bounced" ? "danger" : p.chequeStatus === "Cleared" ? "success" : "warning";
 
   return (
-    <div style={st.card}>
+    <section className="k-card" style={st.card}>
       <div style={{ ...st.accentStrip, background: accent }} />
       <div style={st.cardBody}>
         {/* Header: reference + status badges */}
@@ -319,7 +304,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
         {/* Contact */}
         {p.contactName && (
           <div style={st.contactRow}>
-            <MdPerson size={15} style={{ color: colors.textSecondary, flexShrink: 0 }} />
+            <MdPerson size={15} style={{ color: "var(--k-muted)", flexShrink: 0 }} />
             <span style={st.contact}>{p.contactName}</span>
           </div>
         )}
@@ -351,6 +336,7 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
         {count > 0 && (
           <div style={st.allocWrap}>
             <button
+              type="button"
               style={st.allocToggle}
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
@@ -384,42 +370,38 @@ function PayCard({ p, accent, docNoun, canDelete, canEdit, canPrint, tplPicker, 
 
         {/* Footer — View / Print / PDF / Edit / Delete */}
         <div style={st.cardActions}>
-          <button style={st.viewBtn} onClick={onView} title="View details">
-            <MdVisibility size={16} /> View
-          </button>
+          <Button size="sm" icon={MdVisibility} onClick={onView} title="View details">View</Button>
           {canPrint && (
-            <button
-              style={{ ...st.printBtn, ...(tplPicker.noTemplate ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+            <Button
+              size="sm"
+              icon={MdPrint}
               disabled={tplPicker.noTemplate}
               title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print voucher"}
               onClick={onPrint}
             >
-              <MdPrint size={14} /> Print
-            </button>
+              Print
+            </Button>
           )}
           {canPrint && (
-            <button
-              style={{ ...st.pdfBtn, ...((tplPicker.noTemplate || exportingId === p.id) ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+            <Button
+              size="sm"
+              icon={MdPictureAsPdf}
               disabled={tplPicker.noTemplate || !!exportingId}
               title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}
               onClick={onExportPdf}
             >
-              <MdPictureAsPdf size={14} /> PDF
-            </button>
+              PDF
+            </Button>
           )}
           {canEdit && !p.isCancelled && (
-            <button style={st.editBtn} onClick={onEdit} title="Edit">
-              <MdEdit size={16} /> Edit
-            </button>
+            <Button size="sm" icon={MdEdit} onClick={onEdit} title="Edit">Edit</Button>
           )}
           {canDelete && (
-            <button style={st.delBtn} onClick={onDelete} title="Delete">
-              <MdDelete size={16} /> Delete
-            </button>
+            <Button size="sm" variant="danger" icon={MdDelete} onClick={onDelete} title="Delete">Delete</Button>
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -430,13 +412,13 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
     <div style={vd.row}><span style={vd.k}>{label}</span><span style={vd.v}>{value}</span></div>
   );
   return (
-    <div style={vd.backdrop} onClick={onClose}>
-      <div style={vd.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={vd.header}>
-          <span style={{ ...vd.ref, color: accent }}>{p.reference}</span>
-          <button style={vd.close} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
+    <div style={formStyles.backdrop} onClick={onClose}>
+      <div style={{ ...formStyles.modal, maxWidth: 460, cursor: "default" }} onClick={(e) => e.stopPropagation()}>
+        <div style={formStyles.header}>
+          <h5 style={formStyles.title}>{p.reference}</h5>
+          <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={18} /></button>
         </div>
-        <div style={vd.body}>
+        <div style={formStyles.body}>
           <div style={{ ...vd.amount, color: accent }}>Rs {fmtMoney(p.amount)}</div>
           <Row label="Date" value={fmtDate(p.date)} />
           <Row label="Contact" value={p.contactName} />
@@ -445,15 +427,15 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           {p.chequeNumber && <Row label="Cheque #" value={`${p.chequeNumber}${p.chequeDate ? ` · ${fmtDate(p.chequeDate)}` : ""}`} />}
           <Row label="Status" value={p.isCancelled ? "Cancelled" : (p.chequeStatus && p.chequeStatus !== "None" ? p.chequeStatus : "Active")} />
           {p.description && <Row label="Description" value={p.description} />}
-          {p.notes && <div style={{ marginTop: 12 }}><div style={vd.k}>Notes</div><div style={{ marginTop: 5, padding: 10, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={p.notes} /></div></div>}
+          {p.notes && <div style={{ marginTop: 12 }}><div style={vd.k}>Notes</div><div style={{ marginTop: 5, padding: 10, border: "1px solid var(--k-line)", borderRadius: 8 }}><RichText text={p.notes} /></div></div>}
           {allocs.length > 0 && (
             <div style={{ marginTop: "0.6rem" }}>
               <div style={vd.k}>{docNoun}s settled</div>
               <div style={{ marginTop: 4 }}>
                 {allocs.map((a) => (
                   <div key={a.id} style={vd.allocRow}>
-                    <span>{a.documentLabel || `${docNoun} #${a.invoiceNumber ?? a.purchaseBillNumber ?? ""}`}</span>
-                    <span style={{ fontWeight: 700 }}>Rs {fmtMoney(a.amount)}</span>
+                    <span style={{ overflowWrap: "anywhere" }}>{a.documentLabel || `${docNoun} #${a.invoiceNumber ?? a.purchaseBillNumber ?? ""}`}</span>
+                    <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>Rs {fmtMoney(a.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -465,8 +447,8 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
             </div>
           )}
         </div>
-        <div style={vd.footer}>
-          <button style={vd.closeBtn} onClick={onClose}>Close</button>
+        <div style={formStyles.footer}>
+          <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
@@ -474,72 +456,49 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
 }
 
 const st = {
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
-  headerIcon: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 12, flexShrink: 0 },
-  h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary, lineHeight: 1.1 },
-  subtitle: { fontSize: "0.8rem", color: colors.textSecondary, marginTop: 2 },
-  primaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", minHeight: 44, borderRadius: 8, border: "none", color: "#fff", fontWeight: 700, cursor: "pointer" },
-  toolbar: { display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" },
-  pageSummary: { display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: colors.textSecondary, flexWrap: "wrap" },
-  pageSummaryCount: { fontWeight: 700, color: colors.textPrimary },
+  pageSummary: { display: "flex", alignItems: "center", gap: 6, fontSize: "var(--k-font-sm)", color: "var(--k-muted)", flexWrap: "wrap", fontVariantNumeric: "tabular-nums" },
+  pageSummaryCount: { fontWeight: 700, color: "var(--k-ink)" },
   pageSummaryDot: { opacity: 0.5 },
 
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))", gap: "1rem", alignItems: "start" },
-  card: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.05)", position: "relative", overflow: "hidden", display: "flex" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))", gap: "var(--k-gap)", alignItems: "start" },
+  // marginTop: 0 cancels the kit's ".k-card + .k-card" stacking gap — these sit in a grid.
+  card: { position: "relative", overflow: "hidden", display: "flex", marginTop: 0 },
   accentStrip: { width: 5, flexShrink: 0 },
-  cardBody: { padding: "0.95rem 1.05rem", flex: 1, minWidth: 0 },
+  cardBody: { padding: "var(--k-card-pad)", flex: 1, minWidth: 0 },
 
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 },
-  ref: { fontWeight: 800, fontSize: "0.92rem", letterSpacing: "0.3px" },
+  ref: { fontWeight: 800, fontSize: "calc(var(--k-font) + 0.02rem)", letterSpacing: "0.3px" },
   badges: { display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" },
 
-  amount: { fontSize: "1.5rem", fontWeight: 800, marginTop: 6, lineHeight: 1.1, wordBreak: "break-word" },
+  amount: { fontSize: "calc(var(--k-stat-value) + 0.15rem)", fontWeight: 800, marginTop: 6, lineHeight: 1.1, wordBreak: "break-word", fontVariantNumeric: "tabular-nums" },
   rs: { fontSize: "0.85rem", fontWeight: 700, opacity: 0.7 },
 
   contactRow: { display: "flex", alignItems: "center", gap: 5, marginTop: 8 },
-  contact: { fontSize: "0.9rem", color: colors.textPrimary, fontWeight: 700, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
+  contact: { fontSize: "var(--k-font)", color: "var(--k-ink)", fontWeight: 700, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" },
 
   metaGrid: { display: "flex", flexWrap: "wrap", gap: "4px 12px", marginTop: 8 },
-  metaItem: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.78rem", color: colors.textSecondary },
+  metaItem: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
 
-  bankLine: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6, fontSize: "0.76rem", color: colors.textSecondary, fontStyle: "italic" },
-  descRow: { display: "flex", gap: 5, marginTop: 8, fontSize: "0.8rem", color: colors.textSecondary, lineHeight: 1.4 },
+  bankLine: { display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6, fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontStyle: "italic" },
+  descRow: { display: "flex", gap: 5, marginTop: 8, fontSize: "var(--k-font-sm)", color: "var(--k-muted)", lineHeight: 1.4 },
 
-  allocWrap: { marginTop: 10, borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: 8 },
-  allocToggle: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minHeight: 36, padding: "0.3rem 0", background: "none", border: "none", cursor: "pointer", font: "inherit", color: colors.textPrimary },
-  allocToggleLabel: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.82rem", fontWeight: 700 },
-  allocToggleHint: { fontSize: "0.72rem", color: colors.textSecondary },
+  allocWrap: { marginTop: 10, borderTop: "1px dashed var(--k-line)", paddingTop: 8 },
+  allocToggle: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minHeight: 36, padding: "0.3rem 0", background: "none", border: "none", boxShadow: "none", cursor: "pointer", font: "inherit", color: "var(--k-ink)" },
+  allocToggleLabel: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: "var(--k-font-sm)", fontWeight: 700 },
+  allocToggleHint: { fontSize: "0.72rem", color: "var(--k-muted)" },
   allocList: { marginTop: 4, display: "flex", flexDirection: "column", gap: 1 },
-  allocRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "0.4rem 0.5rem", borderRadius: 6, background: colors.inputBg, fontSize: "0.8rem" },
-  allocLabel: { color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  allocAmt: { color: colors.textSecondary, fontWeight: 700, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
-  allocTotalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "0.45rem 0.5rem 0.1rem", fontSize: "0.82rem", fontWeight: 800, color: colors.textPrimary, fontVariantNumeric: "tabular-nums" },
+  allocRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "0.4rem 0.5rem", borderRadius: 6, background: "var(--k-surface-2)", fontSize: "var(--k-font-sm)" },
+  allocLabel: { color: "var(--k-ink)", minWidth: 0, overflowWrap: "anywhere" },
+  allocAmt: { color: "var(--k-muted)", fontWeight: 700, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  allocTotalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "0.45rem 0.5rem 0.1rem", fontSize: "var(--k-font-sm)", fontWeight: 800, color: "var(--k-ink)", fontVariantNumeric: "tabular-nums" },
 
   cardActions: { display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10, flexWrap: "wrap" },
-  viewBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  printBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#4527a0", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  pdfBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#ad1457", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  editBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: "#e65100", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  delBtn: { display: "inline-flex", alignItems: "center", gap: 5, minHeight: 36, padding: "0.35rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },
-  pageBtn: { display: "inline-flex", alignItems: "center", gap: 4, padding: "0.45rem 0.8rem", minHeight: 44, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, fontWeight: 600, cursor: "pointer" },
-  pageInfo: { fontSize: "0.85rem", color: colors.textSecondary },
-  empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
 };
 
 const vd = {
-  backdrop: { position: "fixed", inset: 0, background: "rgba(15,20,30,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "2vh 1rem" },
-  modal: { background: "#fff", borderRadius: 12, width: "min(460px, 100%)", maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 40px rgba(0,0,0,0.2)" },
-  header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.9rem 1.1rem", borderBottom: `1px solid ${colors.cardBorder}` },
-  ref: { fontWeight: 800, fontSize: "1rem" },
-  close: { background: "transparent", border: "none", cursor: "pointer", color: colors.textSecondary, display: "grid", placeItems: "center" },
-  body: { padding: "1rem 1.1rem", overflowY: "auto" },
-  amount: { fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.75rem" },
-  row: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.3rem 0", borderBottom: `1px solid ${colors.inputBg}`, fontSize: "0.86rem" },
-  k: { color: colors.textSecondary, fontWeight: 600 },
-  v: { color: colors.textPrimary, fontWeight: 600, textAlign: "right" },
-  allocRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.25rem 0.5rem", background: colors.inputBg, borderRadius: 6, marginBottom: 4, fontSize: "0.82rem" },
-  footer: { display: "flex", justifyContent: "flex-end", padding: "0.75rem 1.1rem", borderTop: `1px solid ${colors.cardBorder}` },
-  closeBtn: { padding: "0.5rem 1rem", minHeight: 44, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textPrimary, fontWeight: 700, cursor: "pointer" },
+  amount: { fontSize: "1.5rem", fontWeight: 800, marginBottom: "0.75rem", fontVariantNumeric: "tabular-nums" },
+  row: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.3rem 0", borderBottom: "1px solid var(--k-surface-3)", fontSize: "var(--k-font)" },
+  k: { color: "var(--k-muted)", fontWeight: 600 },
+  v: { color: "var(--k-ink)", fontWeight: 600, textAlign: "right", overflowWrap: "anywhere" },
+  allocRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "0.25rem 0.5rem", background: "var(--k-surface-2)", borderRadius: 6, marginBottom: 4, fontSize: "var(--k-font-sm)", fontVariantNumeric: "tabular-nums" },
 };

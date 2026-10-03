@@ -4,11 +4,7 @@ import SelectDropdown from "./SelectDropdown";
 import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import { formStyles, modalSizes } from "../theme";
-
-const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1",
-};
+import { Field } from "../ui/Kit";
 
 // Create + edit a Withholding Tax Receipt (customer-issued tax certificate).
 // Single-amount document: Date + Customer + Amount + Description + an optional
@@ -68,42 +64,40 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div ref={errRef} style={s.err}>{error}</div>}
-            <div style={s.row}>
-              <div style={{ flex: "1 1 100%", minWidth: 0 }}>
-                <SelectDropdown
-                  label="Customer"
-                  endpoint={`/clients/company/${companyId}`}
-                  value={client}
-                  onChange={(v) => setClient(v)}
-                  placeholder="Choose customer"
-                />
-              </div>
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            <div style={{ marginBottom: "1rem" }}>
+              <SelectDropdown
+                label="Customer"
+                endpoint={`/clients/company/${companyId}`}
+                value={client}
+                onChange={(v) => setClient(v)}
+                placeholder="Choose customer"
+              />
             </div>
-            <div style={s.row}>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={s.label}>Date</label>
-                <input type="date" style={s.input} value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={s.label}>Amount (PKR)</label>
+            <div className="k-form-grid" style={{ marginBottom: "1rem", alignItems: "end" }}>
+              <Field label="Date">
+                <input type="date" className="k-input" value={date} onChange={(e) => setDate(e.target.value)} />
+              </Field>
+              <Field label="Amount (PKR)">
                 <input
                   type="number" min="0" step="0.01" inputMode="decimal"
-                  style={{ ...s.input, textAlign: "right" }}
+                  className="k-input"
+                  style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
                 />
-              </div>
+              </Field>
             </div>
             <div style={{ marginBottom: "1rem" }}>
-              <label style={s.label}>Description <span style={s.opt}>(optional — certificate ref, section, period…)</span></label>
-              <textarea
-                style={{ ...s.input, minHeight: 56, resize: "vertical" }}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. WHT u/s 153(1)(a) — May 2026"
-              />
+              <Field label={<>Description <span style={{ fontWeight: 400 }}>(optional — certificate ref, section, period…)</span></>}>
+                <textarea
+                  className="k-textarea"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. WHT u/s 153(1)(a) — May 2026"
+                />
+              </Field>
             </div>
 
             <AttachmentManager
@@ -126,11 +120,3 @@ export default function WithholdingTaxReceiptForm({ onClose, onSaved, companyId,
     </div>
   );
 }
-
-const s = {
-  row: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.85rem 1rem", marginBottom: "1rem", alignItems: "end" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  opt: { color: colors.textSecondary, fontWeight: 400 },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-};

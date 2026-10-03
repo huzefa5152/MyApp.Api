@@ -7,8 +7,9 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
-import useIsNarrow from "../hooks/useIsNarrow";
+import { colors, formStyles, modalSizes } from "../theme";
+import SearchableSelect from "../Components/SearchableSelect";
+import { PageHeader, CompanyPicker, Button, IconButton, Card, EmptyState, Loading } from "../ui/Kit";
 import useScrollToError from "../hooks/useScrollToError";
 import {
   getCoaTree, seedWholesaleCoa, createAccountGroup, createAccount,
@@ -55,10 +56,9 @@ const money = (n) => {
  * one helper, so the tree and the totals can't disagree.
  */
 export default function ChartOfAccountsPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
+  const { companies, selectedCompany } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
-  const isNarrow = useIsNarrow();
   const canView = has("accounting.coa.view");
   const canManage = has("accounting.coa.manage");
   const canClosePeriod = has("accounting.gl.manage");
@@ -140,9 +140,9 @@ export default function ChartOfAccountsPage() {
 
   if (!canView) {
     return (
-      <div style={{ padding: "2rem", color: colors.textSecondary }}>
+      <EmptyState icon={MdAccountTree}>
         You don't have permission to view the chart of accounts.
-      </div>
+      </EmptyState>
     );
   }
 
@@ -155,10 +155,8 @@ export default function ChartOfAccountsPage() {
     return null;
   };
 
-  // Icon buttons: a real 44px tap target on touch, tighter on desktop where the
-  // tree is dense and a pointer is precise.
-  const iconBtn = { ...st.iconBtn, width: isNarrow ? 44 : 28, height: isNarrow ? 44 : 28 };
-
+  // Icon buttons: IconButton grows to a 40px tap target on touch (kit rule),
+  // and stays tight on desktop where the tree is dense and a pointer is precise.
   const renderNode = (node, depth = 0, creditNormal = false) => (
     <div key={node.id} style={{ marginLeft: depth ? 14 : 0, marginTop: depth ? 6 : 12 }}>
       <div style={st.groupHeader}>
@@ -170,9 +168,7 @@ export default function ChartOfAccountsPage() {
         </span>
         <span style={st.groupTotal}>{money((creditNormal ? -1 : 1) * (node.balanceTotal ?? 0))}</span>
         {canManage && !node.isSystem && (
-          <button style={iconBtn} title="Delete group" aria-label={`Delete group ${node.name}`} onClick={() => handleDeleteGroup(node)}>
-            <MdDelete size={15} />
-          </button>
+          <IconButton danger icon={MdDelete} size={15} label={`Delete group ${node.name}`} title="Delete group" onClick={() => handleDeleteGroup(node)} />
         )}
       </div>
 
@@ -194,19 +190,15 @@ export default function ChartOfAccountsPage() {
               behind it, so it gets no actions. */}
           {canManage && a.id > 0 && (
             <span style={st.rowActions}>
-              <button
-                style={iconBtn} title="Edit" aria-label={`Edit ${a.name}`}
+              <IconButton
+                icon={MdEdit} size={14} label={`Edit ${a.name}`} title="Edit"
                 onClick={(e) => { e.stopPropagation(); setForm({ kind: "account", ...a }); }}
-              >
-                <MdEdit size={14} />
-              </button>
+              />
               {!a.isControlAccount && (
-                <button
-                  style={iconBtn} title="Delete" aria-label={`Delete ${a.name}`}
+                <IconButton
+                  danger icon={MdDelete} size={14} label={`Delete ${a.name}`} title="Delete"
                   onClick={(e) => { e.stopPropagation(); handleDeleteAccount(a); }}
-                >
-                  <MdDelete size={14} />
-                </button>
+                />
               )}
             </span>
           )}
@@ -218,91 +210,79 @@ export default function ChartOfAccountsPage() {
   );
 
   const Column = ({ title, nodes }) => (
-    <div style={st.column}>
-      <div style={st.colHeader}>{title}</div>
+    // marginTop: 0 cancels the kit's ".k-card + .k-card" stacking gap — the columns sit in a grid.
+    <Card title={title} style={{ marginTop: 0 }}>
       {nodes?.length
         ? nodes.map((n) => renderNode(n, 0, isCreditNormal(firstAcctType(n))))
         : <div style={st.emptyCol}>No groups yet.</div>}
-    </div>
+    </Card>
+  );
+
+  const glChips = companyId && glStatus && (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+      <span style={st.glChip}>
+        <MdReceiptLong size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+        {(glStatus.entryCount ?? 0).toLocaleString()} ledger entries
+      </span>
+      {/* Every entry is refused unless it balances, so this can only be
+          false if something wrote around the service. Say so here rather
+          than letting a report discover it later. */}
+      {glStatus.isBalanced === false && (
+        <span style={st.glChipWarn} title="Total debits and credits do not match">unbalanced</span>
+      )}
+      {glStatus.lockDate && (
+        <span style={st.lockedChip}>
+          <MdLock size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />
+          closed to {new Date(glStatus.lockDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+        </span>
+      )}
+      {canClosePeriod && (
+        <Button size="sm" onClick={() => setPeriodOpen(true)}>
+          {glStatus.lockDate ? "Change period" : "Close a period"}
+        </Button>
+      )}
+    </span>
   );
 
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
-      <div style={st.headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          <MdAccountTree size={26} color={colors.blue} />
-          <h2 style={st.h2}>Chart of Accounts</h2>
-          {companyId && glStatus && (
-            <>
-              <span style={st.glChip}>
-                <MdReceiptLong size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-                {(glStatus.entryCount ?? 0).toLocaleString()} ledger entries
-              </span>
-              {/* Every entry is refused unless it balances, so this can only be
-                  false if something wrote around the service. Say so here rather
-                  than letting a report discover it later. */}
-              {glStatus.isBalanced === false && (
-                <span style={st.glChipWarn} title="Total debits and credits do not match">unbalanced</span>
-              )}
-              {glStatus.lockDate && (
-                <span style={st.lockedChip}>
-                  <MdLock size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />
-                  closed to {new Date(glStatus.lockDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                </span>
-              )}
-              {canClosePeriod && (
-                <button style={st.linkBtn} onClick={() => setPeriodOpen(true)}>
-                  {glStatus.lockDate ? "Change period" : "Close a period"}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        {canManage && companyId && !isEmpty && (
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button style={st.secondaryBtn} onClick={() => setForm({ kind: "group", statement: "BalanceSheet" })}>
-              <MdAdd size={16} /> New Group
-            </button>
-            <button style={st.primaryBtn} onClick={() => setForm({ kind: "account" })} disabled={flatGroups.length === 0}>
-              <MdAdd size={16} /> New Account
-            </button>
-          </div>
+    <div>
+      <PageHeader
+        icon={MdAccountTree}
+        tone="blue"
+        title="Chart of Accounts"
+        subtitle={glChips || undefined}
+        actions={canManage && companyId && !isEmpty && (
+          <>
+            <Button icon={MdAdd} onClick={() => setForm({ kind: "group", statement: "BalanceSheet" })}>
+              New Group
+            </Button>
+            <Button variant="primary" icon={MdAdd} onClick={() => setForm({ kind: "account" })} disabled={flatGroups.length === 0}>
+              New Account
+            </Button>
+          </>
         )}
-      </div>
+      />
 
-      {companies.length > 0 && (
-        <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <MdBusiness size={20} color={colors.blue} />
-          <select
-            style={dropdownStyles.base}
-            aria-label="Company"
-            value={selectedCompany?.id || ""}
-            onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-          >
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-          </select>
-        </div>
-      )}
+      {companies.length > 0 && <CompanyPicker />}
 
       {!companyId ? (
-        <div style={st.empty}>Select a company to view its chart of accounts.</div>
+        <EmptyState icon={MdBusiness}>Select a company to view its chart of accounts.</EmptyState>
       ) : loading ? (
-        <div style={st.empty}>Loading…</div>
+        <Loading>Loading…</Loading>
       ) : isEmpty ? (
-        <div style={st.seedBox}>
-          <MdAutoAwesome size={32} color={colors.teal} />
-          <h3 style={{ margin: "0.5rem 0", color: colors.textPrimary }}>No chart of accounts yet</h3>
-          <p style={{ color: colors.textSecondary, maxWidth: 460, textAlign: "center" }}>
-            Start with the <strong>Wholesale / Distribution</strong> preset — Bank &amp; Cash, A/R, A/P,
-            Inventory, Input/Output Sales Tax, Capital, Sales, Cost of goods sold and the common
-            expense categories, ready to use. You can rename, add to or prune it afterwards.
-          </p>
-          {canManage && (
-            <button style={st.primaryBtn} onClick={handleSeed} disabled={seeding}>
-              <MdAutoAwesome size={16} /> {seeding ? "Seeding…" : "Seed wholesale preset"}
-            </button>
+        <EmptyState
+          icon={MdAutoAwesome}
+          title="No chart of accounts yet"
+          action={canManage && (
+            <Button variant="primary" icon={MdAutoAwesome} onClick={handleSeed} disabled={seeding}>
+              {seeding ? "Seeding…" : "Seed wholesale preset"}
+            </Button>
           )}
-        </div>
+        >
+          Start with the <strong>Wholesale / Distribution</strong> preset — Bank &amp; Cash, A/R, A/P,
+          Inventory, Input/Output Sales Tax, Capital, Sales, Cost of goods sold and the common
+          expense categories, ready to use. You can rename, add to or prune it afterwards.
+        </EmptyState>
       ) : (
         <div style={st.grid}>
           <Column title="Balance Sheet" nodes={tree.balanceSheet} />
@@ -506,7 +486,7 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                 <div style={formStyles.formGroup}>
                   <label style={formStyles.label}>Statement</label>
                   <select
-                    style={{ ...dropdownStyles.base, width: "100%" }}
+                    className="k-select"
                     value={statement}
                     onChange={(e) => setStatement(e.target.value)}
                     disabled={!!parentGroupId}
@@ -518,10 +498,13 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                 </div>
                 <div style={formStyles.formGroup}>
                   <label style={formStyles.label}>Parent group (optional)</label>
-                  <select style={{ ...dropdownStyles.base, width: "100%" }} value={parentGroupId} onChange={(e) => setParentGroupId(e.target.value)}>
-                    <option value="">— Top level —</option>
-                    {flatGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    items={flatGroups}
+                    value={parentGroupId}
+                    onChange={(id) => setParentGroupId(id === "" || id == null ? "" : String(id))}
+                    placeholder="— Top level —"
+                    ariaLabel="Parent group"
+                  />
                 </div>
               </>
             )}
@@ -531,9 +514,14 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                 <div style={st.formGrid}>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Group</label>
-                    <select style={{ ...dropdownStyles.base, width: "100%" }} value={accountGroupId} onChange={(e) => setAccountGroupId(e.target.value)}>
-                      {flatGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-                    </select>
+                    <SearchableSelect
+                      items={flatGroups}
+                      value={accountGroupId}
+                      onChange={(id) => setAccountGroupId(id === "" || id == null ? "" : String(id))}
+                      allowClear={false}
+                      placeholder="Pick a group"
+                      ariaLabel="Group"
+                    />
                   </div>
 
                   <div style={formStyles.formGroup}>
@@ -544,7 +532,7 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                         <div style={st.fieldHint}>Fixed after creation — reclassifying an account would rewrite its history.</div>
                       </>
                     ) : (
-                      <select style={{ ...dropdownStyles.base, width: "100%" }} value={accountType} onChange={(e) => setAccountType(e.target.value)}>
+                      <select className="k-select" value={accountType} onChange={(e) => setAccountType(e.target.value)}>
                         {ACCOUNT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
                     )}
@@ -563,7 +551,7 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                         <div style={st.fieldHint}>Fixed after creation.</div>
                       </>
                     ) : (
-                      <select style={{ ...dropdownStyles.base, width: "100%" }} value={controlType} onChange={(e) => setControlType(e.target.value)}>
+                      <select className="k-select" value={controlType} onChange={(e) => setControlType(e.target.value)}>
                         {CONTROL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
                     )}
@@ -582,7 +570,7 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
                   </div>
                   <div style={formStyles.formGroup}>
                     <label style={formStyles.label}>Side</label>
-                    <select style={{ ...dropdownStyles.base, width: "100%" }} value={isDebit ? "debit" : "credit"} onChange={(e) => setIsDebit(e.target.value === "debit")}>
+                    <select className="k-select" value={isDebit ? "debit" : "credit"} onChange={(e) => setIsDebit(e.target.value === "debit")}>
                       <option value="debit">Debit</option>
                       <option value="credit">Credit</option>
                     </select>
@@ -625,37 +613,25 @@ function CoaForm({ form, companyId, flatGroups, onClose, onSaved }) {
 }
 
 const st = {
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" },
-  h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary },
-  glChip: { fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#eef2ff", border: `1px solid ${colors.cardBorder}`, padding: "3px 10px", borderRadius: 12, whiteSpace: "nowrap" },
+  glChip: { fontSize: "0.72rem", fontWeight: 700, color: "var(--k-blue)", background: "#eef2ff", border: "1px solid var(--k-line)", padding: "3px 10px", borderRadius: 12, whiteSpace: "nowrap" },
   glChipWarn: { fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", color: "#b71c1c", background: "#ffebee", border: "1px solid #ffcdd2", padding: "3px 10px", borderRadius: 12 },
   lockedChip: { fontSize: "0.7rem", fontWeight: 700, color: "#8a5a00", background: "#fff3cd", border: "1px solid #ffe69c", padding: "3px 9px", borderRadius: 12, whiteSpace: "nowrap" },
-  linkBtn: { padding: "0.3rem 0.7rem", minHeight: 36, borderRadius: 10, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.74rem", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
-  primaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", minHeight: 44, borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
-  secondaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.55rem 1rem", minHeight: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontWeight: 700, cursor: "pointer", boxShadow: "none" },
   // auto-fit collapses the two statement columns to one on a phone with no
   // media query; min() keeps it from forcing horizontal scroll at 375px.
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: "1rem", alignItems: "start" },
-  column: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.9rem", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", minWidth: 0 },
-  colHeader: { fontSize: "0.8rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: colors.blue, borderBottom: `2px solid ${colors.cardBorder}`, paddingBottom: 6, marginBottom: 4 },
-  groupHeader: { display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: `1px solid ${colors.cardBorder}` },
-  groupName: { fontWeight: 800, color: colors.textPrimary, fontSize: "0.9rem", flex: 1, minWidth: 0, overflowWrap: "anywhere" },
-  groupTotal: { fontWeight: 700, color: colors.textSecondary, fontSize: "0.82rem", whiteSpace: "nowrap" },
-  accountRow: { display: "flex", alignItems: "center", gap: 6, padding: "3px 0 3px 14px", fontSize: "0.85rem" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: "var(--k-gap)", alignItems: "start" },
+  groupHeader: { display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "1px solid var(--k-line)" },
+  groupName: { fontWeight: 800, color: "var(--k-ink)", fontSize: "var(--k-font)", flex: 1, minWidth: 0, overflowWrap: "anywhere" },
+  groupTotal: { fontWeight: 700, color: "var(--k-muted)", fontSize: "var(--k-td-font)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
+  accountRow: { display: "flex", alignItems: "center", gap: 6, padding: "3px 0 3px 14px", fontSize: "var(--k-td-font)" },
   // Account names are operator-supplied: wrap them rather than truncating, so
   // two that share a prefix can never render identically.
-  accName: { flex: 1, minWidth: 0, color: colors.textPrimary, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", overflowWrap: "anywhere" },
-  code: { fontFamily: "monospace", fontSize: "0.72rem", color: colors.textSecondary, background: colors.inputBg, padding: "0 4px", borderRadius: 4 },
+  accName: { flex: 1, minWidth: 0, color: "var(--k-ink)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", overflowWrap: "anywhere" },
+  code: { fontFamily: "monospace", fontSize: "0.72rem", color: "var(--k-muted)", background: "var(--k-surface-2)", padding: "0 4px", borderRadius: 4 },
   ctrlBadge: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#e3f2fd", color: "#0d47a1", padding: "1px 5px", borderRadius: 10 },
   inactiveBadge: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#eceff1", color: "#607d8b", padding: "1px 5px", borderRadius: 10 },
-  accAmt: { color: colors.textSecondary, fontSize: "0.8rem", minWidth: 70, textAlign: "right", whiteSpace: "nowrap" },
+  accAmt: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", minWidth: 70, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" },
   rowActions: { display: "flex", gap: 2, flexShrink: 0 },
-  // placeItems + padding:0 + boxShadow:none override the global button rule in
-  // index.css, which would otherwise off-centre the glyph and add a shadow.
-  iconBtn: { display: "grid", placeItems: "center", padding: 0, borderRadius: 6, border: "none", background: "transparent", color: colors.textSecondary, cursor: "pointer", boxShadow: "none" },
   formGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" },
-  fieldHint: { fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, lineHeight: 1.4 },
-  seedBox: { display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem", padding: "2.5rem 1rem", background: colors.cardBg, border: `1px dashed ${colors.inputBorder}`, borderRadius: 12 },
-  empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
-  emptyCol: { padding: "1rem", color: colors.textSecondary, fontSize: "0.85rem" },
+  fieldHint: { fontSize: "0.72rem", color: "var(--k-muted)", marginTop: 4, lineHeight: 1.4 },
+  emptyCol: { padding: "1rem", color: "var(--k-muted)", fontSize: "var(--k-font)" },
 };

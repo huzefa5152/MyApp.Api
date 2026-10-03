@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import httpClient from "../api/httpClient";
-import { dropdownStyles } from "../theme";
+import SearchableSelect from "./SearchableSelect";
 
+/*
+ * Endpoint-backed picker. Fetches its options from `endpoint` and renders them in the
+ * shared searchable dropdown (SearchableSelect), so it looks like every other picker in
+ * every theme. `onChange` still receives the full picked option (or null when cleared).
+ * `className` is accepted for compatibility; the look now comes from the kit tokens.
+ */
 export default function SelectDropdown({
   label,
   endpoint,
@@ -10,6 +16,7 @@ export default function SelectDropdown({
   placeholder = "Select an option",
   optionLabelKey = "name",
   optionValueKey = "id",
+  // eslint-disable-next-line no-unused-vars
   className,
 }) {
   const [options, setOptions] = useState([]);
@@ -38,49 +45,21 @@ export default function SelectDropdown({
     fetchOptions();
   }, [endpoint]);
 
-  const useThemeStyle = className === "" || className === undefined;
-
   return (
-    <div>
-      {label && (
-        <label
-          style={{
-            display: "block",
-            marginBottom: "0.35rem",
-            fontWeight: 600,
-            fontSize: "0.85rem",
-            color: "#5f6d7e",
-          }}
-        >
-          {label}
-        </label>
-      )}
-      <select
-        className={useThemeStyle ? undefined : className}
-        style={useThemeStyle ? { ...dropdownStyles.base, width: "100%" } : undefined}
+    <div className="k-field">
+      {label && <label className="k-field__label">{label}</label>}
+      <SearchableSelect
+        items={options}
         value={value?.[optionValueKey] || ""}
-        onChange={(e) => {
-          const selected = options.find(
-            (opt) => String(opt[optionValueKey]) === e.target.value
-          );
-          onChange(selected || null);
-        }}
+        onChange={(id, picked) => onChange(picked || null)}
+        valueKey={optionValueKey}
+        labelKey={optionLabelKey}
+        placeholder={loading ? "Loading..." : placeholder}
         disabled={loading || !!error}
-      >
-        <option value="">
-          {loading ? "Loading..." : placeholder}
-        </option>
-        {options.map((opt) => (
-          <option key={opt[optionValueKey]} value={opt[optionValueKey]}>
-            {opt[optionLabelKey]}
-          </option>
-        ))}
-      </select>
-      {error && (
-        <div style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.25rem" }}>
-          {error}
-        </div>
-      )}
+        loading={loading}
+        ariaLabel={label || placeholder}
+      />
+      {error && <span className="k-field__error" role="alert">{error}</span>}
     </div>
   );
 }
