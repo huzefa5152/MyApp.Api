@@ -516,6 +516,69 @@ export default function ImportGuidePage() {
           the bank, exactly as paying a purchase bill does.
         </p>
 
+        <h3 style={st.h3}>When to settle a GD</h3>
+        <p style={st.p}>
+          Saving a GD already put the goods, their cost and the claimable tax on the books, on
+          the GD date. The one thing still open is <strong>what you owe for it</strong>: the
+          figure in the Credited column (landed cost plus the sales tax, value-added tax and
+          income tax paid at import). Settling records the money going out, so the bank and
+          Import Clearing match what really happened. The rule is simple:{" "}
+          <strong>settle when the money actually leaves, dated the day it left, from the
+          account it left.</strong>
+        </p>
+        <ul style={st.ul}>
+          <li style={st.li}>
+            <strong>You paid duty and taxes to customs yourself</strong> (bank / e-payment
+            before release): settle that amount, dated the payment date, from that bank
+            account. This is usually on or just before the GD date.
+          </li>
+          <li style={st.li}>
+            <strong>The clearing agent paid and will bill you:</strong> do not settle yet. The
+            GD rightly shows as owed until you pay the agent; then settle with the agent's
+            name and the date you paid them.
+          </li>
+          <li style={st.li}>
+            <strong>The goods themselves</strong> (the supplier's invoice, by LC or TT) are
+            part of the same figure. Settle that part when the bank sends the payment.
+          </li>
+          <li style={st.li}>
+            <strong>Paid in several instalments:</strong> settle each payment as it is made.
+            The GD reads <strong>Part paid</strong> until the last one, then{" "}
+            <strong>Settled</strong>.
+          </li>
+          <li style={st.li}>
+            <strong>One payment covered several GDs:</strong> settle each GD with its own
+            share, all dated the same day and from the same account, so the shares add up to
+            the bank statement.
+          </li>
+          <li style={st.li}>
+            <strong>Paid before the GD was entered:</strong> settle it anyway, with the real
+            payment date. Do not move the date to the GD date.
+          </li>
+        </ul>
+        <div style={st.warn}>
+          <strong>Never record the same money twice.</strong> A payment settled here must not
+          also be entered as a purchase bill, a bank payment or a journal entry for the same
+          duty or invoice: Import Clearing already holds it, and a second entry doubles the
+          cost. If the agent bills <em>more</em> than the GD's outstanding figure, settle the
+          GD in full and record the extra as an ordinary payment to an expense account (for
+          example clearing and forwarding charges).
+        </div>
+        <p style={st.p}>
+          <strong>What happens if a GD is never settled.</strong> Nothing about the stock
+          changes: the goods, their cost, selling them and the input tax claim are all already
+          on the books. But the company keeps showing that amount as owed on Import Clearing
+          (the total above the Consignments list, the dashboard's payables and the tax control
+          report), and if the money was in fact paid from the bank, the bank balance on the
+          books is higher than the statement by the same amount. A quick month-end check: the
+          outstanding total on the Consignments screen should equal what you really still owe
+          customs, the clearing agent and the supplier for imported goods.
+        </p>
+        <p style={st.p}>
+          GDs marked <strong>Not posted</strong> (the older Backfill imports) owe nothing
+          through this route, so there is nothing to settle on them.
+        </p>
+
         <h3 style={st.h3}>When the final bill comes in under the estimate</h3>
         <p style={st.p}>
           A GD's liability is an <strong>estimate</strong> until the clearing agent's final
