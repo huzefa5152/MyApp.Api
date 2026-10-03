@@ -656,4 +656,117 @@
         public decimal? OpeningActualCostExcludingTax { get; set; }
         public decimal? BalanceActualCostExcludingTax { get; set; }
     }
+
+    /// <summary>One row of the client's stock sheet, as the opening-stock
+    /// layout reader returns it (its balance block), plus the operator's pick
+    /// when the row could not be matched to an item on its own.</summary>
+    public class StockReconcileSheetRowDto
+    {
+        public int SourceRow { get; set; }
+        public string ItemNameOnSheet { get; set; } = "";
+        public string? HsCode { get; set; }
+        public string? LotRef { get; set; }
+        public DateTime? LotDate { get; set; }
+        public DateTime? ClaimMonth { get; set; }
+        public string? Unit { get; set; }
+        public decimal BalanceQuantity { get; set; }
+        public decimal BalanceValueExcludingTax { get; set; }
+        /// <summary>Percent, e.g. 18.</summary>
+        public decimal BalanceSalesTaxRate { get; set; }
+        /// <summary>The operator's item for a row the planner could not place;
+        /// -1 = leave the row out.</summary>
+        public int? ChosenItemTypeId { get; set; }
+    }
+
+    /// <summary>Reconcile to my stock sheet: the sheet's rows, the date the sheet
+    /// describes, and (on Apply) which items take the sheet's QUANTITY.</summary>
+    public class StockReconcileRequestDto
+    {
+        /// <summary>The day the sheet describes (its month end). Quantity
+        /// adjustments are dated here.</summary>
+        public DateTime AsOf { get; set; }
+        public string? SourceFile { get; set; }
+        public List<StockReconcileSheetRowDto> Rows { get; set; } = new();
+        /// <summary>Apply only: items whose quantity is corrected to the
+        /// sheet's. Null on a plan request = use the proposal.</summary>
+        public List<int>? UseSheetQuantityItemTypeIds { get; set; }
+    }
+
+    public class StockReconcileLineDto
+    {
+        public int SourceRow { get; set; }
+        public string GdNumber { get; set; } = "";
+        public DateTime? GdDate { get; set; }
+        public DateTime? ClaimMonth { get; set; }
+        public string? Description { get; set; }
+        public string? HsCode { get; set; }
+        public decimal SheetQuantity { get; set; }
+        /// <summary>What the line will hold after Apply.</summary>
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
+        public decimal SalesTaxRate { get; set; }
+        /// <summary>What the matching GD line holds in the books now, if any.</summary>
+        public decimal? CurrentValueExcludingTax { get; set; }
+    }
+
+    public class StockReconcileItemDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public string? HsCode { get; set; }
+        public string? Unit { get; set; }
+        public decimal OnHand { get; set; }
+        public decimal CurrentValueExcludingTax { get; set; }
+        public decimal SheetQuantity { get; set; }
+        public decimal SheetValueExcludingTax { get; set; }
+        /// <summary>The planner's suggestion: the sheet's quantity is a counted
+        /// whole-unit figure that differs from on-hand.</summary>
+        public bool ProposeSheetQuantity { get; set; }
+        /// <summary>The decision this plan was built with.</summary>
+        public bool UseSheetQuantity { get; set; }
+        public decimal TargetQuantity { get; set; }
+        public decimal TargetValueExcludingTax { get; set; }
+        public List<StockReconcileLineDto> Lines { get; set; } = new();
+        /// <summary>Why this item cannot be applied; null = fine.</summary>
+        public string? Error { get; set; }
+        public List<string> Notes { get; set; } = new();
+    }
+
+    public class StockReconcileRowIssueDto
+    {
+        public int SourceRow { get; set; }
+        public string ItemNameOnSheet { get; set; } = "";
+        public string? HsCode { get; set; }
+        public string? GdNumber { get; set; }
+        public decimal BalanceQuantity { get; set; }
+        public decimal BalanceValueExcludingTax { get; set; }
+        public string Reason { get; set; } = "";
+        /// <summary>Items the operator may pick for this row.</summary>
+        public List<StockReconcileCandidateDto> Candidates { get; set; } = new();
+    }
+
+    public class StockReconcileCandidateDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public decimal OnHand { get; set; }
+    }
+
+    public class StockReconcilePlanDto
+    {
+        public DateTime AsOf { get; set; }
+        public List<StockReconcileItemDto> Items { get; set; } = new();
+        /// <summary>Rows no item could be found for, or more than one fits.</summary>
+        public List<StockReconcileRowIssueDto> Unmatched { get; set; } = new();
+        /// <summary>Rows with value but no stock to hold it (left as they are).</summary>
+        public List<StockReconcileRowIssueDto> NotApplied { get; set; } = new();
+        /// <summary>Items holding stock that the sheet does not list -- untouched.</summary>
+        public List<StockReconcileCandidateDto> NotInSheet { get; set; } = new();
+        public decimal CurrentValueExcludingTax { get; set; }
+        public decimal PlannedValueExcludingTax { get; set; }
+        public decimal SheetValueExcludingTax { get; set; }
+        public bool CanApply { get; set; }
+        public bool Applied { get; set; }
+        public List<string> Messages { get; set; } = new();
+    }
 }

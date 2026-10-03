@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
+import { Link } from "react-router-dom";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
 import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, exportStockMonthly, exportAnnexH1, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
@@ -834,6 +835,12 @@ export default function StockDashboardPage() {
               >
                 <MdFileDownload size={16} /> Annex-H1
               </button>
+              {canManagePolicy && (
+                <Link to="/stock/reconcile" style={{ ...styles.altBtn, textDecoration: "none" }}
+                  title="Upload the month's stock sheet and bring the books in line with it, GD by GD">
+                  <MdSyncAlt size={16} /> Reconcile to sheet
+                </Link>
+              )}
             </span>
           )}
           {canManageOpening && (

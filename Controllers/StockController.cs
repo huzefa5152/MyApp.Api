@@ -1722,7 +1722,10 @@ namespace MyApp.Api.Controllers
             // so this is two SaveChanges, which is exactly the multi-step write
             // CLAUDE.md 4 says to wrap. Predicting the after-position instead
             // would put a figure in the history that no query can reproduce.
-            await using var costTx = await _context.Database.BeginTransactionAsync();
+            // Joins a caller's transaction when there is one (Reconcile to sheet
+            // runs adjustments and the restatement as ONE unit); otherwise its own.
+            await using var costTx = _context.Database.CurrentTransaction == null
+                ? await _context.Database.BeginTransactionAsync() : null;
             await _context.SaveChangesAsync();
 
             var after = await CurrentPositionAsync(dto.CompanyId, dto.ItemTypeId);
@@ -1742,7 +1745,7 @@ namespace MyApp.Api.Controllers
             // Inside the transaction, so a rollback takes the entry with it.
             await _stock.RepostInventoryPeriodsAsync(dto.CompanyId, dto.MovementDate.Date);
 
-            await costTx.CommitAsync();
+            if (costTx != null) await costTx.CommitAsync();
 
             return Ok(new
             {
@@ -2086,7 +2089,9 @@ namespace MyApp.Api.Controllers
             var today = PakistanClock.Today;
             var file = string.IsNullOrWhiteSpace(req.SourceFile) ? null
                 : Path.GetFileName(req.SourceFile.Trim()) is var f && f.Length > 260 ? f[..260] : Path.GetFileName(req.SourceFile.Trim());
-            await using (var tx = await _context.Database.BeginTransactionAsync())
+            // Joins a caller's transaction when there is one (Reconcile to sheet).
+            await using (var tx = _context.Database.CurrentTransaction == null
+                             ? await _context.Database.BeginTransactionAsync() : null)
             {
                 foreach (var (item, lines, waValue) in plans)
                 {
@@ -2124,7 +2129,7 @@ namespace MyApp.Api.Controllers
                     }
                     await _context.SaveChangesAsync();
                 }
-                await tx.CommitAsync();
+                if (tx != null) await tx.CommitAsync();
             }
 
             // The value change is an adjustment in this month's relief.
@@ -2144,6 +2149,139 @@ namespace MyApp.Api.Controllers
             });
             result.Committed = true;
             return Ok(result);
+        }
+
+        /// <summary>
+        /// Reconcile to my stock sheet -- PLAN (writes nothing). Takes the sheet's
+        /// rows as the opening-stock layout reader returned them, matches each to
+        /// an item, and says per item what Apply would do: a quantity correction
+        /// where the sheet's counted quantity differs, and the GD lines the item
+        /// will hold. See <see cref="StockSheetReconciler"/>.
+        /// </summary>
+        [HttpPost("company/{companyId}/reconcile/plan")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StockReconcilePlanDto>> PlanReconcile(
+            int companyId, [FromBody] StockReconcileRequestDto req)
+        {
+            var (error, plan) = await BuildReconcilePlanAsync(companyId, req);
+            return error ?? Ok(plan);
+        }
+
+        /// <summary>
+        /// Reconcile to my stock sheet -- APPLY. Re-plans from the rows (never
+        /// trusts a plan from the client), then in ONE transaction: each chosen
+        /// quantity correction as a dated adjustment, then the FIFO restatement
+        /// to the sheet's GD lines. All or nothing.
+        /// </summary>
+        [HttpPost("company/{companyId}/reconcile/apply")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StockReconcilePlanDto>> ApplyReconcile(
+            int companyId, [FromBody] StockReconcileRequestDto req)
+        {
+            if (req != null) req.UseSheetQuantityItemTypeIds ??= new List<int>();
+            var (error, plan) = await BuildReconcilePlanAsync(companyId, req!);
+            if (error != null) return error;
+            if (!plan!.CanApply)
+                return BadRequest(new { message = "Resolve every highlighted row and item first.", plan });
+            var adjust = plan.Items.Where(i => i.UseSheetQuantity && Math.Abs(i.SheetQuantity - i.OnHand) > 0.00005m).ToList();
+            if (adjust.Count > 0 && !await _permission.HasPermissionAsync(CurrentUserId, "stock.adjust.create"))
+                return StatusCode(403, new { message = "Correcting quantities needs the stock adjustment permission." });
+
+            var file = string.IsNullOrWhiteSpace(req!.SourceFile) ? "stock sheet" : Path.GetFileName(req.SourceFile.Trim());
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var item in adjust)
+                {
+                    var r = await AdjustStock(new CreateStockAdjustmentDto
+                    {
+                        CompanyId = companyId, ItemTypeId = item.ItemTypeId, Mode = StockAdjustmentModes.Set,
+                        TargetQuantity = item.SheetQuantity, TargetValueExcludingTax = item.TargetValueExcludingTax,
+                        MovementDate = plan.AsOf, Notes = $"Reconciled to {file}",
+                    });
+                    if (r is not OkObjectResult)
+                        throw new InvalidOperationException($"The quantity of \"{item.ItemTypeName}\" could not be corrected: {DescribeResult(r)}.");
+                }
+                var restate = new FifoRestatementRequestDto
+                {
+                    SourceFile = file, Commit = true,
+                    Lines = plan.Items.Where(i => i.Error == null).SelectMany(i => i.Lines.Select(l => new FifoRestatementLineDto
+                    {
+                        ItemTypeId = i.ItemTypeId, GdNumber = l.GdNumber, GdDate = l.GdDate,
+                        ClaimMonth = l.ClaimMonth is { } cm ? new DateTime(cm.Year, cm.Month, 1) : null,
+                        SourceRow = l.SourceRow, Description = l.Description,
+                        Quantity = l.Quantity, ValueExcludingTax = l.ValueExcludingTax, SalesTaxRate = l.SalesTaxRate,
+                    })).ToList(),
+                };
+                var rr = await RestateFifo(companyId, restate);
+                var res = (rr.Result as OkObjectResult)?.Value as FifoRestatementResultDto ?? rr.Value;
+                if (res == null || !res.Committed)
+                    throw new InvalidOperationException("The GD lines could not be restated: "
+                        + (res == null ? DescribeResult(rr.Result)
+                           : string.Join("; ", res.Items.Where(i => i.Error != null).Select(i => $"{i.ItemTypeName}: {i.Error}"))) + ".");
+                await tx.CommitAsync();
+            }
+            catch (InvalidOperationException ex)
+            {
+                await tx.RollbackAsync();
+                return BadRequest(new { message = ex.Message + " Nothing was changed." });
+            }
+            plan.Applied = true;
+            plan.Messages.Add($"{adjust.Count} quantity correction(s) and {plan.Items.Count(i => i.Error == null)} item(s) restated to the sheet.");
+            return Ok(plan);
+        }
+
+        private static string DescribeResult(IActionResult? r) => r switch
+        {
+            ObjectResult o => System.Text.Json.JsonSerializer.Serialize(o.Value),
+            null => "no answer",
+            _ => r.GetType().Name,
+        };
+
+        /// <summary>The books as the planner needs them: every item with stock,
+        /// its on-hand and value, and its FIFO GD pools.</summary>
+        private async Task<(ActionResult? Error, StockReconcilePlanDto? Plan)> BuildReconcilePlanAsync(
+            int companyId, StockReconcileRequestDto req)
+        {
+            if (req?.Rows == null || req.Rows.Count == 0)
+                return (BadRequest(new { message = "Upload the stock sheet first." }), null);
+            if (req.Rows.Count > 5000)
+                return (BadRequest(new { message = "Too many rows for one reconciliation." }), null);
+            if (req.AsOf == default)
+                return (BadRequest(new { message = "Choose the date the sheet describes." }), null);
+            if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId))
+                return (BadRequest(new { message = "Reconciling to GD lines needs FIFO-by-GD costing." }), null);
+            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) != null)
+                return (StatusCode(403, new { message = "Reconciling stock needs access to every division." }), null);
+
+            var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
+            var ids = rows.Select(r => r.ItemTypeId).ToList();
+            var fifo = await FifoResultsAsync(companyId, ids) ?? new Dictionary<int, GdFifoValuation.Result>();
+            var lotHs = await _context.OpeningStockLots.AsNoTracking()
+                .Where(l => l.OpeningStockBalance.CompanyId == companyId)
+                .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
+            var lineHs = await _context.ImportConsignmentLines.AsNoTracking()
+                .Where(l => l.ImportConsignment.CompanyId == companyId)
+                .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
+
+            var items = rows.Select(r =>
+            {
+                fifo.TryGetValue(r.ItemTypeId, out var res);
+                var all = res?.Pools ?? new List<GdFifoValuation.Pool>();
+                var pools = all.Where(p => p.Quantity > 0m || p.Value != 0m).Select(p =>
+                    new StockSheetReconciler.Pool(p.GdNumber,
+                        p.LotId is int lid && lotHs.TryGetValue(lid, out var lh) ? lh
+                        : p.ConsignmentLineId is int cid && lineHs.TryGetValue(cid, out var ch) ? ch : r.HSCode,
+                        p.Quantity, p.Value)).ToList();
+                var names = all.Select(p => p.Description ?? "").Where(n => n.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                return new StockSheetReconciler.Item(r.ItemTypeId, r.ItemTypeName, r.HSCode, r.UOM,
+                    r.OnHand, r.ValueExcludingTax, pools, names);
+            }).ToList();
+
+            return (null, StockSheetReconciler.Plan(req, items));
         }
 
         [HttpPost("company/{companyId}/flow-version")]

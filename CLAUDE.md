@@ -1401,6 +1401,20 @@ GD panel and Excel export all say which GDs it took.
   Closing = the walk's month-end. Adjustments, revaluations and restatements
   have no H1 column, so they land in a derived "Other" the consultant reviews --
   never silently inside Supplies. FIFO suite step 8b.
+- **Reconcile to my stock sheet is the supported way to match a client's sheet**
+  (2026-10-03; never hand adjustments, which drain the wrong GDs). The screen
+  reads the sheet with the opening-stock layout reader, and
+  `Helpers/StockSheetReconciler` (pure) plans per item: rows matched by GD + HS,
+  then the one item under the HS code, then by name; anything else is a
+  question (or -1 = leave the row out). A quantity correction is PROPOSED only
+  for a counted (whole / one-decimal) sheet quantity that differs -- clients
+  often derive quantity as value / price, and then the books' quantity stands
+  and the gap sits on the derived line. Zero-stock rows with only derived crumbs
+  are reported, never forced in. Apply re-plans from the rows (never trusts the
+  client's plan) and runs the corrections (dated the sheet's month end) and the
+  FIFO restatement in ONE transaction -- `AdjustStock` / `RestateFifo` join an
+  outer transaction when one exists. Suite: `scripts/test_stock_reconcile.py`
+  (16 checks); cross-company in tenant suite 21.
 - Suites: `cd scripts/stock_fifo_harness && dotnet run -c Release` (offline, links
   the real walk), `python scripts/test_stock_fifo.py`, `node scripts/test_fifo_pricing.mjs`,
   and the READ-ONLY production check `cd scripts/stock_fifo_prod_check && dotnet run -c Release`

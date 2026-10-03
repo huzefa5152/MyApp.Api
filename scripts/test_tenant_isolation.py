@@ -1565,6 +1565,13 @@ foreign_fb = [r for r in ((fb21 or {}).get("rows") or []) if r.get("companyId") 
 check(suite21, "alice's parser feedback holds only Alpha rows", s == 200 and not foreign_fb,
       f"status {s}; foreign {[(r.get('id'), r.get('companyId')) for r in foreign_fb[:5]]}")
 
+# 5b. Reconcile to my stock sheet: plan and apply are company-scoped.
+recon_body = {"asOf": "2026-09-30", "rows": [{"sourceRow": 1, "itemNameOnSheet": "probe", "hsCode": "8481.1000",
+              "lotRef": "GD-X", "balanceQuantity": 1, "balanceValueExcludingTax": 1, "balanceSalesTaxRate": 18}]}
+for route in ("plan", "apply"):
+    s, _ = request("POST", f"/api/stock/company/{beta['id']}/reconcile/{route}", token=tokens["alice"], body=recon_body)
+    status_check(suite21, f"alice reconciles Beta's stock ({route})", s, 403)
+
 # 6. A PO format by id answers 404 to a tenant that cannot reach its company.
 s, fmts = request("GET", f"/api/poformats?companyId={beta['id']}", token=admin)
 beta_fmt = next((f for f in (fmts or []) if f.get("companyId") == beta["id"]), None)

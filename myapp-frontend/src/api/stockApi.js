@@ -51,6 +51,12 @@ export const exportAnnexH1 = (companyId, month) =>
     params: { month },
     responseType: "blob",
   });
+// Reconcile to my stock sheet (FIFO companies). Plan writes nothing; Apply does
+// the planned quantity corrections and GD restatement in one transaction.
+export const planStockReconcile = (companyId, body) =>
+  http.post(`/stock/company/${companyId}/reconcile/plan`, body, { timeout: 300000 });
+export const applyStockReconcile = (companyId, body) =>
+  http.post(`/stock/company/${companyId}/reconcile/apply`, body, { timeout: 300000 });
 // The item types this company actually tracks stock for. "Which items can
 // hold a position" is a server rule (V1 = HS-coded, V2 = all, per-company
 // overrides win either way), so the modals ask for it instead of guessing.
