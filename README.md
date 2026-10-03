@@ -298,6 +298,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-03 — Invoice read reliability
+
+- Load invoice lines and delivery challans in separate queries to reduce database memory pressure when viewing, printing, downloading or preparing bills for FBR. Invoice lists use the same approach, with existing filters and ordering preserved.
+
 ### 2026-09-28 — FIFO by GD stock costing, stock-sheet import fixes, per-company item names, stock sheet reconciliation
 
 - **FIFO by GD stock costing (per company, off by default).** A company can now value stock FIFO by GD instead of the weighted average: a sale uses the GDs claimed by its month first, oldest GD date first, then the unclaimed GDs, and is costed at what those GDs cost. The Stock Dashboard's new **Costing method** button shows both methods side by side (read-only) before anything is switched, and switching re-posts the monthly cost-of-goods entries on the new basis. Bill creation is never blocked by it; a sale past every GD is still saved and marked "not covered by a GD".

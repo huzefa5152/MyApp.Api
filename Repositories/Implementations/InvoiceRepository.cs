@@ -21,6 +21,7 @@ namespace MyApp.Api.Repositories.Implementations
             // Notes (DocumentType 9/10), which live on the Return Invoices
             // tab with their own numbering sequence.
             var query = _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
@@ -51,6 +52,7 @@ namespace MyApp.Api.Repositories.Implementations
             // sequence: sale bills (noteType null, default), Debit Notes
             // (9) and Credit Notes (10). A row is never in two lists.
             var query = _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
@@ -108,7 +110,11 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<Invoice?> GetByIdAsync(int id)
         {
+            // Load collections separately: joining bill lines to challan lines
+            // sorts repeated wide rows and can exhaust SQL query memory.
+            // Keep tracking because edit and FBR paths reuse this graph.
             return await _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)
