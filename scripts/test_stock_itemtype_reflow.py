@@ -43,7 +43,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 PASS = "PASS"
@@ -734,6 +734,27 @@ def suite_noop_delta(base, token, cid, client, supplier, suffix):
     row = grid_row(base, token, cid, bid2)
     check(s, "6.8 B out=25 on-hand=75 (reflowed)",
           approx(row["totalOut"], 25) and approx(row["onHand"], 75), str(row))
+
+    # 6.9 DATE-only edit → the movement follows the bill's date. A bill
+    # entered with today's date and corrected to last month changes no
+    # quantity, and the no-op guard used to leave its stock leaving in the
+    # month it was typed (2026-10-03, importer invoices 1371 / 1383).
+    redate = (datetime.now(timezone.utc) - timedelta(days=40)).strftime("%Y-%m-%dT00:00:00Z")
+    before_mc = move_count(base, token, cid, bid2)
+    st, upd = http("PUT", f"/api/invoices/{iid}", base, token=token, body={
+        "date": redate, "gstRate": 18, "items": [
+            {"id": upd["items"][0]["id"], "itemTypeId": bid2, "description": "sell B", "quantity": 25, "uom": "Pcs", "unitPrice": 50}]})
+    check(s, "6.9 date-only invoice edit ok", st == 200, f"{st} {upd}")
+    st, page = http("GET", f"/api/stock/company/{cid}/movements?itemTypeId={bid2}&pageSize=200", base, token=token)
+    rows = page.get("items", []) if isinstance(page, dict) else []
+    inv_rows = [r for r in rows if r.get("sourceType") == "Invoice" and r.get("sourceId") == iid]
+    check(s, "6.9 invoice movement re-dated to the bill's date",
+          len(inv_rows) > 0 and all(str(r.get("movementDate", ""))[:10] == redate[:10] for r in inv_rows),
+          str([r.get("movementDate") for r in inv_rows]))
+    row = grid_row(base, token, cid, bid2)
+    check(s, "6.9 no quantity churn: out=25 on-hand=75, same movement count",
+          approx(row["totalOut"], 25) and approx(row["onHand"], 75)
+          and move_count(base, token, cid, bid2) == before_mc, str(row))
 
 
 # ── Suite 7 — Soft-deleted item type drops off the on-hand grid ────

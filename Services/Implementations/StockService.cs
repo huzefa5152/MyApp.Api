@@ -530,13 +530,18 @@ namespace MyApp.Api.Services.Implementations
         public async Task SyncInvoiceStockMovementsAsync(Invoice invoice)
         {
             if (invoice == null) return;
-            await SyncInvoiceStockMovementsCoreAsync(invoice);
-            await RepostInventoryPeriodsAsync(invoice.CompanyId, invoice.Date);
+            var priorDate = await SyncInvoiceStockMovementsCoreAsync(invoice);
+            // A bill re-dated LATER still left its old month's relief behind,
+            // so the repost starts at whichever of the two dates is earlier.
+            var from = priorDate.HasValue && priorDate.Value < invoice.Date ? priorDate.Value : invoice.Date;
+            await RepostInventoryPeriodsAsync(invoice.CompanyId, from);
         }
 
-        private async Task SyncInvoiceStockMovementsCoreAsync(Invoice invoice)
+        /// <summary>Returns the earliest date this invoice's movements carried
+        /// before the sync, when the sync moved them; null otherwise.</summary>
+        private async Task<DateTime?> SyncInvoiceStockMovementsCoreAsync(Invoice invoice)
         {
-            if (!await IsTrackingEnabledAsync(invoice.CompanyId)) return;
+            if (!await IsTrackingEnabledAsync(invoice.CompanyId)) return null;
 
             // 2026-07-02: an FBR-EXCLUDED document must hold NO stock
             // movements — exclusion marks the bill as not a real supply
@@ -558,7 +563,7 @@ namespace MyApp.Api.Services.Implementations
                     _context.StockMovements.RemoveRange(purge);
                     await _context.SaveChangesAsync();
                 }
-                return;
+                return purge.Count > 0 ? purge.Min(m => m.MovementDate) : null;
             }
 
             // Notes move goods ONLY when NoteAffectsStock is set (industry
@@ -578,7 +583,7 @@ namespace MyApp.Api.Services.Implementations
                     _context.StockMovements.RemoveRange(valueOnly);
                     await _context.SaveChangesAsync();
                 }
-                return;
+                return valueOnly.Count > 0 ? valueOnly.Min(m => m.MovementDate) : null;
             }
 
             // Direction depends on the document type:
@@ -607,7 +612,7 @@ namespace MyApp.Api.Services.Implementations
                     _context.StockMovements.RemoveRange(demoStale);
                     await _context.SaveChangesAsync();
                 }
-                return;
+                return demoStale.Count > 0 ? demoStale.Min(m => m.MovementDate) : null;
             }
 
             // 2026-05-12: use the FBR-facing adjusted qty when an overlay
@@ -647,39 +652,46 @@ namespace MyApp.Api.Services.Implementations
             }
 
             // What this invoice already posted (this direction), per ItemType.
-            var posted = (await _context.StockMovements
-                    .Where(m => m.CompanyId  == invoice.CompanyId
-                             && m.SourceType == StockMovementSourceType.Invoice
-                             && m.SourceId   == invoice.Id
-                             && m.Direction  == dir)
-                    .GroupBy(m => m.ItemTypeId)
-                    .Select(g => new { ItemTypeId = g.Key, Qty = g.Sum(m => m.Quantity) })
-                    .ToListAsync())
-                .ToDictionary(x => x.ItemTypeId, x => x.Qty);
+            var postedRows = await _context.StockMovements
+                .Where(m => m.CompanyId  == invoice.CompanyId
+                         && m.SourceType == StockMovementSourceType.Invoice
+                         && m.SourceId   == invoice.Id
+                         && m.Direction  == dir)
+                .ToListAsync();
+            var posted = postedRows.GroupBy(m => m.ItemTypeId)
+                .ToDictionary(g => g.Key, g => g.Sum(m => m.Quantity));
+            DateTime? priorDate = postedRows.Count > 0 ? postedRows.Min(m => m.MovementDate) : null;
 
             // No-op guard: if the current lines would post exactly what's
-            // already on the ledger, leave the movements untouched. An edit
-            // that changes no tracked item's quantity/type moves no stock and
-            // doesn't churn movement dates/timestamps or the audit feed.
+            // already on the ledger, the movements stay -- but they must still
+            // carry the bill's DATE and division. A bill entered with today's
+            // date and corrected afterwards changes no quantity, and testing
+            // quantities alone left its stock leaving in the month it was typed
+            // (2026-10-03: 18 importer movements, 13 in the wrong month, which
+            // moved sales between monthly stock sheets and COGS reliefs).
             if (desired.Count == posted.Count
                 && desired.All(kv => posted.TryGetValue(kv.Key, out var q) && q == kv.Value))
             {
-                return;
+                var drifted = postedRows
+                    .Where(m => m.MovementDate != invoice.Date || m.DivisionId != invoice.DivisionId)
+                    .ToList();
+                if (drifted.Count == 0) return null;
+                foreach (var m in drifted)
+                {
+                    m.MovementDate = invoice.Date;
+                    m.DivisionId   = invoice.DivisionId;
+                }
+                await _context.SaveChangesAsync();
+                return priorDate;
             }
 
             // Something changed — rebuild this invoice's movements 1:1 with the
             // current lines: delete the prior set (this direction) and re-insert
             // fresh. Keeping movements scoped to the invoice's current state
             // keeps on-hand math simple and avoids stale rows accumulating.
-            var stale = await _context.StockMovements
-                .Where(m => m.CompanyId  == invoice.CompanyId
-                         && m.SourceType == StockMovementSourceType.Invoice
-                         && m.SourceId   == invoice.Id
-                         && m.Direction  == dir)
-                .ToListAsync();
-            if (stale.Count > 0)
+            if (postedRows.Count > 0)
             {
-                _context.StockMovements.RemoveRange(stale);
+                _context.StockMovements.RemoveRange(postedRows);
             }
 
             foreach (var item in invoice.Items)
@@ -726,6 +738,7 @@ namespace MyApp.Api.Services.Implementations
                     invoice.Id, invoice.CompanyId);
                 throw;
             }
+            return priorDate;
         }
 
         public async Task<List<StockShortage>> CheckAvailabilityAsync(
