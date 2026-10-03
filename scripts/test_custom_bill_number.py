@@ -9,7 +9,7 @@ number in the company's sequence ("Auto", the default and the old behaviour)
 or carry a number the operator typed.
 
 What this pins:
-  • Auto still lands MAX + 1 — unchanged for every existing caller.
+  • Auto advances its saved cursor and skips numbers already in use.
   • A custom number is issued VERBATIM, on the standalone path and the
     from-challan path alike, and carries the company's prefix into
     FbrInvoiceNumber exactly as an auto number does.
@@ -18,8 +18,8 @@ What this pins:
     not have.
   • The demo band (900000+, FBR Sandbox) and non-positive numbers are refused,
     so a custom number can't poison the automatic sequence.
-  • A custom number ABOVE the current max moves the sequence: the next auto
-    bill continues from it.
+  • A custom number ABOVE the current cursor leaves Auto unchanged; a custom
+    number at its next candidate is skipped.
   • The next-number endpoint answers what the forms need, honours the two
     separately-grantable create permissions, and is company-scoped.
   • Numbering is PER DIVISION on this line, so the endpoint and both create
@@ -284,7 +284,7 @@ def suite_standalone(base, token, company, client, item_type, prefix):
 
     # Explicit null means Auto too — that is what the form sends in Auto mode.
     status, inv = make_standalone(base, token, company, client, item_type, number=None)
-    check(s, "auto continues MAX + 1", status in (200, 201) and inv.get("invoiceNumber") == 1001,
+    check(s, "auto advances its saved cursor", status in (200, 201) and inv.get("invoiceNumber") == 1001,
           f"{status} {err_text(inv)}")
     if status in (200, 201):
         created.append(inv["id"])
@@ -298,9 +298,9 @@ def suite_standalone(base, token, company, client, item_type, prefix):
         check(s, "custom number carries the prefix too",
               inv.get("fbrInvoiceNumber") == f"{prefix}7777", f"{inv.get('fbrInvoiceNumber')!r}")
 
-    # A custom number above the max MOVES the sequence.
+    # A custom number above the cursor does not move Auto.
     status, d = next_number(base, token, cid)
-    check(s, "auto continues from the custom number", status == 200 and d.get("nextNumber") == 7778,
+    check(s, "high custom number leaves Auto unchanged", status == 200 and d.get("nextNumber") == 1002,
           f"nextNumber={d.get('nextNumber')}")
 
     # Custom, free, and BELOW the max — back-filling a gap must work.
@@ -310,8 +310,8 @@ def suite_standalone(base, token, company, client, item_type, prefix):
              f"{status} {err_text(inv)}"):
         created.append(inv["id"])
     status, d = next_number(base, token, cid)
-    check(s, "back-filling does not rewind the sequence",
-          status == 200 and d.get("nextNumber") == 7778, f"nextNumber={d.get('nextNumber')}")
+    check(s, "Auto skips the custom number at its next candidate",
+          status == 200 and d.get("nextNumber") == 1003, f"nextNumber={d.get('nextNumber')}")
 
     # Duplicate — refused, named, and NOT silently renumbered.
     status, inv = make_standalone(base, token, company, client, item_type, number=7777)
@@ -366,7 +366,7 @@ def suite_from_challan(base, token, company, client, item_type, prefix):
     if status in (200, 201) and dc2.get("status") in ("Pending", "Imported"):
         status, inv = make_from_challan(base, token, company, client, dc2, item_type)
         if check(s, "auto on the challan path continues the shared sequence",
-                 status in (200, 201) and inv.get("invoiceNumber") == 8889,
+                 status in (200, 201) and inv.get("invoiceNumber") == 1003,
                  f"{status} {err_text(inv)}"):
             created.append(inv["id"])
 
