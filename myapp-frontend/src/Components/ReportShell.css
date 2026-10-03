@@ -1,0 +1,36 @@
+.report-filter-status { font-size: 11px; color: #64748b; align-self: center; }
+.report-date-hint { margin: 8px 0 0; font-size: 12px; color: #9a6700; }
+.report-filters { box-shadow: none !important; border-radius: 10px !important; margin-bottom: 12px !important; }
+.report-heading { box-shadow: none !important; border-radius: 10px !important; margin-bottom: 12px !important; }
+.report-heading-inner { padding: 14px 16px !important; gap: 12px !important; }
+.customer-ledger .report-heading h2 { font-size: 20px !important; margin-bottom: 6px !important; }
+.ledger-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #e1e7ef; border-radius: 10px; overflow: hidden; background: #fff; margin-bottom: 16px; }
+.ledger-metric { padding: 14px 16px; min-width: 0; border-right: 1px solid #e1e7ef; }
+.ledger-metric:last-child { border-right: 0; }
+.ledger-metric span { display: block; font-size: 11px; color: #64748b; margin-bottom: 5px; }
+.ledger-metric strong { font-size: 19px; color: #24344a; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ledger-metric-closing { background: #edf7f5; }
+.ledger-metric-closing strong { color: #00695c; }
+.ledger-transactions-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 2px 10px; color: #64748b; font-size: 12px; }
+.ledger-transactions-heading h3 { margin: 0 0 3px; font-size: 14px; font-weight: 700; color: #24344a; }
+.customer-ledger .report-table-wrap { box-shadow: none !important; border-radius: 10px !important; }
+.customer-ledger .report-table-wrap tbody tr:nth-child(even) { background: #f8fafc; }
+.customer-ledger .report-table-wrap tbody tr:hover { background: #edf5ff; }
+.customer-ledger .report-table-wrap td { padding: 8px 10px !important; }
+.customer-ledger .report-table-wrap th { padding: 10px !important; color: #526178 !important; }
+.customer-ledger .report-row-card { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px !important; box-shadow: none !important; }
+.customer-ledger .report-row-card-top { align-items: center !important; margin: 0 !important; }
+.customer-ledger .report-row-card-amount { flex-direction: column; align-items: flex-end !important; justify-content: center !important; gap: 2px !important; padding: 6px 8px !important; margin: 0 !important; }
+.customer-ledger .report-row-card-meta { grid-column: 1 / -1; gap: 6px 12px !important; }
+@media (max-width: 991.98px) {
+  .ledger-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ledger-metric:nth-child(2) { border-right: 0; }
+  .ledger-metric:nth-child(-n+2) { border-bottom: 1px solid #e1e7ef; }
+}
+@media (max-width: 599.98px) {
+  .report-heading-inner { padding: 12px !important; }
+  .ledger-metric { padding: 12px; }
+  .ledger-metric strong { font-size: 17px; }
+  .ledger-transactions-heading { align-items: flex-start; }
+  .report-filter-status { display: none; }
+}

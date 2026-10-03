@@ -15,6 +15,7 @@ import { exportToPdf } from "../utils/exportUtils";
 import { useCompany } from "../contexts/CompanyContext";
 import { getCustomerLedgerInvoiceLayout } from "../api/printTemplateApi";
 import { buildCustomerLedgerHtml, selectLedgerInvoiceTemplate } from "../utils/customerLedgerPrint";
+import "./ReportShell.css";
 
 /**
  * The one renderer every accounting report uses.
@@ -79,8 +80,9 @@ export default function ReportShell({
     [columns]
   );
   const amountCol = useMemo(
-    () => [...columns].reverse().find((c) => c.totalled) || null,
-    [columns]
+    () => (customerLedger ? columns.find((c) => c.key === "balance") : null)
+      || [...columns].reverse().find((c) => c.totalled) || null,
+    [columns, customerLedger]
   );
 
   const totalPages = report?.pageSize
@@ -112,11 +114,11 @@ export default function ReportShell({
   };
 
   return (
-    <div>
+    <div className={`report-shell${customerLedger ? " customer-ledger" : ""}`} aria-busy={loading}>
       {/* ── 1. Identity + actions ─────────────────────────────────────────── */}
-      <div style={st.header}>
+      <div className="report-heading" style={st.header}>
         <div style={st.headerBar} />
-        <div style={st.headerInner}>
+        <div className="report-heading-inner" style={st.headerInner}>
           <div style={{ minWidth: 0, flex: "1 1 260px" }}>
             {onBack && (
               <button type="button" style={st.backBtn} onClick={onBack}>
@@ -149,7 +151,7 @@ export default function ReportShell({
                 type="button"
                 style={st.actionBtn}
                 onClick={async () => { setBusy("excel"); try { await onExportExcel?.(); } finally { setBusy(null); } }}
-                disabled={!!busy}
+                disabled={!!busy || !printable}
                 title="Download as Excel"
               >
                 <MdTableChart size={17} />
@@ -198,7 +200,17 @@ export default function ReportShell({
       )}
 
       {/* ── 2. The answer ─────────────────────────────────────────────────── */}
-      {report && Object.keys(totals).length > 0 && (
+      {report && customerLedger && (
+        <div className="ledger-overview">
+          {[["Opening balance", report.openingBalance], ["Invoiced / debits", report.totalDebit],
+            ["Received / credits", report.totalCredit], ["Closing balance", report.closingBalance]].map(([label, value], i) => (
+            <div key={label} className={`ledger-metric${i === 3 ? " ledger-metric-closing" : ""}`}>
+              <span>{label}</span><strong>{fmtMoney(value)}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+      {report && !customerLedger && Object.keys(totals).length > 0 && (
         <div style={st.totalsStrip}>
           {Object.entries(totals).map(([key, value]) => (
             <div key={key} style={st.totalTile}>
@@ -213,11 +225,11 @@ export default function ReportShell({
 
       {/* A statement is a document you send, so it leads with the letterhead,
           the addressee and the amount due rather than a row of tiles. */}
-      {report?.party && <StatementHead report={report} />}
+      {report?.party && !customerLedger && <StatementHead report={report} />}
 
       {/* Books and party ledgers both state opening → closing, which a column
           total cannot express. */}
-      {report?.openingBalance !== undefined
+      {!customerLedger && report?.openingBalance !== undefined
         && (report?.accountName !== undefined || report?.partyType) && (
         <div style={st.bookStrip}>
           <BookFigure label="Opening balance" value={report.openingBalance} />
@@ -233,6 +245,12 @@ export default function ReportShell({
       )}
 
       {/* ── 3. The rows ───────────────────────────────────────────────────── */}
+      {customerLedger && report && (
+        <div className="ledger-transactions-heading">
+          <div><h3>Transactions</h3><span>{report.partyName || "All customers"}</span></div>
+          <span>{fmtInt(report.totalCount)} transaction{report.totalCount === 1 ? "" : "s"}</span>
+        </div>
+      )}
       {loading ? (
         <div style={st.stateBox}>Loading report…</div>
       ) : error ? (
@@ -260,7 +278,7 @@ export default function ReportShell({
           ))}
         </div>
       ) : (
-        <div style={st.tableWrap}>
+        <div className="report-table-wrap" style={st.tableWrap}>
           <table style={st.table}>
             <thead>
               <tr>
@@ -492,8 +510,8 @@ function BookFigure({ label, value, text, strong }) {
 function RowCard({ row, columns, leadCol, amountCol, onOpenRow }) {
   const meta = columns.filter((c) => c !== leadCol && c !== amountCol);
   return (
-    <div style={st.card}>
-      <div style={st.cardTop}>
+    <div className="report-row-card" style={st.card}>
+      <div className="report-row-card-top" style={st.cardTop}>
         <span style={st.cardLead}>{renderCell(row, leadCol) || "—"}</span>
         {onOpenRow && canOpen(row) && (
           <button
@@ -508,13 +526,13 @@ function RowCard({ row, columns, leadCol, amountCol, onOpenRow }) {
       </div>
 
       {amountCol && (
-        <div style={st.cardAmountBox}>
+        <div className="report-row-card-amount" style={st.cardAmountBox}>
           <span style={st.totalLabel}>{amountCol.label}</span>
           <span style={st.cardAmount}>{renderCell(row, amountCol)}</span>
         </div>
       )}
 
-      <div style={st.cardMetaGrid}>
+      <div className="report-row-card-meta" style={st.cardMetaGrid}>
         {meta.map((c) => {
           const v = renderCell(row, c);
           if (v === "" || v === null || v === undefined) return null;

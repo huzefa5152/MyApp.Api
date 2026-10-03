@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MdFilterAltOff, MdSearch, MdTune } from "react-icons/md";
 import { colors, dropdownStyles, formStyles } from "../theme";
 import { FILTERS, PERIOD_OPTIONS } from "../config/accountingReports";
@@ -15,11 +15,9 @@ import { getSuppliersByCompany } from "../api/supplierApi";
  * those render — so the bar is never cluttered with a control that does nothing
  * for the report on screen, and every report's filters look and behave the same.
  *
- * Two-stage state on purpose: the operator edits a DRAFT and presses Apply. A
- * report over a year of journal lines is not something to re-run on every
- * keystroke. Applied filters then show as chips, so what shaped the numbers is
- * visible without reopening the panel — the same list the server prints on the
- * report header and in Excel.
+ * Selections refresh immediately; typed searches wait briefly for a pause.
+ * Custom dates refresh once both ends form a valid range. Applied filters show
+ * as chips, matching the report header and Excel export.
  */
 export default function ReportFilterBar({
   companyId,
@@ -31,6 +29,9 @@ export default function ReportFilterBar({
 }) {
   const [draft, setDraft] = useState(value);
   const [open, setOpen] = useState(false);
+  const currentDraft = useRef(value);
+  const searchTimer = useRef(null);
+  const lastPublished = useRef("");
 
   // Lookups, loaded once per company and only for the controls in play.
   const [accounts, setAccounts] = useState([]);
@@ -43,7 +44,14 @@ export default function ReportFilterBar({
 
   // Re-sync the draft when the caller changes the applied filters from outside
   // (a drill-down arriving from another report, or a reset).
-  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    // Our own URL update must not erase a search typed after that selection.
+    if (filterSignature(value) === lastPublished.current) return;
+    clearTimeout(searchTimer.current);
+    currentDraft.current = value;
+    setDraft(value);
+  }, [value]);
+  useEffect(() => () => clearTimeout(searchTimer.current), []);
 
   useEffect(() => {
     if (!companyId) return;
@@ -72,19 +80,28 @@ export default function ReportFilterBar({
     return () => { alive = false; };
   }, [companyId, wants]);
 
-  const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
-
-  const apply = () => {
-    // Page always resets on a filter change — staying on page 7 of a different
-    // result set shows an empty table and looks broken.
-    onApply({ ...draft, page: 1 });
-    setOpen(false);
+  const publish = (next) => {
+    if (next.period === "custom" && (!next.from || !next.to || next.from > next.to)) return;
+    lastPublished.current = filterSignature({ ...next, page: 1 });
+    onApply({ ...next, page: 1 });
+  };
+  const set = (patch) => {
+    clearTimeout(searchTimer.current);
+    const next = { ...currentDraft.current, ...patch, page: 1 };
+    currentDraft.current = next;
+    setDraft(next);
+    if (Object.hasOwn(patch, "search")) {
+      searchTimer.current = setTimeout(() => publish(next), 350);
+    } else publish(next);
   };
 
   const reset = () => {
     const cleared = { period: draft.period || "thisMonth", page: 1, pageSize: draft.pageSize };
+    if (cleared.period === "custom") { cleared.from = draft.from; cleared.to = draft.to; }
+    clearTimeout(searchTimer.current);
+    currentDraft.current = cleared;
     setDraft(cleared);
-    onApply(cleared);
+    publish(cleared);
   };
 
   // ── Option sets ────────────────────────────────────────────────────────────
@@ -131,6 +148,7 @@ export default function ReportFilterBar({
   );
 
   const clearOne = (key) => {
+    clearTimeout(searchTimer.current);
     const next = { ...value, page: 1 };
     delete next[key];
     if (key === "payeeType") delete next.payeeId;
@@ -138,7 +156,7 @@ export default function ReportFilterBar({
   };
 
   return (
-    <div style={st.wrap}>
+    <div className="report-filters" style={st.wrap}>
       {/* Always-visible row: period + search + the toggle. The two controls an
           operator reaches for most often never hide behind a panel. */}
       <div style={st.topRow}>
@@ -178,6 +196,19 @@ export default function ReportFilterBar({
           </>
         )}
 
+        {wants.has(FILTERS.client) && (
+          <Field label="Customer">
+            <SearchableSelect
+              items={clients.map((c) => ({ id: c.id, name: c.name, ntn: c.ntn || "", phone: c.phone || "" }))}
+              value={draft.clientId ?? ""}
+              onChange={(id) => set({ clientId: id === "" ? undefined : id })}
+              searchKeys={["name", "ntn", "phone"]}
+              placeholder="All customers"
+              style={st.control}
+            />
+          </Field>
+        )}
+
         {wants.has(FILTERS.search) && (
           <label style={{ ...st.field, flex: "2 1 220px" }}>
             <span style={st.label}>Search</span>
@@ -188,7 +219,9 @@ export default function ReportFilterBar({
                 placeholder="Account, description, reference…"
                 value={draft.search || ""}
                 onChange={(e) => set({ search: e.target.value })}
-                onKeyDown={(e) => e.key === "Enter" && apply()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { clearTimeout(searchTimer.current); publish(currentDraft.current); }
+                }}
               />
             </div>
           </label>
@@ -206,11 +239,14 @@ export default function ReportFilterBar({
               <span>Filters</span>
             </button>
           )}
-          <button type="button" style={st.applyBtn} onClick={apply} disabled={loading}>
-            {loading ? "Loading…" : "Apply"}
-          </button>
+          <span className="report-filter-status" role="status">{loading ? "Updating…" : "Auto-updates"}</span>
         </div>
       </div>
+      {isCustom && (!draft.from || !draft.to || draft.from > draft.to) && (
+        <p className="report-date-hint" role="status">
+          {draft.from && draft.to ? "From date must be on or before To date." : "Choose both dates to update the report."}
+        </p>
+      )}
 
       {/* The rest, collapsed by default so the report is what fills the screen. */}
       {open && (
@@ -296,19 +332,6 @@ export default function ReportFilterBar({
               </Field>
             )}
 
-            {wants.has(FILTERS.client) && (
-              <Field label="Customer">
-                <SearchableSelect
-                  items={clients.map((c) => ({ id: c.id, name: c.name, ntn: c.ntn || "", phone: c.phone || "" }))}
-                  value={draft.clientId ?? ""}
-                  onChange={(id) => set({ clientId: id === "" ? undefined : id })}
-                  searchKeys={["name", "ntn", "phone"]}
-                  placeholder="All customers"
-                  style={st.control}
-                />
-              </Field>
-            )}
-
             {wants.has(FILTERS.supplier) && (
               <Field label="Supplier">
                 <SearchableSelect
@@ -355,9 +378,6 @@ export default function ReportFilterBar({
               <MdFilterAltOff size={17} />
               <span>Clear filters</span>
             </button>
-            <button type="button" style={st.applyBtn} onClick={apply} disabled={loading}>
-              {loading ? "Loading…" : "Apply"}
-            </button>
           </div>
         </div>
       )}
@@ -383,6 +403,12 @@ export default function ReportFilterBar({
 }
 
 // ── Small building blocks ───────────────────────────────────────────────────
+
+function filterSignature(filters) {
+  return JSON.stringify(Object.entries(filters).filter(([key, value]) =>
+    key !== "pageSize" && value !== undefined && value !== null && value !== "")
+    .sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [key, String(value)]));
+}
 
 function Field({ label, children }) {
   return (
@@ -438,7 +464,7 @@ const STATUS_OPTIONS = [
 
 const hasMoreFilters = (wants) =>
   [FILTERS.division, FILTERS.account, FILTERS.accountGroup, FILTERS.paymentAccount,
-   FILTERS.payeeType, FILTERS.payee, FILTERS.client, FILTERS.supplier,
+   FILTERS.payeeType, FILTERS.payee, FILTERS.supplier,
    FILTERS.tax, FILTERS.status].some((k) => wants.has(k));
 
 /** Bank/cash split follows the account NAME, matching the server's resolution. */

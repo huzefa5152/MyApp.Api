@@ -53,6 +53,7 @@ import { Can, usePermissions } from "../contexts/PermissionsContext";
 import { lineSources } from "../utils/documentLines";
 import { getAvatarUrl } from "../utils/avatarUrl";
 import "./DashboardLayout.css";
+import "./AdminDensity.css";
 
 /* ------------------------------------------------------------------ */
 /*  NavGroup — generic collapsible section header                       */
@@ -145,6 +146,10 @@ function getDisplayName(user) {
 /*  DashboardLayout                                                     */
 /* ------------------------------------------------------------------ */
 export default function DashboardLayout() {
+  useEffect(() => {
+    document.body.classList.add("admin-ui");
+    return () => document.body.classList.remove("admin-ui");
+  }, []);
   const { user, logout, avatarVersion } = useAuth();
   const { hasAny, has } = usePermissions();
   const location = useLocation();

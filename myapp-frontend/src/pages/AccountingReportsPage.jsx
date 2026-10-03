@@ -53,7 +53,7 @@ export default function AccountingReportsPage() {
   const report = reportId ? REPORTS_BY_ID[reportId] : null;
 
   return (
-    <div style={st.page}>
+    <div className="accounting-reports-page" style={st.page}>
       <div style={st.pageHead}>
         <div style={st.pageTitleRow}>
           <MdAssessment size={26} color={colors.blue} />
@@ -255,7 +255,7 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
       if (v === null || v === undefined || v === "" || k === "pageSize") return;
       params[k] = String(v);
     });
-    setSearchParams(params, { replace: false });
+    setSearchParams(params, { replace: true });
   }, [setSearchParams]);
 
   const requestParams = useMemo(
@@ -348,7 +348,7 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
         categoryTitle={report.categoryTitle}
         onBack={onBack}
         onPage={(p) => applyFilters({ ...filters, page: p })}
-        onPageSize={setPageSize}
+        onPageSize={(size) => { setPageSize(size); applyFilters({ ...filters, page: 1 }); }}
         pageSize={pageSize}
         canExport={canExport}
         onExportExcel={exportExcel}
