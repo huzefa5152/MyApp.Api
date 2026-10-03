@@ -45,7 +45,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(username.trim(), password);
       // Return-to URL preservation: if the operator was bounced off a
       // protected page by the 401 handler, send them back to it after a
       // successful re-login instead of always landing on /dashboard.
@@ -61,12 +60,12 @@ export default function LoginPage() {
       let returnTo = "/dashboard";
       try {
         const stored = sessionStorage.getItem("postLoginReturnTo");
-        if (stored && stored.startsWith("/") && stored !== "/" && !stored.startsWith("/login")) {
+        if (stored && stored.startsWith("/") && !stored.startsWith("//") && stored !== "/" && !stored.startsWith("/login")) {
           returnTo = stored;
         }
-        sessionStorage.removeItem("postLoginReturnTo");
       } catch { /* non-fatal */ }
-      navigate(returnTo, { replace: true });
+      const completed = await login(username.trim(), password, returnTo);
+      if (completed !== false) navigate(returnTo, { replace: true });
     } catch (err) {
       const msg =
         err?.response?.data?.message ||

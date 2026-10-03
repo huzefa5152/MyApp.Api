@@ -51,17 +51,16 @@ const colors = {
  *
  * `module -> pages -> permissions` in, same shape out, with empty pages and
  * empty modules dropped so the editor does not render a heading over nothing.
- * The seed admin is passed through untouched.
+ * MCP permissions are managed separately from this product-role editor.
  */
 function grantableTree(tree, myKeys, isSeedAdmin) {
-  if (isSeedAdmin || !myKeys || myKeys.size === 0) return tree || [];
   return (tree || [])
     .map((mod) => ({
       ...mod,
       pages: (mod.pages || [])
         .map((pg) => ({
           ...pg,
-          permissions: (pg.permissions || []).filter((p) => myKeys.has(p.key)),
+          permissions: (pg.permissions || []).filter((p) => !p.key.startsWith("mcp.") && (isSeedAdmin || !myKeys || myKeys.size === 0 || myKeys.has(p.key))),
         }))
         .filter((pg) => pg.permissions.length > 0),
     }))
@@ -98,14 +97,14 @@ export default function RolesPage() {
     setLoading(true);
     try {
       const [rolesRes, treeRes] = await Promise.all([getRoles(), getPermissionTree()]);
-      setRoles(rolesRes.data);
+      setRoles(rolesRes.data.filter((role) => !(role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name))));
       if (isSeedAdmin && canCreate) setTenants((await getRoleTenants()).data);
       // Show only what THIS operator could actually hand out. The server
       // enforces it either way -- a role may not grant a key its author does
       // not hold -- but offering a checkbox that always fails on save is a
       // trap, and for a tenant administrator on an edition it would also
       // advertise the module they did not buy. The seed admin holds
-      // everything, so nothing is filtered for them.
+      // every product permission; MCP access is managed in the user profile.
       setTree(grantableTree(treeRes.data, myKeys, isSeedAdmin));
     } catch {
       notify("Failed to load roles and permissions", "error");
@@ -295,6 +294,7 @@ export default function RolesPage() {
     () => tree.reduce((n, m) => n + m.pages.reduce((pn, pg) => pn + pg.permissions.length, 0), 0),
     [tree]
   );
+  const visibleSelectedKeys = tree.flatMap((module) => module.pages.flatMap((page) => page.permissions)).filter((permission) => form.permissionKeys.has(permission.key)).length;
 
   // Re-bucket the API tree (which is module → page → permission) into
   // section → module → page → permission so the Roles editor mirrors the
@@ -375,7 +375,7 @@ export default function RolesPage() {
               <div style={styles.cardMeta}>
                 <span style={styles.metaChip}>
                   <MdAdminPanelSettings style={{ fontSize: "0.95rem" }} />
-                  {role.permissionKeys.length} permission{role.permissionKeys.length !== 1 ? "s" : ""}
+                  {role.permissionKeys.filter((key) => !key.startsWith("mcp.")).length} permissions
                 </span>
                 <span style={styles.metaChip}>
                   <MdPeople style={{ fontSize: "0.95rem" }} />
@@ -492,7 +492,7 @@ export default function RolesPage() {
                     Expand all
                   </button>
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem", marginLeft: "0.5rem" }}>
-                    {form.permissionKeys.size} / {totalCatalogKeys} selected
+                    {visibleSelectedKeys} / {totalCatalogKeys} selected
                   </span>
                 </div>
               </div>

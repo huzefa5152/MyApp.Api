@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   MdAccountCircle,
   MdEdit,
@@ -19,6 +20,9 @@ import { getAvatarUrl } from "../utils/avatarUrl";
 import ThemePicker from "../ui2/ThemePicker";
 import McpMyAccessPanel from "../Components/McpMyAccessPanel";
 import { PageHeader, Tabs, Card, Button, Field, Alert } from "../ui/Kit";
+import McpCatalogAccessPanel from "../Components/McpCatalogAccessPanel";
+import McpAgentsPanel from "../Components/McpAgentsPanel";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -57,6 +61,26 @@ function validateImage(file) {
 
 export default function ProfilePage() {
   const { user, refreshUser, setToken, avatarVersion } = useAuth();
+  const { has } = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canAdministerMcp = user?.isSeedAdmin === true && has("mcp.admin.manage");
+  const rawTargetUserId = searchParams.get("userId");
+  const parsedTargetUserId = Number(rawTargetUserId);
+  const targetUserId = /^[1-9]\d*$/.test(rawTargetUserId || "") && Number.isSafeInteger(parsedTargetUserId)
+    ? parsedTargetUserId : undefined;
+  const requestedTab = searchParams.get("tab");
+  const tab = requestedTab === "mcp" ? "mcp-connections"
+    : ["mcp-catalog", "mcp-connections", "appearance"].includes(requestedTab) ? requestedTab
+    : requestedTab === "mcp-admin" && canAdministerMcp ? "mcp-admin" : "profile";
+  const setTab = (nextTab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", nextTab);
+    if (nextTab !== "mcp-catalog") next.delete("userId");
+    setSearchParams(next);
+  };
+  const tabs = [["profile", "Profile", MdAccountCircle], ["appearance", "Appearance", MdPalette], ["mcp-catalog", "MCP Catalog Access", MdSmartToy],
+    ["mcp-connections", "MCP Connections", MdSmartToy],
+    ...(canAdministerMcp ? [["mcp-admin", "MCP Administration", MdShield]] : [])];
   const fileRef = useRef(null);
 
   // Edit profile state
@@ -275,7 +299,6 @@ export default function ProfilePage() {
   //   2. server avatar with cache-buster
   //   3. initials fallback
   const serverAvatarSrc = getAvatarUrl(user, avatarVersion);
-  const [tab, setTab] = useState("profile");
   const displayedSrc = previewUrl || serverAvatarSrc;
   const showInitials = !displayedSrc;
   const hasServerAvatar = !!user?.avatarPath && !previewUrl;
@@ -289,20 +312,19 @@ export default function ProfilePage() {
         subtitle="Manage your account settings"
       />
 
-      {/* Tabs — every user gets "MCP & AI": how to connect their AI tools, and their own tokens */}
       <Tabs
         label="Profile sections"
         idPrefix="profile-tab"
         value={tab}
         onChange={setTab}
-        tabs={[
-          { key: "profile", label: "Profile", icon: MdAccountCircle },
-          { key: "appearance", label: "Appearance", icon: MdPalette },
-          { key: "mcp", label: "MCP & AI", icon: MdSmartToy },
-        ]}
+        tabs={tabs.map(([key, label, icon]) => ({ key, label, icon }))}
       />
-      {tab === "mcp" ? (
-        <div role="tabpanel" id="profile-tab-panel-mcp" aria-labelledby="profile-tab-mcp"><McpMyAccessPanel /></div>
+      {tab === "mcp-catalog" ? (
+        <div role="tabpanel" id="profile-tab-panel-mcp-catalog" aria-labelledby="profile-tab-mcp-catalog"><McpCatalogAccessPanel targetUserId={targetUserId} /></div>
+      ) : tab === "mcp-connections" ? (
+        <div role="tabpanel" id="profile-tab-panel-mcp-connections" aria-labelledby="profile-tab-mcp-connections"><McpMyAccessPanel /></div>
+      ) : tab === "mcp-admin" && canAdministerMcp ? (
+        <div role="tabpanel" id="profile-tab-panel-mcp-admin" aria-labelledby="profile-tab-mcp-admin"><McpAgentsPanel /></div>
       ) : tab === "appearance" ? (
         <Card role="tabpanel" id="profile-tab-panel-appearance" aria-labelledby="profile-tab-appearance" title="Interface theme" icon={MdPalette}>
           <p style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", margin: "0 0 0.9rem" }}>

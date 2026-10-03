@@ -265,6 +265,9 @@ public class McpOAuthController(
         if (client == null || user == null || !await permissions.HasPermissionAsync(user.Id, "mcp.access.use"))
             return OAuthError("invalid_grant", "MCP access is no longer enabled for this user.");
         string companyValue;
+        var (_, scopeError) = await McpScopes.ValidateAsync(permissions, user.Id,
+            row.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries));
+        if (scopeError != null) return OAuthError("invalid_grant", "The approved AI access has changed. Connect again.");
         if (row.CompanyIds == McpAgentToken.AllCompaniesMarker && permissions.IsSeedAdmin(user.Id))
             companyValue = McpAgentToken.AllCompaniesMarker;
         else
@@ -307,6 +310,10 @@ public class McpOAuthController(
             return OAuthError("invalid_grant", "The refresh token is not valid.");
         if (!await permissions.HasPermissionAsync(token.UserId, "mcp.access.use"))
             return OAuthError("invalid_grant", "MCP access is no longer enabled for this user.");
+
+        var (_, scopeError) = await McpScopes.ValidateAsync(permissions, token.UserId,
+            token.Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries));
+        if (scopeError != null) return OAuthError("invalid_grant", "The approved AI access has changed. Connect again.");
 
         var newAccess = McpAgentAuthHandler.NewSecret();
         var newRefresh = NewRefreshSecret();

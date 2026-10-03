@@ -208,7 +208,7 @@ namespace MyApp.Api.Controllers
             var companyId = await CompanyArg(args);
             await Need("challans.manage.create");
             var key = IdemKey(args);
-            if (await PriorForKeyAsync(agent, key) is { } prior) return prior;
+            if (await PriorForKeyAsync(agent, key, companyId, McpScopes.Challans) is { } prior) return prior;
 
             var client = await ClientInCompanyAsync(args, companyId);
             var delivery = OptDate(args, "deliveryDate") ?? throw new ToolError("deliveryDate is required.");
@@ -257,7 +257,7 @@ namespace MyApp.Api.Controllers
             var fromChallans = Has(args, "challanIds");
             await Need(fromChallans ? "bills.manage.create" : "bills.manage.create.standalone");
             var key = IdemKey(args);
-            if (await PriorForKeyAsync(agent, key) is { } prior) return prior;
+            if (await PriorForKeyAsync(agent, key, companyId, McpScopes.Bills) is { } prior) return prior;
 
             var company = await _companies.GetByIdAsync(companyId) ?? throw new ToolError("Resource unavailable or access denied.");
             if (company.StartingInvoiceNumber == 0) throw new ToolError("The starting invoice number has not been set for this company.");

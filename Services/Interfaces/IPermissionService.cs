@@ -21,5 +21,7 @@ namespace MyApp.Api.Services.Interfaces
 
         /// <summary>True when the given userId is the configured seed-admin user.</summary>
         bool IsSeedAdmin(int userId);
+
+        Task<bool> HasMcpToolAccessAsync(int userId, string toolName);
     }
 }

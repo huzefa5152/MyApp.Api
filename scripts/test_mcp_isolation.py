@@ -219,8 +219,14 @@ check("malformed JSON -> JSON-RPC parse error", s == 200 and d.get("error", {}).
 print("\n== catalogue ==")
 s, d = rpc(a, "tools/list")
 names = sorted(t["name"] for t in d["result"]["tools"])
-check("exactly the thirteen read tools (no write tool for a login token)", names == sorted(["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"]), names)
+mandatory_reads = {"get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"}
+permitted_sales_reads = mandatory_reads | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments", "list_print_templates", "get_print_template", "get_print_contract", "get_document_print_data"}
+check("Sales login keeps mandatory reads and exposes only permitted read tools", mandatory_reads <= set(names) <= permitted_sales_reads and not any(name.startswith(("prepare_", "commit_", "cancel_")) for name in names), names)
+check("Sales login never exposes Complete-edition accounting tools", not set(names).intersection({"get_trial_balance", "get_profit_and_loss", "get_balance_sheet", "get_cash_book", "get_aged_payables", "get_party_ledger"}), names)
 check("every tool is annotated read-only", all(t["annotations"]["readOnlyHint"] and not t["annotations"]["destructiveHint"] for t in d["result"]["tools"]))
+s_partial, partial_catalogue = rpc(partial, "tools/list")
+partial_names = {tool["name"] for tool in partial_catalogue.get("result", {}).get("tools", [])}
+check("clients-only permission discovery hides all ungranted product and print tools", s_partial == 200 and partial_names == {"list_companies", "search_clients", "get_mcp_capabilities", "get_action_status"}, sorted(partial_names))
 for bad in ("create_quote", "execute_sql", "submit_invoice", "http_get"):
     err, msg = tool(a, bad, {})
     check(f"no '{bad}' tool", err, msg)

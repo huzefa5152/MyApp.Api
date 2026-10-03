@@ -20,7 +20,7 @@ public class McpAgentToken
 
     /// <summary>Scopes an agent may be granted. "read" covers every read-only tool.</summary>
     public static readonly string[] AllScopes =
-        { "read", "clients.write", "quotes.write", "challans.write", "bills.write" };
+        { "read", "templates.read", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write" };
 
     public int Id { get; set; }
     public int UserId { get; set; }

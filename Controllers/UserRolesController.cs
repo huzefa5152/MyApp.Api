@@ -107,11 +107,17 @@ namespace MyApp.Api.Controllers
                 return BadRequest(new { message = "A private role belongs to another tenant. Copy it into this tenant first." });
             if (targetRoleIds.Count > 0)
             {
+                // MCP choices are edited in the profile. Retaining an already-assigned
+                // system MCP role is not a new grant, even when the manager pauses MCP.
+                var preservedMcpRoles = await _context.UserRoles
+                    .Where(ur => ur.UserId == userId && ur.Role!.IsSystemRole &&
+                        (ur.Role.Name == "MCP Access" || ur.Role.Name == "MCP Write"))
+                    .Select(ur => ur.RoleId).ToListAsync();
                 // Only roles the caller can see may be handed out: system
                 // roles, legacy rows, and custom roles from the caller's own
                 // chain. A sibling Administrator's role id is "invalid" here.
                 var visible = await RolesController.VisibleRoleIdsAsync(_context, _scope, _permissions, CurrentUserId() ?? 0);
-                if (targetRoleIds.Any(id => !visible.Contains(id)))
+                if (targetRoleIds.Any(id => !visible.Contains(id) && !preservedMcpRoles.Contains(id)))
                     return BadRequest(new { message = "One or more role IDs are invalid" });
 
                 // Visible is not the same as grantable, and the difference is
@@ -123,7 +129,7 @@ namespace MyApp.Api.Controllers
                 // only when everything it grants is something the caller holds.
                 var grantable = await RolesController.GrantableKeysAsync(_permissions, CurrentUserId() ?? 0);
                 var overreaching = await _context.Roles
-                    .Where(r => targetRoleIds.Contains(r.Id))
+                    .Where(r => targetRoleIds.Contains(r.Id) && !preservedMcpRoles.Contains(r.Id))
                     .Select(r => new
                     {
                         r.Name,

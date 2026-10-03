@@ -4,7 +4,7 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Helpers;
 
 /// <summary>
-/// What an agent token may be granted. "read" covers every read-only tool. A write scope is
+/// What an agent token may be granted. Print content needs separate explicit read scopes. A write scope is
 /// offered to a user only when they hold the platform opt-in <c>mcp.write.use</c> AND the very
 /// permission the matching screen needs, so a token can never exceed its owner's own authority.
 /// </summary>
@@ -15,10 +15,12 @@ public static class McpScopes
     public const string Quotes = "quotes.write";
     public const string Challans = "challans.write";
     public const string Bills = "bills.write";
+    public const string TemplatesRead = "templates.read";
+    public const string DocumentsRead = "documents.read";
 
     /// <summary>Write scopes that have tools behind them today. Others are refused, not pre-granted.</summary>
     public static readonly string[] Write = { Clients, Quotes, Challans, Bills };
-    public static readonly string[] Implemented = { Read, Clients, Quotes, Challans, Bills };
+    public static readonly string[] Implemented = { Read, TemplatesRead, DocumentsRead, Clients, Quotes, Challans, Bills };
 
     // Permissions the owner must hold: ALL of "All", and at least one of "Any" (when listed).
     private static readonly Dictionary<string, (string[] All, string[] Any)> Needs = new()
@@ -54,7 +56,13 @@ public static class McpScopes
     public static async Task<List<string>> AvailableAsync(IPermissionService permissions, int userId)
     {
         var scopes = new List<string> { Read };
-        if (!await permissions.HasPermissionAsync(userId, "mcp.write.use")) return scopes;
+        if (await permissions.HasPermissionAsync(userId, "printtemplates.manage.view")) scopes.Add(TemplatesRead);
+        foreach (var key in new[] { "challans.print.view", "bills.print.view", "invoices.print.view", "salesquotes.print.view",
+            "salesorders.print.view", "purchasebills.print.view", "goodsreceipts.print.view", "accounting.receipts.print", "accounting.payments.print", "withholdingtax.print.view" })
+            if (await permissions.HasPermissionAsync(userId, key)) { scopes.Add(DocumentsRead); break; }
+        if (!await permissions.HasPermissionAsync(userId, "mcp.access.use")) return new();
+        if (!await permissions.HasPermissionAsync(userId, "mcp.write.use"))
+            return await FilterCatalogAsync(permissions, userId, scopes);
         foreach (var scope in Write)
         {
             var (all, any) = Needs[scope];
@@ -69,7 +77,19 @@ public static class McpScopes
             }
             if (ok) scopes.Add(scope);
         }
-        return scopes;
+        return await FilterCatalogAsync(permissions, userId, scopes);
+    }
+
+    private static async Task<List<string>> FilterCatalogAsync(IPermissionService permissions, int userId, List<string> scopes)
+    {
+        var available = new List<string>();
+        foreach (var scope in scopes)
+        {
+            if (scope == Read) { available.Add(scope); continue; }
+            foreach (var tool in McpToolAccessCatalog.All.Where(t => t.Scope == scope && t.Configurable))
+                if (await permissions.HasMcpToolAccessAsync(userId, tool.Name)) { available.Add(scope); break; }
+        }
+        return available;
     }
 
     /// <summary>Normalises requested scopes; returns an error message, or null when they are acceptable.</summary>
@@ -84,7 +104,7 @@ public static class McpScopes
         var denied = scopes.Where(s => !available.Contains(s, StringComparer.Ordinal)).ToList();
         if (denied.Count > 0)
             return (scopes, IsWrite(denied[0]) && !await permissions.HasPermissionAsync(userId, "mcp.write.use")
-                ? "Write access is not enabled for that user. Assign the MCP Write role first."
+                ? "Write access is not enabled for that user. Enable changes in their MCP Catalog Access settings."
                 : "That user lacks the permission behind one of the chosen scopes.");
         return (scopes, null);
     }

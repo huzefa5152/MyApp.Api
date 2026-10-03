@@ -25,6 +25,15 @@ namespace MyApp.Api.Controllers
         private static readonly string[] WriteToolNameList = { "prepare_client", "prepare_quote", "prepare_challan", "prepare_bill", "commit_action", "cancel_action" };
         private static bool IsWriteTool(string name) => WriteToolNameList.Contains(name, StringComparer.Ordinal);
 
+        private static string PrepareToolFor(string kind) => kind switch
+        {
+            "client.create" or "client.update" => "prepare_client",
+            "quote.create" => "prepare_quote",
+            "challan.create" => "prepare_challan",
+            "bill.create" or "bill.standalone" => "prepare_bill",
+            _ => throw new ToolError("Unknown action kind.")
+        };
+
         // Self-contained on purpose: static fields in different files of a partial class are
         // initialised in an unspecified order across builds, so nothing here may read a static
         // field declared in another file while it is being initialised.
@@ -96,20 +105,28 @@ namespace MyApp.Api.Controllers
         };
 
         /// <summary>Read tools for everyone; write tools only when the token carries a write scope.</summary>
-        private object[] ToolCatalogue()
+        private async Task<object[]> ToolCatalogueAsync()
         {
             var tools = new List<object>(ReadTools) { SearchChallansTool, GetChallanTool };
             tools.AddRange(ReportTools());
-            var agent = Agent;
-            if (agent is { AllowWrites: true })
+            var visible = new List<object>();
+            foreach (var tool in tools)
             {
-                if (agent.HasScope(McpScopes.Clients)) tools.Add(PrepareClientTool);
-                if (agent.HasScope(McpScopes.Quotes)) tools.Add(PrepareQuoteTool);
-                if (agent.HasScope(McpScopes.Challans)) tools.Add(PrepareChallanTool);
-                if (agent.HasScope(McpScopes.Bills)) tools.Add(PrepareBillTool);
+                var name = JsonSerializer.SerializeToElement(tool).GetProperty("name").GetString()!;
+                if (await LegacyToolAllowedAsync(name)) visible.Add(tool);
+            }
+            tools = visible;
+            var agent = Agent;
+            if (agent is { AllowWrites: true } && await _permissions.HasPermissionAsync(CurrentUserId, "mcp.write.use"))
+            {
+                if (agent.HasScope(McpScopes.Clients) && await LegacyToolAllowedAsync("prepare_client")) tools.Add(PrepareClientTool);
+                if (agent.HasScope(McpScopes.Quotes) && await LegacyToolAllowedAsync("prepare_quote")) tools.Add(PrepareQuoteTool);
+                if (agent.HasScope(McpScopes.Challans) && await LegacyToolAllowedAsync("prepare_challan")) tools.Add(PrepareChallanTool);
+                if (agent.HasScope(McpScopes.Bills) && await LegacyToolAllowedAsync("prepare_bill")) tools.Add(PrepareBillTool);
                 tools.Add(CommitTool);
                 tools.Add(CancelTool);
             }
+            tools.AddRange(await ExpandedCatalogueAsync());
             return tools.ToArray();
         }
 
@@ -169,14 +186,24 @@ namespace MyApp.Api.Controllers
         // ── plan store ─────────────────────────────────────────────────────
 
         /// <summary>An earlier plan or result for the same agent and idempotency key, if any.</summary>
-        private async Task<object?> PriorForKeyAsync(McpAgentToken agent, string? key)
+        private async Task<object?> PriorForKeyAsync(McpAgentToken agent, string? key, int companyId, string scope)
         {
             if (key == null) return null;
             var prior = await _context.McpPendingActions.AsNoTracking()
                 .FirstOrDefaultAsync(a => a.AgentTokenId == agent.Id && a.IdempotencyKey == key);
             if (prior == null) return null;
+            if (prior.UserId != CurrentUserId || prior.CompanyId != companyId || ScopeFor(prior.Kind) != scope)
+                throw new ToolError("That request key belongs to a different company or action.");
+            await PinCompanyAsync(prior.CompanyId);
+            await RequireWriterAsync(ScopeFor(prior.Kind));
+            await Need(PermissionFor(prior.Kind));
+            if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, PrepareToolFor(prior.Kind)))
+                throw new ToolError("Resource unavailable or access denied.");
             if (prior.CommittedAt != null)
-                return new { alreadyDone = true, prior.ResultRef, summary = prior.ResultSummary ?? prior.Summary, note = "This request was already committed. Nothing new was created." };
+                return new { alreadyDone = !string.IsNullOrEmpty(prior.ResultRef) && prior.ResultRef != "FAILED",
+                    planId = prior.PlanId, prior.ResultRef, summary = prior.ResultSummary ?? prior.Summary,
+                    status = prior.ResultRef == "FAILED" ? "failedOrIncomplete" : string.IsNullOrEmpty(prior.ResultRef) ? "executingOrUnknown" : "succeeded",
+                    note = "This request was already claimed. Check its outcome; do not create a duplicate." };
             if (prior.ExpiresAt > DateTime.UtcNow)
                 return PlanResponse(prior, "This request was already prepared. Reusing the same plan.");
             // Expired and never committed: the key is free again for a fresh plan.
@@ -221,7 +248,7 @@ namespace MyApp.Api.Controllers
             var clientId = IntArg(args, "clientId");
             await Need(clientId.HasValue ? "clients.manage.update" : "clients.manage.create");
             var key = IdemKey(args);
-            if (await PriorForKeyAsync(agent, key) is { } prior) return prior;
+            if (await PriorForKeyAsync(agent, key, companyId, McpScopes.Clients) is { } prior) return prior;
 
             ClientDto dto;
             if (clientId.HasValue)
@@ -279,7 +306,7 @@ namespace MyApp.Api.Controllers
             var companyId = await CompanyArg(args);
             await Need("salesquotes.manage.create");
             var key = IdemKey(args);
-            if (await PriorForKeyAsync(agent, key) is { } prior) return prior;
+            if (await PriorForKeyAsync(agent, key, companyId, McpScopes.Quotes) is { } prior) return prior;
 
             var clientId = IntArg(args, "clientId") ?? throw new ToolError("clientId is required.");
             var client = clientId > 0 ? await _clients.GetByIdAsync(clientId) : null;
@@ -329,11 +356,25 @@ namespace MyApp.Api.Controllers
 
         // ── commit / cancel ────────────────────────────────────────────────
 
-        private static string ScopeFor(string kind) =>
-            kind.StartsWith("client.", StringComparison.Ordinal) ? McpScopes.Clients
-            : kind.StartsWith("challan.", StringComparison.Ordinal) ? McpScopes.Challans
-            : kind.StartsWith("bill.", StringComparison.Ordinal) ? McpScopes.Bills
-            : McpScopes.Quotes;
+        private static string ScopeFor(string kind) => kind switch
+        {
+            "client.create" or "client.update" => McpScopes.Clients,
+            "challan.create" => McpScopes.Challans,
+            "bill.create" or "bill.standalone" => McpScopes.Bills,
+            "quote.create" => McpScopes.Quotes,
+            _ => throw new ToolError("Unknown plan type.")
+        };
+
+        private static string PermissionFor(string kind) => kind switch
+        {
+            "client.create" => "clients.manage.create",
+            "client.update" => "clients.manage.update",
+            "challan.create" => "challans.manage.create",
+            "bill.create" => "bills.manage.create",
+            "bill.standalone" => "bills.manage.create.standalone",
+            "quote.create" => "salesquotes.manage.create",
+            _ => throw new ToolError("Unknown plan type.")
+        };
 
         private async Task<McpPendingAction> OwnPlanAsync(string? planId)
         {
@@ -341,13 +382,15 @@ namespace MyApp.Api.Controllers
             var id = (planId ?? "").Trim();
             var plan = id.Length is > 0 and <= 64 ? await _context.McpPendingActions.AsNoTracking().FirstOrDefaultAsync(a => a.PlanId == id) : null;
             // Someone else's plan id answers exactly like a missing one.
-            if (plan == null || plan.AgentTokenId != agent.Id) throw new ToolError("That plan was not found. It may have expired.");
+            if (plan == null || plan.AgentTokenId != agent.Id || plan.UserId != CurrentUserId)
+                throw new ToolError("That plan was not found. It may have expired.");
             return plan;
         }
 
         private async Task<object> CancelActionAsync(JsonElement args)
         {
             var plan = await OwnPlanAsync(OptText(args, "planId", 64));
+            await PinCompanyAsync(plan.CompanyId);
             var removed = await _context.McpPendingActions.Where(a => a.Id == plan.Id && a.CommittedAt == null).ExecuteDeleteAsync();
             if (removed == 0) throw new ToolError("That plan was already committed and cannot be cancelled.");
             _resultSummary = $"Cancelled: {plan.Summary}";
@@ -357,21 +400,15 @@ namespace MyApp.Api.Controllers
         private async Task<object> CommitActionAsync(JsonElement args)
         {
             var plan = await OwnPlanAsync(OptText(args, "planId", 64));
+            if (!await _permissions.HasMcpToolAccessAsync(CurrentUserId, PrepareToolFor(plan.Kind)))
+                throw new ToolError("Resource unavailable or access denied.");
             // Every gate is checked again NOW: the world may have changed since the plan was made.
             var agent = await RequireWriterAsync(ScopeFor(plan.Kind));
             if (plan.UserId != CurrentUserId) throw new ToolError("That plan was not found. It may have expired.");
             if (plan.CommittedAt != null) throw new ToolError("That plan was already committed.");
             if (plan.ExpiresAt <= DateTime.UtcNow) throw new ToolError("That plan has expired. Prepare it again.");
             await PinCompanyAsync(plan.CompanyId);
-            await Need(plan.Kind switch
-            {
-                "client.create" => "clients.manage.create",
-                "client.update" => "clients.manage.update",
-                "challan.create" => "challans.manage.create",
-                "bill.create" => "bills.manage.create",
-                "bill.standalone" => "bills.manage.create.standalone",
-                _ => "salesquotes.manage.create",
-            });
+            await Need(PermissionFor(plan.Kind));
             await EnforceHourlyCapAsync(agent, plan.Kind);
 
             // Claim it atomically: of two simultaneous commits only one proceeds, so a double
@@ -433,9 +470,10 @@ namespace MyApp.Api.Controllers
             catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException)
             {
                 // Service rules are operator-facing messages (name clash, unknown client...).
-                await _context.McpPendingActions.Where(a => a.Id == plan.Id).ExecuteUpdateAsync(s => s.SetProperty(a => a.ResultRef, "FAILED").SetProperty(a => a.ResultSummary, Trunc(ex.Message, 300)));
+                await _context.McpPendingActions.Where(a => a.Id == plan.Id).ExecuteUpdateAsync(s => s.SetProperty(a => a.ResultRef, "FAILED").SetProperty(a => a.ResultSummary, "The action was refused or may be incomplete. Check the affected records."));
                 _resultRef = "FAILED";
-                throw new ToolError(ex.Message + " Nothing was created. Prepare the plan again.");
+                _logger.LogWarning(ex, "MCP commit {Kind} was refused for user {UserId}", plan.Kind, CurrentUserId);
+                throw new ToolError("The action was refused or may be incomplete. Check get_action_status and the affected records before preparing another action.");
             }
             catch (Exception ex) when (ex is not ToolError)
             {

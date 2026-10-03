@@ -594,6 +594,7 @@ builder.Services.AddSingleton<MyApp.Api.Helpers.IFbrTokenProtector, MyApp.Api.He
 // permission-set TTL.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<McpUserAccessService>();
 
 // Tenant-scope guard — answers "may this user touch this company?"
 // in addition to RBAC's "may this user perform this action?". Reads
