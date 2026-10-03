@@ -291,6 +291,17 @@ namespace MyApp.Api.Services.Implementations
                 }
             }
 
+            // FIFO companies: a GD line's claim month is never blank (maintainer's
+            // decision, 2026-10-03). It orders which GD a sale draws first, and a
+            // blank one silently drops the GD behind every claimed one. Default:
+            // the GD date's month; the operator changes it if claimed later.
+            if (await StockCostingMethod.IsGdFifoAsync(_db, companyId))
+                foreach (var l in preview.Lines.Where(l => l.ClaimMonth == null && l.GdDate.HasValue))
+                {
+                    l.ClaimMonth = new DateTime(l.GdDate!.Value.Year, l.GdDate.Value.Month, 1);
+                    l.ClaimMonthDefaulted = true;
+                }
+
             var lookups = await LoadNewItemLookupsAsync(preview.Lines.Select(l => l.HsCode));
             var today = DateTime.UtcNow.Date;
             foreach (var line in preview.Lines)
@@ -1172,6 +1183,9 @@ namespace MyApp.Api.Services.Implementations
             // guard just above/below, all of which run identically in both
             // modes.
             var mode = GdCostingImportModeNames.Normalize(dto.Mode);
+            // Same never-blank claim month as the preview, for an API caller that
+            // did not echo one back.
+            var fifoCompany = await StockCostingMethod.IsGdFifoAsync(_db, dto.CompanyId);
 
             await using var tx = await _db.Database.BeginTransactionAsync();
             try
@@ -1427,7 +1441,8 @@ namespace MyApp.Api.Services.Implementations
                         ImportConsignmentId = consignment.Id,
                         SourceRow = line.SourceRow,
                         ClaimMonth = line.ClaimMonth is { } lineClaim
-                            ? new DateTime(lineClaim.Year, lineClaim.Month, 1) : null,
+                            ? new DateTime(lineClaim.Year, lineClaim.Month, 1)
+                            : fifoCompany && line.GdDate is { } gdDay ? new DateTime(gdDay.Year, gdDay.Month, 1) : null,
                         DescriptionOnSheet = Trim(line.Description, 300),
                         HsCode = string.IsNullOrWhiteSpace(line.HsCode) ? null : Trim(line.HsCode, 20),
                         Quantity = line.Quantity,

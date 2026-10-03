@@ -1224,6 +1224,11 @@ feedback -- change both, or the screen promises what the server refuses.
   code. `Effective` resolves an undecided mismatch to NOTHING, so no commit path
   can write it on the HS code alone. Backfill is exempt: it prices stock already
   on the books, where sheet wording legitimately differs. Suite section 32.
+- **A FIFO company's GD line is never stored without a claim month**
+  (2026-10-03, maintainer's decision). Preview fills a blank one with the GD
+  date's month and flags it `ClaimMonthDefaulted`; commit applies the same
+  default for a caller that did not echo one. A blank claim month used to drop
+  the GD behind every claimed GD in FIFO order. Suite section 31.
 
 ### 5b-16. Invoice Sales Detail: the Excel is the operator's sheet, the screen is ours (2026-09-25)
 

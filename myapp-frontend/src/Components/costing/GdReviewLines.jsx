@@ -81,6 +81,7 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
           <div style={{ fontSize: 12, color: line.claimMonth ? billColors.textSecondary : billColors.warn, marginTop: 2 }}>
             {line.claimMonth
               ? `Claim month ${new Date(line.claimMonth).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`
+                + (line.claimMonthDefaulted ? " (from the GD date — Edit if it was claimed later)" : "")
               : "Not claimed yet"}
           </div>
         </div>

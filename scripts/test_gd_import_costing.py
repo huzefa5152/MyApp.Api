@@ -3792,14 +3792,21 @@ def main():
         r = gd_preview(api, h, rules_co, build_sheet(claim_headings, rows), claim_map, mode="new-arrivals")
         pv = r.json() if r.ok else {}
         months = [(l.get("claimMonth") or "")[:7] for l in pv.get("lines", [])]
-        check("31a: the sheet's Claim Month is read by its short name, blank = not claimed",
-              months == ["2026-06", "2026-07", ""], str(months))
+        # 2026-10-03 (maintainer's decision): on a FIFO company a blank claim
+        # month is never kept blank -- it defaults to the GD date's month and is
+        # flagged, because a blank one silently drops the GD behind every claimed
+        # GD in FIFO order. This check used to pin "blank = not claimed".
+        defaulted = [l.get("claimMonthDefaulted") for l in pv.get("lines", [])]
+        check("31a: the sheet's Claim Month is read by its short name; blank takes the GD's month",
+              months == ["2026-06", "2026-07", "2026-07"] and defaulted == [False, False, True],
+              f"{months} defaulted={defaulted}")
         r = commit_preview(api, h, rules_co, pv, "new-arrivals")
         check("31b: the sheet commits", r.ok, f"http {r.status_code} {r.text[:200]}")
         cid = find_consignment_id(api, h, rules_co, "GD-C-3")
         det = get_consignment(api, h, cid).json() if cid else {}
         stored = [(l.get("claimMonth") or "")[:7] for l in sorted(det.get("lines", []), key=lambda x: x["sourceRow"])]
-        check("31c: each GD line keeps its own claim month", stored == ["2026-06", "2026-07", ""], str(stored))
+        check("31c: each GD line keeps its own claim month (blank stored as the GD's month)",
+              stored == ["2026-06", "2026-07", "2026-07"], str(stored))
 
         typed = dict(manual_line("GD-C-4", "8481.2000", f"Rules Pump {tag}", qty=1, assessed=900),
                      claimMonth="2026-05-01")

@@ -136,6 +136,11 @@ namespace MyApp.Api.DTOs
         /// </summary>
         public bool NameMismatch { get; set; }
 
+        /// <summary>The claim month was not given, so it was taken from the GD
+        /// date's month (FIFO companies: never blank -- it decides which GD a
+        /// sale uses first). The operator may change it.</summary>
+        public bool ClaimMonthDefaulted { get; set; }
+
         /// <summary>The operator's "this is a different product -- create a new
         /// item" for a <see cref="NameMismatch"/> line. Echoed into commit, which
         /// re-checks it against the server's own match.</summary>
