@@ -8,7 +8,7 @@ import AttachmentBadge from "./AttachmentBadge";
 
 // Mirror of ChallanList's eligibility checks so the table view enforces the
 // exact same business rules around editability / cancel / delete / duplicate.
-function evalRowFlags(c, perms) {
+export function evalRowFlags(c, perms) {
   const isEditable = c.isEditable ?? (
     c.status === "Pending" || c.status === "Imported" || c.status === "No PO" || c.status === "Setup Required"
   );

@@ -2,7 +2,7 @@ import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { renderRichTextHtml } from "../utils/richText";
 import { useSearchParams } from "react-router-dom";
-import { MdDescription, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdUploadFile } from "react-icons/md";
+import { MdDescription, MdAdd, MdBusiness, MdUploadFile } from "react-icons/md";
 import ChallanList from "../Components/ChallanList";
 import ChallanTable from "../Components/ChallanTable";
 import ChallanForm from "../Components/ChallanForm";
@@ -33,7 +33,8 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { defaultChallanTemplate } from "../utils/defaultTemplates";
 import { exportToPdf } from "../utils/exportUtils";
 import { saveAs } from "file-saver";
-import { dropdownStyles } from "../theme";
+import { PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, EmptyState, Loading } from "../ui/Kit";
+import SearchableClientSelect from "../Components/SearchableClientSelect";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import PageSizeSelect from "../Components/PageSizeSelect";
 import { useCompany } from "../contexts/CompanyContext";
@@ -41,21 +42,13 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import DuplicateChallanDialog from "../Components/DuplicateChallanDialog";
-
-const colors = {
-  blue: "#0d47a1",
-  blueLight: "#1565c0",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-};
+import useUi2 from "../ui2/useUi2";
+import ChallansV2 from "../ui2/ChallansV2";
 
 export default function ChallanPage() {
   const confirm = useConfirm();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const ui2 = useUi2(); // redesigned structure when the user's theme asks for it
+  const { companies, selectedCompany, loading: loadingCompanies } = useCompany();
   const tplPicker = usePrintTemplates("Challan");
   const { has } = usePermissions();
   const canCreate = has("challans.manage.create");
@@ -74,6 +67,7 @@ export default function ChallanPage() {
   const [showImport, setShowImport] = useState(false);
   const [editChallan, setEditChallan] = useState(null);
   const [loadingChallans, setLoadingChallans] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false); // presentation only: lets the redesigned view offer "Try again"
   // Generate-Bill shortcut: holds the challanId to prefill into InvoiceForm
   // when the user clicks the per-card button.
   const [generateBillChallanId, setGenerateBillChallanId] = useState(null);
@@ -128,6 +122,7 @@ export default function ChallanPage() {
   const fetchChallans = useCallback(async (companyId, pg) => {
     if (!companyId) return;
     setLoadingChallans(true);
+    setLoadFailed(false);
     try {
       const params = { page: pg || page };
       if (userPageSize) params.pageSize = userPageSize;
@@ -146,6 +141,7 @@ export default function ChallanPage() {
       setChallans([]);
       setTotalCount(0);
       setTotalPages(0);
+      setLoadFailed(true);
     } finally {
       setLoadingChallans(false);
     }
@@ -405,75 +401,54 @@ export default function ChallanPage() {
     }
   };
 
+  const v2 = ui2 && {
+    companies, selectedCompany, loadingCompanies, totalCount, canCreate,
+    canImport: canCreate && has("poformats.import.create"), canViewClients, canViewSalesOrders: has("salesorders.list.view"),
+    onNew: handleAddChallan, onImport: () => selectedCompany && setShowImport(true),
+    search, statusFilter, clientFilter, dateFrom, dateTo, salesOrderFilter, clients, orderOptions,
+    setSearch, setStatusFilter, setDateFrom, setDateTo, handleFilterChange, handleClientFilter, handleSalesOrderFilter,
+    hasFilters: Boolean(hasFilters), resetFilters, tplPicker, isBigScreen, viewMode, setViewMode,
+    loadingChallans, loadFailed, onRetry: () => selectedCompany && fetchChallans(selectedCompany.id, page), challans,
+    page, totalPages, pageSize: userPageSize ?? pageSize, setPage, onPageSize: (n) => { setUserPageSize(n); setPage(1); },
+    onCancel: handleCancel, onDelete: handleDelete, onPrint: handlePrint, onEditItems: handleEditItems, onExportPdf: handleExportPdf,
+    onExportExcel: hasExcelTpl ? handleExportExcel : null, onGenerateBill: (c) => setGenerateBillChallanId(c.id),
+    onDuplicate: handleDuplicate, canLinkOrder, onLinkOrder: (c) => setLinkChallan(c), exportingId, duplicatingId,
+    printDisabled: tplPicker.noTemplate, printDisabledReason: tplPicker.noTemplateReason,
+    attachCounts, onAttach: (c) => setAttachTarget(c),
+  };
+
   return (
-    <DocumentLinesNavigation type="challan">
-    <div>
-      <div style={styles.pageHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
-            <MdDescription size={28} color="#fff" />
-          </div>
-          <div>
-            <h2 style={styles.pageTitle}>Delivery Challans</h2>
-            <p style={styles.pageSubtitle}>
-              {selectedCompany
-                ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
-                : "Select a company to view challans"}
-            </p>
-          </div>
-        </div>
-        {companies.length > 0 && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            {canCreate && (
-              <button style={styles.addBtn} onClick={handleAddChallan}>
-                <MdAdd size={18} /> New Challan
-              </button>
-            )}
+    <DocumentLinesNavigation type="challan" inline={ui2}>
+    <div className={ui2 ? "u2" : undefined}>
+      {ui2 ? <ChallansV2 {...v2} /> : (<>
+      <PageHeader
+        icon={MdDescription}
+        tone="blue"
+        title="Delivery Challans"
+        subtitle={selectedCompany
+          ? `${totalCount} challan${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+          : "Select a company to view challans"}
+        actions={companies.length > 0 && (
+          <>
+            {canCreate && <Button variant="primary" icon={MdAdd} onClick={handleAddChallan}>New Challan</Button>}
             {canCreate && has("poformats.import.create") && (
-              <button style={{ ...styles.addBtn, backgroundColor: "#00897b" }} onClick={() => selectedCompany && setShowImport(true)}>
-                <MdUploadFile size={18} /> Import PO
-              </button>
+              <Button variant="teal" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import PO</Button>
             )}
-          </div>
+          </>
         )}
-      </div>
+      />
 
       {loadingCompanies ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading companies...</span>
-        </div>
+        <Loading>Loading companies…</Loading>
       ) : companies.length > 0 ? (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              style={dropdownStyles.base}
-              value={selectedCompany?.id || ""}
-              onChange={(e) =>
-                setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))
-              }
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.brandName || c.name}</option>
-              ))}
-            </select>
-          </div>
+          <CompanyPicker />
 
           {/* Filters + view-mode toggle */}
           {selectedCompany && (
-            <div className="filters-row">
-              <div className="filter-search-wrap">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search DC#, Client, PO..."
-                  className="filter-search-input"
-                  value={search}
-                  onChange={handleFilterChange(setSearch)}
-                />
-              </div>
-              <select className="filter-select" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
+            <Toolbar>
+              <SearchBox value={search} onChange={(text) => handleFilterChange(setSearch)({ target: { value: text } })} placeholder="Search DC#, Client, PO..." />
+              <select className="k-select" aria-label="Status" value={statusFilter} onChange={handleFilterChange(setStatusFilter)}>
                 <option value="">All Status</option>
                 <option value="Pending">Pending</option>
                 <option value="Imported">Imported</option>
@@ -483,13 +458,13 @@ export default function ChallanPage() {
                 <option value="Cancelled">Cancelled</option>
               </select>
               {canViewClients && (
-                <select className="filter-select" value={clientFilter} onChange={handleClientFilter}>
-                  <option value="">All Clients</option>
-                  {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
-                </select>
+                <div style={{ flex: "1 1 190px", maxWidth: 240 }}>
+                  <SearchableClientSelect clients={clients} value={clientFilter} placeholder="All Clients"
+                    onChange={(id) => handleClientFilter({ target: { value: String(id) } })} />
+                </div>
               )}
               {has("salesorders.list.view") && (
-                <div style={{ minWidth: 190, maxWidth: 240 }}>
+                <div style={{ flex: "1 1 190px", maxWidth: 240 }}>
                   <SearchableSelect
                     items={orderOptions}
                     value={salesOrderFilter}
@@ -500,42 +475,28 @@ export default function ChallanPage() {
                   />
                 </div>
               )}
-              <div className="filter-date-group">
-                <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
-                <span className="filter-date-sep">–</span>
-                <input type="date" className="filter-date-input" value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" />
-              </div>
-              {hasFilters && (
-                <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
+              <input type="date" className="k-input" style={{ width: "auto" }} value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" aria-label="From date" />
+              <span aria-hidden="true" style={{ color: "var(--k-faint)" }}>–</span>
+              <input type="date" className="k-input" style={{ width: "auto" }} value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" aria-label="To date" />
+              {hasFilters && <Button variant="ghost" onClick={resetFilters}>Clear</Button>}
+              <ToolbarSpacer />
+              <PrintTemplateSelect picker={tplPicker} />
+              {isBigScreen && (
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
               )}
-              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <PrintTemplateSelect picker={tplPicker} />
-                {isBigScreen && (
-                  <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Delivery challan view mode" />
-                )}
-              </div>
-            </div>
+            </Toolbar>
           )}
         </>
       ) : (
-        <div style={styles.emptyState}>
-          <MdBusiness size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No companies available. Add a company first.</p>
-        </div>
+        <EmptyState icon={MdBusiness}>No companies available. Add a company first.</EmptyState>
       )}
 
       {loadingChallans ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-          <span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>Loading challans...</span>
-        </div>
+        <Loading>Loading challans…</Loading>
       ) : challans.length === 0 && selectedCompany ? (
-        <div style={styles.emptyState}>
-          <MdDescription size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {hasFilters ? "No challans match the current filters." : "No delivery challans found for this company."}
-          </p>
-        </div>
+        <EmptyState icon={MdDescription}>
+          {hasFilters ? "No challans match the current filters." : "No delivery challans found for this company."}
+        </EmptyState>
       ) : (
         <>
           {viewMode === "table" ? (
@@ -590,6 +551,8 @@ export default function ChallanPage() {
           )}
         </>
       )}
+
+      </>)}
 
       {showModal && selectedCompany && (
         <ChallanForm
@@ -806,99 +769,3 @@ function buildChallanPrintHtml(data) {
 
 </body></html>`;
 }
-
-const styles = {
-  pageHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "1.5rem",
-    flexWrap: "wrap",
-    gap: "1rem",
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  pageTitle: {
-    margin: 0,
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  pageSubtitle: {
-    margin: "0.15rem 0 0",
-    fontSize: "0.88rem",
-    color: colors.textSecondary,
-  },
-  addBtn: { minHeight: 44,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.55rem 1.25rem",
-    borderRadius: 10,
-    border: "none",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    color: "#fff",
-    fontSize: "0.9rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "filter 0.2s, transform 0.2s",
-    boxShadow: "0 4px 14px rgba(13,71,161,0.25)",
-  },
-  loadingContainer: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "0.75rem",
-    padding: "3rem 0",
-  },
-  spinner: {
-    width: 28,
-    height: 28,
-    border: `3px solid ${colors.cardBorder}`,
-    borderTopColor: colors.blue,
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
-  },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "3rem 1rem",
-    textAlign: "center",
-  },
-  pagination: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: "1rem",
-    padding: "1rem 0",
-    marginTop: "0.5rem",
-  },
-  pageBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.2rem",
-    padding: "0.4rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    backgroundColor: "#fff",
-    color: colors.blue,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  pageInfo: {
-    fontSize: "0.82rem",
-    color: colors.textSecondary,
-    fontWeight: 500,
-  },
-};
