@@ -896,6 +896,24 @@ written down as the expectation.
 
 ---
 
+## UI themes — every screen is built from the kit (2026-10-03)
+
+The admin UI has selectable themes (Classic = default/original, Workspace =
+compact), chosen per user per browser from the account menu or Profile →
+Appearance. **Read `docs/UI_THEMES.md` before changing how any screen looks**, and
+use the `create-ui-theme` skill to add a theme.
+
+- Screens are built from `myapp-frontend/src/ui/Kit.jsx` (PageHeader, CompanyPicker,
+  Button, Toolbar/SearchBox, Field, Card, TableWrap + `k-table`, Tabs, StatCard,
+  Facts, EmptyState/Loading/Alert). Usage rules: `myapp-frontend/src/ui/KIT_GUIDE.md`.
+- A theme changes TOKENS only (`--k-*` in `ui/kit.css`; `--ui-*`/`--sc-*` read with
+  the original value as fallback). Never fork a component per theme; never drop a
+  field, column or action to fit a layout.
+- Every client/supplier picker is `SearchableClientSelect`, every GL-account picker
+  `AccountSelect`, other long lists `SearchableSelect` — all on `Components/ComboBox.jsx`.
+- Classic must keep looking like the product users know; check both themes at
+  375 / 768 / 1280 before calling a UI change done.
+
 ## Anti-patterns I keep finding (don't repeat them)
 
 - ❌ Naming a production database / SQL host / FTP host in any tracked file (prose, code comment, migration comment, docstring). The repo is PUBLIC and the database name is also the SQL username — use a placeholder; `scripts/verify_no_production_identifiers.py` fails on it.
@@ -927,5 +945,6 @@ written down as the expectation.
 | Validate an image upload | `Helpers/ImageUploadValidator.cs` |
 | Retry on number collision | `Helpers/NumberAllocationRetry.cs` |
 | Encrypt at rest | `Helpers/FbrTokenProtector.cs` + EF value converter in `AppDbContext` |
+| UI themes, kit, adding a theme | `docs/UI_THEMES.md`, `myapp-frontend/src/ui/KIT_GUIDE.md`, `.claude/skills/create-ui-theme` |
 | Audit doc + phased fix plan | `AUDIT_2026_05_13_SECURITY.md` |
 | Verify all the above | `scripts/verify_audit_2026_05_13_security.py` |

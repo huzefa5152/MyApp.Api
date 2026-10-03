@@ -58,3 +58,10 @@ Each one needs fresh confirmation from the maintainer, every time. Commits are
 authored as the personal GitHub account (`git config user.email` must be the
 `45231321+huzefa5152` noreply address). Never add an AI-attribution or
 `Co-Authored-By` trailer to a commit message.
+
+## UI changes go through the theme kit
+
+The admin UI has selectable themes (Classic default, Workspace compact). Build
+screens from `myapp-frontend/src/ui/Kit.jsx`, change looks through tokens only,
+and never drop information to fit a layout. Read `docs/UI_THEMES.md` first; the
+step-by-step for a new theme is `.claude/skills/create-ui-theme/SKILL.md`.
