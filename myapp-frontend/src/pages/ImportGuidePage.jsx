@@ -194,24 +194,16 @@ export default function ImportGuidePage() {
       </section>
 
       <section id="import-modes" style={st.section}>
-        <h2 style={st.h2}><span style={st.sectionNum}>3</span> Choosing the import mode</h2>
+        <h2 style={st.h2}><span style={st.sectionNum}>3</span> What an import does</h2>
         <p style={st.p}>
-          The first step asks what this GD is. It is the single most important setting on
-          the screen — it decides what a matching line actually does — and it opens on the
-          monthly case. The one-off Backfill sits behind its own button so it is never
-          picked by accident.
+          Every GD on this screen is <strong>new goods arriving</strong>. Loading the landed
+          cost of stock that was already on the books when a company came on board (a
+          "backfill") is a one-off setup step, so it is no longer on this screen: ask support
+          to run it. Consignments imported that way earlier still show as Backfill on the
+          Consignments screen, and the notes below about Backfill describe those records.
         </p>
 
         <div style={st.modesGrid}>
-          <div style={st.modeCard}>
-            <span style={st.modeBadge}>One-off</span>
-            <p style={st.modeTitle}>"One-off: these goods are already on the books"</p>
-            <p style={st.modeText}>
-              A matched line <strong>sets</strong> the actual cost to the GD's unit cost
-              multiplied by the quantity already on the books. Quantity is not changed.
-            </p>
-            <p style={st.modeUse}>Use for the one-off backfill of history.</p>
-          </div>
           <div style={st.modeCard}>
             <span style={st.modeBadge}>Default</span>
             <p style={st.modeTitle}>"New goods arrived on this GD"</p>
@@ -225,20 +217,20 @@ export default function ImportGuidePage() {
         </div>
 
         <div style={st.warn}>
-          <strong>Why you have to choose — the failure is silent.</strong> Say an item was
-          imported last month, so it already has a balance on the books, and this month's line
-          matches it again. In backfill mode, that match <strong>overwrites</strong> the cost
-          with this month's rate applied to last month's quantity — the units that actually
-          arrived this month never appear on the books, and nothing on screen says so. Picking
-          the mode that matches what the file really is — history being backfilled, or stock
-          that just landed — is what stops that from happening.
+          <strong>Why Backfill is not on this screen.</strong> Say an item was imported last
+          month and this month's line matches it again. A backfill <strong>overwrites</strong>{" "}
+          the cost with this month's rate applied to last month's quantity — the units that
+          actually arrived this month never appear on the books, and nothing on screen says
+          so. A monthly GD is always new goods, so the screen no longer offers the choice.
         </div>
 
         <p style={st.p}>
-          A line that matches nothing becomes a <strong>new item</strong>: an item type named
-          after the line, under its HS code and unit, then an opening balance for it. On a
-          monthly GD that happens by default and every line has a <strong>Leave out</strong>{" "}
-          button; on a Backfill such lines are left out until you bring them in. An item type
+          A line whose HS code is already on your books is added to that item (the closest
+          name when several share the code); the line says which, and you can switch it to
+          another item or <strong>New item</strong>. A line that matches nothing becomes a{" "}
+          <strong>new item</strong>: an item type named after the line, under its HS code and
+          unit. Both happen without a click per line, and every line has a{" "}
+          <strong>Leave out</strong> button. An item type
           already in the catalog is reused only when its <strong>HS code and its name both
           match</strong> — one HS code can genuinely cover several different products, so the
           name is what tells them apart. A new item's HS code has to be a real code from the

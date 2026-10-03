@@ -18,7 +18,7 @@ import { billColors } from "../Components/bill/billTheme";
 import GdLineEditor from "../Components/costing/GdLineEditor";
 import GdReviewLines from "../Components/costing/GdReviewLines";
 import {
-  MODE_NEW_ARRIVALS, MODE_BACKFILL, COSTING_ANCHORS, lineProblems, blankLine, nextLineFrom,
+  MODE_NEW_ARRIVALS, COSTING_ANCHORS, lineProblems, blankLine, nextLineFrom,
   editorLineFrom, toLinePayload, previewLineToPayload, effectiveLeaveOut, entryChecklist,
   commitSummary, summarySentences, commitLabel, moneyText, qtyText, computeCosting, bulkActions,
 } from "../utils/gdCostingEntry";
@@ -130,7 +130,6 @@ export default function GdCostingImportPage() {
 
   const [companyId, setCompanyId] = useState(selectedCompany?.id ? String(selectedCompany.id) : "");
   const [mode, setMode] = useState(MODE_NEW_ARRIVALS);
-  const [showBackfill, setShowBackfill] = useState(false);
   const [entry, setEntry] = useState("file");
 
   const [file, setFile] = useState(null);
@@ -327,7 +326,6 @@ export default function GdCostingImportPage() {
   const onMode = (next) => {
     if (next === mode) return;
     setMode(next);
-    if (next === MODE_BACKFILL) setShowBackfill(true);
     if (preview && !stale)
       run("recheck", () => recheck({ base: preview, modeNow: next, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm: confirmNew }));
   };
@@ -526,27 +524,11 @@ export default function GdCostingImportPage() {
             title="New goods arrived on this GD"
             body="The monthly case. Each line adds its quantity, landed cost and selling value to the item it matches; a line that matches nothing becomes a new item." />
 
-          {!showBackfill && mode !== MODE_BACKFILL ? (
-            <button type="button" onClick={() => setShowBackfill(true)} disabled={!!busy}
-              style={{ ...ghostBtn(billColors.textSecondary), justifySelf: "start", fontWeight: 600 }}>
-              One-off: price stock that is already on the books…
-            </button>
-          ) : (
-            <div>
-              <ModeCard active={mode === MODE_BACKFILL} disabled={!!busy} onPick={() => onMode(MODE_BACKFILL)}
-                tone={billColors.warn}
-                title="One-off: these goods are already on the books"
-                body="For loading the history once. A matched line SETS the item's actual cost from this GD's unit cost; quantities do not move. Never use it for a new month's GD: the new units would never appear." />
-              {mode === MODE_BACKFILL && (
-                <div style={{ marginTop: "0.5rem" }}>
-                  <Banner tone="warn">
-                    Backfill replaces any actual cost already recorded on the items it matches, and lines
-                    with nothing on the books are left out unless you bring them in.
-                  </Banner>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Backfill (pricing stock already on the books) is no longer offered
+              here (2026-10-03, maintainer's decision): it was used once, to load
+              the history when the importers came on board. The API still takes
+              mode=backfill; onboarding a new importer's landed cost goes through
+              the gd-costing-backfill skill, which drives that API with review. */}
         </div>
       </BillStep>
 

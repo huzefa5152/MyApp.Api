@@ -1194,8 +1194,13 @@ feedback -- change both, or the screen promises what the server refuses.
   preview cannot know. `ProblemLineCount` is informational; the screen's checklist
   and the commit refusal are the controls.
 - **The screen** (`pages/GdCostingImportPage.jsx`) is built on
-  `Components/bill/BillStep` + `BillChecklist` and opens on New arrivals (Backfill
-  sits behind a one-off button; the API default without `mode` stays Backfill).
+  `Components/bill/BillStep` + `BillChecklist` and offers New arrivals ONLY
+  (2026-10-03, maintainer's decision: Backfill was used once, to onboard the
+  importers). The API still takes `mode=backfill` and still defaults to it
+  without `mode`; onboarding landed cost and repairing past imports go through
+  the `gd-costing-backfill` skill, which drives that API with a local rehearsal
+  first and never writes production SQL. Do not put the Backfill choice back on
+  the screen: a monthly GD imported as Backfill silently loses its new units.
   Its footer is `position: fixed` over the measured `main`, NOT sticky:
   `.dl-main` sets `overflow-x`, which makes it a scroll container that never
   scrolls, so a sticky footer sat at the foot of a 5,000px page with the save
