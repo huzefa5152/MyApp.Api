@@ -21,6 +21,7 @@ namespace MyApp.Api.Repositories.Implementations
             // Notes (DocumentType 9/10), which live on the Return Invoices
             // tab with their own numbering sequence.
             return await _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
@@ -30,6 +31,7 @@ namespace MyApp.Api.Repositories.Implementations
                 .Where(i => i.CompanyId == companyId && !i.IsDemo
                          && i.DocumentType != 9 && i.DocumentType != 10)
                 .OrderByDescending(i => i.InvoiceNumber)
+                .ThenByDescending(i => i.Id)
                 .ToListAsync();
         }
 
@@ -43,6 +45,7 @@ namespace MyApp.Api.Repositories.Implementations
             // sequence: sale bills (noteType null, default), Debit Notes
             // (9) and Credit Notes (10). A row is never in two lists.
             var query = _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                     // Dual-book overlay pulled on the list too, so the DTO's
@@ -168,6 +171,7 @@ namespace MyApp.Api.Repositories.Implementations
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderByDescending(i => i.InvoiceNumber)
+                .ThenByDescending(i => i.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -177,7 +181,10 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<Invoice?> GetByIdAsync(int id)
         {
+            // Port the importer invoice-read fix: separate collection queries
+            // avoid sorting repeated wide rows while retaining update tracking.
             return await _context.Invoices
+                .AsSplitQuery()
                 .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)

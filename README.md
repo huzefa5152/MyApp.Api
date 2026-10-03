@@ -291,6 +291,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-10-03 — Invoice read reliability
+
+- Port the invoice-read fix from Importer: load invoice lines and delivery challans in separate queries to reduce database memory pressure on lists, details and prints. Preserve the Trader FBR and handover filters, and make page ordering stable when document numbers tie.
+
 ### 2026-09-27 — Import Data knows a business by its NTN
 
 - **A customer or supplier whose NTN is already on file is skipped**, even under
