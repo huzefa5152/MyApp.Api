@@ -1,9 +1,9 @@
-import { MdEmail, MdPhone, MdLocationOn, MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
+import { MdEdit, MdDelete, MdContentCopy } from "react-icons/md";
 import { deleteClient } from "../api/clientApi";
-import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
+import { Button, Facts } from "../ui/Kit";
 
 export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
   const confirm = useConfirm();
@@ -24,91 +24,51 @@ export default function ClientList({ clients, onEdit, onCopy, fetchClients }) {
   };
 
   return (
-    <div className="card-grid">
+    <div className="k-grid-cards">
       {clients.map((client) => (
-        <div
-          key={client.id}
-          style={cardStyles.card}
-          onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-          onMouseLeave={(e) =>
-            Object.assign(e.currentTarget.style, {
-              transform: "none",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-            })
-          }
-        >
-          <div style={cardStyles.cardContent}>
-            <div>
-              <h5 style={cardStyles.title}>{client.name}</h5>
-              {client.email && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdEmail style={{ color: "#0d47a1", flexShrink: 0 }} /> {client.email}
-                </p>
-              )}
-              {client.phone && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdPhone style={{ color: "#00897b", flexShrink: 0 }} /> {client.phone}
-                </p>
-              )}
-              {client.address && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdLocationOn style={{ color: "#5f6d7e", flexShrink: 0 }} /> {client.address}
-                </p>
-              )}
-              {client.ntn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>NTN:</strong> {client.ntn}
-                </p>
-              )}
-              {client.strn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>STRN:</strong> {client.strn}
-                </p>
-              )}
-              {client.site && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>Site:</strong> {client.site}
-                </p>
-              )}
-            </div>
+        <article key={client.id} className="k-card" style={styles.card}>
+          <div className="k-card__body" style={styles.body}>
+            <h3 style={styles.name} title={client.name}>{client.name}</h3>
+            <Facts
+              facts={[
+                client.email && ["Email", client.email],
+                client.phone && ["Phone", client.phone],
+                client.address && ["Address", client.address],
+                client.ntn && ["NTN", client.ntn],
+                client.strn && ["STRN", client.strn],
+                client.site && ["Site", client.site],
+              ]}
+            />
             {(canUpdate || canDelete || canCopy) && (
-              <div style={cardStyles.buttonGroup}>
+              <div style={styles.actions}>
                 {canUpdate && (
-                  <button
-                    style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => onEdit(client)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.08)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                  >
-                    <MdEdit /> Edit
-                  </button>
+                  <Button variant="primary" icon={MdEdit} onClick={() => onEdit(client)}>Edit</Button>
                 )}
                 {canCopy && onCopy && (
-                  <button
-                    style={{ ...cardStyles.button, backgroundColor: "#ede7f6", color: "#4527a0", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => onCopy(client)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.97)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                    title="Copy this client into another company"
-                  >
-                    <MdContentCopy /> Copy
-                  </button>
+                  <Button variant="secondary" icon={MdContentCopy} onClick={() => onCopy(client)} title="Copy this client into another company">
+                    Copy
+                  </Button>
                 )}
                 {canDelete && (
-                  <button
-                    style={{ ...cardStyles.button, ...cardStyles.delete, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => handleDelete(client.id)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.95)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                  >
-                    <MdDelete /> Delete
-                  </button>
+                  <Button variant="danger" icon={MdDelete} onClick={() => handleDelete(client.id)}>Delete</Button>
                 )}
               </div>
             )}
           </div>
-        </div>
+        </article>
       ))}
     </div>
   );
 }
+
+// Shared entity-card layout (same shape as CompanyList): name, labelled facts, action row.
+const styles = {
+  // marginTop: 0 cancels the kit's `.k-card + .k-card` stacking gap inside the grid.
+  card: { display: "flex", flexDirection: "column", overflow: "hidden", marginTop: 0 },
+  body: { flex: 1, display: "flex", flexDirection: "column", gap: "0.75rem" },
+  name: {
+    margin: 0, fontSize: "calc(var(--k-font) + 0.22rem)", fontWeight: 800, lineHeight: 1.3, letterSpacing: "-0.01em", color: "var(--k-ink)",
+    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere",
+  },
+  actions: { display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "auto", paddingTop: "0.75rem", borderTop: "1px solid var(--k-line)" },
+};

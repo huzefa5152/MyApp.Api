@@ -1,17 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
-import { MdStraighten, MdSearch, MdCheck, MdInfo } from "react-icons/md";
+import { MdStraighten, MdCheck, MdInfo } from "react-icons/md";
 import { getAllUnits, updateUnit } from "../api/unitsApi";
 import { notify } from "../utils/notify";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { PageHeader, CompanyPicker, Alert, Toolbar, ToolbarSpacer, SearchBox, TableWrap, EmptyState, Loading } from "../ui/Kit";
 
 import { useCompany } from "../contexts/CompanyContext";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
   textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
   inputBg: "#f8f9fb",
   inputBorder: "#d0d7e2",
   successBg: "#e8f5e9",
@@ -97,93 +94,59 @@ export default function UnitsPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
-            <MdStraighten style={{ fontSize: "1.5rem", color: "#fff" }} />
-          </div>
-          <div>
-            <h2 style={styles.headerTitle}>Units of Measure</h2>
-            <p style={styles.headerSub}>
-              Configure which UOMs allow fractional quantities (KG, Liter, Carat) vs whole numbers only (Pcs, Pair, SET)
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        icon={MdStraighten}
+        tone="brand"
+        title="Units of Measure"
+        subtitle="Configure which UOMs allow fractional quantities (KG, Liter, Carat) vs whole numbers only (Pcs, Pair, SET)"
+      />
 
-      <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
-        Company
-        <select aria-label="Catalog company" value={selectedCompany?.id || ""}
-          onChange={(e) => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)))}
-          style={{ padding: "0.6rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, maxWidth: "100%" }}>
-          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </label>
+      <CompanyPicker label="Catalog company" />
 
       {/* Info banner */}
-      <div style={styles.infoBanner}>
-        <MdInfo style={{ fontSize: "1.1rem", flexShrink: 0, marginTop: 2 }} />
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>
-            How this drives the bill / challan forms
-          </div>
-          <div style={{ fontSize: "0.85rem", lineHeight: 1.5 }}>
-            When an operator picks a UOM on a bill or challan line, the Quantity
-            input switches to decimal mode (up to 4 decimal places, e.g. 12.5 KG
-            or 0.0004 Carat) for any unit toggled on here. Units toggled off
-            accept whole numbers only — the server rejects 2.5 Pcs with an
-            HTTP 400.
-            {!canManage && (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: "0.82rem",
-                  color: colors.textSecondary,
-                }}
-              >
-                Read-only access — you don't have <code>config.units.manage</code>.
-              </div>
-            )}
-          </div>
+      <Alert tone="info" icon={MdInfo}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+          How this drives the bill / challan forms
         </div>
-      </div>
+        <div style={{ lineHeight: 1.5 }}>
+          When an operator picks a UOM on a bill or challan line, the Quantity
+          input switches to decimal mode (up to 4 decimal places, e.g. 12.5 KG
+          or 0.0004 Carat) for any unit toggled on here. Units toggled off
+          accept whole numbers only — the server rejects 2.5 Pcs with an
+          HTTP 400.
+          {!canManage && (
+            <div style={{ marginTop: 6, fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
+              Read-only access — you don't have <code>config.units.manage</code>.
+            </div>
+          )}
+        </div>
+      </Alert>
 
       {/* Summary + Search */}
-      <div style={styles.toolbar}>
+      <Toolbar>
         <div style={styles.summary}>
           <strong>{units.length}</strong> total units ·{" "}
           <strong>{decimalCount}</strong> allow decimals ·{" "}
           <strong>{units.length - decimalCount}</strong> integer-only
         </div>
-        <div style={styles.searchWrap}>
-          <MdSearch style={{ color: colors.textSecondary, fontSize: "1.1rem" }} />
-          <input
-            type="text"
-            style={styles.searchInput}
-            placeholder="Search units…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
+        <ToolbarSpacer />
+        <SearchBox value={search} onChange={setSearch} placeholder="Search units…" />
+      </Toolbar>
 
       {/* Grid */}
       {loading ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-          Loading units…
-        </p>
+        <Loading>Loading units…</Loading>
       ) : filtered.length === 0 ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+        <EmptyState icon={MdStraighten}>
           {search ? "No units match your search" : "No units yet"}
-        </p>
+        </EmptyState>
       ) : (
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
+        <TableWrap>
+          <table className="k-table">
             <thead>
               <tr>
-                <th style={styles.th}>Unit Name</th>
-                <th style={{ ...styles.th, textAlign: "center", width: 220 }}>
+                <th>Unit Name</th>
+                <th className="is-center" style={{ width: 220 }}>
                   Allow Decimal Quantity
                 </th>
               </tr>
@@ -194,12 +157,12 @@ export default function UnitsPage() {
                 const saving = pendingId === u.id;
                 return (
                   <tr key={u.id}>
-                    <td style={styles.td}>
-                      <div style={{ fontWeight: 600, color: colors.textPrimary }}>
+                    <td>
+                      <div style={{ fontWeight: 600, color: "var(--k-ink)", overflowWrap: "anywhere" }}>
                         {u.name}
                       </div>
                     </td>
-                    <td style={{ ...styles.td, textAlign: "center" }}>
+                    <td className="is-center">
                       <button
                         type="button"
                         onClick={() => handleToggle(u)}
@@ -238,7 +201,7 @@ export default function UnitsPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
       )}
     </div>
   );
@@ -246,115 +209,22 @@ export default function UnitsPage() {
 
 /* ---------- styles ---------- */
 const styles = {
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: "1rem",
-    marginBottom: "1.5rem",
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    margin: 0,
-    fontSize: "1.4rem",
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  headerSub: {
-    margin: "0.2rem 0 0",
-    fontSize: "0.88rem",
-    color: colors.textSecondary,
-    maxWidth: 700,
-  },
-  infoBanner: {
-    display: "flex",
-    gap: "0.75rem",
-    background: "#eef4fb",
-    border: "1px solid #b7d4f0",
-    color: "#0d47a1",
-    padding: "0.85rem 1rem",
-    borderRadius: 10,
-    marginBottom: "1.25rem",
-  },
-  toolbar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: "0.75rem",
-    marginBottom: "1rem",
-  },
   summary: {
-    fontSize: "0.9rem",
-    color: colors.textSecondary,
+    fontSize: "var(--k-font)",
+    color: "var(--k-muted)",
   },
-  searchWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 8,
-    padding: "0.45rem 0.75rem",
-    minWidth: 240,
-  },
-  searchInput: {
-    border: "none",
-    outline: "none",
-    background: "transparent",
-    fontSize: "0.9rem",
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  tableWrap: {
-    background: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12,
-    // Was overflow:hidden which clipped content on mobile. overflowX
-    // lets the wrapper scroll horizontally when the units table
-    // (Name / Allows Decimal / Used By) is wider than the viewport.
-    overflowX: "auto",
-    overflowY: "hidden",
-    WebkitOverflowScrolling: "touch",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-  th: {
-    textAlign: "left",
-    padding: "0.75rem 1rem",
-    fontSize: "0.78rem",
-    fontWeight: 700,
-    color: colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    background: "#f8fafc",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-  },
-  td: {
-    padding: "0.75rem 1rem",
-    fontSize: "0.92rem",
-    color: colors.textPrimary,
-    borderBottom: `1px solid ${colors.cardBorder}`,
-  },
+  // Pill toggle — global `button` rule in index.css is overridden (boxShadow / minHeight)
+  // so the pill keeps its shape; height follows the theme's control height.
   toggleBtn: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.35rem",
-    padding: "0.4rem 0.85rem",
+    minHeight: "calc(var(--k-h) - 6px)",
+    padding: "0 0.85rem",
     borderRadius: 999,
-    fontSize: "0.82rem",
+    fontSize: "var(--k-font-sm)",
     fontWeight: 600,
+    boxShadow: "none",
     transition: "background 0.15s, color 0.15s, border-color 0.15s",
     minWidth: 150,
     justifyContent: "center",

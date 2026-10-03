@@ -9,6 +9,7 @@ import { formStyles, modalSizes } from "../theme";
 import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
 import { notify } from "../utils/notify";
 import useScrollToError from "../hooks/useScrollToError";
+import { Button, Loading } from "../ui/Kit";
 
 /**
  * Edit form for a "Common Client" (a ClientGroup row + its sibling
@@ -331,7 +332,7 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
         <form onSubmit={handleSubmit} style={{ display: "contents" }}>
           <div style={formStyles.body}>
             {loading ? (
-              <div style={s.notice}>Loading…</div>
+              <Loading>Loading…</Loading>
             ) : (
               <>
                 {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
@@ -508,16 +509,17 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                         const remainingCount = companies.filter((c) => !memberCompanyIds.has(c.id)).length;
                         if (remainingCount === 0) return null;
                         return (
-                          <button
-                            type="button"
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={MdAdd}
                             style={s.addCompanyBtn}
                             onClick={() => setAddingToCompanies(true)}
                             disabled={saving || deleting || deletingMemberId !== null}
                             title="Add this common client to other companies that don't have it yet"
                           >
-                            <MdAdd size={14} />
                             Add to {remainingCount === 1 ? "1 more company" : `${remainingCount} more companies`}
-                          </button>
+                          </Button>
                         );
                       })()}
                     </div>
@@ -537,23 +539,17 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
                               {m.hasInvoices ? "Has bills" : <span style={{ color: "#aab3bf" }}>—</span>}
                             </div>
                             {canDelete ? (
-                              <button
-                                type="button"
-                                style={{
-                                  ...s.memberDeleteBtn,
-                                  opacity: removingThis || otherActionInFlight ? 0.55 : 1,
-                                  cursor: removingThis || otherActionInFlight ? "not-allowed" : "pointer",
-                                }}
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                icon={MdDelete}
                                 onClick={() => handleDeleteMember(m)}
                                 disabled={removingThis || otherActionInFlight}
                                 title={`Remove this client from ${m.companyName} only`}
                                 aria-label={`Remove from ${m.companyName}`}
                               >
-                                <MdDelete size={14} />
-                                <span style={s.memberDeleteText}>
-                                  {removingThis ? "Removing…" : "Remove"}
-                                </span>
-                              </button>
+                                {removingThis ? "Removing…" : "Remove"}
+                              </Button>
                             ) : (
                               <span />
                             )}
@@ -652,7 +648,6 @@ export default function CommonClientForm({ groupId, onClose, onSaved, onChange }
 }
 
 const s = {
-  notice: { padding: "2rem", textAlign: "center", color: "#5f6d7e" },
   cascadeBanner: {
     display: "flex",
     gap: "0.6rem",
@@ -699,29 +694,10 @@ const s = {
     background: "#fff",
     border: "1px solid #f0f3f7",
   },
-  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  memberSite: { color: "#5f6d7e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 },
+  // Company / site names are user-supplied: 2-line clamp, never nowrap + ellipsis.
+  memberCompany: { display: "flex", alignItems: "flex-start", gap: "0.25rem", fontWeight: 600, color: "#1a2332", minWidth: 0, overflowWrap: "anywhere" },
+  memberSite: { color: "#5f6d7e", minWidth: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" },
   memberFlag: { color: "#5f6d7e", fontSize: "0.78rem", whiteSpace: "nowrap" },
-  memberDeleteBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    padding: "0.3rem 0.55rem",
-    borderRadius: 6,
-    border: "1px solid rgba(220, 53, 69, 0.25)",
-    background: "#fff0f1",
-    color: "#dc3545",
-    fontSize: "0.74rem",
-    fontWeight: 600,
-    transition: "background 150ms ease, border-color 150ms ease",
-    whiteSpace: "nowrap",
-  },
-  memberDeleteText: {
-    // Hide the "Remove" / "Removing…" text on tiny widths — the trash
-    // icon alone communicates the action and the title attr remains
-    // for accessibility.
-    fontSize: "0.74rem",
-  },
   fieldHelp: {
     fontSize: "0.75rem",
     color: "#5f6d7e",
@@ -737,18 +713,6 @@ const s = {
     boxShadow: "none",
   },
   addCompanyBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
     marginLeft: "auto",
-    padding: "0.3rem 0.65rem",
-    borderRadius: 6,
-    border: "1px solid rgba(13,71,161,0.25)",
-    background: "#e3f2fd",
-    color: "#0d47a1",
-    fontSize: "0.76rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
   },
 };

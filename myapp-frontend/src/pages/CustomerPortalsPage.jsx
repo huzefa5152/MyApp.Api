@@ -1,16 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  MdPublic, MdAdd, MdContentCopy, MdCheck, MdDelete, MdBusiness, MdWarning,
+  MdPublic, MdAdd, MdContentCopy, MdCheck, MdDelete, MdWarning,
   MdOpenInNew, MdToggleOn, MdToggleOff,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
-import { colors, formStyles, modalSizes, dropdownStyles } from "../theme";
+import { colors, formStyles, modalSizes } from "../theme";
 import useIsNarrow from "../hooks/useIsNarrow";
 import useScrollToError from "../hooks/useScrollToError";
-import SearchableSelect from "../Components/SearchableSelect";
+import SearchableClientSelect from "../Components/SearchableClientSelect";
+import { PageHeader, Button, Alert, EmptyState, Loading } from "../ui/Kit";
 import { getClientsByCompany } from "../api/clientApi";
 import {
   getCustomerPortals, getPortalDocumentOptions, createCustomerPortal,
@@ -116,105 +117,107 @@ export default function CustomerPortalsPage() {
 
   if (!canView) {
     return (
-      <div style={{ padding: "2rem", color: colors.textSecondary }}>
+      <EmptyState icon={MdPublic}>
         You don't have permission to view customer portals.
-      </div>
+      </EmptyState>
     );
   }
 
   return (
-    <div style={{ padding: "clamp(0.75rem, 2vw, 1.5rem)" }}>
-      <div style={st.headerRow}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-          <MdPublic size={26} color={colors.blue} />
-          <h2 style={st.h2}>Customer Portals</h2>
-          <span style={st.countChip}>{rows.length} link{rows.length === 1 ? "" : "s"}</span>
-        </div>
-        {canCreate && (
-          <button style={st.primaryBtn} onClick={() => setShowForm(true)}>
-            <MdAdd size={16} /> New Portal
-          </button>
+    <div>
+      <PageHeader
+        icon={MdPublic}
+        tone="blue"
+        title="Customer Portals"
+        count={`${rows.length} link${rows.length === 1 ? "" : "s"}`}
+        actions={canCreate && (
+          <Button variant="primary" icon={MdAdd} onClick={() => setShowForm(true)}>New Portal</Button>
         )}
-      </div>
+      />
 
       {/* Said once, plainly, at the top. An operator who thinks of this as "a
           link to the customer's page" will forward it without thinking. */}
-      <div style={st.notice}>
-        <MdWarning size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-        A portal link is a password. Anyone who has it can see that customer's invoices
-        without logging in — so send it to the customer directly, and revoke it if it
-        goes anywhere else.
-      </div>
+      <Alert tone="warn" icon={MdWarning}>
+        <span style={{ fontWeight: 600, lineHeight: 1.5 }}>
+          A portal link is a password. Anyone who has it can see that customer's invoices
+          without logging in — so send it to the customer directly, and revoke it if it
+          goes anywhere else.
+        </span>
+      </Alert>
 
       {loading ? (
-        <div style={st.empty}>Loading…</div>
+        <Loading>Loading…</Loading>
       ) : rows.length === 0 ? (
-        <div style={st.empty}>
+        <EmptyState icon={MdPublic}>
           No portals yet. Issue one to let a customer see their own invoices without an account.
-        </div>
+        </EmptyState>
       ) : (
         <div style={st.list}>
           {rows.map((p) => (
-            <div key={p.id} style={{ ...st.card, ...(p.isActive ? null : st.cardOff) }}>
-              <div style={st.cardHead}>
-                <span style={st.client}>{p.clientName}</span>
-                <span style={p.isActive ? st.activeChip : st.offChip}>
-                  {p.isActive ? "active" : `disabled ${fmtDate(p.disabledAt)}`}
-                </span>
-                {!p.templateAvailable && (
-                  <span style={st.warnChip} title="This company has no template for the chosen document">
-                    <MdWarning size={11} style={{ verticalAlign: "-1px" }} /> no template
+            <article key={p.id} className="k-card" style={{ ...st.card, ...(p.isActive ? null : st.cardOff) }}>
+              <div className="k-card__body" style={st.cardBody}>
+                <div style={st.cardHead}>
+                  <h3 style={st.client} title={p.clientName}>{p.clientName}</h3>
+                  <span style={p.isActive ? st.activeChip : st.offChip}>
+                    {p.isActive ? "active" : `disabled ${fmtDate(p.disabledAt)}`}
                   </span>
-                )}
-              </div>
-              <div style={st.meta}>
-                {p.companyName} · issued {fmtDate(p.createdAt)}
-              </div>
+                  {!p.templateAvailable && (
+                    <span style={st.warnChip} title="This company has no template for the chosen document">
+                      <MdWarning size={11} style={{ verticalAlign: "-1px" }} /> no template
+                    </span>
+                  )}
+                </div>
+                <div style={st.meta}>
+                  {p.companyName} · issued {fmtDate(p.createdAt)}
+                </div>
 
-              <div style={st.linkRow}>
-                {/* The URL is shown truncated with the token hidden: the point
-                    of the row is to COPY it, not to read a secret aloud. */}
-                <span style={st.linkText} title="Copy the link rather than reading it out">
-                  {p.publicUrl.replace(/\/portal\/.*$/, "/portal/") }
-                  <span style={st.tokenMask}>••••••••</span>
-                </span>
-                <button style={st.linkBtn} onClick={() => copyLink(p)} aria-label={`Copy ${p.clientName}'s link`}>
-                  {copiedId === p.id ? <><MdCheck size={15} /> Copied</> : <><MdContentCopy size={15} /> Copy link</>}
-                </button>
-                <a href={p.publicUrl} target="_blank" rel="noopener noreferrer"
-                   style={st.linkBtn} aria-label={`Open ${p.clientName}'s portal`}>
-                  <MdOpenInNew size={15} /> Open
-                </a>
-              </div>
+                <div style={st.linkRow}>
+                  {/* The URL is shown truncated with the token hidden: the point
+                      of the row is to COPY it, not to read a secret aloud. */}
+                  <span style={st.linkText} title="Copy the link rather than reading it out">
+                    {p.publicUrl.replace(/\/portal\/.*$/, "/portal/") }
+                    <span style={st.tokenMask}>••••••••</span>
+                  </span>
+                  <Button variant="secondary" icon={copiedId === p.id ? MdCheck : MdContentCopy}
+                    onClick={() => copyLink(p)} aria-label={`Copy ${p.clientName}'s link`}>
+                    {copiedId === p.id ? "Copied" : "Copy link"}
+                  </Button>
+                  <a href={p.publicUrl} target="_blank" rel="noopener noreferrer"
+                     className="k-btn k-btn--secondary" aria-label={`Open ${p.clientName}'s portal`}>
+                    <MdOpenInNew size={15} aria-hidden="true" /> Open
+                  </a>
+                </div>
 
-              <div style={st.cardActions}>
-                {canUpdate && (
-                  <label style={st.docLabel}>
-                    Document
-                    <select
-                      style={{ ...dropdownStyles.base, minWidth: 150 }}
-                      value={p.documentType || ""}
-                      onChange={(e) => changeDocument(p, e.target.value)}
-                    >
-                      <option value="">Automatic</option>
-                      {p.availableDocumentTypes.includes("Bill") && <option value="Bill">Bill</option>}
-                      {p.availableDocumentTypes.includes("TaxInvoice") && <option value="TaxInvoice">Tax Invoice</option>}
-                    </select>
-                  </label>
-                )}
-                <span style={{ flex: 1 }} />
-                {canUpdate && (
-                  <button style={st.rowBtn} onClick={() => toggle(p)}>
-                    {p.isActive ? <><MdToggleOff size={17} /> Disable</> : <><MdToggleOn size={17} /> Enable</>}
-                  </button>
-                )}
-                {canDelete && (
-                  <button style={{ ...st.rowBtn, ...st.rowBtnDanger }} onClick={() => revoke(p)}>
-                    <MdDelete size={15} /> Revoke
-                  </button>
-                )}
+                <div style={st.cardActions}>
+                  {canUpdate && (
+                    <label style={st.docLabel}>
+                      Document
+                      <select
+                        className="k-select"
+                        style={{ width: "auto", minWidth: 150 }}
+                        value={p.documentType || ""}
+                        onChange={(e) => changeDocument(p, e.target.value)}
+                      >
+                        <option value="">Automatic</option>
+                        {p.availableDocumentTypes.includes("Bill") && <option value="Bill">Bill</option>}
+                        {p.availableDocumentTypes.includes("TaxInvoice") && <option value="TaxInvoice">Tax Invoice</option>}
+                      </select>
+                    </label>
+                  )}
+                  <span style={{ flex: 1 }} />
+                  {canUpdate && (
+                    <Button variant="secondary" icon={p.isActive ? MdToggleOff : MdToggleOn} onClick={() => toggle(p)}>
+                      {p.isActive ? "Disable" : "Enable"}
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button variant="danger" icon={MdDelete} onClick={() => revoke(p)}>
+                      Revoke
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
@@ -293,7 +296,7 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Company</label>
               <select
-                style={{ ...dropdownStyles.base, width: "100%" }}
+                style={{ ...formStyles.input, cursor: "pointer" }}
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value)}
               >
@@ -303,13 +306,12 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
 
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Customer</label>
-              <SearchableSelect
-                items={clients}
+              <SearchableClientSelect
+                clients={clients}
                 value={clientId}
                 onChange={(id) => setClientId(id || "")}
-                labelKey="name"
-                searchKeys={["name", "ntn"]}
                 placeholder="Pick the customer this link is for"
+                ariaLabel="Customer"
               />
               <div style={st.fieldHint}>
                 They will see every invoice of theirs on this company — and nothing else.
@@ -319,7 +321,7 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
             <div style={formStyles.formGroup}>
               <label style={formStyles.label}>Document they download</label>
               <select
-                style={{ ...dropdownStyles.base, width: "100%" }}
+                style={{ ...formStyles.input, cursor: "pointer" }}
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value)}
               >
@@ -348,16 +350,16 @@ function PortalForm({ companies, defaultCompanyId, isNarrow, onClose, onSaved })
 }
 
 const st = {
-  headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.9rem" },
-  h2: { margin: 0, fontSize: "1.4rem", color: colors.textPrimary },
-  countChip: { fontSize: "0.72rem", fontWeight: 700, color: colors.blue, background: "#eef2ff", border: `1px solid ${colors.cardBorder}`, padding: "3px 10px", borderRadius: 12 },
-  primaryBtn: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0 1rem", height: 44, borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
-  notice: { padding: "0.6rem 0.9rem", borderRadius: 10, marginBottom: "1rem", background: "#fff3cd", border: "1px solid #ffe69c", color: "#8a5a00", fontSize: "0.83rem", fontWeight: 600, lineHeight: 1.5 },
-  list: { display: "grid", gap: "0.85rem" },
-  card: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.9rem 1rem", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" },
+  list: { display: "grid", gap: "var(--k-gap)" },
+  // marginTop: 0 cancels the kit's `.k-card + .k-card` margin — the grid gap spaces the cards.
+  card: { marginTop: 0 },
+  cardBody: { padding: "calc(var(--k-gap) * 0.72) 1rem" },
   cardOff: { background: "#fafbfc", borderStyle: "dashed" },
   cardHead: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: 3 },
-  client: { fontWeight: 800, fontSize: "0.98rem", color: colors.textPrimary, overflowWrap: "anywhere" },
+  client: {
+    margin: 0, fontWeight: 800, fontSize: "calc(var(--k-font) + 0.08rem)", color: colors.textPrimary, overflowWrap: "anywhere", minWidth: 0,
+    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+  },
   activeChip: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#e8f5e9", color: "#1b5e20", padding: "1px 7px", borderRadius: 10 },
   offChip: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#eceff1", color: "#607d8b", padding: "1px 7px", borderRadius: 10 },
   warnChip: { fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", background: "#fff3cd", color: "#8a5a00", padding: "1px 7px", borderRadius: 10 },
@@ -365,11 +367,7 @@ const st = {
   linkRow: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0.65rem", background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
   linkText: { flex: "1 1 200px", minWidth: 0, fontSize: "0.78rem", fontFamily: "monospace", color: colors.textSecondary, overflowWrap: "anywhere" },
   tokenMask: { letterSpacing: 2, color: colors.textSecondary },
-  linkBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 0.8rem", height: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", textDecoration: "none", boxShadow: "none" },
   cardActions: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.7rem", paddingTop: "0.6rem", borderTop: `1px solid ${colors.cardBorder}` },
-  docLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", fontWeight: 600, color: colors.textSecondary },
-  rowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 0.9rem", height: 44, minWidth: 44, borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
-  rowBtnDanger: { color: colors.danger, borderColor: `${colors.danger}40` },
+  docLabel: { display: "flex", alignItems: "center", gap: 8, fontSize: "var(--k-font-sm)", fontWeight: 600, color: colors.textSecondary },
   fieldHint: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 5, lineHeight: 1.45 },
-  empty: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
 };

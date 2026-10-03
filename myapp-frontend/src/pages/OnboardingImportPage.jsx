@@ -13,6 +13,7 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import StepCard from "../Components/onboarding/StepCard";
 import { colors } from "../theme";
+import { PageHeader, Button, Tabs } from "../ui/Kit";
 import {
   SHEETS, allowedSheets, sheetsFromQuery, sheetsParam, summarise, rowsFor, issueLine,
   missingSheets, checklist, canImport, sampleFileName, fileProblem, sheetByKey, STATUS,
@@ -225,9 +226,9 @@ export default function OnboardingImportPage() {
         </div>
         {stage === "choose" && (
           <div style={st.actions}>
-            <button type="button" style={st.primary} disabled={!selected.length} onClick={() => goTo("sample")}>
+            <Button variant="primary" disabled={!selected.length} onClick={() => goTo("sample")}>
               Continue <MdArrowForward size={18} />
-            </button>
+            </Button>
           </div>
         )}
       </StepCard>
@@ -247,11 +248,11 @@ export default function OnboardingImportPage() {
           ))}
         </div>
         <div style={st.actions}>
-          <button type="button" style={st.primary} onClick={onDownloadSample} disabled={busy === "sample" || !selected.length}>
-            <MdFileDownload size={18} /> {busy === "sample" ? "Preparing…" : "Download sample workbook"}
-          </button>
+          <Button variant="primary" icon={MdFileDownload} onClick={onDownloadSample} disabled={busy === "sample" || !selected.length}>
+            {busy === "sample" ? "Preparing…" : "Download sample workbook"}
+          </Button>
           {stage === "sample" && (
-            <button type="button" style={st.secondary} onClick={() => goTo("upload")}>I already have my file</button>
+            <Button variant="secondary" onClick={() => goTo("upload")}>I already have my file</Button>
           )}
         </div>
       </StepCard>
@@ -301,17 +302,22 @@ export default function OnboardingImportPage() {
             )}
             {preview.sheets.flatMap((s) => s.sheetWarnings).map((w) => <Notice key={w} tone="warning">{w}</Notice>)}
 
-            <div role="tablist" aria-label="Sheets" style={st.tabs}>
-              {inDisplayOrder(preview.sheets).map((s) => (
-                <button key={s.key} type="button" role="tab" aria-selected={tab === s.key}
-                  style={{ ...st.tab, ...(tab === s.key ? st.tabOn : null) }}
-                  onClick={() => { setTab(s.key); setFilter("all"); setShown(ROW_PAGE); }}>
-                  {s.title}
-                  <span style={st.tabCount}>{s.rows.length}</span>
-                  {s.errors > 0 && <span style={st.tabErr}>{s.errors} to fix</span>}
-                </button>
-              ))}
-            </div>
+            <Tabs
+              label="Sheets"
+              idPrefix="import-sheet"
+              value={tab}
+              onChange={(key) => { setTab(key); setFilter("all"); setShown(ROW_PAGE); }}
+              tabs={inDisplayOrder(preview.sheets).map((s) => ({
+                key: s.key,
+                label: (
+                  <>
+                    {s.title}
+                    {s.errors > 0 && <span style={st.tabErr}>{s.errors} to fix</span>}
+                  </>
+                ),
+                count: s.rows.length,
+              }))}
+            />
 
             {activeSheet && (
               <>
@@ -320,10 +326,10 @@ export default function OnboardingImportPage() {
                     const n = f === "all" ? activeSheet.rows.length : activeSheet.rows.filter((r) => r.status === f).length;
                     if (f !== "all" && n === 0) return null;
                     return (
-                      <button key={f} type="button" onClick={() => { setFilter(f); setShown(ROW_PAGE); }}
-                        style={{ ...st.filter, ...(filter === f ? st.filterOn : null) }}>
+                      <Button key={f} size="sm" variant={filter === f ? "primary" : "secondary"} aria-pressed={filter === f}
+                        onClick={() => { setFilter(f); setShown(ROW_PAGE); }} style={st.filter}>
                         {f === "all" ? "All rows" : STATUS[f].label} · {n}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -336,9 +342,9 @@ export default function OnboardingImportPage() {
                   </ul>
                 )}
                 {visibleRows.length > shown && (
-                  <button type="button" style={st.secondary} onClick={() => setShown((n) => n + ROW_PAGE)}>
+                  <Button variant="secondary" onClick={() => setShown((n) => n + ROW_PAGE)} style={{ marginTop: "0.6rem" }}>
                     Show {Math.min(ROW_PAGE, visibleRows.length - shown)} more of {visibleRows.length - shown}
-                  </button>
+                  </Button>
                 )}
               </>
             )}
@@ -346,18 +352,17 @@ export default function OnboardingImportPage() {
             <Checklist items={checklist({ selected, file, preview, busy: busy === "preview" })} />
 
             <div style={st.actions}>
-              <button type="button" style={st.primary} disabled={!canImport(preview, !!busy)} onClick={onImport}>
-                <MdPlaylistAddCheck size={18} />
+              <Button variant="primary" icon={MdPlaylistAddCheck} disabled={!canImport(preview, !!busy)} onClick={onImport}>
                 {busy === "commit" ? "Importing…" : `Import ${totals.willCreate} row${totals.willCreate === 1 ? "" : "s"}`}
-              </button>
+              </Button>
               {totals.errors > 0 && (
-                <button type="button" style={st.secondary} onClick={onFixList} disabled={!!busy}>
-                  <MdFileDownload size={18} /> {busy === "fix" ? "Preparing…" : `Download ${totals.errors} row${totals.errors === 1 ? "" : "s"} to fix`}
-                </button>
+                <Button variant="secondary" icon={MdFileDownload} onClick={onFixList} disabled={!!busy}>
+                  {busy === "fix" ? "Preparing…" : `Download ${totals.errors} row${totals.errors === 1 ? "" : "s"} to fix`}
+                </Button>
               )}
-              <button type="button" style={st.secondary} onClick={() => fileInput.current?.click()} disabled={!!busy}>
-                <MdRefresh size={18} /> Choose a different file
-              </button>
+              <Button variant="secondary" icon={MdRefresh} onClick={() => fileInput.current?.click()} disabled={!!busy}>
+                Choose a different file
+              </Button>
             </div>
           </>
         )}
@@ -393,7 +398,7 @@ export default function OnboardingImportPage() {
               </>
             )}
             <div style={st.actions}>
-              <button type="button" style={st.primary} onClick={reset}><MdRefresh size={18} /> Import another file</button>
+              <Button variant="primary" icon={MdRefresh} onClick={reset}>Import another file</Button>
             </div>
           </>
         )}
@@ -405,13 +410,15 @@ export default function OnboardingImportPage() {
 function Page({ companyName, children }) {
   return (
     <div style={st.page}>
-      <header style={st.pageHead}>
-        <h2 style={st.pageTitle}>Import Data</h2>
-        <p style={st.pageSub}>
+      <PageHeader
+        icon={MdCloudUpload}
+        tone="brand"
+        title="Import Data"
+        subtitle={<>
           Bring {companyName ? <strong>{companyName}</strong> : "a company"}'s customers, items, suppliers and opening stock
           in from one Excel file. Only what FBR and your printed documents need is asked for.
-        </p>
-      </header>
+        </>}
+      />
       <div style={st.steps}>{children}</div>
     </div>
   );
@@ -429,7 +436,7 @@ function Notice({ tone = "info", children, onClose }) {
   return (
     <div role={tone === "error" ? "alert" : "status"}
       style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start", padding: "0.7rem 0.85rem", borderRadius: 10,
-        background: t.bg, border: `1px solid ${t.border}`, color: t.color, fontSize: "0.88rem", margin: "0.25rem 0 0.75rem" }}>
+        background: t.bg, border: `1px solid ${t.border}`, color: t.color, fontSize: "var(--k-font)", margin: "0.25rem 0 0.75rem" }}>
       <Icon size={20} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
       <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
       {onClose && (
@@ -490,39 +497,30 @@ function Checklist({ items }) {
 
 const st = {
   page: { maxWidth: 1080, margin: "0 auto", padding: "0.25rem 0 2rem" },
-  pageHead: { marginBottom: "1rem" },
-  pageTitle: { margin: 0, fontSize: "1.4rem", fontWeight: 800, color: colors.textPrimary },
-  pageSub: { margin: "0.35rem 0 0", fontSize: "0.9rem", color: colors.textSecondary, lineHeight: 1.5 },
-  steps: { display: "flex", flexDirection: "column", gap: "0.85rem" },
-  muted: { fontSize: "0.82rem", color: colors.textSecondary, lineHeight: 1.4 },
+  steps: { display: "flex", flexDirection: "column", gap: "var(--k-gap)" },
+  muted: { fontSize: "var(--k-font-sm)", color: colors.textSecondary, lineHeight: 1.4 },
   choiceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.6rem" },
-  choice: { display: "flex", gap: "0.6rem", alignItems: "flex-start", padding: "0.75rem 0.85rem", minHeight: 44, borderRadius: 10, border: `1px solid ${colors.inputBorder}`, background: "#fff", cursor: "pointer" },
+  choice: { display: "flex", gap: "0.6rem", alignItems: "flex-start", padding: "0.75rem 0.85rem", minHeight: 44, borderRadius: "var(--k-radius)", border: `1px solid ${colors.inputBorder}`, background: "#fff", cursor: "pointer", fontSize: "var(--k-font)" },
   choiceOn: { borderColor: colors.blue, background: "#f3f7ff", boxShadow: `0 0 0 1px ${colors.blue} inset` },
   choiceOff: { opacity: 0.55, cursor: "not-allowed" },
   checkbox: { width: 20, height: 20, marginTop: 2, flexShrink: 0, accentColor: colors.blue },
   choiceText: { display: "flex", flexDirection: "column", gap: 3, minWidth: 0 },
   actions: { display: "flex", flexWrap: "wrap", gap: "0.6rem", marginTop: "1rem" },
-  primary: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", minHeight: 44, padding: "0 1.1rem", borderRadius: 10, border: "none", background: colors.blue, color: "#fff", fontWeight: 700, fontSize: "0.9rem", cursor: "pointer" },
-  secondary: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", minHeight: 44, padding: "0 1rem", borderRadius: 10, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontWeight: 600, fontSize: "0.88rem", cursor: "pointer" },
   sheetGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.6rem" },
-  sheetTile: { display: "flex", flexDirection: "column", gap: 4, padding: "0.75rem 0.85rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, background: colors.inputBg },
-  tileTitle: { fontSize: "0.95rem", color: colors.textPrimary },
+  sheetTile: { display: "flex", flexDirection: "column", gap: 4, padding: "0.75rem 0.85rem", borderRadius: "var(--k-radius)", border: `1px solid ${colors.cardBorder}`, background: colors.inputBg, fontSize: "var(--k-font)" },
+  tileTitle: { fontSize: "calc(var(--k-font) + 0.05rem)", color: colors.textPrimary },
   requiredTag: { alignSelf: "flex-start", marginTop: 4, fontSize: "0.72rem", fontWeight: 700, color: "#c62828", background: "#ffebee", border: "1px solid #ef9a9a", borderRadius: 999, padding: "1px 8px" },
   drop: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.4rem", minHeight: 150, padding: "1.25rem", borderRadius: 12, border: `2px dashed ${colors.inputBorder}`, background: colors.inputBg, textAlign: "center", cursor: "pointer", color: colors.textPrimary },
   dropOver: { borderColor: colors.blue, background: "#eef4ff" },
   fileChip: { display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: "0.82rem", color: colors.blue, maxWidth: "100%", overflowWrap: "anywhere" },
   tiles: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))", gap: "0.6rem", marginBottom: "0.9rem" },
-  tile: { display: "flex", flexDirection: "column", gap: 2, padding: "0.7rem 0.85rem", borderRadius: 10, border: "1px solid" },
-  tileValue: { fontSize: "1.5rem", fontWeight: 800, lineHeight: 1.1 },
-  tileLabel: { fontSize: "0.8rem", fontWeight: 600 },
-  tabs: { display: "flex", flexWrap: "wrap", gap: "0.4rem", borderBottom: `1px solid ${colors.cardBorder}`, marginBottom: "0.7rem" },
-  tab: { display: "inline-flex", alignItems: "center", gap: "0.4rem", minHeight: 44, padding: "0 0.9rem", border: "none", borderBottom: "3px solid transparent", background: "transparent", color: colors.textSecondary, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer" },
-  tabOn: { color: colors.blue, borderBottomColor: colors.blue },
-  tabCount: { fontSize: "0.72rem", background: "#eceff1", color: "#37474f", borderRadius: 999, padding: "1px 7px" },
+  tile: { display: "flex", flexDirection: "column", gap: 2, padding: "var(--k-stat-pad)", borderRadius: "var(--k-radius)", border: "1px solid" },
+  tileValue: { fontSize: "calc(var(--k-stat-value) + 0.15rem)", fontWeight: 800, lineHeight: 1.1 },
+  tileLabel: { fontSize: "var(--k-font-sm)", fontWeight: 600 },
   tabErr: { fontSize: "0.72rem", background: "#ffebee", color: "#b71c1c", borderRadius: 999, padding: "1px 7px" },
   filters: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.7rem" },
-  filter: { minHeight: 44, padding: "0 0.8rem", borderRadius: 999, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
-  filterOn: { background: colors.blue, borderColor: colors.blue, color: "#fff" },
+  // Status filter pills — kit buttons, rounded to read as filter chips.
+  filter: { borderRadius: 999 },
   rowList: { listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))", gap: "0.5rem" },
   rowCard: { padding: "0.6rem 0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, borderLeft: "4px solid", background: "#fff", minWidth: 0 },
   rowHead: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" },

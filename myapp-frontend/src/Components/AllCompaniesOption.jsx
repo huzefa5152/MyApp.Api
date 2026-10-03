@@ -17,7 +17,8 @@ export default function AllCompaniesOption({ checked, onChange }) {
   </div>;
 }
 
-const box = { display: "flex", alignItems: "flex-start", gap: "0.6rem", minHeight: 44, padding: "0.6rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" };
+// Sizes follow the kit tokens so the option matches the surrounding form in every theme.
+const box = { display: "flex", alignItems: "flex-start", gap: "0.6rem", minHeight: "var(--k-h)", padding: "0.6rem 0.8rem", borderRadius: "var(--k-radius)", border: `1px solid ${colors.inputBorder}`, background: "var(--k-input-bg)", fontSize: "var(--k-font)", cursor: "pointer" };
 const on = { borderColor: "#8a4b00", background: "#fff4e5" };
 const help = { display: "block", fontSize: "0.76rem", fontWeight: 400, color: colors.textSecondary, marginTop: 2 };
-const warn = { display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "0.5rem", padding: "0.6rem 0.8rem", borderRadius: 8, background: "#fff3cd", color: "#664d03", border: "1px solid #ffecb5", fontSize: "0.82rem", lineHeight: 1.45 };
+const warn = { display: "flex", gap: "0.5rem", alignItems: "flex-start", marginTop: "0.5rem", padding: "0.6rem 0.8rem", borderRadius: "var(--k-radius)", background: "#fff3cd", color: "#664d03", border: "1px solid #ffecb5", fontSize: "var(--k-font-sm)", lineHeight: 1.45 };

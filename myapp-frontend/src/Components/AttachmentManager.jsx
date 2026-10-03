@@ -13,6 +13,8 @@ import {
 } from "../api/attachmentApi";
 import AttachmentPreviewModal from "./AttachmentPreviewModal";
 import FolderFormModal from "./FolderFormModal";
+import SearchableSelect from "./SearchableSelect";
+import { Button, IconButton, Loading } from "../ui/Kit";
 
 /**
  * The single reusable attachment component for the whole ERP.
@@ -226,9 +228,9 @@ const AttachmentManager = forwardRef(function AttachmentManager(
           <MdAttachFile size={16} /> {title} <span style={st.count}>({totalCount} added)</span>
         </span>
         {canUpload && (
-          <button type="button" style={{ ...st.uploadBtn, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={() => fileInputRef.current?.click()}>
-            <MdUploadFile size={16} /> {busy ? "Uploading…" : "Upload"}
-          </button>
+          <Button variant="primary" icon={MdUploadFile} disabled={busy} onClick={() => fileInputRef.current?.click()}>
+            {busy ? "Uploading…" : "Upload"}
+          </Button>
         )}
         <input ref={fileInputRef} type="file" multiple hidden onChange={handleInputChange} />
       </div>
@@ -237,14 +239,19 @@ const AttachmentManager = forwardRef(function AttachmentManager(
       {canUpload && hasEntity && !inFolderMode && (
         <div style={st.folderRow}>
           <label style={st.folderLabel}>Folder <span style={{ fontWeight: 400 }}>(optional)</span></label>
-          <select style={st.folderSelect} value={selectedFolderId} onChange={(e) => setSelectedFolderId(e.target.value)}>
-            <option value="">Uncategorized</option>
-            {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
+          {/* "" = Uncategorized (the cleared state), same value the old <select> used. */}
+          <SearchableSelect
+            items={folders}
+            value={selectedFolderId}
+            onChange={(id) => setSelectedFolderId(id === "" || id == null ? "" : String(id))}
+            placeholder="Uncategorized"
+            ariaLabel="Folder"
+            style={st.folderSelect}
+          />
           {canCreateFolder && (
-            <button type="button" style={st.newFolderBtn} onClick={() => setShowCreateFolder(true)}>
-              <MdCreateNewFolder size={15} /> New
-            </button>
+            <Button variant="secondary" icon={MdCreateNewFolder} onClick={() => setShowCreateFolder(true)}>
+              New
+            </Button>
           )}
         </div>
       )}
@@ -257,11 +264,11 @@ const AttachmentManager = forwardRef(function AttachmentManager(
           {buildSourceChips(sourceSummary).map((c) => {
             const active = sourceFilter === c.key;
             return (
-              <button key={c.key} type="button"
-                style={{ ...st.chip, ...(active ? st.chipActive : null) }}
+              <Button key={c.key} size="sm" variant={active ? "primary" : "secondary"} aria-pressed={active}
+                style={st.chip}
                 onClick={() => setSourceFilter(c.key)}>
                 {c.label} <span style={st.chipCount}>{c.count}</span>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -272,7 +279,7 @@ const AttachmentManager = forwardRef(function AttachmentManager(
       )}
 
       {loading ? (
-        <div style={st.empty}>Loading…</div>
+        <Loading>Loading…</Loading>
       ) : totalCount === 0 ? (
         <div style={st.empty}>{canUpload ? "No attachments yet — click Upload or drop files here." : "No attachments."}</div>
       ) : (
@@ -368,9 +375,9 @@ function Row({ name, ext, size, folderName, when, sourceLabel, entityNumber, pen
         )}
       </div>
       <div style={st.rowActions}>
-        <button type="button" style={st.iconBtn} title="Preview" onClick={onPreview}><MdVisibility size={17} /></button>
-        {onDownload && <button type="button" style={st.iconBtn} title="Download" onClick={onDownload}><MdDownload size={17} /></button>}
-        {onRemove && <button type="button" style={{ ...st.iconBtn, color: "#dc3545", borderColor: "#dc354533" }} title="Remove" onClick={onRemove}><MdDelete size={17} /></button>}
+        <IconButton label="Preview" icon={MdVisibility} size={17} onClick={onPreview} />
+        {onDownload && <IconButton label="Download" icon={MdDownload} size={17} onClick={onDownload} />}
+        {onRemove && <IconButton label="Remove" icon={MdDelete} size={17} danger onClick={onRemove} />}
       </div>
     </div>
   );
@@ -379,19 +386,17 @@ function Row({ name, ext, size, folderName, when, sourceLabel, entityNumber, pen
 const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2", inputBg: "#f8f9fb" };
 
 const st = {
-  wrap: { marginTop: "1rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.85rem 1rem", background: "#fff", transition: "border-color 0.15s, background 0.15s" },
+  wrap: { marginTop: "1rem", border: `1px solid ${colors.cardBorder}`, borderRadius: "var(--k-card-radius)", padding: "0.85rem 1rem", background: "#fff", transition: "border-color 0.15s, background 0.15s" },
   wrapDrag: { borderColor: colors.teal, background: `${colors.teal}08` },
   head: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  headTitle: { display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: "0.9rem", color: colors.textPrimary },
+  headTitle: { display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: "var(--k-font)", color: colors.textPrimary },
   count: { color: colors.teal, fontWeight: 700 },
-  uploadBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: 6, padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
   folderRow: { display: "flex", alignItems: "center", gap: 8, marginTop: "0.7rem", flexWrap: "wrap" },
-  folderLabel: { fontSize: "0.8rem", fontWeight: 600, color: colors.textSecondary },
-  folderSelect: { flex: 1, minWidth: 160, maxWidth: 280, padding: "0.45rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.85rem", color: colors.textPrimary, cursor: "pointer" },
-  newFolderBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: 4, padding: "0.4rem 0.7rem", borderRadius: 8, border: `1px solid ${colors.teal}40`, background: `${colors.teal}12`, color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
+  folderLabel: { fontSize: "var(--k-font-sm)", fontWeight: 600, color: colors.textSecondary },
+  folderSelect: { flex: "1 1 160px", minWidth: 0, maxWidth: 280 },
   chipRow: { marginTop: "0.7rem", display: "flex", flexWrap: "wrap", gap: 6 },
-  chip: { display: "inline-flex", alignItems: "center", gap: 5, padding: "0.3rem 0.7rem", minHeight: 30, borderRadius: 20, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" },
-  chipActive: { border: `1px solid ${colors.blue}`, background: "#e3f0ff", color: colors.blue },
+  // Source filter chips — kit buttons rounded into pills.
+  chip: { borderRadius: 999 },
   chipCount: { fontSize: "0.7rem", fontWeight: 700, opacity: 0.85 },
   srcChip: { display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "0.1rem 0.5rem", borderRadius: 6, background: "#eef4ff", color: colors.blue, fontSize: "0.7rem", fontWeight: 600, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   srcChipDirect: { background: `${colors.teal}14`, color: colors.teal },
@@ -399,12 +404,11 @@ const st = {
   row: { display: "flex", alignItems: "center", gap: 10, padding: "0.5rem 0.6rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: colors.inputBg },
   icoBox: { display: "grid", placeItems: "center", width: 34, height: 34, flexShrink: 0 },
   rowMain: { flex: 1, minWidth: 0 },
-  rowName: { fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-all" },
+  rowName: { fontSize: "var(--k-font)", fontWeight: 600, color: colors.textPrimary, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-all" },
   pendBadge: { marginLeft: 8, fontSize: "0.66rem", fontWeight: 700, color: "#fd7e14", background: "#fff3cd", padding: "0.05rem 0.4rem", borderRadius: 6 },
   rowMeta: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: 2 },
   rowActions: { display: "flex", gap: 4, flexShrink: 0 },
-  iconBtn: { display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
-  empty: { marginTop: "0.7rem", padding: "0.9rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.83rem", border: `1px dashed ${colors.cardBorder}`, borderRadius: 10 },
+  empty: { marginTop: "0.7rem", padding: "0.9rem", textAlign: "center", color: colors.textSecondary, fontSize: "var(--k-font-sm)", border: `1px dashed ${colors.cardBorder}`, borderRadius: 10 },
   uploading: { marginTop: "0.7rem", display: "flex", alignItems: "center", gap: 8, padding: "0.5rem 0.7rem", borderRadius: 8, background: `${colors.teal}10`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600 },
   spin: { width: 14, height: 14, border: `2px solid ${colors.teal}40`, borderTopColor: colors.teal, borderRadius: "50%", display: "inline-block", animation: "spin 0.8s linear infinite" },
 };

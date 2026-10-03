@@ -1,9 +1,9 @@
-import { MdEdit, MdDelete, MdReceipt, MdBusiness, MdPhone, MdLocationOn } from "react-icons/md";
+import { MdEdit, MdDelete } from "react-icons/md";
 import { deleteCompany } from "../api/companyApi";
 import { notify } from "../utils/notify";
-import { cardStyles, cardHover } from "../theme";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
+import { Button, Facts } from "../ui/Kit";
 
 export default function CompanyList({ companies, onEdit, fetchCompanies }) {
   const confirm = useConfirm();
@@ -23,99 +23,65 @@ export default function CompanyList({ companies, onEdit, fetchCompanies }) {
   };
 
   return (
-    <div className="card-grid">
+    <div className="k-grid-cards">
       {companies.map((c) => (
-        <div
-          key={c.id}
-          style={cardStyles.card}
-          onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-          onMouseLeave={(e) =>
-            Object.assign(e.currentTarget.style, {
-              transform: "none",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-            })
-          }
-        >
-          <div style={cardStyles.cardContent}>
-            <div>
-              <h5 style={cardStyles.title}>{c.brandName || c.name}</h5>
-              {c.brandName && c.brandName !== c.name && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdBusiness style={{ color: "#5f6d7e", flexShrink: 0 }} /> {c.name}
-                </p>
-              )}
-              {c.fullAddress && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdLocationOn style={{ color: "#5f6d7e", flexShrink: 0 }} /> {c.fullAddress}
-                </p>
-              )}
-              {c.phone && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <MdPhone style={{ color: "#00897b", flexShrink: 0 }} /> {c.phone}
-                </p>
-              )}
-              {c.ntn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>NTN:</strong> {c.ntn}
-                </p>
-              )}
-              {c.cnic && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>CNIC:</strong> {c.cnic}
-                </p>
-              )}
-              {c.strn && (
-                <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <strong style={{ fontSize: "0.75rem", color: "#5f6d7e" }}>STRN:</strong> {c.strn}
-                </p>
-              )}
-              {c.inventoryTrackingEnabled && (
-                <p style={{ ...cardStyles.text, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.15rem 0.55rem", marginTop: "0.25rem", borderRadius: 12, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.72rem", fontWeight: 700, width: "fit-content" }}>
-                  ✓ Inventory tracking ON
-                </p>
-              )}
-              <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <MdReceipt style={{ color: "#0d47a1", flexShrink: 0 }} />
-                <strong>Challan #:</strong> Starts at {c.startingChallanNumber}{c.currentChallanNumber > 0 ? ` → Current: #${c.currentChallanNumber}` : ""}
-              </p>
-              <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <MdReceipt style={{ color: "#00897b", flexShrink: 0 }} />
-                <strong>Invoice #:</strong> Starts at {c.startingInvoiceNumber}{c.currentInvoiceNumber > 0 ? ` → Current: #${c.currentInvoiceNumber}` : ""}
-              </p>
-              {c.logoPath && (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem", padding: "0.4rem 0.6rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: "1px solid #e8edf3", width: "fit-content" }}>
-                  <img src={c.logoPath} alt="Company Logo" style={{ height: "36px", borderRadius: 4, objectFit: "contain" }} />
-                  <span style={{ fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 500 }}>Company Logo</span>
-                </div>
-              )}
-            </div>
+        <article key={c.id} className="k-card" style={styles.card}>
+          <div className="k-card__body" style={styles.body}>
+            <h3 style={styles.name} title={c.brandName || c.name}>{c.brandName || c.name}</h3>
+            {c.inventoryTrackingEnabled && (
+              <span style={styles.badge}>✓ Inventory tracking ON</span>
+            )}
+            <Facts
+              facts={[
+                c.brandName && c.brandName !== c.name && ["Name", c.name],
+                c.fullAddress && ["Address", c.fullAddress],
+                c.phone && ["Phone", c.phone],
+                c.ntn && ["NTN", c.ntn],
+                c.cnic && ["CNIC", c.cnic],
+                c.strn && ["STRN", c.strn],
+                ["Challan #", `Starts at ${c.startingChallanNumber}${c.currentChallanNumber > 0 ? ` → Current: #${c.currentChallanNumber}` : ""}`],
+                ["Invoice #", `Starts at ${c.startingInvoiceNumber}${c.currentInvoiceNumber > 0 ? ` → Current: #${c.currentInvoiceNumber}` : ""}`],
+              ]}
+            />
+            {c.logoPath && (
+              <div style={styles.logo}>
+                <img src={c.logoPath} alt="Company Logo" style={{ height: "36px", borderRadius: 4, objectFit: "contain" }} />
+                <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 500 }}>Company Logo</span>
+              </div>
+            )}
             {(canUpdate || canDelete) && (
-              <div style={cardStyles.buttonGroup}>
+              <div style={styles.actions}>
                 {canUpdate && (
-                  <button
-                    style={{ ...cardStyles.button, ...cardStyles.edit, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => onEdit(c)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(1.08)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                  >
-                    <MdEdit /> Edit
-                  </button>
+                  <Button variant="primary" icon={MdEdit} onClick={() => onEdit(c)}>Edit</Button>
                 )}
                 {canDelete && (
-                  <button
-                    style={{ ...cardStyles.button, ...cardStyles.delete, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
-                    onClick={() => handleDelete(c.id)}
-                    onMouseEnter={(e) => { e.currentTarget.style.filter = "brightness(0.95)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.filter = ""; }}
-                  >
-                    <MdDelete /> Delete
-                  </button>
+                  <Button variant="danger" icon={MdDelete} onClick={() => handleDelete(c.id)}>Delete</Button>
                 )}
               </div>
             )}
           </div>
-        </div>
+        </article>
       ))}
     </div>
   );
 }
+
+// Shared entity-card layout (same shape as ClientList): name, labelled facts, action row.
+const styles = {
+  // marginTop: 0 cancels the kit's `.k-card + .k-card` stacking gap inside the grid.
+  card: { display: "flex", flexDirection: "column", overflow: "hidden", marginTop: 0 },
+  body: { flex: 1, display: "flex", flexDirection: "column", gap: "0.75rem" },
+  name: {
+    margin: 0, fontSize: "calc(var(--k-font) + 0.22rem)", fontWeight: 800, lineHeight: 1.3, letterSpacing: "-0.01em", color: "var(--k-ink)",
+    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere",
+  },
+  badge: {
+    display: "inline-flex", alignItems: "center", gap: "0.3rem", width: "fit-content", padding: "0.15rem 0.55rem", borderRadius: 12,
+    backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.72rem", fontWeight: 700,
+  },
+  logo: {
+    display: "flex", alignItems: "center", gap: "0.5rem", width: "fit-content", padding: "0.4rem 0.6rem",
+    backgroundColor: "var(--k-surface-2)", borderRadius: 8, border: "1px solid var(--k-line)",
+  },
+  actions: { display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "auto", paddingTop: "0.75rem", borderTop: "1px solid var(--k-line)" },
+};

@@ -5,6 +5,7 @@ import { getFbrRegistrationType } from "../api/fbrApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles } from "../theme";
+import { Button } from "../ui/Kit";
 
 const {
   backdrop, modal, header, title, closeButton,
@@ -328,15 +329,15 @@ export default function ClientForm({ client, companyId, companies = [], onClose,
                   {errorMsg("registrationType")}
                   {canAskFbr && companyId && (
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
                         disabled={fbrCheck.busy || !(formData.ntn || formData.cnic).trim()}
                         title="Ask FBR whether this NTN/CNIC is registered for sales tax and set the type accordingly"
                         onClick={checkRegistrationWithFbr}
-                        style={{ ...input, width: "auto", minHeight: 44, padding: "0 0.8rem", cursor: fbrCheck.busy ? "wait" : "pointer", background: "#fff", color: "#0d47a1", fontWeight: 700, borderColor: "#0d47a1" }}
+                        style={fbrCheck.busy ? { cursor: "wait" } : undefined}
                       >
                         {fbrCheck.busy ? "Asking FBR…" : "Check with FBR"}
-                      </button>
+                      </Button>
                       {fbrCheck.result && (
                         <span style={{ fontSize: "0.78rem", color: fbrCheck.result.startsWith("FBR:") ? "#1b5e20" : "#b71c1c" }}>{fbrCheck.result}</span>
                       )}

@@ -1,5 +1,4 @@
 import { MdCheck, MdExpandMore, MdExpandLess } from "react-icons/md";
-import { colors } from "../../theme";
 
 // A numbered step of a guided screen. `status`:
 //   "active"  — the step the operator is on (open, blue number)
@@ -7,6 +6,7 @@ import { colors } from "../../theme";
 //   "waiting" — not reachable yet (folded, greyed)
 // A done step can be reopened with `onToggle`, so an earlier choice stays
 // visible and changeable instead of disappearing.
+// Built on the kit card surface (`k-card`) so it follows the Classic / Workspace tokens.
 export default function StepCard({ number, title, help, status = "active", summary, open, onToggle, children, id }) {
   const isOpen = open ?? status === "active";
   const done = status === "done";
@@ -14,7 +14,7 @@ export default function StepCard({ number, title, help, status = "active", summa
   const canToggle = !!onToggle && !waiting;
 
   return (
-    <section id={id} style={{ ...st.card, ...(status === "active" ? st.cardActive : null), ...(waiting ? st.cardWaiting : null) }}
+    <section id={id} className="k-card" style={{ ...st.card, ...(status === "active" ? st.cardActive : null), ...(waiting ? st.cardWaiting : null) }}
       aria-labelledby={id ? `${id}-title` : undefined}>
       <header
         style={{ ...st.head, cursor: canToggle ? "pointer" : "default" }}
@@ -44,17 +44,18 @@ export default function StepCard({ number, title, help, status = "active", summa
 }
 
 const st = {
-  card: { background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14, boxShadow: "0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.05)", overflow: "hidden" },
+  // marginTop: 0 — the parent stacks steps with its own gap; cancel the kit's `.k-card + .k-card` margin.
+  card: { overflow: "hidden", marginTop: 0 },
   cardActive: { borderColor: "#90caf9", boxShadow: "0 0 0 1px #90caf9, 0 6px 18px rgba(13,71,161,0.08)" },
   cardWaiting: { opacity: 0.6 },
-  head: { display: "flex", alignItems: "center", gap: "0.8rem", padding: "0.9rem 1rem", minHeight: 44 },
-  badge: { width: 32, height: 32, flexShrink: 0, display: "grid", placeItems: "center", borderRadius: "50%", background: colors.blue, color: "#fff", fontWeight: 800, fontSize: "0.9rem" },
-  badgeDone: { background: colors.teal },
+  head: { display: "flex", alignItems: "center", gap: "0.8rem", padding: "calc(var(--k-gap) * 0.72) 1rem", minHeight: 44 },
+  badge: { width: "calc(var(--k-h) - 8px)", height: "calc(var(--k-h) - 8px)", flexShrink: 0, display: "grid", placeItems: "center", borderRadius: "50%", background: "var(--k-blue)", color: "#fff", fontWeight: 800, fontSize: "var(--k-font)" },
+  badgeDone: { background: "var(--k-teal)" },
   badgeWaiting: { background: "#b0bec5" },
   titles: { display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 },
-  title: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary },
-  summary: { fontSize: "0.83rem", color: colors.textSecondary, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  help: { fontSize: "0.83rem", color: colors.textSecondary },
-  chevron: { width: 44, height: 44, display: "grid", placeItems: "center", color: colors.textSecondary, flexShrink: 0 },
+  title: { fontSize: "calc(var(--k-font) + 0.1rem)", fontWeight: 800, color: "var(--k-ink)" },
+  summary: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  help: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  chevron: { width: 44, height: 44, display: "grid", placeItems: "center", color: "var(--k-muted)", flexShrink: 0 },
   body: { padding: "0 1rem 1rem" },
 };

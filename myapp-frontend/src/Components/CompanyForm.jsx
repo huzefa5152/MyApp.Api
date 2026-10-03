@@ -6,6 +6,7 @@ import { getFbrLookupsByCategory } from "../api/fbrLookupApi";
 import { formStyles, modalSizes } from "../theme";
 import TaxInvoiceGrouping from "./TaxInvoiceGrouping";
 import useScrollToError from "../hooks/useScrollToError";
+import { Tabs } from "../ui/Kit";
 
 const {
     backdrop,
@@ -335,24 +336,23 @@ export default function CompanyForm({ company, onClose, onSaved }) {
                         {error && <div ref={errRef} style={errorStyle}>{error}</div>}
 
                         {/* ── Tab bar ─────────────────────────────────────── */}
-                        <div style={tabBar}>
-                            {TABS.map((t) => {
-                                const isActive = activeTab === t.key;
-                                return (
-                                    <button
-                                        key={t.key}
-                                        type="button"
-                                        onClick={() => setActiveTab(t.key)}
-                                        style={{ ...tabBtn, ...(isActive ? tabBtnActive : {}) }}
-                                    >
+                        <Tabs
+                            label="Company settings"
+                            idPrefix="company-form-tab"
+                            value={activeTab}
+                            onChange={setActiveTab}
+                            tabs={TABS.map((t) => ({
+                                key: t.key,
+                                label: (
+                                    <>
                                         {t.label}
                                         {errorTabs[t.key] && (
                                             <span style={tabDot} aria-label="has errors" title="This tab has errors" />
                                         )}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                                    </>
+                                ),
+                            }))}
+                        />
 
                         {/* ── General ─────────────────────────────────────── */}
                         <div hidden={activeTab !== "general"}>
@@ -751,33 +751,6 @@ const infoNote = {
     fontSize: "0.76rem",
     color: "#475569",
     lineHeight: 1.4,
-};
-const tabBar = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.4rem",
-    padding: "0 0 0.75rem",
-    borderBottom: "1px solid #e5e9f0",
-    marginBottom: "0.9rem",
-};
-const tabBtn = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.45rem 0.85rem",
-    borderRadius: 8,
-    border: "1px solid #d0d7e2",
-    background: "#f8f9fb",
-    color: "#455a64",
-    fontSize: "0.83rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    boxShadow: "none",
-};
-const tabBtnActive = {
-    background: "#0d47a1",
-    color: "#fff",
-    borderColor: "#0d47a1",
 };
 const tabDot = {
     width: 8,

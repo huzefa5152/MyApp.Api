@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MdGroups, MdBusiness, MdEdit } from "react-icons/md";
 import { getCommonClients } from "../api/clientApi";
+import { Card, Alert } from "../ui/Kit";
 
 /**
  * "Common Clients" panel — sits above the per-company client list on
@@ -61,17 +62,20 @@ export default function CommonClientsPanel({ companyId, onEdit, refreshKey }) {
   if (!loading && common.length === 0 && !error) return null;
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.header}>
-        <MdGroups size={20} color={colors.blue} />
-        <span style={styles.title}>Common Clients</span>
-        <span style={styles.subtitle}>
-          {loading ? "loading…"
-            : `${common.length} client${common.length !== 1 ? "s" : ""} shared across companies`}
-        </span>
-      </div>
-
-      {error && <div style={styles.error}>{error}</div>}
+    <Card
+      icon={MdGroups}
+      title={(
+        <>
+          Common Clients
+          <span style={styles.subtitle}>
+            {loading ? "loading…"
+              : `${common.length} client${common.length !== 1 ? "s" : ""} shared across companies`}
+          </span>
+        </>
+      )}
+      style={styles.panel}
+    >
+      {error && <Alert tone="error">{error}</Alert>}
 
       {!loading && common.length > 0 && (
         <div style={styles.grid}>
@@ -82,8 +86,6 @@ export default function CommonClientsPanel({ companyId, onEdit, refreshKey }) {
               style={styles.card}
               onClick={() => onEdit?.(c)}
               title="Edit common client (changes apply to every company)"
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
             >
               <div style={styles.cardName}>{c.displayName}</div>
               <div style={styles.cardMeta}>
@@ -103,80 +105,65 @@ export default function CommonClientsPanel({ companyId, onEdit, refreshKey }) {
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
+const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" };
+
+// Kit card, tinted blue so the shared-client group reads apart from the
+// per-company list below it.
 const styles = {
   panel: {
     background: colors.groupBg,
-    border: `1px solid ${colors.groupBorder}`,
-    borderRadius: 12,
-    padding: "1rem 1.1rem",
-    marginBottom: "1.25rem",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    marginBottom: "0.75rem",
-    flexWrap: "wrap",
-  },
-  title: {
-    fontSize: "0.95rem",
-    fontWeight: 700,
-    color: colors.textPrimary,
+    borderColor: colors.groupBorder,
+    marginBottom: "var(--k-gap)",
   },
   subtitle: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-font-sm)",
+    fontWeight: 400,
     color: colors.textSecondary,
     marginLeft: "0.4rem",
   },
-  error: {
-    fontSize: "0.82rem",
-    color: "#842029",
-    background: "#fff0f1",
-    border: "1px solid #f5c6cb",
-    padding: "0.4rem 0.6rem",
-    borderRadius: 8,
-    marginBottom: "0.5rem",
-  },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
     gap: "0.75rem",
   },
+  // A whole-card button: padding / shadow / margin override the global `button` rule in index.css.
   card: {
     textAlign: "left",
     background: "#fff",
     border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     padding: "0.7rem 0.85rem",
+    margin: 0,
+    minWidth: 0,
     cursor: "pointer",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
     boxShadow: "0 1px 4px rgba(13,71,161,0.06)",
     display: "flex",
     flexDirection: "column",
     gap: "0.25rem",
     fontFamily: "inherit",
+    fontWeight: 400,
     color: colors.textPrimary,
   },
   cardName: {
-    fontSize: "0.95rem",
+    ...clamp2,
+    fontSize: "calc(var(--k-font) + 0.05rem)",
     fontWeight: 700,
     color: colors.textPrimary,
   },
   cardMeta: {
-    fontSize: "0.78rem",
+    fontSize: "var(--k-font-sm)",
     color: colors.textSecondary,
   },
   cardCompanies: {
+    ...clamp2,
     fontSize: "0.74rem",
     color: colors.textSecondary,
     fontStyle: "italic",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
   },
   cardEdit: {
     marginTop: "0.35rem",

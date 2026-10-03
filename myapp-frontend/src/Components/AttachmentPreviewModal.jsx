@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { MdClose, MdDownload } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
 import { fileIconFor, isImageExt, isPdfExt } from "../utils/fileIcons";
+import { Loading } from "../ui/Kit";
 
 // Previews an attachment inline. `loadBlob` is an async () => Blob, so the same
 // modal previews both saved attachments (fetched with auth) and staged local
@@ -41,7 +42,8 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
     <div style={{ ...formStyles.backdrop, zIndex: 1103 }} onClick={onClose}>
       <div style={{ ...formStyles.modal, maxWidth: `${modalSizes.xl}px`, height: "90vh" }} onClick={(e) => e.stopPropagation()}>
         <div style={formStyles.header}>
-          <h5 style={{ ...formStyles.title, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</h5>
+          {/* File names are user-supplied: 2-line clamp rather than nowrap + ellipsis. */}
+          <h5 title={title} style={{ ...formStyles.title, minWidth: 0, overflowWrap: "anywhere", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</h5>
           <div style={{ display: "flex", gap: 8 }}>
             {onDownload && <button style={formStyles.closeButton} title="Download" onClick={onDownload}><MdDownload size={18} /></button>}
             <button style={formStyles.closeButton} title="Close" onClick={onClose}><MdClose size={18} /></button>
@@ -49,7 +51,7 @@ export default function AttachmentPreviewModal({ title, ext, loadBlob, onDownloa
         </div>
         <div style={{ ...formStyles.body, maxHeight: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f3f6" }}>
           {loading ? (
-            <span style={{ color: "#5f6d7e" }}>Loading preview…</span>
+            <Loading>Loading preview…</Loading>
           ) : err ? (
             <span style={{ color: "#dc3545" }}>{err}</span>
           ) : !previewable ? (
