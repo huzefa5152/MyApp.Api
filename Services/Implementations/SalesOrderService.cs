@@ -61,8 +61,7 @@ namespace MyApp.Api.Services.Implementations
                     .ToDictionaryAsync(x => x.Key, x => x.Qty);
 
             // Challan stats per order (excluding cancelled): total raised + how
-            // many are billable now. Only "Pending"/"Imported" challans can go
-            // on a bill (InvoiceService rejects "No PO"/"Setup Required"), so the
+            // many are billable now, including deliveries without a PO. The
             // billable count — not the raw unbilled count — gates "Generate Bill".
             var challanStatsList = await _context.DeliveryChallans
                 .Where(dc => dc.SalesOrderId != null
@@ -73,7 +72,7 @@ namespace MyApp.Api.Services.Implementations
                 {
                     Key = g.Key,
                     Count = g.Count(),
-                    Billable = g.Count(x => x.Status == "Pending" || x.Status == "Imported"),
+                    Billable = g.Count(x => x.InvoiceId == null && MyApp.Api.Helpers.ChallanBillingRules.Statuses.Contains(x.Status)),
                     Billed = g.Count(x => x.InvoiceId != null)
                 })
                 .ToListAsync();

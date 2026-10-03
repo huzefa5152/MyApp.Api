@@ -180,7 +180,7 @@ TC, _ = mk(C, [A["id"]], ["read", "challans.write"], "challans-only")
 TRO, _ = mk(W, [A["id"]], ["read"], "reader")
 TW2, _ = mk(W, [A["id"]], ["read", "challans.write", "bills.write"], "other")
 READ8 = {"get_invoice", "get_stock", "list_companies", "search_clients", "search_invoices", "search_quotes", "search_challans", "get_challan", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"}
-check("every token and login sees the two challan read tools", names(TRO) == READ8 and names(W) == READ8, (names(TRO) ^ READ8, names(W) ^ READ8))
+check("read tokens and logins expose the required reads without write tools", READ8 <= names(TRO) and READ8 <= names(W) and not {"prepare_challan", "prepare_bill", "commit_action"} & (names(TRO) | names(W)), (names(TRO), names(W)))
 check("a challans token sees prepare_challan but not prepare_bill", {"prepare_challan", "commit_action"} <= names(TC) and "prepare_bill" not in names(TC), names(TC))
 check("a bills token sees prepare_bill", "prepare_bill" in names(TW) and "prepare_challan" in names(TW), names(TW))
 
@@ -313,6 +313,12 @@ check("a challans-only token cannot prepare a bill", err, m)
 err, m = tool(TRO, "prepare_bill", BL)
 check("a read-only token cannot prepare a bill", err, m)
 
+no_po_prices = [{"deliveryItemId": line["id"], "unitPrice": "100"} for line in nopo["items"]]
+err, no_po_plan = tool(TW, "prepare_bill", {**BL, "challanIds": [nopo_id], "prices": no_po_prices})
+check("a no-PO challan can be prepared for normal billing", not err and no_po_plan["saved"] is False, no_po_plan)
+if not err:
+    tool(TW, "cancel_action", {"planId": no_po_plan["planId"]})
+
 if ch["status"] == "Pending":
     for label, args in (
         ("a missing price for a challan line", {**BL, "prices": PR[:1]}),
@@ -325,7 +331,7 @@ if ch["status"] == "Pending":
         ("gst over 100", {**BL, "gstRate": "150"}),
         ("a bad payment mode", {**BL, "paymentMode": "Barter"}),
         ("a challan that does not exist", {**BL, "challanIds": [2_000_000_000]}),
-        ("a challan with no PO (not billable)", {**BL, "challanIds": [nopo_id]}),
+        ("prices belonging to a different challan", {**BL, "challanIds": [nopo_id]}),
         ("a client other than the challan's", {**BL, "clientId": B["client"]}),
         ("no prices at all", {k: v for k, v in BL.items() if k != "prices"}),
     ):

@@ -1,3 +1,4 @@
+import { isBillableChallan } from "../utils/challanBilling";
 import { useState } from "react";
 import { MdVisibility, MdEdit, MdPrint, MdPictureAsPdf, MdGridOn, MdRequestQuote, MdContentCopy, MdCancel, MdDelete, MdWarning, MdLink } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -15,7 +16,7 @@ function evalRowFlags(c, perms) {
   const canCancel = c.status !== "Invoiced" && isEditable;
   const isDuplicate = c.duplicatedFromId != null;
   const canDelete = canCancel && (isDuplicate || c.isLatest === true);
-  const canGenerateBill = perms.permCreateBill && (c.status === "Pending" || c.status === "Imported");
+  const canGenerateBill = perms.permCreateBill && isBillableChallan(c);
   const canDuplicate = perms.permDuplicate
     && !isDuplicate
     && (c.status === "Pending" || c.status === "Imported");

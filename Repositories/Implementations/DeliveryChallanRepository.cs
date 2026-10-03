@@ -207,14 +207,14 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<List<DeliveryChallan>> GetPendingChallansByCompanyAsync(int companyId)
         {
-            // Both "Pending" (natively-created) and "Imported" (historical back-fill)
-            // are billable — the bill-creation picker shows both populations.
+            // An optional PO never blocks an otherwise billable, unbilled challan.
             return await _context.DeliveryChallans
                                  .Include(dc => dc.Items)
                                      .ThenInclude(i => i.ItemType)
                                  .Include(dc => dc.Client)
                                  .Where(dc => dc.CompanyId == companyId
-                                           && (dc.Status == "Pending" || dc.Status == "Imported"))
+                                           && dc.InvoiceId == null
+                                           && MyApp.Api.Helpers.ChallanBillingRules.Statuses.Contains(dc.Status))
                                  .OrderBy(dc => dc.ChallanNumber)
                                  .ToListAsync();
         }

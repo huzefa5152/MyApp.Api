@@ -950,7 +950,7 @@ export default function InvoicePage({ mode = "invoices" }) {
               canFbrSubmit. Asymmetric grants render a partial bar.
               Bills tab hides the bar entirely — bulk FBR ops live on
               the Invoices tab. */}
-          {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
+          {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && unsubmittedInvoices.length > 0 && (
             <div style={styles.fbrBulkBar}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 <MdCloudUpload size={18} color="#0d47a1" />
@@ -1331,7 +1331,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                         <MdRestore size={14} /> Reset FBR
                       </button>
                     )}
-                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
+                    {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrReady && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
                       <>
                         {canFbrValidate && (
                           <button

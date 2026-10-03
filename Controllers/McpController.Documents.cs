@@ -33,7 +33,7 @@ namespace MyApp.Api.Controllers
         private static readonly object SearchChallansTool = new
         {
             name = "search_challans",
-            description = "Search a company's delivery challans. Billable ones have status Pending or Imported and no invoiceId.",
+            description = "Search a company's delivery challans. Unbilled Pending, Imported, No PO and Setup Required challans can be billed without a PO.",
             inputSchema = Schema(new
             {
                 companyId = DCompanyId, search = new { type = "string", maxLength = 200 }, clientId = new { type = "integer", minimum = 1 },
@@ -58,7 +58,7 @@ namespace MyApp.Api.Controllers
             inputSchema = Schema(new
             {
                 companyId = DCompanyId, clientId = new { type = "integer", minimum = 1 }, deliveryDate = new { type = "string", format = "date" },
-                poNumber = new { type = "string", maxLength = 100, description = "Without a PO number the challan is saved as 'No PO' and cannot be billed until one is added." },
+                poNumber = new { type = "string", maxLength = 100, description = "PO number is optional. Challans without a PO can be billed normally." },
                 poDate = new { type = "string", format = "date" }, indentNo = new { type = "string", maxLength = 100 },
                 site = new { type = "string", maxLength = 300 }, notes = new { type = "string", maxLength = 2000 },
                 items = new
@@ -140,7 +140,7 @@ namespace MyApp.Api.Controllers
                 items = r.Items.Where(c => c.CompanyId == companyId).Select(c => new
                 {
                     c.Id, c.CompanyId, c.ChallanNumber, c.ClientId, c.ClientName, c.PoNumber, deliveryDate = c.DeliveryDate?.ToString("yyyy-MM-dd"),
-                    c.Status, c.InvoiceId, billable = c.InvoiceId == null && (c.Status is "Pending" or "Imported"),
+                    c.Status, c.InvoiceId, billable = ChallanBillingRules.IsBillable(c.Status, c.InvoiceId),
                 }),
                 totalCount = r.TotalCount, page = r.Page, pageSize = r.PageSize, totalPages = r.TotalPages,
             };
@@ -159,7 +159,7 @@ namespace MyApp.Api.Controllers
             {
                 c.Id, c.CompanyId, c.ChallanNumber, c.ClientId, c.ClientName, c.PoNumber, poDate = c.PoDate?.ToString("yyyy-MM-dd"),
                 deliveryDate = c.DeliveryDate?.ToString("yyyy-MM-dd"), c.IndentNo, c.Site, c.Notes, c.Status, c.InvoiceId,
-                billable = c.InvoiceId == null && (c.Status is "Pending" or "Imported"),
+                billable = ChallanBillingRules.IsBillable(c.Status, c.InvoiceId),
                 items = c.Items.Select(i => new { deliveryItemId = i.Id, i.Description, i.Quantity, i.Unit, i.ItemTypeId, i.ItemTypeName }),
             };
         }
@@ -239,7 +239,7 @@ namespace MyApp.Api.Controllers
                 items = lines.Select(l => new { l.Description, l.Quantity, l.Unit, l.ItemTypeId }),
                 expectedStatus = hasPo
                     ? "Pending (billable), or Setup Required if the client's FBR details are incomplete"
-                    : "No PO: it cannot be billed until a PO number is added",
+                    : "No PO: optional PO details can be assigned when billing",
             };
             var summary = $"Create a delivery challan for \"{client.Name}\" in company {companyId}: {lines.Count} line(s), delivery {delivery:yyyy-MM-dd}, "
                 + (hasPo ? $"PO {po}" : "no PO number");
@@ -285,7 +285,7 @@ namespace MyApp.Api.Controllers
                     var ch = await _challans.GetByIdAsync(cid);
                     if (ch == null || ch.CompanyId != companyId) throw new ToolError($"Challan {cid} was not found in this company.");
                     if (ch.ClientId != client.Id) throw new ToolError($"Challan {ch.ChallanNumber} belongs to a different client than the bill.");
-                    if (ch.InvoiceId != null || ch.Status is not ("Pending" or "Imported"))
+                    if (!ChallanBillingRules.IsBillable(ch.Status, ch.InvoiceId))
                         throw new ToolError($"Challan {ch.ChallanNumber} cannot be billed (status {ch.Status}).");
                     foreach (var i in ch.Items) deliveryItems[i.Id] = i;
                 }

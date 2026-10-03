@@ -1,3 +1,4 @@
+import { isBillableChallan } from "../utils/challanBilling";
 import { useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdLink, MdAssignment } from "react-icons/md";
@@ -95,7 +96,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           const hasWarnings = c.warnings && c.warnings.length > 0;
           // Generate Bill shortcut — only for billable statuses
           // (Pending / Imported), matching the backend's CreateAsync guard.
-          const canGenerateBill = permCreateBill && (c.status === "Pending" || c.status === "Imported");
+          const canGenerateBill = permCreateBill && isBillableChallan(c);
           // Duplicate is available on the same statuses as Generate Bill,
           // EXCEPT duplicating-a-duplicate is not allowed (2026-05-08): the
           // original is the only canonical row, and the new "create N copies"

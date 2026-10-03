@@ -183,6 +183,8 @@ namespace MyApp.Api.Services.Implementations
         private static List<string> ComputeFbrMissing(Invoice inv)
         {
             var missing = new List<string>();
+            if (inv.Company == null || inv.Client == null || !FbrSetupRules.IsReady(inv.Company, inv.Client))
+                missing.Add("Seller or buyer FBR setup");
             if (inv.Items == null || !inv.Items.Any()) return missing;
             var items = inv.Items.ToList();
             for (int i = 0; i < items.Count; i++)
@@ -666,12 +668,12 @@ namespace MyApp.Api.Services.Implementations
             {
                 challanMap.TryGetValue(challanId, out var dc);
                 if (dc == null) throw new KeyNotFoundException($"Challan {challanId} not found.");
-                // Both "Pending" (natively-created) and "Imported" (back-filled)
-                // are billable. Anything else (Invoiced, Cancelled, Setup Required, No PO)
-                // blocks bill creation.
-                if (dc.Status != "Pending" && dc.Status != "Imported")
+                // Commercial billing permits an optional PO. Billed and cancelled
+                // challans stay outside the pool.
+                if (!ChallanBillingRules.IsBillable(dc.Status, dc.InvoiceId))
                     throw new InvalidOperationException($"Challan {dc.ChallanNumber} is not in a billable status (got '{dc.Status}').");
                 if (dc.CompanyId != dto.CompanyId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} does not belong to this company.");
+                if (dc.ClientId != dto.ClientId) throw new InvalidOperationException($"Challan {dc.ChallanNumber} belongs to a different client than this bill.");
                 challans.Add(dc);
             }
 
@@ -925,9 +927,9 @@ namespace MyApp.Api.Services.Implementations
                         var freshStatuses = await _context.DeliveryChallans
                             .AsNoTracking()
                             .Where(dc => dto.ChallanIds.Contains(dc.Id))
-                            .Select(dc => new { dc.Status, dc.ChallanNumber })
+                            .Select(dc => new { dc.Status, dc.ChallanNumber, dc.InvoiceId, dc.CompanyId, dc.ClientId })
                             .ToListAsync();
-                        var conflict = freshStatuses.FirstOrDefault(dc => dc.Status != "Pending" && dc.Status != "Imported");
+                        var conflict = freshStatuses.FirstOrDefault(dc => !ChallanBillingRules.IsBillable(dc.Status, dc.InvoiceId) || dc.CompanyId != dto.CompanyId || dc.ClientId != dto.ClientId);
                         if (conflict != null)
                             throw new InvalidOperationException(
                                 $"Challan {conflict.ChallanNumber} was just billed by another request — refresh and try again.");
@@ -1015,7 +1017,11 @@ namespace MyApp.Api.Services.Implementations
                     {
                         if (_context.Entry(dc).State == EntityState.Detached)
                             _context.Attach(dc);   // only after a rolled-back retry cleared the tracker
-                        if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
+                        if (!string.IsNullOrWhiteSpace(dto.PoNumber))
+                            dc.PoNumber = dto.PoNumber.Trim();
+                        if (dto.PoDate.HasValue)
+                            dc.PoDate = dto.PoDate.Value;
+                        else if (dto.PoDateUpdates.TryGetValue(dc.Id, out var poDate))
                             dc.PoDate = poDate;
                         dc.Status = "Invoiced";
                         dc.Invoice = invoice;      // nav link → EF fills InvoiceId with the new key in THIS save

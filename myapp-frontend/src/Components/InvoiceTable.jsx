@@ -360,7 +360,7 @@ export default function InvoiceTable({
             <MdRestore size={14} />
           </button>
         )}
-        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && (
+        {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && inv.fbrReady && !isSubmitted && !isFbrPending && !inv.isCancelled && (
           <>
             {perms.canFbrValidate && (
               <button

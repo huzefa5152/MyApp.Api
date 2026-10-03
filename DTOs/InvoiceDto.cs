@@ -294,8 +294,8 @@ namespace MyApp.Api.DTOs
         public List<CreateInvoiceItemDto> Items { get; set; } = new();
         public Dictionary<int, DateTime> PoDateUpdates { get; set; } = new();
         /// <summary>Optional PO number/date set at bill time. When provided it's
-        /// stored on the bill and overrides the value derived from the linked
-        /// challans; leave blank to keep deriving the PO from the challans.</summary>
+        /// stored on the bill and backfilled to every selected challan in the same
+        /// transaction. Blank fields preserve existing challan details.</summary>
         public string? PoNumber { get; set; }
         public DateTime? PoDate { get; set; }
         /// <summary>

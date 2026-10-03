@@ -291,6 +291,12 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-10-04 — Flexible billing from challans
+
+- Bill client challans with or without a PO, group deliveries by PO number/date, and save optional bill-time PO details back to every selected challan atomically. Normal billing also accepts incomplete FBR setup; FBR actions stay hidden until the bill is ready.
+
+- Verify required MCP read tools without restricting the catalog to an obsolete exact list; cover no-PO bill preparation.
+
 ### 2026-10-03 — Invoice read reliability
 
 - Isolate PDF template styles from the live screen so downloading a challan from cards or tables cannot squeeze the application layout.

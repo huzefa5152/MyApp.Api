@@ -22,6 +22,7 @@ namespace MyApp.Api.Repositories.Implementations
             // tab with their own numbering sequence.
             return await _context.Invoices
                 .AsSplitQuery()
+                .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                 .Include(i => i.DeliveryChallans)
@@ -46,6 +47,7 @@ namespace MyApp.Api.Repositories.Implementations
             // (9) and Credit Notes (10). A row is never in two lists.
             var query = _context.Invoices
                 .AsSplitQuery()
+                .Include(i => i.Company)
                 .Include(i => i.Client)
                 .Include(i => i.Items)
                     // Dual-book overlay pulled on the list too, so the DTO's
