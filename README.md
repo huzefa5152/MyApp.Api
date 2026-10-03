@@ -300,6 +300,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-03 — Annex-H1 stock statement
 
+- **Import Costing no longer merges different products.** When a new GD line's HS code matches one item already on the books but names a different product, the line is held and the screen asks: the same item, or a new item. Nothing is brought in until you choose, so distinct products under one tariff code stay separate.
 - **Annex-H1 export (FIFO-by-GD companies).** Next to the Monthly sheet on the Stock Dashboard, **Annex-H1** downloads the month's stock statement as the sales tax return asks for it (SRO 55(I)/2025): one row per HS code, unit and sales tax rate, with opening, purchased/imported, domestic taxable supplies, exempt supplies and closing, in quantity and value at cost. It is built from the same figures as the monthly sheet and the stock screen, so the three always agree. Stock adjustments and revaluations, which H1 has no column for, are listed separately under "Other" for review.
 
 ### 2026-10-03 — Tenant-isolation fixes, GD arrivals traced to their GD

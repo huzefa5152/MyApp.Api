@@ -125,6 +125,21 @@ namespace MyApp.Api.DTOs
         /// its stock sheet.
         /// </summary>
         public bool ConfirmNewStock { get; set; }
+
+        /// <summary>
+        /// The line's HS code matched exactly ONE item already on the books, but
+        /// under a different product name (New Arrivals only). Nothing merges
+        /// silently: the line is held until the operator says it IS that item
+        /// (ChosenOpeningStockBalanceId) or a new one (<see cref="AsNewItem"/>).
+        /// Before 2026-10-03 such lines joined the existing item, which is how
+        /// nine different weight-scale products became one.
+        /// </summary>
+        public bool NameMismatch { get; set; }
+
+        /// <summary>The operator's "this is a different product -- create a new
+        /// item" for a <see cref="NameMismatch"/> line. Echoed into commit, which
+        /// re-checks it against the server's own match.</summary>
+        public bool AsNewItem { get; set; }
         public string Description { get; set; } = "";
         public string HsCode { get; set; } = "";
         public decimal Quantity { get; set; }
@@ -397,6 +412,9 @@ namespace MyApp.Api.DTOs
         /// <summary>The operator's confirmation that an unmatched line is new
         /// stock — see <see cref="GdCostingLineDto.ConfirmNewStock"/>.</summary>
         public bool? ConfirmNewStock { get; set; }
+
+        /// <summary>The operator's "new item" for a name-mismatch line.</summary>
+        public bool? AsNewItem { get; set; }
 
         public string GdNumber { get; set; } = "";
         public DateTime? GdDate { get; set; }

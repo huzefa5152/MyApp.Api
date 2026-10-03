@@ -123,7 +123,7 @@ namespace MyApp.Api.Services.Implementations
             {
                 var line = lines[i];
                 rows.Add(BuildManualRow(line, line.SourceRow is > 0 ? line.SourceRow.Value : i + 1, warnings));
-                choices.Add(new LineChoice(line.LeaveOut, line.ChosenOpeningStockBalanceId, line.ConfirmNewStock));
+                choices.Add(new LineChoice(line.LeaveOut, line.ChosenOpeningStockBalanceId, line.ConfirmNewStock, line.AsNewItem));
             }
 
             // EVERY line goes through BuildPreviewAsync in ONE call, never one
@@ -180,7 +180,7 @@ namespace MyApp.Api.Services.Implementations
         /// (null = the mode's default) and, for an ambiguous line, which of its
         /// candidate balances it is. Aligned with the rows by index.
         /// </summary>
-        private sealed record LineChoice(bool? LeaveOut, int? ChosenBalanceId, bool? ConfirmNewStock = null);
+        private sealed record LineChoice(bool? LeaveOut, int? ChosenBalanceId, bool? ConfirmNewStock = null, bool? AsNewItem = null);
 
         /// <summary>
         /// Everything a file-sourced preview does AFTER the workbook has been
@@ -224,7 +224,8 @@ namespace MyApp.Api.Services.Implementations
             }
 
             var index = await BuildMatchIndexAsync(companyId);
-            var matches = rows.Select(r => Match(r.GdNumber, r.HsCode, r.Description, index)).ToList();
+            var newArrivalsMode = GdCostingImportModeNames.Normalize(mode) == GdCostingImportModeNames.NewArrivals;
+            var matches = rows.Select(r => Match(r.GdNumber, r.HsCode, r.Description, index, newArrivalsMode)).ToList();
 
             // The operator's decisions, resolved against THIS preview's own
             // matches: a chosen balance counts only when it is one of the line's
@@ -235,14 +236,16 @@ namespace MyApp.Api.Services.Implementations
             // keeps exactly the behaviour CreateMissingStock always gave it.
             var chosen = new int?[rows.Count];
             var leaveOut = new bool[rows.Count];
+            var asNew = new bool[rows.Count];
             for (int i = 0; i < rows.Count; i++)
             {
                 var choice = choices != null && i < choices.Count ? choices[i] : null;
                 chosen[i] = ValidChoice(matches[i], choice?.ChosenBalanceId);
                 leaveOut[i] = choice?.LeaveOut ?? false;
+                asNew[i] = matches[i].NameMismatch && chosen[i] == null && (choice?.AsNewItem ?? false);
             }
 
-            var outcomes = MatchAll(rows, index, mode, matches, chosen, leaveOut);
+            var outcomes = MatchAll(rows, index, mode, matches, chosen, leaveOut, asNew);
 
             preview.Lines = rows
                 .Select((row, i) => ToLineDto(row, outcomes[i]))
@@ -257,7 +260,9 @@ namespace MyApp.Api.Services.Implementations
                 var choiceI = choices != null && i < choices.Count ? choices[i] : null;
                 line.ConfirmNewStock = line.Disposition == GdCostingDispositionNames.StockPosted
                     && (choiceI?.ConfirmNewStock ?? false);
-                if (matches[i].RawIds.Count > 1)
+                line.NameMismatch = matches[i].NameMismatch;
+                line.AsNewItem = asNew[i];
+                if (matches[i].RawIds.Count > 1 || matches[i].NameMismatch)
                     line.Candidates = matches[i].RawIds
                         .Select(id => index.Balances[id])
                         .Select(b => new GdCostingCandidateDto
@@ -596,9 +601,24 @@ namespace MyApp.Api.Services.Implementations
         /// — re-deriving the match from server truth instead of trusting the
         /// line's claimed <c>OpeningStockBalanceId</c>.
         /// </summary>
-        private static MatchResult Match(string? gdNumber, string? hsCode, string? description, MatchIndex index)
+        private static MatchResult Match(string? gdNumber, string? hsCode, string? description, MatchIndex index,
+            bool newArrivals = false)
         {
             var raw = MatchByCode(gdNumber, hsCode, index);
+
+            // New Arrivals: ONE item under the code, found only through the HS
+            // code (no lot of this GD), and named differently from the line.
+            // That is a guess, not a match -- one tariff line carries many
+            // products -- so it is held for the operator: the same item, or a
+            // new one. Backfill is exempt: it prices stock already on the books,
+            // where sheet wording and item names legitimately differ.
+            if (newArrivals && raw.Count == 1
+                && !index.ByLot.ContainsKey((NormalizeGd(gdNumber), GdCostingMapping.CleanHsCode(hsCode))))
+            {
+                var name = NormalizeItemName(description);
+                if (name.Length > 0 && NormalizeItemName(index.Balances[raw[0]].ItemType?.Name) != name)
+                    return new MatchResult(raw, raw, NameMismatch: true);
+            }
 
             // Several balances under one code is the normal shape once this
             // import has created stock: new items are keyed by (HS code, name),
@@ -624,7 +644,7 @@ namespace MyApp.Api.Services.Implementations
         /// <summary>A line's candidate balances: <see cref="RawIds"/> as the GD
         /// number / HS code found them, <see cref="Ids"/> after the name
         /// tie-break.</summary>
-        private sealed record MatchResult(List<int> RawIds, List<int> Ids)
+        private sealed record MatchResult(List<int> RawIds, List<int> Ids, bool NameMismatch = false)
         {
             public bool NarrowedByName => RawIds.Count > 1 && Ids.Count == 1;
         }
@@ -633,10 +653,12 @@ namespace MyApp.Api.Services.Implementations
         /// candidates -- anything else (a stale id, an unrelated balance, a
         /// forged one) resolves to no choice at all.</summary>
         private static int? ValidChoice(MatchResult match, int? chosen) =>
-            chosen is int id && match.RawIds.Count > 1 && match.RawIds.Contains(id) ? id : null;
+            chosen is int id && (match.RawIds.Count > 1 || match.NameMismatch) && match.RawIds.Contains(id) ? id : null;
 
+        /// <summary>A name-mismatch line with no decision resolves to NOTHING, so
+        /// no path can write it on the strength of the HS code alone.</summary>
         private static List<int> Effective(MatchResult match, int? chosen) =>
-            chosen is int id ? new List<int> { id } : match.Ids;
+            chosen is int id ? new List<int> { id } : match.NameMismatch ? new List<int>() : match.Ids;
 
         private static List<int> MatchByCode(string? gdNumber, string? hsCode, MatchIndex index)
         {
@@ -695,7 +717,7 @@ namespace MyApp.Api.Services.Implementations
         /// </summary>
         private static LineOutcome[] MatchAll(
             List<GdCostingSheetRow> rows, MatchIndex index, string mode,
-            IReadOnlyList<MatchResult> matchResults, int?[] chosen, bool[] leaveOut)
+            IReadOnlyList<MatchResult> matchResults, int?[] chosen, bool[] leaveOut, bool[]? asNew = null)
         {
             var matches = rows.Select((_, i) => Effective(matchResults[i], chosen[i])).ToList();
             var outcomes = new LineOutcome?[rows.Count];
@@ -801,6 +823,20 @@ namespace MyApp.Api.Services.Implementations
                         outcomes[i] = new LineOutcome(
                             matches[i].Count > 1 ? GdCostingDispositionNames.Ambiguous : GdCostingDispositionNames.StockPosted,
                             null, null, null, 0m, 0m, leftOut);
+                    continue;
+                }
+
+                if (matchResults[i].NameMismatch && chosen[i] == null)
+                {
+                    var held = index.Balances[matchResults[i].RawIds[0]];
+                    var hsShown = hsKey.Length > 0 ? hsKey : row.HsCode;
+                    var heldName = held.ItemType?.Name ?? "the existing item";
+                    outcomes[i] = asNew != null && asNew[i]
+                        ? new LineOutcome(GdCostingDispositionNames.StockPosted, null, null, null, 0m, 0m,
+                            $"New item: \"{row.Description}\" will be created under HS code {hsShown}, separate from \"{heldName}\".")
+                        : new LineOutcome(GdCostingDispositionNames.Ambiguous, null, null, null, 0m, 0m,
+                            $"\"{heldName}\" is already on your books under HS code {hsShown}, but this line names \"{row.Description}\". "
+                            + "Choose that item if these are the same goods, or New item if they are a different product. Nothing is written until you decide.");
                     continue;
                 }
 
@@ -1101,6 +1137,9 @@ namespace MyApp.Api.Services.Implementations
 
         // ── Commit ───────────────────────────────────────────────────────────
 
+        private const string NameMismatchHeldNote =
+            "The HS code matches an item on the books under a different name. Nothing was written: choose that item or New item.";
+
         public async Task<GdCostingCommitResultDto> CommitAsync(GdCostingCommitDto dto, int userId)
         {
             var result = new GdCostingCommitResultDto();
@@ -1213,7 +1252,8 @@ namespace MyApp.Api.Services.Implementations
                     // Server truth, including the name tie-break and a chosen
                     // candidate -- a choice counts only if it is one of THIS
                     // company's candidates for THIS line's own GD / HS code.
-                    var lineMatch = Match(line.GdNumber, line.HsCode, line.Description, index);
+                    var lineMatch = Match(line.GdNumber, line.HsCode, line.Description, index,
+                        mode == GdCostingImportModeNames.NewArrivals);
                     var resolved = Effective(lineMatch, ValidChoice(lineMatch, line.ChosenOpeningStockBalanceId));
 
                     if (line.LeaveOut)
@@ -1251,7 +1291,13 @@ namespace MyApp.Api.Services.Implementations
                             // a forged CostOnly claim already is, whatever
                             // the client's disposition said.
                             var freshCandidates = resolved;
-                            if (freshCandidates.Count == 0)
+                            if (freshCandidates.Count == 0 && lineMatch.NameMismatch && !line.AsNewItem)
+                            {
+                                // An HS-code guess the operator never settled: held.
+                                disposition = GdCostingDisposition.Ambiguous;
+                                dispositionNote = NameMismatchHeldNote;
+                            }
+                            else if (freshCandidates.Count == 0)
                             {
                                 // Genuinely new stock. Disposition stays
                                 // StockPosted; the item type and opening
@@ -1300,6 +1346,11 @@ namespace MyApp.Api.Services.Implementations
                         if (candidates.Count == 1 && line.OpeningStockBalanceId == candidates[0])
                         {
                             balanceIdToWrite = candidates[0];
+                        }
+                        else if (candidates.Count == 0 && lineMatch.NameMismatch)
+                        {
+                            disposition = GdCostingDisposition.Ambiguous;
+                            dispositionNote = NameMismatchHeldNote;
                         }
                         else if (candidates.Count > 1)
                         {

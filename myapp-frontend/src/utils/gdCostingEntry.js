@@ -170,6 +170,7 @@ export function toLinePayload(m, extra = {}) {
     leaveOut: extra.leaveOut ?? null,
     chosenOpeningStockBalanceId: extra.chosenOpeningStockBalanceId ?? null,
     confirmNewStock: extra.confirmNewStock ?? null,
+    asNewItem: extra.asNewItem ?? null,
     gdNumber: String(m.gdNumber ?? "").trim(),
     gdDate: isoDay(m.gdDate) || null,
     // "YYYY-MM" from the month box; blank = not claimed yet.
@@ -227,6 +228,15 @@ export function lineOutcome(l, mode) {
   const blocking = !l.leaveOut && problems.length > 0;
   if (l.leaveOut)
     return { kind: "left-out", title: "Left out", detail: "Its goods will not come into stock.", blocking: false };
+  if (l.disposition === "ambiguous" && l.nameMismatch) {
+    const held = (l.candidates || [])[0]?.itemTypeName || "an item";
+    return {
+      kind: "choose",
+      title: "Same item, or a new one?",
+      detail: `"${held}" is already on your books under HS code ${l.hsCode}, but this line names "${l.description}". Choose it if these are the same goods, or New item.`,
+      blocking,
+    };
+  }
   if (l.disposition === "ambiguous") {
     const n = (l.candidates || []).length;
     return {

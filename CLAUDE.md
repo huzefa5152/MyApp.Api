@@ -1215,6 +1215,15 @@ feedback -- change both, or the screen promises what the server refuses.
   movement. Lines committed before this change have no movement and keep the old
   balance arithmetic. Backfill is unchanged. Unit cost is stored at 4dp, so a
   line's value can sit qty x 0.00005 off the sheet. Suite: section 14a.
+- **A different product under a held HS code is HELD, never merged**
+  (2026-10-03, maintainer's decision). In New Arrivals, a line whose only match
+  is ONE item found through the HS code alone (no lot of this GD) and named
+  differently is `Ambiguous` with `NameMismatch`: nothing is written until the
+  operator chooses that item (`ChosenOpeningStockBalanceId`) or "New item"
+  (`AsNewItem` + `ConfirmNewStock`), which creates a separate item under the same
+  code. `Effective` resolves an undecided mismatch to NOTHING, so no commit path
+  can write it on the HS code alone. Backfill is exempt: it prices stock already
+  on the books, where sheet wording legitimately differs. Suite section 32.
 
 ### 5b-16. Invoice Sales Detail: the Excel is the operator's sheet, the screen is ours (2026-09-25)
 

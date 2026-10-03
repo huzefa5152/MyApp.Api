@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { MdAddCircleOutline, MdBuild, MdErrorOutline, MdRemoveCircleOutline, MdWarningAmber } from "react-icons/md";
 import { billColors } from "../bill/billTheme";
-import { lineAnchor, lineOutcome, moneyText, qtyText } from "../../utils/gdCostingEntry";
+import { MODE_NEW_ARRIVALS, lineAnchor, lineOutcome, moneyText, qtyText } from "../../utils/gdCostingEntry";
 
 /**
  * "Check the lines": every reviewed line, grouped by GD, each saying what will
@@ -123,14 +123,14 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
         </ul>
       )}
 
-      {(line.candidates || []).length > 1 && !line.leaveOut && (
+      {((line.candidates || []).length > 1 || line.nameMismatch) && !line.leaveOut && (
         <div style={{ marginTop: "0.6rem" }}>
           <label htmlFor={`choose-${line.sourceRow}`} style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: billColors.warn, marginBottom: 4 }}>
             Which item are these goods?
           </label>
           <select id={`choose-${line.sourceRow}`} disabled={busy}
-            value={line.chosenOpeningStockBalanceId ?? (line.disposition === "cost-only" ? line.openingStockBalanceId ?? "" : "")}
-            onChange={(e) => onChoose(line, e.target.value ? Number(e.target.value) : null)}
+            value={line.asNewItem ? "new" : line.chosenOpeningStockBalanceId ?? (line.disposition === "cost-only" ? line.openingStockBalanceId ?? "" : "")}
+            onChange={(e) => onChoose(line, e.target.value === "new" ? "new" : e.target.value ? Number(e.target.value) : null)}
             style={{
               width: "100%", maxWidth: 420, minHeight: 44, padding: "0.45rem 0.6rem", borderRadius: 8,
               border: `1px solid ${billColors.inputBorder}`, background: billColors.inputBg, fontSize: 13.5,
@@ -141,6 +141,9 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
                 {c.itemTypeName} — {qtyText(c.quantity)}{c.unit ? ` ${c.unit}` : ""} on the books
               </option>
             ))}
+            {line.nameMismatch && (
+              <option value="new">+ New item: {line.description}</option>
+            )}
           </select>
         </div>
       )}
@@ -157,8 +160,11 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
             style={{ width: 20, height: 20, marginTop: 1, flexShrink: 0 }} />
           <span>
             <strong>This item is not on your books.</strong> Tick to create it as new stock:{" "}
-            {qtyText(line.quantity)}{line.unit ? ` ${line.unit}` : ""} worth {moneyText(selling)} is added to opening
-            stock and to the Inventory account. Leave it out if the goods are not in stock.
+            {qtyText(line.quantity)}{line.unit ? ` ${line.unit}` : ""} worth {moneyText(selling)}{" "}
+            {mode === MODE_NEW_ARRIVALS
+              ? "comes into stock as an arrival on this GD, dated at the GD date."
+              : "is added to opening stock and to the Inventory account."}{" "}
+            Leave it out if the goods are not in stock.
           </span>
         </label>
       )}

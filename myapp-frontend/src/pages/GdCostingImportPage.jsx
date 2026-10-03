@@ -143,6 +143,9 @@ export default function GdCostingImportPage() {
   const [chosenItem, setChosenItem] = useState({});
   // Row -> the operator's "create it as new stock" for a line not on the books.
   const [confirmNew, setConfirmNew] = useState({});
+  // Lines the operator called a different product from the one item already
+  // under their HS code (the server holds such lines until told).
+  const [asNew, setAsNew] = useState({});
   const [stale, setStale] = useState(false);
   const [busy, setBusy] = useState("");
   const [result, setResult] = useState(null);
@@ -187,7 +190,7 @@ export default function GdCostingImportPage() {
 
   const clearReview = useCallback(() => {
     setPreview(null); setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({});
-    setConfirmNew({}); setStale(false); setFixing(null);
+    setConfirmNew({}); setAsNew({}); setStale(false); setFixing(null);
   }, []);
 
   const resetAll = useCallback(() => {
@@ -219,13 +222,14 @@ export default function GdCostingImportPage() {
    * depends on the server's answer (Backfill leaves a line with nothing to
    * price out), so when an answer changes it, the server is asked once more.
    */
-  const recheck = useCallback(async ({ base, edits = {}, modeNow, leave, chosen, src, confirm = {} }) => {
+  const recheck = useCallback(async ({ base, edits = {}, modeNow, leave, chosen, src, confirm = {}, fresh = asNew }) => {
     const build = (pv, withEdits) => (pv.lines || []).map((l) => {
       const extra = {
         sourceRow: l.sourceRow,
         leaveOut: effectiveLeaveOut(l, modeNow, leave),
         chosenOpeningStockBalanceId: chosen[l.sourceRow] ?? null,
         confirmNewStock: confirm[l.sourceRow] ?? false,
+        asNewItem: fresh[l.sourceRow] ?? false,
       };
       return withEdits[l.sourceRow] ? toLinePayload(withEdits[l.sourceRow], extra) : previewLineToPayload(l, extra);
     });
@@ -238,7 +242,7 @@ export default function GdCostingImportPage() {
       if ((pv.lines || []).every((l) => l.leaveOut === effectiveLeaveOut(l, modeNow, leave))) break;
     }
     return pv;
-  }, [companyId]);
+  }, [companyId, asNew]);
 
   // One wrapper for every server round trip from the review: the preview on
   // screen is replaced only by a complete answer.
@@ -268,7 +272,7 @@ export default function GdCostingImportPage() {
       importProfileId: data.importProfileId, profileVersion: data.profileVersion,
     };
     setSource(src); setSheetNotes(data.warnings || []); setLeaveOutChoice({}); setChosenItem({});
-    setConfirmNew({}); setStale(false);
+    setConfirmNew({}); setAsNew({}); setStale(false);
     return settleDefaults(data, src, mode);
   });
 
@@ -285,7 +289,7 @@ export default function GdCostingImportPage() {
       // review describe the same lines.
       if (hasContent(typed)) { setStaged(lines); setTyped(nextLineFrom(typed)); setTypedShowAll(false); }
       setSource(null); setSheetNotes([]); setLeaveOutChoice({}); setChosenItem({});
-      setConfirmNew({}); setStale(false);
+      setConfirmNew({}); setAsNew({}); setStale(false);
       return settleDefaults(data, null, mode);
     });
   };
@@ -334,9 +338,21 @@ export default function GdCostingImportPage() {
 
   const onChoose = (line, balanceId) => {
     const chosen = { ...chosenItem };
-    if (balanceId) chosen[line.sourceRow] = balanceId; else delete chosen[line.sourceRow];
+    const fresh = { ...asNew };
+    let confirm = confirmNew;
+    if (balanceId === "new") {
+      // A different product: no item chosen, created as new stock on commit.
+      delete chosen[line.sourceRow];
+      fresh[line.sourceRow] = true;
+      confirm = { ...confirmNew, [line.sourceRow]: true };
+    } else {
+      delete fresh[line.sourceRow];
+      if (balanceId) chosen[line.sourceRow] = balanceId; else delete chosen[line.sourceRow];
+    }
     setChosenItem(chosen);
-    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen, src: source, confirm: confirmNew }));
+    setAsNew(fresh);
+    setConfirmNew(confirm);
+    run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen, src: source, confirm, fresh }));
   };
 
   const onFix = (line) => setFixing({ sourceRow: line.sourceRow, draft: editorLineFrom(line), problems: line.problems || [] });

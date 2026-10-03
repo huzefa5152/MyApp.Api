@@ -3816,6 +3816,68 @@ def main():
               any(d.get("gdNumber") == "GD-C-4" and (d.get("claimMonth") or "")[:7] == "2026-05" for d in det_rows),
               str([d for d in det_rows if d.get("gdNumber") == "GD-C-4"])[:200])
 
+        # 32 -- New Arrivals never merges a DIFFERENT product into the one item
+        # already under its HS code (2026-10-03). Before, a GD line named
+        # "KITCHEN SCALE PARTS" silently joined "WEIGHT SCALE PARTS" because it
+        # shared 8423.9000 -- nine products became one item at a real client.
+        mm_co = make_company(api, h, f"GD Name Match {tag}")
+        created_companies.append(mm_co)
+        scale = make_item(api, h, mm_co, f"WEIGHT SCALE PARTS {tag}", hs="8423.9000")
+        set_opening(api, h, mm_co, scale, 10, 5000)
+        kitchen = manual_line("GD-M-1", "8423.9000", f"KITCHEN SCALE PARTS {tag}", qty=4, assessed=2000)
+        r = gd_preview_manual(api, h, mm_co, [kitchen], mode="new-arrivals")
+        pv = r.json() if r.ok else {}
+        line = (pv.get("lines") or [{}])[0]
+        cands = line.get("candidates") or []
+        check("32a: a different name under a held HS code is held as a choice, not merged",
+              line.get("disposition") == "ambiguous" and line.get("nameMismatch") is True
+              and len(cands) == 1 and cands[0].get("itemTypeId") == scale,
+              f"{line.get('disposition')} mismatch={line.get('nameMismatch')} cands={cands}")
+        r = commit_preview(api, h, mm_co, pv, "new-arrivals")
+        check("32b: committed undecided, nothing comes into stock",
+              r.ok and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 10),
+              f"http {r.status_code} qty={(position_of(api, h, mm_co, scale) or {}).get('quantity')}")
+
+        same = dict(manual_line("GD-M-2", "8423.9000", f"KITCHEN SCALE PARTS {tag}", qty=4, assessed=2000),
+                    chosenOpeningStockBalanceId=(cands[0].get("openingStockBalanceId") if cands else None))
+        r = gd_preview_manual(api, h, mm_co, [same], mode="new-arrivals")
+        pv = r.json() if r.ok else {}
+        line = (pv.get("lines") or [{}])[0]
+        check("32c: choosing the existing item settles the line onto it",
+              line.get("disposition") == "cost-only" and line.get("itemTypeId") == scale, str(line)[:200])
+        r = commit_preview(api, h, mm_co, pv, "new-arrivals")
+        check("32d: and its 4 units come in on that item",
+              r.ok and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 14),
+              f"http {r.status_code} qty={(position_of(api, h, mm_co, scale) or {}).get('quantity')}")
+
+        bath_name = f"BATH SCALE {tag}"
+        fresh = dict(manual_line("GD-M-3", "8423.9000", bath_name, qty=5, assessed=2500),
+                     asNewItem=True, confirmNewStock=True)
+        r = gd_preview_manual(api, h, mm_co, [fresh], mode="new-arrivals")
+        pv = r.json() if r.ok else {}
+        line = (pv.get("lines") or [{}])[0]
+        check("32e: 'New item' turns the held line into new stock",
+              line.get("disposition") == "stock-posted" and line.get("asNewItem") is True
+              and line.get("confirmNewStock") is True, str(line)[:200])
+        r = commit_preview(api, h, mm_co, pv, "new-arrivals")
+        res = r.json() if r.ok else {}
+        rows_now = requests.get(f"{api}/stock/company/{mm_co}/onhand", headers=h, timeout=60).json()
+        bath = next((x for x in rows_now if x.get("itemTypeName") == bath_name), None)
+        if bath:
+            CREATED_ITEM_TYPE_IDS.append(bath["itemTypeId"])
+        check("32f: a separate item is created and the old one is untouched",
+              r.ok and bath is not None and close(bath.get("onHand"), 5)
+              and close((position_of(api, h, mm_co, scale) or {}).get("quantity"), 14),
+              f"http {r.status_code} bath={bath} {str(res)[:150]}")
+
+        r = gd_preview_manual(api, h, mm_co, [manual_line("GD-M-4", "8423.9000", f"KITCHEN SCALE PARTS {tag}",
+                                                          qty=1, assessed=100)], mode="backfill")
+        line = ((r.json() or {}).get("lines") or [{}])[0] if r.ok else {}
+        # Two items now share 8423.9000, so the line is ambiguous for the old,
+        # unrelated reason; what Backfill is exempt from is the NAME hold.
+        check("32g: Backfill is exempt from the name hold -- it prices stock already on the books",
+              r.ok and line.get("nameMismatch") is False, str(line)[:200])
+
     finally:
         if not args.keep:
             if restricted_user_id:
