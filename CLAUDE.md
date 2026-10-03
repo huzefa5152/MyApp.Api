@@ -339,6 +339,23 @@ names, because passing `companyId` only ever changed the SORT.
   half positive checks (the creator sees it; a user who can reach both companies
   sees it; the tariff reaches both), because a suite that only proved things
   were hidden would pass just as well if everything were hidden.
+- **By-id reads and writes use the same membership** (2026-10-03,
+  `Helpers/ItemTypeMembership` -- the ONE definition, which the repository's
+  picker filter now calls). `GET/PUT/DELETE /api/itemtypes/{id}` answer 404 for
+  an item the caller's companies do not hold, and `PUT`/`DELETE` refuse (400) an
+  item a company OUTSIDE the caller's access also holds: the row is shared, so a
+  rename or reclassification rewrote that other tenant's unfiled bill lines.
+  Propagation to lines is limited to the caller's companies as a second wall. A
+  company that wants its own wording sets `DisplayName`. The seed admin reaches
+  every company, so is never "outside". Writes that would REGISTER an item
+  (opening upsert, adjust, itemtype-policy) require it to be visible first. GD
+  costing lines are a membership leg too.
+- **Global lookups answer from the caller's data only**: `/api/lookup/items*`
+  returns descriptions the caller's companies used on a document line or that
+  name an item they hold; the HS search names only a visible item. Audit logs and
+  parser feedback (customers' PO PDFs) are scoped to the caller's companies for
+  everyone but the seed admin -- any role editor can grant those permissions.
+  Suite: `scripts/test_tenant_isolation.py` suite 21.
 
 ### 5b-3. Spreadsheet import — layouts are data, not code (2026-09-01)
 
@@ -1185,6 +1202,19 @@ feedback -- change both, or the screen promises what the server refuses.
   button out of sight.
 - Suites: the offline harness (`GdLineRules` cases),
   `scripts/test_gd_import_costing.py` section 29, `node scripts/test_gd_costing_entry.mjs`.
+- **"New goods arrived" brings stock in as a MOVEMENT, never onto the opening
+  balance** (2026-10-03). Each line that writes becomes an inward
+  `StockMovement` (`SourceType.ImportConsignment`, `SourceId` = the line, dated
+  at the GD date, carrying selling value, landed cost and rate) and the line's
+  `StockMovementId` points at it -- that is what makes FIFO open a GD pool. Folded
+  into the opening, an arrival read as "opening -- not traced to a GD" (Pak Trade
+  KAPE-HC-9509) and a later restatement replaced and rescaled it. A NEW item opens
+  an empty anchor balance and posts NO opening Inventory: the GD's own journal
+  already debits Inventory, and posting both debited it twice. Delete removes the
+  movements (refused if the goods have since left); a line correction updates its
+  movement. Lines committed before this change have no movement and keep the old
+  balance arithmetic. Backfill is unchanged. Unit cost is stored at 4dp, so a
+  line's value can sit qty x 0.00005 off the sheet. Suite: section 14a.
 
 ### 5b-16. Invoice Sales Detail: the Excel is the operator's sheet, the screen is ours (2026-09-25)
 

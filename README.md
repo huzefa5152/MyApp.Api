@@ -298,6 +298,12 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-03 — Tenant-isolation fixes, GD arrivals traced to their GD
+
+- **Security: closed cross-company data paths found in a full audit.** The tax-claim summary now checks the caller can reach the company named in the request. An item used by another company can no longer be renamed, reclassified or deleted by a company that cannot see that other company (renaming it used to rewrite the other company's unfiled bill lines); items, descriptions and HS-code item names are only shown from the caller's own companies; audit logs and PO-parser feedback are limited to the caller's companies; a PO format can only be opened by its own company; claim-month edits need full-company access; HS validation no longer borrows another company's FBR token.
+- **Fix: goods entered as "New goods arrived" are now traced to their GD.** Each GD line comes into stock as its own movement dated at the GD date, so FIFO, the GD panel, the movements feed and the monthly sheet name the GD instead of showing "opening — not traced to a GD". A new item created this way no longer posts its value to Inventory twice. Deleting or correcting the GD undoes or adjusts that stock.
+- **Navigation:** the Import Costing Guide now sits under Purchases with the import screens it explains.
+
 ### 2026-10-03 — Monthly GD stock sheet, re-dated bills move their stock
 
 - **Monthly stock sheet (FIFO-by-GD companies).** The Stock Dashboard has a month picker and a **Monthly sheet** button that downloads the stock sheet the way importer clients keep it month by month: one row per GD line (GD x product) with its own HS code, claim month and value; Opening on the 1st of the month, that month's Consumed at FIFO cost, and Balance at month end, so each month's Balance is the next month's Opening. Same columns and Cost of Good Sold block as the existing export, plus a **By HS** sheet (balance by 4-digit heading and product) and a Summary.
