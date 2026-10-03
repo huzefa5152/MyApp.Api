@@ -57,6 +57,7 @@ namespace MyApp.Api.Helpers
                 var endPools = end.Pools.ToDictionary(p => p.Key);
 
                 var consumed = new Dictionary<string, (decimal Qty, decimal Value)>();
+                var sold = new Dictionary<string, (decimal Qty, decimal Value)>();
                 foreach (var m in byItem.GetValueOrDefault(item.ItemTypeId) ?? new())
                 {
                     if (!end.Takes.TryGetValue(m.Id, out var takes)) continue;
@@ -68,6 +69,11 @@ namespace MyApp.Api.Helpers
                         if (endPools.TryGetValue(t.PoolKey, out var own) && own.MovementId == m.Id) continue;
                         consumed.TryGetValue(t.PoolKey, out var c);
                         consumed[t.PoolKey] = (c.Qty + sign * t.Quantity, c.Value + sign * t.Value);
+                        if (m.SourceType == StockMovementSourceType.Invoice)
+                        {
+                            sold.TryGetValue(t.PoolKey, out var so);
+                            sold[t.PoolKey] = (so.Qty + sign * t.Quantity, so.Value + sign * t.Value);
+                        }
                     }
                 }
 
@@ -75,6 +81,7 @@ namespace MyApp.Api.Helpers
                 {
                     startPools.TryGetValue(p.Key, out var s);
                     consumed.TryGetValue(p.Key, out var c);
+                    sold.TryGetValue(p.Key, out var sd);
                     if (p.OrderDate.HasValue && p.OrderDate.Value >= monthEnd && c.Qty == 0m
                         && p.Quantity == p.InQuantity)
                     {
@@ -114,6 +121,10 @@ namespace MyApp.Api.Helpers
                         OpeningQuantity = openQty, OpeningValueExcludingTax = Money(openVal),
                         ConsumedQuantity = c.Qty, ConsumedValueExcludingTax = Money(c.Value),
                         BalanceQuantity = p.Quantity, BalanceValueExcludingTax = Money(p.Value),
+                        // Born this month (not by a restatement): it opened at what it brought in.
+                        ReceivedQuantity = s == null && !restatedHere ? p.InQuantity : 0m,
+                        ReceivedValueExcludingTax = s == null && !restatedHere ? Money(p.InValue) : 0m,
+                        SoldQuantity = sd.Qty, SoldValueExcludingTax = Money(sd.Value),
                         OpeningActualCostExcludingTax = costed ? Money(openAct) : null,
                         BalanceActualCostExcludingTax = costed ? Money(p.ActualValue) : null,
                     });
@@ -122,6 +133,7 @@ namespace MyApp.Api.Helpers
                 // Sold past every GD: one line per item, so the sheet still adds up.
                 var startShort = start?.ShortfallQuantity ?? 0m;
                 consumed.TryGetValue(GdFifoValuation.ShortfallKey, out var sc);
+                sold.TryGetValue(GdFifoValuation.ShortfallKey, out var ss);
                 if (end.ShortfallQuantity > 0m || startShort > 0m || sc.Qty != 0m)
                     output.Lines.Add(new StockMonthlyLineDto
                     {
@@ -130,6 +142,7 @@ namespace MyApp.Api.Helpers
                         HsCode = item.HsCode, Unit = item.Unit, SalesTaxRate = item.SalesTaxRate,
                         OpeningQuantity = -startShort, OpeningValueExcludingTax = -Money(start?.ShortfallValue ?? 0m),
                         ConsumedQuantity = sc.Qty, ConsumedValueExcludingTax = Money(sc.Value),
+                        SoldQuantity = ss.Qty, SoldValueExcludingTax = Money(ss.Value),
                         BalanceQuantity = -end.ShortfallQuantity, BalanceValueExcludingTax = -Money(end.ShortfallValue),
                     });
             }

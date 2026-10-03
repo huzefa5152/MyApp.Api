@@ -298,6 +298,10 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-03 — Annex-H1 stock statement
+
+- **Annex-H1 export (FIFO-by-GD companies).** Next to the Monthly sheet on the Stock Dashboard, **Annex-H1** downloads the month's stock statement as the sales tax return asks for it (SRO 55(I)/2025): one row per HS code, unit and sales tax rate, with opening, purchased/imported, domestic taxable supplies, exempt supplies and closing, in quantity and value at cost. It is built from the same figures as the monthly sheet and the stock screen, so the three always agree. Stock adjustments and revaluations, which H1 has no column for, are listed separately under "Other" for review.
+
 ### 2026-10-03 — Tenant-isolation fixes, GD arrivals traced to their GD
 
 - **Security: closed cross-company data paths found in a full audit.** The tax-claim summary now checks the caller can reach the company named in the request. An item used by another company can no longer be renamed, reclassified or deleted by a company that cannot see that other company (renaming it used to rewrite the other company's unfiled bill lines); items, descriptions and HS-code item names are only shown from the caller's own companies; audit logs and PO-parser feedback are limited to the caller's companies; a PO format can only be opened by its own company; claim-month edits need full-company access; HS validation no longer borrows another company's FBR token.

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, exportStockMonthly, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, exportStockMonthly, exportAnnexH1, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -388,6 +388,11 @@ export default function StockDashboardPage() {
     runExport(
       () => exportStockMonthly(selectedCompany.id, sheetMonth, search.trim()),
       `stock-sheet-${sheetMonth}.xlsx`);
+  };
+
+  const downloadAnnexH1 = () => {
+    if (!/^\d{4}-\d{2}$/.test(sheetMonth)) return;
+    runExport(() => exportAnnexH1(selectedCompany.id, sheetMonth), `annex-h1-${sheetMonth}.xlsx`);
   };
 
   const runExport = async (request, fileName) => {
@@ -820,6 +825,14 @@ export default function StockDashboardPage() {
                 title="Download the month's stock sheet — one row per GD line with its HS code: Opening on the 1st, that month's Consumed at FIFO cost, Balance at month end"
               >
                 <MdFileDownload size={16} /> Monthly sheet
+              </button>
+              <button
+                style={{ ...styles.altBtn, ...(exporting ? styles.altBtnBusy : null) }}
+                onClick={downloadAnnexH1}
+                disabled={exporting || loading || !sheetMonth}
+                title="Annex-H1 stock statement for the month: per HS code, unit and rate - opening, purchased/imported, supplies and closing at cost"
+              >
+                <MdFileDownload size={16} /> Annex-H1
               </button>
             </span>
           )}

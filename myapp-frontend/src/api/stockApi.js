@@ -44,6 +44,13 @@ export const exportStockMonthly = (companyId, month, search = "") =>
     params: search ? { month, search } : { month },
     responseType: "blob",
   });
+// Annex-H1 (SRO 55(I)/2025) for a month: the monthly sheet rolled up per HS
+// code x unit x rate, at cost. FIFO-by-GD companies only. `month` is "yyyy-MM".
+export const exportAnnexH1 = (companyId, month) =>
+  http.get(`/stock/company/${companyId}/annex-h1/excel`, {
+    params: { month },
+    responseType: "blob",
+  });
 // The item types this company actually tracks stock for. "Which items can
 // hold a position" is a server rule (V1 = HS-coded, V2 = all, per-company
 // overrides win either way), so the modals ask for it instead of guessing.

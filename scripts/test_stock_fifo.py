@@ -317,6 +317,29 @@ def main():
                       and near(cc[17].value, 5, 1e-4) and near(cc[18].value, 10000),
                       f"N={cc[13].value} O={cc[14].value} R={cc[17].value} S={cc[18].value}")
 
+        # ── 8b. Annex-H1 (2026-10-03) ─────────────────────────────────────
+        # The monthly sheet rolled up per HS x unit x rate, at cost. Held on the
+        # 1st: 30 units / 35,000; sold this month: 15 / 20,000 (A 10 + C 5);
+        # closing: 15 / 15,000, the same figure as the stock screen.
+        print("\n-- 8b. Annex-H1 rolls the month up at cost --")
+        month = pk_today().strftime("%Y-%m")
+        r = call("GET", f"{api}/stock/company/{cid}/annex-h1/excel", h, params={"month": month})
+        if check("the Annex-H1 workbook downloads", r.ok, f"http {r.status_code}: {r.text[:200]}"):
+            ws = openpyxl.load_workbook(io.BytesIO(r.content), data_only=False).worksheets[0]
+            rows = [row for row in ws.iter_rows(min_row=5, values_only=True)
+                    if isinstance(row[0], int)]
+            def tot(i): return sum(float(x[i] or 0) for x in rows)
+            check("H1 opening 30 / 35,000", near(tot(4), 30, 1e-4) and near(tot(5), 35000),
+                  f"{tot(4)} / {tot(5)}")
+            check("H1 taxable supplies 15 / 20,000 -- FIFO cost, not the sale price",
+                  near(tot(8), 15, 1e-4) and near(tot(9), 20000), f"{tot(8)} / {tot(9)}")
+            check("H1 has nothing in Other when only sales moved stock",
+                  near(tot(12), 0, 1e-4) and near(tot(13), 0), f"{tot(12)} / {tot(13)}")
+            cur = onhand(api, h, cid, iid)
+            check("H1 closing equals the stock screen",
+                  near(tot(14), cur["onHand"], 1e-4) and near(tot(15), cur["valueExcludingTax"]),
+                  f"H1 {tot(14)} / {tot(15)} vs screen {cur['onHand']} / {cur['valueExcludingTax']}")
+
         # ── 9. Second bill crosses into the unclaimed GD ─────────────────
         print("\n-- 9. A bill of 10 takes C (5) then the unclaimed B (5) --")
         r = bill(api, h, cid, client_id, item, 10)

@@ -639,6 +639,18 @@
         public decimal BalanceQuantity { get; set; }
         public decimal BalanceValueExcludingTax { get; set; }
 
+        /// <summary>The part of Opening that ARRIVED during the month (a GD
+        /// arrival, a purchase, other stock in). The client's sheet folds it into
+        /// Opening; Annex-H1 reports it as "purchased / imported".</summary>
+        public decimal ReceivedQuantity { get; set; }
+        public decimal ReceivedValueExcludingTax { get; set; }
+
+        /// <summary>The part of Consumed that went out on SALES (invoices, net of
+        /// sale returns) -- Annex-H1's supplies. The rest of Consumed is stock
+        /// adjustments.</summary>
+        public decimal SoldQuantity { get; set; }
+        public decimal SoldValueExcludingTax { get; set; }
+
         /// <summary>Landed cost held at the start / end of the month. Null when
         /// the line has none or the caller lacks stock.actualcost.view.</summary>
         public decimal? OpeningActualCostExcludingTax { get; set; }

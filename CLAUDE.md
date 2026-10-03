@@ -1381,6 +1381,17 @@ GD panel and Excel export all say which GDs it took.
   on is left out and counted on the Summary. It buckets by `MovementDate`, which
   is why the invoice sync must re-date a movement when only the bill's date
   changes (`SyncInvoiceStockMovementsCoreAsync`'s no-op guard; reflow suite 6.9).
+- **Annex-H1 is the monthly sheet rolled up, never a second calculation**
+  (2026-10-03). `GET .../annex-h1/excel?month=` runs the same
+  `BuildMonthlyDataAsync` as the monthly sheet and `Helpers/AnnexH1` groups its
+  lines per HS code (normalised to NNNN.NNNN) x unit x rate. Values are the
+  stock value excluding tax (maintainer's decision: H1 "at cost" = the figure
+  the screen and ledger show). Opening = held on the 1st (the line's Opening
+  minus what arrived during the month), Purchased/Imported = `Received*`,
+  Supplies = `Sold*` (invoice takes net of returns; 0% rows are exempt),
+  Closing = the walk's month-end. Adjustments, revaluations and restatements
+  have no H1 column, so they land in a derived "Other" the consultant reviews --
+  never silently inside Supplies. FIFO suite step 8b.
 - Suites: `cd scripts/stock_fifo_harness && dotnet run -c Release` (offline, links
   the real walk), `python scripts/test_stock_fifo.py`, `node scripts/test_fifo_pricing.mjs`,
   and the READ-ONLY production check `cd scripts/stock_fifo_prod_check && dotnet run -c Release`

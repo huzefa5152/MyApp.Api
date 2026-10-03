@@ -953,15 +953,69 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> ExportMonthly(int companyId, [FromQuery] string? month,
             [FromQuery] string? search = null)
         {
+            var (error, data) = await BuildMonthlyDataAsync(companyId, month, search);
+            if (error != null) return error;
+            byte[] bytes;
+            try
+            {
+                bytes = StockExcelBuilder.BuildMonthly(data);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Monthly stock Excel export failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "Could not build the Excel file. Please try again." });
+            }
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"stock-sheet-{data!.Month:yyyy-MM}.xlsx");
+        }
+
+        /// <summary>
+        /// Annex-H1 (SRO 55(I)/2025) for a month: the monthly GD sheet's lines
+        /// rolled up per HS code x unit x rate, at cost (stock value excluding
+        /// tax). Built from the SAME data as the monthly sheet, so the two -- and
+        /// the stock screen -- cannot disagree. See <see cref="AnnexH1"/>.
+        /// </summary>
+        [HttpGet("company/{companyId}/annex-h1/excel")]
+        [HasPermission("stock.dashboard.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> ExportAnnexH1(int companyId, [FromQuery] string? month)
+        {
+            var (error, data) = await BuildMonthlyDataAsync(companyId, month, null);
+            if (error != null) return error;
+            var rows = AnnexH1.Build(data!.Lines);
+            var notes = new List<string>(data.FiltersApplied);
+            if (data.LaterLinesOmitted > 0)
+                notes.Add($"{data.LaterLinesOmitted} GD line(s) dated after this month are not included.");
+            if (data.RestatedInMonth)
+                notes.Add("A stock-sheet restatement was applied this month; its value change is in Other.");
+            byte[] bytes;
+            try
+            {
+                bytes = AnnexH1.BuildWorkbook(data.CompanyName, data.Month, rows, notes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Annex-H1 export failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "Could not build the Excel file. Please try again." });
+            }
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"annex-h1-{data.Month:yyyy-MM}.xlsx");
+        }
+
+        /// <summary>The monthly sheet's data for <paramref name="month"/> -- or the
+        /// request's error. Shared by the monthly sheet and Annex-H1.</summary>
+        private async Task<(IActionResult? Error, StockMonthlyExportDto? Data)> BuildMonthlyDataAsync(
+            int companyId, string? month, string? search)
+        {
             if (!DateTime.TryParseExact(month ?? "", "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out var monthStart))
-                return BadRequest(new { message = "Choose a month (yyyy-MM)." });
+                return (BadRequest(new { message = "Choose a month (yyyy-MM)." }), null);
             var today = PakistanClock.Today;
             if (monthStart > new DateTime(today.Year, today.Month, 1))
-                return BadRequest(new { message = "That month has not started yet." });
+                return (BadRequest(new { message = "That month has not started yet." }), null);
             if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId))
-                return BadRequest(new { message =
-                    "The monthly GD sheet needs FIFO-by-GD costing: under the weighted average a sale is not allocated to a GD." });
+                return (BadRequest(new { message =
+                    "The monthly GD sheet needs FIFO-by-GD costing: under the weighted average a sale is not allocated to a GD." }), null);
             var monthEnd = monthStart.AddMonths(1);
 
             var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
@@ -1017,18 +1071,7 @@ namespace MyApp.Api.Controllers
                 data.FiltersApplied.Add("Scope: your divisions only");
             if (monthEnd > today) data.FiltersApplied.Add($"Month in progress: movements to {today:dd-MM-yyyy}");
 
-            byte[] bytes;
-            try
-            {
-                bytes = StockExcelBuilder.BuildMonthly(data);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Monthly stock Excel export failed for company {CompanyId}", companyId);
-                return StatusCode(500, new { message = "Could not build the Excel file. Please try again." });
-            }
-            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                $"stock-sheet-{monthStart:yyyy-MM}.xlsx");
+            return (null, data);
         }
 
         /// <summary>Audit feed of every movement, newest first.</summary>
