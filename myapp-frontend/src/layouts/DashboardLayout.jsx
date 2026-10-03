@@ -299,12 +299,11 @@ export default function DashboardLayout() {
     if (p.startsWith("/users") || p.startsWith("/roles") || p.startsWith("/tenant-access") || p.startsWith("/administrators") || p.startsWith("/audit-logs")
       || p.startsWith("/accounting/data-migration") || p.startsWith("/accounting/manager-import")) return "administration";
     if (p.startsWith("/challans") || p.startsWith("/sales-quotes") || p.startsWith("/sales-orders") || p.startsWith("/withholding-tax") || p === "/bills" || p === "/invoices" || p === "/credit-notes" || p === "/debit-notes" || p === "/credit-debit-notes" || p === "/item-rate-history") return "sales";
-    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase") || p.startsWith("/imports/costing")) return "purchases";
+    if (p.startsWith("/purchase-bills") || p.startsWith("/purchase-debit-notes") || p.startsWith("/goods-receipts") || p.startsWith("/fbr-import/purchase") || p.startsWith("/imports/") || p.startsWith("/guides/import")) return "purchases";
     if (p.startsWith("/receipts") || p.startsWith("/help/accounting") || p.startsWith("/payments") || p.startsWith("/customer-ledger") || p.startsWith("/chart-of-accounts") || p.startsWith("/bank-cash-accounts") || p.startsWith("/transfers") || p.startsWith("/journal-entries") || p.startsWith("/accounting/")) return "accounting";
     if (p.startsWith("/clients") || p.startsWith("/suppliers") || p.startsWith("/item-types") || p.startsWith("/non-inventory-items") || p.startsWith("/units")) return "masterdata";
     if (p.startsWith("/companies") || p.startsWith("/configuration/") || p.startsWith("/divisions") || p.startsWith("/po-formats")
       || p.startsWith("/templates") || p.startsWith("/fbr-settings") || p.startsWith("/fbr-sandbox") || p.startsWith("/fbr-monitor")) return "settings";
-    if (p.startsWith("/guides")) return "guides";
     return "dashboards";
   }, [location.pathname]);
 
@@ -544,6 +543,13 @@ export default function DashboardLayout() {
                   <span>Consignments</span>
                 </NavLink>
               </Can>
+              {/* No Can wrapper: the guide explains the product and shows no
+                  company data. It sits with the import screens it explains,
+                  as the Accounting Guide sits in Accounting. */}
+              <NavLink to="/guides/import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
+                <span>Import Costing Guide</span>
+              </NavLink>
             </NavGroup>
           )}
 
@@ -834,25 +840,6 @@ export default function DashboardLayout() {
             </NavGroup>
           )}
 
-          {/* GUIDES — help content, no company data, so no permission gate:
-              always visible, unlike every other group above which is hidden
-              until the user holds a matching key. Its own section (rather
-              than nested under Accounting, where the Accounting Guide link
-              already lives) so an operator whose only access is Purchases
-              can still find it. */}
-          <NavGroup
-            id="guides"
-            icon={MdMenuBook}
-            title="Guides"
-            count={1}
-            defaultOpen={activeSection === "guides"}
-            isChildActive={activeSection === "guides"}
-          >
-            <NavLink to="/guides/import" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
-              <MdMenuBook className="dl-subitem__icon" aria-hidden="true" />
-              <span>Import Costing Guide</span>
-            </NavLink>
-          </NavGroup>
 
         </nav>
 
@@ -1000,7 +987,7 @@ function getBreadcrumb(pathname) {
     "/tenant-access": "Administration / Tenant Access",
     "/administrators": "Administration / Administrators",
     "/audit-logs": "Administration / Audit Logs",
-    "/guides/import": "Guides / Import Costing Guide",
+    "/guides/import": "Purchases / Import Costing Guide",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
 }

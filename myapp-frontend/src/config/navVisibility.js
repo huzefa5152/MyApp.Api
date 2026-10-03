@@ -29,6 +29,10 @@ export const NAV_ITEMS = [
   { path: "/sales-orders",              permission: "salesorders.list.view",       label: "Sales Orders",       visible: false },
   { path: "/challans/import",           permission: "challans.import.create",      label: "Import Challans",    visible: false },
 
+  // ── Purchases ────────────────────────────────────────────────────────────
+  // Ungated like the Accounting Guide: help content, no company data.
+  { path: "/guides/import",             permission: null,                          label: "Import Costing Guide", visible: true },
+
   // ── Accounting ───────────────────────────────────────────────────────────
   { path: "/customer-ledger",           permission: "customerledger.list.view",    label: "Customer Ledger",    visible: true },
   // No <Can> gate on this nav item (see DashboardLayout.jsx) — the guide
