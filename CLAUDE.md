@@ -1338,6 +1338,19 @@ GD panel and Excel export all say which GDs it took.
 - **The Excel ↳ rows carry their own Consumed / Balance** under FIFO, plus rows
   for opening not traced to a GD, other stock in, and a sale not yet covered.
   The item row and the totals are unchanged.
+- **The MONTHLY sheet is two walks cut at two dates** (2026-10-03).
+  `GET .../onhand/excel/monthly?month=yyyy-MM` (FIFO only; 400 otherwise) runs
+  the walk over movements before the 1st and before the next 1st, and
+  `Helpers/StockMonthlySheet` (pure) turns the pools into one row per GD line:
+  Opening = the pool at the 1st (a pool born in the month opens at what it
+  brought in), Consumed = OUTWARD takes in the month less sale returns, Balance
+  = the pool at month end -- so a month's Balance IS the next month's Opening.
+  Consumed is FIFO COST, never the invoice's sale value (maintainer's decision:
+  clients write the sale value; the sheet must agree with the stock screen and
+  the COGS relief). A GD line dated after the month that the month never drew
+  on is left out and counted on the Summary. It buckets by `MovementDate`, which
+  is why the invoice sync must re-date a movement when only the bill's date
+  changes (`SyncInvoiceStockMovementsCoreAsync`'s no-op guard; reflow suite 6.9).
 - Suites: `cd scripts/stock_fifo_harness && dotnet run -c Release` (offline, links
   the real walk), `python scripts/test_stock_fifo.py`, `node scripts/test_fifo_pricing.mjs`,
   and the READ-ONLY production check `cd scripts/stock_fifo_prod_check && dotnet run -c Release`

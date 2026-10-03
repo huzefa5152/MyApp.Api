@@ -743,6 +743,65 @@ Console.WriteLine("\n=== 9. GD detail preserves source rows without changing sto
         && wb.Worksheet("Summary").Cell(6, 2).GetValue<decimal>() == items.Sum(i => i.Summary.ValueExcludingTax));
 }
 
+// ── Monthly GD-line sheet (the client's month-by-month workbook) ─────────────
+Console.WriteLine("\n=== Monthly sheet: one row per GD line ===");
+{
+    var monthly = new StockMonthlyExportDto
+    {
+        CompanyName = "Harness Traders", Month = new DateTime(2026, 8, 1), GeneratedAt = new DateTime(2026, 9, 2, 10, 0, 0),
+        FiltersApplied = { "Costing: FIFO by GD (claimed GDs first)" },
+        Lines =
+        {
+            new StockMonthlyLineDto { ItemTypeId = 1, ItemTypeName = "Scale parts", ClaimMonth = new DateTime(2026, 6, 1),
+                GdNumber = "KAPE-HC-54847", GdDate = new DateTime(2026, 2, 12), Description = "KITCHEN SCALE PARTS",
+                HsCode = "8423.9000", Unit = "Kg", SalesTaxRate = 18m,
+                OpeningQuantity = 100m, OpeningValueExcludingTax = 50_000m, ConsumedQuantity = 40m, ConsumedValueExcludingTax = 20_000m,
+                BalanceQuantity = 60m, BalanceValueExcludingTax = 30_000m },
+            new StockMonthlyLineDto { ItemTypeId = 1, ItemTypeName = "Scale parts",
+                GdNumber = "KAPE-HC-9509", GdDate = new DateTime(2026, 8, 31), Description = "WEIGHT SCALE PARTS",
+                HsCode = "8423.9000", Unit = "Kg", SalesTaxRate = 25m,
+                OpeningQuantity = 10m, OpeningValueExcludingTax = 5_000m, BalanceQuantity = 10m, BalanceValueExcludingTax = 5_000m,
+                OpeningActualCostExcludingTax = 4_000m, BalanceActualCostExcludingTax = 4_000m },
+        },
+    };
+    var mPath = Path.Combine(outDir, "stock-export-monthly.xlsx");
+    File.WriteAllBytes(mPath, StockExcelBuilder.BuildMonthly(monthly));
+    using var mwb = new XLWorkbook(mPath);
+    var mws = mwb.Worksheet(1);
+    Check("monthly: data sheet is named for the month", mws.Name == "Aug 2026", mws.Name);
+    Check("monthly: sheets are month, Summary, By HS",
+        string.Join(",", mwb.Worksheets.Select(w => w.Name)) == "Aug 2026,Summary,By HS",
+        string.Join(",", mwb.Worksheets.Select(w => w.Name)));
+    Check("monthly: header row is the client's",
+        mws.Cell(3, 2).GetString() == "GDs No" && mws.Cell(3, 7).GetString() == "8 Digit Hs Code"
+        && mws.Cell(3, 15).GetString() == "Consumed Exl" && mws.Cell(3, 19).GetString() == "Bal Exl");
+    Check("monthly: one row per GD line, GD and HS code against it",
+        mws.Cell(4, 2).GetString() == "KAPE-HC-54847" && mws.Cell(4, 4).GetString() == "KITCHEN SCALE PARTS"
+        && mws.Cell(4, 7).GetString() == "8423.9000" && mws.Cell(5, 2).GetString() == "KAPE-HC-9509");
+    Check("monthly: claim month as the month, blank when unclaimed",
+        mws.Cell(4, 1).GetString() == "Jun 2026" && mws.Cell(5, 1).IsEmpty());
+    Check("monthly: 4-digit code is a formula on the 8-digit", mws.Cell(4, 6).FormulaA1 == "LEFT(G4,4)");
+    Check("monthly: opening / consumed / balance are values",
+        mws.Cell(4, 11).GetValue<decimal>() == 50_000m && mws.Cell(4, 15).GetValue<decimal>() == 20_000m
+        && mws.Cell(4, 19).GetValue<decimal>() == 30_000m && !mws.Cell(4, 19).HasFormula);
+    Check("monthly: each line keeps its own rate",
+        mws.Cell(4, 12).GetValue<decimal>() == 0.18m && mws.Cell(5, 12).GetValue<decimal>() == 0.25m);
+    Check("monthly: an uncosted line unwinds the uplift", mws.Cell(4, 24).FormulaA1 == "IF(L4=0,K4,K4*L4/(L4+3%))");
+    Check("monthly: a costed line states its landed cost",
+        mws.Cell(5, 24).GetValue<decimal>() == 4_000m && mws.Cell(5, 30).GetValue<decimal>() == 4_000m
+        && mws.Cell(5, 27).FormulaA1 == "X5-AD5");
+    Check("monthly: totals sum the lines",
+        mws.Cell(8, 19).FormulaA1.Contains("S4:S7") && mws.Cell(8, 11).FormulaA1.Contains("K4:K7"), mws.Cell(8, 19).FormulaA1);
+    var byHs = mwb.Worksheet("By HS");
+    Check("monthly: By HS groups on the 4-digit heading with a grand total",
+        byHs.Cell(6, 1).GetString() == "8423" && byHs.Cell(9, 1).GetString() == "Grand Total"
+        && byHs.Cell(9, 2).GetValue<decimal>() == 35_000m, byHs.Cell(9, 2).GetString());
+    var mSum = mwb.Worksheet("Summary");
+    Check("monthly: Summary states opening, consumed and balance",
+        mSum.Cell(5, 2).GetValue<decimal>() == 55_000m && mSum.Cell(6, 2).GetValue<decimal>() == 20_000m
+        && mSum.Cell(7, 2).GetValue<decimal>() == 35_000m);
+}
+
 Console.WriteLine($"\n=== {pass}/{pass + fail} checks passed ===");
 if (fail > 0)
 {

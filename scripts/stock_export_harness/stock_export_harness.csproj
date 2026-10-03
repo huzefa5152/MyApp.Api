@@ -26,5 +26,6 @@
     <Compile Include="..\..\DTOs\PrintDtos.cs" />
     <Compile Include="..\..\Helpers\ExcelTemplateEngine.cs" />
     <Compile Include="..\..\Helpers\StockExcelBuilder.cs" />
+    <Compile Include="..\..\Helpers\StockExcelBuilder.Monthly.cs" />
   </ItemGroup>
 </Project>

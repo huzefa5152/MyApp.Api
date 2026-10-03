@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
-import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
+import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, exportStockMonthly, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
 // revokes the object URL on the next tick. Generic, not accounting-specific —
 // a second copy here would only drift from it.
@@ -375,12 +375,27 @@ export default function StockDashboardPage() {
   // grid is client-paged, and an export of one page is not a stock sheet. The
   // current search rides along, so an operator who narrowed the screen gets
   // the sheet they can actually see.
-  const downloadExcel = async () => {
+  const downloadExcel = () => runExport(
+    () => exportStockOnHand(selectedCompany.id, search.trim()),
+    `stock-report-${todayYmd()}.xlsx`);
+
+  // The client's month-by-month sheet: one row per GD line, Opening = the
+  // line on the first of the month, Consumed = that month's sales. FIFO only
+  // -- the weighted average allocates no sale to a GD.
+  const [sheetMonth, setSheetMonth] = useState(() => todayYmd().slice(0, 7));
+  const downloadMonthly = () => {
+    if (!/^\d{4}-\d{2}$/.test(sheetMonth)) return;
+    runExport(
+      () => exportStockMonthly(selectedCompany.id, sheetMonth, search.trim()),
+      `stock-sheet-${sheetMonth}.xlsx`);
+  };
+
+  const runExport = async (request, fileName) => {
     if (!selectedCompany || exporting) return;
     setExporting(true);
     try {
-      const response = await exportStockOnHand(selectedCompany.id, search.trim());
-      saveBlob(response, `stock-report-${todayYmd()}.xlsx`);
+      const response = await request();
+      saveBlob(response, fileName);
     } catch (err) {
       // With responseType "blob" an error body arrives as a Blob, not JSON, so
       // the usual err.response.data.error read yields undefined and the
@@ -787,6 +802,26 @@ export default function StockDashboardPage() {
             >
               <MdFileDownload size={16} /> {exporting ? "Preparing…" : "Export Excel"}
             </button>
+          )}
+          {canExport && selectedCompany && isFifo && (
+            <span style={styles.monthExport}>
+              <input
+                type="month"
+                value={sheetMonth}
+                max={todayYmd().slice(0, 7)}
+                onChange={(e) => setSheetMonth(e.target.value)}
+                style={styles.monthInput}
+                aria-label="Month for the monthly stock sheet"
+              />
+              <button
+                style={{ ...styles.altBtn, ...(exporting ? styles.altBtnBusy : null) }}
+                onClick={downloadMonthly}
+                disabled={exporting || loading || !sheetMonth}
+                title="Download the month's stock sheet — one row per GD line with its HS code: Opening on the 1st, that month's Consumed at FIFO cost, Balance at month end"
+              >
+                <MdFileDownload size={16} /> Monthly sheet
+              </button>
+            </span>
           )}
           {canManageOpening && (
             <button style={styles.altBtn} onClick={startAddOpening}>
@@ -2631,6 +2666,8 @@ const styles = {
   subtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
   altBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", borderRadius: 8, border: "1px solid #d0d7e2", backgroundColor: "#fff", color: "#0d47a1", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
   altBtnBusy: { opacity: 0.6, cursor: "progress" },
+  monthExport: { display: "inline-flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" },
+  monthInput: { minHeight: 36, padding: "0.35rem 0.5rem", border: "1px solid #d0d7e2", borderRadius: 8, fontSize: "0.85rem", color: "#0d47a1", backgroundColor: "#fff" },
   loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
   spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
   empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },

@@ -298,6 +298,11 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-03 — Monthly GD stock sheet, re-dated bills move their stock
+
+- **Monthly stock sheet (FIFO-by-GD companies).** The Stock Dashboard has a month picker and a **Monthly sheet** button that downloads the stock sheet the way importer clients keep it month by month: one row per GD line (GD x product) with its own HS code, claim month and value; Opening on the 1st of the month, that month's Consumed at FIFO cost, and Balance at month end, so each month's Balance is the next month's Opening. Same columns and Cost of Good Sold block as the existing export, plus a **By HS** sheet (balance by 4-digit heading and product) and a Summary.
+- **Fix: changing only a bill's date now moves its stock movement too.** An edit that changed no quantity left the stock leaving in the month the bill was first typed, which put sales in the wrong month on stock sheets and in the monthly cost-of-goods entries. Existing movements are corrected the next time such a bill is saved.
+
 ### 2026-10-03 — Invoice read reliability
 
 - Load invoice lines and delivery challans in separate queries to reduce database memory pressure when viewing, printing, downloading or preparing bills for FBR. Invoice lists use the same approach, with existing filters and ordering preserved.

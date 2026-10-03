@@ -210,6 +210,16 @@ namespace MyApp.Api.Controllers
         /// </summary>
         private async Task<Dictionary<int, GdFifoValuation.Result>?> FifoResultsAsync(
             int companyId, List<int> itemTypeIds)
+            => (await FifoResultsBeforeAsync(companyId, itemTypeIds, null))?.Results;
+
+        /// <summary>
+        /// The same walk over only the movements dated before
+        /// <paramref name="before"/> (all of them when null) -- the position on
+        /// that morning. Returns the movements walked, by id, so a caller can
+        /// date each take.
+        /// </summary>
+        private async Task<(Dictionary<int, GdFifoValuation.Result> Results, Dictionary<int, StockMovement> Movements)?>
+            FifoResultsBeforeAsync(int companyId, List<int> itemTypeIds, DateTime? before)
         {
             if (itemTypeIds.Count == 0 || !await StockCostingMethod.IsGdFifoAsync(_context, companyId))
                 return null;
@@ -231,7 +241,10 @@ namespace MyApp.Api.Controllers
                 .Where(m => m.CompanyId == companyId && itemTypeIds.Contains(m.ItemTypeId));
             if (divScope != null)
                 q = q.Where(m => m.DivisionId == null || divScope.Contains(m.DivisionId.Value));
-            var byItem = (await q.ToListAsync()).GroupBy(m => m.ItemTypeId)
+            if (before.HasValue)
+                q = q.Where(m => m.MovementDate < before.Value);
+            var all = await q.ToListAsync();
+            var byItem = all.GroupBy(m => m.ItemTypeId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
             var result = new Dictionary<int, GdFifoValuation.Result>();
@@ -242,7 +255,7 @@ namespace MyApp.Api.Controllers
                     open?.ActualCost ?? 0m, open?.Rate ?? 0m,
                     byItem.GetValueOrDefault(id) ?? new List<StockMovement>());
             }
-            return result;
+            return (result, all.ToDictionary(m => m.Id));
         }
 
         /// <summary>What a pool is called on screen and in the sheet.</summary>
@@ -906,6 +919,101 @@ namespace MyApp.Api.Controllers
             return File(bytes,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 fileName);
+        }
+
+        /// <summary>
+        /// The client's MONTHLY stock sheet: one row per GD line (GD x product),
+        /// with the HS code and value against it. Opening is the line's position
+        /// on the first of the month plus anything that arrived during it,
+        /// Consumed is what that month's outward movements took from it (FIFO
+        /// cost, the same figure the ledger posts), Balance is its position at
+        /// month end. Two walks over the same rows, cut at the two dates, so a
+        /// month's Balance is the next month's Opening by construction.
+        /// FIFO by GD only: under the weighted average a sale is not allocated
+        /// to a GD, so a per-GD consumed figure would be invented.
+        /// </summary>
+        [HttpGet("company/{companyId}/onhand/excel/monthly")]
+        [HasPermission("stock.dashboard.export")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> ExportMonthly(int companyId, [FromQuery] string? month,
+            [FromQuery] string? search = null)
+        {
+            if (!DateTime.TryParseExact(month ?? "", "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var monthStart))
+                return BadRequest(new { message = "Choose a month (yyyy-MM)." });
+            var today = PakistanClock.Today;
+            if (monthStart > new DateTime(today.Year, today.Month, 1))
+                return BadRequest(new { message = "That month has not started yet." });
+            if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId))
+                return BadRequest(new { message =
+                    "The monthly GD sheet needs FIFO-by-GD costing: under the weighted average a sale is not allocated to a GD." });
+            var monthEnd = monthStart.AddMonths(1);
+
+            var (rows, _) = await BuildOnHandAsync(companyId, withMovements: false);
+            var term = (search ?? "").Trim();
+            if (term.Length > 0)
+            {
+                await AttachGdNumbersAsync(companyId, rows);
+                rows = rows
+                    .Where(r => r.ItemTypeName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                             || (r.HSCode ?? "").Contains(term, StringComparison.OrdinalIgnoreCase)
+                             || r.GdNumbers.Any(g => g.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+            }
+            var ids = rows.Select(r => r.ItemTypeId).ToList();
+
+            var atStart = await FifoResultsBeforeAsync(companyId, ids, monthStart);
+            var atEnd = await FifoResultsBeforeAsync(companyId, ids, monthEnd);
+            var canSeeActual = await _permission.HasPermissionAsync(CurrentUserId, "stock.actualcost.view");
+
+            // Each GD line's own HS code: two products under one item can be
+            // filed under different codes, and the sheet states the line's.
+            var lotHs = await _context.OpeningStockLots.AsNoTracking()
+                .Where(l => l.OpeningStockBalance.CompanyId == companyId)
+                .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
+            var lineHs = await _context.ImportConsignmentLines.AsNoTracking()
+                .Where(l => l.ImportConsignment.CompanyId == companyId)
+                .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
+
+            var data = new StockMonthlyExportDto { Month = monthStart, GeneratedAt = PakistanClock.Now };
+            if (atStart != null && atEnd != null)
+            {
+                var movesInMonth = atEnd.Value.Movements.Values
+                    .Where(m => m.MovementDate >= monthStart && m.MovementDate < monthEnd).ToList();
+                var revalIds = movesInMonth.Where(m => m.SourceType == StockMovementSourceType.Revaluation)
+                    .Select(m => m.Id).ToList();
+                data.RestatedInMonth = revalIds.Count > 0 && await _context.StockRestatementLines.AsNoTracking()
+                    .AnyAsync(l => l.CompanyId == companyId && revalIds.Contains(l.StockMovementId));
+
+                var sheet = StockMonthlySheet.Build(monthStart,
+                    rows.Select(r => new StockMonthlySheet.ItemInfo(r.ItemTypeId, r.ItemTypeName, r.HSCode, r.UOM, r.SalesTaxRate)),
+                    atStart.Value.Results, atEnd.Value.Results, movesInMonth, lotHs, lineHs, canSeeActual);
+                data.Lines = sheet.Lines;
+                data.LaterLinesOmitted = sheet.LaterLinesOmitted;
+                data.LaterLinesValue = sheet.LaterLinesValue;
+            }
+
+            var company = await _context.Companies.AsNoTracking()
+                .Where(c => c.Id == companyId).Select(c => new { c.Name, c.BrandName }).FirstOrDefaultAsync();
+            data.CompanyName = company?.BrandName is { Length: > 0 } b ? b : company?.Name ?? "";
+            data.FiltersApplied.Add("Costing: FIFO by GD (claimed GDs first)");
+            if (term.Length > 0) data.FiltersApplied.Add($"Search: \"{term}\"");
+            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) != null)
+                data.FiltersApplied.Add("Scope: your divisions only");
+            if (monthEnd > today) data.FiltersApplied.Add($"Month in progress: movements to {today:dd-MM-yyyy}");
+
+            byte[] bytes;
+            try
+            {
+                bytes = StockExcelBuilder.BuildMonthly(data);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Monthly stock Excel export failed for company {CompanyId}", companyId);
+                return StatusCode(500, new { message = "Could not build the Excel file. Please try again." });
+            }
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"stock-sheet-{monthStart:yyyy-MM}.xlsx");
         }
 
         /// <summary>Audit feed of every movement, newest first.</summary>

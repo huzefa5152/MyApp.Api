@@ -593,4 +593,55 @@
         public List<StockExportItemDto> Items { get; set; } = new();
         public List<StockGdDetailDto> GdDetails { get; set; } = new();
     }
+
+    /// <summary>
+    /// The month-by-month stock sheet the importer clients keep: one row per
+    /// GD line (GD x product), Opening = the line's position when the month
+    /// began (plus what arrived during it), Consumed = what that month's
+    /// outward movements took from it, Balance = its position when the month
+    /// ended. Only a FIFO-by-GD company has GD lines to report.
+    /// </summary>
+    public class StockMonthlyExportDto
+    {
+        public string CompanyName { get; set; } = "";
+        /// <summary>First day of the reported month.</summary>
+        public DateTime Month { get; set; }
+        public DateTime GeneratedAt { get; set; }
+        public List<string> FiltersApplied { get; set; } = new();
+        public List<StockMonthlyLineDto> Lines { get; set; } = new();
+        /// <summary>Lines dated after the month that the export left out, and
+        /// their value -- stated so the totals can be reconciled.</summary>
+        public int LaterLinesOmitted { get; set; }
+        public decimal LaterLinesValue { get; set; }
+        /// <summary>A stock-sheet restatement fell inside the month, so some
+        /// lines' Balance is not Opening minus Consumed.</summary>
+        public bool RestatedInMonth { get; set; }
+    }
+
+    public class StockMonthlyLineDto
+    {
+        public int ItemTypeId { get; set; }
+        public string ItemTypeName { get; set; } = "";
+        public DateTime? ClaimMonth { get; set; }
+        public string? GdNumber { get; set; }
+        public DateTime? GdDate { get; set; }
+        /// <summary>The product as the GD line names it, else the item.</summary>
+        public string Description { get; set; } = "";
+        public string? HsCode { get; set; }
+        public string? Unit { get; set; }
+        /// <summary>Percent, e.g. 18.</summary>
+        public decimal SalesTaxRate { get; set; }
+
+        public decimal OpeningQuantity { get; set; }
+        public decimal OpeningValueExcludingTax { get; set; }
+        public decimal ConsumedQuantity { get; set; }
+        public decimal ConsumedValueExcludingTax { get; set; }
+        public decimal BalanceQuantity { get; set; }
+        public decimal BalanceValueExcludingTax { get; set; }
+
+        /// <summary>Landed cost held at the start / end of the month. Null when
+        /// the line has none or the caller lacks stock.actualcost.view.</summary>
+        public decimal? OpeningActualCostExcludingTax { get; set; }
+        public decimal? BalanceActualCostExcludingTax { get; set; }
+    }
 }

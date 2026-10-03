@@ -36,6 +36,14 @@ export const exportStockOnHand = (companyId, search = "") =>
     params: search ? { search } : {},
     responseType: "blob",
   });
+// The client's MONTHLY stock sheet (FIFO-by-GD companies only): one row per
+// GD line with its HS code; Opening on the 1st, the month's Consumed, Balance
+// at month end. `month` is "yyyy-MM".
+export const exportStockMonthly = (companyId, month, search = "") =>
+  http.get(`/stock/company/${companyId}/onhand/excel/monthly`, {
+    params: search ? { month, search } : { month },
+    responseType: "blob",
+  });
 // The item types this company actually tracks stock for. "Which items can
 // hold a position" is a server rule (V1 = HS-coded, V2 = all, per-company
 // overrides win either way), so the modals ask for it instead of guessing.

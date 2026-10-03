@@ -61,7 +61,7 @@ namespace MyApp.Api.Helpers
     ///    <see cref="ExcelTemplateEngine.CsvSafe"/>, so an item named
     ///    <c>=WEBSERVICE(...)</c> cannot execute in the recipient's Excel.
     /// </summary>
-    public static class StockExcelBuilder
+    public static partial class StockExcelBuilder
     {
         // ── Palette, lifted from the client's workbook ────────────────────────
         // The three blocks are colour-coded the same way on the data sheet and
