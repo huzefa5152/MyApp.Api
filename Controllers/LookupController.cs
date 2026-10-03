@@ -79,10 +79,10 @@ namespace MyApp.Api.Controllers
         {
             if (take <= 0) take = 15;
             if (take > 100) take = 100;
+            // Favourites and the most used first; a company whose own wording has
+            // no usage counted yet still gets its own descriptions rather than an
+            // empty list (before the 2026-10-03 scoping, "top" was every tenant's).
             var items = await (await VisibleDescriptionsAsync())
-                // Only surface items that have FBR data configured — a plain-text
-                // description without HS code isn't useful as a "favorite".
-                .Where(i => i.IsFavorite || i.UsageCount > 0)
                 .OrderByDescending(i => i.IsFavorite)
                 .ThenByDescending(i => i.UsageCount)
                 .ThenByDescending(i => i.LastUsedAt)
