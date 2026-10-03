@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MdClose, MdLocalShipping } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
+import { Alert } from "../ui/Kit";
 
 /**
  * Confirm dialog for marking a customer's printed documents (Bill + Tax
@@ -49,18 +50,11 @@ export default function HandoverDialog({ mode = "single", invoiceNumber, count =
         </div>
 
         <div style={formStyles.body}>
-          <div style={{
-            display: "flex", gap: 10, alignItems: "flex-start",
-            background: "#e8f5e9", border: "1px solid #a5d6a7", color: "#2e7d32",
-            borderRadius: 10, padding: "0.7rem 0.85rem", marginBottom: "1rem", fontSize: "0.83rem",
-          }}>
-            <MdLocalShipping size={20} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>
-              {isBulk
-                ? `Confirm the printed customer copies (Bill + Tax Invoice) for these ${count} invoice${count === 1 ? "" : "s"} were physically handed to the customer. You can revert any of them later.`
-                : "Confirm the printed customer copies (Bill + Tax Invoice) were physically handed to the customer. You can revert this later."}
-            </span>
-          </div>
+          <Alert tone="success" icon={MdLocalShipping}>
+            {isBulk
+              ? `Confirm the printed customer copies (Bill + Tax Invoice) for these ${count} invoice${count === 1 ? "" : "s"} were physically handed to the customer. You can revert any of them later.`
+              : "Confirm the printed customer copies (Bill + Tax Invoice) were physically handed to the customer. You can revert this later."}
+          </Alert>
 
           <div style={formStyles.formGroup}>
             <label style={formStyles.label}>Remark (optional)</label>

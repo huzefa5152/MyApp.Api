@@ -9,15 +9,10 @@ import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
+import SearchableSelect from "../Components/SearchableSelect";
+import { PageHeader, Button, IconButton, Toolbar, Card, Facts, TableWrap, Loading, EmptyState, Alert } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
   success: "#2e7d32",
   successBg: "#e8f5e9",
   danger: "#dc3545",
@@ -154,10 +149,9 @@ export default function FbrSandboxPage() {
 
   if (!canView) {
     return (
-      <div style={styles.deniedBox}>
-        <h3>Access denied</h3>
-        <p>You don't have permission to view the FBR Sandbox tab. Ask an administrator to grant you the <code>fbr.sandbox.view</code> permission.</p>
-      </div>
+      <EmptyState title="Access denied">
+        You don't have permission to view the FBR Sandbox tab. Ask an administrator to grant you the <code>fbr.sandbox.view</code> permission.
+      </EmptyState>
     );
   }
 
@@ -165,117 +159,120 @@ export default function FbrSandboxPage() {
   const unseededScenarios = scenarios.filter((s) => !seededSns.has(s.code));
 
   return (
-    <div className="fbr-page" style={styles.page}>
-      <header className="fbr-header">
-        <div className="fbr-header__title-block">
-          <h2 className="fbr-header__title"><MdScience size={22} style={{ verticalAlign: "middle", marginRight: "0.4rem" }} />FBR Sandbox</h2>
-          <p className="fbr-header__subtitle">
+    <div style={styles.page}>
+      <PageHeader
+        icon={MdScience}
+        tone="brand"
+        title="FBR Sandbox"
+        subtitle={(
+          <>
             Validate FBR scenario test bills for the selected company without
             touching its real bill numbering. Demo bills live in the <code>900000+</code> range and are
             invisible to the regular Bills / Challans pages.
-          </p>
-        </div>
-        {/* Page-local company picker — independent of the global top-bar
-            company switcher so testing scenarios for one company doesn't
-            change which company the rest of the app is showing. */}
-        <div className="fbr-header__actions">
-          <select
-            className="fbr-header__company-select"
-            value={companyId || ""}
-            onChange={(e) => setCompanyId(Number(e.target.value) || "")}
-            aria-label="Company"
-          >
-            <option value="">— Pick a company —</option>
-            {(companies || []).map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <button onClick={refresh} className="fbr-header__icon-btn" title="Reload" disabled={!selectedCompany}><MdRefresh /></button>
-          {canSeed && (
-            <button onClick={handleSeed} disabled={running || !selectedCompany} className="fbr-header__seed-btn">
-              <MdAdd /> Seed Applicable Scenarios
-            </button>
-          )}
-        </div>
-      </header>
+          </>
+        )}
+        actions={(
+          <>
+            {/* Page-local company picker — independent of the global top-bar
+                company switcher so testing scenarios for one company doesn't
+                change which company the rest of the app is showing. */}
+            <SearchableSelect
+              items={companies || []}
+              value={companyId || ""}
+              onChange={(id) => setCompanyId(Number(id) || "")}
+              placeholder="— Pick a company —"
+              ariaLabel="Company"
+              style={styles.companyPicker}
+            />
+            <IconButton label="Reload" icon={MdRefresh} onClick={refresh} disabled={!selectedCompany} />
+            {canSeed && (
+              <Button variant="primary" icon={MdAdd} onClick={handleSeed} disabled={running || !selectedCompany}>
+                Seed Applicable Scenarios
+              </Button>
+            )}
+          </>
+        )}
+      />
 
       {!selectedCompany ? (
-        <div style={styles.emptyState}>
-          <h3>Pick a company</h3>
-          <p>Select a company in the dropdown above to view or seed FBR sandbox scenarios for it.</p>
-        </div>
+        <EmptyState title="Pick a company">
+          Select a company in the dropdown above to view or seed FBR sandbox scenarios for it.
+        </EmptyState>
       ) : (
       <>
       {/* Profile summary */}
-      <div style={styles.profileCard}>
-        <div><b>Company:</b> {selectedCompany.name}</div>
-        <div><b>Activity:</b> {selectedCompany.fbrBusinessActivity || <em style={styles.muted}>not set</em>}</div>
-        <div><b>Sector:</b> {selectedCompany.fbrSector || <em style={styles.muted}>not set</em>}</div>
-        <div><b>Applicable scenarios:</b> {scenarios.length} ({scenarios.map((s) => s.code).join(", ") || "—"})</div>
-      </div>
+      <Card style={{ marginBottom: "var(--k-gap)" }}>
+        <Facts facts={[
+          ["Company", selectedCompany.name],
+          ["Activity", selectedCompany.fbrBusinessActivity || <em style={styles.muted}>not set</em>],
+          ["Sector", selectedCompany.fbrSector || <em style={styles.muted}>not set</em>],
+          ["Applicable scenarios", `${scenarios.length} (${scenarios.map((s) => s.code).join(", ") || "—"})`],
+        ]} />
+      </Card>
 
       {/* Unseeded scenarios warning */}
       {unseededScenarios.length > 0 && bills.length > 0 && (
-        <div style={styles.infoBox}>
-          <MdInfo /> {unseededScenarios.length} scenario(s) not yet seeded: {unseededScenarios.map((s) => s.code).join(", ")}.
+        <Alert tone="info" icon={MdInfo}>
+          {unseededScenarios.length} scenario(s) not yet seeded: {unseededScenarios.map((s) => s.code).join(", ")}.
           {canSeed && <> Click <b>Seed Applicable Scenarios</b> to generate them.</>}
-        </div>
+        </Alert>
       )}
 
       {/* Bulk actions row */}
-      <div style={styles.bulkBar}>
-        {canRun && bills.length > 0 && (
-          <>
-            <button onClick={() => handleRun("validate")} disabled={running} style={styles.actionBtn}>
-              <MdCheckCircle /> Validate All
-            </button>
-            <button onClick={() => handleRun("submit")} disabled={running} style={styles.submitBtn}>
-              <MdSend /> Submit All
-            </button>
-          </>
-        )}
-        {canDelete && bills.length > 0 && (
-          <button onClick={handleDeleteAll} disabled={running} style={styles.dangerBtn}>
-            <MdDelete /> Wipe All
-          </button>
-        )}
-        {running && <span style={styles.runningBadge}>Running…</span>}
-      </div>
+      {(((canRun || canDelete) && bills.length > 0) || running) && (
+        <Toolbar>
+          {canRun && bills.length > 0 && (
+            <>
+              <Button variant="teal" icon={MdCheckCircle} onClick={() => handleRun("validate")} disabled={running}>
+                Validate All
+              </Button>
+              <Button variant="primary" icon={MdSend} onClick={() => handleRun("submit")} disabled={running}>
+                Submit All
+              </Button>
+            </>
+          )}
+          {canDelete && bills.length > 0 && (
+            <Button variant="danger" icon={MdDelete} onClick={handleDeleteAll} disabled={running}>
+              Wipe All
+            </Button>
+          )}
+          {running && <span style={styles.runningBadge}>Running…</span>}
+        </Toolbar>
+      )}
 
       {/* Bills table */}
       {loading ? (
-        <div style={styles.muted}>Loading…</div>
+        <Loading>Loading…</Loading>
       ) : bills.length === 0 ? (
-        <div style={styles.emptyState}>
-          <h3>No demo bills yet</h3>
-          <p>{canSeed ? "Click \"Seed Applicable Scenarios\" to generate one demo bill per scenario." : "Ask an admin to grant you fbr.sandbox.seed."}</p>
-        </div>
+        <EmptyState title="No demo bills yet">
+          {canSeed ? "Click \"Seed Applicable Scenarios\" to generate one demo bill per scenario." : "Ask an admin to grant you fbr.sandbox.seed."}
+        </EmptyState>
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <div className="fbr-table" style={styles.tableWrap}>
-            <table style={styles.table}>
+          <TableWrap className="fbr-table">
+            <table className="k-table">
               <thead>
-                <tr style={styles.thead}>
-                  <th style={styles.th}>SN</th>
-                  <th style={styles.th}>Bill #</th>
-                  <th style={styles.th}>Description</th>
-                  <th style={styles.th}>Client</th>
-                  <th style={{ ...styles.th, textAlign: "right" }}>Total</th>
-                  <th style={styles.th}>FBR Status</th>
-                  <th style={styles.th}>IRN / Error</th>
-                  <th style={styles.th}></th>
+                <tr>
+                  <th>SN</th>
+                  <th>Bill #</th>
+                  <th>Description</th>
+                  <th>Client</th>
+                  <th className="k-num">Total</th>
+                  <th>FBR Status</th>
+                  <th>IRN / Error</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {bills.map((b) => (
                   <tr key={b.id}>
-                    <td style={{ ...styles.td, fontWeight: 700, color: colors.blue }}>{b.scenarioCode}</td>
-                    <td style={styles.td}>{b.invoiceNumber}</td>
-                    <td style={styles.td}>{b.description}</td>
-                    <td style={styles.td}>{b.clientName}</td>
-                    <td style={{ ...styles.td, textAlign: "right" }}>Rs. {Math.round(b.grandTotal).toLocaleString()}</td>
-                    <td style={styles.td}>
+                    <td style={{ fontWeight: 700, color: "var(--k-blue)" }}>{b.scenarioCode}</td>
+                    <td>{b.invoiceNumber}</td>
+                    <td>{b.description}</td>
+                    <td>{b.clientName}</td>
+                    <td className="k-num">Rs. {Math.round(b.grandTotal).toLocaleString()}</td>
+                    <td>
                       {b.fbrStatus === "Submitted" ? (
                         <span style={styles.successBadge}>Submitted</span>
                       ) : b.fbrStatus === "Validated" ? (
@@ -286,29 +283,27 @@ export default function FbrSandboxPage() {
                         <span style={styles.muted}>—</span>
                       )}
                     </td>
-                    <td style={{ ...styles.td, fontSize: "0.74rem", maxWidth: 300, wordBreak: "break-all" }}>
+                    <td style={{ fontSize: "0.74rem", maxWidth: 300, wordBreak: "break-all" }}>
                       {b.fbrIRN ? (
                         <code style={styles.irn}>{b.fbrIRN}</code>
                       ) : b.fbrErrorMessage ? (
-                        <span title={b.fbrErrorMessage} style={{ color: colors.danger }}>
+                        <span title={b.fbrErrorMessage} style={{ color: "var(--k-danger)" }}>
                           <MdError size={12} /> {b.fbrErrorMessage.slice(0, 60)}…
                         </span>
                       ) : (
                         <span style={styles.muted}>—</span>
                       )}
                     </td>
-                    <td style={styles.td}>
+                    <td className="k-actions">
                       {canDelete && (
-                        <button onClick={() => handleDeleteBill(b)} style={styles.iconBtnSmall} title="Delete">
-                          <MdDelete size={14} />
-                        </button>
+                        <IconButton label="Delete" icon={MdDelete} size={14} danger onClick={() => handleDeleteBill(b)} />
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
 
           {/* Mobile — stacked cards. Scenario code top-left bold blue +
               FBR status badge top-right; total prominent on its own row;
@@ -375,32 +370,12 @@ export default function FbrSandboxPage() {
 }
 
 const styles = {
-  page: { padding: "1.25rem 1.5rem", maxWidth: 1400 },
-  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" },
-  title: { fontSize: "1.4rem", fontWeight: 800, color: colors.textPrimary, margin: 0 },
-  subtitle: { fontSize: "0.86rem", color: colors.textSecondary, margin: "0.25rem 0 0", maxWidth: 720 },
-  headerActions: { display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" },
-  companySelect: { padding: "0.5rem 0.75rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, backgroundColor: "#fff", color: colors.textPrimary, fontSize: "0.85rem", fontWeight: 600, minWidth: 200, cursor: "pointer" },
-  iconBtn: { padding: "0.5rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 6, backgroundColor: "#fff", cursor: "pointer", color: colors.textPrimary, display: "flex", alignItems: "center" },
-  primaryBtn: { padding: "0.5rem 1rem", border: "none", borderRadius: 6, backgroundColor: colors.blue, color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "0.35rem" },
-  profileCard: { display: "flex", flexWrap: "wrap", gap: "1.5rem", padding: "0.75rem 1rem", backgroundColor: "#f5f7fa", borderRadius: 6, fontSize: "0.82rem", color: colors.textPrimary, marginBottom: "1rem" },
-  infoBox: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.85rem", backgroundColor: "#e3f2fd", color: colors.textPrimary, borderRadius: 6, marginBottom: "1rem", fontSize: "0.82rem", border: "1px solid #90caf9" },
-  bulkBar: { display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" },
-  actionBtn: { padding: "0.45rem 0.85rem", border: "none", borderRadius: 6, backgroundColor: colors.teal, color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.3rem" },
-  submitBtn: { padding: "0.45rem 0.85rem", border: "none", borderRadius: 6, backgroundColor: colors.blue, color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.3rem" },
-  dangerBtn: { padding: "0.45rem 0.85rem", border: "none", borderRadius: 6, backgroundColor: colors.danger, color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.3rem" },
+  page: { maxWidth: 1400 },
+  companyPicker: { width: 240, maxWidth: "100%" },
   runningBadge: { padding: "0.25rem 0.6rem", backgroundColor: colors.warnBg, color: colors.warn, borderRadius: 4, fontSize: "0.75rem", fontWeight: 700 },
-  emptyState: { textAlign: "center", padding: "2.5rem 1rem", color: colors.textSecondary, backgroundColor: "#f5f7fa", borderRadius: 8, border: `1px dashed ${colors.cardBorder}` },
-  tableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
-  table: { width: "100%", borderCollapse: "collapse" },
-  thead: { backgroundColor: "#f5f7fa" },
-  th: { padding: "0.6rem 0.75rem", textAlign: "left", fontSize: "0.74rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "0.55rem 0.75rem", fontSize: "0.84rem", borderBottom: `1px solid ${colors.cardBorder}`, verticalAlign: "middle" },
   successBadge: { padding: "0.15rem 0.5rem", backgroundColor: colors.successBg, color: colors.success, borderRadius: 4, fontSize: "0.72rem", fontWeight: 700 },
   warnBadge: { padding: "0.15rem 0.5rem", backgroundColor: colors.warnBg, color: colors.warn, borderRadius: 4, fontSize: "0.72rem", fontWeight: 700 },
   failBadge: { padding: "0.15rem 0.5rem", backgroundColor: colors.dangerLight, color: colors.danger, borderRadius: 4, fontSize: "0.72rem", fontWeight: 700 },
   irn: { fontFamily: "monospace", fontSize: "0.72rem", color: colors.success },
-  muted: { color: colors.textSecondary, fontStyle: "italic", fontSize: "0.84rem" },
-  iconBtnSmall: { padding: "0.25rem", border: "none", backgroundColor: "transparent", color: colors.danger, cursor: "pointer", display: "flex", alignItems: "center" },
-  deniedBox: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
+  muted: { color: "var(--k-muted)", fontStyle: "italic", fontSize: "var(--k-td-font)" },
 };

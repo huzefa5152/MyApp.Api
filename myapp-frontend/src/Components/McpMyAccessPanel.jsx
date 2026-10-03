@@ -8,7 +8,8 @@ import { SecretDialog } from "./McpAgentsPanel";
 import { notify } from "../utils/notify";
 import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
 import AllCompaniesOption from "./AllCompaniesOption";
-import { colors, cardStyles, formStyles, modalSizes } from "../theme";
+import { colors, formStyles, modalSizes } from "../theme";
+import { Button, IconButton, Card, Loading, EmptyState, Alert } from "../ui/Kit";
 
 // "MCP & AI" tab on My Profile: whether MCP is switched on for this user, how to
 // connect their AI tools, their own agent tokens, and a log of what those agents did.
@@ -38,7 +39,7 @@ const Badge = ({ tone, children }) => <span style={{ ...s.badge, background: ton
 function CopyBlock({ text, label }) {
   const copy = async () => { try { await navigator.clipboard.writeText(text); notify(`${label} copied.`, "success"); } catch { notify("Copy failed. Select the text and copy it by hand.", "error"); } };
   return <div style={s.copyRow}><pre style={s.code}>{text}</pre>
-    <button type="button" style={s.iconBtn} onClick={copy} aria-label={`Copy ${label}`}><MdContentCopy /></button></div>;
+    <IconButton label={`Copy ${label}`} icon={MdContentCopy} style={s.copyBtn} onClick={copy} /></div>;
 }
 
 function NewTokenDialog({ status, onClose, onCreated }) {
@@ -64,26 +65,34 @@ function NewTokenDialog({ status, onClose, onCreated }) {
         <button type="button" style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose /></button></div>
       <div style={formStyles.body}>
         <p style={s.sub}>The token acts as you, only in the companies you tick, and never beyond what you can do yourself.</p>
-        <label style={s.label}>Name</label>
-        <input style={s.input} value={name} maxLength={100} placeholder="e.g. Codex on my laptop" onChange={e => setName(e.target.value)} />
-        <label style={s.label}>Companies it may reach</label>
-        {status.canUseAllCompanies && <AllCompaniesOption checked={all} onChange={setAll} />}
-        {!all && <div style={s.checks}>{status.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
-          <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>}
-        <label style={s.label}>What it may do</label>
-        <div style={s.scopes}>{orderedScopes(status.scopesAvailable).map(k => <label key={k} style={{ ...s.scope, ...(scopes.includes(k) ? s.checkOn : {}) }}>
-          <input type="checkbox" checked={scopes.includes(k)} disabled={k === "read"} onChange={() => toggleScope(k)} />
-          <span><strong>{SCOPE_INFO[k].label}</strong><span style={s.scopeHelp}>{SCOPE_INFO[k].help}</span></span></label>)}</div>
-        {status.scopesAvailable.length === 1 && <p style={s.hint}>Creating records needs the MCP Write role. Ask your administrator if you want your AI to draft clients or quotations.</p>}
-        <label style={s.label}>Expires after</label>
-        <select style={s.input} value={days} onChange={e => setDays(e.target.value)}>
-          {[...[7, 30, 60, 90].filter(d => d < status.maxLifetimeDays), status.maxLifetimeDays].map(d => [d, d === status.maxLifetimeDays ? `${d} days (maximum)` : `${d} days`]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        {error && <div role="alert" style={s.alert}>{error}</div>}
+        <div style={formStyles.formGroup}>
+          <label style={formStyles.label}>Name</label>
+          <input style={formStyles.input} value={name} maxLength={100} placeholder="e.g. Codex on my laptop" onChange={e => setName(e.target.value)} />
+        </div>
+        <div style={formStyles.formGroup}>
+          <label style={formStyles.label}>Companies it may reach</label>
+          {status.canUseAllCompanies && <AllCompaniesOption checked={all} onChange={setAll} />}
+          {!all && <div style={s.checks}>{status.companies.map(c => <label key={c.id} style={{ ...s.check, ...(picked.includes(c.id) ? s.checkOn : {}) }}>
+            <input type="checkbox" checked={picked.includes(c.id)} onChange={() => toggle(c.id)} /> {c.name}</label>)}</div>}
+        </div>
+        <div style={formStyles.formGroup}>
+          <label style={formStyles.label}>What it may do</label>
+          <div style={s.scopes}>{orderedScopes(status.scopesAvailable).map(k => <label key={k} style={{ ...s.scope, ...(scopes.includes(k) ? s.checkOn : {}) }}>
+            <input type="checkbox" checked={scopes.includes(k)} disabled={k === "read"} onChange={() => toggleScope(k)} />
+            <span><strong>{SCOPE_INFO[k].label}</strong><span style={s.scopeHelp}>{SCOPE_INFO[k].help}</span></span></label>)}</div>
+          {status.scopesAvailable.length === 1 && <p style={s.hint}>Creating records needs the MCP Write role. Ask your administrator if you want your AI to draft clients or quotations.</p>}
+        </div>
+        <div style={formStyles.formGroup}>
+          <label style={formStyles.label}>Expires after</label>
+          <select style={formStyles.input} value={days} onChange={e => setDays(e.target.value)}>
+            {[...[7, 30, 60, 90].filter(d => d < status.maxLifetimeDays), status.maxLifetimeDays].map(d => [d, d === status.maxLifetimeDays ? `${d} days (maximum)` : `${d} days`]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+        {error && <Alert tone="error">{error}</Alert>}
       </div>
-      <div style={s.foot}>
-        <button type="button" style={s.ghost} onClick={onClose}>Cancel</button>
-        <button type="submit" style={{ ...s.primary, opacity: valid && !busy ? 1 : 0.55 }} disabled={!valid || busy}>Create token</button>
+      <div style={formStyles.footer}>
+        <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={onClose}>Cancel</button>
+        <button type="submit" style={{ ...formStyles.button, ...formStyles.submit, opacity: valid && !busy ? 1 : 0.55 }} disabled={!valid || busy}>Create token</button>
       </div>
     </form>
   </div>;
@@ -120,8 +129,8 @@ export default function McpMyAccessPanel() {
     finally { setBusy(false); }
   };
 
-  if (error) return <div role="alert" style={s.alert}>{error}</div>;
-  if (!status) return <div style={s.empty}>Loading…</div>;
+  if (error) return <Alert tone="error">{error}</Alert>;
+  if (!status) return <Loading>Loading…</Loading>;
 
   const guides = {
     codex: { label: "Codex", steps: <>
@@ -148,43 +157,42 @@ export default function McpMyAccessPanel() {
 
   const t = status.tokens;
   return <div style={{ minWidth: 0 }}>
-    <div style={status.enabled ? s.ok : s.warn}>
-      {status.enabled ? <MdCheckCircle style={s.bannerIcon} /> : <MdInfo style={s.bannerIcon} />}
+    <Alert tone={status.enabled ? "success" : "warn"} icon={status.enabled ? MdCheckCircle : MdInfo}>
       <div>
         <strong>{status.enabled ? "MCP is enabled for your account" : "MCP is not enabled for your account"}</strong>
         <div style={s.sub}>{status.enabled
           ? "Your AI tools can use the companies you choose, with the same limits as your own login. Everything they do is recorded."
           : "Ask your administrator to give you the MCP Access role. Once they do, this page lets you create a token and connect your AI tool."}</div>
       </div>
-    </div>
+    </Alert>
 
     <h4 style={s.h4}><MdSmartToy aria-hidden /> Connect your AI</h4>
     <div style={s.pills} role="group" aria-label="AI tool">
-      {Object.entries(guides).map(([k, g]) => <button key={k} type="button" aria-pressed={client === k}
-        style={{ ...s.pill, ...(client === k ? s.pillOn : {}) }} onClick={() => setClient(k)}>{g.label}</button>)}
+      {Object.entries(guides).map(([k, g]) => <Button key={k} size="sm" variant={client === k ? "primary" : "secondary"} aria-pressed={client === k}
+        onClick={() => setClient(k)}>{g.label}</Button>)}
     </div>
-    <div style={s.guide}>{guides[client].steps}</div>
+    <Card style={{ marginTop: "0.8rem" }}>{guides[client].steps}</Card>
     <p style={s.hint}>Server address: <code>{url}</code>. Looking things up is always allowed. Creating clients or quotations is a separate permission you choose per token, and every such change is shown to you to approve first.</p>
 
     {status.enabled && <>
       <div style={s.sectionHead}>
         <h4 style={{ ...s.h4, margin: 0 }}><MdVpnKey aria-hidden /> My tokens</h4>
-        <button style={s.primary} onClick={() => setShowNew(true)}><MdAdd aria-hidden /> New token</button>
+        <Button variant="primary" icon={MdAdd} onClick={() => setShowNew(true)}>New token</Button>
       </div>
-      {t.length === 0 && <div style={s.empty}>You have no tokens yet.</div>}
-      <div style={s.cards}>{t.map(k => <article key={k.id} style={s.card}>
+      {t.length === 0 && <EmptyState icon={MdVpnKey}>You have no tokens yet.</EmptyState>}
+      <div style={s.cards}>{t.map(k => <article key={k.id} className="k-card" style={s.card}>
         <div style={s.cardTop}><div style={{ minWidth: 0 }}><div style={s.strong}>{k.name}</div><div style={s.muted}><code>{k.hint}…</code></div></div>
           <Badge tone={TONE[k.status]}>{k.status}</Badge></div>
         <div style={s.chips}>{k.allCompanies ? <span style={{ ...s.chip, color: "#8a4b00", background: "#fff4e5" }}>All companies</span> : k.companies.map(c => <span key={c.id} style={s.chip}>{c.name}</span>)}</div>
         <div style={s.meta}>Last used {relative(k.lastUsedAt)} · expires {absolute(k.expiresAt)}</div>
-        {k.status === "Active" && <button style={s.danger} disabled={busy} onClick={() => revoke(k)}><MdBlock aria-hidden /> Revoke</button>}
+        {k.status === "Active" && <Button size="sm" variant="danger" icon={MdBlock} style={{ justifySelf: "start" }} disabled={busy} onClick={() => revoke(k)}>Revoke</Button>}
       </article>)}</div>
 
       <h4 style={{ ...s.h4, marginTop: "1.4rem" }}><MdHistory aria-hidden /> What my AI did</h4>
-      {!activity && <div style={s.empty}>Loading…</div>}
-      {activity && activity.items.length === 0 && <div style={s.empty}>Nothing yet. Activity appears here as soon as your AI makes a call.</div>}
+      {!activity && <Loading>Loading…</Loading>}
+      {activity && activity.items.length === 0 && <EmptyState icon={MdHistory}>Nothing yet. Activity appears here as soon as your AI makes a call.</EmptyState>}
       {activity && activity.items.length > 0 && <>
-        <div style={s.cards}>{activity.items.map(a => <article key={a.id} style={s.card}>
+        <div style={s.cards}>{activity.items.map(a => <article key={a.id} className="k-card" style={s.card}>
           <div style={s.cardTop}><div style={{ minWidth: 0 }}><div style={s.strong}>{a.tool}</div><div style={s.muted}>{a.agentName || "Login session"}{a.companyId ? ` · company ${a.companyId}` : ""}</div></div>
             <Badge tone={TONE[a.outcome] || TONE.error}>{(TONE[a.outcome] || TONE.error).label}</Badge></div>
           {a.detail && <div style={s.muted}>{a.detail}</div>}
@@ -194,8 +202,8 @@ export default function McpMyAccessPanel() {
         <div style={s.pager}>
           <span style={s.muted}>{(activity.page - 1) * activity.pageSize + 1}–{Math.min(activity.page * activity.pageSize, activity.total)} of {activity.total}</span>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button style={s.iconBtn} disabled={page <= 1} onClick={() => setPage(p => p - 1)} aria-label="Previous page"><MdChevronLeft /></button>
-            <button style={s.iconBtn} disabled={page * activity.pageSize >= activity.total} onClick={() => setPage(p => p + 1)} aria-label="Next page"><MdChevronRight /></button>
+            <IconButton label="Previous page" icon={MdChevronLeft} size={22} disabled={page <= 1} onClick={() => setPage(p => p - 1)} />
+            <IconButton label="Next page" icon={MdChevronRight} size={22} disabled={page * activity.pageSize >= activity.total} onClick={() => setPage(p => p + 1)} />
           </div>
         </div></>}
     </>}
@@ -205,47 +213,31 @@ export default function McpMyAccessPanel() {
   </div>;
 }
 
-const btn = { minHeight: 44, padding: "0.4rem 1rem", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", boxShadow: "none", display: "inline-flex", alignItems: "center", gap: "0.35rem" };
-const banner = { display: "flex", gap: "0.8rem", alignItems: "flex-start", padding: "0.9rem 1.1rem", borderRadius: 12, marginBottom: "1.2rem", fontSize: "0.9rem", lineHeight: 1.45 };
 const s = {
-  ok: { ...banner, background: "#eafbef", color: "#1b6e34", border: "1px solid #bfe8cb" },
-  warn: { ...banner, background: "#fff4e5", color: "#8a4b00", border: "1px solid #ffd9a8" },
-  bannerIcon: { fontSize: "1.5rem", flexShrink: 0, marginTop: 1 },
-  h4: { display: "flex", alignItems: "center", gap: "0.4rem", margin: "1.2rem 0 0.7rem", fontSize: "0.98rem", fontWeight: 700, color: colors.textPrimary },
+  h4: { display: "flex", alignItems: "center", gap: "0.4rem", margin: "1.2rem 0 0.7rem", fontSize: "calc(var(--k-font) + 0.08rem)", fontWeight: 700, color: "var(--k-ink)" },
   sectionHead: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem", margin: "1.4rem 0 0.7rem" },
-  sub: { margin: "0.15rem 0 0.6rem", fontSize: "0.84rem", lineHeight: 1.45, opacity: 0.9 },
-  p: { margin: "0.5rem 0 0.4rem", fontSize: "0.86rem", color: colors.textPrimary, lineHeight: 1.5 },
-  hint: { margin: "0.6rem 0 0", fontSize: "0.78rem", color: colors.textSecondary },
-  guide: { ...cardStyles.card, padding: "0.5rem 1.1rem 1rem", marginTop: "0.8rem" },
+  sub: { margin: "0.15rem 0 0.6rem", fontSize: "var(--k-font-sm)", lineHeight: 1.45, opacity: 0.9 },
+  p: { margin: "0.5rem 0 0.4rem", fontSize: "var(--k-font)", color: "var(--k-ink)", lineHeight: 1.5 },
+  hint: { margin: "0.6rem 0 0", fontSize: "0.78rem", color: "var(--k-muted)" },
   copyRow: { display: "flex", alignItems: "flex-start", gap: "0.5rem" },
   code: { flex: 1, minWidth: 0, margin: 0, padding: "0.6rem 0.8rem", borderRadius: 8, background: "#0a1628", color: "#d6e4ff", fontSize: "0.78rem", whiteSpace: "pre-wrap", overflowWrap: "anywhere", userSelect: "all" },
-  primary: { ...btn, background: colors.blue, color: "#fff", border: "none" },
-  ghost: { ...btn, background: "#fff", color: colors.blue, border: `1px solid ${colors.inputBorder}` },
-  danger: { ...btn, background: colors.dangerLight, color: colors.danger, border: `1px solid ${colors.danger}30`, justifySelf: "start" },
-  iconBtn: { width: 44, height: 44, padding: 0, display: "grid", placeItems: "center", boxShadow: "none", background: colors.inputBg, color: colors.blue, border: `1px solid ${colors.inputBorder}`, borderRadius: 8, fontSize: "1.3rem", cursor: "pointer", flexShrink: 0 },
+  copyBtn: { border: "1px solid var(--k-line-strong)", background: "var(--k-input-bg)", color: "var(--k-blue)" },
   pills: { display: "flex", flexWrap: "wrap", gap: "0.4rem" },
-  pill: { ...btn, padding: "0.35rem 0.9rem", fontSize: "0.82rem", background: colors.inputBg, color: "#455a64", border: `1px solid ${colors.inputBorder}` },
-  pillOn: { background: colors.blue, color: "#fff", borderColor: colors.blue },
-  label: { display: "block", margin: "0.9rem 0 0.35rem", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary },
-  input: { width: "100%", minHeight: 44, padding: "0.5rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, color: colors.textPrimary, fontSize: "0.9rem", boxSizing: "border-box" },
   checks: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.5rem" },
-  check: { display: "flex", alignItems: "center", gap: "0.5rem", minHeight: 44, padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" },
+  check: { display: "flex", alignItems: "center", gap: "0.5rem", minHeight: "var(--k-btn-h)", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "var(--k-input-bg)", fontSize: "var(--k-font)", cursor: "pointer" },
   checkOn: { borderColor: colors.blue, background: "rgba(13,71,161,0.07)" },
   scopes: { display: "grid", gap: "0.5rem" },
-  scope: { display: "flex", alignItems: "flex-start", gap: "0.6rem", minHeight: 44, padding: "0.55rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.88rem", cursor: "pointer" },
-  scopeHelp: { display: "block", fontSize: "0.76rem", fontWeight: 400, color: colors.textSecondary, marginTop: 2 },
-  foot: { display: "flex", justifyContent: "flex-end", flexWrap: "wrap", gap: "0.6rem", padding: "0.9rem clamp(1rem, 2vw, 1.5rem)", borderTop: `1px solid ${colors.cardBorder}`, flexShrink: 0 },
-  alert: { padding: "0.7rem 1rem", margin: "0.8rem 0", borderRadius: 8, background: colors.dangerLight, color: "#842029", border: "1px solid #f5c6cb", fontSize: "0.88rem" },
-  empty: { ...cardStyles.card, padding: "1.4rem 1rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.9rem" },
+  scope: { display: "flex", alignItems: "flex-start", gap: "0.6rem", minHeight: "var(--k-btn-h)", padding: "0.55rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "var(--k-input-bg)", fontSize: "var(--k-font)", cursor: "pointer" },
+  scopeHelp: { display: "block", fontSize: "0.76rem", fontWeight: 400, color: "var(--k-muted)", marginTop: 2 },
   badge: { display: "inline-flex", alignItems: "center", gap: 6, padding: "0.2rem 0.65rem", borderRadius: 999, fontSize: "0.74rem", fontWeight: 700, whiteSpace: "nowrap" },
   dot: { width: 7, height: 7, borderRadius: "50%", display: "inline-block" },
   chips: { display: "flex", flexWrap: "wrap", gap: "0.3rem" },
   chip: { padding: "0.15rem 0.55rem", borderRadius: 6, fontSize: "0.74rem", fontWeight: 600, color: colors.blue, background: "rgba(13,71,161,0.08)" },
-  strong: { fontSize: "0.9rem", fontWeight: 700, color: colors.textPrimary, overflowWrap: "break-word" },
-  muted: { fontSize: "0.8rem", color: colors.textSecondary, overflowWrap: "anywhere" },
-  meta: { fontSize: "0.8rem", color: colors.textSecondary },
+  strong: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)", overflowWrap: "break-word" },
+  muted: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", overflowWrap: "anywhere" },
+  meta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
   cards: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))", gap: "0.8rem" },
-  card: { ...cardStyles.card, padding: "0.95rem 1rem", display: "grid", gap: "0.6rem", minWidth: 0 },
+  card: { marginTop: 0, padding: "var(--k-card-pad)", display: "grid", gap: "0.6rem", minWidth: 0 },
   cardTop: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.6rem" },
   pager: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem", marginTop: "1rem" },
 };

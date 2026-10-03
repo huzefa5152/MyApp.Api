@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import {
   MdPeople,
   MdAdd,
-  MdSearch,
   MdEdit,
   MdDelete,
   MdClose,
@@ -26,23 +25,19 @@ import { notify } from "../utils/notify";
 // non-movable. Every popup in the app pulls from these so widths and
 // behaviour stay consistent.
 import { formStyles, modalSizes } from "../theme";
+import SearchableSelect from "../Components/SearchableSelect";
+import { PageHeader, Button, Tabs, Toolbar, SearchBox, Loading, EmptyState, Alert } from "../ui/Kit";
 
 const colors = {
   blue: "#0d47a1",
-  blueLight: "#1565c0",
   teal: "#00897b",
-  cyan: "#00e5ff",
-  cardBg: "#ffffff",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
+  cardBorder: "var(--k-line)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
   danger: "#dc3545",
-  dangerLight: "#fff0f1",
-  success: "#28a745",
-  successLight: "#eafbef",
 };
+
+const msgTone = (type) => (type === "success" ? "success" : type === "warn" ? "warn" : "error");
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -251,6 +246,11 @@ export default function UsersPage() {
       u.fullName.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Create / edit role picker options — same labels the old <option>s showed.
+  const roleOptions = availableRoles.length === 0
+    ? [{ name: "Admin", label: "Admin" }]
+    : availableRoles.map((r) => ({ name: r.name, label: `${r.name}${r.isSystemRole ? " (system)" : ""}` }));
+
   const getInitials = (name) => {
     if (!name) return "?";
     return name
@@ -263,71 +263,55 @@ export default function UsersPage() {
 
   return (
     <div>
-      {/* Page Header */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
-            <MdPeople style={{ fontSize: "1.5rem", color: "#fff" }} />
-          </div>
-          <div>
-            <h2 style={styles.headerTitle}>User Management</h2>
-            <p style={styles.headerSub}>Manage admin users and their access</p>
-          </div>
-        </div>
-        {canCreate && (
-          <button style={styles.addBtn} onClick={openAdd}>
-            <MdAdd style={{ fontSize: "1.2rem" }} />
-            Add User
-          </button>
+      <PageHeader
+        icon={MdPeople}
+        tone="brand"
+        title="User Management"
+        subtitle="Manage admin users and their access"
+        actions={canCreate && (
+          <Button variant="primary" icon={MdAdd} onClick={openAdd}>Add User</Button>
         )}
-      </div>
+      />
 
       {/* Tabs — Sessions & devices exists for the primary admin only */}
       {isSeedAdmin && (
-        <div role="tablist" aria-label="User management sections" style={styles.tabs}>
-          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices], ["agents", "AI agents", MdSmartToy]].map(([key, label, Icon]) => (
-            <button key={key} role="tab" id={`users-tab-${key}`} aria-selected={tab === key} aria-controls={`users-panel-${key}`}
-              style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
-              <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          label="User management sections"
+          idPrefix="users-tab"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { key: "users", label: "Users", icon: MdPeople },
+            { key: "sessions", label: "Sessions & devices", icon: MdDevices },
+            { key: "agents", label: "AI agents", icon: MdSmartToy },
+          ]}
+        />
       )}
 
       {isSeedAdmin && tab === "sessions" && (
-        <div role="tabpanel" id="users-panel-sessions" aria-labelledby="users-tab-sessions"><UserSessionsPanel /></div>
+        <div role="tabpanel" id="users-tab-panel-sessions" aria-labelledby="users-tab-sessions"><UserSessionsPanel /></div>
       )}
       {isSeedAdmin && tab === "agents" && (
-        <div role="tabpanel" id="users-panel-agents" aria-labelledby="users-tab-agents"><McpAgentsPanel /></div>
+        <div role="tabpanel" id="users-tab-panel-agents" aria-labelledby="users-tab-agents"><McpAgentsPanel /></div>
       )}
 
-      <div role="tabpanel" id="users-panel-users" hidden={isSeedAdmin && tab !== "users"}>
-      {/* Search */}
-      <div style={styles.searchWrap}>
-        <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
-        <input
-          style={styles.searchInput}
-          type="text"
-          placeholder="Search users..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <div role="tabpanel" id="users-tab-panel-users" aria-labelledby={isSeedAdmin ? "users-tab-users" : undefined} hidden={isSeedAdmin && tab !== "users"}>
+      <Toolbar>
+        <SearchBox value={search} onChange={setSearch} placeholder="Search users..." />
+      </Toolbar>
 
       {/* Users List */}
       <div>
         {loading ? (
-          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-            Loading users...
-          </p>
+          <Loading>Loading users...</Loading>
         ) : filtered.length === 0 ? (
-          <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+          <EmptyState icon={MdPeople}>
             {search ? "No users match your search" : "No users found"}
-          </p>
+          </EmptyState>
         ) : (
           <div className="user-cards-grid">
             {filtered.map((u) => (
-              <div key={u.id} style={styles.userCard}>
+              <div key={u.id} className="k-card" style={styles.userCard}>
                 <div style={styles.userCardTop}>
                   {u.avatarPath ? (
                     <img src={u.avatarPath} alt={u.fullName} style={styles.avatar} />
@@ -337,38 +321,35 @@ export default function UsersPage() {
                     </div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.95rem" }}>
+                    <div style={styles.userName}>
                       {u.fullName}
                     </div>
-                    <div style={{ color: colors.textSecondary, fontSize: "0.84rem" }}>
+                    <div style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", overflowWrap: "anywhere" }}>
                       @{u.username}
                     </div>
                   </div>
                   <span style={styles.roleBadge}>{u.role}</span>
                 </div>
                 <div style={styles.userCardMeta}>
-                  <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
+                  <span style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)" }}>
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
                   {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {canAssignRoles && (
-                        <button style={styles.rolesBtn} onClick={() => openRolesModal(u)} title="Manage roles">
-                          <MdAdminPanelSettings style={{ fontSize: "1rem" }} />
-                          <span>Roles</span>
-                        </button>
+                        <Button size="sm" icon={MdAdminPanelSettings} onClick={() => openRolesModal(u)} title="Manage roles">
+                          Roles
+                        </Button>
                       )}
                       {canUpdate && (
-                        <button style={styles.editBtn} onClick={() => openEdit(u)} title="Edit user">
-                          <MdEdit style={{ fontSize: "1rem" }} />
-                          <span>Edit</span>
-                        </button>
+                        <Button size="sm" icon={MdEdit} onClick={() => openEdit(u)} title="Edit user">
+                          Edit
+                        </Button>
                       )}
                       {canDelete && (
-                        <button style={styles.deleteBtn} onClick={() => setDeleteConfirm(u)} title="Delete user">
-                          <MdDelete style={{ fontSize: "1rem" }} />
-                          <span>Delete</span>
-                        </button>
+                        <Button size="sm" variant="danger" icon={MdDelete} onClick={() => setDeleteConfirm(u)} title="Delete user">
+                          Delete
+                        </Button>
                       )}
                     </div>
                   )}
@@ -380,7 +361,7 @@ export default function UsersPage() {
       </div>
 
       {/* Summary */}
-      <p style={{ color: colors.textSecondary, fontSize: "0.85rem", marginTop: "1rem" }}>
+      <p style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", marginTop: "1rem" }}>
         {filtered.length} user{filtered.length !== 1 ? "s" : ""} total
       </p>
       </div>
@@ -395,94 +376,94 @@ export default function UsersPage() {
               <h3 style={formStyles.title}>
                 {editUser ? "Edit User" : "Add New User"}
               </h3>
-              <button style={styles.modalClose} onClick={closeModal}>
+              <button type="button" style={styles.modalClose} onClick={closeModal} aria-label="Close">
                 <MdClose style={{ fontSize: "1.25rem" }} />
               </button>
             </div>
 
             <div style={styles.modalBody}>
               {msg && (
-                <div
-                  style={
-                    msg.type === "success"
-                      ? styles.successMsg
-                      : styles.errorMsg
-                  }
-                >
+                <Alert tone={msgTone(msg.type)}>
                   {msg.text}
-                </div>
+                </Alert>
               )}
 
               {/* Full Name */}
-              <label style={styles.label}>
-                <MdBadge style={styles.labelIcon} />
-                Full Name
-              </label>
-              <input
-                style={styles.input}
-                type="text"
-                placeholder="Enter full name"
-                value={form.fullName}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-              />
+              <div style={formStyles.formGroup}>
+                <label style={styles.label}>
+                  <MdBadge style={styles.labelIcon} />
+                  Full Name
+                </label>
+                <input
+                  style={formStyles.input}
+                  type="text"
+                  placeholder="Enter full name"
+                  value={form.fullName}
+                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                />
+              </div>
 
               {/* Username */}
-              <label style={styles.label}>
-                <MdPerson style={styles.labelIcon} />
-                Username
-              </label>
-              <input
-                style={styles.input}
-                type="text"
-                placeholder="Enter username"
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-              />
+              <div style={formStyles.formGroup}>
+                <label style={styles.label}>
+                  <MdPerson style={styles.labelIcon} />
+                  Username
+                </label>
+                <input
+                  style={formStyles.input}
+                  type="text"
+                  placeholder="Enter username"
+                  value={form.username}
+                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                />
+              </div>
 
               {/* Password */}
-              <label style={styles.label}>
-                <MdLock style={styles.labelIcon} />
-                {editUser ? "New Password (leave blank to keep)" : "Password"}
-              </label>
-              <input
-                style={styles.input}
-                type="password"
-                placeholder={editUser ? "Leave blank to keep current" : "Min. 6 characters"}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-              />
+              <div style={formStyles.formGroup}>
+                <label style={styles.label}>
+                  <MdLock style={styles.labelIcon} />
+                  {editUser ? "New Password (leave blank to keep)" : "Password"}
+                </label>
+                <input
+                  style={formStyles.input}
+                  type="password"
+                  placeholder={editUser ? "Leave blank to keep current" : "Min. 6 characters"}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                />
+              </div>
 
               {/* Role */}
-              <label style={styles.label}>
-                <MdShield style={styles.labelIcon} />
-                Role
-              </label>
-              <select
-                style={styles.input}
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-              >
-                {availableRoles.length === 0 && (
-                  <option value="Admin">Admin</option>
+              <div>
+                <label style={styles.label}>
+                  <MdShield style={styles.labelIcon} />
+                  Role
+                </label>
+                <SearchableSelect
+                  items={roleOptions}
+                  valueKey="name"
+                  labelKey="label"
+                  searchKeys={["label"]}
+                  value={form.role}
+                  onChange={(name) => setForm({ ...form, role: name })}
+                  allowClear={false}
+                  placeholder="Select role"
+                  ariaLabel="Role"
+                />
+                {!editUser && availableRoles.length > 0 && (
+                  <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "var(--k-muted)" }}>
+                    The selected role's permissions will be auto-assigned to this user on create.
+                  </p>
                 )}
-                {availableRoles.map((r) => (
-                  <option key={r.id} value={r.name}>
-                    {r.name}{r.isSystemRole ? " (system)" : ""}
-                  </option>
-                ))}
-              </select>
-              {!editUser && availableRoles.length > 0 && (
-                <p style={{ margin: "0.35rem 0 0", fontSize: "0.72rem", color: "#5f6d7e" }}>
-                  The selected role's permissions will be auto-assigned to this user on create.
-                </p>
-              )}
+              </div>
             </div>
 
             <div style={styles.modalFooter}>
-              <button style={styles.cancelBtn} onClick={closeModal}>
+              <button type="button" style={styles.cancelBtn} onClick={closeModal}>
                 Cancel
               </button>
               <button
+                type="button"
                 style={styles.saveBtn}
                 onClick={handleSave}
                 disabled={saving}
@@ -504,16 +485,16 @@ export default function UsersPage() {
               <h3 style={formStyles.title}>
                 Manage roles — {rolesModalUser.fullName}
               </h3>
-              <button style={styles.modalClose} onClick={closeRolesModal}>
+              <button type="button" style={styles.modalClose} onClick={closeRolesModal} aria-label="Close">
                 <MdClose style={{ fontSize: "1.25rem" }} />
               </button>
             </div>
 
             <div style={styles.modalBody}>
               {rolesMsg && (
-                <div style={rolesMsg.type === "success" ? styles.successMsg : styles.errorMsg}>
+                <Alert tone={msgTone(rolesMsg.type)}>
                   {rolesMsg.text}
-                </div>
+                </Alert>
               )}
 
               <p style={{ margin: "0 0 0.75rem", color: colors.textSecondary, fontSize: "0.85rem" }}>
@@ -522,13 +503,11 @@ export default function UsersPage() {
               </p>
 
               {rolesLoading ? (
-                <p style={{ padding: "1.5rem", textAlign: "center", color: colors.textSecondary }}>
-                  Loading roles...
-                </p>
+                <Loading>Loading roles...</Loading>
               ) : allRoles.length === 0 ? (
-                <p style={{ padding: "1.5rem", textAlign: "center", color: colors.textSecondary }}>
+                <EmptyState boxed={false}>
                   No roles defined yet. Go to <strong>Roles &amp; Permissions</strong> to create one.
-                </p>
+                </EmptyState>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                   {allRoles.map((role) => {
@@ -543,7 +522,7 @@ export default function UsersPage() {
                           padding: "0.75rem 0.9rem",
                           border: `1px solid ${checked ? colors.blue : colors.cardBorder}`,
                           borderRadius: 10,
-                          background: checked ? `${colors.blue}0c` : "#fff",
+                          background: checked ? `${colors.blue}0c` : "var(--k-surface)",
                           cursor: "pointer",
                           transition: "background 0.15s, border-color 0.15s",
                         }}
@@ -554,7 +533,7 @@ export default function UsersPage() {
                           onChange={() => toggleRoleAssignment(role.id)}
                           style={{ accentColor: colors.blue, marginTop: 3 }}
                         />
-                        <div style={{ flex: 1 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                             <span style={{ fontWeight: 600, color: colors.textPrimary, fontSize: "0.92rem" }}>
                               {role.name}
@@ -595,10 +574,10 @@ export default function UsersPage() {
             </div>
 
             <div style={styles.modalFooter}>
-              <button style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
+              <button type="button" style={styles.cancelBtn} onClick={closeRolesModal} disabled={rolesSaving}>
                 Cancel
               </button>
-              <button style={styles.saveBtn} onClick={handleSaveRoles} disabled={rolesSaving || rolesLoading}>
+              <button type="button" style={styles.saveBtn} onClick={handleSaveRoles} disabled={rolesSaving || rolesLoading}>
                 <MdSave style={{ fontSize: "1.1rem" }} />
                 {rolesSaving ? "Saving..." : "Save roles"}
               </button>
@@ -621,14 +600,16 @@ export default function UsersPage() {
               Are you sure you want to delete <strong>{deleteConfirm.fullName}</strong>?
               This action cannot be undone.
             </p>
-            <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
               <button
+                type="button"
                 style={styles.cancelBtn}
                 onClick={() => setDeleteConfirm(null)}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 style={{ ...styles.saveBtn, background: colors.danger }}
                 onClick={() => handleDelete(deleteConfirm.id)}
               >
@@ -644,104 +625,23 @@ export default function UsersPage() {
 
 /* ---------- Styles ---------- */
 const styles = {
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: "1rem",
-    marginBottom: "1.5rem",
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    margin: 0,
-    fontSize: "1.4rem",
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  headerSub: {
-    margin: "0.2rem 0 0",
-    fontSize: "0.88rem",
-    color: colors.textSecondary,
-  },
-  addBtn: { minHeight: 44,
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.65rem 1.25rem",
-    background: colors.blue,
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    fontWeight: 600,
-    fontSize: "0.9rem",
-    cursor: "pointer",
-  },
-  tabs: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.4rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    marginBottom: "1.25rem",
-  },
-  tab: {
-    minHeight: 44,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.5rem 1.1rem",
-    background: "transparent",
-    color: colors.textSecondary,
-    border: "none",
-    borderBottom: "3px solid transparent",
-    borderRadius: "8px 8px 0 0",
-    fontSize: "0.9rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    boxShadow: "none",
-  },
-  tabActive: {
-    color: colors.blue,
-    borderBottomColor: colors.blue,
-    background: "rgba(13,71,161,0.06)",
-  },
-  searchWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.6rem",
-    padding: "0.6rem 1rem",
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 8,
-    marginBottom: "1.25rem",
-  },
-  searchInput: {
-    flex: 1,
-    border: "none",
-    outline: "none",
-    background: "transparent",
-    fontSize: "0.9rem",
-    color: colors.textPrimary,
-  },
   userCard: {
-    background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12,
-    padding: "1rem 1.15rem",
-    transition: "box-shadow 0.2s, transform 0.15s",
+    marginTop: 0,
+    padding: "var(--k-card-pad)",
   },
   userCardTop: {
     display: "flex",
     alignItems: "center",
     gap: "0.75rem",
+  },
+  userName: {
+    fontWeight: 600,
+    color: "var(--k-ink)",
+    fontSize: "var(--k-font)",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
   },
   userCardMeta: {
     display: "flex",
@@ -751,17 +651,19 @@ const styles = {
     gap: "0.5rem",
     marginTop: "0.75rem",
     paddingTop: "0.75rem",
-    borderTop: `1px solid ${colors.cardBorder}`,
+    borderTop: "1px solid var(--k-line)",
   },
   avatar: {
     width: 36,
     height: 36,
+    flex: "none",
     borderRadius: "50%",
     objectFit: "cover",
   },
   avatarFallback: {
     width: 36,
     height: 36,
+    flex: "none",
     borderRadius: "50%",
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
     color: "#fff",
@@ -780,45 +682,6 @@ const styles = {
     background: `${colors.blue}14`,
     color: colors.blue,
   },
-  editBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0.4rem 0.85rem",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 8,
-    background: "#fff",
-    cursor: "pointer",
-    color: colors.blue,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-  },
-  rolesBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0.4rem 0.85rem",
-    border: `1px solid ${colors.teal}30`,
-    borderRadius: 8,
-    background: `${colors.teal}0f`,
-    cursor: "pointer",
-    color: colors.teal,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-  },
-  deleteBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0.4rem 0.85rem",
-    border: `1px solid ${colors.dangerLight}`,
-    borderRadius: 8,
-    background: colors.dangerLight,
-    cursor: "pointer",
-    color: colors.danger,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-  },
   // Modal chrome — all delegated to the shared formStyles baseline so
   // every popup (Create/Edit user, Roles, Delete confirm) has identical
   // backdrop blur, width tier, gradient header, and non-movable behaviour
@@ -830,69 +693,17 @@ const styles = {
   modalBody: formStyles.body,
   modalFooter: formStyles.footer,
   label: {
+    ...formStyles.label,
     display: "flex",
     alignItems: "center",
     gap: "0.4rem",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    color: colors.textPrimary,
-    marginBottom: "0.4rem",
-    marginTop: "1rem",
   },
   labelIcon: {
     fontSize: "1rem",
     color: colors.blue,
   },
-  input: {
-    width: "100%",
-    padding: "0.65rem 0.85rem",
-    border: `1px solid ${colors.inputBorder}`,
-    borderRadius: 8,
-    fontSize: "0.9rem",
-    background: colors.inputBg,
-    color: colors.textPrimary,
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  cancelBtn: {
-    padding: "0.6rem 1.25rem",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 8,
-    background: "#fff",
-    color: colors.textPrimary,
-    fontWeight: 600,
-    fontSize: "0.9rem",
-    cursor: "pointer",
-  },
-  saveBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.6rem 1.25rem",
-    border: "none",
-    borderRadius: 8,
-    background: colors.blue,
-    color: "#fff",
-    fontWeight: 600,
-    fontSize: "0.9rem",
-    cursor: "pointer",
-  },
-  successMsg: {
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    background: colors.successLight,
-    color: colors.success,
-    fontSize: "0.85rem",
-    fontWeight: 500,
-  },
-  errorMsg: {
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    background: colors.dangerLight,
-    color: colors.danger,
-    fontSize: "0.85rem",
-    fontWeight: 500,
-  },
+  cancelBtn: { ...formStyles.button, ...formStyles.cancel },
+  saveBtn: { ...formStyles.button, ...formStyles.submit, display: "inline-flex", alignItems: "center", gap: "0.4rem" },
   // Delete-confirm uses the small modal tier, but skips the gradient header
   // (small alert dialog with centered icon + buttons inline). Padding is
   // applied directly because the body/footer stack isn't used here.

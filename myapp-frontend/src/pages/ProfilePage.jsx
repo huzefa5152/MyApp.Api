@@ -12,29 +12,29 @@ import {
   MdShield,
   MdDelete,
   MdCloudUpload,
-  MdSmartToy,
-} from "react-icons/md";
+  MdSmartToy, MdPalette } from "react-icons/md";
 import { useAuth } from "../contexts/AuthContext";
 import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
 import { getAvatarUrl } from "../utils/avatarUrl";
+import ThemePicker from "../ui2/ThemePicker";
 import McpMyAccessPanel from "../Components/McpMyAccessPanel";
+import { PageHeader, Tabs, Card, Button, Field, Alert } from "../ui/Kit";
 
 const colors = {
   blue: "#0d47a1",
-  blueLight: "#1565c0",
   teal: "#00897b",
   cyan: "#00e5ff",
-  cardBg: "#ffffff",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
-  success: "#28a745",
-  successLight: "#eafbef",
 };
+
+// Success / error banner used by every card on the page.
+function Msg({ msg }) {
+  if (!msg) return null;
+  return (
+    <Alert tone={msg.type === "success" ? "success" : "error"} icon={msg.type === "success" ? MdCheckCircle : undefined}>
+      {msg.text}
+    </Alert>
+  );
+}
 
 // Client-side mirror of the server validation (Helpers/ImageUploadValidator.cs):
 // extension allowlist + 7 MB cap. The server is the source of truth — these
@@ -282,33 +282,39 @@ export default function ProfilePage() {
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
-      {/* Page header */}
-      <div style={styles.pageHeader}>
-        <div style={styles.headerIcon}>
-          <MdAccountCircle size={28} color="#fff" />
-        </div>
-        <div>
-          <h2 style={styles.pageTitle}>My Profile</h2>
-          <p style={styles.pageSubtitle}>Manage your account settings</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={MdAccountCircle}
+        tone="brand"
+        title="My Profile"
+        subtitle="Manage your account settings"
+      />
 
       {/* Tabs — every user gets "MCP & AI": how to connect their AI tools, and their own tokens */}
-      <div role="tablist" aria-label="Profile sections" style={styles.tabs}>
-        {[["profile", "Profile", MdAccountCircle], ["mcp", "MCP & AI", MdSmartToy]].map(([key, label, Icon]) => (
-          <button key={key} role="tab" id={`profile-tab-${key}`} aria-selected={tab === key} aria-controls={`profile-panel-${key}`}
-            style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
-            <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        label="Profile sections"
+        idPrefix="profile-tab"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { key: "profile", label: "Profile", icon: MdAccountCircle },
+          { key: "appearance", label: "Appearance", icon: MdPalette },
+          { key: "mcp", label: "MCP & AI", icon: MdSmartToy },
+        ]}
+      />
       {tab === "mcp" ? (
-        <div role="tabpanel" id="profile-panel-mcp" aria-labelledby="profile-tab-mcp"><McpMyAccessPanel /></div>
+        <div role="tabpanel" id="profile-tab-panel-mcp" aria-labelledby="profile-tab-mcp"><McpMyAccessPanel /></div>
+      ) : tab === "appearance" ? (
+        <Card role="tabpanel" id="profile-tab-panel-appearance" aria-labelledby="profile-tab-appearance" title="Interface theme" icon={MdPalette}>
+          <p style={{ color: "var(--k-muted)", fontSize: "var(--k-font-sm)", margin: "0 0 0.9rem" }}>
+            Changes how screens look, not what they do. Saved for your account on this browser, so other users keep their own choice.
+          </p>
+          <div className="u2" style={{ maxWidth: 420 }}><ThemePicker /></div>
+        </Card>
       ) : (
-      <div role="tabpanel" id="profile-panel-profile" aria-labelledby="profile-tab-profile">
+      <div role="tabpanel" id="profile-tab-panel-profile" aria-labelledby="profile-tab-profile">
 
       {/* Avatar + Info Card */}
-      <div style={styles.profileCard}>
+      <div className="k-card" style={styles.profileCard}>
         <div style={styles.profileBanner} />
 
         {/* Avatar with drag-and-drop zone wrapping the circle */}
@@ -337,6 +343,7 @@ export default function ProfilePage() {
                 {hasServerAvatar ? (
                   <div style={styles.avatarOverlayActions}>
                     <button
+                      type="button"
                       onClick={handlePickClick}
                       style={styles.avatarOverlayBtn}
                       title="Change photo"
@@ -346,6 +353,7 @@ export default function ProfilePage() {
                     </button>
                     <div style={styles.avatarOverlayDivider} />
                     <button
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); handleRemoveAvatar(); }}
                       disabled={avatarLoading}
                       style={styles.avatarOverlayBtn}
@@ -383,8 +391,8 @@ export default function ProfilePage() {
         </div>
 
         {avatarMsg && (
-          <div style={{ padding: "0 1.5rem", marginTop: "0.75rem", ...(avatarMsg.type === "success" ? styles.successMsg : styles.errorMsg) }}>
-            {avatarMsg.text}
+          <div style={{ padding: "0 1.5rem", marginTop: "0.75rem" }}>
+            <Msg msg={avatarMsg} />
           </div>
         )}
 
@@ -392,27 +400,28 @@ export default function ProfilePage() {
         <div style={styles.avatarActions}>
           {previewUrl ? (
             <>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleSaveAvatar}
-                style={styles.uploadBtn}
                 disabled={avatarLoading}
               >
                 {avatarLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={16} />}
                 {avatarLoading ? "Uploading..." : "Save Photo"}
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
+                icon={MdClose}
                 onClick={handleCancelPreview}
-                style={styles.cancelBtnSecondary}
                 disabled={avatarLoading}
               >
-                <MdClose size={16} /> Cancel
-              </button>
+                Cancel
+              </Button>
             </>
           ) : (
-            <button onClick={handlePickClick} style={styles.uploadBtn} disabled={avatarLoading}>
-              <MdCameraAlt size={15} />
+            <Button variant="primary" size="sm" icon={MdCameraAlt} onClick={handlePickClick} disabled={avatarLoading}>
               {hasServerAvatar ? "Change Photo" : "Upload Photo"}
-            </button>
+            </Button>
           )}
         </div>
         <p style={styles.avatarHint}>
@@ -423,133 +432,105 @@ export default function ProfilePage() {
       </div>
 
       {/* Profile Details Card */}
-      <div style={styles.card}>
-        <div style={styles.cardHeader}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <MdPerson size={20} color={colors.blue} />
-            <h3 style={styles.cardTitle}>Profile Details</h3>
-          </div>
-          <button
-            type="button"
-            style={editing ? styles.cancelBtn : styles.editBtn}
+      <Card
+        title="Profile Details"
+        icon={MdPerson}
+        tone="blue"
+        actions={(
+          <Button
+            variant={editing ? "secondary" : "primary"}
+            size="sm"
+            icon={editing ? MdClose : MdEdit}
             onClick={handleEditToggle}
           >
-            {editing ? <><MdClose size={16} /> Cancel</> : <><MdEdit size={16} /> Edit</>}
-          </button>
-        </div>
-
-        {profileMsg && (
-          <div style={profileMsg.type === "success" ? styles.successMsg : styles.errorMsg}>
-            {profileMsg.type === "success" && <MdCheckCircle size={16} style={{ marginRight: 6 }} />}
-            {profileMsg.text}
-          </div>
+            {editing ? "Cancel" : "Edit"}
+          </Button>
         )}
+      >
+        <Msg msg={profileMsg} />
 
-        <form onSubmit={handleProfileSave}>
-          <div style={styles.formRow}>
-            <label style={styles.label}>
-              <MdBadge size={14} style={{ marginRight: 4, color: colors.textSecondary }} />
-              Username
-            </label>
+        <form onSubmit={handleProfileSave} style={styles.form}>
+          <Field label={<><MdBadge size={14} style={styles.labelIcon} />Username</>}>
             {editing ? (
               <input
-                style={styles.input}
+                className="k-input"
                 value={profileForm.username}
                 onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
               />
             ) : (
               <p style={styles.value}>{user?.username}</p>
             )}
-          </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>
-              <MdPerson size={14} style={{ marginRight: 4, color: colors.textSecondary }} />
-              Full Name
-            </label>
+          </Field>
+          <Field label={<><MdPerson size={14} style={styles.labelIcon} />Full Name</>}>
             {editing ? (
               <input
-                style={styles.input}
+                className="k-input"
                 value={profileForm.fullName}
                 onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
               />
             ) : (
               <p style={styles.value}>{user?.fullName}</p>
             )}
-          </div>
+          </Field>
           {editing && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
-              <button
+            <div style={styles.formActions}>
+              <Button
                 type="submit"
-                style={styles.saveBtn}
+                variant="primary"
+                icon={MdSave}
                 disabled={profileLoading}
               >
-                <MdSave size={16} />
                 {profileLoading ? "Saving..." : "Save Changes"}
-              </button>
+              </Button>
             </div>
           )}
         </form>
-      </div>
+      </Card>
 
       {/* Change Password Card */}
-      <div style={styles.card}>
-        <div style={styles.cardHeader}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <MdLock size={20} color={colors.teal} />
-            <h3 style={styles.cardTitle}>Change Password</h3>
-          </div>
-        </div>
+      <Card title="Change Password" icon={MdLock} tone="teal">
+        <Msg msg={pwMsg} />
 
-        {pwMsg && (
-          <div style={pwMsg.type === "success" ? styles.successMsg : styles.errorMsg}>
-            {pwMsg.type === "success" && <MdCheckCircle size={16} style={{ marginRight: 6 }} />}
-            {pwMsg.text}
-          </div>
-        )}
-
-        <form onSubmit={handlePasswordChange}>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Current Password</label>
+        <form onSubmit={handlePasswordChange} style={styles.form}>
+          <Field label="Current Password">
             <input
               type="password"
-              style={styles.input}
+              className="k-input"
               value={pwForm.currentPassword}
               onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })}
               placeholder="Enter current password"
             />
-          </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>New Password</label>
+          </Field>
+          <Field label="New Password">
             <input
               type="password"
-              style={styles.input}
+              className="k-input"
               value={pwForm.newPassword}
               onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
               placeholder="At least 6 characters"
             />
-          </div>
-          <div style={styles.formRow}>
-            <label style={styles.label}>Confirm New Password</label>
+          </Field>
+          <Field label="Confirm New Password">
             <input
               type="password"
-              style={styles.input}
+              className="k-input"
               value={pwForm.confirmPassword}
               onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
               placeholder="Re-enter new password"
             />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
-            <button
+          </Field>
+          <div style={styles.formActions}>
+            <Button
               type="submit"
-              style={{ ...styles.saveBtn, background: `linear-gradient(135deg, ${colors.teal}, #00695c)` }}
+              variant="teal"
+              icon={MdLock}
               disabled={pwLoading}
             >
-              <MdLock size={16} />
               {pwLoading ? "Changing..." : "Change Password"}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
+      </Card>
       </div>
       )}
     </div>
@@ -557,50 +538,7 @@ export default function ProfilePage() {
 }
 
 const styles = {
-  tabs: { display: "flex", flexWrap: "wrap", gap: "0.4rem", borderBottom: `1px solid ${colors.cardBorder}`, marginBottom: "1.25rem" },
-  tab: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.5rem 1.1rem", background: "transparent", color: colors.textSecondary, border: "none", borderBottom: "3px solid transparent", borderRadius: "8px 8px 0 0", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
-  tabActive: { color: colors.blue, borderBottomColor: colors.blue, background: "rgba(13,71,161,0.06)" },
-  pageHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "1rem",
-    marginBottom: "1.5rem",
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  pageTitle: {
-    margin: 0,
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  pageSubtitle: {
-    margin: "0.15rem 0 0",
-    fontSize: "0.88rem",
-    color: colors.textSecondary,
-  },
-  card: {
-    backgroundColor: colors.cardBg,
-    borderRadius: 14,
-    border: `1px solid ${colors.cardBorder}`,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-    padding: "1.5rem",
-    marginBottom: "1.25rem",
-  },
   profileCard: {
-    backgroundColor: colors.cardBg,
-    borderRadius: 14,
-    border: `1px solid ${colors.cardBorder}`,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-    marginBottom: "1.25rem",
     overflow: "hidden",
   },
   profileBanner: {
@@ -696,12 +634,14 @@ const styles = {
     margin: 0,
     fontSize: "1.35rem",
     fontWeight: 700,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
+    overflowWrap: "anywhere",
   },
   profileUsername: {
     margin: "0.2rem 0 0",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.9rem",
+    overflowWrap: "anywhere",
   },
   roleBadge: {
     display: "inline-flex",
@@ -722,144 +662,21 @@ const styles = {
     padding: "1rem 1.5rem 0",
     flexWrap: "wrap",
   },
-  uploadBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.35rem",
-    padding: "0.45rem 1rem",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.blueLight})`,
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  cancelBtnSecondary: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.35rem",
-    padding: "0.45rem 1rem",
-    backgroundColor: "#e9ecf1",
-    color: colors.textSecondary,
-    border: "none",
-    borderRadius: 8,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
   avatarHint: {
     textAlign: "center",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontSize: "0.78rem",
     margin: 0,
     padding: "0.6rem 1.5rem 1.25rem",
   },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "1.25rem",
-    paddingBottom: "0.75rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-  },
-  cardTitle: {
-    margin: 0,
-    fontSize: "1.05rem",
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  editBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "0.4rem 0.9rem",
-    borderRadius: 8,
-    border: "none",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.blueLight})`,
-    color: "#fff",
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "filter 0.2s",
-  },
-  cancelBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "0.4rem 0.9rem",
-    borderRadius: 8,
-    border: "none",
-    backgroundColor: "#e9ecf1",
-    color: colors.textSecondary,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "filter 0.2s",
-  },
-  saveBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "0.5rem 1.25rem",
-    borderRadius: 8,
-    border: "none",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.blueLight})`,
-    color: "#fff",
-    fontSize: "0.88rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "filter 0.2s",
-  },
-  formRow: {
-    marginBottom: "1rem",
-  },
-  label: {
-    display: "flex",
-    alignItems: "center",
-    marginBottom: "0.3rem",
-    fontWeight: 600,
-    fontSize: "0.83rem",
-    color: colors.textSecondary,
-  },
-  input: {
-    width: "100%",
-    padding: "0.6rem 0.85rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    fontSize: "0.95rem",
-    backgroundColor: colors.inputBg,
-    color: colors.textPrimary,
-    outline: "none",
-    transition: "border-color 0.25s, box-shadow 0.25s",
-    boxSizing: "border-box",
-  },
+  form: { display: "flex", flexDirection: "column", gap: "1rem" },
+  formActions: { display: "flex", justifyContent: "flex-end" },
+  labelIcon: { marginRight: 4, verticalAlign: "-2px" },
   value: {
     margin: 0,
-    fontSize: "0.95rem",
-    color: colors.textPrimary,
-    padding: "0.6rem 0",
-  },
-  successMsg: {
-    display: "flex",
-    alignItems: "center",
-    backgroundColor: colors.successLight,
-    color: colors.success,
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    marginBottom: "1rem",
-    fontWeight: 500,
-    border: `1px solid ${colors.success}30`,
-    fontSize: "0.85rem",
-  },
-  errorMsg: {
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    marginBottom: "1rem",
-    fontWeight: 500,
-    border: `1px solid ${colors.danger}30`,
-    fontSize: "0.85rem",
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
+    padding: "0.35rem 0",
+    overflowWrap: "anywhere",
   },
 };

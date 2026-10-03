@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   MdAdminPanelSettings,
   MdAdd,
-  MdSearch,
   MdEdit,
   MdDelete,
   MdClose,
@@ -25,7 +24,7 @@ import {
   getPermissionTree,
 } from "../api/rbacApi";
 import { useAuth } from "../contexts/AuthContext";
-import { Can, usePermissions } from "../contexts/PermissionsContext";
+import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 // Shared modal baseline — gradient header, blurred backdrop, size tiers,
 // non-movable. See comment in theme.js modalSizes for tier guidance.
@@ -33,23 +32,17 @@ import { formStyles, modalSizes } from "../theme";
 // Section layout config — maps catalog modules to navbar super-groups.
 // Edit this file to add a new module/screen; nothing else here needs to change.
 import { groupTreeBySections, getModuleLabel } from "../config/permissionSections";
+import SearchableSelect from "../Components/SearchableSelect";
+import { PageHeader, Button, IconButton, Toolbar, SearchBox, Loading, EmptyState, Alert } from "../ui/Kit";
 
 const colors = {
   blue: "#0d47a1",
-  blueLight: "#1565c0",
   teal: "#00897b",
-  cardBg: "#ffffff",
   cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
   textPrimary: "#1a2332",
   textSecondary: "#5f6d7e",
   danger: "#dc3545",
-  dangerLight: "#fff0f1",
-  success: "#28a745",
-  successLight: "#eafbef",
   warn: "#b26a00",
-  warnLight: "#fff4e0",
 };
 
 
@@ -309,91 +302,63 @@ export default function RolesPage() {
   // `src/config/permissionSections.js` — edit there to add modules.
   const groupedSections = useMemo(() => groupTreeBySections(tree), [tree]);
 
+  // Tenant-administrator picker options — same text the old <option> showed.
+  const tenantOptions = useMemo(
+    () => tenants.map((t) => ({
+      userId: t.userId,
+      label: `${t.fullName || t.username} (${t.username}) - ${t.companies.join(", ") || "No assigned companies"}`,
+    })),
+    [tenants]
+  );
+
   // ── Render ───────────────────────────────────────────────────────────────
   if (!canView) {
     return (
-      <div style={styles.forbidden}>
-        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
-        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
-        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>
-          You don&apos;t have permission to view roles.
-        </p>
-      </div>
+      <EmptyState icon={MdLock} title="Access denied">
+        You don&apos;t have permission to view roles.
+      </EmptyState>
     );
   }
 
   return (
     <div>
-      {/* Page Header */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>
-            <MdAdminPanelSettings style={{ fontSize: "1.5rem", color: "#fff" }} />
-          </div>
-          <div>
-            <h2 style={styles.headerTitle}>Roles &amp; Permissions</h2>
-            <p style={styles.headerSub}>
-              Define what each role can see and do. {totalCatalogKeys} permissions available.
-            </p>
-          </div>
-        </div>
-        {canCreate && (
-          <button style={styles.addBtn} onClick={openCreate}>
-            <MdAdd style={{ fontSize: "1.2rem" }} />
-            New Role
-          </button>
+      <PageHeader
+        icon={MdAdminPanelSettings}
+        tone="brand"
+        title="Roles & Permissions"
+        subtitle={`Define what each role can see and do. ${totalCatalogKeys} permissions available.`}
+        actions={canCreate && (
+          <Button variant="primary" icon={MdAdd} onClick={openCreate}>New Role</Button>
         )}
-      </div>
+      />
 
-      {/* Search */}
-      <div style={styles.searchWrap}>
-        <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
-        <input
-          style={styles.searchInput}
-          type="text"
-          placeholder="Search roles..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      <Toolbar>
+        <SearchBox value={search} onChange={setSearch} placeholder="Search roles..." />
+      </Toolbar>
 
       {/* List */}
       {loading ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
-          Loading roles...
-        </p>
+        <Loading>Loading roles...</Loading>
       ) : filtered.length === 0 ? (
-        <p style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>
+        <EmptyState icon={MdAdminPanelSettings}>
           {search ? "No roles match your search" : "No roles defined yet"}
-        </p>
+        </EmptyState>
       ) : (
-        <div className="role-cards-grid" style={styles.grid}>
+        <div className="role-cards-grid k-grid-cards">
           {filtered.map((role) => (
-            <div key={role.id} style={styles.card}>
+            <div key={role.id} className="k-card" style={styles.card}>
               <div style={styles.cardHeader}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", minWidth: 0 }}>
                   <h3 style={styles.cardTitle}>{role.name}</h3>
                   {role.isSystemRole && <span style={styles.systemBadge}>System</span>}
                 </div>
                 {!role.isSystemRole && role.canEdit && (canUpdate || canDelete) && (
-                  <div style={{ display: "flex", gap: "0.4rem" }}>
+                  <div style={{ display: "flex", gap: "0.25rem" }}>
                     {canUpdate && (
-                      <button
-                        style={styles.iconBtn}
-                        onClick={() => openEdit(role)}
-                        title="Edit role"
-                      >
-                        <MdEdit style={{ fontSize: "1rem" }} />
-                      </button>
+                      <IconButton label="Edit role" icon={MdEdit} size={17} onClick={() => openEdit(role)} />
                     )}
                     {canDelete && (
-                      <button
-                        style={styles.iconBtnDanger}
-                        onClick={() => setDeleteConfirm(role)}
-                        title="Delete role"
-                      >
-                        <MdDelete style={{ fontSize: "1rem" }} />
-                      </button>
+                      <IconButton label="Delete role" icon={MdDelete} size={17} danger onClick={() => setDeleteConfirm(role)} />
                     )}
                   </div>
                 )}
@@ -401,7 +366,7 @@ export default function RolesPage() {
               {isSeedAdmin && !role.isSystemRole && <p style={styles.cardDescription}>
                 Tenant: {tenants.find(t => t.userId === role.tenantAdminUserId)?.username || `Administrator #${role.tenantAdminUserId}`}
               </p>}
-              {isSeedAdmin && canCreate && !role.isSystemRole && <button style={styles.smallLinkBtn} onClick={() => {
+              {isSeedAdmin && canCreate && !role.isSystemRole && <button type="button" style={styles.smallLinkBtn} onClick={() => {
                 openCreate(); setCopySource(role); setForm({ name: role.name, description: role.description || "", permissionKeys: new Set(role.permissionKeys) });
               }}>Copy to tenants</button>}
               {role.description && (
@@ -445,50 +410,60 @@ export default function RolesPage() {
 
             <div style={styles.modalBody}>
               {msg && (
-                <div style={msg.type === "success" ? styles.successMsg : styles.errorMsg}>
+                <Alert tone={msg.type === "success" ? "success" : "error"}>
                   {msg.text}
-                </div>
+                </Alert>
               )}
 
-              {isSeedAdmin && !editRole && !copySource && <>
-                <label style={styles.label} htmlFor="role-tenant">Tenant administrator</label>
-                <select id="role-tenant" style={styles.input} value={tenantId} disabled={saving} onChange={e => setTenantId(e.target.value)}>
-                  <option value="">Select tenant administrator</option>
-                  {tenants.map(t => <option key={t.userId} value={t.userId}>{t.fullName || t.username} ({t.username}) - {t.companies.join(", ") || "No assigned companies"}</option>)}
-                </select>
-              </>}
-              {copySource && <>
-                <label style={styles.label}>Destination tenant administrators</label>
+              {isSeedAdmin && !editRole && !copySource && <div style={formStyles.formGroup}>
+                <label style={formStyles.label}>Tenant administrator</label>
+                <SearchableSelect
+                  items={tenantOptions}
+                  valueKey="userId"
+                  labelKey="label"
+                  value={tenantId}
+                  disabled={saving}
+                  onChange={(id) => setTenantId(String(id))}
+                  placeholder="Select tenant administrator"
+                  ariaLabel="Tenant administrator"
+                />
+              </div>}
+              {copySource && <div style={formStyles.formGroup}>
+                <label style={formStyles.label}>Destination tenant administrators</label>
                 {tenants.map(t => <label key={t.userId} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, overflowWrap: "anywhere" }}>
                   <input type="checkbox" checked={copyTargets.has(t.userId)} disabled={saving} onChange={e => setCopyTargets(prev => {
                     const next = new Set(prev); if (e.target.checked) next.add(t.userId); else next.delete(t.userId); return next;
                   })} />{t.fullName || t.username} ({t.username}) - {t.companies.join(", ") || "No assigned companies"}
                 </label>)}
                 <p style={styles.cardDescription}>Each copy has its own permissions and no user assignments. Later edits do not affect the original.</p>
-              </>}
-              <label style={styles.label}>Role name</label>
+              </div>}
+              <div style={formStyles.formGroup}>
+              <label style={formStyles.label}>Role name</label>
               <input
-                style={styles.input}
+                style={formStyles.input}
                 type="text"
                 placeholder="e.g. Billing Operator"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 disabled={saving}
               />
+              </div>
 
-              <label style={styles.label}>Description</label>
+              <div style={formStyles.formGroup}>
+              <label style={formStyles.label}>Description</label>
               <input
-                style={styles.input}
+                style={formStyles.input}
                 type="text"
                 placeholder="What this role is for (optional)"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 disabled={saving || Boolean(copySource)}
               />
+              </div>
 
               {!copySource && <>
               <div style={styles.permHeader}>
-                <label style={{ ...styles.label, marginTop: 0 }}>Permissions</label>
+                <label style={{ ...formStyles.label, marginBottom: 0 }}>Permissions</label>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                   {/* Collapse All / Expand All — quality-of-life when the
                       catalog has 15+ modules. Sets/clears every module
@@ -655,10 +630,10 @@ export default function RolesPage() {
             </div>
 
             <div style={styles.modalFooter}>
-              <button style={styles.cancelBtn} onClick={closeModal} disabled={saving}>
+              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={closeModal} disabled={saving}>
                 Cancel
               </button>
-              <button style={styles.saveBtn} onClick={handleSave} disabled={saving || (!editRole && !copySource && isSeedAdmin && !tenantId) || (copySource && copyTargets.size === 0)}>
+              <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={handleSave} disabled={saving || (!editRole && !copySource && isSeedAdmin && !tenantId) || (copySource && copyTargets.size === 0)}>
                 <MdSave style={{ fontSize: "1.1rem" }} />
                 {saving ? "Saving..." : copySource ? "Copy role" : editRole ? "Update role" : "Create role"}
               </button>
@@ -674,8 +649,8 @@ export default function RolesPage() {
         <div style={styles.overlay}>
           <div style={styles.deleteModal} onClick={(e) => e.stopPropagation()}>
             <MdDelete style={{ fontSize: "2.5rem", color: colors.danger }} />
-            <h3 style={{ margin: "0.75rem 0 0.5rem", color: colors.textPrimary }}>Delete role?</h3>
-            <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>
+            <h3 style={{ margin: "0.75rem 0 0.5rem", color: "var(--k-ink)" }}>Delete role?</h3>
+            <p style={{ margin: 0, color: "var(--k-muted)", fontSize: "var(--k-font)" }}>
               Are you sure you want to delete <strong>{deleteConfirm.name}</strong>?
               {deleteConfirm.userCount > 0 && (
                 <>
@@ -686,12 +661,13 @@ export default function RolesPage() {
                 </>
               )}
             </p>
-            <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
-              <button style={styles.cancelBtn} onClick={() => setDeleteConfirm(null)}>
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
+              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setDeleteConfirm(null)}>
                 Cancel
               </button>
               <button
-                style={{ ...styles.saveBtn, background: colors.danger }}
+                type="button"
+                style={{ ...formStyles.button, background: colors.danger, color: "#fff" }}
                 onClick={() => handleDelete(deleteConfirm)}
               >
                 Delete
@@ -706,67 +682,7 @@ export default function RolesPage() {
 
 /* ─────────── Styles ─────────── */
 const styles = {
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: "1rem",
-    marginBottom: "1.5rem",
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { margin: 0, fontSize: "1.4rem", fontWeight: 700, color: colors.textPrimary },
-  headerSub: { margin: "0.2rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { minHeight: 44,
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.65rem 1.25rem",
-    background: colors.blue,
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    fontWeight: 600,
-    fontSize: "0.9rem",
-    cursor: "pointer",
-  },
-  searchWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.6rem",
-    padding: "0.6rem 1rem",
-    background: colors.inputBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 8,
-    marginBottom: "1.25rem",
-  },
-  searchInput: {
-    flex: 1,
-    border: "none",
-    outline: "none",
-    background: "transparent",
-    fontSize: "0.9rem",
-    color: colors.textPrimary,
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
-    gap: "1rem",
-  },
-  card: {
-    background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12,
-    padding: "1rem 1.15rem",
-  },
+  card: { marginTop: 0, padding: "var(--k-card-pad)" },
   cardHeader: {
     display: "flex",
     alignItems: "flex-start",
@@ -774,11 +690,11 @@ const styles = {
     gap: "0.5rem",
     marginBottom: "0.4rem",
   },
-  cardTitle: { margin: 0, fontSize: "1rem", fontWeight: 700, color: colors.textPrimary },
+  cardTitle: { margin: 0, fontSize: "calc(var(--k-font) + 0.1rem)", fontWeight: 700, color: "var(--k-ink)", overflowWrap: "anywhere" },
   cardDescription: {
     margin: "0 0 0.75rem",
-    color: colors.textSecondary,
-    fontSize: "0.85rem",
+    color: "var(--k-muted)",
+    fontSize: "var(--k-font-sm)",
     lineHeight: 1.4,
   },
   cardMeta: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" },
@@ -804,42 +720,6 @@ const styles = {
     background: `${colors.blue}10`,
     color: colors.blue,
   },
-  // The global `button` rule in index.css adds chunky padding + a
-  // box-shadow + a dark-theme background. These icon buttons need to
-  // be a tight 32 × 32 square with the role-page tint, so we override
-  // every property the global rule would otherwise smuggle in.
-  iconBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 32,
-    height: 32,
-    minWidth: 32,
-    padding: 0,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 8,
-    background: "#fff",
-    boxShadow: "none",
-    cursor: "pointer",
-    color: colors.blue,
-    flexShrink: 0,
-  },
-  iconBtnDanger: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 32,
-    height: 32,
-    minWidth: 32,
-    padding: 0,
-    border: `1px solid ${colors.dangerLight}`,
-    borderRadius: 8,
-    background: colors.dangerLight,
-    boxShadow: "none",
-    cursor: "pointer",
-    color: colors.danger,
-    flexShrink: 0,
-  },
   // Modal chrome delegated to formStyles so the Roles & Permissions popup
   // matches every other dialog in the app (blurred backdrop, gradient
   // header, fixed centered position, non-movable). Tier "lg" because the
@@ -850,25 +730,7 @@ const styles = {
   modalClose: formStyles.closeButton,
   modalBody: formStyles.body,
   modalFooter: formStyles.footer,
-  label: {
-    display: "block",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    color: colors.textPrimary,
-    marginBottom: "0.4rem",
-    marginTop: "0.9rem",
-  },
-  input: {
-    width: "100%",
-    padding: "0.6rem 0.85rem",
-    border: `1px solid ${colors.inputBorder}`,
-    borderRadius: 8,
-    fontSize: "0.9rem",
-    background: colors.inputBg,
-    color: colors.textPrimary,
-    outline: "none",
-    boxSizing: "border-box",
-  },
+  iconLabel: { display: "inline-flex", alignItems: "center", gap: "0.4rem" },
   // Compact text-link-style button for collapse/expand-all controls. Has to
   // override the global button rule from index.css (padding 0.8em 1.6em,
   // box-shadow, etc.).
@@ -892,7 +754,9 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: "1.25rem",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+    marginTop: "0.25rem",
     marginBottom: "0.5rem",
   },
   permTree: {
@@ -1030,47 +894,6 @@ const styles = {
     fontSize: "0.73rem",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   },
-  cancelBtn: {
-    padding: "0.6rem 1.25rem",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 8,
-    background: "#fff",
-    color: colors.textPrimary,
-    fontWeight: 600,
-    fontSize: "0.9rem",
-    cursor: "pointer",
-  },
-  saveBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    padding: "0.6rem 1.25rem",
-    border: "none",
-    borderRadius: 8,
-    background: colors.blue,
-    color: "#fff",
-    fontWeight: 600,
-    fontSize: "0.9rem",
-    cursor: "pointer",
-  },
-  successMsg: {
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    background: colors.successLight,
-    color: colors.success,
-    fontSize: "0.85rem",
-    fontWeight: 500,
-    marginBottom: "0.5rem",
-  },
-  errorMsg: {
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    background: colors.dangerLight,
-    color: colors.danger,
-    fontSize: "0.85rem",
-    fontWeight: 500,
-    marginBottom: "0.5rem",
-  },
   // Delete-confirm uses the smallest tier with centered icon + text;
   // padding is applied directly because the body/footer stack isn't used.
   deleteModal: {
@@ -1079,12 +902,5 @@ const styles = {
     padding: "2rem",
     textAlign: "center",
     overflow: "visible",
-  },
-  forbidden: {
-    textAlign: "center",
-    padding: "4rem 1.5rem",
-    background: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 14,
   },
 };

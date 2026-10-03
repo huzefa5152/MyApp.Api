@@ -15,7 +15,6 @@ import {
   MdPeople,
   MdRefresh,
   MdSave,
-  MdSearch,
 } from "react-icons/md";
 import { getAdministratorTree } from "../api/administratorsApi";
 import { getCompanies } from "../api/companyApi";
@@ -26,6 +25,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { notify } from "../utils/notify";
 import { colors, formStyles, modalSizes } from "../theme";
 import { useConfirm } from "../Components/ConfirmDialog";
+import { PageHeader, Button, Toolbar, SearchBox, Loading, EmptyState } from "../ui/Kit";
 
 /**
  * Seed-admin console. Lists every top-level account (created by the seed
@@ -184,60 +184,47 @@ export default function AdministratorsPage() {
 
   if (!isSeedAdmin) {
     return (
-      <div style={styles.empty}>
-        <MdLock size={48} color={colors.textSecondary} />
-        <p>Only the seed admin can open the administrators console.</p>
-      </div>
+      <EmptyState icon={MdLock} boxed={false}>
+        Only the seed admin can open the administrators console.
+      </EmptyState>
     );
   }
 
   return (
     <div style={styles.page}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
-          <div style={styles.headerIcon}><MdAdminPanelSettings size={22} /></div>
-          <div style={{ minWidth: 0 }}>
-            <h1 style={styles.h1}>Administrators</h1>
-            <p style={styles.sub}>
-              Every Administrator you created, with their users, companies and company access.
-            </p>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button type="button" style={styles.ghostBtn} onClick={load} title="Reload">
-            <MdRefresh size={18} /> Refresh
-          </button>
-          <button type="button" style={styles.primaryBtn} onClick={() => setShowCreate(true)}>
-            <MdAdd size={18} /> New Administrator
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={MdAdminPanelSettings}
+        tone="brand"
+        title="Administrators"
+        subtitle="Every Administrator you created, with their users, companies and company access."
+        actions={(
+          <>
+            <Button icon={MdRefresh} onClick={load} title="Reload">Refresh</Button>
+            <Button variant="primary" icon={MdAdd} onClick={() => setShowCreate(true)}>New Administrator</Button>
+          </>
+        )}
+      />
 
-      {/* Search */}
-      <div style={styles.searchWrap}>
-        <MdSearch style={{ color: colors.textSecondary, fontSize: "1.25rem" }} />
-        <input
-          style={styles.searchInput}
-          type="text"
-          placeholder="Search administrators, users or companies..."
+      <Toolbar>
+        <SearchBox
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
+          placeholder="Search administrators, users or companies..."
         />
-      </div>
+      </Toolbar>
 
       {loading ? (
-        <p style={styles.muted}>Loading administrators...</p>
+        <Loading>Loading administrators...</Loading>
       ) : filtered.length === 0 ? (
-        <p style={styles.muted}>
+        <EmptyState icon={MdAdminPanelSettings}>
           {search ? "Nothing matches your search." : "No administrators yet. Create the first one to start delegating."}
-        </p>
+        </EmptyState>
       ) : (
         <div style={styles.list}>
           {filtered.map((a) => {
             const open = expanded.has(a.userId);
             return (
-              <div key={a.userId} style={styles.card}>
+              <div key={a.userId} className="k-card" style={styles.card}>
                 {/* Card header */}
                 <button type="button" style={styles.cardHead} onClick={() => toggle(a.userId)} aria-expanded={open}>
                   <div style={styles.avatar}>{initials(a.fullName)}</div>
@@ -267,14 +254,14 @@ export default function AdministratorsPage() {
                           : a.companyIds.map((id) => <span key={id} style={styles.chip}>{companyName(id)}</span>)}
                       </div>
                       <div style={styles.actions}>
-                        <button type="button" style={styles.smallBtn}
+                        <Button size="sm" icon={MdLockOpen}
                           onClick={() => openAccess({ userId: a.userId, fullName: a.fullName, username: a.username }, a.companyIds)}>
-                          <MdLockOpen size={16} /> Edit access
-                        </button>
-                        <button type="button" style={styles.smallDangerBtn}
+                          Edit access
+                        </Button>
+                        <Button size="sm" variant="danger" icon={MdDelete}
                           onClick={() => handleDelete({ userId: a.userId, fullName: a.fullName })}>
-                          <MdDelete size={16} /> Delete administrator
-                        </button>
+                          Delete administrator
+                        </Button>
                       </div>
                     </Section>
 
@@ -299,14 +286,14 @@ export default function AdministratorsPage() {
                                   : u.companyIds.map((id) => <span key={id} style={styles.chip}>{companyName(id)}</span>)}
                               </div>
                               <div style={styles.actions}>
-                                <button type="button" style={styles.smallBtn}
+                                <Button size="sm" icon={MdLockOpen}
                                   onClick={() => openAccess({ userId: u.userId, fullName: u.fullName, username: u.username }, u.companyIds)}>
-                                  <MdLockOpen size={16} /> Edit access
-                                </button>
-                                <button type="button" style={styles.smallDangerBtn}
+                                  Edit access
+                                </Button>
+                                <Button size="sm" variant="danger" icon={MdDelete}
                                   onClick={() => handleDelete({ userId: u.userId, fullName: u.fullName })}>
-                                  <MdDelete size={16} /> Delete
-                                </button>
+                                  Delete
+                                </Button>
                               </div>
                             </div>
                           ))}
@@ -328,9 +315,9 @@ export default function AdministratorsPage() {
                         </div>
                       )}
                       <div style={styles.actions}>
-                        <Link to="/companies/list" style={styles.linkBtn}>Open Companies</Link>
-                        <Link to="/users" style={styles.linkBtn}>Open Users</Link>
-                        <Link to="/tenant-access" style={styles.linkBtn}>Open Tenant Access</Link>
+                        <Link to="/companies/list" className="k-btn k-btn--secondary k-btn--sm">Open Companies</Link>
+                        <Link to="/users" className="k-btn k-btn--secondary k-btn--sm">Open Users</Link>
+                        <Link to="/tenant-access" className="k-btn k-btn--secondary k-btn--sm">Open Tenant Access</Link>
                       </div>
                     </Section>
                   </div>
@@ -354,17 +341,23 @@ export default function AdministratorsPage() {
                 The account is created under you, receives the Administrator role, and starts with no company
                 access. Grant companies afterwards with "Edit access".
               </p>
-              <label style={styles.label} htmlFor="adm-fullname">Full name</label>
-              <input id="adm-fullname" style={styles.input} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} autoFocus />
-              <label style={styles.label} htmlFor="adm-username">Username</label>
-              <input id="adm-username" style={styles.input} value={form.username} autoComplete="off" onChange={(e) => setForm({ ...form, username: e.target.value })} />
-              <label style={styles.label} htmlFor="adm-password">Password</label>
-              <input id="adm-password" style={styles.input} type="password" value={form.password} autoComplete="new-password" onChange={(e) => setForm({ ...form, password: e.target.value })} />
-              <div style={styles.hint}>At least 8 characters with a letter and a digit.</div>
+              <div style={formStyles.formGroup}>
+                <label style={formStyles.label} htmlFor="adm-fullname">Full name</label>
+                <input id="adm-fullname" style={formStyles.input} value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} autoFocus />
+              </div>
+              <div style={formStyles.formGroup}>
+                <label style={formStyles.label} htmlFor="adm-username">Username</label>
+                <input id="adm-username" style={formStyles.input} value={form.username} autoComplete="off" onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              </div>
+              <div>
+                <label style={formStyles.label} htmlFor="adm-password">Password</label>
+                <input id="adm-password" style={formStyles.input} type="password" value={form.password} autoComplete="new-password" onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                <div style={styles.hint}>At least 8 characters with a letter and a digit.</div>
+              </div>
             </div>
             <div style={formStyles.footer}>
-              <button type="button" style={styles.ghostBtn} onClick={() => setShowCreate(false)} disabled={saving}>Cancel</button>
-              <button type="button" style={styles.primaryBtn} onClick={submitCreate} disabled={saving}>
+              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setShowCreate(false)} disabled={saving}>Cancel</button>
+              <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitCreate} disabled={saving}>
                 <MdSave size={18} /> {saving ? "Creating..." : "Create"}
               </button>
             </div>
@@ -390,7 +383,7 @@ export default function AdministratorsPage() {
                     return (
                       <button key={c.id} type="button" style={{ ...styles.checkRow, ...(on ? styles.checkRowOn : null) }} onClick={() => toggleAccess(c.id)}>
                         {on ? <MdCheckBox size={22} color={colors.blue} /> : <MdCheckBoxOutlineBlank size={22} color={colors.textSecondary} />}
-                        <span style={{ flex: 1, textAlign: "left" }}>{c.name}</span>
+                        <span style={{ flex: 1, minWidth: 0, textAlign: "left", overflowWrap: "anywhere" }}>{c.name}</span>
                         {c.isTenantIsolated ? <MdLock size={16} color={colors.textSecondary} title="Tenant-isolated" /> : null}
                       </button>
                     );
@@ -402,8 +395,8 @@ export default function AdministratorsPage() {
               </p>
             </div>
             <div style={formStyles.footer}>
-              <button type="button" style={styles.ghostBtn} onClick={() => setAccessTarget(null)} disabled={saving}>Cancel</button>
-              <button type="button" style={styles.primaryBtn} onClick={submitAccess} disabled={saving}>
+              <button type="button" style={{ ...formStyles.button, ...formStyles.cancel }} onClick={() => setAccessTarget(null)} disabled={saving}>Cancel</button>
+              <button type="button" style={{ ...formStyles.button, ...formStyles.submit, ...styles.iconLabel }} onClick={submitAccess} disabled={saving}>
                 <MdSave size={18} /> {saving ? "Saving..." : "Save access"}
               </button>
             </div>
@@ -434,33 +427,15 @@ function initials(name) {
 }
 
 const styles = {
-  page: { padding: "clamp(0.75rem, 2vw, 1.5rem)", maxWidth: 1200, margin: "0 auto" },
-  header: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    gap: "1rem", flexWrap: "wrap", marginBottom: "1rem",
-  },
-  headerIcon: {
-    width: 44, height: 44, borderRadius: 12, display: "grid", placeItems: "center",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", flexShrink: 0,
-  },
-  h1: { margin: 0, fontSize: "1.35rem", color: colors.textPrimary },
-  sub: { margin: 0, color: colors.textSecondary, fontSize: "0.88rem" },
-  searchWrap: {
-    display: "flex", alignItems: "center", gap: "0.5rem", background: colors.inputBg,
-    border: `1px solid ${colors.inputBorder}`, borderRadius: 10, padding: "0.5rem 0.75rem", marginBottom: "1rem",
-  },
-  searchInput: { flex: 1, border: "none", background: "transparent", outline: "none", fontSize: "0.95rem", minWidth: 0 },
-  muted: { padding: "2rem", textAlign: "center", color: colors.textSecondary },
-  mutedInline: { color: colors.textSecondary, fontSize: "0.86rem" },
-  list: { display: "flex", flexDirection: "column", gap: "0.9rem" },
-  card: {
-    background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 14,
-    boxShadow: "0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06)", overflow: "hidden",
-  },
+  page: { maxWidth: 1200, margin: "0 auto" },
+  mutedInline: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)" },
+  list: { display: "flex", flexDirection: "column", gap: "var(--k-gap)" },
+  card: { overflow: "hidden", marginTop: 0 }, // the list gap spaces cards; cancel the kit adjacent-card margin
   cardHead: {
-    width: "100%", display: "flex", alignItems: "center", gap: "0.85rem", padding: "0.9rem 1rem",
+    width: "100%", display: "flex", alignItems: "center", gap: "0.85rem", padding: "var(--k-card-pad)",
+    margin: 0, borderRadius: 0,
     background: "transparent", border: "none", boxShadow: "none", cursor: "pointer", textAlign: "left",
-    color: colors.textPrimary, minHeight: 64,
+    color: "var(--k-ink)", fontFamily: "inherit", fontSize: "var(--k-font)", fontWeight: 400,
     // Wrap on phones: the count pills drop under the name instead of
     // squeezing the name column to zero width.
     flexWrap: "wrap",
@@ -469,74 +444,42 @@ const styles = {
   // keeps it from collapsing when the pills sit on the same line.
   headText: { flex: "1 1 180px", minWidth: 0 },
   avatar: {
-    width: 42, height: 42, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0,
+    width: "var(--k-icon-tile)", height: "var(--k-icon-tile)", maxWidth: 42, maxHeight: 42, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0,
     background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontWeight: 700, fontSize: "0.9rem",
   },
   name: {
-    fontWeight: 600, fontSize: "0.95rem", color: colors.textPrimary,
+    fontWeight: 600, fontSize: "var(--k-font)", color: "var(--k-ink)",
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
   },
-  username: { color: colors.textSecondary, fontSize: "0.82rem", overflowWrap: "break-word" },
+  username: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", overflowWrap: "break-word" },
   counts: { display: "flex", gap: "0.4rem", flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" },
   pill: {
     display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.2rem 0.55rem",
-    borderRadius: 999, background: "#eef3fb", color: colors.blue, fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap",
+    borderRadius: 999, background: "#eef3fb", color: "var(--k-blue)", fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap",
   },
-  cardBody: { borderTop: `1px solid ${colors.cardBorder}`, padding: "0.5rem 1rem 1rem" },
+  cardBody: { borderTop: "1px solid var(--k-line)", padding: "0.5rem 1rem 1rem" },
   section: { padding: "0.75rem 0" },
   sectionTitle: {
-    fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
-    color: colors.textSecondary, marginBottom: "0.5rem",
+    fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+    color: "var(--k-muted)", marginBottom: "0.5rem",
   },
   chipRow: { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.6rem" },
   chip: {
     display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.25rem 0.6rem", borderRadius: 8,
-    background: "#f3f6fa", border: `1px solid ${colors.cardBorder}`, fontSize: "0.82rem", color: colors.textPrimary,
+    background: "var(--k-surface-3)", border: "1px solid var(--k-line)", fontSize: "var(--k-font-sm)", color: "var(--k-ink)",
   },
   actions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
   subGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: "0.75rem" },
   subCard: {
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.75rem",
-    display: "flex", flexDirection: "column", gap: "0.6rem", background: "#fbfcfe",
+    border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.75rem",
+    display: "flex", flexDirection: "column", gap: "0.6rem", background: "var(--k-surface-2)",
   },
-  primaryBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.4rem", minHeight: 44, padding: "0.6rem 1rem",
-    border: "none", borderRadius: 10, cursor: "pointer", color: "#fff", fontWeight: 600, boxShadow: "none",
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-  },
-  ghostBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.4rem", minHeight: 44, padding: "0.6rem 1rem",
-    border: `1px solid ${colors.inputBorder}`, borderRadius: 10, cursor: "pointer", background: colors.cardBg,
-    color: colors.textPrimary, fontWeight: 600, boxShadow: "none",
-  },
-  smallBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 40, padding: "0.45rem 0.8rem",
-    border: `1px solid ${colors.inputBorder}`, borderRadius: 8, cursor: "pointer", background: colors.cardBg,
-    color: colors.blue, fontWeight: 600, fontSize: "0.85rem", boxShadow: "none",
-  },
-  smallDangerBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.35rem", minHeight: 40, padding: "0.45rem 0.8rem",
-    border: `1px solid ${colors.dangerLight}`, borderRadius: 8, cursor: "pointer", background: colors.dangerLight,
-    color: colors.danger, fontWeight: 600, fontSize: "0.85rem", boxShadow: "none",
-  },
-  linkBtn: {
-    display: "inline-flex", alignItems: "center", minHeight: 40, padding: "0.45rem 0.8rem", borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`, color: colors.textPrimary, textDecoration: "none", fontSize: "0.85rem", fontWeight: 600,
-  },
-  label: { display: "block", fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary, margin: "0.75rem 0 0.3rem" },
-  input: {
-    width: "100%", boxSizing: "border-box", padding: "0.65rem 0.8rem", borderRadius: 10,
-    border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.95rem", minHeight: 44,
-  },
-  hint: { color: colors.textSecondary, fontSize: "0.8rem", marginTop: "0.35rem" },
+  iconLabel: { display: "inline-flex", alignItems: "center", gap: "0.4rem" },
+  hint: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)", marginTop: "0.35rem" },
   checkRow: {
-    display: "flex", alignItems: "center", gap: "0.6rem", width: "100%", minHeight: 44, padding: "0.5rem 0.75rem",
-    border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: colors.cardBg, cursor: "pointer",
-    color: colors.textPrimary, fontSize: "0.92rem", boxShadow: "none",
+    display: "flex", alignItems: "center", gap: "0.6rem", width: "100%", minHeight: "var(--k-btn-h)", padding: "0.4rem 0.75rem", margin: 0,
+    border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", background: "var(--k-surface)", cursor: "pointer",
+    color: "var(--k-ink)", fontFamily: "inherit", fontSize: "var(--k-font)", fontWeight: 400, boxShadow: "none",
   },
-  checkRowOn: { borderColor: colors.blue, background: "#eef3fb" },
-  empty: {
-    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-    minHeight: "50vh", gap: "0.75rem", color: colors.textSecondary, padding: "1rem", textAlign: "center",
-  },
+  checkRowOn: { borderColor: "var(--k-blue)", background: "#eef3fb" },
 };

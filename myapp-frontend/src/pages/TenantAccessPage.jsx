@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   MdAdminPanelSettings,
-  MdSearch,
   MdEdit,
   MdClose,
   MdSave,
@@ -17,23 +16,16 @@ import {
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { formStyles, modalSizes } from "../theme";
+import { PageHeader, Button, Toolbar, ToolbarSpacer, SearchBox, TableWrap, Loading, EmptyState } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
   blueLight: "#1565c0",
-  teal: "#00897b",
-  cardBg: "#ffffff",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
+  cardBg: "var(--k-surface)",
+  cardBorder: "var(--k-line)",
+  textPrimary: "var(--k-ink)",
+  textSecondary: "var(--k-muted)",
   success: "#28a745",
   successLight: "#eafbef",
-  warn: "#b26a00",
-  warnLight: "#fff4e0",
 };
 
 export default function TenantAccessPage() {
@@ -78,10 +70,9 @@ export default function TenantAccessPage() {
 
   if (!canView) {
     return (
-      <div style={pageStyles.empty}>
-        <MdLock size={48} color={colors.textSecondary} />
-        <p>You don't have permission to view tenant-access assignments.</p>
-      </div>
+      <EmptyState icon={MdLock} boxed={false}>
+        You don't have permission to view tenant-access assignments.
+      </EmptyState>
     );
   }
 
@@ -127,55 +118,47 @@ export default function TenantAccessPage() {
   };
 
   return (
-    <div className="tenant-page" style={pageStyles.shell}>
-      <div style={pageStyles.header}>
-        <div style={pageStyles.headerInner}>
-          <MdAdminPanelSettings size={28} color={colors.blue} />
-          <div>
-            <h1 style={pageStyles.title}>Tenant Access</h1>
-            <p style={pageStyles.subtitle}>
-              Decide which companies each user can reach. This is the whole
-              answer: a user reaches the companies ticked here and no others.
-              No ticks, no access. Only the primary admin bypasses it.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div style={pageStyles.shell}>
+      <PageHeader
+        icon={MdAdminPanelSettings}
+        tone="blue"
+        title="Tenant Access"
+        subtitle={(
+          <span style={{ display: "block", maxWidth: 720 }}>
+            Decide which companies each user can reach. This is the whole
+            answer: a user reaches the companies ticked here and no others.
+            No ticks, no access. Only the primary admin bypasses it.
+          </span>
+        )}
+      />
 
-      <div style={pageStyles.toolbar}>
-        <div style={pageStyles.searchBox}>
-          <MdSearch color={colors.textSecondary} />
-          <input
-            type="text"
-            placeholder="Search users by name or username…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={pageStyles.searchInput}
-          />
-        </div>
+      <Toolbar>
+        <SearchBox
+          value={search}
+          onChange={setSearch}
+          placeholder="Search users by name or username…"
+        />
+        <ToolbarSpacer />
         <span style={pageStyles.count}>
           {filtered.length} user{filtered.length === 1 ? "" : "s"}
         </span>
-      </div>
+      </Toolbar>
 
       {loading ? (
-        <div style={pageStyles.empty}>Loading…</div>
+        <Loading>Loading…</Loading>
       ) : filtered.length === 0 ? (
-        <div style={pageStyles.empty}>
-          <MdPerson size={48} color={colors.textSecondary} />
-          <p>No users match that search.</p>
-        </div>
+        <EmptyState icon={MdPerson}>No users match that search.</EmptyState>
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <div className="tenant-table" style={pageStyles.tableWrap}>
-            <table style={pageStyles.table}>
+          <TableWrap className="tenant-table">
+            <table className="k-table">
               <thead>
                 <tr>
-                  <th style={pageStyles.th}>User</th>
-                  <th style={pageStyles.th}>Username</th>
-                  <th style={pageStyles.th}>Companies Granted</th>
-                  <th style={{ ...pageStyles.th, textAlign: "right" }}>Actions</th>
+                  <th>User</th>
+                  <th>Username</th>
+                  <th>Companies Granted</th>
+                  <th className="k-num">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,38 +169,39 @@ export default function TenantAccessPage() {
                   // which has not been true since the guard changed.
                   const grants = row.companies.filter((c) => c.hasExplicitGrant);
                   return (
-                    <tr key={row.userId} style={pageStyles.tr}>
-                      <td style={pageStyles.td}>
+                    <tr key={row.userId}>
+                      <td>
                         <div style={pageStyles.userCell}>
                           <div style={pageStyles.avatar}>
                             {row.fullName?.[0]?.toUpperCase() ?? "?"}
                           </div>
-                          <div>
+                          <div style={{ minWidth: 0 }}>
                             <div style={pageStyles.userName}>{row.fullName}</div>
                           </div>
                         </div>
                       </td>
-                      <td style={pageStyles.td}>{row.username}</td>
-                      <td style={pageStyles.td}>
+                      <td>{row.username}</td>
+                      <td>
                         <span style={pageStyles.pill}>{grants.length} / {row.companies.length}</span>
                       </td>
-                      <td style={{ ...pageStyles.td, textAlign: "right" }}>
-                        <button
-                          type="button"
-                          style={pageStyles.btnPrimary}
+                      <td className="k-actions">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={MdEdit}
                           disabled={!canAssign}
                           title={canAssign ? "" : "Requires tenantaccess.manage.assign permission"}
                           onClick={() => openEdit(row)}
                         >
-                          <MdEdit /> Edit Access
-                        </button>
+                          Edit Access
+                        </Button>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
 
           {/* Mobile — stacked cards. Username under the name; both stat
               pills on a labelled row; full-width Edit button at the
@@ -329,9 +313,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
               );
             })}
             {user.companies.length === 0 && (
-              <div style={pageStyles.empty}>
-                <p>No companies in the system yet.</p>
-              </div>
+              <EmptyState boxed={false}>No companies in the system yet.</EmptyState>
             )}
           </div>
         </div>
@@ -350,7 +332,7 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
             onClick={onSubmit}
             disabled={saving || !canAssign}
           >
-            <MdSave /> {saving ? "Saving…" : "Save"}
+            <MdSave style={{ verticalAlign: "-2px" }} /> {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -359,32 +341,14 @@ function EditModal({ user, selected, onToggle, onSubmit, onClose, saving, canAss
 }
 
 const pageStyles = {
-  shell: { padding: "1.5rem", maxWidth: 1200, margin: "0 auto" },
-  header: { marginBottom: "1.5rem" },
-  headerInner: { display: "flex", gap: "1rem", alignItems: "flex-start" },
-  title: { margin: 0, color: colors.textPrimary, fontSize: "1.5rem" },
-  subtitle: { margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.9rem", maxWidth: 720 },
-  toolbar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "1rem", flexWrap: "wrap" },
-  searchBox: { display: "flex", alignItems: "center", gap: "0.5rem", background: colors.inputBg, border: `1px solid ${colors.inputBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", minWidth: 280 },
-  searchInput: { border: "none", outline: "none", background: "transparent", flex: 1, fontSize: "0.9rem", color: colors.textPrimary },
-  count: { color: colors.textSecondary, fontSize: "0.85rem" },
-  empty: { textAlign: "center", padding: "3rem", color: colors.textSecondary, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" },
-  tableWrap: { background: colors.cardBg, border: `1px solid ${colors.cardBorder}`, borderRadius: 8, overflow: "hidden" },
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "0.75rem 1rem", background: colors.inputBg, borderBottom: `1px solid ${colors.cardBorder}`, color: colors.textSecondary, fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" },
-  tr: { borderBottom: `1px solid ${colors.cardBorder}` },
-  td: { padding: "0.75rem 1rem", color: colors.textPrimary, fontSize: "0.92rem", verticalAlign: "middle" },
+  shell: { maxWidth: 1200, margin: "0 auto" },
+  count: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)" },
   userCell: { display: "flex", alignItems: "center", gap: "0.75rem" },
-  avatar: { width: 32, height: 32, borderRadius: "50%", background: colors.blueLight, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: "0.9rem" },
-  userName: { fontWeight: 600 },
-  pill: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.inputBg, border: `1px solid ${colors.cardBorder}`, color: colors.textPrimary, fontSize: "0.8rem", fontWeight: 600 },
-  pillSuccess: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.successLight, border: `1px solid ${colors.success}`, color: colors.success, fontSize: "0.8rem", fontWeight: 600 },
-  pillWarn: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.warnLight, border: `1px solid ${colors.warn}`, color: colors.warn, fontSize: "0.8rem", fontWeight: 600 },
-  pillDanger: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: colors.dangerLight, border: `1px solid ${colors.danger}`, color: colors.danger, fontSize: "0.8rem", fontWeight: 600 },
-  muted: { color: colors.textSecondary, fontSize: "0.85rem" },
-  btnPrimary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", background: colors.blue, color: "white", border: "none", borderRadius: 6, padding: "0.45rem 0.75rem", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" },
-  helpText: { color: colors.textSecondary, fontSize: "0.85rem", marginTop: 0, marginBottom: "1rem", lineHeight: 1.5 },
+  avatar: { width: 32, height: 32, flex: "none", borderRadius: "50%", background: colors.blueLight, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: "0.9rem" },
+  userName: { fontWeight: 600, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  pill: { display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: 999, background: "var(--k-surface-2)", border: "1px solid var(--k-line)", color: "var(--k-ink)", fontSize: "0.8rem", fontWeight: 600 },
+  helpText: { color: colors.textSecondary, fontSize: "var(--ui-label-size, 0.85rem)", marginTop: 0, marginBottom: "1rem", lineHeight: 1.5 },
   companyList: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "60vh", overflowY: "auto" },
-  companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem 0.9rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, cursor: "pointer", transition: "all 0.15s ease" },
-  companyName: { flex: 1, fontWeight: 500, color: colors.textPrimary },
+  companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", minHeight: "var(--k-h)", padding: "0.45rem 0.9rem", border: "1px solid var(--k-line)", borderRadius: 8, cursor: "pointer", transition: "all 0.15s ease" },
+  companyName: { flex: 1, fontWeight: 500, color: colors.textPrimary, overflowWrap: "anywhere" },
 };

@@ -13,7 +13,7 @@
 //      response (already-masked NTN/CNIC).
 import { useState, useEffect, useMemo } from "react";
 import {
-  MdCloudDone, MdHourglassEmpty, MdError, MdWarning, MdCheckCircle, MdRefresh, MdFilterList,
+  MdCloudDone, MdHourglassEmpty, MdError, MdWarning, MdCheckCircle, MdRefresh, MdFilterList, MdClose, MdCloudSync,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -21,6 +21,7 @@ import { getFbrLogs, getFbrLogById, getFbrSummary } from "../api/fbrMonitorApi";
 import { notify } from "../utils/notify";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
 import Pagination from "../Components/Pagination";
+import { PageHeader, CompanyPicker, Button, IconButton, Toolbar, ToolbarSpacer, StatGrid, StatCard, Loading, EmptyState } from "../ui/Kit";
 import "./FbrMonitorPage.css";
 
 // Status -> visual config. Keys mirror FbrCommunicationLog.Status taxonomy.
@@ -51,7 +52,7 @@ function fmtMs(ms) {
 }
 
 export default function FbrMonitorPage() {
-  const { selectedCompany, companies, setSelectedCompany } = useCompany();
+  const { selectedCompany, companies } = useCompany();
   const { has, loading: permsLoading } = usePermissions();
 
   const canView = has?.("fbrmonitor.view") ?? false;
@@ -115,9 +116,9 @@ export default function FbrMonitorPage() {
   }, [canView, companyId, windowHours, page, pageSize, statusFilter, actionFilter]);
 
   // ── Permission / state gates ──────────────────────────────────
-  if (permsLoading) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div></Shell>;
-  if (!canView) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>You don't have permission to view FBR monitor.</div></Shell>;
-  if (!selectedCompany) return <Shell><div className="fbr-mon-placeholder" style={S.placeholder}>Pick a company first.</div></Shell>;
+  if (permsLoading) return <Shell><Loading>Loading…</Loading></Shell>;
+  if (!canView) return <Shell><EmptyState>You don't have permission to view FBR monitor.</EmptyState></Shell>;
+  if (!selectedCompany) return <Shell><EmptyState>Pick a company first.</EmptyState></Shell>;
 
   const effectiveSize = pageSize ?? observedSize ?? 10;
   const totalPages = Math.max(1, Math.ceil(total / effectiveSize));
@@ -128,13 +129,9 @@ export default function FbrMonitorPage() {
       <Header
         company={selectedCompany.name}
         companies={companies}
-        selectedCompanyId={selectedCompany.id}
-        onCompanyChange={(id) => {
-          const c = companies.find((cc) => cc.id === id);
-          if (c) {
-            setSelectedCompany(c);
-            setPage(1);
-          }
+        onCompanyChange={(c) => {
+          // CompanyPicker has already set the global company; reset paging.
+          if (c) setPage(1);
         }}
         windowHours={windowHours}
         onWindowChange={(h) => { setWindowHours(h); setPage(1); }}
@@ -189,68 +186,51 @@ function Shell({ children }) {
   return <div className="fbr-mon-page" style={{ maxWidth: 1480, margin: "0 auto" }}>{children}</div>;
 }
 
-function Header({ company, companies, selectedCompanyId, onCompanyChange, windowHours, onWindowChange, onRefresh }) {
+function Header({ company, companies, onCompanyChange, windowHours, onWindowChange, onRefresh }) {
   // Hide the picker when there's only one company — it'd just be visual
   // noise. Same UX as the dashboard hero.
   const showCompanyPicker = (companies?.length ?? 0) > 1;
   return (
-    <header className="fbr-mon-hero" style={S.heroBanner}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 className="fbr-mon-hero__title" style={S.heroH1}>FBR Communication Monitor</h1>
-        <p className="fbr-mon-hero__sub" style={S.heroSub}>
-          <strong>{company}</strong> · last {windowHours}h
-        </p>
-      </div>
-      <div className="fbr-mon-hero__pickers" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {showCompanyPicker && (
-          <select
-            value={selectedCompanyId ?? ""}
-            onChange={(e) => onCompanyChange(parseInt(e.target.value, 10))}
-            style={{ ...S.select, minWidth: 160 }}
-            aria-label="Company"
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+    <>
+      <PageHeader
+        icon={MdCloudSync}
+        tone="brand"
+        title="FBR Communication Monitor"
+        subtitle={<><strong>{company}</strong> · last {windowHours}h</>}
+        actions={(
+          <>
+            <select className="k-select" style={{ width: "auto" }} value={windowHours} onChange={(e) => onWindowChange(parseInt(e.target.value, 10))} aria-label="Window">
+              <option value={1}>Last 1h</option>
+              <option value={6}>Last 6h</option>
+              <option value={24}>Last 24h</option>
+              <option value={168}>Last 7 days</option>
+              <option value={720}>Last 30 days</option>
+            </select>
+            <Button icon={MdRefresh} onClick={onRefresh} title="Refresh">Refresh</Button>
+          </>
         )}
-        <select value={windowHours} onChange={(e) => onWindowChange(parseInt(e.target.value, 10))} style={S.select} aria-label="Window">
-          <option value={1}>Last 1h</option>
-          <option value={6}>Last 6h</option>
-          <option value={24}>Last 24h</option>
-          <option value={168}>Last 7 days</option>
-          <option value={720}>Last 30 days</option>
-        </select>
-        <button type="button" style={S.btnGhost} onClick={onRefresh} title="Refresh">
-          <MdRefresh size={16} /> Refresh
-        </button>
-      </div>
-    </header>
+      />
+      {showCompanyPicker && <CompanyPicker onChange={onCompanyChange} />}
+    </>
   );
 }
 
 function Summary({ summary, windowHours }) {
-  const tile = (label, value, accent, icon) => (
-    <div className="fbr-mon-tile" style={{ ...S.tile, borderTop: `3px solid ${accent}` }}>
-      <div className="fbr-mon-tile__label" style={S.tileLabel}>{icon}<span>{label}</span></div>
-      <div className="fbr-mon-tile__value" style={{ ...S.tileValue, color: accent }}>{value ?? 0}</div>
-    </div>
-  );
-  if (!summary) return <div style={S.tilesSkeleton}><div style={S.tile}>—</div></div>;
+  if (!summary) return <StatGrid><div className="k-stat" style={{ color: "var(--k-muted)" }}>—</div></StatGrid>;
   return (
     <>
-      <div className="fbr-mon-tiles" style={S.tiles}>
-        {tile("Total calls", summary.totalCalls, "#0d47a1", null)}
-        {tile("Submitted", summary.submitted, "#2e7d32", null)}
-        {tile("Validated", summary.acknowledged, "#0277bd", null)}
-        {tile("Rejected", summary.rejected, "#c62828", null)}
-        {tile("Failed", summary.failed, "#b71c1c", null)}
-        {tile("Uncertain", summary.uncertain, "#8a4b00", null)}
-        {tile("Avg duration", fmtMs(Math.round(summary.avgDurationMs || 0)), "#37474f", null)}
-      </div>
+      <StatGrid className="fbr-mon-tiles">
+        <StatCard label="Total calls" value={summary.totalCalls ?? 0} tone="blue" icon={MdCloudSync} />
+        <StatCard label="Submitted" value={summary.submitted ?? 0} tone="green" icon={MdCloudDone} />
+        <StatCard label="Validated" value={summary.acknowledged ?? 0} tone="teal" icon={MdCheckCircle} />
+        <StatCard label="Rejected" value={summary.rejected ?? 0} tone="red" icon={MdError} />
+        <StatCard label="Failed" value={summary.failed ?? 0} tone="red" icon={MdError} />
+        <StatCard label="Uncertain" value={summary.uncertain ?? 0} tone="orange" icon={MdWarning} />
+        <StatCard label="Avg duration" value={fmtMs(Math.round(summary.avgDurationMs || 0))} tone="slate" icon={MdHourglassEmpty} />
+      </StatGrid>
       {summary.topErrorCodes && Object.keys(summary.topErrorCodes).length > 0 && (
-        <div className="fbr-mon-error-bar" style={S.errorBar}>
-          <span style={{ fontSize: "0.78rem", color: "#5f6d7e", fontWeight: 600, marginRight: "0.5rem" }}>
+        <div className="k-card fbr-mon-error-bar" style={S.errorBar}>
+          <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600, marginRight: "0.5rem" }}>
             Top FBR error codes ({windowHours}h):
           </span>
           {Object.entries(summary.topErrorCodes).map(([code, n]) => (
@@ -266,11 +246,11 @@ function Summary({ summary, windowHours }) {
 
 function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
   return (
-    <section className="fbr-mon-filter-bar" style={S.filterBar}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "#5f6d7e", fontWeight: 600, fontSize: "0.82rem" }}>
+    <Toolbar>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "var(--k-muted)", fontWeight: 600, fontSize: "var(--k-font-sm)" }}>
         <MdFilterList size={14} /> Filter:
       </span>
-      <select value={statusFilter} onChange={(e) => onStatus(e.target.value)} style={S.select}>
+      <select className="k-select" aria-label="Status" value={statusFilter} onChange={(e) => onStatus(e.target.value)}>
         <option value="">All statuses</option>
         <option value="submitted">Submitted</option>
         <option value="acknowledged">Validated</option>
@@ -278,24 +258,25 @@ function FilterBar({ statusFilter, onStatus, actionFilter, onAction, count }) {
         <option value="failed">Failed</option>
         <option value="uncertain">Uncertain</option>
       </select>
-      <select value={actionFilter} onChange={(e) => onAction(e.target.value)} style={S.select}>
+      <select className="k-select" aria-label="Action" value={actionFilter} onChange={(e) => onAction(e.target.value)}>
         <option value="">All actions</option>
         <option value="Submit">Submit</option>
         <option value="Validate">Validate</option>
         <option value="Preview">Preview</option>
       </select>
-      <span className="fbr-mon-filter-bar__count" style={{ marginLeft: "auto", fontSize: "0.82rem", color: "#5f6d7e" }}>
+      <ToolbarSpacer />
+      <span className="fbr-mon-filter-bar__count" style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
         {count.toLocaleString()} {count === 1 ? "result" : "results"}
       </span>
-    </section>
+    </Toolbar>
   );
 }
 
 function RowsList({ rows, loading, onClickRow }) {
-  if (loading && rows.length === 0) return <div className="fbr-mon-placeholder" style={S.placeholder}>Loading…</div>;
-  if (rows.length === 0) return <div className="fbr-mon-placeholder" style={S.placeholder}>No FBR communication in the selected window.</div>;
+  if (loading && rows.length === 0) return <Loading>Loading…</Loading>;
+  if (rows.length === 0) return <EmptyState icon={MdCloudSync}>No FBR communication in the selected window.</EmptyState>;
   return (
-    <section style={S.list}>
+    <section className="k-card" style={S.list}>
       <div className="fbr-mon-list-header" style={S.listHeader}>
         <span style={{ width: 150 }}>Timestamp</span>
         <span style={{ width: 110 }}>Status</span>
@@ -310,24 +291,24 @@ function RowsList({ rows, loading, onClickRow }) {
         const Icon = cfg.icon;
         return (
           <button type="button" key={r.id} onClick={() => onClickRow(r)} className="fbr-mon-row" style={S.row}>
-            <span className="fbr-mon-row__ts" style={{ width: 150, fontSize: "0.78rem", color: "#5f6d7e", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
+            <span className="fbr-mon-row__ts" style={{ width: 150, fontSize: "0.78rem", color: "var(--k-muted)", fontFamily: "ui-monospace, monospace" }}>{fmtDate(r.timestamp)}</span>
             <span className="fbr-mon-row__status" style={{ width: 110 }}>
               <span style={{ ...S.pill, color: cfg.color, backgroundColor: cfg.bg, border: `1px solid ${cfg.border}` }}>
                 <Icon size={12} /> {cfg.label}
               </span>
             </span>
-            <span className="fbr-mon-row__action" style={{ width: 90, fontSize: "0.82rem", fontWeight: 600 }}>{r.action}</span>
-            <span className="fbr-mon-row__bill" style={{ width: 90, fontSize: "0.82rem", color: "#0d47a1", fontFamily: "ui-monospace, monospace" }}>
+            <span className="fbr-mon-row__action" style={{ width: 90, fontSize: "var(--k-td-font)", fontWeight: 600 }}>{r.action}</span>
+            <span className="fbr-mon-row__bill" style={{ width: 90, fontSize: "var(--k-td-font)", color: "var(--k-blue)", fontFamily: "ui-monospace, monospace" }}>
               {r.invoiceNumber != null ? `#${r.invoiceNumber}` : "—"}
             </span>
-            <span className="fbr-mon-row__http" style={{ width: 70, textAlign: "right", fontSize: "0.82rem", fontFamily: "ui-monospace, monospace" }}>
+            <span className="fbr-mon-row__http" style={{ width: 70, textAlign: "right", fontSize: "var(--k-td-font)", fontFamily: "ui-monospace, monospace" }}>
               {r.httpStatusCode ?? "—"}
             </span>
-            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "0.82rem", color: r.fbrErrorMessage ? "#b71c1c" : "#1a2332", whiteSpace: "pre-line", wordBreak: "break-word", lineHeight: 1.4 }}>
+            <span className="fbr-mon-row__err" style={{ flex: 1, minWidth: 0, fontSize: "var(--k-td-font)", color: r.fbrErrorMessage ? "#b71c1c" : "var(--k-ink)", whiteSpace: "pre-line", wordBreak: "break-word", lineHeight: 1.4 }}>
               {r.fbrErrorCode ? <strong>[{r.fbrErrorCode}] </strong> : null}
               {r.fbrErrorMessage || "—"}
             </span>
-            <span className="fbr-mon-row__duration" style={{ width: 80, textAlign: "right", fontSize: "0.78rem", color: "#5f6d7e" }}>{fmtMs(r.requestDurationMs)}</span>
+            <span className="fbr-mon-row__duration" style={{ width: 80, textAlign: "right", fontSize: "0.78rem", color: "var(--k-muted)" }}>{fmtMs(r.requestDurationMs)}</span>
           </button>
         );
       })}
@@ -342,12 +323,12 @@ function Drawer({ row, onClose }) {
       <div className="fbr-mon-drawer-inner" style={S.drawerInner} onClick={(e) => e.stopPropagation()}>
         <header className="fbr-mon-drawer-header" style={S.drawerHeader}>
           <div>
-            <h2 style={{ margin: 0, fontSize: "1.1rem" }}>FBR call detail</h2>
-            <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
+            <h2 style={{ margin: 0, fontSize: "1.1rem", color: "var(--k-ink)" }}>FBR call detail</h2>
+            <div style={{ fontSize: "0.8rem", color: "var(--k-muted)" }}>
               {fmtDate(row.timestamp)} · {row.action} · invoice {row.invoiceNumber != null ? `#${row.invoiceNumber}` : "—"}
             </div>
           </div>
-          <button type="button" onClick={onClose} style={S.drawerClose} title="Close">×</button>
+          <IconButton label="Close" icon={MdClose} onClick={onClose} />
         </header>
         <div className="fbr-mon-drawer-body" style={S.drawerBody}>
           <KeyValue label="Status" value={<span style={{ color: cfg.color, fontWeight: 600 }}>{cfg.label}</span>} />
@@ -361,11 +342,11 @@ function Drawer({ row, onClose }) {
           {row.fbrErrorMessage && <KeyValue label="FBR message" value={<span style={{ color: "#b71c1c", whiteSpace: "pre-line" }}>{row.fbrErrorMessage}</span>} />}
 
           <div style={{ marginTop: "1rem" }}>
-            <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Request body (NTN/CNIC masked)</strong>
+            <strong style={{ fontSize: "var(--k-font)", color: "var(--k-ink)" }}>Request body (NTN/CNIC masked)</strong>
             <pre className="fbr-mon-pre" style={S.pre}>{row.requestBodyMasked || "(empty)"}</pre>
           </div>
           <div style={{ marginTop: "1rem" }}>
-            <strong style={{ fontSize: "0.85rem", color: "#1a2332" }}>Response body</strong>
+            <strong style={{ fontSize: "var(--k-font)", color: "var(--k-ink)" }}>Response body</strong>
             <pre className="fbr-mon-pre" style={S.pre}>{row.responseBodyMasked || "(empty)"}</pre>
           </div>
         </div>
@@ -376,9 +357,9 @@ function Drawer({ row, onClose }) {
 
 function KeyValue({ label, value }) {
   return (
-    <div className="fbr-mon-kv" style={{ display: "flex", gap: "0.85rem", fontSize: "0.85rem", padding: "0.25rem 0" }}>
-      <span style={{ width: 130, color: "#5f6d7e", fontWeight: 600 }}>{label}</span>
-      <span style={{ flex: 1, color: "#1a2332", overflow: "hidden", overflowWrap: "anywhere" }}>{value}</span>
+    <div className="fbr-mon-kv" style={{ display: "flex", gap: "0.85rem", fontSize: "var(--k-font)", padding: "0.25rem 0" }}>
+      <span style={{ width: 130, flex: "none", color: "var(--k-muted)", fontWeight: 600 }}>{label}</span>
+      <span style={{ flex: 1, minWidth: 0, color: "var(--k-ink)", overflow: "hidden", overflowWrap: "anywhere" }}>{value}</span>
     </div>
   );
 }
@@ -386,93 +367,26 @@ function KeyValue({ label, value }) {
 // ── Styles ─────────────────────────────────────────────────────────
 
 const S = {
-  heroBanner: {
-    background: "linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #00897b 100%)",
-    color: "#fff",
-    padding: "1rem 1.15rem",
-    borderRadius: 14,
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: "0.75rem",
-    marginBottom: "0.75rem",
-    boxShadow: "0 8px 18px -8px rgba(13,71,161,0.4)",
-  },
-  heroH1: { margin: 0, fontSize: "1.25rem", fontWeight: 800, letterSpacing: "0.01em" },
-  heroSub: { margin: "0.2rem 0 0", fontSize: "0.82rem", color: "rgba(255,255,255,0.85)" },
-  select: {
-    background: "#fff",
-    border: "1px solid #d0d7e2",
-    borderRadius: 8,
-    padding: "0.4rem 0.6rem",
-    fontSize: "0.82rem",
-    color: "#1a2332",
-    cursor: "pointer",
-  },
-  btnGhost: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem",
-    background: "rgba(255,255,255,0.92)", color: "#0d47a1",
-    border: "none", borderRadius: 8,
-    padding: "0.4rem 0.75rem",
-    fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
-  },
-  tiles: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))",
-    gap: "0.55rem",
-    marginBottom: "0.55rem",
-  },
-  tilesSkeleton: { padding: "0.5rem 0", color: "#5f6d7e", fontSize: "0.85rem" },
-  tile: {
-    background: "#fff",
-    border: "1px solid #e8edf3",
-    borderRadius: 12,
-    padding: "0.65rem 0.85rem 0.7rem",
-    boxShadow: "0 1px 2px rgba(13,71,161,0.04)",
-  },
-  tileLabel: {
-    display: "flex", alignItems: "center", gap: "0.3rem",
-    fontSize: "0.7rem", color: "#5f6d7e", fontWeight: 700,
-    textTransform: "uppercase", letterSpacing: "0.04em",
-    marginBottom: "0.25rem",
-  },
-  tileValue: {
-    fontSize: "1.35rem", fontWeight: 800, fontFamily: "ui-monospace, monospace",
-  },
   errorBar: {
-    background: "#fff",
-    border: "1px solid #e8edf3",
-    borderRadius: 10,
     padding: "0.5rem 0.8rem",
     display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem",
-    marginBottom: "0.55rem",
+    marginBottom: "var(--k-gap)",
   },
   errChip: {
     display: "inline-flex", alignItems: "center",
     padding: "0.15rem 0.5rem", borderRadius: 999,
     background: "#ffebee", color: "#b71c1c", fontSize: "0.78rem",
   },
-  filterBar: {
-    background: "#f8fafd",
-    border: "1px solid #e8edf3",
-    borderRadius: 10,
-    padding: "0.55rem 0.85rem",
-    display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem",
-    marginBottom: "0.5rem",
-  },
   list: {
-    background: "#fff",
-    border: "1px solid #e8edf3",
-    borderRadius: 12,
     overflow: "hidden",
-    boxShadow: "0 1px 2px rgba(13,71,161,0.04)",
   },
   listHeader: {
     display: "flex", alignItems: "center", gap: "0.5rem",
-    padding: "0.55rem 0.85rem",
-    fontSize: "0.7rem", color: "#5f6d7e", fontWeight: 700,
-    textTransform: "uppercase", letterSpacing: "0.04em",
-    background: "#f4f7fb", borderBottom: "1px solid #e8edf3",
+    minHeight: "var(--k-th-h)",
+    padding: "0 var(--k-td-pad-x)",
+    fontSize: "var(--k-th-font)", color: "var(--k-muted)", fontWeight: 700,
+    textTransform: "uppercase", letterSpacing: "0.05em",
+    background: "var(--k-th-bg)", borderBottom: "1px solid var(--k-line)",
   },
   row: {
     // alignItems: flex-start so a wrapped multi-line error doesn't
@@ -480,55 +394,34 @@ const S = {
     // an 0.55rem top padding the first line lines up with the column
     // header guide above.
     display: "flex", alignItems: "flex-start", gap: "0.5rem",
-    padding: "0.55rem 0.85rem",
-    background: "#fff", border: "none",
-    borderBottom: "1px solid #f0f3f8",
+    padding: "0.55rem var(--k-td-pad-x)",
+    margin: 0, borderRadius: 0, boxShadow: "none",
+    background: "var(--k-surface)", border: "none",
+    borderBottom: "1px solid var(--k-row-line)",
     width: "100%", textAlign: "left", cursor: "pointer",
-    fontFamily: "inherit",
+    fontFamily: "inherit", color: "var(--k-ink)",
   },
   pill: {
     display: "inline-flex", alignItems: "center", gap: "0.25rem",
     padding: "0.12rem 0.55rem", borderRadius: 999,
     fontSize: "0.72rem", fontWeight: 700, whiteSpace: "nowrap",
   },
-  pagination: {
-    display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem",
-    padding: "0.85rem 0",
-  },
-  pageBtn: {
-    padding: "0.4rem 0.85rem",
-    borderRadius: 8,
-    border: "1px solid #d0d7e2",
-    background: "#fff",
-    color: "#0d47a1",
-    fontWeight: 600,
-    fontSize: "0.82rem",
-    cursor: "pointer",
-  },
-  placeholder: {
-    background: "#fff", border: "1px solid #e8edf3", borderRadius: 12,
-    padding: "1.5rem", textAlign: "center", color: "#5f6d7e", fontSize: "0.9rem",
-  },
   drawerOverlay: {
     position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
     display: "flex", justifyContent: "flex-end", zIndex: 1050,
   },
   drawerInner: {
-    background: "#fff", width: "min(640px, 100%)", height: "100vh",
+    background: "var(--k-surface)", width: "min(640px, 100%)", height: "100vh",
     overflowY: "auto", display: "flex", flexDirection: "column",
   },
   drawerHeader: {
-    display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+    display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem",
     padding: "0.85rem 1rem",
-    borderBottom: "1px solid #e8edf3",
-  },
-  drawerClose: {
-    background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer",
-    color: "#5f6d7e", lineHeight: 1, padding: "0 0.35rem",
+    borderBottom: "1px solid var(--k-line)",
   },
   drawerBody: { padding: "0.85rem 1rem 1.5rem", flex: 1 },
   pre: {
-    background: "#f5f8fc", border: "1px solid #e8edf3", borderRadius: 8,
+    background: "#f5f8fc", border: "1px solid var(--k-line)", borderRadius: 8,
     padding: "0.6rem 0.75rem", margin: "0.35rem 0 0",
     fontSize: "0.78rem", lineHeight: 1.4,
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -541,7 +434,7 @@ const S = {
     background: "#f5f8fc",
     padding: "1px 5px",
     borderRadius: 4,
-    border: "1px solid #e8edf3",
+    border: "1px solid var(--k-line)",
     wordBreak: "break-all",
   },
 };

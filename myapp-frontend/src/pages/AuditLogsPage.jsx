@@ -1,23 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
-import { MdBugReport, MdWarning, MdInfo, MdSearch, MdChevronLeft, MdChevronRight, MdClose, MdLock } from "react-icons/md";
+import { MdBugReport, MdWarning, MdInfo, MdClose, MdLock } from "react-icons/md";
 import { getAuditLogs, getAuditSummary } from "../api/auditLogApi";
 import { usePermissions } from "../contexts/PermissionsContext";
 // Shared backdrop / modal so this audit-log detail dialog matches every
 // other popup (blurred backdrop, centered, non-movable).
 import { formStyles, modalSizes } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
+import { PageHeader, Button, Toolbar, ToolbarSpacer, SearchBox, Card, TableWrap, Loading, EmptyState } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
   teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBg: "#ffffff",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
+  textPrimary: "var(--k-ink)",
   danger: "#dc3545",
 };
 
@@ -94,120 +88,107 @@ export default function AuditLogsPage() {
 
   if (!canView) {
     return (
-      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
-        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
-        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
-        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to view audit logs.</p>
-      </div>
+      <EmptyState icon={MdLock} title="Access denied">
+        You don&apos;t have permission to view audit logs.
+      </EmptyState>
     );
   }
 
   return (
-    <div className="audit-page" style={{ padding: "1.5rem", maxWidth: 1200, margin: "0 auto" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: `linear-gradient(135deg, ${colors.danger}, #b71c1c)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <MdBugReport size={24} color="#fff" />
-        </div>
-        <div>
-          <h2 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 700, color: colors.textPrimary }}>Audit Logs</h2>
-          <p style={{ margin: 0, fontSize: "0.82rem", color: colors.textSecondary }}>Monitor API errors and system events</p>
-        </div>
-        {summary && (
-          <div style={{ marginLeft: "auto", display: "flex", gap: "0.75rem" }}>
-            <div style={{ background: "#fdeded", borderRadius: 8, padding: "6px 14px", fontSize: "0.82rem", fontWeight: 600, color: "#842029" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <PageHeader
+        icon={MdBugReport}
+        tone="red"
+        title="Audit Logs"
+        subtitle="Monitor API errors and system events"
+        actions={summary && (
+          <>
+            <span style={{ ...chip, background: "#fdeded", color: "#842029" }}>
               {summary.errorsLast24h} errors (24h)
-            </div>
-            <div style={{ background: "#fff3cd", borderRadius: 8, padding: "6px 14px", fontSize: "0.82rem", fontWeight: 600, color: "#664d03" }}>
+            </span>
+            <span style={{ ...chip, background: "#fff3cd", color: "#664d03" }}>
               {summary.warningsLast24h} warnings (24h)
-            </div>
-          </div>
+            </span>
+          </>
         )}
-      </div>
+      />
 
       {/* Filters */}
-      <div className="audit-filters" style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+      <Toolbar>
         <select
+          className="k-select"
+          aria-label="Level"
           value={level}
           onChange={(e) => { setLevel(e.target.value); setPage(1); }}
-          style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.85rem", fontWeight: 500 }}
         >
           <option value="">All Levels</option>
           <option value="Error">Errors</option>
           <option value="Warning">Warnings</option>
           <option value="Info">Info</option>
         </select>
-        <form onSubmit={handleSearch} style={{ display: "flex", gap: "0.4rem", flex: 1, minWidth: 200, maxWidth: 400 }}>
-          <div style={{ position: "relative", flex: 1 }}>
-            <MdSearch size={18} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: colors.textSecondary }} />
-            <input
-              type="text"
-              placeholder="Search path, message, user..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              style={{ width: "100%", padding: "6px 12px 6px 34px", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: colors.inputBg, fontSize: "0.85rem" }}
-            />
-          </div>
-          <button type="submit" style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}>
-            Search
-          </button>
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: "0.4rem", flex: "1 1 280px", minWidth: 0, maxWidth: 460 }}>
+          <SearchBox
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Search path, message, user..."
+          />
+          <Button type="submit" variant="primary">Search</Button>
         </form>
-        <span style={{ fontSize: "0.82rem", color: colors.textSecondary, marginLeft: "auto" }}>
+        <ToolbarSpacer />
+        <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
           {totalCount} total
         </span>
-      </div>
+      </Toolbar>
 
       {/* Table (desktop) */}
-      <div style={{ background: colors.cardBg, borderRadius: 12, border: `1px solid ${colors.cardBorder}`, overflow: "hidden" }}>
-        <div className="audit-table-wrap" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+      <Card flush>
+        <TableWrap className="audit-table-wrap">
+          <table className="k-table">
             <thead>
-              <tr style={{ background: "#f8f9fb", borderBottom: `2px solid ${colors.cardBorder}` }}>
-                <th style={thStyle}>Time</th>
-                <th style={thStyle}>Level</th>
-                <th style={thStyle}>Method</th>
-                <th style={thStyle}>Path</th>
-                <th style={thStyle}>Status</th>
-                <th style={thStyle}>User</th>
-                <th style={thStyle}>Message</th>
+              <tr>
+                <th>Time</th>
+                <th>Level</th>
+                <th>Method</th>
+                <th>Path</th>
+                <th>Status</th>
+                <th>User</th>
+                <th>Message</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: colors.textSecondary }}>Loading...</td></tr>
+                <tr><td colSpan={7}><Loading>Loading...</Loading></td></tr>
               ) : logs.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: colors.textSecondary }}>No audit logs found</td></tr>
+                <tr><td colSpan={7}><EmptyState boxed={false}>No audit logs found</EmptyState></td></tr>
               ) : logs.map((log) => {
                 const badge = levelBadge[log.level] || levelBadge.Info;
                 return (
                   <tr
                     key={log.id}
                     onClick={() => setSelectedLog(log)}
-                    style={{ borderBottom: `1px solid ${colors.cardBorder}`, cursor: "pointer", transition: "background 0.15s" }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "#f0f4ff"}
-                    onMouseLeave={(e) => e.currentTarget.style.background = ""}
+                    style={{ cursor: "pointer" }}
                   >
-                    <td style={tdStyle}>{formatDate(log.timestamp)}</td>
-                    <td style={tdStyle}>
+                    <td style={{ whiteSpace: "nowrap" }}>{formatDate(log.timestamp)}</td>
+                    <td>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, background: badge.bg, color: badge.color, fontSize: "0.78rem", fontWeight: 600 }}>
                         {badge.icon} {log.level}
                       </span>
                     </td>
-                    <td style={tdStyle}>
+                    <td>
                       <span style={{ fontWeight: 700, fontSize: "0.78rem", color: methodColor[log.httpMethod] || colors.textPrimary }}>
                         {log.httpMethod}
                       </span>
                     </td>
-                    <td style={{ ...tdStyle, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: "0.8rem" }}>
+                    <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "monospace", fontSize: "0.8rem" }}>
                       {log.requestPath}
                     </td>
-                    <td style={tdStyle}>
+                    <td>
                       <span style={{ fontWeight: 700, color: log.statusCode >= 500 ? colors.danger : log.statusCode >= 400 ? "#fd7e14" : colors.teal }}>
                         {log.statusCode}
                       </span>
                     </td>
-                    <td style={tdStyle}>{log.userName || "—"}</td>
-                    <td style={{ ...tdStyle, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td>{log.userName || "—"}</td>
+                    <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {log.message}
                     </td>
                   </tr>
@@ -215,14 +196,14 @@ export default function AuditLogsPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </TableWrap>
 
         {/* Mobile Cards */}
         <div className="audit-cards">
           {loading ? (
-            <div style={{ padding: 40, textAlign: "center", color: colors.textSecondary }}>Loading...</div>
+            <Loading>Loading...</Loading>
           ) : logs.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", color: colors.textSecondary }}>No audit logs found</div>
+            <EmptyState boxed={false}>No audit logs found</EmptyState>
           ) : logs.map((log) => {
             const badge = levelBadge[log.level] || levelBadge.Info;
             const statusColor =
@@ -279,7 +260,7 @@ export default function AuditLogsPage() {
             onPageSize={(n) => { setPageSize(n); setPage(1); }}
           />
         )}
-      </div>
+      </Card>
 
       {/* Detail Modal */}
       {selectedLog && (
@@ -289,16 +270,17 @@ export default function AuditLogsPage() {
           style={formStyles.backdrop}
         >
           <div
-            style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px`, overflow: "auto", padding: "24px" }}
+            style={{ ...formStyles.modal, maxWidth: `${modalSizes.lg}px` }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", color: colors.textPrimary }}>Log Detail #{selectedLog.id}</h3>
-              <button onClick={() => setSelectedLog(null)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-                <MdClose size={22} color={colors.textSecondary} />
+            <div style={formStyles.header}>
+              <h3 style={formStyles.title}>Log Detail #{selectedLog.id}</h3>
+              <button type="button" onClick={() => setSelectedLog(null)} style={formStyles.closeButton} aria-label="Close">
+                <MdClose size={20} />
               </button>
             </div>
-            <div className="audit-detail-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px", fontSize: "0.88rem", marginBottom: 16 }}>
+            <div style={formStyles.body}>
+            <div className="audit-detail-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px", fontSize: "var(--k-font)", marginBottom: 16 }}>
               <Detail label="Timestamp" value={formatDate(selectedLog.timestamp)} />
               <Detail label="Level" value={selectedLog.level} />
               <Detail label="User" value={selectedLog.userName || "—"} />
@@ -311,6 +293,7 @@ export default function AuditLogsPage() {
             <DetailBlock label="Message" value={selectedLog.message} />
             {selectedLog.requestBody && <DetailBlock label="Request Body" value={selectedLog.requestBody} mono />}
             {selectedLog.stackTrace && <DetailBlock label="Stack Trace" value={selectedLog.stackTrace} mono />}
+            </div>
           </div>
         </div>
       )}
@@ -321,8 +304,8 @@ export default function AuditLogsPage() {
 function Detail({ label, value, mono, full }) {
   return (
     <div style={full ? { gridColumn: "1 / -1" } : {}}>
-      <div style={{ fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 600, marginBottom: 2 }}>{label}</div>
-      <div style={{ color: "#1a2332", fontFamily: mono ? "monospace" : "inherit", fontSize: mono ? "0.82rem" : "0.88rem", wordBreak: "break-all" }}>{value}</div>
+      <div style={{ fontSize: "0.75rem", color: "var(--k-muted)", fontWeight: 600, marginBottom: 2 }}>{label}</div>
+      <div style={{ color: "var(--k-ink)", fontFamily: mono ? "monospace" : "inherit", fontSize: mono ? "0.82rem" : "0.88rem", wordBreak: "break-all" }}>{value}</div>
     </div>
   );
 }
@@ -330,10 +313,10 @@ function Detail({ label, value, mono, full }) {
 function DetailBlock({ label, value, mono }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: "0.75rem", color: "#5f6d7e", fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: "0.75rem", color: "var(--k-muted)", fontWeight: 600, marginBottom: 4 }}>{label}</div>
       <pre style={{
-        background: "#f8f9fb",
-        border: "1px solid #e8edf3",
+        background: "var(--k-surface-2)",
+        border: "1px solid var(--k-line)",
         borderRadius: 8,
         padding: 12,
         fontSize: "0.8rem",
@@ -350,13 +333,4 @@ function DetailBlock({ label, value, mono }) {
   );
 }
 
-const thStyle = { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#5f6d7e", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.3px", whiteSpace: "nowrap" };
-const tdStyle = { padding: "10px 14px", color: "#1a2332" };
-const pgBtn = {
-  display: "flex", alignItems: "center", justifyContent: "center",
-  width: 32, height: 32, minWidth: 32, flexShrink: 0,
-  borderRadius: 8, border: "1px solid #d0d7e2",
-  background: "#fff", color: "#1a2332",
-  padding: 0, boxShadow: "none",
-  cursor: "pointer",
-};
+const chip = { display: "inline-flex", alignItems: "center", minHeight: 30, borderRadius: 8, padding: "0 14px", fontSize: "var(--k-font-sm)", fontWeight: 600 };
