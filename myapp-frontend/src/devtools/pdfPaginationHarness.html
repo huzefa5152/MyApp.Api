@@ -49,24 +49,7 @@ const mkItems = (n) =>
     totalInclTax: 9440,
   }));
 
-/**
- * Force a font stack onto the offscreen PDF container, standing in for a
- * machine that lacks the template's preferred font. Font availability is the
- * variable that actually differs between operator machines here — the render
- * width is pinned at 796px and html2canvas hardcodes scale 2, so neither
- * device pixel ratio nor browser zoom moves the layout.
- */
-function applyFontOverride(stack) {
-  const id = "pdf-harness-font-override";
-  document.getElementById(id)?.remove();
-  if (!stack) return;
-  const el = document.createElement("style");
-  el.id = id;
-  el.textContent = ".pdf-content, .pdf-content * { font-family: " + stack + " !important; }";
-  document.head.appendChild(el);
-}
 
-/** Bounding band of the FBR block, in the same canvas-pixel space as layout.cuts. */
 function fbrBand(content, pxRatio) {
   // The shipped template tags the block; the per-company templates stored in
   // the database predate that class and are matched on their inline border.
@@ -82,7 +65,6 @@ function fbrBand(content, pxRatio) {
 }
 
 window.runPdfCase = async ({ template, itemCount, fontStack }) => {
-  applyFontOverride(fontStack);
 
   const data = {
     ...SAMPLE_DATA.TaxInvoice,
@@ -103,11 +85,15 @@ window.runPdfCase = async ({ template, itemCount, fontStack }) => {
   if (!tpl) throw new Error("unknown template: " + template);
 
   let band = null;
-  const layout = await exportToPdf(mergeTemplate(tpl, data), "harness", {
+  // Put the font fixture in the exported document, which now has its own styles.
+  let html = mergeTemplate(tpl, data);
+  if (fontStack) {
+    html = html.replace("</head>", `<style>.pdf-content, .pdf-content * { font-family: ${fontStack} !important; }</style></head>`);
+  }
+  const layout = await exportToPdf(html, "harness", {
     onLayout: ({ content, pxRatio }) => { band = fbrBand(content, pxRatio); },
   });
 
-  applyFontOverride(null);
   const cutsThroughFbr = band
     ? layout.cuts.filter((c) => c > band.start + 0.5 && c < band.end - 0.5)
     : [];

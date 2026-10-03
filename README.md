@@ -293,6 +293,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-03 — Invoice read reliability
 
+- Isolate PDF template styles from the live screen so downloading a challan from cards or tables cannot squeeze the application layout.
+
 - Keep application files in place during Trader deployments, show maintenance until the upload completes, and queue overlapping deployments.
 
 - Allow a custom challan number to be reused for different clients in the same company; check availability against the selected client on create and edit. Automatic numbering stays company-wide.
