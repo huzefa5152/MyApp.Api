@@ -94,7 +94,7 @@ export default function StockSplitPage() {
 
   return (
     <div style={st.page}>
-      <Link to="/stock" style={st.back}><MdArrowBack size={16} /> Stock Dashboard</Link>
+      <Link to="/stock" style={st.back}><MdArrowBack style={{ flexShrink: 0 }} size={16} /> Stock Dashboard</Link>
       <h1 style={st.h1}>Split an item by GD line</h1>
       <p style={st.muted}>
         When one item holds several different products, move the GD lines that are really another product to their own item.
@@ -149,7 +149,7 @@ export default function StockSplitPage() {
           )}
           {moving.length === lines.length && <p style={st.err}>Leave at least one line on the item — to move everything, rename the item instead.</p>}
           <button type="button" onClick={move} disabled={busy || !canMove} style={st.primary}>
-            <MdCallSplit size={18} /> Move {moving.length} line(s)
+            <MdCallSplit style={{ flexShrink: 0 }} size={18} /> Move {moving.length} line(s)
           </button>
         </section>
       )}
