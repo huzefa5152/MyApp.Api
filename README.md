@@ -293,6 +293,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-03 — Invoice read reliability
 
+- Keep application files in place during Trader deployments, show maintenance until the upload completes, and queue overlapping deployments.
+
 - Allow a custom challan number to be reused for different clients in the same company; check availability against the selected client on create and edit. Automatic numbering stays company-wide.
 
 - Port the invoice-read fix from Importer: load invoice lines and delivery challans in separate queries to reduce database memory pressure on lists, details and prints. Preserve the Trader FBR and handover filters, and make page ordering stable when document numbers tie.
