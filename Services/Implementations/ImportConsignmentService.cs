@@ -313,8 +313,11 @@ namespace MyApp.Api.Services.Implementations
                     // (only the spreadsheet importer writes those). ANY of
                     // either found now happened AFTER this consignment, and
                     // deleting the balance would destroy that history.
+                    var ownLineIds = consignment.Lines.Select(l => l.Id).ToList();
                     var hasMoved = await _db.StockMovements.AnyAsync(m =>
-                        m.CompanyId == companyId && m.ItemTypeId == balance.ItemTypeId);
+                        m.CompanyId == companyId && m.ItemTypeId == balance.ItemTypeId
+                        && !(m.SourceType == StockMovementSourceType.ImportConsignment
+                             && m.SourceId != null && ownLineIds.Contains(m.SourceId.Value)));
                     if (hasMoved)
                         throw new InvalidOperationException(
                             $"Cannot delete: \"{itemName}\" has stock movements recorded since this consignment created it (sold, adjusted, purchased, or otherwise moved). Remove those first, or leave this consignment in place.");
@@ -330,8 +333,13 @@ namespace MyApp.Api.Services.Implementations
                 // ── Pass 1b: CostOnly lines — balances this consignment
                 // costed, never deleted, only the cost (and, in New Arrivals
                 // mode, quantity/value) contribution reversed.
+                // A line that arrived as its own movement is undone by removing
+                // that movement (below), never by subtracting from the balance --
+                // it never added to the balance. Only lines committed before
+                // arrivals became movements take the balance reversal.
                 var costOnlyLines = consignment.Lines
-                    .Where(l => l.Disposition == GdCostingDisposition.CostOnly && l.OpeningStockBalanceId.HasValue)
+                    .Where(l => l.Disposition == GdCostingDisposition.CostOnly && l.OpeningStockBalanceId.HasValue
+                             && l.StockMovementId == null)
                     .ToList();
                 var costOnlyBalanceIds = costOnlyLines.Select(l => l.OpeningStockBalanceId!.Value).Distinct().ToList();
 
@@ -383,6 +391,30 @@ namespace MyApp.Api.Services.Implementations
                     }
                 }
 
+                // ── Pass 1c: arrivals that came in as their own movement. Removing
+                // one must not leave its item holding less than nothing -- if
+                // the goods have since been sold, the delete is refused.
+                var arrivalMovementIds = consignment.Lines
+                    .Where(l => l.StockMovementId.HasValue).Select(l => l.StockMovementId!.Value).ToList();
+                var arrivalMovements = arrivalMovementIds.Count == 0 ? new List<StockMovement>()
+                    : await _db.StockMovements.Where(m => arrivalMovementIds.Contains(m.Id)).ToListAsync();
+                foreach (var g in arrivalMovements.GroupBy(m => m.ItemTypeId))
+                {
+                    var opening = await _db.OpeningStockBalances
+                        .Where(o => o.CompanyId == companyId && o.ItemTypeId == g.Key)
+                        .SumAsync(o => (decimal?)o.Quantity) ?? 0m;
+                    var moved = await _db.StockMovements
+                        .Where(m => m.CompanyId == companyId && m.ItemTypeId == g.Key)
+                        .SumAsync(m => (decimal?)(m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity)) ?? 0m;
+                    if (opening + moved - g.Sum(m => m.Quantity) < -0.0001m)
+                    {
+                        var name = await _db.ItemTypes.Where(i => i.Id == g.Key).Select(i => i.Name).FirstOrDefaultAsync();
+                        throw new InvalidOperationException(
+                            $"Cannot delete: goods this GD brought in of \"{name ?? $"item #{g.Key}"}\" have since been sold or moved. "
+                            + "Reverse those first, or correct this GD's lines instead of deleting it.");
+                    }
+                }
+
                 // ── Everything above is proven safe. Now actually do it. ──
 
                 var hadJournalEntry = await _db.JournalEntries.AnyAsync(e =>
@@ -412,6 +444,8 @@ namespace MyApp.Api.Services.Implementations
                 }
                 result.BalancesCostReversed = costReversals.Count;
 
+                _db.StockMovements.RemoveRange(arrivalMovements);
+                result.ArrivalMovementsRemoved = arrivalMovements.Count;
                 _db.ImportConsignmentLines.RemoveRange(consignment.Lines);
                 _db.ImportConsignments.Remove(consignment);
 
@@ -433,8 +467,14 @@ namespace MyApp.Api.Services.Implementations
                 result.BalancesDeleted = balancesToDelete.Count;
 
                 await _db.SaveChangesAsync();
+                // Stock left, so the monthly stock relief is recomputed from the
+                // remaining walk, inside the same transaction.
+                if (arrivalMovements.Count > 0)
+                    await _posting.PostInventoryPeriodsAsync(companyId, null);
                 await tx.CommitAsync();
 
+                if (result.ArrivalMovementsRemoved > 0)
+                    result.Messages.Add($"{result.ArrivalMovementsRemoved} arrival(s) this GD brought into stock were removed.");
                 if (result.BalancesCostReversed > 0)
                     result.Messages.Add(mode == GdCostingImportModeNames.NewArrivals
                         ? $"{result.BalancesCostReversed} opening balance(s) had this consignment's New Arrivals quantity, cost and value subtracted back out."
@@ -529,7 +569,26 @@ namespace MyApp.Api.Services.Implementations
                 OpeningStockBalance? balance = null;
                 decimal newBalQty = 0m, newBalCost = 0m, newBalValue = 0m;
 
-                var balanceId = line.OpeningStockBalanceId ?? 0;
+                // A line that arrived as its own movement corrects THAT movement;
+                // its balance is only the item's anchor and is not touched.
+                StockMovement? arrival = line.StockMovementId is int mid
+                    ? await _db.StockMovements.FirstOrDefaultAsync(m => m.Id == mid)
+                    : null;
+                if (arrival != null && deltaQty < 0m)
+                {
+                    var opening = await _db.OpeningStockBalances
+                        .Where(o => o.CompanyId == companyId && o.ItemTypeId == arrival.ItemTypeId)
+                        .SumAsync(o => (decimal?)o.Quantity) ?? 0m;
+                    var moved = await _db.StockMovements
+                        .Where(m => m.CompanyId == companyId && m.ItemTypeId == arrival.ItemTypeId)
+                        .SumAsync(m => (decimal?)(m.Direction == StockMovementDirection.In ? m.Quantity : -m.Quantity)) ?? 0m;
+                    if (opening + moved + deltaQty < -0.0001m)
+                        throw new InvalidOperationException(
+                            "That correction would leave this item holding less than nothing: goods this GD brought in have since been sold. "
+                            + "Reverse those sales first, or correct the quantity upwards only.");
+                }
+
+                var balanceId = arrival == null ? (line.OpeningStockBalanceId ?? 0) : 0;
                 if (balanceId > 0)
                 {
                     balance = await _db.OpeningStockBalances.Include(b => b.ItemType)
@@ -604,6 +663,15 @@ namespace MyApp.Api.Services.Implementations
                 result.NewCostExcludingTax = newCost;
                 result.NewSellingValueExcludingTax = newSelling;
 
+                if (arrival != null)
+                {
+                    arrival.Quantity = dto.Quantity;
+                    arrival.UnitCostExcludingTax = newSelling / dto.Quantity;
+                    arrival.ActualUnitCostExcludingTax = newCost / dto.Quantity;
+                    arrival.SalesTaxRate = dto.SalesTaxRate;
+                    result.ArrivalUpdated = true;
+                }
+
                 if (balance != null)
                 {
                     await _costAudit.RecordAsync(
@@ -661,8 +729,12 @@ namespace MyApp.Api.Services.Implementations
                 result.ImportClearingCredited = consignment.ImportClearingCredited;
 
                 await _db.SaveChangesAsync();
+                if (arrival != null)
+                    await _posting.PostInventoryPeriodsAsync(companyId, null);
                 await tx.CommitAsync();
 
+                if (result.ArrivalUpdated)
+                    result.Messages.Add("The stock this GD line brought in was corrected to match.");
                 if (result.BalancesUpdated > 0)
                     result.Messages.Add(mode == GdCostingImportModeNames.Backfill
                         ? "The opening balance's actual cost was re-derived from this GD's corrected unit cost."

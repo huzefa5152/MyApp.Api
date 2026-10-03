@@ -26,6 +26,18 @@ namespace MyApp.Api.Models
         /// rather than showing a quantity movement of zero.
         /// </summary>
         Revaluation = 6,
+
+        /// <summary>
+        /// Goods that came IN on a GD through the GD costing import's "New goods
+        /// arrived" mode. SourceId is the <see cref="ImportConsignmentLine"/> id,
+        /// and that line's StockMovementId points back here, which is what makes
+        /// the FIFO walk open a GD pool for it (dated at the GD date) rather than
+        /// folding the goods into the opening balance, where they read as
+        /// "opening -- not traced to a GD" and a later restatement would absorb
+        /// them. The consignment's own journal entry debits Inventory, so the
+        /// monthly stock relief skips it like a purchase.
+        /// </summary>
+        ImportConsignment = 7,
     }
 
     public enum StockMovementDirection

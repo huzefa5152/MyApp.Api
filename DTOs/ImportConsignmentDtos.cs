@@ -237,6 +237,10 @@ namespace MyApp.Api.DTOs
     /// <summary>What correcting one line actually moved.</summary>
     public class ImportConsignmentLineUpdateResultDto
     {
+        /// <summary>The line arrived as its own stock movement, and that
+        /// movement was corrected to the new figures.</summary>
+        public bool ArrivalUpdated { get; set; }
+
         public string GdNumber { get; set; } = "";
         public int LineId { get; set; }
         public decimal OldCostExcludingTax { get; set; }
@@ -272,6 +276,10 @@ namespace MyApp.Api.DTOs
         /// <summary>Opening balances this consignment created (StockPosted)
         /// that were removed along with it.</summary>
         public int BalancesDeleted { get; set; }
+
+        /// <summary>GD arrivals (New goods arrived) whose stock movement was
+        /// removed with the consignment.</summary>
+        public int ArrivalMovementsRemoved { get; set; }
 
         public bool JournalEntryWithdrawn { get; set; }
 

@@ -2061,6 +2061,7 @@ const LEDGER_SOURCE_LABELS = {
   GoodsReceipt: "Goods receipt",
   PurchaseDebitNote: "Debit note",
   Adjustment: "Adjustment",
+  ImportConsignment: "GD",
 };
 // FIFO by GD: which GDs a movement took its stock from (or, for a return, went
 // back into), one chip per GD with the quantity and the value at its cost.

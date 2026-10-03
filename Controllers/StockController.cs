@@ -751,6 +751,13 @@ namespace MyApp.Api.Controllers
                 : await _context.GoodsReceipts.Where(g => grIds.Contains(g.Id))
                     .Select(g => new { g.Id, g.GoodsReceiptNumber })
                     .ToDictionaryAsync(x => x.Id, x => x.GoodsReceiptNumber);
+            // A GD arrival names its GD, the reference the operator files under.
+            var gdLineIds = rows.Where(r => r.SourceType == nameof(StockMovementSourceType.ImportConsignment) && r.SourceId.HasValue)
+                                .Select(r => r.SourceId!.Value).Distinct().ToList();
+            var gdNums = gdLineIds.Count == 0 ? new Dictionary<int, string>()
+                : await _context.ImportConsignmentLines.Where(l => gdLineIds.Contains(l.Id))
+                    .Select(l => new { l.Id, l.ImportConsignment.GdNumber })
+                    .ToDictionaryAsync(x => x.Id, x => x.GdNumber);
 
             foreach (var r in rows)
             {
@@ -761,6 +768,8 @@ namespace MyApp.Api.Controllers
                     r.SourceDocNumber = pNo.ToString();
                 else if (r.SourceType == nameof(StockMovementSourceType.GoodsReceipt) && grNums.TryGetValue(r.SourceId.Value, out var gNo))
                     r.SourceDocNumber = gNo.ToString();
+                else if (r.SourceType == nameof(StockMovementSourceType.ImportConsignment) && gdNums.TryGetValue(r.SourceId.Value, out var gd))
+                    r.SourceDocNumber = gd;
             }
         }
 

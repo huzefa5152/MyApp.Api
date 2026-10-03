@@ -1442,11 +1442,23 @@ namespace MyApp.Api.Services.Implementations
                 // matched one balance; trusting a per-line copy of a shared
                 // figure invites a "last line wins" bug the moment two lines
                 // disagree.
+                // New Arrivals: the goods come in as their OWN movement, dated at
+                // the GD (see WriteArrivalMovementsAsync), never folded into the
+                // opening balance -- folded in, the FIFO walk can only call them
+                // "opening, not traced to a GD", and a later stock-sheet
+                // restatement replaces and rescales whatever the opening holds.
+                var arrivals = new List<(ImportConsignmentLine Entity, int ItemTypeId)>();
                 foreach (var balanceId in costedBalanceIds)
                 {
                     var balance = index.Balances[balanceId];
                     var matching = writtenLines.Where(e =>
                         e.Disposition == GdCostingDisposition.CostOnly && e.OpeningStockBalanceId == balanceId).ToList();
+
+                    if (mode == GdCostingImportModeNames.NewArrivals)
+                    {
+                        foreach (var e in matching) arrivals.Add((e, balance.ItemTypeId));
+                        continue;
+                    }
 
                     var totalCost = matching.Sum(e => e.CostExcludingTax);
                     var totalQty = matching.Sum(e => e.Quantity);
@@ -1463,23 +1475,6 @@ namespace MyApp.Api.Services.Implementations
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .OrderBy(g => g, StringComparer.OrdinalIgnoreCase));
 
-                    if (mode == GdCostingImportModeNames.NewArrivals)
-                    {
-                        // New arrivals: this GD brings MORE of what is
-                        // already on the books. ADD rather than SET, on all
-                        // three figures together — quantity and cost move in
-                        // step so the stored cost stays the total cost of the
-                        // total quantity (a genuine weighted average per
-                        // unit), and the selling value is added in step too,
-                        // or a month-2 arrival would inflate cost and
-                        // quantity while margin silently collapsed (brief,
-                        // Task 19).
-                        var totalSellingValue = matching.Sum(e => e.SellingValueExcludingTax);
-                        balance.Quantity += totalQty;
-                        balance.ActualCostExcludingTax = Money(balance.ActualCostExcludingTax + totalCost);
-                        balance.ValueExcludingTax = Money(balance.ValueExcludingTax + totalSellingValue);
-                    }
-                    else
                     {
                         // Backfill (default, and byte-identical to every
                         // release before this one): this GD is pricing stock
@@ -1510,8 +1505,15 @@ namespace MyApp.Api.Services.Implementations
                 // inline in the loop above, because a group sharing one
                 // (HsCode, Name) target needs every member's own recomputed
                 // Cost/SellingValue collected first.
+                var asArrivals = mode == GdCostingImportModeNames.NewArrivals;
                 var (itemTypesCreated, itemTypesAdopted, openingBalancesCreated, newStockValue) =
-                    await CreateMissingStockAsync(dto.CompanyId, newStockLines, userId);
+                    await CreateMissingStockAsync(dto.CompanyId, newStockLines, userId, asArrivals);
+                if (asArrivals)
+                    foreach (var (entity, _, _) in newStockLines)
+                        if (entity.Disposition == GdCostingDisposition.StockPosted && entity.ItemTypeId is int nid)
+                            arrivals.Add((entity, nid));
+                var arrivalMovements = await WriteArrivalMovementsAsync(
+                    dto.CompanyId, arrivals, consignmentsByGd.Values.ToList());
 
                 // The value that stock brought onto the books belongs on the
                 // Inventory control account, the same way a stock sheet's does.
@@ -1622,7 +1624,9 @@ namespace MyApp.Api.Services.Implementations
                 result.JournalEntries = postedEntries;
                 result.TotalPosted = Money(postedEntries.Sum(e => e.Amount));
 
-                if (result.BalancesCosted > 0)
+                if (arrivalMovements > 0)
+                    result.Messages.Add($"{arrivalMovements} GD line(s) brought into stock as arrivals dated at their GD, each traced to its GD.");
+                else if (result.BalancesCosted > 0)
                     result.Messages.Add($"{result.BalancesCosted} opening balance(s) received an actual cost.");
                 var notAsked = writtenLines.Count(l =>
                     l.Disposition == GdCostingDisposition.Skipped && l.DispositionNote == NotAskedNote);
@@ -1700,7 +1704,8 @@ namespace MyApp.Api.Services.Implementations
             CreateMissingStockAsync(
             int companyId,
             List<(ImportConsignmentLine Entity, NewStockGroupKey Key, GdCostingLineDto Line)> newStockLines,
-            int userId)
+            int userId,
+            bool asArrivals = false)
         {
             if (newStockLines.Count == 0) return (0, 0, 0, 0m);
 
@@ -1868,7 +1873,34 @@ namespace MyApp.Api.Services.Implementations
                 var newStockBefore = balance == null
                     ? new StockFigures(0m, 0m, 0m)
                     : new StockFigures(balance.Quantity, balance.ActualCostExcludingTax, balance.ValueExcludingTax);
-                if (balance == null)
+                // New Arrivals: the balance is only the item's anchor on this
+                // company's books, opened EMPTY; the goods themselves come in as
+                // a GD-dated movement (WriteArrivalMovementsAsync). Nothing is
+                // added to it and no opening value is posted -- the GD's own
+                // journal entry already debits Inventory, and posting the opening
+                // as well debited it twice.
+                if (balance == null && asArrivals)
+                {
+                    balance = new OpeningStockBalance
+                    {
+                        CompanyId = companyId,
+                        ItemTypeId = itemType.Id,
+                        Quantity = 0m,
+                        ValueExcludingTax = 0m,
+                        ActualCostExcludingTax = 0m,
+                        SalesTaxRate = rate,
+                        AsOfDate = asOfDate,
+                        Notes = Trim($"Item first brought in by GD costing import (New goods arrived): GD {string.Join(", ", gdNumbers)}.", 500),
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    _db.OpeningStockBalances.Add(balance);
+                    openingBalancesCreated++;
+                }
+                else if (asArrivals)
+                {
+                    // An existing balance is left exactly as it is.
+                }
+                else if (balance == null)
                 {
                     balance = new OpeningStockBalance
                     {
@@ -1931,6 +1963,55 @@ namespace MyApp.Api.Services.Implementations
             }
 
             return (itemTypesCreated, itemTypesAdopted, openingBalancesCreated, Money(valueCreated));
+        }
+
+        /// <summary>
+        /// New Arrivals: one inward <see cref="StockMovement"/> per GD line that
+        /// brought goods in, dated at the GD date, carrying the line's selling
+        /// value (the stock walk's value basis, exactly what the opening used to
+        /// be credited with), its landed cost and its rate. The line's
+        /// StockMovementId points back at it, which is what
+        /// <c>StockCosting</c> reads to open a GD pool (CLAUDE.md 5b-17) -- the
+        /// GD, its date, claim month and description travel with the stock from
+        /// the day it lands. Returns how many movements were written.
+        /// </summary>
+        private async Task<int> WriteArrivalMovementsAsync(
+            int companyId,
+            List<(ImportConsignmentLine Entity, int ItemTypeId)> arrivals,
+            List<ImportConsignment> consignments)
+        {
+            if (arrivals.Count == 0) return 0;
+            // The lines must have ids first: each movement's SourceId IS its
+            // line, and the feed resolves the GD number through it.
+            await _db.SaveChangesAsync();
+            var byId = consignments.ToDictionary(c => c.Id);
+            var written = new List<(ImportConsignmentLine Entity, StockMovement Movement)>();
+            foreach (var (entity, itemTypeId) in arrivals)
+            {
+                if (entity.Quantity <= 0m) continue;
+                var consignment = byId[entity.ImportConsignmentId];
+                var movement = new StockMovement
+                {
+                    CompanyId = companyId,
+                    ItemTypeId = itemTypeId,
+                    Direction = StockMovementDirection.In,
+                    Quantity = entity.Quantity,
+                    SourceType = StockMovementSourceType.ImportConsignment,
+                    SourceId = entity.Id,
+                    MovementDate = consignment.GdDate.Date,
+                    UnitCostExcludingTax = entity.SellingValueExcludingTax / entity.Quantity,
+                    ActualUnitCostExcludingTax = entity.CostExcludingTax / entity.Quantity,
+                    SalesTaxRate = entity.SalesTaxRate,
+                    Notes = Trim($"GD {consignment.GdNumber} arrived (row {entity.SourceRow})", 500),
+                    CreatedAt = DateTime.UtcNow,
+                };
+                _db.StockMovements.Add(movement);
+                written.Add((entity, movement));
+            }
+            await _db.SaveChangesAsync();
+            foreach (var (entity, movement) in written) entity.StockMovementId = movement.Id;
+            await _db.SaveChangesAsync();
+            return written.Count;
         }
 
         /// <summary>

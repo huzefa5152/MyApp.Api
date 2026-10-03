@@ -319,6 +319,24 @@ def opening_of(openings, item_id):
     return next((o for o in openings if o.get("itemTypeId") == item_id), None)
 
 
+def position_of(api, h, company_id, item_id):
+    """The item's stock POSITION (opening + every movement), shaped like an
+    opening row so a check reads the same either way.
+
+    2026-10-03: a New Arrivals GD no longer adds onto the opening balance -- it
+    comes in as its own movement dated at the GD, so FIFO can trace it to the GD
+    (CLAUDE.md 5b-15/5b-17). Checks that used to read the OPENING to see what an
+    arrival brought in now read the position: the contract they pin -- the goods,
+    their landed cost and their value all arrive, and a refused resubmit adds
+    nothing -- is unchanged; only where the figures live moved."""
+    r = requests.get(f"{api}/stock/company/{company_id}/onhand", headers=h, timeout=60)
+    row = next((x for x in (r.json() if r.ok else []) if x.get("itemTypeId") == item_id), None)
+    if row is None:
+        return None
+    return {"quantity": row.get("onHand"), "valueExcludingTax": row.get("valueExcludingTax"),
+            "actualCostExcludingTax": row.get("actualCostExcludingTax")}
+
+
 def movement_count(api, h, company_id):
     r = requests.get(f"{api}/stock/company/{company_id}/movements", headers=h, timeout=60,
                      params={"pageSize": 200})
@@ -1397,7 +1415,7 @@ def main():
         check("14a: month-2 GD-NA-B commits in new-arrivals mode",
               r.ok and naB_res.get("balancesCosted") == 1, f"http {r.status_code}: {r.text[:200]}")
 
-        na_item_after = opening_of(get_openings(api, h, twomonth_co), na_item_id)
+        na_item_after = position_of(api, h, twomonth_co, na_item_id)
         expected_na_qty = d(310) + d(200)
         expected_na_cost = money(d(100000) + na_cost_b["cost"])
         expected_na_value = money(na_cost_a["sellingValue"] + na_cost_b["sellingValue"])
@@ -1407,8 +1425,14 @@ def main():
         check("14a: ActualCostExcludingTax is the SUM of both months' cost",
               na_item_after is not None and close(na_item_after.get("actualCostExcludingTax"), float(expected_na_cost)),
               f"actualCostExcludingTax={na_item_after.get('actualCostExcludingTax') if na_item_after else None} expected={expected_na_cost}")
+        # An arrival's value rides on a unit cost stored at decimal(18,4), so a
+        # line's value can land up to qty x 0.00005 away from the sheet (200 units
+        # cannot make 93,333.33 exactly at 4dp). A storage limit shared with
+        # purchase bills, not a disagreement -- hence this tolerance, not close().
+        value_tol = float(expected_na_qty) * 0.00005 + 0.005
         check("14a: ValueExcludingTax (selling value) is the SUM of both months",
-              na_item_after is not None and close(na_item_after.get("valueExcludingTax"), float(expected_na_value)),
+              na_item_after is not None
+              and abs(float(na_item_after.get("valueExcludingTax") or 0) - float(expected_na_value)) <= value_tol,
               f"valueExcludingTax={na_item_after.get('valueExcludingTax') if na_item_after else None} expected={expected_na_value}")
 
         if na_item_after is not None:
@@ -1421,6 +1445,25 @@ def main():
             check("14a: the per-unit cost is a genuine weighted average across both consignments",
                   False, "no balance found to compute a unit cost from")
 
+        # 2026-10-03: the month-2 arrival is TRACED to its GD. Before, it was
+        # folded into the opening balance and FIFO could only call it "opening
+        # -- not traced to a GD" (Pak Trade, KAPE-HC-9509). Now it is its own
+        # movement, so the GD panel shows a GD-NA-B source holding its 200 units.
+        r = requests.get(f"{api}/stock/company/{twomonth_co}/gd-details", headers=h, timeout=60,
+                         params={"itemTypeId": na_item_id})
+        gd_rows = r.json() if r.ok else []
+        arrival_row = next((x for x in gd_rows if (x.get("gdNumber") or "").upper() == "GD-NA-B"), None)
+        check("14a: the month-2 arrival is traced to GD-NA-B in the GD panel",
+              arrival_row is not None and close(arrival_row.get("quantity"), 200),
+              f"http {r.status_code} rows={[(x.get('gdNumber'), x.get('quantity'), x.get('source')) for x in gd_rows]}")
+        r = requests.get(f"{api}/stock/company/{twomonth_co}/movements", headers=h, timeout=60,
+                         params={"itemTypeId": na_item_id, "pageSize": 50})
+        mv = (r.json() or {}).get("items", []) if r.ok else []
+        check("14a: the arrival is a stock movement sourced from the GD, not an opening change",
+              any(m.get("sourceType") == "ImportConsignment" and m.get("sourceDocNumber") == "GD-NA-B"
+                  and close(m.get("quantity"), 200) for m in mv),
+              f"movements={[(m.get('sourceType'), m.get('sourceDocNumber'), m.get('quantity')) for m in mv]}")
+
         # Idempotence still holds in new-arrivals mode -- neither duplicate
         # guard is mode-specific (brief, Task 19).
         r = gd_commit(api, h, {
@@ -1431,7 +1474,7 @@ def main():
         check("14a: re-submitting GD-NA-B's exact file (new-arrivals) is refused as already imported",
               r.status_code == 400 and "already imported" in (r.json() or {}).get("message", ""),
               f"http {r.status_code}: {r.text[:200]}")
-        na_item_dup1 = opening_of(get_openings(api, h, twomonth_co), na_item_id)
+        na_item_dup1 = position_of(api, h, twomonth_co, na_item_id)
         check("14a: the refused duplicate-file resubmit left the balance unchanged",
               na_item_dup1 is not None and close(na_item_dup1.get("quantity"), float(expected_na_qty))
               and close(na_item_dup1.get("actualCostExcludingTax"), float(expected_na_cost)),
@@ -1450,7 +1493,7 @@ def main():
         check("14a: a duplicate GD number (fresh file hash, new-arrivals) is refused as a friendly 400, not a 500",
               r.status_code == 400 and "already" in na_dup_msg and "consignment" in na_dup_msg,
               f"http {r.status_code}: {r.text[:200]}")
-        na_item_dup2 = opening_of(get_openings(api, h, twomonth_co), na_item_id)
+        na_item_dup2 = position_of(api, h, twomonth_co, na_item_id)
         check("14a: the refused duplicate-GD resubmit left the balance unchanged (not added again)",
               na_item_dup2 is not None and close(na_item_dup2.get("quantity"), float(expected_na_qty))
               and close(na_item_dup2.get("actualCostExcludingTax"), float(expected_na_cost)),
@@ -2969,7 +3012,7 @@ def main():
         na_res = r.json() if r.ok else {}
         na_old = compute_costing(assessed=40000, st=18, ast=3, it=6)
         na_new = compute_costing(assessed=50000, st=18, ast=3, it=6)
-        bal = opening_of(get_openings(api, h, na_co), na_item)
+        bal = position_of(api, h, na_co, na_item)
         check("22: New Arrivals applies the DIFFERENCE to the balance, not a re-derivation",
               close(bal.get("actualCostExcludingTax"),
                     float(money(d(60000) + d(na_new["cost"])))),
@@ -3010,7 +3053,7 @@ def main():
         check("22: the refusal rolled the WHOLE thing back -- liability unchanged",
               close(after.get("importClearingCredited"), float(na_credited_after)),
               f"detail={after}")
-        bal = opening_of(get_openings(api, h, na_co), na_item)
+        bal = position_of(api, h, na_co, na_item)
         check("22: and the balance is unchanged too",
               close(bal.get("actualCostExcludingTax"),
                     float(money(d(60000) + d(na_new["cost"])))),
@@ -3506,7 +3549,9 @@ def main():
             check(f"29: opening for item {iid}", r.ok, f"http {r.status_code} {r.text[:150]}")
 
         def qty_of(item_id):
-            o = opening_of(get_openings(api, h, rules_co), item_id)
+            # The position, not the opening: an arrival is its own movement
+            # since 2026-10-03 (see position_of).
+            o = position_of(api, h, rules_co, item_id)
             return float((o or {}).get("quantity") or 0)
 
         # 29a -- a bad line is reported, not refused: all three come back.
