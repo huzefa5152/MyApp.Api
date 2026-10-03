@@ -29,6 +29,7 @@ import PurchaseDebitNotesPage from "./pages/PurchaseDebitNotesPage";
 import GoodsReceiptsPage from "./pages/GoodsReceiptsPage";
 import StockDashboardPage from "./pages/StockDashboardPage";
 import StockReconcilePage from "./pages/StockReconcilePage";
+import StockSplitPage from "./pages/StockSplitPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import GdCostingImportPage from "./pages/GdCostingImportPage";
 import ImportConsignmentsPage from "./pages/ImportConsignmentsPage";
@@ -158,6 +159,7 @@ export default function App() {
           <Route path="/goods-receipts" element={<RequirePermission anyPrefix="goodsreceipts."><GoodsReceiptsPage /></RequirePermission>} />
           <Route path="/stock" element={<RequirePermission anyPrefix="stock."><StockDashboardPage /></RequirePermission>} />
           <Route path="/stock/reconcile" element={<RequirePermission permission="stock.policy.manage"><StockReconcilePage /></RequirePermission>} />
+          <Route path="/stock/split" element={<RequirePermission permission="stock.policy.manage"><StockSplitPage /></RequirePermission>} />
           {/* FBR Annexure-A purchase ledger import — Phase 1 preview only */}
           <Route path="/fbr-import/purchase" element={<RequirePermission anyPrefix="fbrimport."><FbrPurchaseImportPage /></RequirePermission>} />
           {/* GD costing workbook import — loads actual landed cost onto stock

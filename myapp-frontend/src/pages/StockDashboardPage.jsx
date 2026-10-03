@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
-import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit } from "react-icons/md";
+import { MdInventory, MdBusiness, MdSearch, MdAdd, MdHistory, MdTune, MdClose, MdSwapHoriz, MdExpandMore, MdChevronRight, MdSyncAlt, MdFileDownload, MdEdit, MdCallSplit } from "react-icons/md";
 import CostHistoryDialog from "../Components/CostHistoryDialog";
 import { getStockOnHand, getInventorySummary, setInventoryFlowVersion, getStockMovements, getStockGdDetails, setLineClaimMonth, getOpeningBalances, upsertOpeningBalance, deleteOpeningBalance, adjustStock, exportStockOnHand, exportStockMonthly, exportAnnexH1, getTrackedItemTypes, getCostingMethod } from "../api/stockApi";
 // Shared blob-save helper: it reads the filename off Content-Disposition and
@@ -839,6 +839,12 @@ export default function StockDashboardPage() {
                 <Link to="/stock/reconcile" style={{ ...styles.altBtn, textDecoration: "none" }}
                   title="Upload the month's stock sheet and bring the books in line with it, GD by GD">
                   <MdSyncAlt size={16} /> Reconcile to sheet
+                </Link>
+              )}
+              {canManagePolicy && (
+                <Link to="/stock/split" style={{ ...styles.altBtn, textDecoration: "none" }}
+                  title="Move GD lines that are really a different product to their own item">
+                  <MdCallSplit size={16} /> Split an item
                 </Link>
               )}
             </span>

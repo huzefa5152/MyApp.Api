@@ -2284,6 +2284,165 @@ namespace MyApp.Api.Controllers
             return (null, StockSheetReconciler.Plan(req, items));
         }
 
+        /// <summary>The GD lines an item holds now (its FIFO pools), for the
+        /// merged-item split tool.</summary>
+        [HttpGet("company/{companyId}/split/lines")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<List<StockSplitLineDto>>> GetSplitLines(int companyId, [FromQuery] int itemTypeId)
+        {
+            var pools = await SplitPoolsAsync(companyId, itemTypeId);
+            if (pools == null) return BadRequest(new { message = "Splitting by GD line needs FIFO-by-GD costing." });
+            return Ok(pools);
+        }
+
+        /// <summary>
+        /// Split a merged item (2026-10-03, maintainer's decision: operator-driven).
+        /// The chosen GD lines -- with their quantity, value, landed cost, GD,
+        /// date and claim month -- move to another item, existing or new. In ONE
+        /// transaction: a dated adjustment out of the source and into the target
+        /// (so quantities and the ledger follow), then a FIFO restatement of both
+        /// so each holds exactly its GD lines. Past sales stay on the source.
+        /// </summary>
+        [HttpPost("company/{companyId}/split")]
+        [HasPermission("stock.policy.manage")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StockSplitResultDto>> SplitItem(int companyId, [FromBody] StockSplitRequestDto req)
+        {
+            if (req == null || req.SourceItemTypeId <= 0 || req.PoolKeys == null || req.PoolKeys.Count == 0)
+                return BadRequest(new { message = "Choose the item and the GD lines to move." });
+            if (req.TargetItemTypeId == req.SourceItemTypeId)
+                return BadRequest(new { message = "Move the lines to a different item." });
+            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) != null)
+                return StatusCode(403, new { message = "Splitting stock needs access to every division." });
+            if (!await _permission.HasPermissionAsync(CurrentUserId, "stock.adjust.create"))
+                return StatusCode(403, new { message = "Splitting an item needs the stock adjustment permission." });
+
+            var source = await SplitPoolsAsync(companyId, req.SourceItemTypeId);
+            if (source == null) return BadRequest(new { message = "Splitting by GD line needs FIFO-by-GD costing." });
+            if (source.Count == 0) return BadRequest(new { message = "That item holds no stock to split." });
+            var keys = req.PoolKeys.ToHashSet(StringComparer.Ordinal);
+            var moving = source.Where(p => keys.Contains(p.PoolKey)).ToList();
+            if (moving.Count != keys.Count)
+                return BadRequest(new { message = "Some chosen lines no longer exist. Reload and choose again." });
+            if (moving.Count == source.Count)
+                return BadRequest(new { message = "Leave at least one line on the item -- to move everything, rename the item instead." });
+
+            var srcPos = await CurrentPositionAsync(companyId, req.SourceItemTypeId);
+            var srcName = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == req.SourceItemTypeId)
+                .Select(i => new { i.Name, i.HSCode, i.UOM }).FirstOrDefaultAsync();
+            if (srcName == null) return NotFound(new { message = "Item not found." });
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                int targetId;
+                if (req.TargetItemTypeId is int tid && tid > 0)
+                {
+                    if (!await ItemTypeMembership.IsVisibleAsync(_context, tid, new[] { companyId }))
+                        throw new InvalidOperationException("The target item is not one of this company's items.");
+                    targetId = tid;
+                }
+                else
+                {
+                    var name = (req.NewItemName ?? "").Trim();
+                    if (name.Length == 0) throw new InvalidOperationException("Name the new item, or choose an existing one.");
+                    var items = HttpContext.RequestServices.GetRequiredService<IItemTypeService>();
+                    var created = await items.CreateAsync(new ItemTypeDto
+                    {
+                        Name = name.Length <= 300 ? name : name[..300],
+                        HSCode = moving.Select(m => m.HsCode).FirstOrDefault(h => !string.IsNullOrWhiteSpace(h)) ?? srcName.HSCode,
+                        UOM = string.IsNullOrWhiteSpace(req.NewItemUnit) ? srcName.UOM : req.NewItemUnit!.Trim(),
+                        IsFavorite = true,
+                    }, companyId);
+                    targetId = created.Id;
+                }
+                var tgtPos = await CurrentPositionAsync(companyId, targetId);
+                var target = await SplitPoolsAsync(companyId, targetId) ?? new();
+
+                var mQty = moving.Sum(m => m.Quantity);
+                var mVal = Money(moving.Sum(m => m.ValueExcludingTax));
+                var mAct = Money(moving.Sum(m => m.ActualValueExcludingTax));
+                var note = $"Split {srcName.Name}: {moving.Count} GD line(s) moved";
+
+                foreach (var (item, qty, val, act) in new[]
+                {
+                    (req.SourceItemTypeId, srcPos.Quantity - mQty, Money(srcPos.ValueExcludingTax - mVal), Money(srcPos.ActualValueExcludingTax - mAct)),
+                    (targetId, tgtPos.Quantity + mQty, Money(tgtPos.ValueExcludingTax + mVal), Money(tgtPos.ActualValueExcludingTax + mAct)),
+                })
+                {
+                    var r = await AdjustStock(new CreateStockAdjustmentDto
+                    {
+                        CompanyId = companyId, ItemTypeId = item, Mode = StockAdjustmentModes.Set,
+                        TargetQuantity = qty, TargetValueExcludingTax = val, TargetActualCostExcludingTax = act,
+                        MovementDate = PakistanClock.Today, Notes = note,
+                    });
+                    if (r is not OkObjectResult)
+                        throw new InvalidOperationException("The stock could not be moved: " + DescribeResult(r) + ".");
+                }
+
+                FifoRestatementLineDto Line(int itemId, StockSplitLineDto p, int row) => new()
+                {
+                    ItemTypeId = itemId, SourceRow = row,
+                    GdNumber = string.IsNullOrWhiteSpace(p.GdNumber) ? "Opening (no GD)" : p.GdNumber!,
+                    GdDate = p.GdDate, ClaimMonth = p.ClaimMonth, Description = p.Description,
+                    Quantity = p.Quantity, ValueExcludingTax = p.ValueExcludingTax, SalesTaxRate = p.SalesTaxRate,
+                };
+                var lines = new List<FifoRestatementLineDto>();
+                var n = 1;
+                foreach (var p in source.Where(p => !keys.Contains(p.PoolKey))) lines.Add(Line(req.SourceItemTypeId, p, n++));
+                foreach (var p in target.Concat(moving)) lines.Add(Line(targetId, p, n++));
+                var rr = await RestateFifo(companyId, new FifoRestatementRequestDto
+                {
+                    SourceFile = $"split of item {req.SourceItemTypeId}", Commit = true, Lines = lines,
+                });
+                var res = (rr.Result as OkObjectResult)?.Value as FifoRestatementResultDto ?? rr.Value;
+                if (res == null || !res.Committed)
+                    throw new InvalidOperationException("The GD lines could not be moved: "
+                        + (res == null ? DescribeResult(rr.Result)
+                           : string.Join("; ", res.Items.Where(i => i.Error != null).Select(i => $"{i.ItemTypeName}: {i.Error}"))) + ".");
+                await tx.CommitAsync();
+
+                var targetName = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == targetId).Select(i => i.Name).FirstAsync();
+                return Ok(new StockSplitResultDto
+                {
+                    SourceItemTypeId = req.SourceItemTypeId, TargetItemTypeId = targetId, TargetItemTypeName = targetName,
+                    LinesMoved = moving.Count, QuantityMoved = mQty, ValueMoved = mVal,
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                await tx.RollbackAsync();
+                return BadRequest(new { message = ex.Message + " Nothing was changed." });
+            }
+        }
+
+        /// <summary>An item's FIFO pools that hold stock, as split lines; null
+        /// when the company is not on FIFO. A shortfall (sold past stock) is not
+        /// a line and blocks nothing here -- the restatement clears it.</summary>
+        private async Task<List<StockSplitLineDto>?> SplitPoolsAsync(int companyId, int itemTypeId)
+        {
+            if (!await StockCostingMethod.IsGdFifoAsync(_context, companyId)) return null;
+            var fifo = await FifoResultsAsync(companyId, new List<int> { itemTypeId });
+            if (fifo == null || !fifo.TryGetValue(itemTypeId, out var res)) return new();
+            var itemHs = await _context.ItemTypes.AsNoTracking().Where(i => i.Id == itemTypeId).Select(i => i.HSCode).FirstOrDefaultAsync();
+            var lotIds = res.Pools.Where(p => p.LotId != null).Select(p => p.LotId!.Value).ToList();
+            var lineIds = res.Pools.Where(p => p.ConsignmentLineId != null).Select(p => p.ConsignmentLineId!.Value).ToList();
+            var lotHs = await _context.OpeningStockLots.AsNoTracking().Where(l => lotIds.Contains(l.Id))
+                .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
+            var lineHs = await _context.ImportConsignmentLines.AsNoTracking().Where(l => lineIds.Contains(l.Id))
+                .Select(l => new { l.Id, l.HsCode }).ToDictionaryAsync(l => l.Id, l => l.HsCode);
+            return res.Pools.Where(p => p.Quantity > 0.00005m).Select(p => new StockSplitLineDto
+            {
+                PoolKey = p.Key, GdNumber = p.GdNumber, GdDate = p.GdNumber != null ? p.OrderDate : null,
+                ClaimMonth = p.ClaimMonth, Description = p.Description,
+                HsCode = p.LotId is int l && lotHs.TryGetValue(l, out var a) ? a
+                    : p.ConsignmentLineId is int c && lineHs.TryGetValue(c, out var b) ? b : itemHs,
+                Quantity = p.Quantity, ValueExcludingTax = Money(p.Value), ActualValueExcludingTax = Money(p.ActualValue),
+                SalesTaxRate = p.Rate,
+            }).ToList();
+        }
+
         [HttpPost("company/{companyId}/flow-version")]
         [HasPermission("stock.policy.manage")]
         [AuthorizeCompany]

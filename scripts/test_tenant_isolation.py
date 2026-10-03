@@ -1572,6 +1572,13 @@ for route in ("plan", "apply"):
     s, _ = request("POST", f"/api/stock/company/{beta['id']}/reconcile/{route}", token=tokens["alice"], body=recon_body)
     status_check(suite21, f"alice reconciles Beta's stock ({route})", s, 403)
 
+# 5c. Split a merged item: reading lines and moving them are company-scoped.
+s, _ = request("GET", f"/api/stock/company/{beta['id']}/split/lines?itemTypeId=1", token=tokens["alice"])
+status_check(suite21, "alice lists Beta's split lines", s, 403)
+s, _ = request("POST", f"/api/stock/company/{beta['id']}/split", token=tokens["alice"],
+               body={"sourceItemTypeId": 1, "poolKeys": ["x"], "newItemName": "probe"})
+status_check(suite21, "alice splits a Beta item", s, 403)
+
 # 6. A PO format by id answers 404 to a tenant that cannot reach its company.
 s, fmts = request("GET", f"/api/poformats?companyId={beta['id']}", token=admin)
 beta_fmt = next((f for f in (fmts or []) if f.get("companyId") == beta["id"]), None)

@@ -769,4 +769,40 @@
         public bool Applied { get; set; }
         public List<string> Messages { get; set; } = new();
     }
+
+    /// <summary>One GD line an item holds now (a FIFO pool), for the split tool.</summary>
+    public class StockSplitLineDto
+    {
+        public string PoolKey { get; set; } = "";
+        public string? GdNumber { get; set; }
+        public DateTime? GdDate { get; set; }
+        public DateTime? ClaimMonth { get; set; }
+        public string? Description { get; set; }
+        public string? HsCode { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal ValueExcludingTax { get; set; }
+        public decimal ActualValueExcludingTax { get; set; }
+        public decimal SalesTaxRate { get; set; }
+    }
+
+    /// <summary>Move the chosen GD lines of one item to another item -- an
+    /// existing one, or a new one named here.</summary>
+    public class StockSplitRequestDto
+    {
+        public int SourceItemTypeId { get; set; }
+        public List<string> PoolKeys { get; set; } = new();
+        public int? TargetItemTypeId { get; set; }
+        public string? NewItemName { get; set; }
+        public string? NewItemUnit { get; set; }
+    }
+
+    public class StockSplitResultDto
+    {
+        public int SourceItemTypeId { get; set; }
+        public int TargetItemTypeId { get; set; }
+        public string TargetItemTypeName { get; set; } = "";
+        public int LinesMoved { get; set; }
+        public decimal QuantityMoved { get; set; }
+        public decimal ValueMoved { get; set; }
+    }
 }

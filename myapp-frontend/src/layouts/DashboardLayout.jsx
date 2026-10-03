@@ -989,6 +989,7 @@ function getBreadcrumb(pathname) {
     "/audit-logs": "Administration / Audit Logs",
     "/guides/import": "Purchases / Import Costing Guide",
     "/stock/reconcile": "Dashboards / Inventory / Reconcile to stock sheet",
+    "/stock/split": "Dashboards / Inventory / Split an item",
   };
   return map[pathname] ?? pathname.replace(/\//g, " / ").replace(/^\s\/\s/, "");
 }

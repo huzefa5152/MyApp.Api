@@ -57,6 +57,11 @@ export const planStockReconcile = (companyId, body) =>
   http.post(`/stock/company/${companyId}/reconcile/plan`, body, { timeout: 300000 });
 export const applyStockReconcile = (companyId, body) =>
   http.post(`/stock/company/${companyId}/reconcile/apply`, body, { timeout: 300000 });
+// Split a merged item: its GD lines now, and the move itself.
+export const getSplitLines = (companyId, itemTypeId) =>
+  http.get(`/stock/company/${companyId}/split/lines`, { params: { itemTypeId } });
+export const splitItem = (companyId, body) =>
+  http.post(`/stock/company/${companyId}/split`, body, { timeout: 300000 });
 // The item types this company actually tracks stock for. "Which items can
 // hold a position" is a server rule (V1 = HS-coded, V2 = all, per-company
 // overrides win either way), so the modals ask for it instead of guessing.
