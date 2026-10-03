@@ -1,0 +1,150 @@
+/* =====================================================================
+   Shared-component theming (DataTable, pickers, badges, dialogs, line items …).
+
+   Inline styles in those components read `var(--sc-*, <classic value>)`, so the
+   Classic layout is exactly the original look even when no token is set. Only the
+   Workspace layout defines the tokens below, making the same markup compact.
+   Colours come from the kit's --k-* tokens (ui/kit.css), whose Classic values are
+   the original palette.
+   ===================================================================== */
+
+[data-ui-layout="workspace"] {
+  --sc-touch-h: var(--k-btn-h);          /* buttons that were 44px tap targets */
+  --sc-small-btn-pad: 0 0.6rem;
+  --sc-small-font: 0.75rem;
+
+  /* line-item / table cell inputs */
+  --sc-cell-pad: 0.25rem 0.5rem;
+  --sc-cell-font: var(--k-font);
+  --sc-cell-h: var(--k-h);
+  --sc-th-h: var(--k-th-h);
+  --sc-th-pad: 0 0.4rem;
+  --sc-td-pad: 0.2rem 0.35rem;
+
+  /* badges / chips */
+  --sc-badge-font: 0.68rem;
+  --sc-badge-pad: 0.1rem 0.5rem;
+  --sc-pay-font: 0.72rem;
+  --sc-pay-pad: 0.15rem 0.55rem;
+  --sc-chip-h: 24px;
+
+  /* toast */
+  --sc-toast-pad: 8px 12px;
+  --sc-toast-font: var(--k-font);
+
+  /* confirm dialog */
+  --sc-dlg-pad-x: 1.15rem;
+  --sc-dlg-icon: 44px;
+  --sc-dlg-icon-top: 1.1rem;
+  --sc-dlg-msg: var(--k-font);
+
+  /* full-panel states (no access / no company) */
+  --sc-panel-title: 1rem;
+  --sc-panel-pad: 1.25rem 1.15rem;
+  --sc-hero-icon: 48px;
+  --sc-hero-title: 1.15rem;
+
+  /* segmented control (Cards / Table) */
+  --sc-seg-pad: 0 0.65rem;
+  --sc-seg-h: calc(var(--k-btn-h) - 6px);
+  --sc-seg-font: 0.78rem;
+
+  /* misc text / option rows */
+  --sc-text: var(--k-font);
+  --sc-opt-pad: 0.3rem 0.6rem;
+  --sc-box-pad: 0.6rem 0.75rem;
+  --sc-select-pad: 0 0.5rem;
+}
+@media (pointer: coarse) {
+  [data-ui-layout="workspace"] { --sc-chip-h: 30px; }
+}
+
+/* ---------- DataTable ---------- */
+.sc-dt {
+  background: var(--k-surface); border: 1px solid var(--k-line); border-radius: var(--sc-dt-radius, 12px);
+  box-shadow: var(--sc-dt-shadow, 0 2px 12px rgba(0, 0, 0, 0.05)); overflow: hidden;
+}
+[data-ui-layout="workspace"] .sc-dt { --sc-dt-radius: var(--k-card-radius); --sc-dt-shadow: none; }
+.sc-dt__toolbar {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--k-line);
+}
+[data-ui-layout="workspace"] .sc-dt__toolbar { gap: 0.5rem; padding: 0.45rem 0.6rem; }
+.sc-dt__search { position: relative; flex: 0 1 320px; min-width: min(200px, 100%); }
+.sc-dt__search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--k-muted); pointer-events: none; }
+.sc-dt__search .k-input { padding-left: 2rem; }
+.sc-dt__menu {
+  position: absolute; right: 0; top: calc(100% + 4px); min-width: 220px; max-height: 60vh; overflow-y: auto; z-index: 50;
+  padding: 0.5rem 0.25rem; background: var(--k-surface); border: 1px solid var(--k-line); border-radius: var(--k-radius);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.18);
+}
+.sc-dt__menu-title {
+  padding: 0.25rem 0.75rem 0.5rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--k-muted);
+}
+.sc-dt__menu-item {
+  display: flex; align-items: center; gap: 8px; padding: 0.4rem 0.75rem; border-radius: 6px; font-size: calc(var(--k-font) - 0.05rem);
+  color: var(--k-ink); user-select: none;
+}
+[data-ui-layout="workspace"] .sc-dt__menu-item { padding: 0.3rem 0.6rem; }
+.sc-dt__menu-item:hover { background: var(--k-surface-3); }
+.sc-dt__scroll { width: 100%; overflow: auto; max-height: 70vh; }
+.sc-dt .k-table th { user-select: none; }
+.sc-dt__th-inner { display: inline-flex; align-items: center; gap: 4px; }
+.sc-dt__empty { text-align: center; color: var(--k-muted); font-style: italic; }
+.sc-dt__actions { display: inline-flex; gap: 6px; flex-wrap: nowrap; justify-content: flex-end; }
+
+/* ---------- Segmented control (ViewModeToggle) ---------- */
+.sc-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; border: 1px solid var(--k-line-strong); background: var(--k-surface-2); }
+[data-ui-layout="workspace"] .sc-seg { padding: 2px; border-radius: var(--k-radius); }
+.sc-seg__btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--sc-seg-h, 0); padding: var(--sc-seg-pad, 0.4rem 0.85rem);
+  border: none; border-radius: 8px; background: transparent; color: var(--k-muted); font-family: inherit;
+  font-size: var(--sc-seg-font, 0.82rem); font-weight: 600; cursor: pointer; box-shadow: none;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+[data-ui-layout="workspace"] .sc-seg__btn { border-radius: calc(var(--k-radius) - 2px); }
+.sc-seg__btn:hover { transform: none; box-shadow: none; border-color: transparent; }
+.sc-seg__btn[aria-selected="true"] { background: #fff; color: var(--k-blue); box-shadow: 0 1px 4px rgba(13, 71, 161, 0.18); }
+.sc-seg__btn:focus-visible { outline: 2px solid var(--k-focus); outline-offset: 1px; }
+
+/* ---------- Full-panel states ---------- */
+[data-ui-layout="workspace"] .sc-hero-icon svg { width: 26px; height: 26px; }
+[data-ui-layout="workspace"] .sc-dlg-icon svg { width: 22px; height: 22px; }
+
+/* ---------- Confirm dialog buttons ---------- */
+.sc-dlg-btn { flex: 1; white-space: normal; }
+.sc-dlg-btn--confirm, .sc-dlg-btn--confirm:hover:not(:disabled) { color: #fff; border-color: transparent; }
+.sc-dlg-btn--confirm:hover:not(:disabled) { filter: brightness(0.9); }
+
+/* ---------- Free-text autocomplete dropdowns (Lookup / HS code / Smart item) ----------
+   Same surface, option and group look as the ComboBox popover (k-combo__*). */
+.sc-suggest {
+  position: fixed; z-index: 9999; margin: 0; padding: 0.25rem; list-style: none; overflow-y: auto;
+  background: #fff; border: 1px solid var(--k-line-strong); border-radius: var(--k-radius);
+  box-shadow: 0 10px 28px rgba(16, 32, 64, 0.16); font-size: var(--k-font); color: var(--k-ink); text-align: left;
+}
+.sc-suggest .k-combo__opt { flex-direction: column; gap: 2px; }
+.sc-suggest__note { padding: 0.6rem 0.75rem; color: var(--k-muted); line-height: 1.4; }
+.sc-suggest__note--loading { font-style: italic; }
+.sc-suggest__create { color: #2e7d32; font-weight: 700; }
+.sc-combo-sticky { position: sticky; top: 0; z-index: 1; background: #fff; }
+
+/* Item-type picker option rows */
+.sc-opt-name {
+  font-weight: 600; color: var(--k-ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.k-combo__opt--current .sc-opt-name { color: var(--k-blue); }
+.sc-opt-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; margin-top: 2px; font-size: 0.72rem; color: var(--k-muted); font-weight: 400; }
+.sc-opt-desc {
+  font-size: 0.75rem; color: var(--k-muted); font-weight: 400; line-height: 1.3; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sc-opt-code { font-weight: 700; color: var(--k-blue); font-family: monospace; }
+.sc-chip { padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.7rem; font-weight: 700; }
+.sc-chip--hs { background: #e3f2fd; color: #0d47a1; font-family: monospace; }
+.sc-chip--ok { background: #e8f5e9; color: #1b5e20; }
+.sc-chip--empty { background: #f0f4f8; color: var(--k-muted); font-weight: 600; }
+.sc-chip--saved { background: #e8f5e9; color: #2e7d32; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; }
+.sc-chip--fbr { background: #fff3e0; color: #e65100; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; }
+
+/* ---------- LineItemsEditor ---------- */
+.sc-lie-table th { height: var(--sc-th-h, auto); }

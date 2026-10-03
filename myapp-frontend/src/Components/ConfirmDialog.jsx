@@ -3,6 +3,8 @@ import { MdWarning, MdDelete, MdInfo } from "react-icons/md";
 // Reuse the shared backdrop / modal baseline so confirm dialogs feel
 // identical to every other popup (blurred backdrop, centered, non-movable).
 import { formStyles, modalSizes } from "../theme";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 const ConfirmContext = createContext(null);
 
@@ -70,9 +72,9 @@ export default function ConfirmProvider({ children }) {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Icon header */}
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: 28 }}>
-              <div style={{
-                width: 56, height: 56, borderRadius: "50%", background: v.bg,
+            <div style={{ display: "flex", justifyContent: "center", paddingTop: "var(--sc-dlg-icon-top, 28px)" }}>
+              <div className="sc-dlg-icon" style={{
+                width: "var(--sc-dlg-icon, 56px)", height: "var(--sc-dlg-icon, 56px)", borderRadius: "50%", background: v.bg,
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
                 {v.icon}
@@ -80,12 +82,12 @@ export default function ConfirmProvider({ children }) {
             </div>
 
             {/* Content */}
-            <div style={{ padding: "16px 28px 8px", textAlign: "center" }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: "1.15rem", fontWeight: 700, color: "#1a2332" }}>
+            <div style={{ padding: "16px var(--sc-dlg-pad-x, 28px) 8px", textAlign: "center" }}>
+              <h3 style={{ ...formStyles.title, margin: "0 0 8px", color: "var(--k-ink, #1a2332)" }}>
                 {state.title}
               </h3>
               {state.message && (
-                <p style={{ margin: 0, fontSize: "0.9rem", color: "#5f6d7e", lineHeight: 1.5 }}>
+                <p style={{ margin: 0, fontSize: "var(--sc-dlg-msg, 0.9rem)", color: "var(--k-muted, #5f6d7e)", lineHeight: 1.5 }}>
                   {state.message}
                 </p>
               )}
@@ -93,50 +95,35 @@ export default function ConfirmProvider({ children }) {
 
             {/* Optional free-text input (e.g. a void reason) */}
             {state.input && (
-              <div style={{ padding: "4px 28px 0" }}>
+              <div style={{ padding: "4px var(--sc-dlg-pad-x, 28px) 0" }}>
                 {state.input.label && (
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#5f6d7e", marginBottom: 6, textAlign: "left" }}>
+                  <label style={{ ...formStyles.label, textAlign: "left" }}>
                     {state.input.label}
                   </label>
                 )}
                 <textarea
                   autoFocus
+                  className="k-textarea"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder={state.input.placeholder || ""}
                   rows={3}
-                  style={{
-                    width: "100%", boxSizing: "border-box", padding: "10px 12px",
-                    borderRadius: 10, border: "1px solid #d0d7e2", fontSize: "0.9rem",
-                    resize: "vertical", fontFamily: "inherit", color: "#1a2332",
-                  }}
                 />
               </div>
             )}
 
             {/* Buttons */}
-            <div style={{ display: "flex", gap: 10, padding: "16px 28px 24px", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 10, padding: "16px var(--sc-dlg-pad-x, 28px) var(--sc-dlg-icon-top, 24px)", justifyContent: "center" }}>
               <button
+                className="k-btn k-btn--secondary sc-dlg-btn"
                 onClick={() => handleClose(false)}
-                style={{
-                  flex: 1, padding: "10px 20px", borderRadius: 10, border: "1px solid #d0d7e2",
-                  background: "#fff", color: "#1a2332", fontWeight: 600, fontSize: "0.9rem",
-                  cursor: "pointer", transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f8f9fb"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
               >
                 {state.cancelText}
               </button>
               <button
+                className="k-btn sc-dlg-btn sc-dlg-btn--confirm"
                 onClick={() => handleClose(true)}
-                style={{
-                  flex: 1, padding: "10px 20px", borderRadius: 10, border: "none",
-                  background: v.btnBg, color: "#fff", fontWeight: 600, fontSize: "0.9rem",
-                  cursor: "pointer", transition: "filter 0.15s",
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.filter = "brightness(0.9)"}
-                onMouseLeave={(e) => e.currentTarget.style.filter = ""}
+                style={{ background: v.btnBg }}
               >
                 {state.confirmText}
               </button>

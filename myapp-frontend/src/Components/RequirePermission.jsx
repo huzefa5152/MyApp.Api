@@ -5,6 +5,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { permissionForPath } from "../config/routePermissions";
 import { useCompany } from "../contexts/CompanyContext";
 import { colors } from "../theme";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 /**
  * Route-level permission gate. Wraps every screen inside the dashboard layout:
@@ -66,14 +68,14 @@ function NoAccess({ permission, pathname, onRetry }) {
           onto a role that already has it.
         </p>
         <div style={styles.actions}>
-          <Link to={has("dashboard.view") ? "/dashboard" : "/profile"} style={styles.primary}>
+          <Link to={has("dashboard.view") ? "/dashboard" : "/profile"} className="k-btn k-btn--primary">
             {has("dashboard.view") ? "Go to the dashboard" : "Go to my profile"}
           </Link>
           {/* /permissions/me failing leaves the set empty, which looks exactly
               like holding nothing. Rather than guess which it was, offer the
               re-read — a transient failure clears in one click, and a genuine
               refusal simply says the same thing again. */}
-          <button type="button" onClick={onRetry} style={styles.secondary}>
+          <button type="button" onClick={onRetry} className="k-btn k-btn--secondary">
             Check again
           </button>
         </div>
@@ -82,6 +84,8 @@ function NoAccess({ permission, pathname, onRetry }) {
   );
 }
 
+// Colours from the kit tokens (Classic values = the original palette); sizes from
+// --sc-* tokens with the original values as the Classic fallback.
 const styles = {
   wrap: {
     display: "flex",
@@ -92,10 +96,10 @@ const styles = {
   card: {
     width: "100%",
     maxWidth: 560,
-    backgroundColor: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "var(--k-surface, #ffffff)",
+    border: "1px solid var(--k-line, #e8edf3)",
     borderRadius: 12,
-    padding: "1.75rem 1.5rem",
+    padding: "var(--sc-panel-pad, 1.75rem 1.5rem)",
     textAlign: "center",
     boxShadow: "0 1px 3px rgba(10,22,40,0.06)",
   },
@@ -109,16 +113,16 @@ const styles = {
     backgroundColor: "#fff8e1",
     color: "#e65100",
   },
-  title: { margin: "0 0 0.6rem", fontSize: "1.15rem", color: colors.textPrimary },
-  body: { margin: "0 0 0.7rem", fontSize: "0.9rem", lineHeight: 1.5, color: colors.textSecondary },
+  title: { margin: "0 0 0.6rem", fontSize: "var(--sc-panel-title, 1.15rem)", color: "var(--k-ink, #1a2332)" },
+  body: { margin: "0 0 0.7rem", fontSize: "var(--k-font, 0.9rem)", lineHeight: 1.5, color: "var(--k-muted, #5f6d7e)" },
   code: {
     fontFamily: "monospace",
     padding: "0.1rem 0.3rem",
     borderRadius: 4,
     backgroundColor: colors.inputBg,
-    border: `1px solid ${colors.inputBorder}`,
+    border: "1px solid var(--k-line-strong, #d0d7e2)",
     fontSize: "0.82rem",
-    color: colors.textPrimary,
+    color: "var(--k-ink, #1a2332)",
     wordBreak: "break-all",
   },
   actions: {
@@ -127,26 +131,5 @@ const styles = {
     gap: "0.6rem",
     justifyContent: "center",
     flexWrap: "wrap",
-  },
-  primary: {
-    display: "inline-block",
-    padding: "0.6rem 1.1rem",
-    borderRadius: 8,
-    backgroundColor: colors.blue,
-    color: "#fff",
-    textDecoration: "none",
-    fontWeight: 600,
-    fontSize: "0.88rem",
-  },
-  secondary: {
-    padding: "0.6rem 1.1rem",
-    borderRadius: 8,
-    backgroundColor: colors.cardBg,
-    color: colors.textPrimary,
-    border: `1px solid ${colors.inputBorder}`,
-    fontWeight: 600,
-    fontSize: "0.88rem",
-    cursor: "pointer",
-    boxShadow: "none",
   },
 };

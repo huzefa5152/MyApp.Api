@@ -1,4 +1,5 @@
 import { MdCheckCircle, MdSchedule, MdWarningAmber, MdRadioButtonUnchecked } from "react-icons/md";
+import "../ui/shared-components.css";
 
 // Payment-status pill for the Invoice / Bill and Purchase Bill list screens.
 // Purely presentational — the CALLER gates rendering on the
@@ -38,9 +39,10 @@ export default function PaymentStatusBadge({ status, balanceDue = 0, daysOverdue
     <div
       style={{
         display: "inline-flex", alignItems: "center", gap: 6,
-        padding: "0.35rem 0.7rem", borderRadius: 8,
+        // Size tokens: Classic = these fallbacks; Workspace = ui/shared-components.css.
+        padding: "var(--sc-pay-pad, 0.35rem 0.7rem)", borderRadius: 8,
         background: s.bg, color: s.color, border: `1px solid ${s.border}`,
-        fontSize: "0.78rem", fontWeight: 700, whiteSpace: "nowrap",
+        fontSize: "var(--sc-pay-font, 0.78rem)", fontWeight: 700, whiteSpace: "nowrap",
       }}
       title={title}
     >

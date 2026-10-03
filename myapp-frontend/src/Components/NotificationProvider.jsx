@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { onNotify } from "../utils/notify";
+import "../ui/shared-components.css";
 
 const severityColors = {
   error: { bg: "#fdeded", border: "#f5c6cb", text: "#842029", icon: "!" },
@@ -47,12 +48,13 @@ export default function NotificationProvider({ children }) {
             zIndex: 9999,
             minWidth: 320,
             maxWidth: 480,
-            padding: "12px 16px",
+            // Size tokens: Classic = these fallbacks; Workspace = ui/shared-components.css.
+            padding: "var(--sc-toast-pad, 12px 16px)",
             borderRadius: 8,
             border: `1px solid ${s.border}`,
             background: s.bg,
             color: s.text,
-            fontSize: "0.88rem",
+            fontSize: "var(--sc-toast-font, 0.88rem)",
             fontWeight: 500,
             boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
             display: "flex",

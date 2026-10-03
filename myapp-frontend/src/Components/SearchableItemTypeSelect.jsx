@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { MdArrowDropDown, MdSearch, MdStar } from "react-icons/md";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 /**
  * Dropdown for picking an Item Type (FBR-mapped catalog entry). Designed to
@@ -155,15 +157,20 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   const favorites = rest.filter((it) => hasHs(it) && it.isFavorite);
   const others = rest.filter((it) => hasHs(it) && !it.isFavorite);
 
+  // Same look as the ComboBox engine (k-combo__* classes in ui/kit.css, themed by the
+  // --k-* tokens). `style` is still merged onto the trigger, exactly as before.
   return (
-    <div style={{ position: "relative", width: "100%" }}>
+    <div className="k-combo">
       <button
         type="button"
         ref={triggerRef}
+        className="k-combo__trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        style={{ ...styles.trigger, ...style }}
+        style={style}
       >
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" }}>
+        <span className="k-combo__label">
           {selected ? (
             <>
               {selected.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
@@ -171,37 +178,38 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
               {selected.hsCode && <span style={styles.hsInline}> · {selected.hsCode}</span>}
             </>
           ) : (
-            <span style={styles.placeholder}>{placeholder || "Select item…"}</span>
+            <span className="k-combo__placeholder">{placeholder || "Select item…"}</span>
           )}
         </span>
         {selected && (
-          <span onClick={handleClear} style={styles.clearBtn} title="Clear selection">×</span>
+          <span onClick={handleClear} className="k-combo__clear" title="Clear selection">×</span>
         )}
-        <MdArrowDropDown size={18} style={{ flexShrink: 0 }} />
+        <MdArrowDropDown size={18} className="k-combo__caret" />
       </button>
 
       {open && triggerRect && createPortal(
         <div
           ref={wrapperRef}
+          className="k-combo__pop"
           style={styles.dropdown(triggerRect)}
           onKeyDown={handleKeyDown}
         >
-          <div style={styles.searchRow}>
-            <MdSearch size={16} style={styles.searchIcon} />
+          <div className="k-combo__search">
+            <MdSearch size={16} aria-hidden="true" />
             <input
               ref={searchRef}
               type="text"
               placeholder="Search by name, HS code…"
+              aria-label="Search by name, HS code…"
               value={query}
               onChange={(e) => { setQuery(e.target.value); setHighlightIdx(0); }}
               onKeyDown={handleKeyDown}
-              style={styles.searchInput}
             />
           </div>
 
-          <div style={styles.list}>
+          <div className="k-combo__list" role="listbox">
             {filteredItems.length === 0 && (
-              <div style={styles.empty}>
+              <div className="k-combo__empty">
                 {items?.length === 0
                   ? "No items in catalog yet. Add one on the Item Types page."
                   : `No items match "${query}".`}
@@ -210,34 +218,34 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
 
             {stocked.length > 0 && (
               <>
-                <div style={styles.sectionHeader}>📦 IN STOCK</div>
-                {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick))}
+                <div className="k-combo__group sc-combo-sticky">📦 IN STOCK</div>
+                {stocked.map((it, i) => renderItem(it, i, highlightIdx, setHighlightIdx, handlePick, value))}
               </>
             )}
             {quick.length > 0 && (
               <>
-                <div style={styles.sectionHeader}>⚡ QUICK (no HS code)</div>
+                <div className="k-combo__group sc-combo-sticky">⚡ QUICK (no HS code)</div>
                 {quick.map((it, i) => {
                   const realIdx = stocked.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick, value);
                 })}
               </>
             )}
             {favorites.length > 0 && (
               <>
-                <div style={styles.sectionHeader}>★ FAVORITES</div>
+                <div className="k-combo__group sc-combo-sticky">★ FAVORITES</div>
                 {favorites.map((it, i) => {
                   const realIdx = stocked.length + quick.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick, value);
                 })}
               </>
             )}
             {others.length > 0 && (
               <>
-                {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div style={styles.sectionHeader}>OTHER</div>}
+                {(stocked.length > 0 || quick.length > 0 || favorites.length > 0) && <div className="k-combo__group sc-combo-sticky">OTHER</div>}
                 {others.map((it, i) => {
                   const realIdx = stocked.length + quick.length + favorites.length + i;
-                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick);
+                  return renderItem(it, realIdx, highlightIdx, setHighlightIdx, handlePick, value);
                 })}
               </>
             )}
@@ -249,32 +257,32 @@ export default function SearchableItemTypeSelect({ items, value, onChange, place
   );
 }
 
-function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
+function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick, currentValue) {
   const highlighted = idx === highlightIdx;
+  const current = currentValue !== "" && currentValue != null && String(it.id) === String(currentValue);
   return (
     <div
       key={it.id}
+      role="option"
+      aria-selected={highlighted}
+      className={`k-combo__opt${current ? " k-combo__opt--current" : ""}`}
       onMouseDown={() => handlePick(it)}
       onMouseEnter={() => setHighlightIdx(idx)}
-      style={{
-        ...styles.row,
-        backgroundColor: highlighted ? "#e3f2fd" : "transparent",
-      }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={styles.rowName}>
+      <div className="k-combo__opt-main">
+        <div className="sc-opt-name">
           {it.isFavorite && <MdStar size={12} color="#f59f00" style={{ verticalAlign: "middle", marginRight: 3 }} />}
           {it.name}
         </div>
-        <div style={styles.rowMeta}>
-          {it.hsCode && <span style={styles.hsChip}>{it.hsCode}</span>}
-          {it.uom && <span style={{ color: "#5f6d7e" }}> {it.uom}</span>}
+        <div className="sc-opt-meta">
+          {it.hsCode && <span className="sc-chip sc-chip--hs">{it.hsCode}</span>}
+          {it.uom && <span> {it.uom}</span>}
           {typeof it.availableQty === "number" && (
-            <span style={(it.availableQty || 0) > 0 ? styles.stockChipOk : styles.stockChipEmpty}>
+            <span className={`sc-chip ${(it.availableQty || 0) > 0 ? "sc-chip--ok" : "sc-chip--empty"}`} style={{ marginLeft: 4 }}>
               {(it.availableQty || 0) > 0 ? `${Number(it.availableQty).toLocaleString("en-PK")} in stock` : "out of stock"}
             </span>
           )}
-          {it.usageCount > 0 && <span style={{ color: "#5f6d7e", marginLeft: 4 }}>· used {it.usageCount}×</span>}
+          {it.usageCount > 0 && <span style={{ marginLeft: 4 }}>· used {it.usageCount}×</span>}
         </div>
       </div>
     </div>
@@ -282,131 +290,23 @@ function renderItem(it, idx, highlightIdx, setHighlightIdx, handlePick) {
 }
 
 const styles = {
-  trigger: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    width: "100%",
-    padding: "0.45rem 0.55rem",
-    border: "1px solid #d0d7e2",
-    borderRadius: 6,
-    backgroundColor: "#fff",
-    fontSize: "0.82rem",
-    color: "#1a2332",
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  placeholder: { color: "#94a3b8" },
-  clearBtn: {
-    fontSize: "1rem",
-    color: "#94a3b8",
-    padding: "0 0.3rem",
-    cursor: "pointer",
-    lineHeight: 1,
-  },
-  hsInline: { color: "#5f6d7e", fontFamily: "monospace", fontSize: "0.75rem", marginLeft: 4 },
-  // position: fixed uses viewport coords (no scrollY math). Anchored directly
-  // to the trigger's getBoundingClientRect(), and the component re-measures
-  // on every ancestor scroll/resize so the list tracks the trigger exactly.
-  // If the dropdown would run off the bottom of the viewport we flip it above.
+  hsInline: { color: "var(--k-muted, #5f6d7e)", fontFamily: "monospace", fontSize: "0.75rem", marginLeft: 4 },
+  // position: fixed (from .k-combo__pop) uses viewport coords (no scrollY math).
+  // Anchored directly to the trigger's getBoundingClientRect(), and the component
+  // re-measures on every ancestor scroll/resize so the list tracks the trigger
+  // exactly. If the dropdown would run off the bottom of the viewport we flip it
+  // above; it is also kept inside the viewport horizontally (phones).
   dropdown: (rect) => {
     const spaceBelow = window.innerHeight - rect.bottom;
     const listHeight = 420;
     const flipAbove = spaceBelow < 240 && rect.top > spaceBelow;
+    const width = Math.min(Math.max(rect.width, 360), window.innerWidth - 16);
     return {
-      position: "fixed",
       top: flipAbove ? undefined : rect.bottom + 2,
       bottom: flipAbove ? window.innerHeight - rect.top + 2 : undefined,
-      left: rect.left,
-      width: Math.max(rect.width, 360),
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+      width,
       maxHeight: flipAbove ? Math.min(listHeight, rect.top - 10) : Math.min(listHeight, spaceBelow - 10),
-      backgroundColor: "#fff",
-      border: "1px solid #d0d7e2",
-      borderRadius: 8,
-      boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-      zIndex: 9999,
-      display: "flex",
-      flexDirection: "column",
     };
   },
-  searchRow: {
-    display: "flex",
-    alignItems: "center",
-    padding: "0.45rem 0.65rem",
-    borderBottom: "1px solid #e8edf3",
-    position: "relative",
-  },
-  searchIcon: { position: "absolute", left: 12, color: "#94a3b8" },
-  searchInput: {
-    width: "100%",
-    padding: "0.35rem 0.35rem 0.35rem 1.85rem",
-    border: "1px solid #e8edf3",
-    borderRadius: 6,
-    fontSize: "0.82rem",
-    outline: "none",
-    backgroundColor: "#f8f9fb",
-  },
-  list: { overflowY: "auto", flex: 1 },
-  sectionHeader: {
-    padding: "0.45rem 0.7rem 0.25rem",
-    fontSize: "0.65rem",
-    fontWeight: 800,
-    color: "#5f6d7e",
-    letterSpacing: "0.05em",
-    textTransform: "uppercase",
-    backgroundColor: "#f8f9fb",
-    position: "sticky",
-    top: 0,
-  },
-  row: {
-    padding: "0.45rem 0.7rem",
-    cursor: "pointer",
-    borderBottom: "1px solid #f0f4f8",
-  },
-  rowName: {
-    fontWeight: 600,
-    fontSize: "0.82rem",
-    color: "#1a2332",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  rowMeta: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.35rem",
-    marginTop: 2,
-    fontSize: "0.72rem",
-  },
-  hsChip: {
-    padding: "0.05rem 0.35rem",
-    backgroundColor: "#e3f2fd",
-    color: "#0d47a1",
-    fontFamily: "monospace",
-    fontWeight: 700,
-    fontSize: "0.7rem",
-    borderRadius: 3,
-  },
-  // 2026-05-12: stock chips shown next to HS / UOM when the parent
-  // passed companyId to getItemTypes. Green = sellable now, muted =
-  // nothing left to ship under this Item Type.
-  stockChipOk: {
-    padding: "0.05rem 0.35rem",
-    backgroundColor: "#e8f5e9",
-    color: "#1b5e20",
-    fontWeight: 700,
-    fontSize: "0.7rem",
-    borderRadius: 3,
-    marginLeft: 4,
-  },
-  stockChipEmpty: {
-    padding: "0.05rem 0.35rem",
-    backgroundColor: "#f0f4f8",
-    color: "#5f6d7e",
-    fontWeight: 600,
-    fontSize: "0.7rem",
-    borderRadius: 3,
-    marginLeft: 4,
-  },
-  empty: { padding: "0.8rem 0.8rem", color: "#5f6d7e", fontSize: "0.82rem" },
 };

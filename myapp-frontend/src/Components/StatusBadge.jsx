@@ -1,8 +1,9 @@
 // Reusable status pill. Centralised palette so colours stay consistent
 // across Challans, Bills, Invoices, Purchase Bills, Goods Receipts.
 // Pass `tone` for one of the presets, or `bg`/`color`/`border` to override.
+import "../ui/shared-components.css";
 
-const tones = {
+export const statusTones = {
   pending:    { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
   imported:   { bg: "#f3e5f5", color: "#6a1b9a", border: "#6a1b9a30" },
   info:       { bg: "#e3f2fd", color: "#0d47a1", border: "#0d47a130" },
@@ -45,7 +46,7 @@ export function toneForStatus(status) {
 
 export default function StatusBadge({ tone, status, children, style, title }) {
   const resolvedTone = tone || toneForStatus(status);
-  const palette = tones[resolvedTone] || tones.neutral;
+  const palette = statusTones[resolvedTone] || statusTones.neutral;
   return (
     <span
       title={title}
@@ -53,9 +54,11 @@ export default function StatusBadge({ tone, status, children, style, title }) {
         display: "inline-flex",
         alignItems: "center",
         gap: 4,
-        fontSize: "0.72rem",
+        // Size tokens: Classic falls back to the original values; Workspace sets them
+        // in ui/shared-components.css.
+        fontSize: "var(--sc-badge-font, 0.72rem)",
         fontWeight: 700,
-        padding: "0.2rem 0.6rem",
+        padding: "var(--sc-badge-pad, 0.2rem 0.6rem)",
         borderRadius: 20,
         whiteSpace: "nowrap",
         textTransform: "uppercase",

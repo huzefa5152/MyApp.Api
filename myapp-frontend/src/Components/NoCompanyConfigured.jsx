@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { MdBusiness, MdLockOutline } from "react-icons/md";
 import { usePermissions } from "../contexts/PermissionsContext";
-import { colors } from "../theme";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 /**
  * Shown in place of any company-dependent screen when the signed-in
@@ -24,7 +25,7 @@ export default function NoCompanyConfigured() {
   return (
     <div style={styles.wrap} data-testid="no-company-configured">
       <div style={styles.card}>
-        <div style={styles.iconWrap}>
+        <div style={styles.iconWrap} className="sc-hero-icon">
           {canCreate ? <MdBusiness size={40} /> : <MdLockOutline size={40} />}
         </div>
         <h2 style={styles.title}>No Company Configured</h2>
@@ -34,7 +35,7 @@ export default function NoCompanyConfigured() {
             : "This account currently has access to no company. Ask your administrator to assign a company to your account."}
         </p>
         {canCreate && (
-          <Link to="/companies/list" style={styles.button}>
+          <Link to="/companies/list" className="k-btn k-btn--primary">
             <MdBusiness size={18} />
             Go to Companies
           </Link>
@@ -44,6 +45,9 @@ export default function NoCompanyConfigured() {
   );
 }
 
+// Colours from the kit tokens (Classic values = the original palette); sizes from
+// --sc-* tokens with the original values as the Classic fallback. The button is the
+// kit primary button (ui/kit.css).
 const styles = {
   wrap: {
     display: "flex",
@@ -56,42 +60,31 @@ const styles = {
     width: "100%",
     maxWidth: 480,
     textAlign: "center",
-    background: colors.cardBg,
-    border: `1px solid ${colors.cardBorder}`,
+    background: "var(--k-surface, #ffffff)",
+    border: "1px solid var(--k-line, #e8edf3)",
     borderRadius: 16,
-    padding: "clamp(1.5rem, 4vw, 2.5rem)",
-    boxShadow: "0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06)",
+    padding: "var(--sc-panel-pad, clamp(1.5rem, 4vw, 2.5rem))",
+    boxShadow: "var(--k-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
   },
   iconWrap: {
-    width: 72,
-    height: 72,
+    width: "var(--sc-hero-icon, 72px)",
+    height: "var(--sc-hero-icon, 72px)",
     margin: "0 auto 1rem",
     borderRadius: "50%",
     display: "grid",
     placeItems: "center",
     background: "#e8f0fe",
-    color: colors.blue,
+    color: "var(--k-blue, #0d47a1)",
   },
   title: {
     margin: "0 0 0.5rem",
-    fontSize: "1.35rem",
-    color: colors.textPrimary,
+    fontSize: "var(--sc-hero-title, 1.35rem)",
+    color: "var(--k-ink, #1a2332)",
   },
   text: {
     margin: "0 0 1.25rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted, #5f6d7e)",
+    fontSize: "var(--sc-text, inherit)",
     lineHeight: 1.5,
-  },
-  button: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    padding: "0.7rem 1.2rem",
-    minHeight: 44,
-    borderRadius: 10,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    color: "#fff",
-    fontWeight: 600,
-    textDecoration: "none",
   },
 };

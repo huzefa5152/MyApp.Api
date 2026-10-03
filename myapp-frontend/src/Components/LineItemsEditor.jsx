@@ -329,8 +329,8 @@ export default function LineItemsEditor({
 
       {showBulk && items.length > 1 && (
         <div style={s.bulkApplyBar}>
-          <span style={{ fontSize: "0.82rem", color: "#1a2332", fontWeight: 500 }}>Apply same Item Type to:</span>
-          <select value={bulkApplyMode} onChange={(e) => setBulkApplyMode(e.target.value)} style={{ ...s.input, width: "auto", padding: "0.3rem 0.5rem", fontSize: "0.8rem", maxWidth: 160 }}>
+          <span style={{ fontSize: "var(--sc-cell-font, 0.82rem)", color: colors.ink, fontWeight: 500 }}>Apply same Item Type to:</span>
+          <select value={bulkApplyMode} onChange={(e) => setBulkApplyMode(e.target.value)} style={{ ...s.input, width: "auto", minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-select-pad, 0.3rem 0.5rem)", fontSize: "var(--sc-cell-font, 0.8rem)", maxWidth: 160 }}>
             <option value="all">All {items.length} rows</option>
             <option value="empty">Only empty rows</option>
           </select>
@@ -340,7 +340,7 @@ export default function LineItemsEditor({
               value={""}
               onChange={(newId) => applyItemTypeToAll(newId)}
               placeholder={nonHsPlaceholderAll}
-              style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }}
+              style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.3rem 0.5rem)", fontSize: "var(--sc-cell-font, 0.78rem)" }}
             />
           </div>
           <button type="button" style={s.bulkClearBtn} onClick={clearAllItemTypes} disabled={!items.some((it) => it.itemTypeId)} title="Drop the Item Type binding from every row">
@@ -361,7 +361,7 @@ export default function LineItemsEditor({
                   {showImage && imageCell(item, idx, locked)}
                   {showItemType && (
                     <div style={{ flex: 1 }}>
-                      <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder={itemTypePlaceholder} style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }} />
+                      <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder={itemTypePlaceholder} style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.4rem 0.55rem)", fontSize: "var(--sc-cell-font, 0.82rem)" }} />
                     </div>
                   )}
                   {!showItemType && <div style={{ flex: 1 }} />}
@@ -374,7 +374,7 @@ export default function LineItemsEditor({
                   endpoint="/lookup/items"
                   value={item.description}
                   onChange={(v) => handleDescChange(idx, v)}
-                  inputStyle={{ ...s.cellInput, fontSize: "0.95rem" }}
+                  inputStyle={{ ...s.cellInput, fontSize: "var(--sc-cell-font, 0.95rem)" }}
                   inputRef={(el) => { descRefs.current[idx] = el; }}
                   onEnterKey={() => commitAndAdvance(idx)}
                   multiline={descriptionMultiline}
@@ -406,7 +406,7 @@ export default function LineItemsEditor({
         </div>
       ) : (
         <div style={s.tableWrap}>
-          <table style={s.table}>
+          <table style={s.table} className="sc-lie-table">
             <thead>
               <tr>
                 <th style={{ ...s.th, width: 28, textAlign: "center" }}>#</th>
@@ -430,7 +430,7 @@ export default function LineItemsEditor({
                     {showImage && <td style={s.td}>{imageCell(item, idx, locked)}</td>}
                     {showItemType && (
                       <td style={{ ...s.td, verticalAlign: "top" }}>
-                        <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder="— optional —" style={{ padding: "0.3rem 0.5rem", fontSize: "0.78rem" }} />
+                        <SearchableItemTypeSelect items={itemTypes} value={item.itemTypeId || ""} onChange={(newId) => pickItemType(idx, newId)} placeholder="— optional —" style={{ minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.3rem 0.5rem)", fontSize: "var(--sc-cell-font, 0.78rem)" }} />
                       </td>
                     )}
                     <td style={{ ...s.td, verticalAlign: "top" }}>
@@ -482,37 +482,43 @@ export default function LineItemsEditor({
   );
 }
 
+// Colours come from the kit's --k-* tokens (ui/kit.css — Classic values are the
+// original palette). Sizes read --sc-* tokens (ui/shared-components.css) with the
+// original value as the fallback, so Classic is unchanged and Workspace is compact.
 const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
+  textSecondary: "var(--k-muted, #5f6d7e)", cardBorder: "var(--k-line, #e8edf3)", inputBg: "var(--k-input-bg, #f8f9fb)",
+  inputBorder: "var(--k-line-strong, #d0d7e2)", danger: "var(--k-danger, #dc3545)", dangerLight: "var(--k-danger-bg, #fff0f1)", teal: "var(--k-teal, #00897b)",
+  ink: "var(--k-ink, #1a2332)",
 };
+const touchH = "var(--sc-touch-h, 44px)";
+const smallFont = "var(--sc-small-font, 0.78rem)";
 
 const s = {
   itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
+  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "var(--ui-label-size, 0.85rem)", color: colors.textSecondary },
   hintText: { fontWeight: 400, fontSize: "0.72rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  toolBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.textSecondary, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  pastePanel: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem", marginBottom: "0.6rem", background: "#f8faff" },
+  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.ink, outline: "none", boxSizing: "border-box" },
+  toolBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.textSecondary, fontSize: smallFont, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  inlineAddBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.4rem 0.7rem)", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: smallFont, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  pastePanel: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "var(--sc-box-pad, 0.7rem)", marginBottom: "0.6rem", background: "#f8faff" },
   pasteHintRow: { fontSize: "0.75rem", color: colors.textSecondary, marginBottom: "0.4rem" },
-  pasteArea: { width: "100%", boxSizing: "border-box", padding: "0.5rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.85rem", fontFamily: "inherit", marginBottom: "0.5rem", resize: "vertical" },
-  pasteCancel: { padding: "0.4rem 0.9rem", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
-  pasteApply: { padding: "0.4rem 0.9rem", borderRadius: 6, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" },
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  pasteArea: { width: "100%", boxSizing: "border-box", padding: "0.5rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--sc-cell-font, 0.85rem)", fontFamily: "inherit", marginBottom: "0.5rem", resize: "vertical" },
+  pasteCancel: { minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)", borderRadius: 6, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
+  pasteApply: { minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)", borderRadius: 6, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer" },
+  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "var(--sc-box-pad, 0.55rem 0.85rem)", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
+  bulkClearBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.35rem 0.7rem)", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: smallFont, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
   tableWrap: { maxHeight: 320, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
   table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.4rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
-  td: { padding: "0.3rem 0.4rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}` },
-  cellInput: { width: "100%", padding: "0.5rem 0.55rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
+  th: { textAlign: "left", fontSize: "var(--k-th-font, 0.7rem)", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "var(--sc-th-pad, 0.5rem 0.4rem)", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0, zIndex: 1 },
+  td: { padding: "var(--sc-td-pad, 0.3rem 0.4rem)", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}` },
+  cellInput: { width: "100%", minHeight: "var(--sc-cell-h, 0px)", padding: "var(--sc-cell-pad, 0.5rem 0.55rem)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--sc-cell-font, 0.88rem)", backgroundColor: colors.inputBg, color: colors.ink, outline: "none", boxSizing: "border-box" },
   hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
   lockHint: { fontSize: "0.7rem", color: colors.textSecondary, marginTop: 2, fontStyle: "italic" },
-  del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
+  del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: "1px solid rgba(220, 53, 69, 0.15)", backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
   addRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.6rem", flexWrap: "wrap" },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
+  addBtn: { minHeight: touchH, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "var(--sc-small-btn-pad, 0.4rem 0.9rem)", borderRadius: 8, border: "none", backgroundColor: "rgba(0, 137, 123, 0.08)", color: colors.teal, fontSize: "var(--sc-cell-font, 0.82rem)", fontWeight: 600, cursor: "pointer" },
   enterHint: { fontSize: "0.72rem", color: colors.textSecondary },
-  kbd: { fontFamily: "monospace", fontSize: "0.7rem", padding: "0.05rem 0.35rem", borderRadius: 4, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: "#1a2332" },
+  kbd: { fontFamily: "monospace", fontSize: "0.7rem", padding: "0.05rem 0.35rem", borderRadius: 4, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.ink },
   // Mobile stacked-card line items (below narrowBreakpoint).
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },

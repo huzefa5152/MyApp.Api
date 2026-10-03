@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import httpClient from "../api/httpClient";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 export default function LookupAutocomplete({ companyId, label, endpoint, value, onChange, inputClassName, inputStyle, inputRef, autoFocus, onEnterKey, multiline = false }) {
     const [suggestions, setSuggestions] = useState([]);
@@ -167,7 +169,7 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
                 <textarea
                     ref={inputRef}
                     autoFocus={autoFocus}
-                    className={inputClassName !== undefined ? inputClassName : "form-control"}
+                    className={inputClassName !== undefined ? inputClassName : "k-textarea"}
                     style={{ resize: "vertical", minHeight: 58, lineHeight: 1.4, ...inputStyle }}
                     placeholder={label}
                     value={inputValue}
@@ -183,7 +185,7 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
                     ref={inputRef}
                     autoFocus={autoFocus}
                     type="text"
-                    className={inputClassName !== undefined ? inputClassName : "form-control"}
+                    className={inputClassName !== undefined ? inputClassName : "k-input"}
                     style={inputStyle}
                     placeholder={label}
                     value={inputValue}
@@ -196,37 +198,34 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
             )}
 
             {showDropdown && (() => {
-                // position:fixed in viewport coords so the dropdown stays
-                // glued to the input even when an ancestor (modal body, page
-                // root) scrolls. The reflow effect above re-renders this on
-                // scroll/resize so getBoundingClientRect() returns current
-                // viewport coords every time.
+                // position:fixed (from .sc-suggest) in viewport coords so the
+                // dropdown stays glued to the input even when an ancestor (modal
+                // body, page root) scrolls. The reflow effect above re-renders this
+                // on scroll/resize so getBoundingClientRect() returns current
+                // viewport coords every time. Look = the ComboBox popover
+                // (.sc-suggest + k-combo__opt, themed by the --k-* tokens).
                 const rect = wrapperRef.current?.getBoundingClientRect();
                 if (!rect) return null;
                 return createPortal(
                     <ul
-                        className="list-group shadow-sm"
+                        className="sc-suggest"
+                        role="listbox"
                         style={{
-                            position: "fixed",
-                            zIndex: 9999,
                             maxHeight: "300px",
-                            overflowY: "auto",
-                            borderRadius: "0.375rem",
-                            background: "#fff",
-                            top: rect.bottom,
+                            top: rect.bottom + 2,
                             left: rect.left,
                             width: rect.width
                         }}
                     >
 
-                        {loading && <li className="list-group-item text-muted">Loading...</li>}
+                        {loading && <li className="sc-suggest__note sc-suggest__note--loading">Loading...</li>}
 
                         {suggestions.map((s, idx) => (
                             <li
                                 key={s.id}
-                                className={`list-group-item list-group-item-action ${idx === highlightIndex ? "active" : ""
-                                    }`}
-                                style={{ cursor: "pointer" }}
+                                role="option"
+                                aria-selected={idx === highlightIndex}
+                                className="k-combo__opt"
                                 onMouseDown={() => handleSelect(s.name)}
                             >
                                 {s.name}
@@ -235,8 +234,9 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
 
                         {valueExists && (
                             <li
-                                className="list-group-item list-group-item-action text-success"
-                                style={{ cursor: "pointer", fontWeight: "bold" }}
+                                role="option"
+                                aria-selected={false}
+                                className="k-combo__opt sc-suggest__create"
                                 onMouseDown={() => handleSelect(inputValue)}
                             >
                                 + Create new "{inputValue}"
@@ -244,7 +244,6 @@ export default function LookupAutocomplete({ companyId, label, endpoint, value, 
                         )}
                     </ul>,
                     document.body);
-            })()}
-        </div>
+            })()}        </div>
     );
 }

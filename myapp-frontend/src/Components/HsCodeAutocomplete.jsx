@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { getFbrHSCodes } from "../api/fbrApi";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 // PCT/HS format: NNNN.NNNN with an optional .NN tail. Used to tell a
 // complete, already-valid code (e.g. an item's SAVED code on edit) apart
@@ -133,10 +135,14 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
     }
   };
 
+  // Free-text input (the operator may type a code directly). Input = kit input
+  // (k-input; `style` is still applied on top), dropdown = the ComboBox popover look
+  // (.sc-suggest + k-combo__* in ui/kit.css / ui/shared-components.css).
   return (
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
       <input
         type="text"
+        className="k-input"
         style={style}
         value={query}
         placeholder={placeholder || "Click to browse FBR catalog, or type e.g. valve, pipe, steel…"}
@@ -153,8 +159,8 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
       />
       {showDropdown && (
         createPortal(
-          <ul style={styles.dropdown(triggerRect)}>
-            {loading && <li style={styles.loading}>Searching FBR catalog…</li>}
+          <ul className="sc-suggest" role="listbox" style={styles.dropdown(triggerRect)}>
+            {loading && <li className="sc-suggest__note sc-suggest__note--loading">Searching FBR catalog…</li>}
             {!loading && suggestions.length === 0 && query && (
               HS_FORMAT.test(query.trim()) ? (
                 // The field already holds a complete, valid HS code — almost
@@ -168,21 +174,20 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
                   <span><b>{query.trim()}</b> — current HS code. Type a product keyword (e.g. “valve”, “pipe”) to pick a different one.</span>
                 </li>
               ) : (
-                <li style={styles.empty}>No HS codes match “{query}”. Try a product keyword like “valve” or “steel pipe”.</li>
+                <li className="sc-suggest__note">No HS codes match “{query}”. Try a product keyword like “valve” or “steel pipe”.</li>
               )
             )}
             {suggestions.map((s, idx) => (
               <li
                 key={s.hS_CODE + idx}
-                style={{
-                  ...styles.item,
-                  backgroundColor: idx === highlightIndex ? "#e3f2fd" : "#fff",
-                }}
+                role="option"
+                aria-selected={idx === highlightIndex}
+                className="k-combo__opt"
                 onMouseDown={() => handleSelect(s.hS_CODE)}
                 onMouseEnter={() => setHighlightIndex(idx)}
               >
-                <div style={styles.itemCode}>{s.hS_CODE}</div>
-                <div style={styles.itemDesc}>{s.description}</div>
+                <div className="sc-opt-code">{s.hS_CODE}</div>
+                <div className="sc-opt-desc">{s.description}</div>
               </li>
             ))}
           </ul>,
@@ -195,53 +200,18 @@ export default function HsCodeAutocomplete({ companyId, value, onChange, style, 
 
 const styles = {
   dropdown: (rect) => {
-    // position:fixed + viewport coords. The triggerRect state is updated
-    // on every scroll (capture phase) so the dropdown re-renders glued
-    // to the input as it moves on screen. position:absolute with +scrollY
-    // would drift on inner-container scroll because we never re-render.
+    // position:fixed (from .sc-suggest) + viewport coords. The triggerRect state
+    // is updated on every scroll (capture phase) so the dropdown re-renders glued
+    // to the input as it moves on screen. Kept inside the viewport horizontally.
     const r = rect ?? { bottom: 0, left: 0, width: 300 };
+    const width = Math.min(Math.max(r.width, 400), window.innerWidth - 16);
     return {
-      position: "fixed",
-      top: r.bottom,
-      left: r.left,
-      width: Math.max(r.width, 400),
+      top: r.bottom + 2,
+      left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
+      width,
       maxHeight: 340,
-      overflowY: "auto",
-      backgroundColor: "#fff",
-      border: "1px solid #d0d7e2",
-      borderRadius: 6,
-      boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
-      zIndex: 9999,
-      margin: 0,
-      padding: 0,
-      listStyle: "none",
-      fontSize: "0.82rem",
     };
   },
-  item: {
-    padding: "0.5rem 0.7rem",
-    cursor: "pointer",
-    borderBottom: "1px solid #f0f4f8",
-  },
-  itemCode: {
-    fontWeight: 700,
-    color: "#0d47a1",
-    fontFamily: "monospace",
-    fontSize: "0.82rem",
-  },
-  itemDesc: {
-    fontSize: "0.75rem",
-    color: "#5f6d7e",
-    marginTop: 2,
-    lineHeight: 1.3,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-  },
-  loading: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem", fontStyle: "italic" },
-  empty: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem" },
-  confirm: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.6rem 0.75rem", color: "#1b5e20", fontSize: "0.82rem", backgroundColor: "#f1f8f2" },
+  confirm: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.6rem 0.75rem", color: "#1b5e20", backgroundColor: "#f1f8f2", borderRadius: 6 },
   confirmTick: { flex: "none", color: "#2e7d32", fontWeight: 700 },
 };

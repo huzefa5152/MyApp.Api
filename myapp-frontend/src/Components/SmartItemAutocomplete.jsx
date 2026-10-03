@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { searchItemDescriptions } from "../api/lookupApi";
 import { getFbrHSCodes, getFbrHsUom } from "../api/fbrApi";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 /**
  * Unified item description picker:
@@ -170,10 +172,14 @@ export default function SmartItemAutocomplete({
 
   const hasAnyResults = localResults.length > 0 || fbrResults.length > 0;
 
+  // Free-text input (own descriptions are allowed). Input = kit input (k-input;
+  // `style` is still applied on top), dropdown = the ComboBox popover look
+  // (.sc-suggest + k-combo__* in ui/kit.css / ui/shared-components.css).
   return (
     <div ref={wrapperRef} style={{ position: "relative", width: "100%" }}>
       <input
         type="text"
+        className="k-input"
         style={style}
         value={query}
         placeholder={placeholder || "Search items or FBR catalog…"}
@@ -184,28 +190,27 @@ export default function SmartItemAutocomplete({
       />
       {showDropdown && (
         createPortal(
-          <ul style={styles.dropdown(wrapperRef.current)}>
-            {loading && <li style={styles.loading}>Searching…</li>}
+          <ul className="sc-suggest" role="listbox" style={styles.dropdown(wrapperRef.current)}>
+            {loading && <li className="sc-suggest__note sc-suggest__note--loading">Searching…</li>}
 
             {!loading && localResults.length > 0 && (
               <>
-                <li style={styles.sectionHeader}>SAVED ITEMS</li>
+                <li className="k-combo__group" style={styles.sectionHeader}>SAVED ITEMS</li>
                 {localResults.map((item, idx) => (
                   <li
                     key={`local-${item.id}`}
-                    style={{
-                      ...styles.item,
-                      backgroundColor: idx === highlightIndex ? "#e3f2fd" : "#fff",
-                    }}
+                    role="option"
+                    aria-selected={idx === highlightIndex}
+                    className="k-combo__opt"
                     onMouseDown={() => pickLocal(item)}
                     onMouseEnter={() => setHighlightIndex(idx)}
                   >
                     <div style={styles.itemName}>
                       {item.name}
-                      <span style={styles.localBadge}>SAVED</span>
+                      <span className="sc-chip sc-chip--saved">SAVED</span>
                     </div>
                     {(item.hsCode || item.uom) && (
-                      <div style={styles.itemMeta}>
+                      <div className="sc-opt-meta" style={{ display: "block" }}>
                         {item.hsCode && <span><b>HS:</b> {item.hsCode}</span>}
                         {item.uom && <span> · <b>UOM:</b> {item.uom}</span>}
                         {item.saleType && <span> · <b>Sale:</b> {item.saleType.substring(0, 30)}{item.saleType.length > 30 ? "…" : ""}</span>}
@@ -218,24 +223,23 @@ export default function SmartItemAutocomplete({
 
             {!loading && fbrResults.length > 0 && (
               <>
-                <li style={styles.sectionHeader}>FBR CATALOG (HS Code)</li>
+                <li className="k-combo__group" style={styles.sectionHeader}>FBR CATALOG (HS Code)</li>
                 {fbrResults.map((f, idx) => {
                   const realIdx = localResults.length + idx;
                   return (
                     <li
                       key={`fbr-${f.hS_CODE}-${idx}`}
-                      style={{
-                        ...styles.item,
-                        backgroundColor: realIdx === highlightIndex ? "#e3f2fd" : "#fff",
-                      }}
+                      role="option"
+                      aria-selected={realIdx === highlightIndex}
+                      className="k-combo__opt"
                       onMouseDown={() => pickFbr(f)}
                       onMouseEnter={() => setHighlightIndex(realIdx)}
                     >
                       <div style={styles.itemCodeRow}>
-                        <span style={styles.hsCode}>{f.hS_CODE}</span>
-                        <span style={styles.fbrBadge}>FBR</span>
+                        <span className="sc-opt-code">{f.hS_CODE}</span>
+                        <span className="sc-chip sc-chip--fbr">FBR</span>
                       </div>
-                      <div style={styles.itemDesc}>{f.description}</div>
+                      <div className="sc-opt-desc">{f.description}</div>
                     </li>
                   );
                 })}
@@ -243,7 +247,7 @@ export default function SmartItemAutocomplete({
             )}
 
             {!loading && !hasAnyResults && query && (
-              <li style={styles.empty}>
+              <li className="sc-suggest__note">
                 No matches. Keep typing or just use your own description — we'll save it for next time.
               </li>
             )}
@@ -256,99 +260,23 @@ export default function SmartItemAutocomplete({
 }
 
 const styles = {
-  // position:fixed uses viewport coords (no scrollY math). The component's
-  // scroll/resize listener forces a re-render so this reads fresh
+  // position:fixed (from .sc-suggest) uses viewport coords (no scrollY math). The
+  // component's scroll/resize listener forces a re-render so this reads fresh
   // getBoundingClientRect() coords each time — dropdown stays glued to the
   // input as ancestors scroll. Same pattern as LookupAutocomplete and
-  // SearchableItemTypeSelect.
+  // SearchableItemTypeSelect. Kept inside the viewport horizontally (phones).
   dropdown: (el) => {
     const rect = el?.getBoundingClientRect() ?? { bottom: 0, left: 0, width: 300 };
+    const width = Math.min(Math.max(rect.width, 420), window.innerWidth - 16);
     return {
-      position: "fixed",
-      top: rect.bottom,
-      left: rect.left,
-      width: Math.max(rect.width, 420),
+      top: rect.bottom + 2,
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+      width,
       maxHeight: 380,
-      overflowY: "auto",
-      backgroundColor: "#fff",
-      border: "1px solid #d0d7e2",
-      borderRadius: 6,
-      boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
-      zIndex: 9999,
-      margin: 0,
-      padding: 0,
-      listStyle: "none",
-      fontSize: "0.82rem",
     };
   },
-  sectionHeader: {
-    padding: "0.4rem 0.7rem",
-    fontSize: "0.7rem",
-    fontWeight: 800,
-    color: "#0d47a1",
-    backgroundColor: "#eff6ff",
-    letterSpacing: "0.05em",
-    textTransform: "uppercase",
-    borderBottom: "1px solid #d0d7e2",
-  },
-  item: {
-    padding: "0.45rem 0.7rem",
-    cursor: "pointer",
-    borderBottom: "1px solid #f0f4f8",
-  },
-  itemName: {
-    fontWeight: 600,
-    color: "#1a2332",
-    fontSize: "0.82rem",
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-  },
-  localBadge: {
-    padding: "0.05rem 0.35rem",
-    backgroundColor: "#e8f5e9",
-    color: "#2e7d32",
-    fontSize: "0.62rem",
-    fontWeight: 800,
-    borderRadius: 3,
-    letterSpacing: "0.04em",
-  },
-  fbrBadge: {
-    padding: "0.05rem 0.35rem",
-    backgroundColor: "#fff3e0",
-    color: "#e65100",
-    fontSize: "0.62rem",
-    fontWeight: 800,
-    borderRadius: 3,
-    letterSpacing: "0.04em",
-  },
-  itemMeta: {
-    fontSize: "0.72rem",
-    color: "#5f6d7e",
-    marginTop: 2,
-  },
-  itemCodeRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.4rem",
-  },
-  hsCode: {
-    fontWeight: 700,
-    color: "#0d47a1",
-    fontFamily: "monospace",
-    fontSize: "0.82rem",
-  },
-  itemDesc: {
-    fontSize: "0.72rem",
-    color: "#5f6d7e",
-    marginTop: 2,
-    lineHeight: 1.3,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-  },
-  loading: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.82rem", fontStyle: "italic" },
-  empty: { padding: "0.6rem 0.75rem", color: "#5f6d7e", fontSize: "0.8rem", lineHeight: 1.4 },
+  // Section header keeps its blue tint (same as the ComboBox's toned group rows).
+  sectionHeader: { color: "var(--k-blue, #0d47a1)", backgroundColor: "#eff6ff", borderRadius: 4 },
+  itemName: { fontWeight: 600, color: "var(--k-ink, #1a2332)", display: "flex", alignItems: "center", gap: "0.4rem" },
+  itemCodeRow: { display: "flex", alignItems: "center", gap: "0.4rem" },
 };

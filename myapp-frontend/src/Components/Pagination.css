@@ -1,13 +1,42 @@
-/* Shared pagination bar — see Components/Pagination.jsx */
+/* Shared pagination bar — see Components/Pagination.jsx
+   Sizes come from the --pg-* tokens below (Classic = the original look,
+   Workspace = compact); colours from the kit's --k-* tokens (ui/kit.css). */
+
+:root,
+[data-ui-layout="classic"] {
+  --pg-gap: 0.6rem 1rem;
+  --pg-pad: 1rem 0;
+  --pg-mt: 0.5rem;
+  --pg-font: 0.85rem;
+  --pg-size-font: 0.82rem;
+  --pg-size-pad: 0.3rem 0.6rem;
+  --pg-btn-h: 44px;
+  --pg-btn-pad: 0 0.7rem;
+  --pg-btn-radius: 8px;
+}
+
+[data-ui-layout="workspace"] {
+  --pg-gap: 0.6rem;
+  --pg-pad: 0.6rem 0 0;
+  --pg-font: 0.78rem;
+  --pg-size-font: 0.78rem;
+  --pg-size-pad: 0 0.45rem;
+  --pg-btn-h: 30px;
+  --pg-btn-pad: 0 0.55rem;
+  --pg-btn-radius: 8px;
+}
+@media (pointer: coarse) {
+  [data-ui-layout="workspace"] { --pg-btn-h: 40px; }
+}
 
 .pagination-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem 1rem;
-  padding: 1rem 0;
-  margin-top: 0.5rem;
+  gap: var(--pg-gap);
+  padding: var(--pg-pad);
+  margin-top: var(--pg-mt);
 }
 
 .pagination-nav {
@@ -22,17 +51,22 @@
   align-items: center;
   justify-content: center;
   gap: 0.2rem;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 0.7rem;
-  border: 1px solid #d0d7e2;
-  border-radius: 8px;
+  min-height: var(--pg-btn-h);
+  min-width: var(--pg-btn-h);
+  padding: var(--pg-btn-pad);
+  border: 1px solid var(--k-line-strong, #d0d7e2);
+  border-radius: var(--pg-btn-radius);
   background: #fff;
-  color: #0d47a1;
-  font-size: 0.85rem;
+  color: var(--k-blue, #0d47a1);
+  font-size: var(--pg-font);
   font-weight: 600;
   cursor: pointer;
   box-shadow: none;
+}
+
+.pagination-btn:focus-visible {
+  outline: 2px solid var(--k-focus, #1565c0);
+  outline-offset: 2px;
 }
 
 .pagination-btn:disabled {
@@ -41,14 +75,41 @@
 }
 
 .pagination-info {
-  font-size: 0.85rem;
-  color: #5f6d7e;
+  font-size: var(--pg-font);
+  color: var(--k-muted, #5f6d7e);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .pagination-info__count {
   color: #98a4b3;
+}
+
+/* Rows-per-page selector (Components/PageSizeSelect.jsx). */
+.pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--pg-size-font);
+  color: var(--k-muted, #5f6d7e);
+  font-weight: 500;
+}
+
+.pagination-size__select {
+  min-height: var(--pg-btn-h);
+  padding: var(--pg-size-pad);
+  border-radius: var(--pg-btn-radius);
+  border: 1px solid var(--k-line-strong, #d0d7e2);
+  background-color: #fff;
+  color: var(--k-blue, #0d47a1);
+  font-size: var(--pg-size-font);
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+}
+
+.pagination-size__select:focus-visible {
+  border-color: var(--k-focus, #1565c0);
 }
 
 /* Phone: nav spans the full width (Prev · info · Next), rows-select wraps

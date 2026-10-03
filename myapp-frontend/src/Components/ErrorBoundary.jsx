@@ -1,4 +1,5 @@
 import React from "react";
+import "../ui/kit.css";
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -57,25 +58,16 @@ export default class ErrorBoundary extends React.Component {
             >
               !
             </div>
-            <h2 style={{ margin: "0 0 8px", fontSize: "1.5rem", color: "#1a2332" }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: "var(--k-title, 1.5rem)", color: "var(--k-ink, #1a2332)" }}>
               Something Went Wrong
             </h2>
-            <p style={{ margin: "0 0 24px", color: "#5f6d7e", fontSize: "0.95rem", lineHeight: 1.5 }}>
+            <p style={{ margin: "0 0 24px", color: "var(--k-muted, #5f6d7e)", fontSize: "0.95rem", lineHeight: 1.5 }}>
               An unexpected error occurred. Please try again or return to the dashboard.
             </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
               <button
                 onClick={this.handleReset}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 8,
-                  border: "1px solid #d0d7e2",
-                  background: "#fff",
-                  color: "#1a2332",
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
-                }}
+                className="k-btn k-btn--secondary"
               >
                 Try Again
               </button>
@@ -84,16 +76,7 @@ export default class ErrorBoundary extends React.Component {
                   this.handleReset();
                   window.location.href = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") + "/dashboard";
                 }}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#0d47a1",
-                  color: "#fff",
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                  cursor: "pointer",
-                }}
+                className="k-btn k-btn--primary"
               >
                 Go to Dashboard
               </button>

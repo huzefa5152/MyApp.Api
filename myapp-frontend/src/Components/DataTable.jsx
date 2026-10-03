@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { MdArrowUpward, MdArrowDownward, MdViewColumn, MdSearch } from "react-icons/md";
 import { useUiPreference } from "../hooks/useUiPreference";
+import "../ui/kit.css";
+import "../ui/shared-components.css";
 
 /**
  * Sticky-header sortable table for dense list views.
@@ -123,22 +125,21 @@ export default function DataTable({
     });
   };
 
-  const cellPad = dense ? "0.45rem 0.7rem" : "0.6rem 0.85rem";
-  const headPad = dense ? "0.5rem 0.7rem" : "0.65rem 0.85rem";
-
+  // Theme look (header height, row height, padding, colours) comes from the kit's
+  // .k-table rules via --k-* tokens; `dense` maps to the kit's compact row variant.
   return (
-    <div style={styles.outer}>
+    <div className="sc-dt">
       {(quickSearchPlaceholder || true) && (
-        <div style={styles.toolbar}>
+        <div className="sc-dt__toolbar">
           {quickSearchPlaceholder && (
-            <div style={styles.searchWrap}>
-              <MdSearch size={15} style={styles.searchIcon} />
+            <div className="sc-dt__search">
+              <MdSearch size={15} aria-hidden="true" />
               <input
                 type="text"
+                className="k-input"
                 placeholder={quickSearchPlaceholder}
                 value={quickFilter}
                 onChange={(e) => setQuickFilter(e.target.value)}
-                style={styles.searchInput}
               />
             </div>
           )}
@@ -147,23 +148,23 @@ export default function DataTable({
             <button
               type="button"
               onClick={() => setColMenuOpen((v) => !v)}
-              style={styles.colBtn}
+              className="k-btn k-btn--secondary k-btn--sm"
               title="Show / hide columns"
             >
               <MdViewColumn size={16} />
               Columns
             </button>
             {colMenuOpen && (
-              <div style={styles.colMenu} role="menu">
-                <div style={styles.colMenuTitle}>Visible columns</div>
+              <div className="sc-dt__menu" role="menu">
+                <div className="sc-dt__menu-title">Visible columns</div>
                 {columns.map((c) => {
                   const disabled = c.hideable === false;
                   const checked = !hidden.has(c.key);
                   return (
                     <label
                       key={c.key}
+                      className="sc-dt__menu-item"
                       style={{
-                        ...styles.colMenuItem,
                         opacity: disabled ? 0.55 : 1,
                         cursor: disabled ? "not-allowed" : "pointer",
                       }}
@@ -184,8 +185,8 @@ export default function DataTable({
         </div>
       )}
 
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <div className="sc-dt__scroll">
+        <table className={dense ? "k-table k-table--compact" : "k-table"}>
           <thead>
             <tr>
               {visibleColumns.map((col) => {
@@ -196,15 +197,13 @@ export default function DataTable({
                     key={col.key}
                     onClick={() => sortable && handleSort(col)}
                     style={{
-                      ...styles.th,
-                      padding: headPad,
                       cursor: sortable ? "pointer" : "default",
                       textAlign: col.align || "left",
                       width: col.width,
                     }}
                     title={sortable ? `Sort by ${col.header}` : undefined}
                   >
-                    <span style={styles.thInner}>
+                    <span className="sc-dt__th-inner">
                       {col.header}
                       {sortable && isSorted && (
                         sort.dir === "asc"
@@ -216,7 +215,7 @@ export default function DataTable({
                 );
               })}
               {actions && (
-                <th style={{ ...styles.th, padding: headPad, textAlign: "right", width: 1 }}>
+                <th className="k-actions" style={{ textAlign: "right", width: 1 }}>
                   {actionsHeader}
                 </th>
               )}
@@ -227,7 +226,7 @@ export default function DataTable({
               <tr>
                 <td
                   colSpan={visibleColumns.length + (actions ? 1 : 0)}
-                  style={{ ...styles.tdEmpty, padding: cellPad }}
+                  className="sc-dt__empty"
                 >
                   {quickFilter ? "No rows match the quick filter." : emptyMessage}
                 </td>
@@ -238,19 +237,12 @@ export default function DataTable({
                 <tr
                   key={k}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  style={{
-                    ...styles.tr,
-                    cursor: onRowClick ? "pointer" : "default",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f8fafc"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#fff"; }}
+                  style={{ cursor: onRowClick ? "pointer" : "default" }}
                 >
                   {visibleColumns.map((col) => (
                     <td
                       key={col.key}
                       style={{
-                        ...styles.td,
-                        padding: cellPad,
                         textAlign: col.align || "left",
                         width: col.width,
                       }}
@@ -263,10 +255,10 @@ export default function DataTable({
                   ))}
                   {actions && (
                     <td
-                      style={{ ...styles.td, padding: cellPad, textAlign: "right" }}
+                      className="k-actions"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div style={styles.actionsCell}>{actions(row)}</div>
+                      <div className="sc-dt__actions">{actions(row)}</div>
                     </td>
                   )}
                 </tr>
@@ -278,147 +270,3 @@ export default function DataTable({
     </div>
   );
 }
-
-const colors = {
-  cardBorder: "#e8edf3",
-  inputBorder: "#d0d7e2",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  headBg: "#f5f8fc",
-};
-
-const styles = {
-  outer: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    border: `1px solid ${colors.cardBorder}`,
-    boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-    overflow: "hidden",
-  },
-  toolbar: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.6rem",
-    padding: "0.6rem 0.85rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    flexWrap: "wrap",
-  },
-  searchWrap: {
-    position: "relative",
-    flex: "0 1 320px",
-    minWidth: 200,
-  },
-  searchIcon: {
-    position: "absolute",
-    left: 10,
-    top: "50%",
-    transform: "translateY(-50%)",
-    color: colors.textSecondary,
-  },
-  searchInput: {
-    width: "100%",
-    padding: "0.45rem 0.7rem 0.45rem 2rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    backgroundColor: "#f8f9fb",
-    fontSize: "0.85rem",
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  colBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "0.4rem 0.75rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    backgroundColor: "#fff",
-    color: colors.textSecondary,
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  colMenu: {
-    position: "absolute",
-    right: 0,
-    top: "calc(100% + 4px)",
-    minWidth: 220,
-    padding: "0.5rem 0.25rem",
-    backgroundColor: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 10,
-    boxShadow: "0 8px 32px rgba(15,23,42,0.18)",
-    zIndex: 50,
-    maxHeight: "60vh",
-    overflowY: "auto",
-  },
-  colMenuTitle: {
-    fontSize: "0.7rem",
-    fontWeight: 700,
-    color: colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    padding: "0.25rem 0.75rem 0.5rem",
-  },
-  colMenuItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "0.4rem 0.75rem",
-    fontSize: "0.85rem",
-    color: colors.textPrimary,
-    borderRadius: 6,
-    userSelect: "none",
-  },
-  tableWrap: {
-    width: "100%",
-    overflowX: "auto",
-    maxHeight: "70vh",
-    overflowY: "auto",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "separate",
-    borderSpacing: 0,
-    fontSize: "0.85rem",
-  },
-  th: {
-    position: "sticky",
-    top: 0,
-    backgroundColor: colors.headBg,
-    color: colors.textSecondary,
-    fontSize: "0.74rem",
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    whiteSpace: "nowrap",
-    userSelect: "none",
-    zIndex: 1,
-  },
-  thInner: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  },
-  tr: {
-    transition: "background-color 0.12s",
-  },
-  td: {
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    color: colors.textPrimary,
-    verticalAlign: "middle",
-  },
-  tdEmpty: {
-    textAlign: "center",
-    color: colors.textSecondary,
-    padding: "2rem 1rem",
-    fontStyle: "italic",
-  },
-  actionsCell: {
-    display: "inline-flex",
-    gap: 6,
-    flexWrap: "nowrap",
-    justifyContent: "flex-end",
-  },
-};
