@@ -174,11 +174,12 @@ def make_token(owner_token, name, cids, scopes, days=30):
 # ── scopes are offered only to those entitled to them ────────────────
 print("\n== who may be granted write scopes ==")
 s, st = http("GET", "/api/mcp/me/status", W)
-check("MCP Write + permissions -> every write scope offered", set(st["scopesAvailable"]) == {"read", "clients.write", "quotes.write", "challans.write", "bills.write"}, st["scopesAvailable"])
+check("MCP Write + permissions -> implemented write and explicit print-read scopes offered", set(st["scopesAvailable"]) == {"read", "templates.read", "documents.read", "clients.write", "quotes.write", "challans.write", "bills.write"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", R)
-check("MCP Access without MCP Write -> read only", st["scopesAvailable"] == ["read"], st["scopesAvailable"])
+check("MCP Access without MCP Write -> permitted read scopes, no write scopes", set(st["scopesAvailable"]) == {"read", "templates.read", "documents.read"}, st["scopesAvailable"])
 s, st = http("GET", "/api/mcp/me/status", C)
 check("MCP Write but no quotation permission -> clients.write, not quotes.write", "clients.write" in st["scopesAvailable"] and "quotes.write" not in st["scopesAvailable"], st["scopesAvailable"])
+check("clients-only permissions never offer print-content or other write scopes", set(st["scopesAvailable"]) == {"read", "clients.write"}, st["scopesAvailable"])
 s, d = make_token(R, "x", [A["id"]], ["read", "quotes.write"])
 check("a user without MCP Write cannot create a write token", s == 400 and "MCP Write" in d["message"], f"{s} {d}")
 s, d = make_token(C, "x", [A["id"]], ["read", "quotes.write"])
@@ -204,10 +205,21 @@ TC = d["secret"]
 
 print("\n== tool catalogue follows the token ==")
 READ6 = ["get_challan", "get_invoice", "get_stock", "list_companies", "search_challans", "search_clients", "search_invoices", "search_quotes", "item_rate_history", "outstanding_ledger", "receivables_by_client", "sales_summary", "tax_sheet_summary"]
-check("a read-only token sees only the read tools (thirteen)", tool_names(TRO) == sorted(READ6), tool_names(TRO))
-check("a login token sees only the read tools", tool_names(W) == sorted(READ6), tool_names(W))
-check("a write token also sees prepare, commit and cancel", set(tool_names(TW)) == set(READ6) | {"prepare_client", "prepare_quote", "commit_action", "cancel_action"}, tool_names(TW))
-check("a clients-only token does not see prepare_quote", set(tool_names(TC)) == set(READ6) | {"prepare_client", "commit_action", "cancel_action"}, tool_names(TC))
+SALES_READS = set(READ6) | {"get_mcp_capabilities", "get_action_status", "get_onboarding_schema", "get_company_onboarding_status", "get_daily_work_queue", "get_quote", "search_sales_orders", "get_sales_order", "search_suppliers", "search_item_types", "search_purchase_bills", "get_purchase_bill", "search_goods_receipts", "search_receipts", "search_payments"}
+PRINT_READS = {"list_print_templates", "get_print_template", "get_print_contract", "get_document_print_data"}
+ACCOUNTING_READS = {"get_trial_balance", "get_profit_and_loss", "get_balance_sheet", "get_cash_book", "get_aged_payables", "get_party_ledger"}
+
+
+def write_names(names):
+    return {name for name in names if name.startswith(("prepare_", "commit_", "cancel_"))}
+
+
+reader_names, login_names, writer_names, client_names = (set(tool_names(token)) for token in (TRO, W, TW, TC))
+check("a read-only token keeps mandatory reads and excludes writes or ungranted print reads", set(READ6) <= reader_names <= SALES_READS and not write_names(reader_names) and not reader_names.intersection(PRINT_READS), sorted(reader_names))
+check("a login token keeps mandatory reads and exposes only permitted reads", set(READ6) <= login_names <= SALES_READS | PRINT_READS and not write_names(login_names), sorted(login_names))
+check("a write token exposes exactly writes covered by its client and quotation scopes", set(READ6) <= writer_names and writer_names - write_names(writer_names) <= SALES_READS and write_names(writer_names) == {"prepare_client", "prepare_quote", "commit_action", "cancel_action"}, sorted(writer_names))
+check("a clients-only token exposes only its permitted reads and client write flow", client_names - write_names(client_names) == {"list_companies", "search_clients", "get_mcp_capabilities", "get_action_status"} and write_names(client_names) == {"prepare_client", "commit_action", "cancel_action"}, sorted(client_names))
+check("Sales users are never offered Complete-edition accounting reads", not ACCOUNTING_READS.intersection(reader_names | login_names | writer_names | client_names))
 
 print("\n== gates on prepare ==")
 Q = {"companyId": A["id"], "clientId": A["client"], "date": "2026-10-02", "gstRate": "18",
