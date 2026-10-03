@@ -40,14 +40,14 @@ export const cardStyles = {
     // cramps the layout). Was hardcoded `repeat(3, 1fr)` which forced
     // a 3-up grid on phones.
     gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: "1.25rem",
+    gap: "var(--ui-card-gap, 1.25rem)",
   },
   card: {
     backgroundColor: colors.cardBg,
-    borderRadius: "14px",
+    borderRadius: "var(--ui-card-radius, 14px)",
     border: `1px solid ${colors.cardBorder}`,
     // Layered soft shadow reads cleaner than a single flat blur.
-    boxShadow: "0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06)",
+    boxShadow: "var(--ui-card-shadow, 0 1px 3px rgba(16,32,64,0.04), 0 6px 18px rgba(16,32,64,0.06))",
     transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
     cursor: "default",
     overflow: "hidden",
@@ -57,17 +57,17 @@ export const cardStyles = {
     flexDirection: "column",
     justifyContent: "space-between",
     height: "100%",
-    padding: "1.25rem 1.35rem",
+    padding: "var(--ui-card-pad, 1.25rem 1.35rem)",
   },
   title: {
-    fontSize: "1.12rem",
+    fontSize: "var(--ui-card-title, 1.12rem)",
     fontWeight: "800",
     marginBottom: "0.5rem",
     color: colors.textPrimary,
     letterSpacing: "-0.01em",
   },
   text: {
-    fontSize: "0.88rem",
+    fontSize: "var(--ui-card-text, 0.88rem)",
     color: colors.textSecondary,
     marginBottom: "0.2rem",
     lineHeight: 1.5,
@@ -87,14 +87,14 @@ export const cardStyles = {
     display: "flex",
     flexWrap: "wrap",
     gap: "0.5rem",
-    marginTop: "1rem",
-    paddingTop: "0.9rem",
+    marginTop: "var(--ui-card-actions-gap, 1rem)",
+    paddingTop: "var(--ui-card-actions-pad, 0.9rem)",
     borderTop: `1px solid ${colors.cardBorder}`,
   },
   button: {
-    minHeight: 44,
-    padding: "0.45rem 1rem",
-    fontSize: "0.82rem",
+    minHeight: "var(--ui-btn-h, 44px)",
+    padding: "var(--ui-card-btn-pad, 0.45rem 1rem)",
+    fontSize: "var(--ui-card-btn-font, 0.82rem)",
     fontWeight: "600",
     borderRadius: "8px",
     cursor: "pointer",
@@ -103,7 +103,7 @@ export const cardStyles = {
     letterSpacing: "0.2px",
   },
   edit: {
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.blueLight})`,
+    background: `var(--ui-card-edit-bg, linear-gradient(135deg, ${colors.blue}, ${colors.blueLight}))`,
     color: "#fff",
   },
   delete: {
@@ -115,10 +115,11 @@ export const cardStyles = {
 
 export const dropdownStyles = {
   base: {
-    padding: "0.55rem 1rem",
+    padding: "var(--ui-select-pad, 0.55rem 1rem)",
+    minHeight: "var(--ui-control-h, 0px)",
     borderRadius: "8px",
     border: `1px solid ${colors.inputBorder}`,
-    backgroundColor: colors.inputBg,
+    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
     color: colors.textPrimary,
     outline: "none",
     // Was a fixed 250px which forced horizontal overflow on phones
@@ -129,7 +130,7 @@ export const dropdownStyles = {
     maxWidth: "100%",
     cursor: "pointer",
     transition: "border-color 0.25s ease",
-    fontSize: "0.9rem",
+    fontSize: "var(--ui-input-size, 0.9rem)",
   },
 };
 
@@ -174,13 +175,13 @@ export const formStyles = {
   },
   modal: {
     backgroundColor: colors.cardBg,
-    borderRadius: "16px",
+    borderRadius: "var(--ui-modal-radius, 16px)",
     width: "100%",
     // Default size = "md". Override per-modal via inline spread:
     //   { ...formStyles.modal, maxWidth: modalSizes.xl }
     maxWidth: `${modalSizes.md}px`,
     maxHeight: "96vh", // cap at 96% of viewport so header + footer always stay visible
-    boxShadow: "0 20px 60px rgba(13,71,161,0.2)",
+    boxShadow: "var(--ui-modal-shadow, 0 20px 60px rgba(13,71,161,0.2))",
     overflow: "hidden",
     color: colors.textPrimary,
     animation: "fadeIn 0.3s ease",
@@ -192,10 +193,11 @@ export const formStyles = {
     resize: "none",
   },
   header: {
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    background: `var(--ui-modal-head-bg, linear-gradient(135deg, ${colors.blue}, ${colors.teal}))`,
+    borderBottom: "var(--ui-modal-head-border, none)",
     // clamp keeps the header tidy on phones (~0.9rem horizontal) while
     // restoring the comfortable 1.5rem on tablet/desktop.
-    padding: "1.1rem clamp(0.9rem, 2vw, 1.5rem)",
+    padding: "var(--ui-modal-head-pad, 1.1rem clamp(0.9rem, 2vw, 1.5rem))",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
@@ -203,27 +205,27 @@ export const formStyles = {
   },
   title: {
     margin: 0,
-    fontSize: "1.15rem",
+    fontSize: "var(--ui-modal-title-size, 1.15rem)",
     fontWeight: "700",
-    color: "#ffffff",
+    color: "var(--ui-modal-title-color, #ffffff)",
   },
   closeButton: {
     // Aggressive overrides because index.css applies a global
     //   button { padding: 0.8em 1.6em; box-shadow: ...; background: ...; }
     // rule that would otherwise stretch this to a huge pill and hide the X.
-    background: "rgba(255,255,255,0.2)",
-    backgroundColor: "rgba(255,255,255,0.2)",
+    background: "var(--ui-close-bg, rgba(255,255,255,0.2))",
+    backgroundColor: "var(--ui-close-bg, rgba(255,255,255,0.2))",
     border: "none",
-    color: "#fff",
+    color: "var(--ui-close-color, #fff)",
     fontSize: "1.2rem",
     fontWeight: 500,
     cursor: "pointer",
-    width: "44px",
-    minWidth: "44px",
-    maxWidth: "44px",
-    height: "44px",
-    minHeight: "44px",
-    maxHeight: "44px",
+    width: "var(--ui-close-size, 44px)",
+    minWidth: "var(--ui-close-size, 44px)",
+    maxWidth: "var(--ui-close-size, 44px)",
+    height: "var(--ui-close-size, 44px)",
+    minHeight: "var(--ui-close-size, 44px)",
+    maxHeight: "var(--ui-close-size, 44px)",
     padding: 0,                 // kills the global 0.8em 1.6em padding
     margin: 0,
     borderRadius: "8px",
@@ -240,7 +242,7 @@ export const formStyles = {
     // Padding shrinks on phones via a clamp() — 1rem at narrow widths,
     // 1.5rem on tablet+. Keeps long forms from feeling claustrophobic
     // on a 360px viewport without cramping the desktop look.
-    padding: "clamp(1rem, 2vw, 1.5rem)",
+    padding: "var(--ui-modal-body-pad, clamp(1rem, 2vw, 1.5rem))",
     // Body takes remaining space and scrolls internally when content exceeds it —
     // this is the key fix for tall modals on high-resolution screens.
     overflowY: "auto",
@@ -263,22 +265,23 @@ export const formStyles = {
     fontSize: "0.88rem",
   },
   formGroup: {
-    marginBottom: "1.1rem",
+    marginBottom: "var(--ui-group-gap, 1.1rem)",
   },
   label: {
     display: "block",
-    marginBottom: "0.35rem",
+    marginBottom: "var(--ui-label-gap, 0.35rem)",
     fontWeight: "600",
-    fontSize: "0.85rem",
+    fontSize: "var(--ui-label-size, 0.85rem)",
     color: colors.textSecondary,
   },
   input: {
     width: "100%",
-    padding: "0.6rem 0.85rem",
+    padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
+    minHeight: "var(--ui-control-h, 0px)",
     borderRadius: "8px",
     border: `1px solid ${colors.inputBorder}`,
-    fontSize: "0.95rem",
-    backgroundColor: colors.inputBg,
+    fontSize: "var(--ui-input-size, 0.95rem)",
+    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
     color: colors.textPrimary,
     outline: "none",
     transition: "border-color 0.25s, box-shadow 0.25s",
@@ -289,16 +292,16 @@ export const formStyles = {
     // flexWrap lets long button rows (e.g. Save / Cancel / Delete) wrap
     // to a second line on narrow phones instead of overflowing.
     flexWrap: "wrap",
-    padding: "1rem clamp(0.9rem, 2vw, 1.5rem)",
+    padding: "var(--ui-foot-pad, 1rem clamp(0.9rem, 2vw, 1.5rem))",
     gap: "0.6rem",
-    backgroundColor: "#f5f7fa",
+    backgroundColor: "var(--ui-foot-bg, #f5f7fa)",
     borderTop: `1px solid ${colors.cardBorder}`,
     flexShrink: 0, // footer always visible (buttons like Save/Cancel)
   },
   button: {
-    minHeight: 44,
-    padding: "0.5rem 1.25rem",
-    fontSize: "0.9rem",
+    minHeight: "var(--ui-btn-h, 44px)",
+    padding: "var(--ui-btn-pad, 0.5rem 1.25rem)",
+    fontSize: "var(--ui-btn-size, 0.9rem)",
     fontWeight: "600",
     borderRadius: "8px",
     cursor: "pointer",
@@ -306,11 +309,12 @@ export const formStyles = {
     transition: "all 0.2s ease",
   },
   cancel: {
-    backgroundColor: "#e9ecf1",
+    backgroundColor: "var(--ui-cancel-bg, #e9ecf1)",
     color: colors.textSecondary,
+    border: "var(--ui-cancel-border, none)",
   },
   submit: {
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
+    background: `var(--ui-submit-bg, linear-gradient(135deg, ${colors.blue}, ${colors.teal}))`,
     color: "#fff",
   },
 };

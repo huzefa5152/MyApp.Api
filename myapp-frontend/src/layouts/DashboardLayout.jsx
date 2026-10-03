@@ -51,6 +51,9 @@ import { Can, usePermissions } from "../contexts/PermissionsContext";
 import NoCompanyConfigured from "../Components/NoCompanyConfigured";
 import { getAvatarUrl } from "../utils/avatarUrl";
 import "./DashboardLayout.css";
+import useUi2 from "../ui2/useUi2";
+import { CompanySwitcher, QuickJump } from "../ui2/ShellParts";
+import ThemePicker from "../ui2/ThemePicker";
 
 /* ------------------------------------------------------------------ */
 /*  NavGroup — generic collapsible section header                       */
@@ -144,6 +147,7 @@ function getDisplayName(user) {
 /* ------------------------------------------------------------------ */
 export default function DashboardLayout() {
   const { user, logout, avatarVersion } = useAuth();
+  const ui2 = useUi2(); // the user's theme decides whether the redesigned structure is used
   const { hasAny, has } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
@@ -302,7 +306,7 @@ export default function DashboardLayout() {
     : null;
 
   return (
-    <div className="dl-shell">
+    <div className={`dl-shell${ui2 ? " dl-shell--v2" : ""}`}>
       {/* ---- Mobile Overlay ---- */}
       <div
         className={`dl-overlay${sidebarOpen ? " dl-overlay--visible" : ""}`}
@@ -728,6 +732,13 @@ export default function DashboardLayout() {
             {getBreadcrumb(location.pathname)}
           </div>
 
+          {ui2 && (
+            <div className="u2-topbar-left">
+              {!companyFreeRoute && <CompanySwitcher />}
+              <QuickJump />
+            </div>
+          )}
+
           <div className="dl-topbar__user-wrapper" ref={userMenuRef}>
             <button
               type="button"
@@ -743,7 +754,12 @@ export default function DashboardLayout() {
                   initials
                 )}
               </div>
-              <span>{displayName}</span>
+              {ui2 ? (
+                <span className="u2-topbar-user">
+                  <span className="u2-topbar-user__name">{displayName}</span>
+                  <span className="u2-topbar-user__role">{user?.isSeedAdmin ? "Primary admin" : user?.role}</span>
+                </span>
+              ) : <span>{displayName}</span>}
               <MdKeyboardArrowDown
                 className={`dl-topbar__user-arrow${userMenuOpen ? " dl-topbar__user-arrow--open" : ""}`}
                 aria-hidden="true"
@@ -760,6 +776,9 @@ export default function DashboardLayout() {
                   My Profile
                 </button>
                 <hr className="dl-user-menu__divider" />
+                <div className="u2-menu-label">Theme</div>
+                <ThemePicker onPicked={() => setUserMenuOpen(false)} />
+                <hr className="dl-user-menu__divider" />
                 <button
                   type="button"
                   className="dl-user-menu__item dl-user-menu__item--danger"
@@ -774,7 +793,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="dl-main" id="main-content">
+        <main className={`dl-main${ui2 ? " u2" : ""}`} id="main-content">
           {showNoCompany ? <NoCompanyConfigured /> : <Outlet />}
         </main>
       </div>

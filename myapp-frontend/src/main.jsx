@@ -6,6 +6,8 @@ import App from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
 import { CompanyProvider } from "./contexts/CompanyContext";
+import { UiThemeProvider } from "./ui2/UiThemeContext";
+import "./ui/kit.css";
 import ErrorBoundary from "./Components/ErrorBoundary";
 import NotificationProvider from "./Components/NotificationProvider";
 import ConfirmProvider from "./Components/ConfirmDialog";
@@ -55,7 +57,9 @@ if (isPublicPortal) {
               <AuthProvider>
                 <PermissionsProvider>
                   <CompanyProvider>
-                    <App />
+                    <UiThemeProvider>
+                      <App />
+                    </UiThemeProvider>
                   </CompanyProvider>
                 </PermissionsProvider>
               </AuthProvider>

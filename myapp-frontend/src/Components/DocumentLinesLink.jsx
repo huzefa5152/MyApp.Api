@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { MdTableRows } from "react-icons/md";
 
-export default function DocumentLinesLink({ type, documentId, compact = false }) {
+export default function DocumentLinesLink({ type, documentId, compact = false, className }) {
   return <Link to={`/reports/document-lines?type=${encodeURIComponent(type)}${documentId ? `&documentId=${encodeURIComponent(documentId)}` : ""}`}
-    title="Review, copy or export document lines" aria-label="Open document lines"
+    className={className} title="Review, copy or export document lines" aria-label="Open document lines"
     style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5,
       minHeight: 44, minWidth: compact ? 44 : undefined, padding: compact ? "0 10px" : "0 12px",
       borderRadius: 8, border: "1px solid #dce5ef", background: "#fff", color: "#0d47a1",
