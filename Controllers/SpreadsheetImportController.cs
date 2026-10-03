@@ -146,7 +146,8 @@ namespace MyApp.Api.Controllers
             [FromForm] IFormFile file,
             [FromQuery] int companyId,
             [FromQuery] int? profileId,
-            [FromForm] string? mappingJson)
+            [FromForm] string? mappingJson,
+            [FromQuery] string? purpose = null)
         {
             await _access.AssertAccessAsync(CurrentUserId, companyId);
             if (!await CompanyExistsAsync(companyId))
@@ -163,7 +164,8 @@ namespace MyApp.Api.Controllers
             {
                 return Ok(await _openingStock.PreviewAsync(
                     validated.Bytes, validated.Extension, validated.FileName, validated.Sha256,
-                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion));
+                    resolved.MappingJson!, companyId, resolved.ProfileId, resolved.ProfileVersion,
+                    forReconcile: string.Equals(purpose, "reconcile", StringComparison.OrdinalIgnoreCase)));
             }
             catch (InvalidOperationException ex)
             {

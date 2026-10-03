@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { MdArrowBack, MdCloudUpload, MdDoneAll, MdErrorOutline, MdExpandMore, MdChevronRight, MdWarningAmber } from "react-icons/md";
+import { MdArrowBack, MdCloudUpload, MdDoneAll, MdErrorOutline, MdExpandMore, MdChevronRight, MdWarningAmber, MdFileDownload, MdHelpOutline } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { useConfirm } from "../Components/ConfirmDialog";
@@ -42,6 +42,7 @@ export default function StockReconcilePage() {
   const [useSheet, setUseSheet] = useState(null);    // Set of itemTypeIds, null = proposals
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState({});
+  const [guideOpen, setGuideOpen] = useState(null);   // null = open until a file is chosen
 
   const companyId = selectedCompany?.id;
   const canRun = has("stock.policy.manage") && has("spreadsheetimport.stock.run");
@@ -85,7 +86,7 @@ export default function StockReconcilePage() {
       const { data: profiles } = await getImportProfiles({ kind: "OpeningStock", companyId });
       const profile = (profiles || []).find((p) => p.isDefault) || (profiles || [])[0];
       if (!profile) { notify("No stock sheet layout is set up yet.", "error"); return; }
-      const { data } = await previewOpeningStock({ file: f, companyId, profileId: profile.id });
+      const { data } = await previewOpeningStock({ file: f, companyId, profileId: profile.id, purpose: "reconcile" });
       if ((data.blockingErrors || []).length > 0) {
         setReaderNotes(data.blockingErrors);
         setRows(null);
@@ -153,12 +154,14 @@ export default function StockReconcilePage() {
 
   return (
     <div style={st.page}>
-      <Link to="/stock" style={st.back}><MdArrowBack size={16} /> Stock Dashboard</Link>
+      <Link to="/stock" style={st.back}><MdArrowBack style={{ flexShrink: 0 }} size={16} /> Stock Dashboard</Link>
       <h1 style={st.h1}>Reconcile to my stock sheet</h1>
       <p style={st.muted}>
         Upload the month's stock sheet. Each row is matched to an item and its GD; the plan shows what would make the books
         hold the sheet. Nothing changes until you press Reconcile.
       </p>
+
+      <SheetGuide open={guideOpen ?? !file} onToggle={() => setGuideOpen(!(guideOpen ?? !file))} />
 
       <div style={st.bar}>
         <label style={st.field}>
@@ -166,14 +169,14 @@ export default function StockReconcilePage() {
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={st.input} disabled={busy} />
         </label>
         <label style={{ ...st.field, ...st.upload }}>
-          <MdCloudUpload size={18} /> {file ? file.name : "Choose the stock sheet (.xlsx)"}
+          <MdCloudUpload style={{ flexShrink: 0 }} size={18} /> {file ? file.name : "Choose the stock sheet (.xlsx)"}
           <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} disabled={busy || !companyId}
             onChange={(e) => onUpload(e.target.files?.[0])} />
         </label>
       </div>
 
       {readerNotes.length > 0 && (
-        <ul style={st.notes}>{readerNotes.map((n, i) => <li key={i}><MdWarningAmber size={14} /> {n}</li>)}</ul>
+        <ul style={st.notes}>{readerNotes.map((n, i) => <li key={i}><MdWarningAmber style={{ flexShrink: 0 }} size={14} /> {n}</li>)}</ul>
       )}
       {busy && <p style={st.muted}>Working…</p>}
 
@@ -213,7 +216,7 @@ export default function StockReconcilePage() {
             {changed.map((i) => (
               <div key={i.itemTypeId} style={{ ...st.item, ...(i.error ? st.itemErr : null) }}>
                 <button type="button" onClick={() => setOpen({ ...open, [i.itemTypeId]: !open[i.itemTypeId] })} style={st.itemHead}>
-                  {open[i.itemTypeId] ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}
+                  {open[i.itemTypeId] ? <MdExpandMore style={{ flexShrink: 0 }} size={18} /> : <MdChevronRight style={{ flexShrink: 0 }} size={18} />}
                   <span style={st.itemName}>{i.itemTypeName}</span>
                   <span style={st.itemFig}>{money(i.currentValueExcludingTax)} → <strong>{money(i.targetValueExcludingTax)}</strong></span>
                 </button>
@@ -267,12 +270,53 @@ export default function StockReconcilePage() {
                 : "Decide every highlighted row and item to continue."}
             </span>
             <button type="button" onClick={apply} disabled={busy || !plan.canApply || changed.length === 0} style={st.primary}>
-              <MdDoneAll size={18} /> Reconcile
+              <MdDoneAll style={{ flexShrink: 0 }} size={18} /> Reconcile
             </button>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * What to upload, for a new importer or a client sending their sheet for the
+ * first time. The reader is the opening-stock layout reader, so the shipped
+ * opening-stock template IS the sample: same headings, same Balance block.
+ */
+function SheetGuide({ open, onToggle }) {
+  const sample = `${(import.meta.env.BASE_URL || "/")}templates/opening-stock-template.xlsx`;
+  return (
+    <section style={st.guide}>
+      <button type="button" onClick={onToggle} style={st.guideHead}>
+        <MdHelpOutline style={{ flexShrink: 0 }} size={18} aria-hidden="true" />
+        <span style={{ flex: 1, textAlign: "left" }}>What sheet should I upload?</span>
+        {open ? <MdExpandMore style={{ flexShrink: 0 }} size={18} /> : <MdChevronRight style={{ flexShrink: 0 }} size={18} />}
+      </button>
+      {open && (
+        <div style={st.guideBody}>
+          <a href={sample} download style={st.sample}>
+            <MdFileDownload style={{ flexShrink: 0 }} size={18} aria-hidden="true" /> Download the sample stock sheet (.xlsx)
+          </a>
+          <p style={st.p}>
+            Use the stock sheet you keep each month, as it stands at <strong>month end</strong>, and pick that month above.
+            The sample shows the layout; your own sheet works if its headings match (the order of the columns may differ).
+          </p>
+          <ul style={st.ul}>
+            <li><strong>One row per GD line</strong> — a product on a GD. Two products under the same HS code stay on separate rows.</li>
+            <li><strong>GD Number</strong>, <strong>GD Date</strong> and <strong>Claim Month</strong> (the return the input tax was claimed in).</li>
+            <li><strong>Description</strong>, the <strong>8-digit HS code</strong> (e.g. 8482.1000) and the <strong>Unit</strong>.</li>
+            <li>The <strong>Balance</strong> block: <strong>Bal Qty</strong>, <strong>Bal Exl</strong> (value excluding sales tax, at cost) and <strong>Rate</strong>. This is what is reconciled; the Opening and Consumed blocks are for your own reference.</li>
+            <li>Write the quantity you <strong>counted</strong>. A quantity worked out as value ÷ price (e.g. 44.4496) is treated as arithmetic, and the books' quantity is kept.</li>
+          </ul>
+          <p style={st.p}>
+            <strong>New importer?</strong> If the books hold no stock yet, load your opening stock first in{" "}
+            <Link to="/accounting/spreadsheet-import" style={{ color: colors.blue }}>Accounting ▸ Spreadsheet Import</Link>{" "}
+            (same sheet), then reconcile here at the end of each month.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -298,6 +342,14 @@ const st = {
   upload: { flexDirection: "row", alignItems: "center", justifyContent: "center", minHeight: 44, border: `1px dashed ${colors.blue}`,
     borderRadius: 8, color: colors.blue, cursor: "pointer", padding: "0.4rem 0.75rem", fontWeight: 600, overflowWrap: "anywhere" },
   notes: { listStyle: "none", padding: 0, margin: "0.5rem 0", color: "#8a4b00", fontSize: 13 },
+  guide: { background: "#f5f9ff", border: "1px solid #cfe0f7", borderRadius: 10, margin: "0.75rem 0" },
+  guideHead: { display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 44, padding: "0.5rem 0.8rem",
+    background: "none", border: "none", cursor: "pointer", color: colors.blue, fontWeight: 700, fontSize: 14 },
+  guideBody: { padding: "0 0.9rem 0.8rem", fontSize: 13.5, color: colors.textPrimary },
+  sample: { display: "inline-flex", alignItems: "center", gap: 6, minHeight: 44, padding: "0.4rem 0.8rem", borderRadius: 8,
+    border: `1px solid ${colors.blue}`, color: colors.blue, fontWeight: 700, textDecoration: "none", background: "#fff" },
+  p: { margin: "0.5rem 0" },
+  ul: { margin: "0.4rem 0", paddingLeft: "1.2rem", display: "grid", gap: 4 },
   tiles: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.6rem", margin: "0.75rem 0" },
   tile: { background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.85rem" },
   tileLabel: { fontSize: 12, color: "#5f6d7e", fontWeight: 600 },

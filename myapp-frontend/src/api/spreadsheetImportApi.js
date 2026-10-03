@@ -26,9 +26,11 @@ const upload = (path, file, params, fields = {}) => {
 export const identifyWorkbook = ({ file, companyId, kind }) =>
   upload("/spreadsheet-import/identify", file, { companyId, kind });
 
-export const previewOpeningStock = ({ file, companyId, profileId, mappingJson }) =>
+// `purpose: "reconcile"` reads the sheet for Reconcile to my stock sheet: the
+// "already imported" checks are about importing, so the server skips them.
+export const previewOpeningStock = ({ file, companyId, profileId, mappingJson, purpose }) =>
   upload("/spreadsheet-import/opening-stock/preview", file,
-    { companyId, ...(profileId ? { profileId } : {}) },
+    { companyId, ...(profileId ? { profileId } : {}), ...(purpose ? { purpose } : {}) },
     profileId ? {} : { mappingJson });
 
 export const commitOpeningStock = (body) =>

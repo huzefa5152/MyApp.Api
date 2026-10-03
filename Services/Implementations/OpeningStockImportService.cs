@@ -38,7 +38,8 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<OpeningStockPreviewDto> PreviewAsync(
             byte[] bytes, string extension, string fileName, string fileSha256,
-            string mappingJson, int companyId, int? profileId, int? profileVersion)
+            string mappingJson, int companyId, int? profileId, int? profileVersion,
+            bool forReconcile = false)
         {
             var mapping = LotRowsMapping.Parse(mappingJson);
 
@@ -64,7 +65,12 @@ namespace MyApp.Api.Services.Implementations
 
             var rows = GroupLots(lots);
             await ClassifyAsync(rows, preview, companyId);
-            await FlagAlreadyImportedAsync(rows, companyId, preview);
+            // Reconcile to my stock sheet reads the sheet through this same
+            // reader (2026-10-03). The two "already imported" checks are about
+            // IMPORTING it; a month-end sheet that matches the books is exactly
+            // what reconciling is for, so they do not apply there.
+            if (!forReconcile)
+                await FlagAlreadyImportedAsync(rows, companyId, preview);
 
             preview.Rows = rows;
             preview.TotalQuantity = rows.Sum(r => r.Quantity);
@@ -105,7 +111,8 @@ namespace MyApp.Api.Services.Implementations
 
             // Reported, not blocking: the operator may be re-importing on
             // purpose after setting the earlier run aside.
-            var blocking = await _imports.FindBlockingRunAsync(companyId, ImportKinds.OpeningStock, fileSha256);
+            var blocking = forReconcile ? null
+                : await _imports.FindBlockingRunAsync(companyId, ImportKinds.OpeningStock, fileSha256);
             if (blocking != null)
             {
                 var who = blocking.ImportedByUserName;

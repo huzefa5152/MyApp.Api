@@ -1438,8 +1438,13 @@ GD panel and Excel export all say which GDs it took.
   are reported, never forced in. Apply re-plans from the rows (never trusts the
   client's plan) and runs the corrections (dated the sheet's month end) and the
   FIFO restatement in ONE transaction -- `AdjustStock` / `RestateFifo` join an
-  outer transaction when one exists. Suite: `scripts/test_stock_reconcile.py`
-  (16 checks); cross-company in tenant suite 21.
+  outer transaction when one exists. The sheet is read by the opening-stock
+  preview with `purpose=reconcile`, which skips that import's two "already
+  imported" checks (file hash and unchanged quantities) -- a month-end sheet
+  matching the books, or the very sheet loaded as opening stock, is exactly what
+  reconciling is for; every READING check still applies. The screen offers the
+  shipped `opening-stock-template.xlsx` as its sample. Suite:
+  `scripts/test_stock_reconcile.py` (20 checks); cross-company in tenant suite 21.
 - Suites: `cd scripts/stock_fifo_harness && dotnet run -c Release` (offline, links
   the real walk), `python scripts/test_stock_fifo.py`, `node scripts/test_fifo_pricing.mjs`,
   and the READ-ONLY production check `cd scripts/stock_fifo_prod_check && dotnet run -c Release`

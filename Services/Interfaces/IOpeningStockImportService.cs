@@ -26,7 +26,8 @@ namespace MyApp.Api.Services.Interfaces
             string mappingJson,
             int companyId,
             int? profileId,
-            int? profileVersion);
+            int? profileVersion,
+            bool forReconcile = false);
 
         /// <summary>
         /// Writes the reviewed rows in one transaction: item types, opening

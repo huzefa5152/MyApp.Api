@@ -16,6 +16,9 @@ A fresh FIFO company holds two items. Its stock sheet says:
     3. Apply corrects VALVE to 90 (dated at the sheet's month end) and restates
        both items to the sheet's GD lines; PUMP keeps 100 units.
     4. Re-planning the same sheet afterwards finds nothing left to change.
+    6. The sample sheet the screen offers reads for reconcile even after the
+       same file was imported as opening stock (the "already imported" checks
+       belong to importing, not reconciling).
     5. A plan for a company that does not exist is refused (cross-company:
        test_tenant_isolation.py suite 21).
 
@@ -23,6 +26,7 @@ Usage:
     python scripts/test_stock_reconcile.py [--base URL] [--username U] [--password P] [--keep]
 """
 import argparse
+import os
 import sys
 from datetime import datetime
 
@@ -166,9 +170,54 @@ def main():
         # be refused before anything is read or written.
         r = requests.post(f"{api}/stock/company/999999999/reconcile/plan", headers=h, json=req, timeout=60)
         check("a company that does not exist is refused", r.status_code in (400, 403, 404), str(r.status_code))
+
+        print("\n-- 6. The sample sheet reads for reconcile after being imported --")
+        sample = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "myapp-frontend", "public",
+                              "templates", "opening-stock-template.xlsx")
+        body = open(sample, "rb").read()
+        r = requests.post(f"{api}/companies", headers=h, timeout=60, json={
+            "name": f"_reconcile sample {tag}", "brandName": "RECS", "fullAddress": "1 Test Street",
+            "phone": "021-0000000", "ntn": "1234567-8", "startingChallanNumber": 1, "startingInvoiceNumber": 1,
+            "startingPurchaseBillNumber": 1, "startingGoodsReceiptNumber": 1,
+            "startingSalesQuoteNumber": 1, "startingSalesOrderNumber": 1,
+            "fbrEnabled": False, "inventoryTrackingEnabled": True, "enableGl": False})
+        sample_co = r.json()["id"] if r.ok else None
+        profiles = requests.get(f"{api}/import-profiles", headers=h, timeout=60,
+                                params={"kind": "OpeningStock", "companyId": sample_co}).json() or []
+        prof = next((x for x in profiles if x.get("isDefault")), profiles[0] if profiles else {})
+
+        def preview(purpose=None):
+            params = {"companyId": sample_co, "profileId": prof.get("id")}
+            if purpose:
+                params["purpose"] = purpose
+            return requests.post(f"{api}/spreadsheet-import/opening-stock/preview", headers=h, timeout=120,
+                                 params=params, files={"file": ("opening-stock-template.xlsx", body)})
+
+        pv = preview().json()
+        check("the sample sheet reads cleanly as opening stock", not pv.get("blockingErrors") and len(pv.get("rows", [])) > 0,
+              str(pv.get("blockingErrors"))[:200])
+        r = requests.post(f"{api}/spreadsheet-import/opening-stock/commit", headers=h, timeout=300, json={
+            "companyId": sample_co, "importProfileId": pv.get("importProfileId"), "profileVersion": pv.get("profileVersion"),
+            "fileSha256": pv["fileSha256"], "fileName": "opening-stock-template.xlsx",
+            "fileSizeBytes": pv["fileSizeBytes"], "asOfDate": "2026-07-01",
+            "postInventoryValue": False, "enableInventoryTracking": True,
+            "rows": [{"itemName": x["itemName"], "hsCode": x["hsCode"], "isHsCodePartial": x["isHsCodePartial"],
+                      "unit": x["unit"], "quantity": x["quantity"], "value": x["value"], "lotRefs": x["lotRefs"],
+                      "itemTypeId": x["itemTypeId"], "lots": x.get("lots")} for x in pv["rows"]]})
+        check("the sample imports as opening stock", r.ok, f"http {r.status_code} {r.text[:200]}")
+        again = preview().json()
+        check("importing the same file again is refused as already imported",
+              any("already imported" in e or "already been imported" in e for e in again.get("blockingErrors", [])),
+              str(again.get("blockingErrors"))[:200])
+        rec = preview("reconcile").json()
+        check("reading the same file for reconcile is not refused, and returns its rows",
+              not rec.get("blockingErrors") and len(rec.get("rows", [])) == len(pv["rows"]),
+              f"{rec.get('blockingErrors')} rows={len(rec.get('rows', []))}")
     finally:
         if not a.keep:
             requests.delete(f"{api}/companies/{cid}", headers=h, timeout=300)
+            if "sample_co" in locals() and sample_co:
+                requests.delete(f"{api}/companies/{sample_co}", headers=h, timeout=300)
             for iid in item_ids:
                 requests.delete(f"{api}/itemtypes/{iid}", headers=h, timeout=60)
 
