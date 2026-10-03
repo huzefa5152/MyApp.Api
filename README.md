@@ -296,6 +296,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-03 - Auto and Custom document numbers (Customize)
 
+- Customer Ledger print and PDF exports follow the selected company's invoice letterhead, fonts and table colors, include all filtered transactions, and use consistent PDF margins with repeated column headings. PDF filenames carry a single `.pdf` extension.
+
 Company and division starting numbers now support Auto or a custom number when creating quotes, orders, challans, bills, purchase bills, goods receipts, credit notes and debit notes. Auto continues its own cursor and skips occupied numbers; Custom does not advance that cursor. Editable document forms also validate number changes, with company/division isolation and existing filed-bill and duplicated-challan protections retained.
 
 > This project evolves across many focused sessions. **Every session that ships a

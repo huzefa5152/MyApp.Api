@@ -12,6 +12,9 @@ import Pagination from "./Pagination";
 // which is where the real saving is.
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
+import { useCompany } from "../contexts/CompanyContext";
+import { getCustomerLedgerInvoiceLayout } from "../api/printTemplateApi";
+import { buildCustomerLedgerHtml, selectLedgerInvoiceTemplate } from "../utils/customerLedgerPrint";
 
 /**
  * The one renderer every accounting report uses.
@@ -43,9 +46,25 @@ export default function ReportShell({
   onOpenRow,        // (row) => void — jump to the source document
   onOpenAccount,    // (accountId) => void — statement line -> that account's ledger
   categoryTitle,
+  printReportId,
+  printDivisionId,
+  loadPrintReport,
 }) {
+  const { selectedCompany } = useCompany();
   const narrow = useIsNarrow(820);
   const [busy, setBusy] = useState(null);
+  const [printError, setPrintError] = useState("");
+  const customerLedger = printReportId === "customer-ledger";
+  const printable = !!report && !loading && !error;
+  const printHtml = async () => {
+    if (!customerLedger) return buildReportHtml(report);
+    const company = { ...selectedCompany };
+    const [{ data: invoiceLayout }, ledger] = await Promise.all([
+      getCustomerLedgerInvoiceLayout(company.id, printDivisionId), loadPrintReport ? loadPrintReport() : report,
+    ]);
+    const template = selectLedgerInvoiceTemplate(invoiceLayout ? [invoiceLayout] : [], company.id, printDivisionId);
+    return buildCustomerLedgerHtml(ledger, company, template);
+  };
 
   const columns = report?.columns || [];
   const rows = report?.rows || [];
@@ -70,16 +89,25 @@ export default function ReportShell({
 
   const doPrint = async () => {
     setBusy("print");
+    setPrintError("");
+    const w = window.open("", "_blank");
     try {
-      const w = window.open("", "_blank");
-      if (w) writeAndPrint(w, buildReportHtml(report));
+      if (!w) throw new Error("Popup blocked");
+      writeAndPrint(w, await printHtml());
+    } catch {
+      w?.close();
+      setPrintError("Could not prepare the report. Check template access and allow print popups, then try again.");
     } finally { setBusy(null); }
   };
 
   const doPdf = async () => {
     setBusy("pdf");
+    setPrintError("");
     try {
-      await exportToPdf(buildReportHtml(report), `${slug(report.title)}.pdf`);
+      await exportToPdf(await printHtml(), slug(report.title), customerLedger
+        ? { marginMm: 12, repeatTableHeader: ".ledger-table" } : {});
+    } catch {
+      setPrintError("Could not build the PDF. Check template access and try again.");
     } finally { setBusy(null); }
   };
 
@@ -128,17 +156,19 @@ export default function ReportShell({
                 <span>{busy === "excel" ? "Preparing…" : "Excel"}</span>
               </button>
             )}
-            <button type="button" style={st.actionBtn} onClick={doPrint} disabled={!!busy} title="Print this report">
+            <button type="button" style={st.actionBtn} onClick={doPrint} disabled={!!busy || !printable} title="Print this report">
               <MdPrint size={17} />
               <span>Print</span>
             </button>
-            <button type="button" style={st.actionBtn} onClick={doPdf} disabled={!!busy} title="Save as PDF">
+            <button type="button" style={st.actionBtn} onClick={doPdf} disabled={!!busy || !printable} title="Save as PDF">
               <MdPictureAsPdf size={17} />
               <span>{busy === "pdf" ? "Building…" : "PDF"}</span>
             </button>
           </div>
         </div>
       </div>
+
+      {printError && <Notice tone="warn">{printError}</Notice>}
 
       {/* Provenance and truncation warnings, stated rather than implied.
           The generic banner is a FALLBACK only. A report that knows why it is not

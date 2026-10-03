@@ -161,6 +161,31 @@ namespace MyApp.Api.Controllers
             return Ok(templates.Select(t => ToDto(t, includeSheetNames: false, includeBody: !meta)));
         }
 
+        [HttpGet("company/{companyId}/customer-ledger-invoice-layout")]
+        [HasPermission("accounting.reports.view")]
+        [AuthorizeCompany]
+        public async Task<IActionResult> GetCustomerLedgerInvoiceLayout(int companyId, [FromQuery] int? divisionId = null)
+        {
+            if (divisionId.HasValue)
+                await _divisionAccess.AssertAccessAsync(CurrentUserId, companyId, divisionId);
+
+            var templates = await _repo.GetByCompanyAsync(companyId);
+            var scopes = divisionId.HasValue ? new int?[] { divisionId, null } : new int?[] { null };
+            foreach (var scope in scopes)
+            {
+                foreach (var type in new[] { "Bill", "TaxInvoice" })
+                {
+                    var template = templates
+                        .Where(t => t.CompanyId == companyId && t.DivisionId == scope && t.TemplateType == type
+                            && !string.IsNullOrWhiteSpace(t.HtmlContent))
+                        .OrderByDescending(t => t.IsDefault).ThenBy(t => t.Id).FirstOrDefault();
+                    if (template != null)
+                        return Ok(new { template.CompanyId, template.DivisionId, template.TemplateType, template.HtmlContent });
+                }
+            }
+            return NoContent();
+        }
+
         [HttpGet("company/{companyId}/{templateType}")]
         [HasReferenceAccess("printtemplates")]
         [AuthorizeCompany]

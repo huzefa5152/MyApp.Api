@@ -102,7 +102,7 @@ export default function AccountingReportsPage() {
         <NotBuiltYet report={report} onBack={() => navigate("/accounting/reports")} />
       ) : (
         <GenericReport
-          key={reportId}
+          key={`${reportId}:${companyId}`}
           companyId={companyId}
           report={report}
           canExport={canExport}
@@ -295,6 +295,19 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
     }
   };
 
+  const loadPrintReport = async () => {
+    const { data: first } = await getReport(companyId, report.path, { ...requestParams, page: 1, pageSize: 200 });
+    const rows = [...(first.rows || [])];
+    const size = first.pageSize || rows.length;
+    if (first.totalCount > rows.length && !size) throw new Error("Empty report page");
+    for (let page = 2; rows.length < first.totalCount; page++) {
+      const { data: next } = await getReport(companyId, report.path, { ...requestParams, page, pageSize: size });
+      if (!next.rows?.length || next.totalCount !== first.totalCount) throw new Error("Report changed during export");
+      rows.push(...next.rows);
+    }
+    return { ...first, rows, page: 1, pageSize: rows.length };
+  };
+
   /**
    * Summary → detail. A group row carries the filter key and value that narrow
    * the detail report to exactly that group, so the accounting trail is never
@@ -342,6 +355,9 @@ function GenericReport({ companyId, report, canExport, onBack, onNavigate }) {
         onDrill={report.drill || report.detailTarget ? drill : undefined}
         onOpenRow={openRow}
         onOpenAccount={(accountId) => drill("accountId", accountId)}
+        printReportId={report.id}
+        printDivisionId={filters.divisionId}
+        loadPrintReport={report.id === "customer-ledger" ? loadPrintReport : undefined}
       />
     </div>
   );

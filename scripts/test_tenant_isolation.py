@@ -327,6 +327,7 @@ endpoints_to_test = [
     ("GET",  "/api/fbr/scenarios/applicable/{cid}"),
     ("GET",  "/api/fbr/uom/{cid}"),
     ("GET",  "/api/printtemplates/company/{cid}"),
+    ("GET",  "/api/printtemplates/company/{cid}/customer-ledger-invoice-layout"),
     ("GET",  "/api/folders/company/{cid}"),
     ("GET",  "/api/folders/company/{cid}/paged"),
     ("GET",  "/api/attachments/company/{cid}/entity/SalesQuote/1"),

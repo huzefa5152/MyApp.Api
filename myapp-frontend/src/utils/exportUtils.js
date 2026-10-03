@@ -96,6 +96,7 @@ function atomicCutPoints(content, scale) {
   const top = content.getBoundingClientRect().top;
   const points = new Set();
   for (const el of content.querySelectorAll("tr, img, .no-break")) {
+    if (el.parentElement?.closest(".no-break")) continue;
     const r = el.getBoundingClientRect();
     if (r.height <= 0) continue;
     points.add(Math.round((r.bottom - top) * scale));
@@ -120,10 +121,28 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
   const { css, bodyHtml } = parseHtml(html);
   const { wrapper, content } = createStyledContainer(css, bodyHtml);
   const footerHolder = detachPrintFooter(wrapper, content);
+  const repeatTable = opts.repeatTableHeader ? content.querySelector(opts.repeatTableHeader) : null;
+  let repeatHeader = null;
+  if (repeatTable?.querySelector("thead")) {
+    repeatHeader = repeatTable.cloneNode(false);
+    repeatHeader.appendChild(repeatTable.querySelector("thead").cloneNode(true));
+    repeatHeader.style.width = `${repeatTable.getBoundingClientRect().width}px`;
+    const originalCells = repeatTable.querySelectorAll("thead th");
+    repeatHeader.querySelectorAll("th").forEach((th, i) => {
+      th.style.width = `${originalCells[i].getBoundingClientRect().width}px`;
+    });
+    content.appendChild(repeatHeader);
+  }
 
   await new Promise((r) => setTimeout(r, 400));
 
   try {
+    const headerCanvas = repeatHeader
+      ? await html2canvas(repeatHeader, { scale: 2, useCORS: true, windowWidth: 796 }) : null;
+    repeatHeader?.remove();
+    await document.fonts.ready;
+    await Promise.all(Array.from(content.querySelectorAll("img")).map((img) =>
+      img.decode().catch(() => {})));
     const canvas = await html2canvas(content, {
       scale: 2,
       useCORS: true,
@@ -134,23 +153,26 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
       ? await html2canvas(footerHolder, { scale: 2, useCORS: true, letterRendering: true, windowWidth: 796 })
       : null;
     const imgData = canvas.toDataURL("image/jpeg", 0.98);
-    const pageW = 210;
-    const pageH = 297;
-    const imgH = (canvas.height * pageW) / canvas.width;
-    const marginMm = 8;
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const inset = opts.marginMm ?? 0;
+    const drawW = pageW - inset * 2;
+    const imgH = (canvas.height * drawW) / canvas.width;
+    const marginMm = opts.marginMm ?? 8;
 
     // Same signature on the bottom of every page as the print path produces.
     const footerData = footerCanvas && footerCanvas.height
       ? footerCanvas.toDataURL("image/png")
       : null;
-    const footerMmH = footerData ? (footerCanvas.height * pageW) / footerCanvas.width : 0;
+    const footerMmH = footerData ? (footerCanvas.height * drawW) / footerCanvas.width : 0;
     const stampFooter = () => {
-      if (footerData) pdf.addImage(footerData, "PNG", 0, pageH - marginMm - footerMmH, pageW, footerMmH);
+      if (footerData) pdf.addImage(footerData, "PNG", inset, pageH - marginMm - footerMmH, drawW, footerMmH);
     };
 
     let pagesAdded = 0;
-    if (imgH <= pageH * 1.02) {
-      pdf.addImage(imgData, "JPEG", 0, 0, pageW, Math.min(imgH, pageH));
+    const singlePageHeight = inset ? pageH - inset * 2 : pageH * 1.02;
+    if (imgH <= singlePageHeight) {
+      pdf.addImage(imgData, "JPEG", inset, inset, drawW, Math.min(imgH, pageH));
       stampFooter();
       pagesAdded = 1;
     } else {
@@ -161,13 +183,22 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
       // "combined" and rows were cut flush). Content is sliced into
       // (pageH − 2·margin) tall bands, each drawn `marginMm` down from the top.
       const contentMm = pageH - marginMm * 2;
-      const pageCanvasH = (canvas.width * contentMm) / pageW;   // slice height in canvas px
+      const pageCanvasH = (canvas.width * contentMm) / drawW;   // slice height in canvas px
 
       // Cut in the gaps between rows rather than at fixed offsets. The scale is
       // MEASURED off the canvas rather than assumed: html2canvas rounds, and a
       // half-pixel error compounds down a long document.
       const cuts = atomicCutPoints(content, canvas.height / (content.scrollHeight || 1));
-      const pageEnds = choosePageCuts(cuts, pageCanvasH, canvas.height);
+      const headerMmH = headerCanvas ? headerCanvas.height * drawW / headerCanvas.width : 0;
+      const pageEnds = [];
+      let start = 0;
+      while (start < canvas.height) {
+        const reserved = pageEnds.length ? headerMmH * canvas.width / drawW : 0;
+        const shiftedCuts = cuts.filter((c) => c > start).map((c) => c - start);
+        const end = start + choosePageCuts(shiftedCuts, pageCanvasH - reserved, canvas.height - start)[0];
+        pageEnds.push(end);
+        start = end;
+      }
 
       let y = 0;
       let pageNum = 0;
@@ -179,8 +210,10 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
         page.height = sliceH;
         page.getContext("2d").drawImage(canvas, 0, -y);
         const sliceData = page.toDataURL("image/jpeg", 0.98);
-        const sliceMmH = (sliceH * pageW) / canvas.width;
-        pdf.addImage(sliceData, "JPEG", 0, marginMm, pageW, sliceMmH);
+        const sliceMmH = (sliceH * drawW) / canvas.width;
+        const headerHeight = pageNum > 0 ? headerMmH : 0;
+        if (headerHeight) pdf.addImage(headerCanvas.toDataURL("image/png"), "PNG", inset, marginMm, drawW, headerHeight);
+        pdf.addImage(sliceData, "JPEG", inset, marginMm + headerHeight, drawW, sliceMmH);
         stampFooter();
         y = end;
         pageNum++;
@@ -199,11 +232,11 @@ export async function renderIntoPdf(pdf, html, opts = {}) {
  * while renderIntoPdf above does the drawing. Every bulk operation reuses that
  * same primitive, so a bulk PDF of one invoice is identical to this one.
  */
-export async function exportToPdf(html, filename) {
+export async function exportToPdf(html, filename, opts = {}) {
   const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-  await renderIntoPdf(pdf, html);
-  pdf.save(`${filename}.pdf`);
+  await renderIntoPdf(pdf, html, opts);
+  pdf.save(`${String(filename || "report").replace(/(?:\.pdf)+$/i, "")}.pdf`);
 }
 
 /**

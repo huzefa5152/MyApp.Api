@@ -9,6 +9,11 @@ export const getTemplatesByCompany = (companyId, { meta = false } = {}) =>
 export const getTemplate = (companyId, templateType) =>
   httpClient.get(`/printtemplates/company/${companyId}/${templateType}`);
 
+export const getCustomerLedgerInvoiceLayout = (companyId, divisionId) =>
+  httpClient.get(`/printtemplates/company/${companyId}/customer-ledger-invoice-layout`, {
+    params: divisionId ? { divisionId } : {},
+  });
+
 export const upsertTemplate = (companyId, templateType, htmlContent, templateJson, editorMode) =>
   httpClient.put(`/printtemplates/company/${companyId}/${templateType}`, {
     htmlContent,
