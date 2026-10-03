@@ -121,6 +121,11 @@ namespace MyApp.Api.Controllers
                 .Include(x => x.ClientGroup)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (f == null) return NotFound();
+            // Same rule as the list: a company-scoped format is visible only to
+            // callers who can reach that company (installation-wide formats stay
+            // visible to all). 404, not 403, so ids cannot be probed.
+            if (f.CompanyId.HasValue && !await _access.HasAccessAsync(CurrentUserId, f.CompanyId.Value))
+                return NotFound();
             return Ok(ToDto(f));
         }
 

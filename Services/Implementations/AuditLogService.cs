@@ -45,6 +45,7 @@ namespace MyApp.Api.Services.Implementations
         private static AuditLogDto ToListDto(AuditLog a) => new()
         {
             Id = a.Id,
+            CompanyId = a.CompanyId,
             Timestamp = a.Timestamp,
             Level = a.Level,
             UserName = a.UserName,
@@ -62,6 +63,7 @@ namespace MyApp.Api.Services.Implementations
         private static AuditLogDto ToDetailDto(AuditLog a) => new()
         {
             Id = a.Id,
+            CompanyId = a.CompanyId,
             Timestamp = a.Timestamp,
             Level = a.Level,
             UserName = a.UserName,
@@ -143,9 +145,10 @@ namespace MyApp.Api.Services.Implementations
             return Convert.ToHexString(bytes).ToLowerInvariant()[..40];
         }
 
-        public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null)
+        public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null,
+            IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
-            var result = await _repository.GetPagedAsync(page, pageSize, level, search);
+            var result = await _repository.GetPagedAsync(page, pageSize, level, search, scopeCompanyIds);
             return new PagedResult<AuditLogDto>
             {
                 Items = result.Items.Select(ToListDto).ToList(),
@@ -155,18 +158,18 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<AuditLogDto?> GetByIdAsync(int id)
+        public async Task<AuditLogDto?> GetByIdAsync(int id, IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
-            var log = await _repository.GetByIdAsync(id);
+            var log = await _repository.GetByIdAsync(id, scopeCompanyIds);
             return log == null ? null : ToDetailDto(log);
         }
 
-        public async Task<AuditSummaryDto> GetSummaryAsync()
+        public async Task<AuditSummaryDto> GetSummaryAsync(IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
             return new AuditSummaryDto
             {
-                ErrorsLast24h = await _repository.GetCountByLevelAsync("Error", 24),
-                WarningsLast24h = await _repository.GetCountByLevelAsync("Warning", 24)
+                ErrorsLast24h = await _repository.GetCountByLevelAsync("Error", 24, scopeCompanyIds),
+                WarningsLast24h = await _repository.GetCountByLevelAsync("Warning", 24, scopeCompanyIds)
             };
         }
     }

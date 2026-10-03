@@ -1484,6 +1484,97 @@ for route20 in ("uoms-for-hs", "fbr-hints"):
     status_check(suite20, f"alice calls {route20} against another tenant", s, 403)
 
 
+# ── Suite 21: the 2026-10-03 audit -- shared catalog writes, body companyId,
+# global lookups and installation-wide screens ──
+# Each case was a live leak found by reading the code: a route that trusted a
+# companyId in the BODY, a shared catalog row any tenant could rename (and the
+# rename rewrote the other tenant's unfiled bill lines), lookups that answered
+# from every tenant's data, and screens a role editor could open to everyone.
+# Half of these are POSITIVE checks on purpose -- a guard that hid everything
+# would pass the negative half just as well.
+print("\n  Suite 21 - 2026-10-03 audit fixes")
+suite21 = "2026-10-03 audit fixes"
+
+# 1. Tax-claim summary took its company from the body and checked nothing.
+claim_body = {"companyId": beta["id"], "billDate": "2026-10-01", "billGstRate": 18,
+              "billRows": [{"hsCode": "8481.1000", "itemTypeName": "probe", "qty": 1, "value": 1}]}
+s, _ = request("POST", "/api/tax-claim/claim-summary", token=tokens["alice"], body=claim_body)
+status_check(suite21, "alice reads another tenant's tax-claim summary", s, 403)
+s, _ = request("POST", "/api/tax-claim/claim-summary", token=tokens["bob"], body=claim_body)
+status_check(suite21, "bob (Beta access) reads Beta's tax-claim summary", s, 200)
+
+# 2. Item types: Beta's own item is invisible and unchangeable to Alpha.
+beta_item_name = f"ISO21 BETA {uuid.uuid4().hex[:6]}"
+s, beta_item = request("POST", f"/api/itemtypes?companyId={beta['id']}", token=tokens["bob"],
+                       body={"name": beta_item_name, "uom": "Numbers, pieces, units", "isFavorite": True})
+check(suite21, "bob creates a Beta item", s in (200, 201), f"http {s}: {beta_item}")
+if s in (200, 201):
+    bid21 = beta_item["id"]
+    s, _ = request("GET", f"/api/itemtypes/{bid21}", token=tokens["alice"])
+    status_check(suite21, "alice GET Beta's item by id", s, 404)
+    edit21 = dict(beta_item); edit21["name"] = beta_item_name + " RENAMED"
+    s, _ = request("PUT", f"/api/itemtypes/{bid21}?companyId={alpha['id']}", token=tokens["alice"], body=edit21)
+    status_check(suite21, "alice renames Beta's item (and would pull it into Alpha)", s, 404)
+    s, _ = request("DELETE", f"/api/itemtypes/{bid21}", token=tokens["alice"])
+    status_check(suite21, "alice deletes Beta's item", s, 404)
+    s, _ = request("POST", f"/api/stock/company/{alpha['id']}/itemtype-policy", token=tokens["alice"],
+                   body={"itemTypeId": bid21, "mode": 1})
+    status_check(suite21, "alice registers Beta's item into Alpha via itemtype-policy", s, 404)
+    s, got21 = request("GET", f"/api/itemtypes/{bid21}", token=tokens["bob"])
+    check(suite21, "bob still reads his own item by id, unrenamed",
+          s == 200 and (got21 or {}).get("name") == beta_item_name, f"status {s}, name {(got21 or {}).get('name')}")
+
+    # A SHARED item: carol (Alpha + Beta) brings Beta's item into Alpha. Alice
+    # can now see it, but renaming it would change Beta's books, so she is
+    # refused; carol, who reaches every company holding it, is not.
+    s, _ = request("PUT", f"/api/itemtypes/{bid21}?companyId={alpha['id']}", token=tokens["carol"], body=dict(beta_item))
+    check(suite21, "carol (Alpha + Beta) registers the item into Alpha", s == 200, f"http {s}")
+    s, _ = request("GET", f"/api/itemtypes/{bid21}", token=tokens["alice"])
+    status_check(suite21, "alice now sees the shared item", s, 200)
+    s, body21 = request("PUT", f"/api/itemtypes/{bid21}", token=tokens["alice"], body=edit21)
+    status_check(suite21, "alice renames an item Beta also holds", s, 400)
+    s, _ = request("DELETE", f"/api/itemtypes/{bid21}", token=tokens["alice"])
+    status_check(suite21, "alice deletes an item Beta also holds", s, 400)
+    s, _ = request("PUT", f"/api/itemtypes/{bid21}", token=tokens["carol"], body=dict(beta_item))
+    status_check(suite21, "carol, who reaches every holder, may still save it", s, 200)
+
+    # 3. Description lookup: Beta's wording never reaches Alpha.
+    s, look_a = request("GET", "/api/lookup/items?query=" + urllib.parse.quote(beta_item_name), token=tokens["alice"])
+    check(suite21, "alice's description lookup does not offer Beta-only wording",
+          s == 200 and not any(beta_item_name in (r.get("name") or "") for r in (look_a or [])),
+          f"LEAK: {[(r or {}).get('name') for r in (look_a or [])]}")
+    s, look_adm = request("GET", "/api/lookup/items?query=" + urllib.parse.quote(beta_item_name), token=admin)
+    if any(beta_item_name in (r.get("name") or "") for r in (look_adm or [])):
+        s, look_b = request("GET", "/api/lookup/items?query=" + urllib.parse.quote(beta_item_name), token=tokens["bob"])
+        check(suite21, "bob's lookup still offers Beta's own wording",
+              s == 200 and any(beta_item_name in (r.get("name") or "") for r in (look_b or [])),
+              "scoping hid a description from its own company")
+
+# 4. Audit logs: a non-seed user sees only rows for companies they can reach.
+s, logs21 = request("GET", "/api/auditlogs?pageSize=200", token=tokens["alice"])
+foreign = [r for r in ((logs21 or {}).get("items") or []) if r.get("companyId") not in (alpha["id"],)]
+check(suite21, "alice's audit log holds only Alpha rows", s == 200 and not foreign,
+      f"status {s}; foreign rows {[(r.get('id'), r.get('companyId')) for r in foreign[:5]]}")
+s, logs_adm = request("GET", "/api/auditlogs?pageSize=5", token=admin)
+check(suite21, "the seed admin still reads the installation log", s == 200 and (logs_adm or {}).get("totalCount", 0) > 0,
+      f"status {s}")
+
+# 5. Parser feedback (customers' PO PDFs).
+s, fb21 = request("GET", "/api/import-feedback/incorrect?pageSize=200", token=tokens["alice"])
+foreign_fb = [r for r in ((fb21 or {}).get("rows") or []) if r.get("companyId") != alpha["id"]]
+check(suite21, "alice's parser feedback holds only Alpha rows", s == 200 and not foreign_fb,
+      f"status {s}; foreign {[(r.get('id'), r.get('companyId')) for r in foreign_fb[:5]]}")
+
+# 6. A PO format by id answers 404 to a tenant that cannot reach its company.
+s, fmts = request("GET", f"/api/poformats?companyId={beta['id']}", token=admin)
+beta_fmt = next((f for f in (fmts or []) if f.get("companyId") == beta["id"]), None)
+if beta_fmt is None:
+    check(suite21, "a Beta PO format available to probe", True, "skipped -- none on this installation")
+else:
+    s, _ = request("GET", f"/api/poformats/{beta_fmt['id']}", token=tokens["alice"])
+    status_check(suite21, "alice GET Beta's PO format by id", s, 404)
+
+
 # ── Cleanup (test fails → keep rows for inspection) ──────────
 print("\n=== Results ===")
 fails = [r for r in results if not r[2].startswith(PASS)]

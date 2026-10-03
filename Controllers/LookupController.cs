@@ -16,10 +16,42 @@ namespace MyApp.Api.Controllers
     public class LookupController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly MyApp.Api.Services.Interfaces.ICompanyAccessGuard _access;
 
-        public LookupController(AppDbContext context)
+        public LookupController(AppDbContext context, MyApp.Api.Services.Interfaces.ICompanyAccessGuard access)
         {
             _context = context;
+            _access = access;
+        }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                    ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                out var id) ? id : 0;
+
+        /// <summary>
+        /// The descriptions THIS caller's companies have used. ItemDescriptions
+        /// is one global table filled from every company's challans, bills and
+        /// imports, so returning it whole handed every tenant every other
+        /// tenant's product wording. A description counts as the caller's when
+        /// one of their companies put it on a document line, or it names an item
+        /// those companies hold (CLAUDE.md §5b-2b). SQL Server's default
+        /// collation is case-insensitive, so "=" matches the registry's own
+        /// de-duplication.
+        /// </summary>
+        private async Task<IQueryable<ItemDescription>> VisibleDescriptionsAsync()
+        {
+            var ids = (await _access.GetAccessibleCompanyIdsAsync(CurrentUserId)).ToList();
+            var held = Helpers.ItemTypeMembership.CompanyItemTypeIds(_context, ids);
+            return _context.ItemDescriptions.Where(d =>
+                _context.InvoiceItems.Any(x => x.Description == d.Name && ids.Contains(x.Invoice!.CompanyId))
+                || _context.DeliveryItems.Any(x => x.Description == d.Name && ids.Contains(x.DeliveryChallan!.CompanyId))
+                || _context.SalesQuoteItems.Any(x => x.Description == d.Name && ids.Contains(x.SalesQuote!.CompanyId))
+                || _context.SalesOrderItems.Any(x => x.Description == d.Name && ids.Contains(x.SalesOrder!.CompanyId))
+                || _context.PurchaseItems.Any(x => x.Description == d.Name && ids.Contains(x.PurchaseBill!.CompanyId))
+                || _context.GoodsReceiptItems.Any(x => x.Description == d.Name && ids.Contains(x.GoodsReceipt!.CompanyId))
+                || _context.ItemTypes.Any(t => t.Name == d.Name && held.Contains(t.Id)));
         }
 
         // Search item descriptions (now returns FBR defaults so the caller can auto-fill
@@ -28,7 +60,8 @@ namespace MyApp.Api.Controllers
         [HttpGet("items")]
         public async Task<IActionResult> GetItems([FromQuery] string query)
         {
-            var items = await _context.ItemDescriptions
+            if (string.IsNullOrWhiteSpace(query)) return Ok(new List<ItemDescription>());
+            var items = await (await VisibleDescriptionsAsync())
                 .Where(i => i.Name.Contains(query))
                 .OrderByDescending(i => i.IsFavorite)
                 .ThenByDescending(i => i.UsageCount)
@@ -46,7 +79,7 @@ namespace MyApp.Api.Controllers
         {
             if (take <= 0) take = 15;
             if (take > 100) take = 100;
-            var items = await _context.ItemDescriptions
+            var items = await (await VisibleDescriptionsAsync())
                 // Only surface items that have FBR data configured — a plain-text
                 // description without HS code isn't useful as a "favorite".
                 .Where(i => i.IsFavorite || i.UsageCount > 0)
@@ -78,7 +111,7 @@ namespace MyApp.Api.Controllers
         public async Task<IActionResult> GetItemByName([FromQuery] string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return NotFound();
-            var item = await _context.ItemDescriptions
+            var item = await (await VisibleDescriptionsAsync())
                 .FirstOrDefaultAsync(i => i.Name == name);
             if (item == null) return NotFound();
             return Ok(item);

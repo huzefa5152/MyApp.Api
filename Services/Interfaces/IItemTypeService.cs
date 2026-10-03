@@ -61,7 +61,18 @@ namespace MyApp.Api.Services.Interfaces
         /// CompanyItemTypeSetting overlay from the DTO's DivisionId /
         /// SaleAccountId / PurchaseAccountId (design §3.1/§7).</summary>
         Task<ItemTypeDto> CreateAsync(ItemTypeDto dto, int? companyId = null);
-        Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? companyId = null);
+        /// <param name="scopeCompanyIds">The caller's accessible companies.
+        /// Propagation to bill and challan lines reaches only these; null is an
+        /// internal caller acting for the installation.</param>
+        Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? companyId = null,
+            IReadOnlyCollection<int>? scopeCompanyIds = null);
+
+        /// <summary>The caller may see the item (CLAUDE.md §5b-2b).</summary>
+        Task<bool> IsVisibleToAsync(int id, IEnumerable<int> companyIds);
+
+        /// <summary>A company outside <paramref name="companyIds"/> holds the
+        /// item, so the shared row may not be changed or deleted by this caller.</summary>
+        Task<bool> IsHeldOutsideAsync(int id, IEnumerable<int> companyIds);
         Task DeleteAsync(int id);
     }
 }

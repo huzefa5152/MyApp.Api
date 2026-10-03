@@ -36,56 +36,7 @@ namespace MyApp.Api.Repositories.Implementations
         /// and passing them back as parameters would not survive paging.
         /// </summary>
         private IQueryable<int> CompanyItemTypeIds(List<int> companyIds)
-        {
-            // The company's own registrations -- Mode is irrelevant here; a
-            // Default row means "this company has this item on its books",
-            // which is exactly the question being asked.
-            var registered = _context.CompanyItemTypeSettings
-                .Where(s => companyIds.Contains(s.CompanyId)).Select(s => s.ItemTypeId);
-
-            var openings = _context.OpeningStockBalances
-                .Where(o => companyIds.Contains(o.CompanyId)).Select(o => o.ItemTypeId);
-            var movements = _context.StockMovements
-                .Where(m => companyIds.Contains(m.CompanyId)).Select(m => m.ItemTypeId);
-
-            var invoiceLines = _context.InvoiceItems
-                .Where(ii => ii.ItemTypeId != null && companyIds.Contains(ii.Invoice!.CompanyId))
-                .Select(ii => ii.ItemTypeId!.Value);
-            // The filed book of an overlay company can classify a line
-            // differently from the bill, so it is a separate source.
-            // No Invoice navigation on the adjustment row, so this one
-            // joins explicitly rather than walking a property.
-            var adjustments =
-                from a in _context.InvoiceItemAdjustments
-                join i in _context.Invoices on a.InvoiceId equals i.Id
-                where a.AdjustedItemTypeId != null && companyIds.Contains(i.CompanyId)
-                select a.AdjustedItemTypeId!.Value;
-
-            var purchaseLines = _context.PurchaseItems
-                .Where(pi => pi.ItemTypeId != null && companyIds.Contains(pi.PurchaseBill!.CompanyId))
-                .Select(pi => pi.ItemTypeId!.Value);
-            var debitNoteLines = _context.PurchaseDebitNoteItems
-                .Where(d => d.ItemTypeId != null && companyIds.Contains(d.PurchaseDebitNote!.CompanyId))
-                .Select(d => d.ItemTypeId!.Value);
-            var receiptLines = _context.GoodsReceiptItems
-                .Where(g => g.ItemTypeId != null && companyIds.Contains(g.GoodsReceipt!.CompanyId))
-                .Select(g => g.ItemTypeId!.Value);
-            var challanLines = _context.DeliveryItems
-                .Where(d => d.ItemTypeId != null && companyIds.Contains(d.DeliveryChallan!.CompanyId))
-                .Select(d => d.ItemTypeId!.Value);
-            var orderLines = _context.SalesOrderItems
-                .Where(s => s.ItemTypeId != null && companyIds.Contains(s.SalesOrder!.CompanyId))
-                .Select(s => s.ItemTypeId!.Value);
-            var quoteLines = _context.SalesQuoteItems
-                .Where(s => s.ItemTypeId != null && companyIds.Contains(s.SalesQuote!.CompanyId))
-                .Select(s => s.ItemTypeId!.Value);
-
-            return registered
-                .Union(openings).Union(movements)
-                .Union(invoiceLines).Union(adjustments)
-                .Union(purchaseLines).Union(debitNoteLines).Union(receiptLines)
-                .Union(challanLines).Union(orderLines).Union(quoteLines);
-        }
+            => Helpers.ItemTypeMembership.CompanyItemTypeIds(_context, companyIds);
 
         /// <summary>
         /// Narrow a catalog query to what <paramref name="companyId"/> may see.

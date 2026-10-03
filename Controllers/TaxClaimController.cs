@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyApp.Api.DTOs;
@@ -27,11 +28,19 @@ namespace MyApp.Api.Controllers
     public class TaxClaimController : ControllerBase
     {
         private readonly ITaxClaimService _taxClaim;
+        private readonly ICompanyAccessGuard _access;
 
-        public TaxClaimController(ITaxClaimService taxClaim)
+        public TaxClaimController(ITaxClaimService taxClaim, ICompanyAccessGuard access)
         {
             _taxClaim = taxClaim;
+            _access = access;
         }
+
+        private int CurrentUserId =>
+            int.TryParse(
+                User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)
+                    ?? User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier),
+                out var id) ? id : 0;
 
         /// <summary>
         /// POST /api/tax-claim/claim-summary
@@ -53,6 +62,10 @@ namespace MyApp.Api.Controllers
         {
             if (request == null || request.CompanyId <= 0)
                 return BadRequest(new { error = "companyId is required." });
+            // The company arrives in the BODY, which [AuthorizeCompany] does not
+            // read, so the check is made here. Without it any user with
+            // invoices.list.view could read another company's purchase book.
+            await _access.AssertAccessAsync(CurrentUserId, request.CompanyId);
             var summary = await _taxClaim.GetClaimSummaryAsync(request);
             return Ok(summary);
         }

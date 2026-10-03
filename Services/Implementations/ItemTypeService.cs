@@ -401,7 +401,14 @@ namespace MyApp.Api.Services.Implementations
             return null;
         }
 
-        public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? companyId = null)
+        public Task<bool> IsVisibleToAsync(int id, IEnumerable<int> companyIds)
+            => ItemTypeMembership.IsVisibleAsync(_context, id, companyIds);
+
+        public Task<bool> IsHeldOutsideAsync(int id, IEnumerable<int> companyIds)
+            => ItemTypeMembership.IsHeldOutsideAsync(_context, id, companyIds);
+
+        public async Task<ItemTypeDto?> UpdateAsync(int id, ItemTypeDto dto, int? companyId = null,
+            IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
             var it = await _repo.GetByIdAsync(id);
             if (it == null) return null;
@@ -461,7 +468,7 @@ namespace MyApp.Api.Services.Implementations
             it.IsFavorite = dto.IsFavorite;
             var updated = await _repo.UpdateAsync(it);
 
-            var summary = await PropagateToLinesAsync(updated, changedFields);
+            var summary = await PropagateToLinesAsync(updated, changedFields, scopeCompanyIds);
 
             var resultDto = ToDto(updated);
             resultDto.Propagation = summary;
@@ -573,16 +580,29 @@ namespace MyApp.Api.Services.Implementations
         /// completes in one round-trip.
         /// </summary>
         private async Task<ItemTypePropagationSummaryDto> PropagateToLinesAsync(
-            ItemType updated, ItemTypeFieldChangeSet changed)
+            ItemType updated, ItemTypeFieldChangeSet changed, IReadOnlyCollection<int>? scopeCompanyIds)
         {
             if (!changed.Any) return new ItemTypePropagationSummaryDto();
 
-            int submittedSkipped = await _context.InvoiceItems
-                .Where(ii => ii.ItemTypeId == updated.Id && ii.Invoice.FbrStatus == "Submitted")
+            // Only the caller's companies' lines move. The controller already
+            // refuses an edit to an item another company holds; this is the
+            // second wall, so a catalog edit can never rewrite a line some other
+            // tenant is about to file with FBR.
+            var scope = scopeCompanyIds?.ToList();
+            var invoiceLines = _context.InvoiceItems.Where(ii => ii.ItemTypeId == updated.Id);
+            var challanLines = _context.DeliveryItems.Where(di => di.ItemTypeId == updated.Id);
+            if (scope != null)
+            {
+                invoiceLines = invoiceLines.Where(ii => scope.Contains(ii.Invoice.CompanyId));
+                challanLines = challanLines.Where(di => scope.Contains(di.DeliveryChallan.CompanyId));
+            }
+
+            int submittedSkipped = await invoiceLines
+                .Where(ii => ii.Invoice.FbrStatus == "Submitted")
                 .CountAsync();
 
-            int invoicesUpdated = await _context.InvoiceItems
-                .Where(ii => ii.ItemTypeId == updated.Id && ii.Invoice.FbrStatus != "Submitted")
+            int invoicesUpdated = await invoiceLines
+                .Where(ii => ii.Invoice.FbrStatus != "Submitted")
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(ii => ii.HSCode,
                         ii => changed.HsCodeChanged ? updated.HSCode : ii.HSCode)
@@ -594,9 +614,8 @@ namespace MyApp.Api.Services.Implementations
                         ii => changed.SaleTypeChanged ? updated.SaleType : ii.SaleType)
                     .SetProperty(ii => ii.ItemTypeName, ii => updated.Name));
 
-            int challansUpdated = await _context.DeliveryItems
-                .Where(di => di.ItemTypeId == updated.Id
-                          && di.DeliveryChallan.Status != "Cancelled"
+            int challansUpdated = await challanLines
+                .Where(di => di.DeliveryChallan.Status != "Cancelled"
                           && (di.DeliveryChallan.Invoice == null
                               || di.DeliveryChallan.Invoice.FbrStatus != "Submitted"))
                 .ExecuteUpdateAsync(s => s
@@ -661,22 +680,13 @@ namespace MyApp.Api.Services.Implementations
                     "screen if the tariff has been updated — an unrecognised code is rejected by FBR " +
                     "with error [0007] at submission time.");
             }
-            // Use the supplied companyId when available; otherwise pick
-            // ANY existing company so the catalog-load path has SOME
-            // token to try. The FbrService donor-refusal guard (audit
-            // H-9) does NOT fire on read-only catalog fetches that are
-            // attributed to the same tenant the data is for — and the
-            // catalog is global, so the choice of company doesn't leak
-            // anything.
+            // Only the caller's OWN company's token may be used. The old fallback
+            // borrowed the first company's FBR token whenever none was given --
+            // the token-borrowing pattern audit H-9 forbids. With no company and
+            // no master there is nothing honest to check against, so the code is
+            // accepted here and FBR's own pre-flight / submission check stands.
             var companyId = companyIdHint;
-            if (companyId == null)
-            {
-                companyId = await _context.Companies
-                    .OrderBy(c => c.Id)
-                    .Select(c => (int?)c.Id)
-                    .FirstOrDefaultAsync();
-            }
-            if (companyId == null) return; // brand-new install with no companies — nothing to validate against
+            if (companyId == null) return;
 
             var ok = await _fbr.IsKnownHsCodeAsync(companyId.Value, hsCode!);
             if (!ok)

@@ -35,9 +35,17 @@ namespace MyApp.Api.Repositories.Implementations
 
         public async Task<(List<ParserFeedback> Rows, int Total)> ListAsync(
             ParserFeedbackStatus? status, DateTime? from, DateTime? to,
-            string? parserVersion, string? sortBy, bool descending, int page, int pageSize)
+            string? parserVersion, string? sortBy, bool descending, int page, int pageSize,
+            IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
             var q = _db.ParserFeedbacks.AsNoTracking().AsQueryable();
+            // Null = the seed admin; anyone else sees only feedback recorded for
+            // the companies they can reach (a row points at a customer's PO PDF).
+            if (scopeCompanyIds != null)
+            {
+                var ids = scopeCompanyIds.ToList();
+                q = q.Where(f => f.CompanyId != null && ids.Contains(f.CompanyId.Value));
+            }
             if (status.HasValue) q = q.Where(f => f.FeedbackStatus == status.Value);
             if (from.HasValue) q = q.Where(f => f.CreatedDate >= from.Value);
             if (to.HasValue) q = q.Where(f => f.CreatedDate < to.Value);
@@ -56,9 +64,15 @@ namespace MyApp.Api.Repositories.Implementations
             return (rows, total);
         }
 
-        public async Task<List<ParserFeedbackVersionCount>> AggregateAsync()
+        public async Task<List<ParserFeedbackVersionCount>> AggregateAsync(IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
-            var raw = await _db.ParserFeedbacks.AsNoTracking()
+            var scoped = _db.ParserFeedbacks.AsNoTracking().AsQueryable();
+            if (scopeCompanyIds != null)
+            {
+                var ids = scopeCompanyIds.ToList();
+                scoped = scoped.Where(f => f.CompanyId != null && ids.Contains(f.CompanyId.Value));
+            }
+            var raw = await scoped
                 .GroupBy(f => new { f.ParserVersion, f.FeedbackStatus })
                 .Select(g => new { g.Key.ParserVersion, g.Key.FeedbackStatus, Count = g.Count() })
                 .ToListAsync();

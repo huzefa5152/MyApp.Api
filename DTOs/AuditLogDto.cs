@@ -3,6 +3,8 @@ namespace MyApp.Api.DTOs
     public class AuditLogDto
     {
         public int Id { get; set; }
+        /// <summary>The company the row was written for; null for installation events.</summary>
+        public int? CompanyId { get; set; }
         public DateTime Timestamp { get; set; }
         public string Level { get; set; } = "";
         public string? UserName { get; set; }

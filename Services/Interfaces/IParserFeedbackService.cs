@@ -16,10 +16,10 @@ namespace MyApp.Api.Services.Interfaces
     public interface IParserFeedbackService
     {
         Task<ParserFeedbackDto> RecordAsync(RecordParserFeedbackInput input);
-        Task<ParserFeedbackPageDto> GetIncorrectAsync(ParserFeedbackQuery query);
-        Task<ParserFeedbackStatisticsDto> GetStatisticsAsync();
-        Task<ParserFeedbackPdf?> GetPdfAsync(int id);
-        Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids);
+        Task<ParserFeedbackPageDto> GetIncorrectAsync(ParserFeedbackQuery query, IReadOnlyCollection<int>? scopeCompanyIds = null);
+        Task<ParserFeedbackStatisticsDto> GetStatisticsAsync(IReadOnlyCollection<int>? scopeCompanyIds = null);
+        Task<ParserFeedbackPdf?> GetPdfAsync(int id, IReadOnlyCollection<int>? scopeCompanyIds = null);
+        Task<byte[]?> GetBulkZipAsync(IReadOnlyCollection<int> ids, IReadOnlyCollection<int>? scopeCompanyIds = null);
     }
 
     /// <summary>Input for recording one feedback verdict from the Review screen.</summary>

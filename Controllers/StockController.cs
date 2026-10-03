@@ -111,6 +111,9 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<IActionResult> SetGdClaimMonth(int companyId, [FromBody] SetGdClaimMonthDto dto)
         {
+            // A claim month changes company-level stock costing (FIFO order), so
+            // a division-restricted user may not write it (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, null);
             var number = dto.GdNumber?.Trim() ?? "";
             if (number.Length == 0 || number.Length > 100)
                 return BadRequest(new { error = "Enter a valid GD number." });
@@ -162,6 +165,9 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<IActionResult> SetLineClaimMonth(int companyId, [FromBody] SetLineClaimMonthDto dto)
         {
+            // A claim month changes company-level stock costing (FIFO order), so
+            // a division-restricted user may not write it (policy D2).
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, null);
             if (dto.ClaimMonth is { } month && (month.Day != 1 || month.TimeOfDay != TimeSpan.Zero))
                 return BadRequest(new { error = "Claim month must be the first day of the month." });
             if ((dto.LotId == null) == (dto.ConsignmentLineId == null))
@@ -1237,6 +1243,11 @@ namespace MyApp.Api.Controllers
             // Opening balances are company-level inventory state — a
             // division-restricted user may not write that scope (policy D2).
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
+            // The item must already be one this company may see (CLAUDE.md
+            // §5b-2b). Writing a balance or movement against another tenant's
+            // item would REGISTER it here and pull it into this company's pickers.
+            if (!await ItemTypeMembership.IsVisibleAsync(_context, dto.ItemTypeId, new[] { dto.CompanyId }))
+                return NotFound(new { error = "Item type not found." });
             var existing = await _context.OpeningStockBalances
                 .FirstOrDefaultAsync(o => o.CompanyId == dto.CompanyId && o.ItemTypeId == dto.ItemTypeId);
             // Snapshot BEFORE anything is assigned. A new row starts at zero on
@@ -1363,6 +1374,11 @@ namespace MyApp.Api.Controllers
             // Adjustments correct company-level inventory — blocked for
             // division-restricted users (policy D2).
             await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, dto.CompanyId, null);
+            // The item must already be one this company may see (CLAUDE.md
+            // §5b-2b). Writing a balance or movement against another tenant's
+            // item would REGISTER it here and pull it into this company's pickers.
+            if (!await ItemTypeMembership.IsVisibleAsync(_context, dto.ItemTypeId, new[] { dto.CompanyId }))
+                return NotFound(new { error = "Item type not found." });
 
             var mode = string.Equals(dto.Mode, StockAdjustmentModes.Set, StringComparison.OrdinalIgnoreCase)
                 ? StockAdjustmentModes.Set
@@ -2177,7 +2193,11 @@ namespace MyApp.Api.Controllers
                 return BadRequest(new { error = "itemTypeId is required." });
             if (req.Mode > 2)
                 return BadRequest(new { error = "mode must be 0 (default), 1 (tracked) or 2 (FBR-only)." });
-            if (!await _context.ItemTypes.AnyAsync(it => it.Id == req.ItemTypeId))
+            // Company-level policy: a division-restricted user may not write it,
+            // and the item must be one this company may already see -- a policy
+            // row would otherwise register another tenant's item here.
+            await _divisionAccess.AssertWriteAccessAsync(CurrentUserId, companyId, null);
+            if (!await ItemTypeMembership.IsVisibleAsync(_context, req.ItemTypeId, new[] { companyId }))
                 return NotFound(new { error = "Item type not found." });
 
             var setting = await _context.CompanyItemTypeSettings

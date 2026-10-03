@@ -38,6 +38,10 @@ namespace MyApp.Api.Controllers
             _defaultPageSize = configuration.GetValue<int>("Pagination:DefaultPageSize", 10);
         }
 
+        private const string SharedItemMessage =
+            "This item is also used by another company, so it cannot be renamed, reclassified or deleted from here. " +
+            "To call it something else in your company, set your company's own name for it on the item form.";
+
         private int CurrentUserId =>
             int.TryParse(
                 User.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? User.FindFirstValue(ClaimTypes.NameIdentifier),
@@ -191,6 +195,11 @@ namespace MyApp.Api.Controllers
             // company's overlay (division + GL accounts), which is per-tenant data.
             if (companyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            // The catalog is global in storage, scoped in visibility (§5b-2b):
+            // an id that belongs to another tenant answers 404, exactly like an
+            // id that does not exist, so ids cannot be walked to read names.
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            if (!await _service.IsVisibleToAsync(id, accessible)) return NotFound();
             var item = await _service.GetByIdAsync(id, companyId);
             if (item == null) return NotFound();
             return Ok(item);
@@ -227,9 +236,15 @@ namespace MyApp.Api.Controllers
         {
             if (companyId.HasValue)
                 await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            if (!await _service.IsVisibleToAsync(id, accessible)) return NotFound();
+            // The row is shared: renaming or reclassifying it changes the books
+            // of every company holding it, including what they file with FBR.
+            if (await _service.IsHeldOutsideAsync(id, accessible))
+                return BadRequest(new { message = SharedItemMessage });
             try
             {
-                var updated = await _service.UpdateAsync(id, dto, companyId);
+                var updated = await _service.UpdateAsync(id, dto, companyId, accessible);
                 if (updated == null) return NotFound();
                 return Ok(updated);
             }
@@ -243,6 +258,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("itemtypes.manage.delete")]
         public async Task<IActionResult> Delete(int id)
         {
+            var accessible = await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
+            if (!await _service.IsVisibleToAsync(id, accessible)) return NotFound();
+            if (await _service.IsHeldOutsideAsync(id, accessible))
+                return BadRequest(new { message = SharedItemMessage });
             try
             {
                 await _service.DeleteAsync(id);

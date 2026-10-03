@@ -28,12 +28,23 @@ namespace MyApp.Api.Controllers
     {
         private readonly IParserFeedbackService _service;
         private readonly ICompanyAccessGuard _access;
+        private readonly IPermissionService _permissions;
 
-        public ImportFeedbackController(IParserFeedbackService service, ICompanyAccessGuard access)
+        public ImportFeedbackController(IParserFeedbackService service, ICompanyAccessGuard access,
+            IPermissionService permissions)
         {
             _service = service;
             _access = access;
+            _permissions = permissions;
         }
+
+        /// <summary>Null for the seed admin (the parser's owner reviews every
+        /// tenant's misreads); anyone else sees only their own companies' --
+        /// a feedback row hands out a customer's original PO PDF.</summary>
+        private async Task<IReadOnlyCollection<int>?> ScopeAsync()
+            => _permissions.IsSeedAdmin(CurrentUserId)
+                ? null
+                : await _access.GetAccessibleCompanyIdsAsync(CurrentUserId);
 
         private int CurrentUserId =>
             int.TryParse(
@@ -96,7 +107,7 @@ namespace MyApp.Api.Controllers
                 Descending = desc,
                 Page = page,
                 PageSize = pageSize,
-            });
+            }, await ScopeAsync());
             return Ok(result);
         }
 
@@ -104,14 +115,14 @@ namespace MyApp.Api.Controllers
         [HttpGet("statistics")]
         [HasPermission("importfeedback.list.view")]
         public async Task<ActionResult<ParserFeedbackStatisticsDto>> GetStatistics()
-            => Ok(await _service.GetStatisticsAsync());
+            => Ok(await _service.GetStatisticsAsync(await ScopeAsync()));
 
         // Download one retained PDF.
         [HttpGet("{id:int}/download")]
         [HasPermission("importfeedback.download.view")]
         public async Task<IActionResult> Download(int id)
         {
-            var pdf = await _service.GetPdfAsync(id);
+            var pdf = await _service.GetPdfAsync(id, await ScopeAsync());
             if (pdf == null) return NotFound(new { error = "No retained PDF for this feedback." });
             var stream = new FileStream(pdf.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             return File(stream, "application/pdf", pdf.FileName);
@@ -124,7 +135,7 @@ namespace MyApp.Api.Controllers
         {
             if (body?.Ids == null || body.Ids.Count == 0)
                 return BadRequest(new { error = "Provide at least one id." });
-            var zip = await _service.GetBulkZipAsync(body.Ids);
+            var zip = await _service.GetBulkZipAsync(body.Ids, await ScopeAsync());
             if (zip == null) return NotFound(new { error = "None of the selected feedbacks have a retained PDF." });
             return File(zip, "application/zip", "parser-feedback-pdfs.zip");
         }

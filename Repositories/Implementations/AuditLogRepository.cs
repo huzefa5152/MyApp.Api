@@ -19,14 +19,15 @@ namespace MyApp.Api.Repositories.Implementations
             return log;
         }
 
-        public async Task<PagedResult<AuditLog>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null)
+        public async Task<PagedResult<AuditLog>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null,
+            IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
             // Defence-in-depth clamp (audit C-11) — controller already
             // clamps via PaginationHelper, but the repo is a public seam.
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 200);
 
-            var query = _context.AuditLogs.AsNoTracking().AsQueryable();
+            var query = Scope(_context.AuditLogs.AsNoTracking(), scopeCompanyIds);
 
             if (!string.IsNullOrWhiteSpace(level))
                 query = query.Where(a => a.Level == level);
@@ -53,14 +54,26 @@ namespace MyApp.Api.Repositories.Implementations
             };
         }
 
-        public async Task<AuditLog?> GetByIdAsync(int id)
-            => await _context.AuditLogs.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
+        public async Task<AuditLog?> GetByIdAsync(int id, IReadOnlyCollection<int>? scopeCompanyIds = null)
+            => await Scope(_context.AuditLogs.AsNoTracking(), scopeCompanyIds).FirstOrDefaultAsync(a => a.Id == id);
 
-        public async Task<int> GetCountByLevelAsync(string level, int hours = 24)
+        /// <summary>
+        /// Null = the seed admin, who sees the installation (including system
+        /// rows with no company). Anyone else sees only rows written for the
+        /// companies they can reach: a log row carries request bodies, query
+        /// strings and stack traces, which are another tenant's data.
+        /// </summary>
+        private static IQueryable<AuditLog> Scope(IQueryable<AuditLog> q, IReadOnlyCollection<int>? scopeCompanyIds)
+        {
+            if (scopeCompanyIds == null) return q;
+            var ids = scopeCompanyIds.ToList();
+            return q.Where(a => a.CompanyId != null && ids.Contains(a.CompanyId.Value));
+        }
+
+        public async Task<int> GetCountByLevelAsync(string level, int hours = 24, IReadOnlyCollection<int>? scopeCompanyIds = null)
         {
             var since = DateTime.UtcNow.AddHours(-hours);
-            return await _context.AuditLogs
-                .AsNoTracking()
+            return await Scope(_context.AuditLogs.AsNoTracking(), scopeCompanyIds)
                 .CountAsync(a => a.Level == level && a.Timestamp >= since);
         }
     }

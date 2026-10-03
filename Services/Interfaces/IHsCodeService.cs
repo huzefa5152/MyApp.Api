@@ -14,12 +14,14 @@ namespace MyApp.Api.Services.Interfaces
         /// Search the master by code prefix or description substring. Used by the
         /// Item Type form's autocomplete; returns at most <paramref name="take"/> rows.
         /// </summary>
-        Task<List<HsCodeDto>> SearchAsync(string? search, int take, bool activeOnly = true);
+        Task<List<HsCodeDto>> SearchAsync(string? search, int take, bool activeOnly = true,
+            IEnumerable<int>? scopeCompanyIds = null);
 
         /// <summary>Local tariff first; a fully-typed code that is not in it is
         /// looked up at FBR (installation reference token, throttled) and folded
         /// into the master, so what the operator picks is a code FBR accepts.</summary>
-        Task<List<HsCodeDto>> SearchWithFbrFallbackAsync(string? search, int take, bool activeOnly = true);
+        Task<List<HsCodeDto>> SearchWithFbrFallbackAsync(string? search, int take, bool activeOnly = true,
+            IEnumerable<int>? scopeCompanyIds = null);
 
         Task<HsCodeDto?> GetByCodeAsync(string code);
 
