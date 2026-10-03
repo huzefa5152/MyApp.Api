@@ -156,7 +156,7 @@ namespace MyApp.Api.Repositories.Implementations
 
                 int nextNumber = isDemo
                     ? (maxExisting > 0 ? maxExisting + 1 : company.StartingChallanNumber)
-                    : await MyApp.Api.Helpers.CompanyDocumentNumbers.AllocateAsync(_context, deliveryChallan.CompanyId, "challan", customNumber);
+                    : await MyApp.Api.Helpers.CompanyDocumentNumbers.AllocateAsync(_context, deliveryChallan.CompanyId, "challan", customNumber, deliveryChallan.ClientId);
 
                 deliveryChallan.ChallanNumber = nextNumber;
                 // Don't touch the company's CurrentChallanNumber when seeding

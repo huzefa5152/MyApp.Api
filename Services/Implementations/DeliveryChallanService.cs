@@ -927,7 +927,7 @@ namespace MyApp.Api.Services.Implementations
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                await CompanyDocumentNumbers.RenumberAsync(_context, dc.CompanyId, "challan", dc.Id, dc.ChallanNumber, dto.CustomNumber);
+                await CompanyDocumentNumbers.RenumberAsync(_context, dc.CompanyId, "challan", dc.Id, dc.ChallanNumber, dto.CustomNumber, dc.ClientId);
                 if (dto.CustomNumber.HasValue) dc.ChallanNumber = dto.CustomNumber.Value;
 
                 // Items: diff-based update so the linked bill stays in sync.

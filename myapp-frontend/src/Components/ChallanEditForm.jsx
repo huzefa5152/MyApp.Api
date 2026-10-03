@@ -249,7 +249,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
           <div style={formStyles.body}>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
 
             {/* Duplicate-mode banner — explains why so many fields are
                 read-only and what the operator IS allowed to change. */}

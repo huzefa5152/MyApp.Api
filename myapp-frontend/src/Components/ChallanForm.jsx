@@ -237,7 +237,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
-            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
+            <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
 
             {/* Optional: fulfil a Sales Order. Picking one autofills the client,
                 PO, site and the order's undelivered lines below, and links the
