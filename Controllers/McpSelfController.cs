@@ -115,7 +115,6 @@ public class McpSelfController(
     }
 
     [HttpPost("tokens/{id:int}/revoke")]
-    [HasPermission("mcp.access.use")]
     public async Task<IActionResult> Revoke(int id)
     {
         var uid = CurrentUserId;

@@ -1,6 +1,6 @@
 import UserSessionsPanel from "../Components/UserSessionsPanel";
-import McpAgentsPanel from "../Components/McpAgentsPanel";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MdPeople,
   MdAdd,
@@ -44,7 +44,10 @@ const colors = {
   successLight: "#eafbef",
 };
 
+const isMcpRole = (role) => role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name);
+
 export default function UsersPage() {
+  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const { has } = usePermissions();
   const seedAdminUserId = currentUser?.seedAdminUserId;
@@ -97,7 +100,7 @@ export default function UsersPage() {
     // Best-effort — non-admin users may not have rbac.roles.view, in which
     // case the dropdown falls back to free-typing the legacy role name.
     getRoles()
-      .then(({ data }) => setAvailableRoles(data || []))
+      .then(({ data }) => setAvailableRoles((data || []).filter((role) => !isMcpRole(role))))
       .catch(() => setAvailableRoles([]));
   }, []);
 
@@ -136,14 +139,14 @@ export default function UsersPage() {
         // this, the Edit form silently keeps the user's old permissions
         // (the legacy `role` text was updated but the UserRoles join table
         // wasn't). Mirrors what the Create branch already does.
-        // Note: this OVERWRITES any extra RBAC roles the user had (rare;
-        // operators with multi-role users should use the Roles modal,
-        // which is the explicit multi-select path).
+        // MCP grants are managed in the profile and survive normal role edits.
         const matchingRole = availableRoles.find(
           (r) => r.name?.toLowerCase() === form.role?.toLowerCase());
         if (matchingRole?.id && canAssignRoles) {
           try {
-            await assignUserRoles(editUser.id, [matchingRole.id]);
+            const { data: existing } = await getUserRoles(editUser.id);
+            const mcpIds = existing.roles.filter(isMcpRole).map((role) => role.id);
+            await assignUserRoles(editUser.id, [...new Set([matchingRole.id, ...mcpIds])]);
             setMsg({ type: "success", text: `User updated and role "${matchingRole.name}" applied.` });
           } catch {
             setMsg({
@@ -204,7 +207,7 @@ export default function UsersPage() {
     setRolesLoading(true);
     try {
       const [rolesRes, userRolesRes] = await Promise.all([getRoles(), getUserRoles(u.id)]);
-      setAllRoles(rolesRes.data);
+      setAllRoles(rolesRes.data.filter((role) => !isMcpRole(role)));
       setAssignedRoleIds(new Set(userRolesRes.data.roles.map((r) => r.id)));
     } catch {
       setRolesMsg({ type: "error", text: "Failed to load roles" });
@@ -234,7 +237,10 @@ export default function UsersPage() {
     setRolesSaving(true);
     setRolesMsg(null);
     try {
-      await assignUserRoles(rolesModalUser.id, Array.from(assignedRoleIds));
+      const { data: current } = await getUserRoles(rolesModalUser.id);
+      const normalIds = allRoles.filter((role) => assignedRoleIds.has(role.id)).map((role) => role.id);
+      const mcpIds = current.roles.filter(isMcpRole).map((role) => role.id);
+      await assignUserRoles(rolesModalUser.id, [...new Set([...normalIds, ...mcpIds])]);
       setRolesMsg({ type: "success", text: "Roles updated" });
       setTimeout(closeRolesModal, 700);
     } catch (err) {
@@ -285,7 +291,7 @@ export default function UsersPage() {
       {/* Tabs — Sessions & devices exists for the primary admin only */}
       {isSeedAdmin && (
         <div role="tablist" aria-label="User management sections" style={styles.tabs}>
-          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices], ["agents", "AI agents", MdSmartToy]].map(([key, label, Icon]) => (
+          {[["users", "Users", MdPeople], ["sessions", "Sessions & devices", MdDevices]].map(([key, label, Icon]) => (
             <button key={key} role="tab" id={`users-tab-${key}`} aria-selected={tab === key} aria-controls={`users-panel-${key}`}
               style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
               <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
@@ -296,9 +302,6 @@ export default function UsersPage() {
 
       {isSeedAdmin && tab === "sessions" && (
         <div role="tabpanel" id="users-panel-sessions" aria-labelledby="users-tab-sessions"><UserSessionsPanel /></div>
-      )}
-      {isSeedAdmin && tab === "agents" && (
-        <div role="tabpanel" id="users-panel-agents" aria-labelledby="users-tab-agents"><McpAgentsPanel /></div>
       )}
 
       <div role="tabpanel" id="users-panel-users" hidden={isSeedAdmin && tab !== "users"}>
@@ -350,6 +353,13 @@ export default function UsersPage() {
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
+                  {canUpdate && (
+                    <button style={{ ...styles.rolesBtn, minHeight: 44 }}
+                      onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)} title={`MCP access for ${u.fullName}`}>
+                      <MdSmartToy aria-hidden style={{ fontSize: "1rem" }} />
+                      <span>MCP access</span>
+                    </button>
+                  )}
                   {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {canAssignRoles && (

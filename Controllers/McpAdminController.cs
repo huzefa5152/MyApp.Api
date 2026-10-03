@@ -134,6 +134,7 @@ public class McpAdminController(
     {
         if (!IsSeedAdmin) return Forbid();
         if (outcome is not (null or "" or "ok" or "denied" or "error")) return BadRequest(new { message = "Invalid outcome." });
+        if (companyId.HasValue) await access.AssertAccessAsync(CurrentUserId, companyId.Value);
         var q = db.McpActivities.AsNoTracking().AsQueryable();
         if (tokenId.HasValue) q = q.Where(a => a.AgentTokenId == tokenId);
         if (userId.HasValue) q = q.Where(a => a.UserId == userId);

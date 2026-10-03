@@ -76,6 +76,7 @@ namespace MyApp.Api.Data
 
         public DbSet<UserSession> UserSessions { get; set; }
         public DbSet<McpAgentToken> McpAgentTokens { get; set; }
+        public DbSet<McpUserAccessPolicy> McpUserAccessPolicies { get; set; }
         public DbSet<McpActivity> McpActivities { get; set; }
         public DbSet<McpOAuthClient> McpOAuthClients { get; set; }
         public DbSet<McpPendingAction> McpPendingActions { get; set; }
@@ -175,6 +176,14 @@ namespace MyApp.Api.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<McpUserAccessPolicy>(e =>
+            {
+                e.HasKey(p => p.UserId);
+                e.Property(p => p.GrantedTools).HasMaxLength(8000);
+                e.Property(p => p.SelectedTools).HasMaxLength(8000);
+                e.Property(p => p.Revision).IsConcurrencyToken();
+                e.HasOne(p => p.User).WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
             modelBuilder.Entity<UserSession>().Property(s => s.SecurityStamp).HasMaxLength(64);
             modelBuilder.Entity<UserSession>().Property(s => s.UserAgent).HasMaxLength(512);
             modelBuilder.Entity<UserSession>().Property(s => s.IpAddress).HasMaxLength(64);

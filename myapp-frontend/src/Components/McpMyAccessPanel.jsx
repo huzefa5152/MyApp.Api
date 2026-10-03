@@ -10,7 +10,7 @@ import { SCOPE_INFO, orderedScopes } from "../utils/mcpScopes";
 import AllCompaniesOption from "./AllCompaniesOption";
 import { colors, cardStyles, formStyles, modalSizes } from "../theme";
 
-// "MCP & AI" tab on My Profile: whether MCP is switched on for this user, how to
+// MCP Connections on My Profile: whether MCP is switched on for this user, how to
 // connect their AI tools, their own agent tokens, and a log of what those agents did.
 
 const TONE = {
@@ -74,7 +74,7 @@ function NewTokenDialog({ status, onClose, onCreated }) {
         <div style={s.scopes}>{orderedScopes(status.scopesAvailable).map(k => <label key={k} style={{ ...s.scope, ...(scopes.includes(k) ? s.checkOn : {}) }}>
           <input type="checkbox" checked={scopes.includes(k)} disabled={k === "read"} onChange={() => toggleScope(k)} />
           <span><strong>{SCOPE_INFO[k].label}</strong><span style={s.scopeHelp}>{SCOPE_INFO[k].help}</span></span></label>)}</div>
-        {status.scopesAvailable.length === 1 && <p style={s.hint}>Creating records needs the MCP Write role. Ask your administrator if you want your AI to draft clients or quotations.</p>}
+        {status.scopesAvailable.length === 1 && <p style={s.hint}>Ask your administrator to enable the tools you need in Profile → MCP Catalog Access before creating a token for those actions.</p>}
         <label style={s.label}>Expires after</label>
         <select style={s.input} value={days} onChange={e => setDays(e.target.value)}>
           {[...[7, 30, 60, 90].filter(d => d < status.maxLifetimeDays), status.maxLifetimeDays].map(d => [d, d === status.maxLifetimeDays ? `${d} days (maximum)` : `${d} days`]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -154,7 +154,7 @@ export default function McpMyAccessPanel() {
         <strong>{status.enabled ? "MCP is enabled for your account" : "MCP is not enabled for your account"}</strong>
         <div style={s.sub}>{status.enabled
           ? "Your AI tools can use the companies you choose, with the same limits as your own login. Everything they do is recorded."
-          : "Ask your administrator to give you the MCP Access role. Once they do, this page lets you create a token and connect your AI tool."}</div>
+          : "Ask your administrator to enable your connection in Profile → MCP Catalog Access. Then return to MCP Connections to create a token and connect your AI tool."}</div>
       </div>
     </div>
 
@@ -164,7 +164,7 @@ export default function McpMyAccessPanel() {
         style={{ ...s.pill, ...(client === k ? s.pillOn : {}) }} onClick={() => setClient(k)}>{g.label}</button>)}
     </div>
     <div style={s.guide}>{guides[client].steps}</div>
-    <p style={s.hint}>Server address: <code>{url}</code>. Looking things up is always allowed. Creating clients or quotations is a separate permission you choose per token, and every such change is shown to you to approve first.</p>
+    <p style={s.hint}>Server address: <code>{url}</code>. Profile → MCP Catalog Access shows which tools you may use. Each token is limited to the companies and actions you choose; changes are shown for approval before they run.</p>
 
     {status.enabled && <>
       <div style={s.sectionHead}>

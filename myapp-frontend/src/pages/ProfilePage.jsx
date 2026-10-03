@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   MdAccountCircle,
   MdEdit,
@@ -18,6 +19,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { updateProfile, changePassword, uploadAvatar, removeAvatar } from "../api/authApi";
 import { getAvatarUrl } from "../utils/avatarUrl";
 import McpMyAccessPanel from "../Components/McpMyAccessPanel";
+import McpCatalogAccessPanel from "../Components/McpCatalogAccessPanel";
+import McpAgentsPanel from "../Components/McpAgentsPanel";
+import { usePermissions } from "../contexts/PermissionsContext";
 
 const colors = {
   blue: "#0d47a1",
@@ -57,6 +61,26 @@ function validateImage(file) {
 
 export default function ProfilePage() {
   const { user, refreshUser, setToken, avatarVersion } = useAuth();
+  const { has } = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canAdministerMcp = user?.isSeedAdmin === true && has("mcp.admin.manage");
+  const rawTargetUserId = searchParams.get("userId");
+  const parsedTargetUserId = Number(rawTargetUserId);
+  const targetUserId = /^[1-9]\d*$/.test(rawTargetUserId || "") && Number.isSafeInteger(parsedTargetUserId)
+    ? parsedTargetUserId : undefined;
+  const requestedTab = searchParams.get("tab");
+  const tab = requestedTab === "mcp" ? "mcp-connections"
+    : ["mcp-catalog", "mcp-connections"].includes(requestedTab) ? requestedTab
+    : requestedTab === "mcp-admin" && canAdministerMcp ? "mcp-admin" : "profile";
+  const setTab = (nextTab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", nextTab);
+    if (nextTab !== "mcp-catalog") next.delete("userId");
+    setSearchParams(next);
+  };
+  const tabs = [["profile", "Profile", MdAccountCircle], ["mcp-catalog", "MCP Catalog Access", MdSmartToy],
+    ["mcp-connections", "MCP Connections", MdSmartToy],
+    ...(canAdministerMcp ? [["mcp-admin", "MCP Administration", MdShield]] : [])];
   const fileRef = useRef(null);
 
   // Edit profile state
@@ -275,7 +299,6 @@ export default function ProfilePage() {
   //   2. server avatar with cache-buster
   //   3. initials fallback
   const serverAvatarSrc = getAvatarUrl(user, avatarVersion);
-  const [tab, setTab] = useState("profile");
   const displayedSrc = previewUrl || serverAvatarSrc;
   const showInitials = !displayedSrc;
   const hasServerAvatar = !!user?.avatarPath && !previewUrl;
@@ -293,17 +316,20 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Tabs — every user gets "MCP & AI": how to connect their AI tools, and their own tokens */}
       <div role="tablist" aria-label="Profile sections" style={styles.tabs}>
-        {[["profile", "Profile", MdAccountCircle], ["mcp", "MCP & AI", MdSmartToy]].map(([key, label, Icon]) => (
+        {tabs.map(([key, label, Icon]) => (
           <button key={key} role="tab" id={`profile-tab-${key}`} aria-selected={tab === key} aria-controls={`profile-panel-${key}`}
             style={{ ...styles.tab, ...(tab === key ? styles.tabActive : {}) }} onClick={() => setTab(key)}>
             <Icon style={{ fontSize: "1.1rem" }} aria-hidden />{label}
           </button>
         ))}
       </div>
-      {tab === "mcp" ? (
-        <div role="tabpanel" id="profile-panel-mcp" aria-labelledby="profile-tab-mcp"><McpMyAccessPanel /></div>
+      {tab === "mcp-catalog" ? (
+        <div role="tabpanel" id="profile-panel-mcp-catalog" aria-labelledby="profile-tab-mcp-catalog"><McpCatalogAccessPanel targetUserId={targetUserId} /></div>
+      ) : tab === "mcp-connections" ? (
+        <div role="tabpanel" id="profile-panel-mcp-connections" aria-labelledby="profile-tab-mcp-connections"><McpMyAccessPanel /></div>
+      ) : tab === "mcp-admin" && canAdministerMcp ? (
+        <div role="tabpanel" id="profile-panel-mcp-admin" aria-labelledby="profile-tab-mcp-admin"><McpAgentsPanel /></div>
       ) : (
       <div role="tabpanel" id="profile-panel-profile" aria-labelledby="profile-tab-profile">
 
