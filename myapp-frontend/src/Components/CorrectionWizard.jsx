@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { MdClose, MdPostAdd, MdInfoOutline, MdArrowBack } from "react-icons/md";
 import { getInvoiceById, supplementInvoice, createNote, markInvoiceFbrCancelled } from "../api/invoiceApi";
 import { notify } from "../utils/notify";
+import { formStyles } from "../theme";
+import { Alert, Facts, Field, TableWrap } from "../ui/Kit";
 
 // Unified post-FBR-submission correction wizard. A submitted invoice can't be
 // edited at FBR, so every fix is a linked document. The operator picks what went
@@ -166,17 +168,21 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
   const M = mode ? MODES[mode] : null;
 
   return (
-    <div style={s.overlay} onClick={onClose}>
-      <div style={s.card} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div style={s.head}>
-          <div>
+    // Never-clip pattern: formStyles.backdrop scrolls (overflowY:auto) and the
+    // modal caps at 96vh with its own scrolling body, so a tall wizard is always
+    // reachable top to bottom. zIndex 1100 sits above the fixed sidebar (1040).
+    <div style={formStyles.backdrop} onClick={onClose}>
+      <div style={{ ...formStyles.modal, maxWidth: 720 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <div style={formStyles.header}>
+          <div style={{ minWidth: 0 }}>
             <div style={s.eyebrow}>Correct a submitted bill · #{invoice?.invoiceNumber}</div>
-            <h2 style={s.title}>{step === "diagnose" ? "What needs correcting?" : M?.label}</h2>
+            <h2 style={formStyles.title}>{step === "diagnose" ? "What needs correcting?" : M?.label}</h2>
           </div>
-          <button style={s.iconBtn} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
+          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close"><MdClose size={20} /></button>
         </div>
 
-        {loadErr && <div style={s.err}>{loadErr}</div>}
+        <div style={formStyles.body}>
+        {loadErr && <Alert tone="error">{loadErr}</Alert>}
 
         {step === "diagnose" && (
           <div style={s.opts}>
@@ -210,77 +216,69 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
 
             {mode === "cancel" ? (
               <div style={s.cancelPanel}>
-                <div style={s.cancelRow}>
-                  <span style={s.cancelKey}>Bill</span>
-                  <span style={s.cancelVal}>#{invoice?.invoiceNumber}</span>
-                </div>
-                {invoice?.fbrInvoiceNumber && (
-                  <div style={s.cancelRow}>
-                    <span style={s.cancelKey}>FBR IRN</span>
-                    <span style={{ ...s.cancelVal, fontFamily: "monospace", fontSize: "0.82rem" }}>{invoice.fbrInvoiceNumber}</span>
-                  </div>
-                )}
-                <div style={s.cancelRow}>
-                  <span style={s.cancelKey}>Filed</span>
-                  <span style={s.cancelVal}>
-                    {invoice?.fbrSubmittedAt ? new Date(invoice.fbrSubmittedAt).toLocaleString() : "—"}
-                    {hoursSinceFiling !== null && (
-                      <span style={{
-                        marginLeft: 8, fontSize: "0.76rem", fontWeight: 700,
-                        color: hoursSinceFiling <= 72 ? "#0e7c6b" : "#b3261e",
-                      }}>
-                        {hoursSinceFiling <= 72
-                          ? `${Math.max(0, Math.floor(72 - hoursSinceFiling))}h left of FBR's 72-hour window`
-                          : `${Math.floor(hoursSinceFiling)}h ago — past FBR's 72-hour window`}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div style={s.cancelRow}>
-                  <span style={s.cancelKey}>Value</span>
-                  <span style={s.cancelVal}>{Number(invoice?.grandTotal || 0).toLocaleString()}</span>
-                </div>
+                <Facts facts={[
+                  ["Bill", `#${invoice?.invoiceNumber}`],
+                  invoice?.fbrInvoiceNumber && ["FBR IRN", <span style={{ fontFamily: "monospace", fontSize: "0.82rem" }}>{invoice.fbrInvoiceNumber}</span>],
+                  ["Filed", (
+                    <>
+                      {invoice?.fbrSubmittedAt ? new Date(invoice.fbrSubmittedAt).toLocaleString() : "—"}
+                      {hoursSinceFiling !== null && (
+                        <span style={{
+                          display: "block", fontSize: "0.76rem", fontWeight: 700,
+                          color: hoursSinceFiling <= 72 ? "#0e7c6b" : "#b3261e",
+                        }}>
+                          {hoursSinceFiling <= 72
+                            ? `${Math.max(0, Math.floor(72 - hoursSinceFiling))}h left of FBR's 72-hour window`
+                            : `${Math.floor(hoursSinceFiling)}h ago — past FBR's 72-hour window`}
+                        </span>
+                      )}
+                    </>
+                  )],
+                  ["Value", Number(invoice?.grandTotal || 0).toLocaleString()],
+                ]} />
                 {hoursSinceFiling !== null && hoursSinceFiling > 72 && (
-                  <div style={s.cancelWarn}>
-                    FBR's window has passed, so the filing may no longer be cancellable there.
-                    Record this only if the portal actually accepted the cancellation — otherwise
-                    raise a Credit Note instead.
+                  <div style={{ marginTop: "0.75rem" }}>
+                    <Alert tone="warn">
+                      FBR's window has passed, so the filing may no longer be cancellable there.
+                      Record this only if the portal actually accepted the cancellation — otherwise
+                      raise a Credit Note instead.
+                    </Alert>
                   </div>
                 )}
               </div>
             ) : (
-            <div style={s.tableWrap}>
-              <table style={s.table}>
+            <TableWrap>
+              <table className="k-table">
                 <thead>
                   <tr>
-                    <th style={s.th}>Item</th>
-                    <th style={{ ...s.th, textAlign: "right" }}>Billed</th>
-                    <th style={{ ...s.th, textAlign: "right" }}>Rate</th>
-                    <th style={{ ...s.th, textAlign: "right" }}>{mode === "debit" ? "Corrected rate" : mode === "credit" ? "Qty kept" : "Corrected qty"}</th>
-                    <th style={{ ...s.th, textAlign: "right" }}>{mode === "credit" ? "Refund" : mode === "debit" ? "Δ value" : "Δ to bill"}</th>
+                    <th>Item</th>
+                    <th className="k-num">Billed</th>
+                    <th className="k-num">Rate</th>
+                    <th className="k-num">{mode === "debit" ? "Corrected rate" : mode === "credit" ? "Qty kept" : "Corrected qty"}</th>
+                    <th className="k-num">{mode === "credit" ? "Refund" : mode === "debit" ? "Δ value" : "Δ to bill"}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {computed.rows.map((r, i) => (
                     <tr key={r.invoiceItemId}>
-                      <td style={s.td}>{r.description}</td>
-                      <td style={{ ...s.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.billedQty}</td>
-                      <td style={{ ...s.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.unitPrice.toLocaleString()}</td>
-                      <td style={{ ...s.td, textAlign: "right" }}>
+                      <td>{r.description}</td>
+                      <td className="k-num">{r.billedQty}</td>
+                      <td className="k-num">{r.unitPrice.toLocaleString()}</td>
+                      <td className="k-num">
                         {mode === "debit" ? (
-                          <input style={s.qty} type="number" min={r.unitPrice} step="1" inputMode="decimal" value={r.rate} onChange={(e) => setField(i, "rate", e.target.value)} />
+                          <input className="k-input" style={s.qty} type="number" min={r.unitPrice} step="1" inputMode="decimal" value={r.rate} onChange={(e) => setField(i, "rate", e.target.value)} />
                         ) : (
-                          <input style={s.qty} type="number" min={mode === "credit" ? 0 : r.billedQty} max={mode === "credit" ? r.billedQty : undefined} step="0.5" inputMode="decimal" value={r.qty} onChange={(e) => setField(i, "qty", e.target.value)} />
+                          <input className="k-input" style={s.qty} type="number" min={mode === "credit" ? 0 : r.billedQty} max={mode === "credit" ? r.billedQty : undefined} step="0.5" inputMode="decimal" value={r.qty} onChange={(e) => setField(i, "qty", e.target.value)} />
                         )}
                       </td>
-                      <td style={{ ...s.td, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700, color: r.show ? M.tint : "#90a4ae" }}>
+                      <td className="k-num" style={{ fontWeight: 700, color: r.show ? M.tint : "#90a4ae" }}>
                         {r.show ? (mode === "credit" ? "-" : "+") + r.amount.toLocaleString() : "—"}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
             )}
 
             <div style={s.footRow}>
@@ -319,34 +317,41 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
               )}
             </div>
 
-            <div style={s.grid2}>
-              <div>
-                <label style={s.lbl}>Reason</label>
-                <select style={s.text} value={reason} onChange={(e) => setReason(e.target.value)}>
+            <div className="k-form-grid" style={{ marginTop: 14 }}>
+              <Field label="Reason" htmlFor="cw-reason">
+                <select id="cw-reason" className="k-select" value={reason} onChange={(e) => setReason(e.target.value)}>
                   {REASONS[mode].map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
-              </div>
+              </Field>
               {(reason === "Others" || reason === "Other") && (
-                <div>
-                  <label style={s.lbl}>Remarks</label>
-                  <input style={s.text} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Required when reason is Others" />
-                </div>
+                <Field label="Remarks" htmlFor="cw-remarks">
+                  <input id="cw-remarks" className="k-input" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Required when reason is Others" />
+                </Field>
               )}
             </div>
-
-            <div style={s.actions}>
-              <button style={s.btnGhost} onClick={() => setStep("diagnose")} disabled={saving}><MdArrowBack size={16} /> Back</button>
-              <button
-                style={{ ...s.btnPrimary, background: M.tint, opacity: !canSubmit || saving ? 0.5 : 1, cursor: !canSubmit || saving ? "not-allowed" : "pointer" }}
-                onClick={submit}
-                disabled={!canSubmit || saving}
-                title={!canSubmit ? "Adjust a line to create the correction." : `Create the ${M.doc}`}
-              >
-                <MdPostAdd size={18} />
-                {saving ? "Creating…" : `Create ${M.doc}`}
-              </button>
-            </div>
           </>
+        )}
+        </div>
+
+        {step === "figures" && lines && (
+          <div style={{ ...formStyles.footer, justifyContent: "space-between" }}>
+            <button
+              style={{ ...formStyles.button, ...formStyles.cancel, ...s.btnInline }}
+              onClick={() => setStep("diagnose")}
+              disabled={saving}
+            >
+              <MdArrowBack size={16} /> Back
+            </button>
+            <button
+              style={{ ...formStyles.button, ...s.btnInline, background: M.tint, color: "#fff", opacity: !canSubmit || saving ? 0.5 : 1, cursor: !canSubmit || saving ? "not-allowed" : "pointer" }}
+              onClick={submit}
+              disabled={!canSubmit || saving}
+              title={!canSubmit ? "Adjust a line to create the correction." : `Create the ${M.doc}`}
+            >
+              <MdPostAdd size={18} />
+              {saving ? "Creating…" : `Create ${M.doc}`}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -356,41 +361,20 @@ export default function CorrectionWizard({ invoice, onClose, onCreated }) {
 const s = {
   // Whole-bill cancellation has no per-line figures, so it states the document
   // being withdrawn instead of a table.
-  cancelPanel: { border: "1px solid #e8edf3", borderRadius: 10, padding: "0.8rem 1rem", background: "#fbfcfe", display: "flex", flexDirection: "column", gap: 8 },
-  cancelRow: { display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" },
-  cancelKey: { fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: "#5f6d7e", minWidth: 62 },
-  cancelVal: { fontWeight: 700, color: "#16202b", minWidth: 0, overflowWrap: "anywhere" },
-  cancelWarn: { marginTop: 4, padding: "0.5rem 0.7rem", borderRadius: 8, background: "#fff4e5", color: "#8a4b00", fontSize: "0.82rem", lineHeight: 1.4 },
-  // Overlay scrolls (overflowY) and the card uses margin:auto so it centres
-  // when it fits and pins to the top (fully reachable, never clipped) when it's
-  // taller than the viewport. zIndex 1100 sits above the fixed sidebar (1040).
-  overlay: { position: "fixed", inset: 0, background: "rgba(15,22,32,.5)", display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "24px 16px", zIndex: 1100, overflowY: "auto" },
-  card: { background: "#fff", borderRadius: 12, width: "min(720px,100%)", margin: "auto", boxShadow: "0 20px 60px -20px rgba(0,0,0,.4)", padding: 20 },
-  head: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 },
-  eyebrow: { fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "#0a5d50", fontWeight: 700 },
-  title: { margin: "2px 0 0", fontSize: 20, color: "#16202b", lineHeight: 1.15 },
-  // padding:0 + boxShadow:none override the global `button` rule (index.css
-  // padding .8em 1.6em) that otherwise off-centres the icon and adds a shadow.
-  iconBtn: { display: "grid", placeItems: "center", width: 34, height: 34, padding: 0, border: "1px solid #dce2e8", background: "#fff", borderRadius: 8, boxShadow: "none", cursor: "pointer", color: "#46586b", flexShrink: 0 },
-  info: { display: "flex", gap: 10, background: "#eef1f4", color: "#46586b", borderRadius: 8, padding: "11px 13px", fontSize: 13, lineHeight: 1.45, marginBottom: 14 },
-  err: { background: "#fdecea", color: "#a5384a", border: "1px solid #f5c6cb", borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 12 },
+  cancelPanel: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "var(--k-card-pad)", background: "var(--k-surface-2)" },
+  // Sits on the themed modal header (gradient in Classic, light in Workspace),
+  // so it follows the header's title colour at reduced emphasis.
+  eyebrow: { fontSize: 11, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--ui-modal-title-color, #ffffff)", opacity: 0.85, fontWeight: 700, marginBottom: 2 },
+  info: { display: "flex", gap: 10, background: "#eef1f4", color: "#46586b", borderRadius: "var(--k-radius)", padding: "0.6rem 0.8rem", fontSize: "var(--k-font)", lineHeight: 1.45, marginBottom: 14 },
   opts: { display: "grid", gap: 10 },
-  opt: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, textAlign: "left", border: "1px solid #dce2e8", background: "#fff", borderRadius: 10, padding: "14px 16px", cursor: "pointer" },
-  optTitle: { display: "block", fontWeight: 700, fontSize: 15, color: "#16202b" },
-  optBlurb: { display: "block", fontSize: 13, color: "#607282", marginTop: 3 },
+  // padding/margin/boxShadow/fontWeight override the global `button` rule (index.css).
+  opt: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, textAlign: "left", border: "1px solid var(--k-line-strong)", background: "var(--k-surface)", borderRadius: "var(--k-radius)", padding: "var(--k-card-pad)", margin: 0, boxShadow: "none", fontFamily: "inherit", fontWeight: 400, cursor: "pointer", color: "var(--k-ink)" },
+  optTitle: { display: "block", fontWeight: 700, fontSize: "calc(var(--k-font) + 0.05rem)", color: "var(--k-ink)" },
+  optBlurb: { display: "block", fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 3 },
   chip: { flex: "0 0 auto", fontSize: 12, fontWeight: 700, padding: "5px 11px", borderRadius: 99 },
-  tableWrap: { overflowX: "auto", border: "1px solid #eceff1", borderRadius: 8 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13.5 },
-  th: { textAlign: "left", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#7c8ca0", fontWeight: 700, padding: "10px 12px", borderBottom: "1px solid #eceff1", whiteSpace: "nowrap" },
-  td: { padding: "10px 12px", borderBottom: "1px solid #f2f4f6", color: "#16202b" },
-  qty: { width: 96, padding: "7px 9px", border: "1px solid #cfd8dc", borderRadius: 6, textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13.5 },
+  qty: { width: 96, textAlign: "right", fontVariantNumeric: "tabular-nums" },
   footRow: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, margin: "14px 2px 2px" },
-  check: { display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "#46586b", cursor: "pointer" },
-  totals: { display: "flex", gap: 16, alignItems: "baseline", fontSize: 13, color: "#46586b", fontVariantNumeric: "tabular-nums", flexWrap: "wrap", marginLeft: "auto" },
-  grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px,100%), 1fr))", gap: 12, marginTop: 14 },
-  lbl: { display: "block", fontSize: 12, fontWeight: 700, color: "#46586b", marginBottom: 5 },
-  text: { width: "100%", padding: "9px 11px", border: "1px solid #cfd8dc", borderRadius: 6, fontSize: 14, boxSizing: "border-box", background: "#fff" },
-  actions: { display: "flex", justifyContent: "space-between", gap: 10, marginTop: 18 },
-  btnGhost: { display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 18px", borderRadius: 8, border: "1px solid #cfd8dc", background: "#fff", color: "#46586b", fontWeight: 600, fontSize: 14, cursor: "pointer" },
-  btnPrimary: { display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 20px", borderRadius: 8, border: "none", color: "#fff", fontWeight: 700, fontSize: 14 },
+  check: { display: "flex", gap: 8, alignItems: "center", fontSize: "var(--k-font)", color: "var(--k-muted)", cursor: "pointer" },
+  totals: { display: "flex", gap: 16, alignItems: "baseline", fontSize: "var(--k-font)", color: "var(--k-muted)", fontVariantNumeric: "tabular-nums", flexWrap: "wrap", marginLeft: "auto" },
+  btnInline: { display: "inline-flex", alignItems: "center", gap: 6 },
 };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MdClose, MdWarningAmber } from "react-icons/md";
-import { formStyles, modalSizes, colors } from "../theme";
+import { formStyles, modalSizes } from "../theme";
+import { Alert, Field } from "../ui/Kit";
 import { resetFbrSubmission } from "../api/fbrApi";
 
 /**
@@ -50,17 +51,17 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
   const radioRow = (value, title, desc) => (
     <label
       style={{
-        display: "flex", gap: 10, alignItems: "flex-start", padding: "0.7rem 0.85rem",
-        border: `1px solid ${mode === value ? colors.blue : colors.cardBorder}`,
-        borderRadius: 10, cursor: "pointer", marginBottom: "0.6rem",
+        display: "flex", gap: 10, alignItems: "flex-start", padding: "0.6rem 0.8rem",
+        border: `1px solid ${mode === value ? "var(--k-blue)" : "var(--k-line)"}`,
+        borderRadius: "var(--k-radius)", cursor: "pointer", marginBottom: "0.6rem",
         background: mode === value ? "#eef4ff" : "transparent",
       }}
     >
       <input type="radio" name="reset-mode" value={value} checked={mode === value}
         onChange={() => setMode(value)} style={{ marginTop: 3 }} />
       <span>
-        <span style={{ fontWeight: 700, fontSize: "0.9rem", color: colors.textPrimary }}>{title}</span>
-        <span style={{ display: "block", fontSize: "0.8rem", color: colors.textSecondary, marginTop: 2 }}>{desc}</span>
+        <span style={{ fontWeight: 700, fontSize: "var(--k-font)", color: "var(--k-ink)" }}>{title}</span>
+        <span style={{ display: "block", fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 }}>{desc}</span>
       </span>
     </label>
   );
@@ -76,18 +77,11 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
         </div>
 
         <div style={formStyles.body}>
-          <div style={{
-            display: "flex", gap: 10, alignItems: "flex-start",
-            background: "#fff8e1", border: "1px solid #ffe082", color: "#8a6d00",
-            borderRadius: 10, padding: "0.7rem 0.85rem", marginBottom: "1rem", fontSize: "0.83rem",
-          }}>
-            <MdWarningAmber size={20} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span>
-              This bill is <b>{invoice.fbrStatus}</b>. A submission may already have reached FBR.
-              <b> Verify on the FBR / IRIS portal first.</b> Only choose “clear for resubmission” once
-              you have confirmed FBR has <b>no</b> invoice for this bill — otherwise you will create a duplicate.
-            </span>
-          </div>
+          <Alert tone="warn" icon={MdWarningAmber}>
+            This bill is <b>{invoice.fbrStatus}</b>. A submission may already have reached FBR.
+            <b> Verify on the FBR / IRIS portal first.</b> Only choose “clear for resubmission” once
+            you have confirmed FBR has <b>no</b> invoice for this bill — otherwise you will create a duplicate.
+          </Alert>
 
           {radioRow("retry", "Clear for resubmission",
             "FBR has no record — wipe the local FBR fields so the bill can be submitted again.")}
@@ -96,21 +90,24 @@ export default function FbrResetModal({ invoice, onClose, onDone }) {
 
           {mode === "recordExisting" && (
             <div style={formStyles.formGroup}>
-              <label style={formStyles.label}>IRN (from the FBR portal)</label>
-              <input style={formStyles.input} value={irn} onChange={(e) => setIrn(e.target.value)}
-                placeholder="e.g. 1234567890123DI000001" disabled={busy} />
+              <Field label="IRN (from the FBR portal)" htmlFor="fbr-reset-irn">
+                <input id="fbr-reset-irn" className="k-input" value={irn} onChange={(e) => setIrn(e.target.value)}
+                  placeholder="e.g. 1234567890123DI000001" disabled={busy} />
+              </Field>
             </div>
           )}
 
           <div style={formStyles.formGroup}>
-            <label style={formStyles.label}>Reason (audited) *</label>
-            <textarea
-              style={{ ...formStyles.input, minHeight: 70, resize: "vertical" }}
-              value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}
-              placeholder="e.g. Confirmed on IRIS that no invoice exists for bill #… — clearing to resubmit." />
+            <Field label="Reason (audited) *" htmlFor="fbr-reset-reason">
+              <textarea
+                id="fbr-reset-reason"
+                className="k-textarea"
+                value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}
+                placeholder="e.g. Confirmed on IRIS that no invoice exists for bill #… — clearing to resubmit." />
+            </Field>
           </div>
 
-          {error && <div style={formStyles.error}>{error}</div>}
+          {error && <Alert tone="error">{error}</Alert>}
         </div>
 
         <div style={formStyles.footer}>

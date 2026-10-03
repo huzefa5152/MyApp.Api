@@ -174,7 +174,7 @@ export default function DocumentTaxFields({
 
 const st = {
   wrap: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, padding: "0.7rem 0.85rem", background: colors.cardBg, marginTop: "0.75rem" },
-  header: { display: "flex", alignItems: "center", gap: 8, marginBottom: "0.35rem" },
+  header: { display: "flex", alignItems: "center", gap: 8, marginBottom: "var(--ui-label-gap, 0.35rem)" },
   title: { fontSize: "0.78rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em", color: colors.textSecondary },
   noneChip: { fontSize: "0.64rem", fontWeight: 700, textTransform: "uppercase", background: colors.inputBg, color: colors.textSecondary, border: `1px solid ${colors.cardBorder}`, padding: "1px 7px", borderRadius: 10 },
   hint: { margin: "0 0 0.5rem", fontSize: "0.76rem", color: colors.textSecondary, lineHeight: 1.45 },
@@ -182,11 +182,11 @@ const st = {
   // Explicit height, not minHeight: the global `button` rule in index.css sets
   // its own padding and box sizing, which lands this two pixels under the 44px
   // tap target when the height is only a minimum.
-  addChip: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 0.9rem", height: 44, borderRadius: 999, border: `1px dashed ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
+  addChip: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 0.9rem", height: "var(--ui-btn-h, 44px)", borderRadius: 999, border: `1px dashed ${colors.inputBorder}`, background: "#fff", color: colors.blue, fontSize: "var(--ui-btn-size, 0.8rem)", fontWeight: 700, cursor: "pointer", boxShadow: "none" },
   taxRow: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginTop: "0.65rem" },
-  label: { display: "block", marginBottom: "0.3rem", fontWeight: 600, fontSize: "0.8rem", color: colors.textSecondary },
+  label: { display: "block", marginBottom: "var(--ui-label-gap, 0.3rem)", fontWeight: 600, fontSize: "var(--ui-label-size, 0.8rem)", color: colors.textSecondary },
   fieldHint: { fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, lineHeight: 1.45 },
-  removeBtn: { display: "grid", placeItems: "center", width: 44, height: 44, padding: 0, marginTop: "1.4rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer", boxShadow: "none", flexShrink: 0 },
+  removeBtn: { display: "grid", placeItems: "center", width: "var(--ui-btn-h, 44px)", height: "var(--ui-btn-h, 44px)", padding: 0, marginTop: "calc(var(--ui-label-size, 0.8rem) * 1.75)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer", boxShadow: "none", flexShrink: 0 },
   summary: { marginTop: "0.7rem", paddingTop: "0.55rem", borderTop: `1px solid ${colors.cardBorder}`, display: "grid", gap: "0.2rem" },
   summaryRow: { display: "flex", justifyContent: "space-between", gap: 10, fontSize: "0.84rem", color: colors.textPrimary },
 };

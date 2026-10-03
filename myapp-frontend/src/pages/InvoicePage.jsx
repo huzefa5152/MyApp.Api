@@ -1,7 +1,7 @@
 import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdSearch, MdChevronLeft, MdChevronRight, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
+import { MdReceipt, MdAdd, MdBusiness, MdPrint, MdDescription, MdPictureAsPdf, MdGridOn, MdCloudUpload, MdCheckCircle, MdError, MdHourglassEmpty, MdDelete, MdCancel, MdEdit, MdVisibility, MdBlock, MdRestore, MdOpenInNew, MdViewList, MdUndo, MdPostAdd, MdLocalShipping, MdAssignmentTurnedIn } from "react-icons/md";
 import InvoiceForm from "../Components/InvoiceForm";
 import StandaloneInvoiceForm from "../Components/StandaloneInvoiceForm";
 import EditBillForm from "../Components/EditBillForm";
@@ -23,7 +23,9 @@ import PageSizeSelect from "../Components/PageSizeSelect";
 import { getPagedInvoicesByCompany, getInvoicePrintBill, getInvoicePrintTaxInvoice, deleteInvoice, cancelInvoice, setInvoiceFbrExcluded, markInvoiceHandover, revertInvoiceHandover, bulkInvoiceHandover } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { submitInvoiceToFbr, validateInvoiceWithFbr } from "../api/fbrApi";
-import { dropdownStyles, cardStyles, cardHover } from "../theme";
+import { cardStyles } from "../theme";
+import { PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, Loading, EmptyState } from "../ui/Kit";
+import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
@@ -102,14 +104,31 @@ function renderHandoverPill(inv) {
   return null;
 }
 
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
+// Colour-coded tints for the card action buttons. Size, padding, radius, focus
+// and disabled dimming come from the kit <Button size="sm"> (theme tokens); the
+// tint keeps each action family recognisable (print / PDF / XLS / FBR / edit /
+// delete / void / reverse …), exactly as before.
+const tint = (bg, fg, border = "transparent") => ({ backgroundColor: bg, color: fg, borderColor: border });
+const TONE = {
+  view: tint("#e3f2fd", "#0d47a1", "#90caf9"),
+  openTeal: tint("#e0f2f1", "#00695c", "#80cbc4"),
+  print: tint("#f3e5f5", "#7b1fa2"),
+  tax: tint("#e8f5e9", "#2e7d32"),
+  pdf: tint("#ffebee", "#c62828"),
+  excel: tint("#e8f5e9", "#1b5e20"),
+  reset: tint("#fff8e1", "#8a6d00", "#ffe082"),
+  validate: tint("#fff3e0", "#e65100"),
+  validated: tint("#e8f5e9", "#2e7d32"),
+  submit: tint("#e3f2fd", "#0d47a1"),
+  edit: tint("#fff3e0", "#e65100", "#ffcc80"),
+  include: tint("#e8f5e9", "#2e7d32", "#a5d6a7"),
+  exclude: tint("#eceff1", "#546e7a", "#b0bec5"),
+  deliver: tint("#e8f5e9", "#2e7d32", "#a5d6a7"),
+  revert: tint("#fff8e1", "#8a6d00", "#ffe082"),
+  delete: tint("#ffebee", "#c62828", "#ef9a9a"),
+  void: tint("#fff8e1", "#b26a00", "#ffe082"),
+  reverse: tint("#ede7f6", "#5e35b1", "#b39ddb"),
+  correct: tint("#d6eee8", "#0a5d50", "#b6ddd3"),
 };
 
 export default function InvoicePage({ mode = "invoices" }) {
@@ -131,7 +150,7 @@ export default function InvoicePage({ mode = "invoices" }) {
   // Persist view-mode per tab so each tab remembers its own setting
   // (e.g. operator wants cards on Bills but table on Invoices).
   const [viewMode, setViewMode, isBigScreen] = useListViewMode(isBillsMode ? "bills" : isNotesMode ? mode : "invoices");
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { companies, selectedCompany, loading: loadingCompanies } = useCompany();
   // Print-template picker, keyed on the mode: Bills print the "Bill" type;
   // Invoices the "TaxInvoice" type; Credit/Debit notes their own distinct types.
   const printTemplateType = isBillsMode
@@ -878,72 +897,60 @@ export default function InvoicePage({ mode = "invoices" }) {
   return (
     <DocumentLinesNavigation type={isBillsMode ? "bill" : mode === "creditnotes" ? "creditNote" : mode === "debitnotes" ? "debitNote" : "taxInvoice"}>
     <div>
-      <div style={styles.pageHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}>{isNotesMode ? <MdUndo size={28} color="#fff" /> : <MdReceipt size={28} color="#fff" />}</div>
-          <div>
-            <h2 style={styles.pageTitle}>{isNotesMode ? `${noteLabel}s` : isBillsMode ? "Bills" : "Invoices"}</h2>
-            <p style={styles.pageSubtitle}>
-              {selectedCompany
-                ? (isNotesMode
-                    ? `${noteDocType === 10 ? "Returns / reversals of submitted invoices" : "Upward adjustments against submitted invoices"} — ${totalCount} note${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
-                    : isBillsMode
-                    ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
-                    : `Classify items and submit to FBR — ${totalCount} record${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`)
-                : "Select a company"}
-            </p>
-          </div>
-        </div>
-        {/* Creation buttons live on the Bills tab only — Invoices tab is
-            for FBR classification & submission of existing records. */}
-        {isBillsMode && companies.length > 0 && (canCreate || canCreateStandalone) && (
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {canCreate && (
-              <button style={styles.addBtn} onClick={() => setShowForm(true)}>
-                <MdAdd size={18} /> New Bill
-              </button>
+      <PageHeader
+        icon={isNotesMode ? MdUndo : MdReceipt}
+        tone="brand"
+        title={isNotesMode ? `${noteLabel}s` : isBillsMode ? "Bills" : "Invoices"}
+        subtitle={selectedCompany
+          ? (isNotesMode
+              ? `${noteDocType === 10 ? "Returns / reversals of submitted invoices" : "Upward adjustments against submitted invoices"} — ${totalCount} note${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+              : isBillsMode
+              ? `${totalCount} bill${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`
+              : `Classify items and submit to FBR — ${totalCount} record${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}`)
+          : "Select a company"}
+        actions={(
+          <>
+            {/* Creation buttons live on the Bills tab only — Invoices tab is
+                for FBR classification & submission of existing records. */}
+            {isBillsMode && companies.length > 0 && canCreate && (
+              <Button variant="primary" icon={MdAdd} onClick={() => setShowForm(true)}>
+                New Bill
+              </Button>
             )}
-            {canCreateStandalone && (
-              <button
-                style={styles.addBtnSecondary}
+            {isBillsMode && companies.length > 0 && canCreateStandalone && (
+              <Button
+                variant="secondary"
+                icon={MdAdd}
                 onClick={() => setShowStandaloneForm(true)}
                 title="Create a bill directly without linking a delivery challan (FBR-only flow)"
               >
-                <MdAdd size={18} /> New Bill (No Challan)
-              </button>
+                New Bill (No Challan)
+              </Button>
             )}
-          </div>
+            {/* Note tabs: notes are generated from an existing submitted
+                invoice — the "New" button opens the note screen in this
+                tab's mode. */}
+            {isNotesMode && companies.length > 0 && canReverse && (
+              <Button
+                variant="primary"
+                icon={MdAdd}
+                onClick={() => navigate(`/credit-debit-notes?type=${noteDocType === 10 ? "credit" : "debit"}`)}
+                title={noteDocType === 10
+                  ? "Reverse a submitted invoice — fully or line-by-line — by generating a Credit Note"
+                  : "Record an upward adjustment (undercharge / rate change / extra goods) against a submitted invoice"}
+              >
+                New {noteLabel}
+              </Button>
+            )}
+          </>
         )}
-        {/* Note tabs: notes are generated from an existing submitted
-            invoice — the "New" button opens the note screen in this
-            tab's mode. */}
-        {isNotesMode && companies.length > 0 && canReverse && (
-          <button
-            style={styles.addBtn}
-            onClick={() => navigate(`/credit-debit-notes?type=${noteDocType === 10 ? "credit" : "debit"}`)}
-            title={noteDocType === 10
-              ? "Reverse a submitted invoice — fully or line-by-line — by generating a Credit Note"
-              : "Record an upward adjustment (undercharge / rate change / extra goods) against a submitted invoice"}
-          >
-            <MdAdd size={18} /> New {noteLabel}
-          </button>
-        )}
-      </div>
+      />
 
       {loadingCompanies ? (
-        <div style={styles.loadingContainer}><div style={styles.spinner} /></div>
+        <Loading />
       ) : companies.length > 0 ? (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              style={dropdownStyles.base}
-              value={selectedCompany?.id || ""}
-              onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}
-            >
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </div>
+          <CompanyPicker />
 
           {/* FBR Bulk Actions — bar shows if caller has either FBR perm.
               Validate All is gated on canFbrValidate; Submit All on
@@ -951,10 +958,10 @@ export default function InvoicePage({ mode = "invoices" }) {
               Bills tab hides the bar entirely — bulk FBR ops live on
               the Invoices tab. */}
           {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && (unsubmittedInvoices.length > 0 || incompleteCount > 0) && (
-            <div style={styles.fbrBulkBar}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <div className="k-card" style={styles.bulkBar}>
+              <div style={styles.bulkLead}>
                 <MdCloudUpload size={18} color="#0d47a1" />
-                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}>
+                <span style={styles.bulkText}>
                   FBR: {unsubmittedInvoices.length} ready to submit
                   {validatedCount > 0 ? `, ${validatedCount} validated` : ""}
                 </span>
@@ -964,45 +971,44 @@ export default function InvoicePage({ mode = "invoices" }) {
                   </span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div style={styles.bulkActions}>
                 {/* Preview All — read-only inspector for the whole bulk
                     queue. Gated on the same permission as the per-bill
                     preview dialog so we don't unintentionally expose
                     payload data to roles that lacked it before. Hidden
                     on tabs without ready bills. 2026-05-13. */}
                 {canFbrPreview && unsubmittedInvoices.length > 0 && (
-                  <button
-                    style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkPreviewBtn }}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={MdViewList}
                     onClick={() => setShowBulkFbrPreview(true)}
                     title="Preview the FBR payload for every bill that's ready to validate — collapsible rows, no network call to FBR."
                   >
-                    <MdViewList size={15} />
                     Preview All
-                  </button>
+                  </Button>
                 )}
                 {canFbrValidate && (
-                  <button
-                    style={{ ...styles.fbrBulkBtn, ...styles.fbrBulkValidateBtn }}
+                  <Button
+                    size="sm"
+                    style={TONE.validate}
                     disabled={bulkFbrLoading}
                     onClick={handleBulkValidateAll}
                   >
                     {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCheckCircle size={15} />}
                     Validate All
-                  </button>
+                  </Button>
                 )}
                 {canFbrSubmit && (
-                  <button
-                    style={{
-                      ...styles.fbrBulkBtn, ...styles.fbrBulkSubmitBtn,
-                      opacity: validatedCount === 0 ? 0.4 : 1,
-                      cursor: validatedCount === 0 ? "not-allowed" : "pointer",
-                    }}
+                  <Button
+                    variant="primary"
+                    size="sm"
                     disabled={bulkFbrLoading || validatedCount === 0}
                     onClick={handleBulkSubmitValidated}
                   >
                     {bulkFbrLoading ? <span className="btn-spinner" /> : <MdCloudUpload size={15} />}
                     Submit {validatedCount > 0 ? `${validatedCount} ` : ""}to FBR
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -1013,51 +1019,50 @@ export default function InvoicePage({ mode = "invoices" }) {
               documents on the current page. "Mark delivered" acts on ALL
               pending rows matching the current filters (across pages). */}
           {!isBillsMode && canDocsDeliver && pendingHandoverCount > 0 && (
-            <div style={styles.fbrBulkBar}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <div className="k-card" style={styles.bulkBar}>
+              <div style={styles.bulkLead}>
                 <MdLocalShipping size={18} color="#e65100" />
-                <span style={{ fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary }}>
+                <span style={styles.bulkText}>
                   Documents: {pendingHandoverCount} pending on this page
                 </span>
               </div>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <button
-                  style={{ ...styles.fbrBulkBtn, backgroundColor: "#2e7d32", color: "#fff" }}
+              <div style={styles.bulkActions}>
+                <Button
+                  size="sm"
+                  style={tint("#2e7d32", "#fff")}
                   disabled={handoverBulkBusy}
                   onClick={openBulkHandover}
                   title="Mark every pending invoice matching the current filters as documents delivered"
                 >
                   {handoverBulkBusy ? <span className="btn-spinner" /> : <MdAssignmentTurnedIn size={15} />}
                   Mark delivered
-                </button>
+                </Button>
               </div>
             </div>
           )}
 
           {/* Filters */}
           {selectedCompany && (
-            <div className="filters-row">
-              <div className="filter-search-wrap">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search Bill#, Challan#, PO#, Client, Item..."
-                  className="filter-search-input"
-                  value={search}
-                  onChange={handleFilterChange(setSearch)}
-                />
-              </div>
+            <Toolbar>
+              <SearchBox
+                placeholder="Search Bill#, Challan#, PO#, Client, Item..."
+                value={search}
+                onChange={(text) => handleFilterChange(setSearch)({ target: { value: text } })}
+              />
               {canViewClients && (
-                <select className="filter-select" value={clientFilter} onChange={handleFilterChange(setClientFilter)}>
-                  <option value="">All Clients</option>
-                  {clients.map((cl) => <option key={cl.id} value={cl.id}>{cl.name}</option>)}
-                </select>
+                <SearchableClientSelect
+                  clients={clients}
+                  value={clientFilter}
+                  onChange={(id) => handleFilterChange(setClientFilter)({ target: { value: String(id) } })}
+                  placeholder="All Clients"
+                  style={styles.clientPicker}
+                />
               )}
               {/* FBR workflow-status filter — Bills & Invoices tabs (not the
                   immutable note tabs). Server-side, so it paginates correctly. */}
               {!isNotesMode && (
                 <select
-                  className="filter-select"
+                  className="k-select"
                   value={fbrFilter}
                   onChange={handleFilterChange(setFbrFilter)}
                   title="Filter by FBR status"
@@ -1075,7 +1080,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                   Server-side, so it paginates correctly. */}
               {!isBillsMode && (
                 <select
-                  className="filter-select"
+                  className="k-select"
                   value={handoverFilter}
                   onChange={handleFilterChange(setHandoverFilter)}
                   title="Filter by customer document handover"
@@ -1085,15 +1090,16 @@ export default function InvoicePage({ mode = "invoices" }) {
                   <option value="delivered">Docs delivered</option>
                 </select>
               )}
-              <div className="filter-date-group">
-                <input type="date" className="filter-date-input" value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" />
-                <span className="filter-date-sep">–</span>
-                <input type="date" className="filter-date-input" value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" />
+              <div style={styles.dateGroup}>
+                <input type="date" className="k-input" style={styles.dateInput} value={dateFrom} onChange={handleFilterChange(setDateFrom)} title="From date" aria-label="From date" />
+                <span style={{ color: "var(--k-muted)" }}>–</span>
+                <input type="date" className="k-input" style={styles.dateInput} value={dateTo} onChange={handleFilterChange(setDateTo)} title="To date" aria-label="To date" />
               </div>
               {hasFilters && (
-                <button className="filter-clear-btn" onClick={resetFilters}>Clear</button>
+                <Button variant="ghost" size="sm" onClick={resetFilters}>Clear</Button>
               )}
-              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <ToolbarSpacer />
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                 {canPrint && <PrintTemplateSelect picker={tplPicker} />}
                 {isBigScreen && (
                   <ViewModeToggle
@@ -1103,11 +1109,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                   />
                 )}
               </div>
-            </div>
+            </Toolbar>
           )}
         </>
       ) : (
-        <div style={styles.emptyState}><p style={{ color: colors.textSecondary }}>No companies available.</p></div>
+        <EmptyState icon={MdBusiness}>No companies available.</EmptyState>
       )}
 
       {/* Spinner ONLY on the initial/empty load. During a REFETCH (validate,
@@ -1115,14 +1121,11 @@ export default function InvoicePage({ mode = "invoices" }) {
           so the browser preserves the scroll position — unmounting it here was
           why the page jumped to the top after every action. */}
       {loadingInvoices && invoices.length === 0 ? (
-        <div style={styles.loadingContainer}><div style={styles.spinner} /></div>
+        <Loading />
       ) : invoices.length === 0 && selectedCompany ? (
-        <div style={styles.emptyState}>
-          <MdReceipt size={40} color={colors.cardBorder} />
-          <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-            {hasFilters ? "No invoices match the current filters." : "No invoices found. Create one from pending challans."}
-          </p>
-        </div>
+        <EmptyState icon={MdReceipt}>
+          {hasFilters ? "No invoices match the current filters." : "No invoices found. Create one from pending challans."}
+        </EmptyState>
       ) : (
         <>
           {viewMode === "table" ? (
@@ -1182,15 +1185,16 @@ export default function InvoicePage({ mode = "invoices" }) {
             {invoices.map((inv) => (
               <div
                 key={inv.id}
-                style={cardStyles.card}
-                onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-                onMouseLeave={(e) => Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })}
+                className="k-card"
+                style={styles.card}
+                onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.cardHoverOn)}
+                onMouseLeave={(e) => Object.assign(e.currentTarget.style, styles.cardHoverOff)}
               >
-                <div style={cardStyles.cardContent}>
+                <div style={styles.cardContent}>
                   <div>
                     <div style={cardStyles.cardHeader}>
-                      <h5 style={cardStyles.title}>
-                        <MdReceipt style={{ color: colors.blue, marginRight: 6 }} />
+                      <h5 style={styles.cardTitle}>
+                        <MdReceipt style={{ color: "var(--k-blue)", marginRight: 6 }} />
                         {isNotesMode ? noteLabel : isBillsMode ? "Bill" : "Invoice"} #{inv.invoiceNumber}
                       </h5>
                       {/* FBR lifecycle + note relationship as compact pills;
@@ -1234,20 +1238,20 @@ export default function InvoicePage({ mode = "invoices" }) {
                       )}
                     </div>
                   </div>
-                  <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
+                  <div style={styles.buttonGroup}>
                     {/* Bills card: View, Print Bill, Bill PDF, Bill XLS, Edit, Delete.
                         Invoices card: View, Tax Print, Tax PDF, Tax XLS, View FBR, Validate, Submit. */}
                     {/* Read-only View — shown on BOTH tabs. On the Invoices tab
                         it opens the same read-only bill view so the operator can
                         inspect the grouped-by-Item-Type and individual line
                         items without switching to the Bills tab. */}
-                    <button
-                      style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                    <Button size="sm"
+                      style={TONE.view}
                       onClick={() => setViewingId(inv.id)}
                       title="View bill details (read-only) — grouped & individual line items"
                     >
                       <MdVisibility size={14} /> View
-                    </button>
+                    </Button>
                     {/* Cross-tab locator — Bills tab only. Navigates to
                         the Invoices tab with ?search=<billNumber> seeded;
                         the Invoices page reads the param on mount so the
@@ -1256,53 +1260,53 @@ export default function InvoicePage({ mode = "invoices" }) {
                         again. Reuses the existing search pipeline so no
                         new filter logic is needed. */}
                     {isBillsMode && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e0f2f1", color: "#00695c", border: "1px solid #80cbc4" }}
+                      <Button size="sm"
+                        style={TONE.openTeal}
                         onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
                         title="Find this bill on the Invoices tab so you can classify items and submit to FBR"
                       >
                         <MdOpenInNew size={14} /> Open in Invoices
-                      </button>
+                      </Button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button
-                        style={{ ...styles.printBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }}
+                      <Button size="sm"
+                        style={TONE.print}
                         disabled={tplPicker.noTemplate}
                         title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
                         onClick={() => handlePrintBill(inv)}
                       >
                         <MdPrint size={14} /> Bill
-                      </button>
+                      </Button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button
-                        style={{ ...styles.taxBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }}
+                      <Button size="sm"
+                        style={TONE.tax}
                         disabled={tplPicker.noTemplate}
                         title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}
                         onClick={() => handlePrintTax(inv)}
                       >
                         <MdDescription size={14} /> Tax Invoice
-                      </button>
+                      </Button>
                     )}
                     {isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: tplPicker.noTemplate || exportingId ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"} onClick={() => handleExportBillPdf(inv)}>
+                      <Button size="sm" style={TONE.pdf} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"} onClick={() => handleExportBillPdf(inv)}>
                         {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Bill PDF
-                      </button>
+                      </Button>
                     )}
                     {!isBillsMode && canPrint && (
-                      <button style={{ ...styles.pdfBtn, opacity: tplPicker.noTemplate || exportingId ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"} onClick={() => handleExportTaxPdf(inv)}>
+                      <Button size="sm" style={TONE.pdf} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"} onClick={() => handleExportTaxPdf(inv)}>
                         {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} Tax PDF
-                      </button>
+                      </Button>
                     )}
                     {isBillsMode && canPrint && hasExcelBill && (
-                      <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
+                      <Button size="sm" style={TONE.excel} disabled={!!exportingId} onClick={() => handleExportBillExcel(inv)}>
                         {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Bill XLS
-                      </button>
+                      </Button>
                     )}
                     {!isBillsMode && canPrint && hasExcelTax && (
-                      <button style={{ ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
+                      <Button size="sm" style={TONE.excel} disabled={!!exportingId} onClick={() => handleExportTaxExcel(inv)}>
                         {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Tax XLS
-                      </button>
+                      </Button>
                     )}
                     {/* View what FBR will see — grouped items, totals, raw
                         JSON. Pure read-only, no calls to FBR. Available for
@@ -1314,33 +1318,28 @@ export default function InvoicePage({ mode = "invoices" }) {
                         status badge above the buttons still shows in both
                         modes so the operator can see locked rows. */}
                     {!isBillsMode && canFbrPreview && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" }}
+                      <Button size="sm"
+                        style={TONE.view}
                         onClick={() => setFbrPreviewId(inv.id)}
                         title="Preview the FBR payload — grouped items, total qty, total value, total tax. Read-only, doesn't send anything."
                       >
                         <MdVisibility size={14} /> View FBR
-                      </button>
+                      </Button>
                     )}
                     {!isBillsMode && canFbrReset && (inv.fbrStatus === "Submitting" || inv.fbrStatus === "Uncertain") && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+                      <Button size="sm"
+                        style={TONE.reset}
                         onClick={() => handleFbrReset(inv)}
                         title="Reset this bill's FBR state (stuck after a timed-out/uncertain submit). Verify at FBR first."
                       >
                         <MdRestore size={14} /> Reset FBR
-                      </button>
+                      </Button>
                     )}
                     {!isBillsMode && canFbrAny && selectedCompany?.hasFbrToken && inv.fbrStatus !== "Submitted" && inv.fbrStatus !== "Submitting" && inv.fbrStatus !== "Uncertain" && !inv.isCancelled && (
                       <>
                         {canFbrValidate && (
-                          <button
-                            style={{
-                              ...styles.fbrValidateBtn,
-                              opacity: fbrLoading || !inv.fbrReady ? 0.4 : 1,
-                              cursor: !inv.fbrReady ? "not-allowed" : "pointer",
-                              ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
-                            }}
+                          <Button size="sm"
+                            style={fbrValidated.has(inv.id) ? TONE.validated : TONE.validate}
                             disabled={!!fbrLoading || !inv.fbrReady}
                             onClick={() => handleFbrValidate(inv)}
                             title={
@@ -1353,15 +1352,11 @@ export default function InvoicePage({ mode = "invoices" }) {
                           >
                             {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
                             {fbrValidated.has(inv.id) ? "Validated" : "Validate"}
-                          </button>
+                          </Button>
                         )}
                         {canFbrSubmit && (
-                          <button
-                            style={{
-                              ...styles.fbrSubmitBtn,
-                              opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
-                              cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
-                            }}
+                          <Button size="sm"
+                            style={TONE.submit}
                             disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
                             onClick={() => handleFbrSubmit(inv)}
                             title={
@@ -1375,7 +1370,7 @@ export default function InvoicePage({ mode = "invoices" }) {
                             }
                           >
                             {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />} Submit FBR
-                          </button>
+                          </Button>
                         )}
                       </>
                     )}
@@ -1385,37 +1380,32 @@ export default function InvoicePage({ mode = "invoices" }) {
                         the Invoices tab. Hidden once FBR-submitted (locks
                         edits permanently). */}
                     {isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
+                      <Button size="sm"
+                        style={TONE.edit}
                         onClick={() => setEditingId(inv.id)}
                         title={canUpdate
                           ? "Edit items and prices on this bill"
                           : "Edit bill (your permissions)"}
                       >
                         <MdEdit size={14} /> Edit
-                      </button>
+                      </Button>
                     )}
                     {/* Edit on Invoices tab: ONLY allows picking the Item
                         Type for each line. Everything else (items, prices,
                         qty, dates) is read-only and reflects whatever was
                         last saved on the Bills tab. Hidden once submitted. */}
                     {!isBillsMode && canEditInThisMode && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff3e0", color: "#e65100", border: "1px solid #ffcc80" }}
+                      <Button size="sm"
+                        style={TONE.edit}
                         onClick={() => setEditingId(inv.id)}
                         title="Classify line items by Item Type (other fields read-only — edit on the Bills tab)"
                       >
                         <MdEdit size={14} /> Edit
-                      </button>
+                      </Button>
                     )}
                     {!isBillsMode && canFbrExclude && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
-                        style={{
-                          ...styles.printBtn,
-                          backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
-                          color: inv.isFbrExcluded ? "#2e7d32" : "#546e7a",
-                          border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
-                        }}
+                      <Button size="sm"
+                        style={inv.isFbrExcluded ? TONE.include : TONE.exclude}
                         onClick={() => handleToggleFbrExcluded(inv)}
                         title={
                           inv.isFbrExcluded
@@ -1425,28 +1415,28 @@ export default function InvoicePage({ mode = "invoices" }) {
                       >
                         {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
                         {inv.isFbrExcluded ? "Include in FBR" : "Exclude from FBR"}
-                      </button>
+                      </Button>
                     )}
                     {/* Customer document handover — Invoices + Notes only. Mark
                         on Pending rows, Revert on Delivered rows. Both gated by
                         their own permission (button hidden otherwise). */}
                     {!isBillsMode && canDocsDeliver && inv.handoverStatus === "Pending" && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#e8f5e9", color: "#2e7d32", border: "1px solid #a5d6a7" }}
+                      <Button size="sm"
+                        style={TONE.deliver}
                         onClick={() => setHandoverTarget({ mode: "single", inv })}
                         title="Mark the customer's printed documents (Bill + Tax Invoice) as handed over to the customer"
                       >
                         <MdAssignmentTurnedIn size={14} /> Mark Delivered
-                      </button>
+                      </Button>
                     )}
                     {!isBillsMode && canDocsRevert && inv.handoverStatus === "Delivered" && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
+                      <Button size="sm"
+                        style={TONE.reset}
                         onClick={() => handleRevertHandover(inv)}
                         title={`Delivered${inv.handoverAt ? ` on ${new Date(inv.handoverAt).toLocaleDateString()}` : ""}${inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)"}${inv.handoverRemark ? ` — ${inv.handoverRemark}` : ""}. Click to revert to Pending.`}
                       >
                         <MdUndo size={14} /> Revert Delivery
-                      </button>
+                      </Button>
                     )}
                     {/* Delete: Bills tab only, last-created bill only,
                         not FBR-submitted. A CANCELLED bill still shows Delete
@@ -1455,30 +1445,30 @@ export default function InvoicePage({ mode = "invoices" }) {
                         bill with no way to remove it once the bill above it
                         was gone. */}
                     {(isBillsMode || isNotesMode) && canDelete && inv.fbrStatus !== "Submitted" && inv.isLatest && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#ffebee", color: "#c62828", border: "1px solid #ef9a9a" }}
+                      <Button size="sm"
+                        style={TONE.delete}
                         onClick={() => handleDeleteInvoice(inv)}
                         title={inv.isCancelled
                           ? "Delete this voided document entirely — it is the latest in its sequence, so removing it rolls the number back."
                           : "Delete this document entirely — latest in its sequence only. Use Void to cancel an earlier one without leaving a gap."}
                       >
                         <MdDelete size={14} /> Delete
-                      </button>
+                      </Button>
                     )}
                     {/* Void: Bills tab, ANY non-submitted, non-cancelled bill
                         (not just the latest). Keeps the bill number so the
                         sequence stays gap-free, marks the bill Cancelled, and
                         reverts its delivery challan(s) to Pending for re-billing. */}
                     {(isBillsMode || isNotesMode) && canVoid && inv.fbrStatus !== "Submitted" && !inv.isCancelled && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#fff8e1", color: "#b26a00", border: "1px solid #ffe082" }}
+                      <Button size="sm"
+                        style={TONE.void}
                         onClick={() => handleVoidInvoice(inv)}
                         title={isNotesMode
                           ? "Void this note — keeps its number (no gap), frees the original invoice so it can be reversed again."
                           : "Void this bill — keeps the bill number (no gap), marks it Cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."}
                       >
                         <MdCancel size={14} /> Void
-                      </button>
+                      </Button>
                     )}
                     {/* Reverse: an FBR-SUBMITTED sale invoice (not itself a
                         note) can be reversed → generates a Credit Note as a new
@@ -1486,23 +1476,23 @@ export default function InvoicePage({ mode = "invoices" }) {
                         the bill has reached FBR. */}
                     {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled && !inv.fbrCancelledAt &&
                      inv.documentType !== 9 && inv.documentType !== 10 && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#ede7f6", color: "#5e35b1", border: "1px solid #b39ddb" }}
+                      <Button size="sm"
+                        style={TONE.reverse}
                         onClick={() => handleReverseInvoice(inv)}
                         title="Reverse this FBR-submitted bill — generates a Credit Note (new unsubmitted bill) that you then Validate and Submit to FBR."
                       >
                         <MdUndo size={14} /> Reverse
-                      </button>
+                      </Button>
                     )}
                     {canReverse && inv.fbrStatus === "Submitted" && !inv.isCancelled &&
                      inv.documentType !== 9 && inv.documentType !== 10 && (
-                      <button
-                        style={{ ...styles.printBtn, backgroundColor: "#d6eee8", color: "#0a5d50", border: "1px solid #b6ddd3" }}
+                      <Button size="sm"
+                        style={TONE.correct}
                         onClick={() => setCorrectTarget(inv)}
                         title="Bill the balance quantity under-reported on this submitted bill — creates a new unclassified bill (+ same challan/PO) for the tax consultant to classify and submit to FBR."
                       >
                         <MdPostAdd size={14} /> Correct
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -1668,145 +1658,22 @@ export default function InvoicePage({ mode = "invoices" }) {
 }
 
 const styles = {
-  pageHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
-  headerIcon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, display: "flex", alignItems: "center", justifyContent: "center" },
-  pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  // Visually distinct from the primary "New Bill" — outlined treatment
-  // makes the standalone path the secondary action without losing
-  // discoverability for roles that also have the primary permission.
-  addBtnSecondary: { display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: `1px solid ${colors.blue}`, background: "#fff", color: colors.blue, fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
-  loadingContainer: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
-  spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
-  printBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  taxBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  pdfBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#ffebee", color: "#c62828" },
-  excelBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e8f5e9", color: "#1b5e20" },
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
-  pageBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
-  },
-  pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
-  fbrValidateBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#fff3e0", color: "#e65100" },
-  fbrSubmitBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer", backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  fbrBulkBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem", padding: "0.65rem 1rem", borderRadius: 10, border: "1px solid #e3f2fd", backgroundColor: "#f8faff" },
-  // FBR-status pills used in Bills mode. Soft-tinted background with a
-  // matching border + an icon and label, sitting under the bill metadata
-  // row so the operator gets a clear at-a-glance "locked / not yet" cue.
-  fbrPillPending: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    marginTop: "0.5rem",
-    padding: "0.3rem 0.7rem",
-    borderRadius: 999,
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
-    border: "1px solid #ffcc80",
-    letterSpacing: "0.01em",
-  },
-  fbrPillSubmitted: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    marginTop: "0.5rem",
-    padding: "0.3rem 0.7rem",
-    borderRadius: 999,
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#1b5e20",
-    backgroundColor: "#eafbef",
-    border: "1px solid #a5d6a7",
-    letterSpacing: "0.01em",
-  },
-  fbrPillIrn: {
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "0.7rem",
-    fontWeight: 600,
-    color: "#2e7d32",
-    backgroundColor: "#fff",
-    padding: "0.05rem 0.4rem",
-    borderRadius: 50,
-    border: "1px solid #c8e6c9",
-  },
-  // Invoices-mode FBR status pills — same shape as the Bills-mode ones
-  // (Pending / Submitted) but tinted for the workflow states the FBR
-  // officer needs to track: Ready, Setup Incomplete, Failed, Excluded.
-  fbrPillReady: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    marginTop: "0.5rem",
-    padding: "0.3rem 0.7rem",
-    borderRadius: 999,
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#0d47a1",
-    backgroundColor: "#e3f2fd",
-    border: "1px solid #90caf9",
-    letterSpacing: "0.01em",
-  },
-  fbrPillIncomplete: {
-    display: "inline-flex",
-    alignItems: "flex-start",
-    gap: "0.45rem",
-    marginTop: "0.5rem",
-    padding: "0.35rem 0.7rem",
-    borderRadius: 12,
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#8a4b00",
-    backgroundColor: "#fff4e0",
-    border: "1px solid #ffcc80",
-    letterSpacing: "0.01em",
-    maxWidth: "100%",
-  },
-  fbrPillIncompleteHint: {
-    display: "block",
-    fontSize: "0.7rem",
-    fontWeight: 500,
-    color: "#a35400",
-    marginTop: "0.15rem",
-    wordBreak: "break-word",
-  },
-  fbrPillFailed: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    marginTop: "0.5rem",
-    padding: "0.3rem 0.7rem",
-    borderRadius: 999,
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#b71c1c",
-    backgroundColor: "#ffebee",
-    border: "1px solid #ef9a9a",
-    letterSpacing: "0.01em",
-  },
-  fbrPillExcluded: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.4rem",
-    marginTop: "0.5rem",
-    padding: "0.3rem 0.7rem",
-    borderRadius: 999,
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: "#37474f",
-    backgroundColor: "#eceff1",
-    border: "1px solid #b0bec5",
-    letterSpacing: "0.01em",
-  },
-  fbrBulkBtn: { display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 1rem", borderRadius: 8, border: "none", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "filter 0.2s" },
-  // 2026-05-13: neutral-blue outline for "Preview All" — distinct from
-  // the amber Validate All (action) and solid-blue Submit All (terminal
-  // action). Reads as an inspector button, not a workflow trigger.
-  fbrBulkPreviewBtn: { backgroundColor: "#fff", color: "#0d47a1", border: "1px solid #b7d4f0" },
-  fbrBulkValidateBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
-  fbrBulkSubmitBtn: { backgroundColor: "#0d47a1", color: "#fff", boxShadow: "0 2px 8px rgba(13,71,161,0.2)" },
+  // FBR / handover bulk strips — a k-card surface laid out as a wrap row.
+  bulkBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", margin: "0 0 0.75rem", padding: "0.5rem 0.85rem", background: "#f8faff", boxShadow: "none" },
+  bulkLead: { display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", minWidth: 0 },
+  bulkText: { fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)" },
+  bulkActions: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
+  // Client filter: grows with the toolbar, capped on desktop, full row on phones.
+  clientPicker: { flex: "1 1 200px", minWidth: "min(200px, 100%)", maxWidth: 260 },
+  dateGroup: { display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" },
+  dateInput: { width: "auto", maxWidth: "100%" },
+  // Invoice / bill card (card view). Surface comes from .k-card; the hover lift
+  // follows --k-lift (Classic lifts, Workspace stays flat).
+  // marginTop 0 cancels `.k-card + .k-card` stacking margin inside the grid.
+  card: { marginTop: 0, overflow: "hidden", transition: "transform 0.2s ease, border-color 0.2s ease" },
+  cardHoverOn: { transform: "var(--k-lift)", borderColor: "#b9c4d3" },
+  cardHoverOff: { transform: "", borderColor: "" },
+  cardContent: { display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%", padding: "var(--k-card-pad)" },
+  cardTitle: { ...cardStyles.title, fontSize: "calc(var(--k-font) + 0.2rem)" },
+  buttonGroup: { ...cardStyles.buttonGroup, marginTop: "0.85rem", paddingTop: "0.75rem", flexWrap: "wrap", gap: "0.4rem" },
 };

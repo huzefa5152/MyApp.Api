@@ -1,21 +1,18 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import RichText from "../Components/RichText";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MdUndo, MdSearch, MdReceipt, MdArrowBack } from "react-icons/md";
+import { MdUndo, MdReceipt, MdArrowBack, MdBlock, MdBusiness } from "react-icons/md";
 import { getInvoicesByCompany, createNote } from "../api/invoiceApi";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import AttachmentManager from "../Components/AttachmentManager";
+import { PageHeader, Toolbar, SearchBox, Button, Card, Facts, TableWrap, Field, Loading, EmptyState } from "../ui/Kit";
 
+// Note-kind accent (Credit = purple, Debit = teal) for the Generate button.
 const colors = {
-  blue: "#0d47a1",
   purple: "#5e35b1",
   teal: "#00695c",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  border: "#d0d7e2",
-  inputBg: "#f8f9fb",
 };
 
 // FBR's OFFICIAL note reasons — the enumerated list from IRIS (bulk-import
@@ -179,55 +176,59 @@ export default function CreditDebitNotePage() {
   };
 
   if (!canCreate) {
-    return <div style={{ padding: 24 }}>You don't have permission to create Credit/Debit Notes.</div>;
+    return <EmptyState icon={MdBlock}>You don't have permission to create Credit/Debit Notes.</EmptyState>;
   }
   if (!selectedCompany?.id) {
-    return <div style={{ padding: 24 }}>Select a company to create a {label}.</div>;
+    return <EmptyState icon={MdBusiness}>Select a company to create a {label}.</EmptyState>;
   }
 
+  const tint = isCredit ? colors.purple : colors.teal;
+
   return (
-    <div style={{ padding: "16px", maxWidth: 1100, margin: "0 auto" }}>
-      <h2 style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textPrimary, margin: "0 0 4px" }}>
-        <MdUndo style={{ color: isCredit ? colors.purple : colors.teal }} /> New {label}
-      </h2>
-      <p style={{ color: colors.textSecondary, marginTop: 0 }}>
-        {isCredit
-          ? "Reverse an FBR-submitted invoice — fully or partially. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back."
-          : "Record an upward adjustment against an FBR-submitted invoice (undercharge, rate change, extra goods). A Debit Note increases the sale and normally leaves stock untouched."}
-        {" "}The note is created unsubmitted — validate and submit it to FBR from its tab.
-      </p>
+    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <PageHeader
+        icon={MdUndo}
+        tone={isCredit ? "purple" : "teal"}
+        title={`New ${label}`}
+        subtitle={<>
+          {isCredit
+            ? "Reverse an FBR-submitted invoice — fully or partially. A Credit Note reduces the sale (goods returned, cancellation, discount) and re-enters stock only when goods physically come back."
+            : "Record an upward adjustment against an FBR-submitted invoice (undercharge, rate change, extra goods). A Debit Note increases the sale and normally leaves stock untouched."}
+          {" "}The note is created unsubmitted — validate and submit it to FBR from its tab.
+        </>}
+      />
 
       {!selected ? (
         <>
-          <div style={{ position: "relative", margin: "12px 0" }}>
-            <MdSearch style={{ position: "absolute", left: 10, top: 12, color: colors.textSecondary }} />
-            <input
+          <Toolbar>
+            <SearchBox
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={setSearch}
               placeholder="Search submitted invoices by #, client, or IRN…"
-              style={{ width: "100%", padding: "10px 10px 10px 34px", borderRadius: 8, border: `1px solid ${colors.border}`, background: colors.inputBg, boxSizing: "border-box" }}
             />
-          </div>
+          </Toolbar>
           {loading ? (
-            <p style={{ color: colors.textSecondary }}>Loading…</p>
+            <Loading>Loading…</Loading>
           ) : filtered.length === 0 ? (
-            <p style={{ color: colors.textSecondary }}>No eligible FBR-submitted invoices.</p>
+            <EmptyState icon={MdReceipt}>No eligible FBR-submitted invoices.</EmptyState>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 10 }}>
+            <div className="k-grid-cards" style={{ gap: 10 }}>
               {filtered.map((inv) => (
                 <button
                   key={inv.id}
+                  type="button"
                   onClick={() => pickInvoice(inv)}
-                  style={{ textAlign: "left", padding: 12, borderRadius: 10, border: `1px solid ${colors.border}`, background: "#fff", cursor: "pointer" }}
+                  className="k-card"
+                  style={styles.pickCard}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: colors.textPrimary }}>
-                    <MdReceipt style={{ color: colors.blue }} /> Bill #{inv.invoiceNumber}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: "var(--k-ink)" }}>
+                    <MdReceipt style={{ color: "var(--k-blue)" }} /> Bill #{inv.invoiceNumber}
                   </div>
-                  <div style={{ fontSize: "0.85rem", color: colors.textSecondary }}>{inv.clientName}</div>
-                  <div style={{ fontSize: "0.8rem", color: colors.textSecondary }}>
+                  <div style={styles.pickClient}>{inv.clientName}</div>
+                  <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
                     {inv.date ? new Date(inv.date).toLocaleDateString() : ""} · Rs {Number(inv.grandTotal).toLocaleString()}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: colors.textSecondary, marginTop: 4, wordBreak: "break-all" }}>
+                  <div style={{ fontSize: "0.72rem", color: "var(--k-muted)", marginTop: 4, wordBreak: "break-all" }}>
                     IRN {inv.fbrIRN}
                   </div>
                 </button>
@@ -237,27 +238,32 @@ export default function CreditDebitNotePage() {
         </>
       ) : (
         <>
-          <button onClick={clearSelection} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: "none", color: colors.blue, cursor: "pointer", padding: 0, marginBottom: 8 }}>
-            <MdArrowBack /> Choose a different invoice
-          </button>
-
-          <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${colors.border}`, background: colors.inputBg, marginBottom: 12 }}>
-            <strong>Bill #{selected.invoiceNumber}</strong> · {selected.clientName}
-            <div style={{ fontSize: "0.78rem", color: colors.textSecondary, wordBreak: "break-all" }}>IRN {selected.fbrIRN}</div>
+          <div style={{ marginBottom: 8 }}>
+            <Button variant="secondary" size="sm" icon={MdArrowBack} onClick={clearSelection}>
+              Choose a different invoice
+            </Button>
           </div>
 
+          <Card style={{ marginBottom: "var(--k-gap)", background: "var(--k-surface-2)" }}>
+            <Facts facts={[
+              ["Bill", `#${selected.invoiceNumber}`],
+              ["Client", selected.clientName],
+              ["IRN", <span style={{ wordBreak: "break-all", fontWeight: 500 }}>{selected.fbrIRN}</span>],
+            ]} />
+          </Card>
+
           {/* Lines */}
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+          <TableWrap>
+            <table className="k-table">
               <thead>
-                <tr style={{ textAlign: "left", color: colors.textSecondary, borderBottom: `1px solid ${colors.border}` }}>
-                  <th style={{ padding: 6 }}>Incl.</th>
-                  <th style={{ padding: 6 }}>Item</th>
-                  <th style={{ padding: 6 }}>HS</th>
-                  <th style={{ padding: 6, textAlign: "right" }}>Invoiced</th>
-                  <th style={{ padding: 6, textAlign: "right" }}>{isCredit ? "Return qty" : "Adjust qty"}</th>
-                  <th style={{ padding: 6, textAlign: "right" }}>{isCredit ? "Rate (fixed)" : "Rate / delta"}</th>
-                  <th style={{ padding: 6, textAlign: "right" }}>Total</th>
+                <tr>
+                  <th>Incl.</th>
+                  <th>Item</th>
+                  <th>HS</th>
+                  <th className="k-num">Invoiced</th>
+                  <th className="k-num">{isCredit ? "Return qty" : "Adjust qty"}</th>
+                  <th className="k-num">{isCredit ? "Rate (fixed)" : "Rate / delta"}</th>
+                  <th className="k-num">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -265,24 +271,25 @@ export default function CreditDebitNotePage() {
                   const oQty = l.include && Number(l.noteQty) > Number(l.invoicedQty);
                   const oRate = l.include && Number(l.noteRate) > Number(l.invoicedRate);
                   return (
-                    <tr key={l.id} style={{ borderBottom: "1px solid #eef1f5", opacity: l.include ? 1 : 0.5 }}>
-                      <td style={{ padding: 6 }}>
+                    <tr key={l.id} style={{ opacity: l.include ? 1 : 0.5 }}>
+                      <td>
                         <input type="checkbox" checked={l.include} onChange={(e) => updateLine(l.id, { include: e.target.checked })} />
                       </td>
-                      <td style={{ padding: 6 }}><RichText text={l.description} /></td>
-                      <td style={{ padding: 6, color: colors.textSecondary }}>{l.hsCode || "—"}</td>
-                      <td style={{ padding: 6, textAlign: "right" }}>
+                      <td><RichText text={l.description} /></td>
+                      <td className="k-muted">{l.hsCode || "—"}</td>
+                      <td className="k-num">
                         {Number(l.invoicedQty).toLocaleString()} {l.uom} @ {Number(l.invoicedRate).toLocaleString()}
                       </td>
-                      <td style={{ padding: 6, textAlign: "right" }}>
+                      <td className="k-num">
                         <input
                           type="number" min="0" step="any" disabled={!l.include}
                           value={l.noteQty}
                           onChange={(e) => updateLine(l.id, { noteQty: e.target.value })}
-                          style={{ width: 84, padding: "4px 6px", textAlign: "right", borderRadius: 6, border: `1px solid ${oQty ? "#e53935" : colors.border}` }}
+                          className="k-input"
+                          style={{ ...styles.numInput, ...(oQty ? styles.invalid : null) }}
                         />
                       </td>
-                      <td style={{ padding: 6, textAlign: "right" }}>
+                      <td className="k-num">
                         {isCredit ? (
                           Number(l.noteRate).toLocaleString()
                         ) : (
@@ -291,11 +298,12 @@ export default function CreditDebitNotePage() {
                             value={l.noteRate}
                             onChange={(e) => updateLine(l.id, { noteRate: e.target.value })}
                             title="Per-unit adjustment value — e.g. the undercharged amount per unit. Cannot exceed the invoiced rate."
-                            style={{ width: 84, padding: "4px 6px", textAlign: "right", borderRadius: 6, border: `1px solid ${oRate ? "#e53935" : colors.border}` }}
+                            className="k-input"
+                            style={{ ...styles.numInput, ...(oRate ? styles.invalid : null) }}
                           />
                         )}
                       </td>
-                      <td style={{ padding: 6, textAlign: "right" }}>
+                      <td className="k-num">
                         {(Number(l.noteQty || 0) * Number(l.noteRate || 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -303,29 +311,29 @@ export default function CreditDebitNotePage() {
                 })}
               </tbody>
             </table>
-          </div>
-          {overQty && <p style={{ color: "#e53935", fontSize: "0.8rem" }}>A quantity exceeds what was invoiced.</p>}
-          {overRate && <p style={{ color: "#e53935", fontSize: "0.8rem" }}>An adjustment rate exceeds the invoiced rate (FBR caps the note at the original).</p>}
+          </TableWrap>
+          {overQty && <p style={styles.errorText}>A quantity exceeds what was invoiced.</p>}
+          {overRate && <p style={styles.errorText}>An adjustment rate exceeds the invoiced rate (FBR caps the note at the original).</p>}
 
           {/* Reason + remarks + stock toggle */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 12, marginTop: 12 }}>
-            <label style={{ fontSize: "0.85rem", color: colors.textSecondary }}>
-              Reason (FBR official list)
-              <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ width: "100%", padding: 8, borderRadius: 8, border: `1px solid ${colors.border}`, marginTop: 4 }}>
+          <div className="k-form-grid" style={{ marginTop: 12 }}>
+            <Field label="Reason (FBR official list)" htmlFor="cdn-reason">
+              <select id="cdn-reason" className="k-select" value={reason} onChange={(e) => setReason(e.target.value)}>
                 <option value="">Select a reason…</option>
                 {FBR_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
-            </label>
-            <label style={{ fontSize: "0.85rem", color: colors.textSecondary }}>
-              Remarks {reason === "Others" && <span style={{ color: "#e53935" }}>*</span>}
+            </Field>
+            <Field label={<>Remarks {reason === "Others" && <span style={{ color: "var(--k-danger)" }}>*</span>}</>} htmlFor="cdn-remarks">
               <input
+                id="cdn-remarks"
+                className="k-input"
                 value={remarks} onChange={(e) => setRemarks(e.target.value)}
                 placeholder={reason === "Others" ? "Required when reason is Others" : "Optional"}
-                style={{ width: "100%", padding: 8, borderRadius: 8, border: `1px solid ${needsRemarks ? "#e53935" : colors.border}`, marginTop: 4, boxSizing: "border-box" }}
+                style={needsRemarks ? styles.invalid : undefined}
               />
-            </label>
+            </Field>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: "0.88rem", color: colors.textPrimary }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: "var(--k-font)", color: "var(--k-ink)" }}>
             <input
               type="checkbox"
               checked={affectsStock}
@@ -333,7 +341,7 @@ export default function CreditDebitNotePage() {
             />
             <span>
               Goods physically {isCredit ? "returned — add the quantities back to stock" : "shipped — deduct the quantities from stock"}
-              <span style={{ color: colors.textSecondary }}> (off = value-only adjustment, inventory untouched)</span>
+              <span style={{ color: "var(--k-muted)" }}> (off = value-only adjustment, inventory untouched)</span>
             </span>
           </label>
 
@@ -343,24 +351,33 @@ export default function CreditDebitNotePage() {
 
           {/* Totals + submit */}
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 16 }}>
-            <div style={{ fontSize: "0.9rem", color: colors.textPrimary }}>
+            <div style={{ fontSize: "var(--k-font)", color: "var(--k-ink)", fontVariantNumeric: "tabular-nums" }}>
               <div>Subtotal: <strong>Rs {subtotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div>
-              <div style={{ color: colors.textSecondary }}>GST ({gstRate}%): Rs {gstAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+              <div style={{ color: "var(--k-muted)" }}>GST ({gstRate}%): Rs {gstAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
               <div>Grand total: <strong>Rs {grandTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div>
             </div>
-            <button
+            <Button
+              variant="primary"
               onClick={handleSubmit} disabled={!canSubmit}
-              style={{
-                padding: "12px 20px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: "0.95rem",
-                cursor: canSubmit ? "pointer" : "not-allowed",
-                background: canSubmit ? (isCredit ? colors.purple : colors.teal) : "#c5c9d1", color: "#fff",
-              }}
+              // Credit = purple, Debit = teal — the note kind's colour, as before.
+              style={{ background: canSubmit ? tint : "#c5c9d1", boxShadow: "none" }}
             >
               {submitting ? "Creating…" : `Generate ${label}`}
-            </button>
+            </Button>
           </div>
         </>
       )}
     </div>
   );
 }
+
+const styles = {
+  // Invoice pick tiles — a k-card surface rendered as a button; the overrides
+  // neutralise the global `button` rule (index.css padding / shadow / weight).
+  pickCard: { display: "block", width: "100%", textAlign: "left", padding: "0.75rem", margin: 0, fontFamily: "inherit", fontWeight: 400, cursor: "pointer", color: "var(--k-ink)", boxShadow: "var(--k-card-shadow)" },
+  // Client name: 2-line clamp, never a single-line ellipsis.
+  pickClient: { fontSize: "var(--k-font)", color: "var(--k-muted)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  numInput: { width: 84, minHeight: "calc(var(--k-h) - 6px)", padding: "0 6px", textAlign: "right" },
+  invalid: { borderColor: "#e53935" },
+  errorText: { color: "#e53935", fontSize: "var(--k-font-sm)" },
+};

@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { MdClose, MdInfo, MdCheckCircle, MdContentCopy, MdWarning } from "react-icons/md";
 import httpClient from "../api/httpClient";
 import { formStyles, modalSizes } from "../theme";
+import { Alert, Button, Loading, TableWrap } from "../ui/Kit";
 
 /**
  * Read-only preview of the JSON we would POST to FBR for a bill.
@@ -120,43 +121,36 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
 
         <div style={formStyles.body}>
           {loading ? (
-            <div style={s.notice}>Loading FBR preview…</div>
+            <Loading>Loading FBR preview…</Loading>
           ) : error ? (
-            <div style={s.errorBox}>
-              <MdWarning size={18} color="#dc3545" style={{ flexShrink: 0, marginTop: 2 }} />
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>Could not build preview</div>
-                <div style={{ fontSize: "0.88rem", whiteSpace: "pre-wrap" }}>{error}</div>
-              </div>
-            </div>
+            <Alert tone="error" icon={MdWarning}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Could not build preview</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{error}</div>
+            </Alert>
           ) : (
             <>
               {/* Summary banner: how the bill grouped, where it would go.
-                  `minWidth: 0` on the text column is the standard fix for
-                  flex-child overflow — without it, long unbreakable tokens
-                  (the FBR URL) push the parent past the modal width. */}
-              <div style={s.summaryBanner}>
-                <MdInfo size={18} color="#0d47a1" style={{ flexShrink: 0, marginTop: 2 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                    {origLineCount} bill {origLineCount === 1 ? "line" : "lines"} → {itemCount} FBR{" "}
-                    {itemCount === 1 ? "item" : "items"}
-                    {origLineCount !== itemCount && (
-                      <span style={{ color: "#2e7d32", marginLeft: "0.4rem" }}>
-                        (grouped by Item Type — same as Tax Invoice print)
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: "0.82rem", color: "#5f6d7e", wordBreak: "break-word" }}>
-                    Will POST to <code style={s.codeInline}>{url}</code>
-                  </div>
+                  The Alert body column has minWidth:0, so the long
+                  unbreakable FBR URL wraps instead of widening the modal. */}
+              <Alert tone="info" icon={MdInfo}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                  {origLineCount} bill {origLineCount === 1 ? "line" : "lines"} → {itemCount} FBR{" "}
+                  {itemCount === 1 ? "item" : "items"}
+                  {origLineCount !== itemCount && (
+                    <span style={{ color: "#2e7d32", marginLeft: "0.4rem" }}>
+                      (grouped by Item Type — same as Tax Invoice print)
+                    </span>
+                  )}
                 </div>
-              </div>
+                <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", wordBreak: "break-word" }}>
+                  Will POST to <code style={s.codeInline}>{url}</code>
+                </div>
+              </Alert>
 
               {/* Header / parties block — `responsive-grid-3col`
                   collapses 3 → 2 → 1 columns on narrow viewports
                   (defined in index.css). */}
-              <div className="responsive-grid-3col" style={s.partiesGrid}>
+              <div className="responsive-grid-3col">
                 <div>
                   <div style={s.partyLabel}>Seller</div>
                   <div style={s.partyName}>{payload?.sellerBusinessName}</div>
@@ -193,19 +187,19 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                 <div style={s.itemsHeader}>
                   Items in FBR payload ({itemCount})
                 </div>
-                <div className="responsive-table-wrap" style={s.tableWrap}>
-                  <table style={s.table}>
+                <TableWrap>
+                  <table className="k-table" style={s.table}>
                     <thead>
                       <tr>
-                        <th style={s.thIdx}>#</th>
-                        <th style={s.th}>Item Type / Description</th>
-                        <th style={s.th}>HS Code</th>
-                        <th style={s.th}>UOM</th>
-                        <th style={{ ...s.th, textAlign: "right" }}>Qty</th>
-                        <th style={{ ...s.th, textAlign: "right" }}>Value (excl. tax)</th>
-                        <th style={{ ...s.th, textAlign: "right" }}>Sales Tax</th>
-                        <th style={{ ...s.th, textAlign: "right" }}>Further Tax</th>
-                        <th style={{ ...s.th, textAlign: "right" }}>Line Total</th>
+                        <th className="is-center" style={s.idxCol}>#</th>
+                        <th>Item Type / Description</th>
+                        <th>HS Code</th>
+                        <th>UOM</th>
+                        <th className="k-num">Qty</th>
+                        <th className="k-num">Value (excl. tax)</th>
+                        <th className="k-num">Sales Tax</th>
+                        <th className="k-num">Further Tax</th>
+                        <th className="k-num">Line Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -217,8 +211,8 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                         const lineTotal = value + tax + further + extra;
                         return (
                           <tr key={idx}>
-                            <td style={s.tdIdx}>{idx + 1}</td>
-                            <td style={s.td}>
+                            <td className="is-center k-muted">{idx + 1}</td>
+                            <td>
                               <div style={{ fontWeight: 600 }}>{it.productDescription}</div>
                               <div style={s.metaSub}>
                                 {it.saleType}
@@ -227,15 +221,15 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                                 {it.sroItemSerialNo && ` #${it.sroItemSerialNo}`}
                               </div>
                             </td>
-                            <td style={s.td}>{it.hsCode || <span style={s.muted}>—</span>}</td>
-                            <td style={s.td}>{it.uoM || <span style={s.muted}>—</span>}</td>
-                            <td style={{ ...s.td, textAlign: "right" }}>{fmtQty(it.quantity)}</td>
-                            <td style={{ ...s.td, textAlign: "right" }}>{fmtNum(value)}</td>
-                            <td style={{ ...s.td, textAlign: "right" }}>{fmtNum(tax)}</td>
-                            <td style={{ ...s.td, textAlign: "right" }}>
+                            <td>{it.hsCode || <span style={s.muted}>—</span>}</td>
+                            <td>{it.uoM || <span style={s.muted}>—</span>}</td>
+                            <td className="k-num">{fmtQty(it.quantity)}</td>
+                            <td className="k-num">{fmtNum(value)}</td>
+                            <td className="k-num">{fmtNum(tax)}</td>
+                            <td className="k-num">
                               {further > 0 ? fmtNum(further) : <span style={s.muted}>0.00</span>}
                             </td>
-                            <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>
+                            <td className="k-num" style={{ fontWeight: 700 }}>
                               {fmtNum(lineTotal)}
                             </td>
                           </tr>
@@ -243,38 +237,34 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
                       })}
                     </tbody>
                     <tfoot>
-                      <tr style={s.totalsRow}>
-                        <td colSpan={4} style={{ ...s.tdTotals, textAlign: "right" }}>
+                      <tr>
+                        <td colSpan={4} className="k-num">
                           Total ({itemCount} {itemCount === 1 ? "item" : "items"})
                         </td>
-                        <td style={{ ...s.tdTotals, textAlign: "right" }}>{fmtQty(totals.qty)}</td>
-                        <td style={{ ...s.tdTotals, textAlign: "right" }}>{fmtNum(totals.value)}</td>
-                        <td style={{ ...s.tdTotals, textAlign: "right" }}>{fmtNum(totals.tax)}</td>
-                        <td style={{ ...s.tdTotals, textAlign: "right" }}>
+                        <td className="k-num">{fmtQty(totals.qty)}</td>
+                        <td className="k-num">{fmtNum(totals.value)}</td>
+                        <td className="k-num">{fmtNum(totals.tax)}</td>
+                        <td className="k-num">
                           {totals.further > 0 ? fmtNum(totals.further) : <span style={s.muted}>0.00</span>}
                         </td>
-                        <td style={{ ...s.tdTotals, textAlign: "right", color: "#0d47a1" }}>
+                        <td className="k-num" style={{ color: "var(--k-blue)" }}>
                           {fmtNum(totals.total)}
                         </td>
                       </tr>
                     </tfoot>
                   </table>
-                </div>
+                </TableWrap>
               </div>
 
               {/* Toggleable raw JSON for the curious / for support tickets. */}
               <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  style={s.linkBtn}
-                  onClick={() => setShowRawJson((v) => !v)}
-                >
+                <Button variant="secondary" size="sm" onClick={() => setShowRawJson((v) => !v)}>
                   {showRawJson ? "Hide" : "Show"} raw JSON
-                </button>
+                </Button>
                 {showRawJson && (
-                  <button type="button" style={s.linkBtn} onClick={copyJson}>
-                    {copied ? <><MdCheckCircle size={14} /> Copied</> : <><MdContentCopy size={14} /> Copy</>}
-                  </button>
+                  <Button variant="secondary" size="sm" icon={copied ? MdCheckCircle : MdContentCopy} onClick={copyJson}>
+                    {copied ? "Copied" : "Copy"}
+                  </Button>
                 )}
               </div>
               {showRawJson && (
@@ -299,74 +289,24 @@ export default function FbrPreviewDialog({ invoiceId, onClose }) {
 }
 
 const s = {
-  notice: { padding: "2rem", textAlign: "center", color: "#5f6d7e" },
-  errorBox: {
-    display: "flex", gap: "0.6rem",
-    background: "#fff0f1", border: "1px solid #f5c6cb",
-    color: "#842029", padding: "0.85rem 1rem", borderRadius: 8,
-  },
-  summaryBanner: {
-    display: "flex", gap: "0.6rem",
-    background: "#eef4fb", border: "1px solid #b7d4f0",
-    color: "#0d47a1", padding: "0.75rem 1rem", borderRadius: 8,
-  },
-  partiesGrid: {
-    // `display: grid` + columns come from the `responsive-grid-3col`
-    // class on the wrapping div (auto-fit, minmax(220px, 1fr) — see
-    // index.css). The inline style only adds the top margin so we
-    // don't have to bake spacing into a utility class.
-    marginTop: "0.75rem",
-  },
   partyLabel: {
-    fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em",
-    color: "#5f6d7e", fontWeight: 700, marginBottom: 4,
+    fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.04em",
+    color: "var(--k-muted)", fontWeight: 700, marginBottom: 4,
   },
-  partyName: { fontSize: "0.95rem", fontWeight: 700, color: "#1a2332" },
-  partyMeta: { fontSize: "0.82rem", color: "#5f6d7e", marginTop: 2 },
+  partyName: { fontSize: "calc(var(--k-font) + 0.05rem)", fontWeight: 700, color: "var(--k-ink)", overflowWrap: "anywhere" },
+  partyMeta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 },
   itemsHeader: {
-    fontSize: "0.85rem", fontWeight: 700, color: "#1a2332",
+    fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)",
     marginBottom: "0.4rem", display: "flex", alignItems: "center",
     justifyContent: "space-between",
   },
-  // Border / radius / horizontal-scroll all come from the
-  // `responsive-table-wrap` class on the wrapping div (index.css).
-  // Kept as an empty object so spread-into-style users still work.
-  tableWrap: {},
   // minWidth ensures columns don't collapse to unreadable widths on
-  // mobile — instead the parent `responsive-table-wrap` scrolls
-  // horizontally, which is the standard wide-table-on-mobile pattern.
-  table: { width: "100%", minWidth: "720px", borderCollapse: "collapse", fontSize: "0.85rem" },
-  th: {
-    padding: "0.5rem 0.6rem", background: "#f8fafc", borderBottom: "1px solid #e8edf3",
-    fontSize: "0.75rem", fontWeight: 700, color: "#5f6d7e",
-    textTransform: "uppercase", letterSpacing: "0.03em", textAlign: "left",
-  },
-  thIdx: {
-    padding: "0.5rem 0.4rem", background: "#f8fafc", borderBottom: "1px solid #e8edf3",
-    fontSize: "0.75rem", fontWeight: 700, color: "#5f6d7e",
-    textTransform: "uppercase", letterSpacing: "0.03em", textAlign: "center",
-    width: 36,
-  },
-  td: { padding: "0.55rem 0.6rem", borderBottom: "1px solid #f0f3f7", color: "#1a2332" },
-  tdIdx: {
-    padding: "0.55rem 0.4rem", borderBottom: "1px solid #f0f3f7",
-    color: "#5f6d7e", fontSize: "0.78rem", textAlign: "center",
-  },
-  metaSub: { fontSize: "0.75rem", color: "#5f6d7e", marginTop: 2 },
-  muted: { color: "#aab3bf" },
-  totalsRow: { background: "#f5f7fa" },
-  tdTotals: {
-    padding: "0.65rem 0.6rem", fontSize: "0.88rem", fontWeight: 700,
-    color: "#1a2332", borderTop: "2px solid #d0d7e2",
-  },
-  linkBtn: {
-    background: "transparent", backgroundColor: "transparent",
-    border: "none", color: "#0d47a1", fontSize: "0.82rem", fontWeight: 600,
-    padding: "0.25rem 0.45rem", margin: 0, cursor: "pointer",
-    boxShadow: "none", textDecoration: "underline", textUnderlineOffset: 2,
-    display: "inline-flex", alignItems: "center", gap: "0.3rem",
-    borderRadius: 4,
-  },
+  // mobile — instead the TableWrap scrolls horizontally, which is the
+  // standard wide-table-on-mobile pattern.
+  table: { minWidth: "720px" },
+  idxCol: { width: 36 },
+  metaSub: { fontSize: "0.75rem", color: "var(--k-muted)", marginTop: 2 },
+  muted: { color: "var(--k-faint)" },
   rawJson: {
     margin: "0.5rem 0 0", padding: "0.75rem 1rem",
     background: "#0a1628", color: "#e8f5e9", border: "1px solid #1a2332",

@@ -34,7 +34,7 @@ export default function LineItemImageCell({ value, onChange, onUpload, onBusyCha
       {busy ? "…" : value ? <img src={value} alt={label} style={{ maxWidth: 44, maxHeight: 44, objectFit: "contain" }} /> : <MdAddAPhoto size={21} />}
     </button>
     {value && <button type="button" aria-label={`Remove ${label}`} disabled={disabled || busy}
-      onClick={() => onChange(null)} style={{ minHeight: 44, padding: "4px", background: "white", border: "1px solid #e8edf3", borderRadius: 6, fontSize: 11 }}><MdClose /> Remove</button>}
+      onClick={() => onChange(null)} style={{ minHeight: "var(--ui-btn-h, 44px)", padding: "4px", boxShadow: "none", background: "white", border: "1px solid #e8edf3", borderRadius: 6, fontSize: 11 }}><MdClose /> Remove</button>}
     {error && <span role="alert" style={{ color: "#dc3545", fontSize: 11 }}>{error}</span>}
     <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={`Upload ${label}`}
       style={{ display: "none" }} onChange={e => { const file=e.target.files?.[0]; e.target.value=""; send(file); }} />

@@ -64,9 +64,9 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
   return (
     <div style={styles.backdrop}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
-          <h3 style={styles.title}>{title}</h3>
-          <button style={styles.closeBtn} onClick={onClose} aria-label="Close">
+        <div style={formStyles.header}>
+          <h3 style={formStyles.title}>{title}</h3>
+          <button style={formStyles.closeButton} onClick={onClose} aria-label="Close">
             <MdClose size={20} />
           </button>
         </div>
@@ -104,18 +104,18 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
         </div>
 
         <div style={styles.tableWrap}>
-          <table style={styles.table}>
+          <table className="k-table">
             <thead>
               <tr>
-                <th style={styles.th}>Bill #</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Details</th>
+                <th>Bill #</th>
+                <th>Status</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
               {sortedItems.length === 0 && (
                 <tr>
-                  <td colSpan={3} style={{ ...styles.td, textAlign: "center", color: colors.textSecondary, padding: "1.5rem" }}>
+                  <td colSpan={3} className="is-center k-muted" style={{ padding: "1.5rem" }}>
                     No bills processed.
                   </td>
                 </tr>
@@ -148,8 +148,8 @@ export default function BulkFbrResultsDialog({ open, action, items, onClose }) {
           </table>
         </div>
 
-        <div style={styles.footer}>
-          <button style={styles.closeFooterBtn} onClick={onClose}>Close</button>
+        <div style={formStyles.footer}>
+          <button style={{ ...formStyles.button, ...formStyles.submit }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
@@ -198,54 +198,17 @@ const styles = {
   // full bill/invoice editor.
   backdrop: formStyles.backdrop,
   modal: { ...formStyles.modal, maxWidth: `${modalSizes.lg}px` },
-  header: {
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    padding: "0.95rem 1.4rem",
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    flexShrink: 0,
-  },
-  title: { margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#fff" },
-  closeBtn: {
-    background: "rgba(255,255,255,0.2)", border: "none", color: "#fff",
-    cursor: "pointer", width: 44, height: 44, minWidth: 32, padding: 0,
-    borderRadius: 8, boxShadow: "none",
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-  },
   summaryBar: {
     display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap",
-    padding: "0.75rem 1.25rem", borderBottom: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#f8faff",
+    padding: "var(--k-card-pad)", borderBottom: "1px solid var(--k-line)",
+    backgroundColor: "var(--k-surface-2)", flexShrink: 0,
   },
   summaryItem: { display: "flex", alignItems: "center", gap: "0.4rem" },
-  summaryLabel: { fontSize: "0.78rem", color: colors.textSecondary, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" },
-  summaryValue: { fontSize: "1rem", fontWeight: 800, color: colors.textPrimary },
-  // overflowX:auto added so the 3-col results table can scroll
-  // horizontally on phones (Bill # / Status / Details columns get
-  // squashed at sub-360px viewports otherwise).
+  summaryLabel: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" },
+  summaryValue: { fontSize: "calc(var(--k-font) + 0.1rem)", fontWeight: 800, color: "var(--k-ink)" },
+  // The results region is the dialog's scroll area — overflowX:auto lets the
+  // 3-col table scroll on phones; overflowY keeps the sticky k-table header.
   tableWrap: { overflowX: "auto", overflowY: "auto", flex: "1 1 auto", minHeight: 0, maxHeight: "calc(92vh - 200px)", WebkitOverflowScrolling: "touch" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
-  th: {
-    textAlign: "left", padding: "0.6rem 0.95rem",
-    backgroundColor: "#f5f8fc", borderBottom: `1px solid ${colors.cardBorder}`,
-    fontSize: "0.76rem", fontWeight: 700, color: colors.textSecondary,
-    textTransform: "uppercase", letterSpacing: "0.04em",
-    position: "sticky", top: 0, zIndex: 1,
-  },
-  td: {
-    padding: "0.6rem 0.95rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    color: colors.textPrimary, verticalAlign: "top",
-  },
-  footer: {
-    padding: "0.75rem 1.25rem",
-    borderTop: `1px solid ${colors.cardBorder}`,
-    display: "flex", justifyContent: "flex-end",
-    flexShrink: 0,
-  },
-  closeFooterBtn: {
-    padding: "0.5rem 1.25rem", borderRadius: 8,
-    border: "none", backgroundColor: colors.blue, color: "#fff",
-    fontSize: "0.86rem", fontWeight: 600, cursor: "pointer",
-    boxShadow: "none",
-  },
+  // Details wrap and top-align (long FBR messages); the k-table supplies padding/borders.
+  td: { verticalAlign: "top" },
 };

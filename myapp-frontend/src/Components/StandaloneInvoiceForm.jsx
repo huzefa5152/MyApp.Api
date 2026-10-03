@@ -625,7 +625,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                   <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: "#f8fafc" }}>
                     {canUseOrders && (
                       <div style={{ flex: 2, minWidth: 240 }}>
-                        <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
+                        <label style={styles.label}>
                           From Sales Order <span style={{ fontWeight: 400 }}>(optional — prefills lines + prices)</span>
                         </label>
                         <SearchableSelect
@@ -638,12 +638,12 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 160 }}>
-                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Number <span style={{ fontWeight: 400 }}>(optional)</span></label>
-                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Set at bill time" style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                      <label style={styles.label}>PO Number <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Set at bill time" style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 140 }}>
-                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Date</label>
-                      <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                      <label style={styles.label}>PO Date</label>
+                      <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
                     </div>
                   </div>
                 )}
@@ -1426,9 +1426,9 @@ const styles = {
   mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
+  label: { display: "block", marginBottom: "var(--ui-label-gap, 0.35rem)", fontWeight: 600, fontSize: "var(--ui-label-size, 0.85rem)", color: colors.textSecondary },
+  input: { width: "100%", padding: "var(--ui-input-pad, 0.55rem 0.75rem)", minHeight: "var(--ui-control-h, 0px)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--ui-input-size, 0.9rem)", backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
+  select: { width: "100%", padding: "var(--ui-select-pad, 0.6rem 0.75rem)", minHeight: "var(--ui-control-h, 0px)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--ui-input-size, 0.9rem)", backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`, color: colors.textPrimary, outline: "none", cursor: "pointer" },
   errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
   warnAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.65rem 0.85rem", borderRadius: 8, backgroundColor: colors.warnLight, border: `1px solid ${colors.warn}30`, color: colors.warn, fontSize: "0.85rem" },
   totalsBox: { display: "flex", flexDirection: "column", gap: "0.35rem", alignItems: "flex-end", padding: "1rem", backgroundColor: "#f8f9fb", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, marginTop: "0.5rem" },
@@ -1437,8 +1437,8 @@ const styles = {
   optionalTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#fff3e0", color: "#e65100", fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.03em", textTransform: "uppercase" },
   lockedTag: { marginLeft: "0.3rem", padding: "0.05rem 0.35rem", borderRadius: 4, backgroundColor: "#e0f2f1", color: "#00695c", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 2 },
   itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  addRowBtn: { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: "none", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  addRowBtn: { minHeight: "var(--ui-btn-h, auto)", display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: "none", backgroundColor: colors.blue, color: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" },
+  inlineAddBtn: { minHeight: "var(--ui-btn-h, 44px)", display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
   removeRowBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.3rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fff", color: colors.danger, cursor: "pointer" },
   unifiedTableWrap: { width: "100%", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 8 },
@@ -1460,7 +1460,8 @@ const styles = {
     alignItems: "center",
     gap: "0.6rem",
     width: "100%",
-    padding: "0.6rem 0.85rem",
+    minHeight: "var(--ui-btn-h, 0px)",
+    padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
     borderRadius: 10,
     border: `1px solid ${colors.cardBorder}`,
     backgroundColor: "#f8faff",
@@ -1554,5 +1555,5 @@ const styles = {
 
   // Bulk-apply Item Type toolbar — surfaces above the items table when 2+ rows exist
   bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  bulkClearBtn: { minHeight: "var(--ui-btn-h, 44px)", display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
 };

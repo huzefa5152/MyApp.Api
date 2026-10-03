@@ -22,6 +22,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { useAuth } from "../contexts/AuthContext";
 import LookupAutocomplete from "./LookupAutocomplete";
 import SearchableItemTypeSelect from "./SearchableItemTypeSelect";
+import SearchableSelect from "./SearchableSelect";
+import SearchableClientSelect from "./SearchableClientSelect";
 import { useConfirm } from "./ConfirmDialog";
 import ItemTypeForm from "./ItemTypeForm";
 import AttachmentManager from "./AttachmentManager";
@@ -1671,26 +1673,27 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                       <label style={styles.label}>
                         FBR Scenario <span style={{ fontWeight: 400, color: colors.textSecondary, fontSize: "0.7rem" }}>filters items below</span>
                       </label>
-                      <select
-                        style={{ ...styles.input, ...(lockItemType ? styles.readOnlyInput : {}) }}
+                      <SearchableSelect
+                        items={scenarios.map((s) => ({
+                          id: s.code,
+                          label: `${s.code} — ${s.description || s.saleType}${s.buyerRegistrationType ? ` · ${s.buyerRegistrationType} buyer` : ""} · ${s.defaultRate}%`,
+                          code: s.code,
+                          saleType: s.saleType,
+                        }))}
                         value={scenarioCode}
-                        onChange={(e) => {
-                          setScenarioCode(e.target.value);
+                        onChange={(code) => {
+                          const value = code ? String(code) : "";
+                          setScenarioCode(value);
                           const buyer = clients.find((c) => String(c.id) === String(clientId));
                           if (!lockNonItemType)
-                            setFurtherTaxRate(defaultFurtherTaxRate(e.target.value, buyer?.registrationType));
+                            setFurtherTaxRate(defaultFurtherTaxRate(value, buyer?.registrationType));
                         }}
+                        labelKey="label"
+                        searchKeys={["label", "code", "saleType"]}
+                        placeholder="— auto-detect from items —"
                         disabled={lockItemType}
-                      >
-                        <option value="">— auto-detect from items —</option>
-                        {scenarios.map((s) => (
-                          <option key={s.code} value={s.code}>
-                            {s.code} — {s.description || s.saleType}
-                            {s.buyerRegistrationType ? ` · ${s.buyerRegistrationType} buyer` : ""}
-                            {` · ${s.defaultRate}%`}
-                          </option>
-                        ))}
-                      </select>
+                        ariaLabel="FBR Scenario"
+                      />
                       {chosenScenario && (
                         <div style={{ fontSize: "0.7rem", color: colors.textSecondary, marginTop: "0.25rem" }}>
                           <b>{chosenScenario.code}</b> — {chosenScenario.description || chosenScenario.saleType}.
@@ -1724,29 +1727,32 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                         </span>
                       )}
                     </label>
-                    <select
-                      style={{ ...styles.input, ...(lockClient ? styles.readOnlyInput : {}) }}
+                    {/* Show the existing buyer as a fallback option even
+                        when not in the loaded clients list (e.g. archived
+                        client) so the dropdown never silently changes the
+                        buyer just because of an empty options list. */}
+                    <SearchableClientSelect
+                      clients={[
+                        ...(invoice?.clientId && !clients.some((c) => c.id === invoice.clientId)
+                          ? [{ id: invoice.clientId, name: invoice.clientName }]
+                          : []),
+                        ...clients.map((c) => ({
+                          ...c,
+                          name: `${c.name} (${c.registrationType || "—"}${c.ntn ? ` · NTN ${c.ntn}` : c.cnic ? ` · CNIC ${c.cnic}` : ""})`,
+                        })),
+                      ]}
                       value={clientId}
-                      onChange={(e) => {
-                        setClientId(e.target.value);
-                        const buyer = clients.find((c) => String(c.id) === String(e.target.value));
+                      onChange={(id) => {
+                        const value = String(id);
+                        setClientId(value);
+                        const buyer = clients.find((c) => String(c.id) === value);
                         setFurtherTaxRate(defaultFurtherTaxRate(scenarioCode, buyer?.registrationType));
                       }}
+                      allowClear={false}
                       disabled={lockClient}
-                    >
-                      {/* Show the existing buyer as a fallback option even
-                          when not in the loaded clients list (e.g. archived
-                          client) so the dropdown never silently changes the
-                          buyer just because of an empty options list. */}
-                      {invoice?.clientId && !clients.some((c) => c.id === invoice.clientId) && (
-                        <option value={invoice.clientId}>{invoice.clientName}</option>
-                      )}
-                      {clients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.registrationType || "—"}{c.ntn ? ` · NTN ${c.ntn}` : c.cnic ? ` · CNIC ${c.cnic}` : ""})
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select buyer…"
+                      ariaLabel="Buyer"
+                    />
                   </div>
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <label style={styles.label}>Bill Date</label>
@@ -3346,8 +3352,8 @@ const styles = {
     fontSize: "0.82rem", border: `1px solid ${colors.infoBorder}`,
   },
   row: { display: "flex", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", fontSize: "0.82rem", fontWeight: 600, color: colors.textPrimary, marginBottom: "0.3rem" },
-  input: { width: "100%", padding: "0.55rem 0.75rem", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, fontSize: "0.85rem", backgroundColor: colors.inputBg },
+  label: { display: "block", fontSize: "var(--ui-label-size, 0.82rem)", fontWeight: 600, color: colors.textPrimary, marginBottom: "var(--ui-label-gap, 0.3rem)" },
+  input: { width: "100%", padding: "var(--ui-input-pad, 0.55rem 0.75rem)", minHeight: "var(--ui-control-h, 0px)", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, fontSize: "var(--ui-input-size, 0.85rem)", backgroundColor: `var(--ui-input-bg, ${colors.inputBg})` },
   sectionHeading: { margin: "1rem 0 0.5rem", fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary },
   // Header row that pairs the section title with an inline action
   // (e.g. "+ New Item Type"). Wraps on phones via flex-wrap so the
@@ -3359,7 +3365,7 @@ const styles = {
     flexWrap: "wrap",
     margin: "1rem 0 0.5rem",
   },
-  inlineAddBtn: { minHeight: 44,
+  inlineAddBtn: { minHeight: "var(--ui-btn-h, 44px)",
     display: "inline-flex", alignItems: "center", gap: "0.3rem",
     padding: "0.35rem 0.7rem",
     border: `1px solid ${colors.blue}`,
@@ -3451,8 +3457,10 @@ const styles = {
     color: colors.textPrimary,
     fontWeight: 600,
     overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflowWrap: "anywhere",
     minWidth: 0,
   },
   taxRowStats: {
@@ -4044,7 +4052,7 @@ const styles = {
   bulkApplyLabel: { fontSize: "0.82rem", color: colors.textPrimary, fontWeight: 500 },
   // Grouped ⇄ Individual lines segmented toggle.
   viewToggle: { display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, overflow: "hidden", backgroundColor: "#fff" },
-  viewToggleBtn: { minHeight: 44, padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "normal" },
+  viewToggleBtn: { minHeight: "var(--ui-btn-h, 44px)", padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600, color: colors.textSecondary, backgroundColor: "#fff", border: "none", cursor: "pointer", whiteSpace: "normal" },
   viewToggleBtnActive: { backgroundColor: colors.blue, color: "#fff" },
   // Grouped table affordances.
   groupedRow: { backgroundColor: "#fbfcfe" },
@@ -4067,7 +4075,7 @@ const styles = {
   segmented: { display: "inline-flex", border: `1px solid ${colors.inputBorder}`, borderRadius: 6, overflow: "hidden" },
   segBtn: {
     padding: "0.4rem 0.7rem", fontSize: "0.75rem", border: "none", background: "#fff",
-    color: colors.textSecondary, cursor: "pointer", minHeight: 36,
+    color: colors.textSecondary, cursor: "pointer", minHeight: "var(--ui-control-h, 36px)",
   },
   segBtnOn: { background: colors.blue, color: "#fff", fontWeight: 600 },
   exactBox: {
@@ -4077,7 +4085,7 @@ const styles = {
   exactLabel: { display: "block", fontSize: "0.72rem", fontWeight: 600, color: colors.textPrimary, marginBottom: "0.3rem" },
   exactDerived: { marginTop: "0.35rem", fontSize: "0.74rem", color: colors.textPrimary },
   clearExactBtn: {
-    padding: "0.35rem 0.6rem", fontSize: "0.72rem", borderRadius: 4, minHeight: 36,
+    padding: "0.35rem 0.6rem", fontSize: "0.72rem", borderRadius: 4, minHeight: "var(--ui-control-h, 36px)",
     border: `1px solid ${colors.inputBorder}`, background: "#fff", color: colors.textSecondary, cursor: "pointer",
   },
   requiredHint: { marginTop: 2, fontSize: "0.66rem", color: colors.warn, fontWeight: 700 },

@@ -166,12 +166,12 @@ export default function BillNumberField({
 
   const segBtn = (active) => ({
     flex: 1,
-    minHeight: 44,
-    padding: "0.5rem 0.75rem",
+    minHeight: "var(--ui-btn-h, 44px)",
+    padding: "var(--ui-input-pad, 0.5rem 0.75rem)",
     border: `1px solid ${active ? colors.blue : colors.inputBorder}`,
     backgroundColor: active ? colors.blue : "#fff",
     color: active ? "#fff" : colors.textSecondary,
-    fontSize: "0.82rem",
+    fontSize: "var(--ui-btn-size, 0.82rem)",
     fontWeight: 700,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
@@ -179,11 +179,12 @@ export default function BillNumberField({
 
   const inputStyle = {
     width: "100%",
-    padding: "0.55rem 0.75rem",
+    padding: "var(--ui-input-pad, 0.55rem 0.75rem)",
+    minHeight: "var(--ui-control-h, 0px)",
     borderRadius: 8,
     border: `1px solid ${colors.inputBorder}`,
-    fontSize: "0.9rem",
-    backgroundColor: colors.inputBg,
+    fontSize: "var(--ui-input-size, 0.9rem)",
+    backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`,
     color: colors.textPrimary,
     outline: "none",
     boxSizing: "border-box",
@@ -191,7 +192,7 @@ export default function BillNumberField({
 
   return (
     <div>
-      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
+      <label style={{ display: "block", marginBottom: "var(--ui-label-gap, 0.35rem)", fontWeight: 600, fontSize: "var(--ui-label-size, 0.85rem)", color: colors.textSecondary }}>
         {documentLabel} No.
       </label>
 
@@ -248,8 +249,10 @@ export default function BillNumberField({
               style={{
                 display: "grid",
                 placeItems: "center",
-                width: 44,
-                height: 44,
+                width: "var(--ui-btn-h, 44px)",
+                height: "var(--ui-btn-h, 44px)",
+                padding: 0,
+                boxShadow: "none",
                 flexShrink: 0,
                 borderRadius: 8,
                 border: `1px solid ${colors.inputBorder}`,

@@ -8,6 +8,7 @@ import DataTable from "./DataTable";
 import StatusBadge from "./StatusBadge";
 import PaymentStatusBadge from "./PaymentStatusBadge";
 import AttachmentBadge from "./AttachmentBadge";
+import { IconButton } from "../ui/Kit";
 
 // Renders the FBR-status pill in compact form for the table.
 function fbrStatusBadge(inv, isBillsMode) {
@@ -60,7 +61,7 @@ function handoverBadge(inv) {
   if (inv.handoverStatus === "Pending") {
     return <StatusBadge tone="warning" title="Submitted to FBR but the printed customer copies have not been marked handed over yet.">Pending</StatusBadge>;
   }
-  return <span style={{ color: "#90a4ae" }}>—</span>;
+  return <span style={{ color: "var(--k-faint)" }}>—</span>;
 }
 
 export default function InvoiceTable({
@@ -185,7 +186,7 @@ export default function InvoiceTable({
           <div style={{ fontWeight: 600 }}>
             Bill #{i.originalInvoiceNumber ?? "—"}
           </div>
-          <div style={{ fontSize: "0.75rem", color: "#5f6d7e" }} title={i.noteReasonRemarks || undefined}>
+          <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }} title={i.noteReasonRemarks || undefined}>
             {i.noteReason || "—"}
           </div>
         </div>
@@ -273,145 +274,139 @@ export default function InvoiceTable({
     return (
       <>
         {isBillsMode && (
-          <button style={btn.view} onClick={() => onView?.(inv)} title="View bill">
+          <IconButton style={btn.view} onClick={() => onView?.(inv)} label="View bill">
             <MdVisibility size={14} />
-          </button>
+          </IconButton>
         )}
         {isBillsMode && (
-          <button
+          <IconButton
             style={btn.teal}
             onClick={() => navigate(`/invoices?search=${encodeURIComponent(inv.invoiceNumber)}`)}
-            title="Open this bill on the Invoices tab"
+            label="Open this bill on the Invoices tab"
           >
             <MdOpenInNew size={14} />
-          </button>
+          </IconButton>
         )}
         {isBillsMode && perms.canPrint && (
-          <button
-            style={{ ...btn.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <IconButton
+            style={{ ...btn.print }}
             disabled={printDisabled}
             onClick={() => onPrintBill?.(inv)}
-            title={printDisabled ? printDisabledReason : "Print bill"}
+            label={printDisabled ? printDisabledReason : "Print bill"}
           >
             <MdPrint size={14} />
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button
-            style={{ ...btn.tax, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <IconButton
+            style={{ ...btn.tax }}
             disabled={printDisabled}
             onClick={() => onPrintTax?.(inv)}
-            title={printDisabled ? printDisabledReason : "Print tax invoice"}
+            label={printDisabled ? printDisabledReason : "Print tax invoice"}
           >
             <MdDescription size={14} />
-          </button>
+          </IconButton>
         )}
         {isBillsMode && perms.canPrint && (
-          <button
-            style={{ ...btn.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <IconButton
+            style={{ ...btn.pdf }}
             disabled={printDisabled || !!exportingId}
             onClick={() => onExportBillPdf?.(inv)}
-            title={printDisabled ? printDisabledReason : "Export Bill PDF"}
+            label={printDisabled ? printDisabledReason : "Export Bill PDF"}
           >
             {exportingId === inv.id + "-bill-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && perms.canPrint && (
-          <button
-            style={{ ...btn.pdf, opacity: printDisabled || exportingId ? 0.55 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+          <IconButton
+            style={{ ...btn.pdf }}
             disabled={printDisabled || !!exportingId}
             onClick={() => onExportTaxPdf?.(inv)}
-            title={printDisabled ? printDisabledReason : "Export Tax Invoice PDF"}
+            label={printDisabled ? printDisabledReason : "Export Tax Invoice PDF"}
           >
             {exportingId === inv.id + "-tax-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />}
-          </button>
+          </IconButton>
         )}
         {isBillsMode && perms.canPrint && hasExcelBill && (
-          <button
-            style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
+          <IconButton
+            style={{ ...btn.excel }}
             disabled={!!exportingId}
             onClick={() => onExportBillExcel?.(inv)}
-            title="Export Bill XLS"
+            label="Export Bill XLS"
           >
             {exportingId === inv.id + "-bill-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && perms.canPrint && hasExcelTax && (
-          <button
-            style={{ ...btn.excel, opacity: exportingId ? 0.55 : 1 }}
+          <IconButton
+            style={{ ...btn.excel }}
             disabled={!!exportingId}
             onClick={() => onExportTaxExcel?.(inv)}
-            title="Export Tax Invoice XLS"
+            label="Export Tax Invoice XLS"
           >
             {exportingId === inv.id + "-tax-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />}
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && perms.canFbrPreview && (
-          <button style={btn.view} onClick={() => onFbrPreview?.(inv)} title="Preview FBR payload">
+          <IconButton style={btn.view} onClick={() => onFbrPreview?.(inv)} label="Preview FBR payload">
             <MdVisibility size={14} />
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && canReset && (
-          <button
+          <IconButton
             style={{ ...btn.neutral, backgroundColor: "#fff8e1", color: "#8a6d00", border: "1px solid #ffe082" }}
             onClick={() => onFbrReset?.(inv)}
-            title="Reset this bill's FBR state (it is stuck after a timed-out/uncertain submit). Verify at FBR first."
+            label="Reset this bill's FBR state (it is stuck after a timed-out/uncertain submit). Verify at FBR first."
           >
             <MdRestore size={14} />
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && perms.canFbrAny && selectedCompanyHasFbrToken && !isSubmitted && !isFbrPending && !inv.isCancelled && (
           <>
             {perms.canFbrValidate && (
-              <button
+              <IconButton
                 style={{
                   ...btn.fbrValidate,
-                  opacity: fbrLoading || !inv.fbrReady ? 0.45 : 1,
-                  cursor: !inv.fbrReady ? "not-allowed" : "pointer",
                   ...(fbrValidated.has(inv.id) ? { backgroundColor: "#e8f5e9", color: "#2e7d32" } : {}),
                 }}
                 disabled={!!fbrLoading || !inv.fbrReady}
                 onClick={() => onFbrValidate?.(inv)}
-                title={
+                label={
                   !inv.fbrReady
                     ? `Complete FBR setup first:\n• ${inv.fbrMissing?.join("\n• ") || "Missing FBR fields"}`
                     : "Validate this bill with FBR (dry-run)"
                 }
               >
                 {fbrLoading === inv.id + "-validate" ? <span className="btn-spinner" /> : <MdCheckCircle size={14} />}
-              </button>
+              </IconButton>
             )}
             {perms.canFbrSubmit && (
-              <button
-                style={{
-                  ...btn.fbrSubmit,
-                  opacity: fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady ? 0.4 : 1,
-                  cursor: !fbrValidated.has(inv.id) || !inv.fbrReady ? "not-allowed" : "pointer",
-                }}
+              <IconButton
+                style={btn.fbrSubmit}
                 disabled={!!fbrLoading || !fbrValidated.has(inv.id) || !inv.fbrReady}
                 onClick={() => onFbrSubmit?.(inv)}
-                title={
+                label={
                   !inv.fbrReady ? "Complete FBR setup first."
                     : fbrValidated.has(inv.id) ? "Submit to FBR"
                     : "Validate first before submitting."
                 }
               >
                 {fbrLoading === inv.id + "-submit" ? <span className="btn-spinner" /> : <MdCloudUpload size={14} />}
-              </button>
+              </IconButton>
             )}
           </>
         )}
         {perms.canOpenEdit && !isSubmitted && !inv.isCancelled && (
-          <button
+          <IconButton
             style={btn.edit}
             onClick={() => onEdit?.(inv)}
-            title={isBillsMode ? "Edit bill" : "Classify line items by Item Type"}
+            label={isBillsMode ? "Edit bill" : "Classify line items by Item Type"}
           >
             <MdEdit size={14} />
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && perms.canFbrExclude && !isSubmitted && !inv.isCancelled && (
-          <button
+          <IconButton
             style={{
               ...btn.neutral,
               backgroundColor: inv.isFbrExcluded ? "#e8f5e9" : "#eceff1",
@@ -419,68 +414,68 @@ export default function InvoiceTable({
               border: `1px solid ${inv.isFbrExcluded ? "#a5d6a7" : "#b0bec5"}`,
             }}
             onClick={() => onToggleFbrExcluded?.(inv)}
-            title={inv.isFbrExcluded
+            label={inv.isFbrExcluded
               ? "Re-enable for Validate All / Submit All bulk actions."
               : "Exclude from Validate All / Submit All. Per-bill actions still work."}
           >
             {inv.isFbrExcluded ? <MdRestore size={14} /> : <MdBlock size={14} />}
-          </button>
+          </IconButton>
         )}
         {/* Customer document handover — Mark (Pending rows) / Revert (Delivered
             rows). Invoices + Notes only; each gated by its own permission. */}
         {!isBillsMode && perms.canDocsDeliver && inv.handoverStatus === "Pending" && (
-          <button
+          <IconButton
             style={btn.handoverMark}
             onClick={() => onMarkHandover?.(inv)}
-            title="Mark customer documents delivered"
+            label="Mark customer documents delivered"
           >
             <MdAssignmentTurnedIn size={14} />
-          </button>
+          </IconButton>
         )}
         {!isBillsMode && perms.canDocsRevert && inv.handoverStatus === "Delivered" && (
-          <button
+          <IconButton
             style={btn.handoverRevert}
             onClick={() => onRevertHandover?.(inv)}
-            title={`Delivered${inv.handoverAt ? ` on ${new Date(inv.handoverAt).toLocaleDateString()}` : ""}${inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)"}. Click to revert to Pending.`}
+            label={`Delivered${inv.handoverAt ? ` on ${new Date(inv.handoverAt).toLocaleDateString()}` : ""}${inv.handoverByName ? ` by ${inv.handoverByName}` : " (migrated)"}. Click to revert to Pending.`}
           >
             <MdUndo size={14} />
-          </button>
+          </IconButton>
         )}
         {(isBillsMode || isReturnsMode) && perms.canDelete && !isSubmitted && inv.isLatest && (
-          <button style={btn.delete} onClick={() => onDelete?.(inv)} title={inv.isCancelled
+          <IconButton style={btn.delete} onClick={() => onDelete?.(inv)} label={inv.isCancelled
             ? "Delete this voided document — it is the latest in its sequence, so removing it rolls the number back."
             : "Delete — only the latest document in its sequence, removes the row entirely."}>
             <MdDelete size={14} />
-          </button>
+          </IconButton>
         )}
         {(isBillsMode || isReturnsMode) && perms.canVoid && !isSubmitted && !inv.isCancelled && (
-          <button
+          <IconButton
             style={btn.void}
             onClick={() => onVoid?.(inv)}
-            title="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
+            label="Void bill — keeps the bill number (no gap), marks it cancelled and reverts its delivery challan(s) to Pending so they can be re-billed."
           >
             <MdCancel size={14} />
-          </button>
+          </IconButton>
         )}
         {perms.canReverse && isSubmitted && !inv.isCancelled && !inv.fbrCancelledAt &&
          inv.documentType !== 9 && inv.documentType !== 10 && (
-          <button
+          <IconButton
             style={btn.reverse}
             onClick={() => onReverse?.(inv)}
-            title="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
+            label="Reverse this FBR-submitted bill — opens the Credit Note screen prefilled with its lines (trim for a partial return)."
           >
             <MdUndo size={14} />
-          </button>
+          </IconButton>
         )}
         {perms.canReverse && isSubmitted && !inv.isCancelled &&
          inv.documentType !== 9 && inv.documentType !== 10 && (
-          <button
+          <IconButton
             style={btn.teal}
             onClick={() => onCorrect?.(inv)}
-            title="Bill the balance quantity under-reported on this submitted bill — creates a new unclassified bill (+ same challan/PO) for the tax consultant to classify and submit to FBR."
+            label="Bill the balance quantity under-reported on this submitted bill — creates a new unclassified bill (+ same challan/PO) for the tax consultant to classify and submit to FBR."
           >
             <MdPostAdd size={14} />
-          </button>
+          </IconButton>
         )}
       </>
     );
@@ -499,17 +494,10 @@ export default function InvoiceTable({
   );
 }
 
-const baseBtn = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 30,
-  height: 28,
-  borderRadius: 6,
-  border: "none",
-  cursor: "pointer",
-  padding: 0,
-};
+// Row actions are kit IconButtons (size, radius, focus and disabled dimming come
+// from the theme tokens); each keeps its colour-coded tint so the action family
+// (print / PDF / XLS / FBR / edit / delete …) still reads at a glance.
+const baseBtn = { border: "none" };
 const btn = {
   view:        { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1" },
   teal:        { ...baseBtn, backgroundColor: "#e0f2f1", color: "#00695c" },

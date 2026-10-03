@@ -19,9 +19,9 @@ export default function DocumentNotesEditor({ value = "", onChange, label = "Not
     <label htmlFor="document-notes" style={{ display: "block", fontWeight: 700, marginBottom: 4 }}>{label}</label>
     {!readOnly && <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
       {[["b", "Bold"], ["i", "Italic"], ["u", "Underline"]].map(([tag, title]) =>
-        <button key={tag} type="button" onClick={() => wrap(tag)} aria-label={title} title={title} style={{ width: 34, height: 34, padding: 0, border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", fontSize: 13, fontWeight: tag === "b" ? 700 : 400, fontStyle: tag === "i" ? "italic" : "normal", textDecoration: tag === "u" ? "underline" : "none" }}>{tag.toUpperCase()}</button>)}
+        <button key={tag} type="button" onClick={() => wrap(tag)} aria-label={title} title={title} style={{ width: "var(--ui-control-h, 34px)", height: "var(--ui-control-h, 34px)", padding: 0, boxShadow: "none", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", fontSize: 13, fontWeight: tag === "b" ? 700 : 400, fontStyle: tag === "i" ? "italic" : "normal", textDecoration: tag === "u" ? "underline" : "none" }}>{tag.toUpperCase()}</button>)}
     </div>}
-    {!readOnly && <textarea id="document-notes" ref={input} rows={2} value={value} onChange={(e) => onChange(e.target.value)} placeholder="Add optional notes" style={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: 8, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }} />}
+    {!readOnly && <textarea id="document-notes" ref={input} rows={2} value={value} onChange={(e) => onChange(e.target.value)} placeholder="Add optional notes" style={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: "var(--ui-input-pad, 8px)", border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical" }} />}
     {value && (readOnly ? <RichText text={value} /> : <details style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}><summary style={{ cursor: "pointer" }}>Preview</summary><div style={{ marginTop: 4, padding: 8, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={value} /></div></details>)}
   </div>;
 }

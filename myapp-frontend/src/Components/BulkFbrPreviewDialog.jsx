@@ -8,9 +8,12 @@ import {
   MdCheckCircle,
   MdHourglassEmpty,
   MdContentCopy,
+  MdUnfoldMore,
+  MdUnfoldLess,
 } from "react-icons/md";
 import httpClient from "../api/httpClient";
 import { formStyles, modalSizes } from "../theme";
+import { Alert, Button, EmptyState, Loading, TableWrap } from "../ui/Kit";
 
 /**
  * Bulk FBR submission preview (2026-05-13).
@@ -140,16 +143,15 @@ export default function BulkFbrPreviewDialog({ invoices, onClose }) {
             </div>
             <div style={{ flex: 1 }} />
             <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-              <button type="button" style={s.linkBtn} onClick={expandAll}>Expand all</button>
-              <button type="button" style={s.linkBtn} onClick={collapseAll}>Collapse all</button>
+              <Button variant="secondary" size="sm" icon={MdUnfoldMore} onClick={expandAll}>Expand all</Button>
+              <Button variant="secondary" size="sm" icon={MdUnfoldLess} onClick={collapseAll}>Collapse all</Button>
             </div>
           </div>
 
           {invoices.length === 0 ? (
-            <div style={s.emptyState}>
-              <MdInfo size={20} color="#5f6d7e" />
-              <span>No bills ready to validate. Set the FBR fields (HS Code, Sale Type, UOM, Unit Price) on each bill first.</span>
-            </div>
+            <EmptyState icon={MdInfo}>
+              No bills ready to validate. Set the FBR fields (HS Code, Sale Type, UOM, Unit Price) on each bill first.
+            </EmptyState>
           ) : (
             <div style={s.rowsList}>
               {invoices.map((inv) => (
@@ -221,15 +223,12 @@ function BillRow({ invoice, expanded, payload, onToggle, fmtMoney, fmtNum, fmtQt
       {expanded && (
         <div style={s.rowBody}>
           {!payload || payload.loading ? (
-            <div style={s.notice}>Loading FBR preview…</div>
+            <Loading>Loading FBR preview…</Loading>
           ) : payload.error ? (
-            <div style={s.errorBox}>
-              <MdWarning size={16} color="#dc3545" style={{ flexShrink: 0, marginTop: 2 }} />
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>Could not build preview</div>
-                <div style={{ fontSize: "0.84rem", whiteSpace: "pre-wrap" }}>{payload.error}</div>
-              </div>
-            </div>
+            <Alert tone="error" icon={MdWarning}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Could not build preview</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{payload.error}</div>
+            </Alert>
           ) : (
             <PayloadPanel
               payload={payload.data}
@@ -308,18 +307,18 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
           </span>
         )}
       </div>
-      <div className="responsive-table-wrap" style={s.tableWrap}>
-        <table style={s.table}>
+      <TableWrap>
+        <table className="k-table k-table--compact" style={s.table}>
           <thead>
             <tr>
-              <th style={s.thIdx}>#</th>
-              <th style={s.th}>Item / Description</th>
-              <th style={s.th}>HS Code</th>
-              <th style={s.th}>UOM</th>
-              <th style={{ ...s.th, textAlign: "right" }}>Qty</th>
-              <th style={{ ...s.th, textAlign: "right" }}>Value (excl. tax)</th>
-              <th style={{ ...s.th, textAlign: "right" }}>Sales Tax</th>
-              <th style={{ ...s.th, textAlign: "right" }}>Line Total</th>
+              <th className="is-center" style={s.idxCol}>#</th>
+              <th>Item / Description</th>
+              <th>HS Code</th>
+              <th>UOM</th>
+              <th className="k-num">Qty</th>
+              <th className="k-num">Value (excl. tax)</th>
+              <th className="k-num">Sales Tax</th>
+              <th className="k-num">Line Total</th>
             </tr>
           </thead>
           <tbody>
@@ -331,48 +330,48 @@ function PayloadPanel({ payload, itemCount, originalLineCount, fmtNum, fmtQty })
               const lineTotal = value + tax + further + extra;
               return (
                 <tr key={idx}>
-                  <td style={s.tdIdx}>{idx + 1}</td>
-                  <td style={s.td}>
+                  <td className="is-center k-muted">{idx + 1}</td>
+                  <td>
                     <div style={{ fontWeight: 600 }}>{it.productDescription}</div>
                     <div style={s.metaSub}>
                       {it.saleType}
                       {it.rate && ` · ${it.rate}`}
                     </div>
                   </td>
-                  <td style={s.td}>{it.hsCode || <span style={s.muted}>—</span>}</td>
-                  <td style={s.td}>{it.uoM || <span style={s.muted}>—</span>}</td>
-                  <td style={{ ...s.td, textAlign: "right" }}>{fmtQty(it.quantity)}</td>
-                  <td style={{ ...s.td, textAlign: "right" }}>{fmtNum(value)}</td>
-                  <td style={{ ...s.td, textAlign: "right" }}>{fmtNum(tax)}</td>
-                  <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{fmtNum(lineTotal)}</td>
+                  <td>{it.hsCode || <span style={s.muted}>—</span>}</td>
+                  <td>{it.uoM || <span style={s.muted}>—</span>}</td>
+                  <td className="k-num">{fmtQty(it.quantity)}</td>
+                  <td className="k-num">{fmtNum(value)}</td>
+                  <td className="k-num">{fmtNum(tax)}</td>
+                  <td className="k-num" style={{ fontWeight: 700 }}>{fmtNum(lineTotal)}</td>
                 </tr>
               );
             })}
           </tbody>
           <tfoot>
-            <tr style={s.totalsRow}>
-              <td colSpan={4} style={{ ...s.tdTotals, textAlign: "right" }}>
+            <tr>
+              <td colSpan={4} className="k-num">
                 Total
               </td>
-              <td style={{ ...s.tdTotals, textAlign: "right" }}>{fmtQty(totals.qty)}</td>
-              <td style={{ ...s.tdTotals, textAlign: "right" }}>{fmtNum(totals.value)}</td>
-              <td style={{ ...s.tdTotals, textAlign: "right" }}>{fmtNum(totals.tax)}</td>
-              <td style={{ ...s.tdTotals, textAlign: "right", color: "#0d47a1" }}>
+              <td className="k-num">{fmtQty(totals.qty)}</td>
+              <td className="k-num">{fmtNum(totals.value)}</td>
+              <td className="k-num">{fmtNum(totals.tax)}</td>
+              <td className="k-num" style={{ color: "var(--k-blue)" }}>
                 {fmtNum(totals.total)}
               </td>
             </tr>
           </tfoot>
         </table>
-      </div>
+      </TableWrap>
 
       <div style={{ marginTop: "0.6rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button type="button" style={s.linkBtn} onClick={() => setShowRaw((v) => !v)}>
+        <Button variant="secondary" size="sm" onClick={() => setShowRaw((v) => !v)}>
           {showRaw ? "Hide" : "Show"} raw JSON
-        </button>
+        </Button>
         {showRaw && (
-          <button type="button" style={s.linkBtn} onClick={copyJson}>
-            {copied ? <><MdCheckCircle size={14} /> Copied</> : <><MdContentCopy size={14} /> Copy</>}
-          </button>
+          <Button variant="secondary" size="sm" icon={copied ? MdCheckCircle : MdContentCopy} onClick={copyJson}>
+            {copied ? "Copied" : "Copy"}
+          </Button>
         )}
       </div>
       {showRaw && <pre style={s.rawJson}>{JSON.stringify(payload, null, 2)}</pre>}
@@ -386,36 +385,25 @@ const s = {
     alignItems: "center",
     gap: "0.85rem",
     flexWrap: "wrap",
-    padding: "0.65rem 0.85rem",
-    background: "#eef4fb",
-    border: "1px solid #b7d4f0",
-    borderRadius: 8,
+    padding: "0.5rem 0.85rem",
+    background: "#e8f0fb",
+    border: "1px solid #c9daf3",
+    borderRadius: "var(--k-radius)",
     marginBottom: "0.85rem",
-    fontSize: "0.85rem",
-    color: "#0d47a1",
+    fontSize: "var(--k-font)",
+    color: "var(--k-blue)",
   },
   summaryItem: {
     display: "inline-flex",
     alignItems: "center",
     gap: "0.35rem",
   },
-  summaryMeta: { color: "#5f6d7e", fontWeight: 500, fontSize: "0.78rem" },
-  emptyState: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    padding: "1.2rem",
-    color: "#5f6d7e",
-    background: "#f8fafc",
-    border: "1px dashed #d0d7e2",
-    borderRadius: 8,
-    fontSize: "0.85rem",
-  },
+  summaryMeta: { color: "var(--k-muted)", fontWeight: 500, fontSize: "var(--k-font-sm)" },
   rowsList: { display: "flex", flexDirection: "column", gap: "0.45rem" },
   row: {
-    border: "1px solid #e8edf3",
-    borderRadius: 8,
-    background: "#fff",
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
+    background: "var(--k-surface)",
     overflow: "hidden",
   },
   rowHeader: {
@@ -424,9 +412,15 @@ const s = {
     justifyContent: "space-between",
     gap: "0.65rem",
     width: "100%",
-    padding: "0.6rem 0.85rem",
+    minHeight: "var(--k-h)",
+    padding: "0.5rem 0.85rem",
+    margin: 0,
     background: "transparent",
     border: "none",
+    borderRadius: 0,
+    boxShadow: "none",       // override the global `button` shadow (index.css)
+    fontFamily: "inherit",
+    fontWeight: 400,
     cursor: "pointer",
     textAlign: "left",
     flexWrap: "wrap",  // mobile fallback — chip/totals drop below the title
@@ -446,15 +440,14 @@ const s = {
   },
   rowTitle: {
     fontWeight: 700,
-    fontSize: "0.92rem",
-    color: "#1a2332",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
+    overflowWrap: "anywhere",
   },
-  rowSubtitle: { color: "#5f6d7e", fontWeight: 500, fontSize: "0.82rem" },
-  rowMeta: { fontSize: "0.78rem", color: "#5f6d7e", marginTop: 2 },
-  rowGrandTotal: { fontWeight: 700, color: "#0d47a1", fontSize: "0.92rem" },
+  rowSubtitle: { color: "var(--k-muted)", fontWeight: 500, fontSize: "var(--k-font-sm)" },
+  // Client name: 2-line clamp, never a single-line ellipsis (similar-prefix names).
+  rowMeta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  rowGrandTotal: { fontWeight: 700, color: "var(--k-blue)", fontSize: "var(--k-font)", fontVariantNumeric: "tabular-nums" },
   badge: {
     display: "inline-flex",
     alignItems: "center",
@@ -471,66 +464,24 @@ const s = {
   badgeFailed:    { background: "#ffebee", color: "#b71c1c", border: "1px solid #ef9a9a" },
   rowBody: {
     padding: "0.65rem 0.85rem 0.85rem",
-    borderTop: "1px solid #e8edf3",
-    background: "#fafbfd",
-  },
-  notice: { padding: "0.75rem", textAlign: "center", color: "#5f6d7e", fontSize: "0.85rem" },
-  errorBox: {
-    display: "flex", gap: "0.5rem",
-    background: "#fff0f1", border: "1px solid #f5c6cb",
-    color: "#842029", padding: "0.65rem 0.85rem", borderRadius: 6,
+    borderTop: "1px solid var(--k-line)",
+    background: "var(--k-surface-2)",
   },
   partyLabel: {
     fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.04em",
-    color: "#5f6d7e", fontWeight: 700, marginBottom: 3,
+    color: "var(--k-muted)", fontWeight: 700, marginBottom: 3,
   },
-  partyName: { fontSize: "0.88rem", fontWeight: 700, color: "#1a2332" },
-  partyMeta: { fontSize: "0.78rem", color: "#5f6d7e", marginTop: 2 },
+  partyName: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)", overflowWrap: "anywhere" },
+  partyMeta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 },
   itemsHeader: {
     marginTop: "0.7rem", marginBottom: "0.35rem",
-    fontSize: "0.82rem", fontWeight: 700, color: "#1a2332",
+    fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)",
   },
-  tableWrap: {},
-  table: { width: "100%", minWidth: "680px", borderCollapse: "collapse", fontSize: "0.82rem" },
-  th: {
-    padding: "0.45rem 0.55rem", background: "#f8fafc", borderBottom: "1px solid #e8edf3",
-    fontSize: "0.72rem", fontWeight: 700, color: "#5f6d7e",
-    textTransform: "uppercase", letterSpacing: "0.03em", textAlign: "left",
-  },
-  thIdx: {
-    padding: "0.45rem 0.4rem", background: "#f8fafc", borderBottom: "1px solid #e8edf3",
-    fontSize: "0.72rem", fontWeight: 700, color: "#5f6d7e",
-    textAlign: "center", width: 34,
-  },
-  td: { padding: "0.5rem 0.55rem", borderBottom: "1px solid #f0f3f7", color: "#1a2332" },
-  tdIdx: {
-    padding: "0.5rem 0.4rem", borderBottom: "1px solid #f0f3f7",
-    color: "#5f6d7e", fontSize: "0.76rem", textAlign: "center",
-  },
-  metaSub: { fontSize: "0.72rem", color: "#5f6d7e", marginTop: 2 },
-  muted: { color: "#aab3bf" },
-  totalsRow: { background: "#f5f7fa" },
-  tdTotals: {
-    padding: "0.55rem 0.55rem", fontSize: "0.85rem", fontWeight: 700,
-    color: "#1a2332", borderTop: "2px solid #d0d7e2",
-  },
-  linkBtn: {
-    background: "transparent",
-    border: "none",
-    color: "#0d47a1",
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    padding: "0.25rem 0.5rem",
-    margin: 0,
-    cursor: "pointer",
-    boxShadow: "none",
-    textDecoration: "underline",
-    textUnderlineOffset: 2,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    borderRadius: 4,
-  },
+  // minWidth keeps the 8 columns legible; TableWrap scrolls on phones.
+  table: { minWidth: "680px" },
+  idxCol: { width: 34 },
+  metaSub: { fontSize: "0.72rem", color: "var(--k-muted)", marginTop: 2 },
+  muted: { color: "var(--k-faint)" },
   rawJson: {
     margin: "0.5rem 0 0", padding: "0.7rem 0.9rem",
     background: "#0a1628", color: "#e8f5e9", border: "1px solid #1a2332",

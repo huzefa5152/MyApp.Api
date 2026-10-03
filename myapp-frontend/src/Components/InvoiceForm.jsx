@@ -4,6 +4,7 @@ import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, Md
 import { getPendingChallansByCompany } from "../api/challanApi";
 import { getSalesOrdersForPicker, getSalesOrderChallans, getSalesOrderById } from "../api/salesOrderApi";
 import SearchableSelect from "./SearchableSelect";
+import SearchableClientSelect from "./SearchableClientSelect";
 import { createInvoice, getLastRatesForChallan } from "../api/invoiceApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { getItemTypes } from "../api/itemTypeApi";
@@ -837,7 +838,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                   <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", marginBottom: "1rem", padding: "0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 10, background: "#f8fafc" }}>
                     {canUseOrders && (
                       <div style={{ flex: 2, minWidth: 240 }}>
-                        <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>
+                        <label style={styles.label}>
                           Bill from Sales Order <span style={{ fontWeight: 400 }}>(optional — pre-ticks its billable challans)</span>
                         </label>
                         <SearchableSelect
@@ -850,12 +851,12 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 160 }}>
-                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Number <span style={{ fontWeight: 400 }}>(optional)</span></label>
-                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Blank = from challan(s)" style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                      <label style={styles.label}>PO Number <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                      <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Blank = from challan(s)" style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 140 }}>
-                      <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary }}>PO Date</label>
-                      <input type="date" value={commonPoDate} onChange={(e) => setCommonPoDate(e.target.value)} style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: "1px solid #d0d7e2", fontSize: "0.9rem", backgroundColor: "#fff", color: colors.textPrimary, outline: "none", boxSizing: "border-box" }} />
+                      <label style={styles.label}>PO Date</label>
+                      <input type="date" value={commonPoDate} onChange={(e) => setCommonPoDate(e.target.value)} style={{ ...styles.input, backgroundColor: "var(--ui-input-bg, #fff)" }} />
                     </div>
                   </div>
                 )}
@@ -995,21 +996,19 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                                 {canCreateClient ? " Add a buyer below." : " Switch scenarios or ask an admin to add one."}
                               </div>
                             ) : (
-                              <select
-                                style={{ ...styles.select, flex: 1 }}
-                                value={selectedClientId}
-                                onChange={handleClientChange}
-                              >
-                                <option value="">— Choose a buyer —</option>
-                                {clientsForScenario.map((cl) => {
-                                  const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
-                                  return (
-                                    <option key={cl.id} value={cl.id}>
-                                      {cl.name} ({count} pending DC{count !== 1 ? "s" : ""})
-                                    </option>
-                                  );
-                                })}
-                              </select>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                {/* The pending-DC count stays part of each buyer's name, as it was in the old <select>. */}
+                                <SearchableClientSelect
+                                  clients={clientsForScenario.map((cl) => {
+                                    const count = allChallans.filter((ch) => ch.clientId === cl.id).length;
+                                    return { ...cl, name: `${cl.name} (${count} pending DC${count !== 1 ? "s" : ""})` };
+                                  })}
+                                  value={selectedClientId}
+                                  onChange={(id) => handleClientChange({ target: { value: String(id) } })}
+                                  placeholder="— Choose a buyer —"
+                                  ariaLabel="Buyer"
+                                />
+                              </div>
                             )}
                             {canCreateClient ? (
                               <button
@@ -1284,7 +1283,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                             backgroundColor: "#fff8e1", border: "1px solid #ffcc80",
                             borderRadius: 8, fontSize: "0.82rem", color: "#bf360c"
                           }}>
-                            <span style={{ fontSize: "1rem", lineHeight: 1 }}>âš </span>
+                            <span style={{ fontSize: "1rem", lineHeight: 1 }} aria-hidden="true">⚠</span>
                             <div>
                               <b>Rates pre-filled from last bill.</b>
                               {" "}Verify each unit price below — material prices may have changed since the previous order. Override any row that needs a new rate.
@@ -1807,9 +1806,9 @@ const styles = {
   mkv: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" },
   mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
   row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
+  label: { display: "block", marginBottom: "var(--ui-label-gap, 0.35rem)", fontWeight: 600, fontSize: "var(--ui-label-size, 0.85rem)", color: colors.textSecondary },
+  input: { width: "100%", padding: "var(--ui-input-pad, 0.55rem 0.75rem)", minHeight: "var(--ui-control-h, 0px)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--ui-input-size, 0.9rem)", backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
+  select: { width: "100%", padding: "var(--ui-select-pad, 0.6rem 0.75rem)", minHeight: "var(--ui-control-h, 0px)", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "var(--ui-input-size, 0.9rem)", backgroundColor: `var(--ui-input-bg, ${colors.inputBg})`, color: colors.textPrimary, outline: "none", cursor: "pointer" },
   errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
   challanGrid: { display: "flex", flexDirection: "column", gap: "0.4rem", maxHeight: 200, overflowY: "auto" },
   challanCard: { display: "flex", alignItems: "center", padding: "0.5rem 0.75rem", borderRadius: 8, border: "2px solid", cursor: "pointer", transition: "all 0.2s", fontSize: "0.88rem" },
@@ -1850,7 +1849,8 @@ const styles = {
     alignItems: "center",
     gap: "0.6rem",
     width: "100%",
-    padding: "0.6rem 0.85rem",
+    minHeight: "var(--ui-btn-h, 0px)",
+    padding: "var(--ui-input-pad, 0.6rem 0.85rem)",
     borderRadius: 10,
     border: `1px solid ${colors.cardBorder}`,
     backgroundColor: "#f8faff",
@@ -1926,7 +1926,7 @@ const styles = {
 
   // ── Inline create buttons (next to Buyer dropdown + per-row Item Type) ──
   inlineRow: { display: "flex", gap: "0.5rem", alignItems: "stretch", flexWrap: "wrap" },
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+  inlineAddBtn: { minHeight: "var(--ui-btn-h, 44px)", display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
   tinyAddBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.25rem", borderRadius: 6, border: `1px solid ${colors.blue}`, backgroundColor: "#fff", color: colors.blue, cursor: "pointer", flexShrink: 0 },
-  bulkClearBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
+  bulkClearBtn: { minHeight: "var(--ui-btn-h, 44px)", display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
 };
