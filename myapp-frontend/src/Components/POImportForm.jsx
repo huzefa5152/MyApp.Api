@@ -18,21 +18,13 @@ import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts"
 import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
+import SearchableSelect from "./SearchableSelect";
+import SearchableClientSelect from "./SearchableClientSelect";
+import { Alert, Button, EmptyState, Field, IconButton, Tabs } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
+  textSecondary: "var(--k-muted)",
   success: "#28a745",
-  successLight: "#e8f5e9",
-  warning: "#f57c00",
-  warningLight: "#fff3e0",
 };
 
 // Per-target wiring — one PO-import wizard drives three destinations.
@@ -473,27 +465,21 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
         </div>
 
         <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
-          {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+          {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
           {step === 1 && (
             <>
               {/* Mode Tabs */}
-              <div style={styles.modeTabs}>
-                <button
-                  type="button"
-                  style={{ ...styles.modeTab, ...(importMode === "pdf" ? styles.modeTabActive : {}) }}
-                  onClick={() => setImportMode("pdf")}
-                >
-                  <MdUploadFile size={18} /> Upload PDF or image
-                </button>
-                <button
-                  type="button"
-                  style={{ ...styles.modeTab, ...(importMode === "text" ? styles.modeTabActive : {}) }}
-                  onClick={() => setImportMode("text")}
-                >
-                  <MdTextSnippet size={18} /> Paste Text
-                </button>
-              </div>
+              <Tabs
+                label="Import source"
+                idPrefix="po-import-mode"
+                tabs={[
+                  { key: "pdf", label: "Upload PDF or image", icon: MdUploadFile },
+                  { key: "text", label: "Paste Text", icon: MdTextSnippet },
+                ]}
+                value={importMode}
+                onChange={setImportMode}
+              />
 
               {importMode === "pdf" ? (
                 <div style={styles.uploadArea}>
@@ -509,23 +495,24 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <MdUploadFile size={48} color={colors.textSecondary} />
-                    <p style={{ margin: "0.5rem 0 0", color: colors.textSecondary, fontSize: "0.9rem" }}>
+                    <p style={{ margin: "0.5rem 0 0", color: colors.textSecondary, fontSize: "var(--k-font)", overflowWrap: "anywhere" }}>
                       {selectedFile ? selectedFile.name : "Click to choose the PO: a PDF, or a photo / screenshot"}
                     </p>
                     <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>PDF, PNG, JPG or WEBP · max 10 MB</span>
                   </div>
                 </div>
               ) : (
-                <div>
-                  <label style={styles.label}>Paste PO content below</label>
+                <Field label="Paste PO content below" htmlFor="po-import-paste">
                   <textarea
+                    id="po-import-paste"
+                    className="k-textarea"
                     style={styles.textarea}
                     rows={12}
                     value={pastedText}
                     onChange={(e) => setPastedText(e.target.value)}
                     placeholder={"Paste your Purchase Order text here...\n\nExample:\nPO No: PO-2026-001\nDate: 13/04/2026\n\n1. Pneumatic Fitting 1/4\"  -  10 Pcs\n2. Air Cylinder 50mm      -   5 Nos\n3. FRL Unit 1/4\"           -   2 Set"}
                   />
-                </div>
+                </Field>
               )}
             </>
           )}
@@ -534,74 +521,64 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
             <>
               {/* Read from a picture: every line deserves a second look. */}
               {ocrInfo && (
-                <div style={styles.ocrBanner} role="status">
-                  <MdErrorOutline size={18} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-                  <span style={{ fontSize: "0.85rem" }}>
-                    Read from an image by text recognition ({ocrInfo.confidence}% average confidence).
-                    Check every description and quantity against the original before you save.
-                  </span>
-                </div>
+                <Alert tone="warn" icon={MdErrorOutline}>
+                  Read from an image by text recognition ({ocrInfo.confidence}% average confidence).
+                  Check every description and quantity against the original before you save.
+                </Alert>
               )}
 
               {/* When a saved POFormat handled the PDF — quiet confirmation */}
               {matchedFormatId && (
-                <div style={styles.matchedBanner}>
-                  <MdVerified size={18} color={colors.success} />
-                  <span style={{ fontSize: "0.85rem" }}>
-                    Parsed using saved format <strong>{matchedFormatName}</strong>
-                    {matchedFormatVersion ? ` (v${matchedFormatVersion})` : ""}. Review and edit below if needed.
-                  </span>
-                </div>
+                <Alert tone="success" icon={MdVerified}>
+                  Parsed using saved format <strong>{matchedFormatName}</strong>
+                  {matchedFormatVersion ? ` (v${matchedFormatVersion})` : ""}. Review and edit below if needed.
+                </Alert>
               )}
 
               {/* No format saved for this client's layout — explicit error */}
               {noFormatMessage && (
-                <div style={styles.noFormatAlert}>
-                  <MdErrorOutline size={20} style={{ flexShrink: 0, marginTop: 2 }} />
-                  <div>
-                    <div style={{ fontWeight: 600, marginBottom: "0.15rem" }}>
-                      No PO format saved for this client's layout
-                    </div>
-                    <div style={{ fontSize: "0.82rem", opacity: 0.9 }}>
-                      {noFormatMessage}
-                    </div>
+                <Alert tone="error" icon={MdErrorOutline}>
+                  <div style={{ fontWeight: 600, marginBottom: "0.15rem" }}>
+                    No PO format saved for this client's layout
                   </div>
-                </div>
+                  <div style={{ fontSize: "var(--k-font-sm)", opacity: 0.9, fontWeight: 400 }}>
+                    {noFormatMessage}
+                  </div>
+                </Alert>
               )}
 
               {/* Quote link is asked FIRST — picking one auto-fills the client
                   below. Order-only; optional; narrows once a client is set. */}
               {cfg.showQuoteLink && (
-                <div style={styles.row}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <label style={styles.label}>Sales Quote (optional)</label>
-                    <select style={styles.select} value={salesQuoteId} onChange={(e) => handleQuotePick(e.target.value)}>
-                      <option value="">— not linked —</option>
-                      {linkableQuotes.map((q) => (
-                        <option key={q.id} value={q.id}>
-                          Quote #{q.quoteNumber} · {q.clientName}{q.status ? ` · ${q.status}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div style={{ marginBottom: "1rem" }}>
+                  <Field label="Sales Quote (optional)">
+                    <SearchableSelect
+                      items={linkableQuotes.map((q) => ({
+                        id: q.id,
+                        label: `Quote #${q.quoteNumber} · ${q.clientName}${q.status ? ` · ${q.status}` : ""}`,
+                      }))}
+                      value={salesQuoteId}
+                      onChange={(id) => handleQuotePick(id ? String(id) : "")}
+                      labelKey="label"
+                      placeholder="— not linked —"
+                    />
+                  </Field>
                 </div>
               )}
 
               {/* Header row: Client / Site / Date */}
-              <div style={styles.row}>
-                <div style={{ flex: 2, minWidth: 220 }}>
-                  <label style={styles.label}>Client *</label>
-                  <select style={styles.select} value={selectedClientId} onChange={(e) => { setSelectedClientId(e.target.value); setSite(""); setSalesQuoteId(""); }}>
-                    <option value="">— Select Client —</option>
-                    {clients.map((cl) => (
-                      <option key={cl.id} value={cl.id}>{cl.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ flex: 1.5, minWidth: 180 }}>
-                  <label style={styles.label}>Site / Department</label>
+              <div className="k-form-grid" style={styles.grid}>
+                <Field label="Client *">
+                  <SearchableClientSelect
+                    clients={clients}
+                    value={selectedClientId}
+                    onChange={(id) => { setSelectedClientId(String(id)); setSite(""); setSalesQuoteId(""); }}
+                    placeholder="— Select Client —"
+                  />
+                </Field>
+                <Field label="Site / Department">
                   {clientSites.length > 0 ? (
-                    <select style={styles.select} value={site} onChange={(e) => setSite(e.target.value)}>
+                    <select className="k-select" value={site} onChange={(e) => setSite(e.target.value)}>
                       <option value="">— Select Site —</option>
                       {clientSites.map((s) => (
                         <option key={s} value={s}>{s}</option>
@@ -610,56 +587,50 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                   ) : (
                     <input
                       type="text"
-                      style={styles.input}
+                      className="k-input"
                       placeholder={selectedClientId ? "Optional" : "Pick a client first"}
                       value={site}
                       onChange={(e) => setSite(e.target.value)}
                       disabled={!selectedClientId}
                     />
                   )}
-                </div>
-                <div style={{ flex: 1, minWidth: 150 }}>
-                  <label style={styles.label}>{cfg.dateLabel}</label>
-                  <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-                </div>
+                </Field>
+                <Field label={cfg.dateLabel}>
+                  <input type="date" className="k-input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                </Field>
               </div>
 
               {/* PO row: Number + Date (+ Indent No for challan target) */}
-              <div style={styles.row}>
-                <div style={{ flex: 1, minWidth: 180 }}>
-                  <label style={styles.label}>PO Number</label>
-                  <input style={styles.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
-                </div>
-                <div style={{ flex: 1, minWidth: 140 }}>
-                  <label style={styles.label}>PO Date</label>
-                  <input type="date" style={styles.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-                </div>
+              <div className="k-form-grid" style={styles.grid}>
+                <Field label="PO Number">
+                  <input className="k-input" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-2026-001" />
+                </Field>
+                <Field label="PO Date">
+                  <input type="date" className="k-input" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+                </Field>
                 {cfg.showIndent && (
-                  <div style={{ flex: 1, minWidth: 140 }}>
-                    <label style={styles.label}>Indent No</label>
-                    <input style={styles.input} value={indentNo} onChange={(e) => setIndentNo(e.target.value)} placeholder="Leave blank if not used" />
-                  </div>
+                  <Field label="Indent No">
+                    <input className="k-input" value={indentNo} onChange={(e) => setIndentNo(e.target.value)} placeholder="Leave blank if not used" />
+                  </Field>
                 )}
               </div>
 
               {/* Items Table */}
               <div style={{ marginTop: "0.5rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                  <label style={{ ...styles.label, marginBottom: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                  <span style={styles.label}>
                     Items ({items.length})
                     {items.length > 0 && items.every((i) => i.description.trim() && i.quantity > 0) && (
                       <MdCheckCircle size={14} color={colors.success} style={{ marginLeft: 6, verticalAlign: "middle" }} />
                     )}
-                  </label>
-                  <button type="button" style={styles.addItemBtn} onClick={addItem}>
-                    <MdAdd size={16} /> Add Item
-                  </button>
+                  </span>
+                  <Button variant="secondary" size="sm" icon={MdAdd} style={styles.addItemBtn} onClick={addItem}>
+                    Add Item
+                  </Button>
                 </div>
 
                 {items.length === 0 ? (
-                  <div style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary, fontSize: "0.85rem", border: `2px dashed ${colors.cardBorder}`, borderRadius: 8 }}>
-                    No items detected. Click "Add Item" to add manually.
-                  </div>
+                  <EmptyState>No items detected. Click "Add Item" to add manually.</EmptyState>
                 ) : (
                   isNarrow ? (
                     <div style={styles.mCards}>
@@ -668,7 +639,7 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                           <div style={styles.mHead}>
                             <span style={styles.mNum}>{idx + 1}</span>
                             <span style={{ flex: 1 }} />
-                            <button type="button" style={styles.deleteItemBtn} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={18} /></button>
+                            <IconButton danger label="Remove item" icon={MdDelete} style={styles.deleteItemBtn} onClick={() => removeItem(idx)} />
                           </div>
                           <div style={{ marginBottom: "0.4rem" }}>
                             <label style={styles.mLabel}>Description *</label>
@@ -749,14 +720,14 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
                           </div>
                         )}
                         <div style={{ flex: 0.3, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <button
-                            type="button"
+                          <IconButton
+                            danger
+                            label="Remove item"
+                            icon={MdDelete}
+                            size={16}
                             style={styles.deleteItemBtn}
                             onClick={() => removeItem(idx)}
-                            title="Remove item"
-                          >
-                            <MdDelete size={16} />
-                          </button>
+                          />
                         </div>
                       </div>
                     ))}
@@ -770,10 +741,10 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
               {/* Raw text toggle */}
               {rawText && (
                 <details style={{ marginTop: "1rem" }}>
-                  <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: colors.textSecondary }}>
+                  <summary style={{ cursor: "pointer", fontSize: "var(--k-font-sm)", color: colors.textSecondary }}>
                     View extracted raw text
                   </summary>
-                  <pre style={{ marginTop: "0.5rem", padding: "0.75rem", backgroundColor: "#f5f5f5", borderRadius: 6, fontSize: "0.75rem", maxHeight: 200, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  <pre style={{ marginTop: "0.5rem", padding: "0.75rem", backgroundColor: "var(--k-surface-3)", borderRadius: 6, fontSize: "0.75rem", maxHeight: 200, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                     {rawText}
                   </pre>
                 </details>
@@ -839,49 +810,20 @@ export default function POImportForm({ companyId, target = "challan", onClose, o
 const styles = {
   // Mobile stacked-card line items (rendered below 760px instead of flex rows).
   mCards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mCard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  mCard: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" },
   mHead: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" },
-  mNum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
+  mNum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "var(--k-surface-3)", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
   mLabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  select: { width: "100%", padding: "0.6rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", cursor: "pointer" },
-  textarea: { width: "100%", padding: "0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.85rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box", fontFamily: "monospace", resize: "vertical" },
-  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  modeTabs: { display: "flex", gap: "0.5rem", marginBottom: "1.25rem" },
-  modeTab: { display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1.25rem", borderRadius: 8, border: `2px solid ${colors.cardBorder}`, backgroundColor: "#fff", fontSize: "0.88rem", fontWeight: 600, color: colors.textSecondary, cursor: "pointer", transition: "all 0.2s" },
-  modeTabActive: { borderColor: colors.blue, color: colors.blue, backgroundColor: "#e3f2fd" },
+  grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
+  label: { display: "inline-block", fontWeight: 600, fontSize: "var(--k-font)", color: colors.textSecondary },
+  // Inline style for the line-item inputs rendered by LookupAutocomplete /
+  // QuantityInput (they take a style object, not a class) — reads the kit tokens.
+  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line-strong)", fontSize: "var(--k-font)", backgroundColor: "var(--k-input-bg)", color: "var(--k-ink)", outline: "none", boxSizing: "border-box" },
+  textarea: { padding: "0.75rem", fontSize: "var(--k-font)", fontFamily: "monospace" },
   uploadArea: { marginBottom: "1rem" },
-  dropZone: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2.5rem 1rem", border: `2px dashed ${colors.inputBorder}`, borderRadius: 12, cursor: "pointer", backgroundColor: colors.inputBg, transition: "border-color 0.2s" },
-  itemsHeader: { display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.4rem 0.5rem", backgroundColor: "#f0f4f8", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase" },
-  itemRow: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 6, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc" },
-  addItemBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.35rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
-  deleteItemBtn: { border: "none", background: "none", color: colors.danger, cursor: "pointer", padding: "0.25rem", borderRadius: 4 },
-  ocrBanner: {
-    display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.6rem 0.8rem", marginBottom: "0.75rem",
-    borderRadius: 8, background: "#fff4e0", border: "1px solid #ffcc80", color: "#8a4b00",
-  },
-  matchedBanner: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    backgroundColor: colors.successLight,
-    border: `1px solid ${colors.success}40`,
-    borderRadius: 8,
-    padding: "0.55rem 0.85rem",
-    marginBottom: "1rem",
-    color: "#1b5e20",
-  },
-  noFormatAlert: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "0.6rem",
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
-    border: `1px solid ${colors.danger}40`,
-    borderRadius: 8,
-    padding: "0.75rem 1rem",
-    marginBottom: "1rem",
-  },
+  dropZone: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2.5rem 1rem", border: "2px dashed var(--k-line-strong)", borderRadius: "var(--k-card-radius)", cursor: "pointer", backgroundColor: "var(--k-surface-2)", transition: "border-color 0.2s", textAlign: "center" },
+  itemsHeader: { display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.4rem 0.5rem", backgroundColor: "var(--k-th-bg)", border: "1px solid var(--k-line)", borderRadius: 6, fontSize: "var(--k-th-font)", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.05em" },
+  itemRow: { display: "flex", gap: "0.5rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 6, border: "1px solid var(--k-line)", backgroundColor: "var(--k-surface-2)" },
+  addItemBtn: { color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  deleteItemBtn: { color: "var(--k-danger)" },
 };

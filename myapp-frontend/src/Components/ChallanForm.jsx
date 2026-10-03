@@ -18,20 +18,8 @@ import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import ChallanPrivateCosts, { useChallanSuppliers } from "./ChallanPrivateCosts";
 import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
 import { useConfirm } from "./ConfirmDialog";
-
-const colors = {
-  blue: "#0d47a1",
-  blueLight: "#1565c0",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
-  success: "#28a745",
-};
+import SearchableClientSelect from "./SearchableClientSelect";
+import { Button, Field } from "../ui/Kit";
 
 export default function ChallanForm({ onClose, onSaved, companyId }) {
   const { has } = usePermissions();
@@ -236,18 +224,15 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
 
             {/* Optional: fulfil a Sales Order. Picking one autofills the client,
                 PO, site and the order's undelivered lines below, and links the
                 challan to the order (fulfilment tracking + auto-close). */}
             {canUseOrders && (
-              <div style={styles.row}>
-                <div style={{ flex: 1, minWidth: 260 }}>
-                  <label style={styles.label}>
-                    From Sales Order <span style={{ color: colors.textSecondary, fontWeight: 400 }}>(optional — autofills the challan)</span>
-                  </label>
+              <div style={{ marginBottom: "1rem" }}>
+                <Field label={<>From Sales Order <span style={styles.opt}>(optional — autofills the challan)</span></>}>
                   <SearchableSelect
                     items={openOrders.map((o) => ({ id: o.id, label: `SO #${o.salesOrderNumber} — ${o.clientName}${o.customerPoNumber ? ` · PO ${o.customerPoNumber}` : ""}` }))}
                     value={salesOrderId}
@@ -255,7 +240,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     labelKey="label"
                     placeholder={openOrders.length ? "— not from an order —" : "No open sales orders for this company"}
                   />
-                </div>
+                </Field>
               </div>
             )}
 
@@ -263,37 +248,36 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 Edit Challan so operators see identical shape on both flows.
                 Site is dropdown when the picked client has presets, free-text
                 otherwise so one-offs still work. */}
-            <div style={styles.row}>
-              <div style={{ flex: 2, minWidth: 220 }}>
-                <label style={styles.label}>Client</label>
-                <SearchableSelect
-                  items={clients}
+            <div className="k-form-grid" style={styles.grid}>
+              <Field label="Client">
+                <SearchableClientSelect
+                  clients={clients}
                   value={client?.id || ""}
                   onChange={(id, item) => { setClient(item); setSite(""); }}
                   placeholder="— Select Client —"
                 />
                 {canCreateClient ? (
-                  <button
-                    type="button"
-                    style={{ ...styles.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
+                  <Button
+                    variant="secondary"
+                    icon={MdPersonAdd}
+                    style={styles.inlineAddBtn}
                     onClick={() => setShowAddClient(true)}
                     title="Create a new client without leaving this form"
                   >
-                    <MdPersonAdd size={14} /> New Client
-                  </button>
+                    New Client
+                  </Button>
                 ) : (
                   <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
                 )}
-              </div>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={styles.label}>Site / Department</label>
+              </Field>
+              <Field label="Site / Department">
                 {(() => {
                   const clientSites = client?.site
                     ? client.site.split(";").map((s) => s.trim()).filter(Boolean)
                     : [];
                   return clientSites.length > 0 ? (
                     <select
-                      style={styles.input}
+                      className="k-select"
                       value={site}
                       onChange={(e) => setSite(e.target.value)}
                     >
@@ -305,7 +289,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                   ) : (
                     <input
                       type="text"
-                      style={styles.input}
+                      className="k-input"
                       placeholder={client ? "Optional" : "Pick a client first"}
                       value={site}
                       onChange={(e) => setSite(e.target.value)}
@@ -313,36 +297,30 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                     />
                   );
                 })()}
-              </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={styles.label}>Delivery Date</label>
-                <input type="date" style={styles.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-              </div>
+              </Field>
+              <Field label="Delivery Date">
+                <input type="date" className="k-input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+              </Field>
             </div>
 
-            {/* PO row: Number + Date + Indent No — flex weights match
+            {/* PO row: Number + Date + Indent No — same grid as
                 ChallanEditForm's PO row so Add and Edit look identical. */}
-            <div style={styles.row}>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>PO Number{salesOrderId && <span style={{ color: colors.textSecondary, fontWeight: 400 }}> (from the order)</span>}</label>
-                <input type="text" style={{ ...styles.input, ...(salesOrderId ? { backgroundColor: "#eef1f5", cursor: "not-allowed" } : {}) }} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" disabled={!!salesOrderId} />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={styles.label}>PO Date</label>
-                <input type="date" style={{ ...styles.input, ...(salesOrderId ? { backgroundColor: "#eef1f5", cursor: "not-allowed" } : {}) }} value={poDate} onChange={(e) => setPoDate(e.target.value)} disabled={!!salesOrderId} />
-              </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>
-                  Indent No <span style={{ color: "#5f6d7e", fontWeight: 400 }}>(optional)</span>
-                </label>
+            <div className="k-form-grid" style={styles.grid}>
+              <Field label={<>PO Number{salesOrderId && <span style={styles.opt}> (from the order)</span>}</>}>
+                <input type="text" className="k-input" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO number" disabled={!!salesOrderId} />
+              </Field>
+              <Field label="PO Date">
+                <input type="date" className="k-input" value={poDate} onChange={(e) => setPoDate(e.target.value)} disabled={!!salesOrderId} />
+              </Field>
+              <Field label={<>Indent No <span style={styles.opt}>(optional)</span></>}>
                 <input
                   type="text"
-                  style={styles.input}
+                  className="k-input"
                   value={indentNo}
                   onChange={(e) => setIndentNo(e.target.value)}
                   placeholder="Enter indent number"
                 />
-              </div>
+              </Field>
             </div>
 
             <div style={{ marginTop: "0.25rem" }}>
@@ -359,8 +337,8 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
             {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
               Challan saved. {purchaseError}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                <button type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
-                <button type="button" style={{ minHeight: 44 }} onClick={onClose}>Close without purchase bills</button>
+                <Button variant="primary" disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(savedChallanId); onClose(); } catch (err) { setPurchaseError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</Button>
+                <Button variant="secondary" onClick={onClose}>Close without purchase bills</Button>
               </div>
             </div>}
 
@@ -402,14 +380,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 }
 
 const styles = {
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", transition: "border-color 0.25s", boxSizing: "border-box" },
-  errorAlert: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, border: `1px solid ${colors.danger}30`, fontSize: "0.85rem" },
-  itemsContainer: { display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: 220, overflowY: "auto", overflowX: "hidden", paddingRight: 4 },
-  itemRow: { display: "flex", gap: "0.4rem", alignItems: "flex-start", padding: "0.5rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#fafbfc", minWidth: 0 },
-  itemIndex: { width: 22, paddingTop: "0.55rem", fontWeight: 700, fontSize: "0.82rem", color: colors.textSecondary, textAlign: "center", flexShrink: 0 },
-  removeBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", marginTop: "0.3rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", transition: "background-color 0.2s", flexShrink: 0 },
-  addItemBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", transition: "background-color 0.2s" },
+  grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
+  inlineAddBtn: { marginTop: "0.4rem", alignSelf: "flex-start", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  opt: { color: "var(--k-muted)", fontWeight: 400 },
 };

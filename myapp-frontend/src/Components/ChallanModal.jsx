@@ -3,15 +3,14 @@ import RichText from "./RichText";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
 import ChallanPrivateCosts from "./ChallanPrivateCosts";
+import { TableWrap } from "../ui/Kit";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : "—");
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
+  blue: "var(--k-blue)",
+  teal: "var(--k-teal)",
+  textSecondary: "var(--k-muted)",
 };
 
 export default function ChallanModal({ challan, onClose }) {
@@ -103,37 +102,37 @@ export default function ChallanModal({ challan, onClose }) {
 
           {/* Items table */}
           <div style={{ marginTop: "1.25rem" }}>
-            <h6 style={{ fontWeight: 700, fontSize: "0.92rem", color: colors.textPrimary, marginBottom: "0.6rem" }}>
+            <h6 style={{ fontWeight: 700, fontSize: "var(--k-font)", color: "var(--k-ink)", marginBottom: "0.6rem" }}>
               Items ({challan.items.length})
             </h6>
-            <div style={styles.tableWrapper}>
-              <table style={styles.table}>
+            <TableWrap style={styles.tableWrapper}>
+              <table className="k-table k-table--compact">
                 <thead>
                   <tr>
-                    <th style={{ ...styles.th, width: 40 }}>#</th>
-                    <th style={{ ...styles.th, width: 110 }}>Item Type</th>
-                    <th style={styles.th}>Description</th>
-                    <th style={{ ...styles.th, width: 70, textAlign: "center" }}>Qty</th>
-                    <th style={{ ...styles.th, width: 90, textAlign: "center" }}>Unit</th>
+                    <th className="is-center" style={{ width: 40 }}>#</th>
+                    <th style={{ width: 110 }}>Item Type</th>
+                    <th>Description</th>
+                    <th className="is-center" style={{ width: 70 }}>Qty</th>
+                    <th className="is-center" style={{ width: 90 }}>Unit</th>
                   </tr>
                 </thead>
                 <tbody>
                   {challan.items.map((item, idx) => (
                     <tr key={idx}>
-                      <td style={{ ...styles.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
-                      <td style={styles.td}>{item.itemTypeName || "—"}</td>
-                      <td style={styles.td}><RichText text={item.description} /></td>
-                      <td style={{ ...styles.td, textAlign: "center", fontWeight: 600 }}>{item.quantity}</td>
-                      <td style={{ ...styles.td, textAlign: "center" }}>{item.unit}</td>
+                      <td className="is-center k-muted">{idx + 1}</td>
+                      <td>{item.itemTypeName || "—"}</td>
+                      <td><RichText text={item.description} /></td>
+                      <td className="is-center" style={{ fontWeight: 600 }}>{item.quantity}</td>
+                      <td className="is-center">{item.unit}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableWrap>
           </div>
 
           <ChallanPrivateCosts items={challan.items} readOnly />
-          {challan.notes && <div style={{ marginTop: 16 }}><strong>Notes</strong><div style={{ marginTop: 6, padding: 10, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={challan.notes} /></div></div>}
+          {challan.notes && <div style={{ marginTop: 16 }}><strong>Notes</strong><div style={{ marginTop: 6, padding: 10, border: "1px solid var(--k-line)", borderRadius: 8 }}><RichText text={challan.notes} /></div></div>}
 
           {/* Attachments — read-only (preview / download only). INSIDE the
               scrollable body so it never pushes the footer off-screen. */}
@@ -160,65 +159,40 @@ export default function ChallanModal({ challan, onClose }) {
 const styles = {
   infoGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: "1rem",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))",
+    gap: "var(--k-gap)",
   },
   infoItem: {
     display: "flex",
     alignItems: "flex-start",
     gap: "0.5rem",
     padding: "0.75rem",
-    backgroundColor: "#f8f9fb",
-    borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
+    backgroundColor: "var(--k-surface-2)",
+    borderRadius: "var(--k-radius)",
+    border: "1px solid var(--k-line)",
+    minWidth: 0,
   },
   infoLabel: {
     display: "block",
-    fontSize: "0.75rem",
+    fontSize: "0.72rem",
     fontWeight: 600,
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     textTransform: "uppercase",
     letterSpacing: "0.3px",
   },
   infoValue: {
     display: "block",
-    fontSize: "0.92rem",
+    fontSize: "var(--k-font)",
     fontWeight: 600,
-    color: colors.textPrimary,
+    color: "var(--k-ink)",
     marginTop: "0.1rem",
+    overflowWrap: "anywhere",
   },
+  // The items table scrolls inside its frame (sticky kit headers) and
+  // horizontally on phones.
   tableWrapper: {
     maxHeight: 280,
     overflowY: "auto",
-    // Horizontal scroll on phones — the 5-column items table (#,
-    // Item Type, Description, Qty, Unit) doesn't fit in a 360px-wide
-    // viewport without unreadable column compression.
-    overflowX: "auto",
-    WebkitOverflowScrolling: "touch",
-    borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: "0.88rem",
-  },
-  th: {
-    padding: "0.6rem 0.75rem",
-    fontWeight: 700,
-    fontSize: "0.78rem",
-    textTransform: "uppercase",
-    letterSpacing: "0.4px",
-    color: colors.textSecondary,
-    backgroundColor: "#f5f7fa",
-    borderBottom: `2px solid ${colors.cardBorder}`,
-    position: "sticky",
-    top: 0,
-    zIndex: 2,
-  },
-  td: {
-    padding: "0.55rem 0.75rem",
-    color: colors.textPrimary,
-    borderBottom: `1px solid ${colors.cardBorder}`,
+    boxShadow: "none",
   },
 };

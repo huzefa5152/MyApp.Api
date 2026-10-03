@@ -6,10 +6,7 @@ import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
 
 import { todayYmd } from "../utils/dateInput";
-const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b", blue: "#0d47a1",
-};
+import { Field, TableWrap } from "../ui/Kit";
 
 // Raise a delivery challan that fulfils a Sales Order. Pre-fills each line's
 // quantity with what's still remaining; the operator can deliver less (partial)
@@ -76,24 +73,22 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
           <button style={formStyles.closeButton} onClick={onClose}>&times;</button>
         </div>
         <div style={formStyles.body}>
-          {error && <div ref={errRef} style={s.err}>{error}</div>}
+          {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
           <p style={s.sub}>Quantities default to what's still remaining. Adjust to deliver a partial amount; a challan will be created and linked to this order.</p>
-          <div style={s.row}>
-            <div style={{ flex: 1, minWidth: 150 }}>
-              <label style={s.label}>Delivery Date</label>
-              <input type="date" style={s.input} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-            </div>
-            <div style={{ flex: 2, minWidth: 180 }}>
-              <label style={s.label}>Site / Department <span style={{ fontWeight: 400 }}>(optional)</span></label>
+          <div className="k-form-grid" style={s.grid}>
+            <Field label="Delivery Date">
+              <input type="date" className="k-input" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+            </Field>
+            <Field label={<>Site / Department <span style={{ fontWeight: 400 }}>(optional)</span></>}>
               {sites.length > 0 ? (
-                <select style={s.input} value={site} onChange={(e) => setSite(e.target.value)}>
+                <select className="k-select" value={site} onChange={(e) => setSite(e.target.value)}>
                   <option value="">(none)</option>
                   {sites.map((x) => <option key={x} value={x}>{x}</option>)}
                 </select>
               ) : (
-                <input type="text" style={s.input} value={site} onChange={(e) => setSite(e.target.value)} placeholder="Optional" />
+                <input type="text" className="k-input" value={site} onChange={(e) => setSite(e.target.value)} placeholder="Optional" />
               )}
-            </div>
+            </Field>
           </div>
 
           {isNarrow ? (
@@ -105,38 +100,45 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
                   <div style={s.mgrid3}>
                     <div><div style={s.mlabel}>Ordered</div><div>{i.quantity}</div></div>
                     <div><div style={s.mlabel}>Delivered</div><div>{i.deliveredQuantity}</div></div>
-                    <div><div style={s.mlabel}>Remaining</div><div style={{ fontWeight: 700, color: i.remainingQuantity > 0 ? colors.blue : colors.teal }}>{i.remainingQuantity}</div></div>
+                    <div><div style={s.mlabel}>Remaining</div><div style={{ fontWeight: 700, color: i.remainingQuantity > 0 ? "var(--k-blue)" : "var(--k-teal)" }}>{i.remainingQuantity}</div></div>
                   </div>
                   <div style={{ marginTop: "0.6rem" }}>
                     <label style={s.mlabel}>Deliver now</label>
-                    <input type="number" min="0" step="0.0001" style={{ ...s.input, textAlign: "right" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
+                    <input type="number" min="0" step="0.0001" className="k-input" style={{ textAlign: "right" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
                   </div>
                 </div>
               ))}
             </div>
-          ) : (<>
-          <div style={s.tableHead}>
-            <div style={{ flex: 2 }}>Item</div>
-            <div style={s.col}>Ordered</div>
-            <div style={s.col}>Delivered</div>
-            <div style={s.col}>Remaining</div>
-            <div style={s.col}>Deliver now</div>
-          </div>
-          {(order.items || []).map((i) => (
-            <div key={i.id} style={s.tableRow}>
-              <div style={{ flex: 2, minWidth: 0 }}>
-                <div style={s.desc}><RichText text={i.description} /></div>
-                <div style={s.unit}>{i.unit}</div>
-              </div>
-              <div style={s.col}>{i.quantity}</div>
-              <div style={s.col}>{i.deliveredQuantity}</div>
-              <div style={{ ...s.col, fontWeight: 700, color: i.remainingQuantity > 0 ? colors.blue : colors.teal }}>{i.remainingQuantity}</div>
-              <div style={s.col}>
-                <input type="number" min="0" step="0.0001" style={{ ...s.input, textAlign: "right", padding: "0.4rem 0.45rem" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} />
-              </div>
-            </div>
-          ))}
-          </>
+          ) : (
+            <TableWrap>
+              <table className="k-table k-table--compact">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th className="is-center" style={s.col}>Ordered</th>
+                    <th className="is-center" style={s.col}>Delivered</th>
+                    <th className="is-center" style={s.col}>Remaining</th>
+                    <th className="is-center" style={s.col}>Deliver now</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(order.items || []).map((i) => (
+                    <tr key={i.id}>
+                      <td>
+                        <div style={s.desc}><RichText text={i.description} /></div>
+                        <div style={s.unit}>{i.unit}</div>
+                      </td>
+                      <td className="is-center">{i.quantity}</td>
+                      <td className="is-center">{i.deliveredQuantity}</td>
+                      <td className="is-center" style={{ fontWeight: 700, color: i.remainingQuantity > 0 ? "var(--k-blue)" : "var(--k-teal)" }}>{i.remainingQuantity}</td>
+                      <td>
+                        <input type="number" min="0" step="0.0001" className="k-input" style={{ textAlign: "right" }} value={qtys[i.id] ?? 0} onChange={(e) => setQty(i.id, e.target.value)} aria-label="Deliver now" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
           )}
         </div>
         <div style={formStyles.footer}>
@@ -149,18 +151,13 @@ export default function CreateChallanFromOrderModal({ order, companyId, onClose,
 }
 
 const s = {
-  sub: { fontSize: "0.85rem", color: colors.textSecondary, marginBottom: "1rem" },
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-  tableHead: { display: "flex", gap: "0.4rem", padding: "0.5rem", fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: colors.textSecondary, borderBottom: `2px solid ${colors.cardBorder}` },
-  tableRow: { display: "flex", gap: "0.4rem", alignItems: "center", padding: "0.5rem", borderBottom: `1px solid ${colors.cardBorder}` },
-  col: { width: 90, flexShrink: 0, textAlign: "center", fontSize: "0.85rem" },
-  desc: { fontSize: "0.88rem", fontWeight: 600, color: "#1a2332", whiteSpace: "pre-wrap" },
-  unit: { fontSize: "0.75rem", color: colors.textSecondary },
+  sub: { fontSize: "var(--k-font)", color: "var(--k-muted)", marginBottom: "1rem" },
+  grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
+  col: { width: 100 },
+  desc: { fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)", whiteSpace: "pre-wrap" },
+  unit: { fontSize: "0.75rem", color: "var(--k-muted)" },
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
-  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.5rem", textAlign: "center", fontSize: "0.85rem" },
-  mlabel: { fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.15rem" },
+  mcard: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" },
+  mgrid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.5rem", textAlign: "center", fontSize: "var(--k-font)" },
+  mlabel: { fontSize: "0.66rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--k-muted)", fontWeight: 700, marginBottom: "0.15rem" },
 };

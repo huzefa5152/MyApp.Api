@@ -1,8 +1,9 @@
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
-import SearchableSelect from "./SearchableSelect";
+import SearchableClientSelect from "./SearchableClientSelect";
 import LineItemsEditor from "./LineItemsEditor";
+import { Alert, Button, Field } from "../ui/Kit";
 import { updateChallan } from "../api/challanApi";
 import { getClientsByCompany } from "../api/clientApi";
 import { saveItemFbrDefaults } from "../api/lookupApi";
@@ -16,19 +17,6 @@ import { createPurchaseBillsFromChallan } from "../api/purchaseBillApi";
 import { useConfirm } from "./ConfirmDialog";
 import { usePermissions } from "../contexts/PermissionsContext";
 
-const colors = {
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
-  teal: "#00897b",
-  blue: "#0d47a1",
-  warning: "#f57c00",
-  warningLight: "#fff3e0",
-};
 
 /**
  * ChallanEditForm — edit ANY editable challan (Pending / No PO / Setup Required /
@@ -247,7 +235,7 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
 
@@ -269,39 +257,27 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 
             {/* Status preview banner — shows what the Save click will do to
                 the challan's status. Especially useful when clearing the PO. */}
-            <div style={{ ...styles.statusBanner, backgroundColor: statusWillChange ? colors.warningLight : "#eef4fb", borderColor: statusWillChange ? "#ffcc80" : "#90caf9", color: statusWillChange ? "#e65100" : colors.blue }}>
-              <MdInfo size={16} />
-              <span>
-                Status: <strong>{challan.status}</strong>
-                {statusWillChange && <> → will become <strong>{previewStatus}</strong> after save</>}
-                {!statusWillChange && <> (will stay <strong>{previewStatus}</strong>)</>}
-              </span>
-            </div>
+            <Alert tone={statusWillChange ? "warn" : "info"} icon={MdInfo}>
+              Status: <strong>{challan.status}</strong>
+              {statusWillChange && <> → will become <strong>{previewStatus}</strong> after save</>}
+              {!statusWillChange && <> (will stay <strong>{previewStatus}</strong>)</>}
+            </Alert>
 
             {/* ── Header row: Client / Site / Delivery Date ── */}
-            <div style={styles.rowGroup}>
-              <div style={{ flex: 2, minWidth: 220 }}>
-                <label style={styles.label}>
-                  Client *
-                  {isDuplicate && <span style={styles.lockedHint}> (locked — inherited)</span>}
-                </label>
-                <SearchableSelect
-                  items={clients}
+            <div className="k-form-grid" style={styles.grid}>
+              <Field label={<>Client *{isDuplicate && <span style={styles.lockedHint}> (locked — inherited)</span>}</>}>
+                <SearchableClientSelect
+                  clients={clients}
                   value={clientId}
                   onChange={(id) => setClientId(id ? String(id) : "")}
                   placeholder="— Select Client —"
                   disabled={isDuplicate}
-                  style={isDuplicate ? styles.lockedInput : undefined}
                 />
-              </div>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={styles.label}>
-                  Site / Department
-                  {isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
-                </label>
+              </Field>
+              <Field label={<>Site / Department{isDuplicate && <span style={styles.lockedHint}> (locked)</span>}</>}>
                 {clientSites.length > 0 ? (
                   <select
-                    style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
+                    className="k-select"
                     value={site}
                     onChange={(e) => setSite(e.target.value)}
                     disabled={isDuplicate}
@@ -312,75 +288,62 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
                 ) : (
                   <input
                     type="text"
-                    style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
+                    className="k-input"
                     placeholder="Optional"
                     value={site}
                     onChange={(e) => setSite(e.target.value)}
                     disabled={isDuplicate}
                   />
                 )}
-              </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={styles.label}>
-                  Delivery Date *
-                  {isDuplicate && <span style={styles.lockedHint}> (locked)</span>}
-                </label>
+              </Field>
+              <Field label={<>Delivery Date *{isDuplicate && <span style={styles.lockedHint}> (locked)</span>}</>}>
                 <input
                   type="date"
-                  style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
+                  className="k-input"
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
                   required
                   disabled={isDuplicate}
                 />
-              </div>
+              </Field>
             </div>
 
             {/* ── PO row: Number (clearable) + Date + Indent No ──
                 All three on one line so the operator sees the full PO/indent
                 context at a glance. Indent No is optional and independent
                 of PO — companies that don't use indents leave it blank. */}
-            <div style={styles.rowGroup}>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>
-                  PO Number
-                  <span style={styles.labelHint}> (clear to move to "No PO")</span>
-                </label>
+            <div className="k-form-grid" style={styles.grid}>
+              <Field label={<>PO Number<span style={styles.labelHint}> (clear to move to "No PO")</span></>}>
                 <input
                   type="text"
-                  style={styles.input}
+                  className="k-input"
                   placeholder="Leave blank for No PO"
                   value={poNumber}
                   onChange={(e) => setPoNumber(e.target.value)}
                 />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={styles.label}>PO Date</label>
+              </Field>
+              <Field label="PO Date">
                 <input
                   type="date"
-                  style={styles.input}
+                  className="k-input"
                   value={poDate}
                   onChange={(e) => setPoDate(e.target.value)}
                   disabled={!poNumber.trim()}
                   title={!poNumber.trim() ? "Set a PO Number first" : undefined}
                 />
-              </div>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <label style={styles.label}>
-                  Indent No
-                  {isDuplicate
-                    ? <span style={styles.lockedHint}> (locked)</span>
-                    : <span style={styles.labelHint}> (optional)</span>}
-                </label>
+              </Field>
+              <Field label={<>Indent No{isDuplicate
+                ? <span style={styles.lockedHint}> (locked)</span>
+                : <span style={styles.labelHint}> (optional)</span>}</>}>
                 <input
                   type="text"
-                  style={isDuplicate ? { ...styles.input, ...styles.lockedInput } : styles.input}
+                  className="k-input"
                   disabled={isDuplicate}
                   placeholder="Leave blank if not used"
                   value={indentNo}
                   onChange={(e) => setIndentNo(e.target.value)}
                 />
-              </div>
+              </Field>
             </div>
 
             {/* ── Items ── */}
@@ -395,8 +358,8 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
             {savedAwaitingPurchase && <div style={{ padding: 12, marginTop: 10, background: "#fff3e0", borderRadius: 8 }}>
               Your challan was saved. Purchase bills still need to be created.
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                <button type="button" style={{ minHeight: 44 }} disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</button>
-                <button type="button" style={{ minHeight: 44 }} onClick={onSaved}>Close without purchase bills</button>
+                <Button variant="primary" disabled={saving} onClick={async () => { setSaving(true); try { await createPurchaseBillsFromChallan(challan.id); onSaved(); } catch (err) { setError(err.response?.data?.error || "Could not create purchase bills."); } finally { setSaving(false); } }}>Retry purchase bills</Button>
+                <Button variant="secondary" onClick={onSaved}>Close without purchase bills</Button>
               </div>
             </div>}
 
@@ -429,43 +392,19 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
 }
 
 const styles = {
-  errorAlert: {
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
-    padding: "0.65rem 1rem",
-    borderRadius: 8,
-    marginBottom: "1rem",
-    fontWeight: 500,
-    border: `1px solid ${colors.danger}30`,
-    fontSize: "0.85rem",
-  },
-  statusBanner: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    padding: "0.6rem 0.85rem",
-    borderRadius: 10,
-    border: "1px solid",
-    fontSize: "0.82rem",
-    marginBottom: "0.9rem",
-  },
+  grid: { gap: "0.75rem", marginBottom: "0.75rem" },
   duplicateBanner: {
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
     padding: "0.65rem 0.85rem",
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     border: "1px solid #b39ddb",
     backgroundColor: "#ede7f6",
     color: "#4527a0",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-font-sm)",
     marginBottom: "0.75rem",
     lineHeight: 1.45,
-  },
-  lockedInput: {
-    backgroundColor: "#eef0f4",
-    color: "#5f6d7e",
-    cursor: "not-allowed",
   },
   lockedHint: {
     fontWeight: 400,
@@ -473,87 +412,10 @@ const styles = {
     color: "#4527a0",
     marginLeft: 4,
   },
-  rowGroup: {
-    display: "flex",
-    gap: "0.75rem",
-    flexWrap: "wrap",
-    marginBottom: "0.75rem",
-  },
-  label: {
-    display: "block",
-    marginBottom: 4,
-    fontWeight: 600,
-    fontSize: "0.82rem",
-    color: colors.textSecondary,
-  },
   labelHint: {
     fontWeight: 400,
     fontSize: "0.72rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     marginLeft: 4,
-  },
-  input: {
-    width: "100%",
-    padding: "0.55rem 0.75rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    fontSize: "0.9rem",
-    backgroundColor: colors.inputBg,
-    color: colors.textPrimary,
-    outline: "none",
-    boxSizing: "border-box",
-  },
-  itemsContainer: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.5rem",
-    maxHeight: 280,
-    overflowY: "auto",
-    paddingRight: 4,
-  },
-  itemRow: {
-    display: "flex",
-    gap: "0.4rem",
-    alignItems: "flex-start",
-    padding: "0.5rem",
-    borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: "#fafbfc",
-    minWidth: 0,
-  },
-  itemIndex: {
-    width: 22,
-    paddingTop: "0.55rem",
-    fontWeight: 700,
-    fontSize: "0.82rem",
-    color: colors.textSecondary,
-    textAlign: "center",
-    flexShrink: 0,
-  },
-  removeBtn: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0.4rem",
-    marginTop: "0.3rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.danger}25`,
-    backgroundColor: colors.dangerLight,
-    color: colors.danger,
-    cursor: "pointer",
-  },
-  addItemBtn: { minHeight: 44,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    marginTop: "0.6rem",
-    padding: "0.4rem 0.9rem",
-    borderRadius: 8,
-    border: "none",
-    backgroundColor: `${colors.teal}14`,
-    color: colors.teal,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
   },
 };

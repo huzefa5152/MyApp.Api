@@ -2,9 +2,9 @@ import { MdClose, MdPrint, MdRequestQuote } from "react-icons/md";
 import RichText from "./RichText";
 import { formStyles, modalSizes } from "../theme";
 import AttachmentManager from "./AttachmentManager";
+import { Facts, TableWrap } from "../ui/Kit";
 
 // Read-only view of a Sales Quote: header + meta + items + totals + notes.
-const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3" };
 const STATUS_COLORS = { Active: "#1565c0", Expired: "#f57c00", Accepted: "#28a745" };
 
 const fmtDate = (d) => {
@@ -15,13 +15,6 @@ const fmtDate = (d) => {
   return `${String(dt.getDate()).padStart(2, "0")}-${m[dt.getMonth()]}-${dt.getFullYear()}`;
 };
 const money = (n) => "Rs " + Number(n || 0).toLocaleString();
-
-const Meta = ({ label, value }) => (
-  <div style={st.metaItem}>
-    <div style={st.metaLabel}>{label}</div>
-    <div style={st.metaValue}>{value || "—"}</div>
-  </div>
-);
 
 export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPrint, onClose }) {
   if (!quote) return null;
@@ -40,45 +33,48 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
         <div style={formStyles.body}>
           <div style={st.clientName}>{quote.clientName}</div>
 
-          <div style={st.metaGrid}>
-            <Meta label="Issue Date" value={fmtDate(quote.date)} />
-            <Meta label="Valid Until" value={quote.validUntil ? fmtDate(quote.validUntil) : "—"} />
-            <Meta label="Customer Enquiry" value={quote.customerEnquiryRef || "—"} />
-            <Meta label="Enquiry Date" value={quote.enquiryDate ? fmtDate(quote.enquiryDate) : "—"} />
-            <Meta label="GST Rate" value={`${quote.gstRate}%`} />
-          </div>
+          <Facts
+            className="sq-detail-facts"
+            facts={[
+              ["Issue Date", fmtDate(quote.date) || "—"],
+              ["Valid Until", quote.validUntil ? fmtDate(quote.validUntil) : "—"],
+              ["Customer Enquiry", quote.customerEnquiryRef || "—"],
+              ["Enquiry Date", quote.enquiryDate ? fmtDate(quote.enquiryDate) : "—"],
+              ["GST Rate", `${quote.gstRate}%`],
+            ]}
+          />
 
           {quote.convertedToSalesOrderNumber && (
             <div style={st.converted}>→ Converted to Sales Order #{quote.convertedToSalesOrderNumber}</div>
           )}
 
           <div style={st.sectionTitle}>Items ({items.length})</div>
-          <div style={st.tableWrap}>
-            <table style={st.table}>
+          <TableWrap style={st.tableWrap}>
+            <table className="k-table k-table--compact">
               <thead>
                 <tr>
-                  <th style={{ ...st.th, width: 28, textAlign: "center" }}>#</th>
-                  <th style={st.th}>Description</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Qty</th>
-                  <th style={st.th}>Unit</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Unit Price</th>
-                  <th style={{ ...st.th, textAlign: "right" }}>Amount</th>
+                  <th className="is-center" style={{ width: 28 }}>#</th>
+                  <th>Description</th>
+                  <th className="k-num">Qty</th>
+                  <th>Unit</th>
+                  <th className="k-num">Unit Price</th>
+                  <th className="k-num">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((i, idx) => (
                   <tr key={i.id ?? idx}>
-                    <td style={{ ...st.td, textAlign: "center", color: colors.textSecondary }}>{idx + 1}</td>
-                    <td style={st.td}>{i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}<span style={st.desc}><RichText text={i.description} /></span></td>
-                    <td style={{ ...st.td, textAlign: "right" }}>{Number(i.quantity).toLocaleString()}</td>
-                    <td style={st.td}>{i.unit}</td>
-                    <td style={{ ...st.td, textAlign: "right" }}>{money(i.unitPrice)}</td>
-                    <td style={{ ...st.td, textAlign: "right", fontWeight: 700 }}>{money(i.lineTotal)}</td>
+                    <td className="is-center k-muted">{idx + 1}</td>
+                    <td>{i.imagePath && <img src={i.imagePath} alt={`Photo for line ${idx + 1}`} style={{ display: "block", maxWidth: 72, maxHeight: 72, objectFit: "contain", marginBottom: 6 }} />}<span style={st.desc}><RichText text={i.description} /></span></td>
+                    <td className="k-num">{Number(i.quantity).toLocaleString()}</td>
+                    <td>{i.unit}</td>
+                    <td className="k-num">{money(i.unitPrice)}</td>
+                    <td className="k-num" style={{ fontWeight: 700 }}>{money(i.lineTotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
 
           <div style={st.totals}>
             <div style={st.tRow}><span>Subtotal</span><span>{money(quote.subtotal)}</span></div>
@@ -115,20 +111,13 @@ export default function SalesQuoteDetailModal({ quote, companyId, canPrint, onPr
 
 const st = {
   badge: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20, background: "rgba(255,255,255,0.22)", color: "#fff", border: "1px solid rgba(255,255,255,0.4)" },
-  clientName: { fontSize: "1.05rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.75rem" },
-  metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))", gap: "0.75rem", marginBottom: "1rem" },
-  metaItem: {},
-  metaLabel: { fontSize: "0.68rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em" },
-  metaValue: { fontSize: "0.9rem", color: colors.textPrimary, marginTop: "0.15rem" },
-  converted: { fontSize: "0.82rem", color: colors.teal, fontWeight: 600, marginBottom: "0.75rem" },
-  sectionTitle: { display: "flex", alignItems: "center", gap: 6, marginTop: "1.25rem", marginBottom: "0.5rem", fontSize: "0.9rem", fontWeight: 700, color: colors.blue },
-  tableWrap: { maxHeight: 320, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.5rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
-  td: { padding: "0.4rem 0.5rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.88rem", color: colors.textPrimary },
+  clientName: { fontSize: "calc(var(--k-font) + 0.15rem)", fontWeight: 700, color: "var(--k-ink)", marginBottom: "0.75rem" },
+  converted: { fontSize: "var(--k-font-sm)", color: "var(--k-teal)", fontWeight: 600, margin: "0.75rem 0" },
+  sectionTitle: { display: "flex", alignItems: "center", gap: 6, marginTop: "1.25rem", marginBottom: "0.5rem", fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-blue)" },
+  tableWrap: { maxHeight: 320, overflowY: "auto" },
   desc: { whiteSpace: "pre-wrap" },
-  totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
-  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
-  grand: { borderTop: `2px solid ${colors.blue}`, marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: colors.blue },
-  notes: { fontSize: "0.86rem", color: colors.textPrimary, whiteSpace: "pre-wrap", background: "#fafbfc", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, padding: "0.6rem 0.8rem" },
+  totals: { marginTop: "1rem", marginLeft: "auto", width: 280, maxWidth: "100%" },
+  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
+  grand: { borderTop: "2px solid var(--k-blue)", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-blue)" },
+  notes: { fontSize: "var(--k-font)", color: "var(--k-ink)", whiteSpace: "pre-wrap", background: "var(--k-surface-2)", border: "1px solid var(--k-line)", borderRadius: 8, padding: "0.6rem 0.8rem" },
 };

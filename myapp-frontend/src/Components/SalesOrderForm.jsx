@@ -15,10 +15,8 @@ import AttachmentManager from "./AttachmentManager";
 import { formStyles, modalSizes } from "../theme";
 
 import { todayYmd } from "../utils/dateInput";
-const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
-};
+import SearchableClientSelect from "./SearchableClientSelect";
+import { Button, Field } from "../ui/Kit";
 
 const blankItem = () => ({ id: 0, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: "" });
 
@@ -153,43 +151,40 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div ref={errRef} style={s.err}>{error}</div>}
-            <div style={s.row}>
-              <div style={{ flex: "1 1 100%", minWidth: 220 }}>
-                <label style={s.label}>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></label>
-                <SearchableSelect
-                  items={quoteOptions}
-                  value={salesQuoteId}
-                  onChange={(id) => handleQuoteSelect(id ? String(id) : "")}
-                  labelKey="label"
-                  placeholder="— not linked —"
-                />
-                {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: colors.teal, marginTop: 4, fontWeight: 600 }}>{quoteLoadedMsg}</div>}
-              </div>
-              <div style={{ flex: "1 1 100%", minWidth: 220 }}>
-                <label style={s.label}>Client</label>
-                <SearchableSelect
-                  items={clients}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
+            <Field label={<>Sales Quote <span style={s.opt}>(optional — picking one pre-fills the order)</span></>}>
+              <SearchableSelect
+                items={quoteOptions}
+                value={salesQuoteId}
+                onChange={(id) => handleQuoteSelect(id ? String(id) : "")}
+                labelKey="label"
+                placeholder="— not linked —"
+              />
+              {quoteLoadedMsg && <div style={{ fontSize: "0.72rem", color: "var(--k-teal)", fontWeight: 600 }}>{quoteLoadedMsg}</div>}
+            </Field>
+            <div className="k-form-grid" style={s.grid}>
+              <Field label="Client">
+                <SearchableClientSelect
+                  clients={clients}
                   value={client?.id || ""}
                   onChange={(id, item) => { setClient(item); setSite(""); setSalesQuoteId(""); }}
                   placeholder="— Select Client —"
                 />
                 {canCreateClient ? (
-                  <button
-                    type="button"
-                    style={{ ...s.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
+                  <Button
+                    variant="secondary"
+                    icon={MdPersonAdd}
+                    style={s.inlineAddBtn}
                     onClick={() => setShowAddClient(true)}
                     title="Create a new client without leaving this form"
                   >
-                    <MdPersonAdd size={14} /> New Client
-                  </button>
+                    New Client
+                  </Button>
                 ) : (
                   <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
                 )}
-
-              </div>
-              <div style={{ flex: 1, minWidth: 150 }}>
-                <label style={s.label}>Site / Department <span style={s.opt}>(optional)</span></label>
+              </Field>
+              <Field label={<>Site / Department <span style={s.opt}>(optional)</span></>}>
                 {(() => {
                   // Derive sites from the loaded `clients` list by id — the
                   // `client` object is only { id, label } in edit mode (no
@@ -198,33 +193,29 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
                   const selectedClientFull = clients.find((c) => String(c.id) === String(client?.id));
                   const sites = selectedClientFull?.site ? selectedClientFull.site.split(";").map((x) => x.trim()).filter(Boolean) : [];
                   return sites.length > 0 ? (
-                    <select style={s.input} value={site} onChange={(e) => setSite(e.target.value)}>
+                    <select className="k-select" value={site} onChange={(e) => setSite(e.target.value)}>
                       <option value="">(none)</option>
                       {sites.map((x) => <option key={x} value={x}>{x}</option>)}
                     </select>
                   ) : (
-                    <input type="text" style={s.input} value={site} onChange={(e) => setSite(e.target.value)} placeholder={client ? "Optional" : "Pick a client first"} disabled={!client} />
+                    <input type="text" className="k-input" value={site} onChange={(e) => setSite(e.target.value)} placeholder={client ? "Optional" : "Pick a client first"} disabled={!client} />
                   );
                 })()}
-              </div>
+              </Field>
             </div>
-            <div style={s.row}>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Order Date</label>
-                <input type="date" style={s.input} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Required By <span style={s.opt}>(optional)</span></label>
-                <input type="date" style={s.input} value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <label style={s.label}>Customer PO # <span style={s.opt}>(optional)</span></label>
-                <input type="text" style={s.input} value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Their PO number" />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Customer PO Date</label>
-                <input type="date" style={s.input} value={poDate} onChange={(e) => setPoDate(e.target.value)} />
-              </div>
+            <div className="k-form-grid" style={s.grid}>
+              <Field label="Order Date">
+                <input type="date" className="k-input" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
+              </Field>
+              <Field label={<>Required By <span style={s.opt}>(optional)</span></>}>
+                <input type="date" className="k-input" value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} />
+              </Field>
+              <Field label={<>Customer PO # <span style={s.opt}>(optional)</span></>}>
+                <input type="text" className="k-input" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Their PO number" />
+              </Field>
+              <Field label="Customer PO Date">
+                <input type="date" className="k-input" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+              </Field>
             </div>
 
             <LineItemsEditor companyId={companyId}
@@ -244,8 +235,9 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
             />
 
             <div style={{ marginTop: "1rem" }}>
-              <label style={s.label}>Notes <span style={s.opt}>(optional)</span></label>
-              <textarea style={{ ...s.input, minHeight: 56, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes for this order" />
+              <Field label={<>Notes <span style={s.opt}>(optional)</span></>}>
+                <textarea className="k-textarea" style={{ minHeight: 56 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes for this order" />
+              </Field>
             </div>
 
             <div style={{ marginTop: "1rem" }}>
@@ -291,21 +283,7 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
 }
 
 const s = {
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  opt: { color: colors.textSecondary, fontWeight: 400 },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-  tableWrap: { maxHeight: 280, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.4rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
-  td: { padding: "0.3rem 0.4rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}` },
-  cellInput: { width: "100%", padding: "0.5rem 0.55rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  hint: { fontSize: "0.7rem", color: colors.danger, marginTop: 2, fontWeight: 600 },
-  del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
+  grid: { gap: "var(--k-gap)", margin: "1rem 0" },
+  inlineAddBtn: { marginTop: "0.4rem", alignSelf: "flex-start", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  opt: { color: "var(--k-muted)", fontWeight: 400 },
 };

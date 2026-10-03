@@ -2,7 +2,7 @@ import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
 import { richTextToPlain } from "../utils/richText";
 import { useNavigate } from "react-router-dom";
-import { MdAssignment, MdAdd, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile, MdGridOn, MdReceiptLong, MdLink } from "react-icons/md";
+import { MdAssignment, MdAdd, MdPrint, MdPictureAsPdf, MdEdit, MdDelete, MdLocalShipping, MdVisibility, MdUploadFile, MdGridOn, MdReceiptLong, MdLink } from "react-icons/md";
 import { saveAs } from "file-saver";
 import { hasExcelTemplate, exportExcel } from "../api/printTemplateApi";
 import SalesOrderForm from "../Components/SalesOrderForm";
@@ -25,15 +25,12 @@ import { exportToPdf } from "../utils/exportUtils";
 import { defaultOrderTemplate } from "../utils/salesDocTemplates";
 import { usePrintTemplates } from "../hooks/usePrintTemplates";
 import PrintTemplateSelect from "../Components/PrintTemplateSelect";
-import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
+import { PageHeader, CompanyPicker, Button, IconButton, Toolbar, ToolbarSpacer, SearchBox, Card, EmptyState, Loading } from "../ui/Kit";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
 import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
-
-const colors = { blue: "#0d47a1", teal: "#00897b", textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBorder: "#d0d7e2" };
 
 const FULFIL_COLORS = {
   "Not Delivered": "#5f6d7e", "Partially Delivered": "#f57c00", "Fully Delivered": "#28a745", "Over Delivered": "#7b1fa2",
@@ -45,7 +42,7 @@ const INVOICE_COLORS = {
 export default function SalesOrderPage() {
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { companies, selectedCompany, loading: loadingCompanies } = useCompany();
   const tplPicker = usePrintTemplates("SalesOrder");
   const { has } = usePermissions();
   const canView = has("salesorders.list.view");
@@ -184,48 +181,38 @@ export default function SalesOrderPage() {
   return (
     <DocumentLinesNavigation type="order">
     <div>
-      <div style={st.header}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={st.icon}><MdAssignment size={28} color="#fff" /></div>
-          <div>
-            <h2 style={st.title}>Sales Orders</h2>
-            <p style={st.subtitle}>{selectedCompany ? `${totalCount} order${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view orders"}</p>
-          </div>
-        </div>
-        {companies.length > 0 && (canCreate || canImportPo) && (
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            {canCreate && <button style={st.addBtn} onClick={() => selectedCompany && (setEditOrder(null), setShowForm(true))}><MdAdd size={18} /> New Order</button>}
-            {canImportPo && <button style={{ ...st.addBtn, background: colors.blue, boxShadow: "0 4px 14px rgba(13,71,161,0.25)" }} onClick={() => selectedCompany && setShowImport(true)}><MdUploadFile size={18} /> Import PO</button>}
-          </div>
-        )}
-      </div>
+      <PageHeader
+        icon={MdAssignment}
+        tone="teal"
+        title="Sales Orders"
+        subtitle={selectedCompany ? `${totalCount} order${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company to view orders"}
+        actions={companies.length > 0 && (canCreate || canImportPo) ? (
+          <>
+            {canCreate && <Button variant="primary" icon={MdAdd} onClick={() => selectedCompany && (setEditOrder(null), setShowForm(true))}>New Order</Button>}
+            {canImportPo && <Button variant="secondary" icon={MdUploadFile} onClick={() => selectedCompany && setShowImport(true)}>Import PO</Button>}
+          </>
+        ) : null}
+      />
 
-      {loadingCompanies ? <Spinner label="Loading companies..." /> : companies.length > 0 ? (
+      {loadingCompanies ? <Loading>Loading companies...</Loading> : companies.length > 0 ? (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={(e) => setSelectedCompany(companies.find((c) => parseInt(c.id) === parseInt(e.target.value)))}>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </div>
+          <CompanyPicker />
           {selectedCompany && (
-            <div className="filters-row">
-              <div className="filter-search-wrap">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input type="text" placeholder="Search Order#, Client, PO..." className="filter-search-input" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-              </div>
-              <select className="filter-select" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+            <Toolbar>
+              <SearchBox placeholder="Search Order#, Client, PO..." value={search} onChange={(text) => { setSearch(text); setPage(1); }} />
+              <select className="k-select" aria-label="Status" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
                 <option value="">All Status</option>
                 {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
               </select>
-              <div style={{ marginLeft: "auto" }}><PrintTemplateSelect picker={tplPicker} /></div>
-            </div>
+              <ToolbarSpacer />
+              <PrintTemplateSelect picker={tplPicker} />
+            </Toolbar>
           )}
         </>
-      ) : <Empty label="No companies available. Add a company first." />}
+      ) : <EmptyState icon={MdAssignment}>No companies available. Add a company first.</EmptyState>}
 
-      {loading ? <Spinner label="Loading orders..." /> : orders.length === 0 && selectedCompany ? (
-        <Empty label="No sales orders found." />
+      {loading ? <Loading>Loading orders...</Loading> : orders.length === 0 && selectedCompany ? (
+        <EmptyState icon={MdAssignment}>No sales orders found.</EmptyState>
       ) : (
         <>
           <div style={st.grid}>
@@ -236,7 +223,7 @@ export default function SalesOrderPage() {
               const totalOrdered = (o.items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0);
               const totalDelivered = (o.items || []).reduce((s, i) => s + (Number(i.deliveredQuantity) || 0), 0);
               return (
-                <div key={o.id} style={st.card}>
+                <Card key={o.id} style={st.card}>
                   <div style={st.cardTop}>
                     <span style={st.oNum}>SO #{o.salesOrderNumber}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -263,7 +250,7 @@ export default function SalesOrderPage() {
                   </div>
                   <div style={st.statusLine}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                      <span style={{ ...st.statusPill, color: o.status === "Cancelled" ? "#dc3545" : o.status === "Closed" ? "#5f6d7e" : colors.teal }}>{o.status}</span>
+                      <span style={{ ...st.statusPill, color: o.status === "Cancelled" ? "#dc3545" : o.status === "Closed" ? "#5f6d7e" : "var(--k-teal)" }}>{o.status}</span>
                       <span style={{ ...st.invPill, color: INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e", background: `${INVOICE_COLORS[o.invoiceStatus] || "#5f6d7e"}18` }}>{o.invoiceStatus}</span>
                     </span>
                     {o.challanCount > 0 && (
@@ -273,22 +260,22 @@ export default function SalesOrderPage() {
                     )}
                   </div>
                   <div style={st.actions}>
-                    {canView && <button style={st.actBtn} onClick={() => setViewOrder(o)} title="View details"><MdVisibility size={16} /></button>}
-                    {canDeliver && <button style={st.deliverBtn} onClick={() => setDeliverOrder(o)}><MdLocalShipping size={15} /> Deliver</button>}
-                    {canBillThis && <button style={st.billBtn} onClick={() => setBillOrder(o)} title="Generate a bill from this order's delivered challans"><MdReceiptLong size={15} /> Bill</button>}
-                    {canAttachThis && <button style={st.actBtn} onClick={() => setAttachOrder(o)} title="Attach an existing (No-PO) challan to this order"><MdLink size={16} /></button>}
-                    {canUpdate && o.isEditable && <button style={st.actBtn} onClick={() => { setEditOrder(o); setShowForm(true); }} title="Edit"><MdEdit size={16} /></button>}
-                    {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handlePrint(o)} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"}><MdPrint size={16} /></button>}
-                    {canPrint && <button style={{ ...st.actBtn, opacity: tplPicker.noTemplate || exportingId === o.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"}><MdPictureAsPdf size={16} /></button>}
-                    {canPrint && hasExcelTpl && <button style={{ ...st.actBtn, color: "#2e7d32", opacity: exportingId === o.id + "-excel" ? 0.5 : 1 }} onClick={() => handleExportExcel(o)} disabled={!!exportingId} title="Download Excel"><MdGridOn size={16} /></button>}
+                    {canView && <IconButton style={st.actBtn} icon={MdVisibility} size={16} label="View details" onClick={() => setViewOrder(o)} />}
+                    {canDeliver && <Button variant="teal" size="sm" icon={MdLocalShipping} onClick={() => setDeliverOrder(o)}>Deliver</Button>}
+                    {canBillThis && <Button variant="primary" size="sm" icon={MdReceiptLong} onClick={() => setBillOrder(o)} title="Generate a bill from this order's delivered challans">Bill</Button>}
+                    {canAttachThis && <IconButton style={st.actBtn} icon={MdLink} size={16} label="Attach an existing (No-PO) challan to this order" onClick={() => setAttachOrder(o)} />}
+                    {canUpdate && o.isEditable && <IconButton style={st.actBtn} icon={MdEdit} size={16} label="Edit" onClick={() => { setEditOrder(o); setShowForm(true); }} />}
+                    {canPrint && <IconButton style={st.actBtn} icon={MdPrint} size={16} label={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"} onClick={() => handlePrint(o)} disabled={tplPicker.noTemplate} />}
+                    {canPrint && <IconButton style={{ ...st.actBtn, opacity: exportingId === o.id ? 0.5 : undefined }} icon={MdPictureAsPdf} size={16} label={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Download PDF"} onClick={() => handleExportPdf(o)} disabled={tplPicker.noTemplate || !!exportingId} />}
+                    {canPrint && hasExcelTpl && <IconButton style={{ ...st.actBtn, color: "#2e7d32", opacity: exportingId === o.id + "-excel" ? 0.5 : undefined }} icon={MdGridOn} size={16} label="Download Excel" onClick={() => handleExportExcel(o)} disabled={!!exportingId} />}
                     {canUpdate && o.status !== "Cancelled" && (
-                      <select style={st.statusSelect} value={o.status} onChange={(e) => handleStatus(o, e.target.value)} title="Set status">
+                      <select className="k-select" style={st.statusSelect} value={o.status} onChange={(e) => handleStatus(o, e.target.value)} title="Set status" aria-label="Set status">
                         {["Open", "Closed", "Cancelled"].map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
                     )}
-                    {canDelete && o.isLatest && o.challanCount === 0 && <button style={{ ...st.actBtn, color: "#dc3545" }} onClick={() => handleDelete(o)} title="Delete"><MdDelete size={16} /></button>}
+                    {canDelete && o.isLatest && o.challanCount === 0 && <IconButton danger style={{ ...st.actBtn, color: "var(--k-danger)" }} icon={MdDelete} size={16} label="Delete" onClick={() => handleDelete(o)} />}
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
@@ -365,45 +352,28 @@ export default function SalesOrderPage() {
 
 const fmtDate = (d) => { if (!d) return ""; const dt = new Date(d); const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`; };
 const fmtQty = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString(); };
-const Spinner = ({ label }) => <div style={st.loading}><div style={st.spin} /><span style={{ color: colors.textSecondary, fontSize: "0.9rem" }}>{label}</span></div>;
-const Empty = ({ label }) => <div style={st.empty}><MdAssignment size={40} color={colors.cardBorder} /><p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>{label}</p></div>;
-
 const st = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
-  icon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${colors.teal}, ${colors.blue})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  subtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.teal}, ${colors.blue})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(0,137,123,0.25)" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(330px, 100%), 1fr))", gap: "1rem" },
-  card: { border: `1px solid ${colors.cardBorder}`, borderRadius: 14, padding: "1rem", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" },
-  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  oNum: { fontWeight: 800, fontSize: "1rem", color: colors.teal },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(330px, 100%), 1fr))", gap: "var(--k-gap)" },
+  card: { marginTop: 0 },
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  oNum: { fontWeight: 800, fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-teal)" },
   badge: { fontSize: "0.72rem", fontWeight: 700, padding: "0.15rem 0.6rem", borderRadius: 20 },
-  client: { marginTop: "0.5rem", fontWeight: 600, color: colors.textPrimary, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
-  metaRow: { display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "0.8rem", color: colors.textSecondary },
-  meta: { marginTop: "0.2rem", fontSize: "0.78rem", color: colors.textSecondary },
-  fulfilBar: { marginTop: "0.6rem", borderTop: `1px dashed ${colors.cardBorder}`, paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.2rem" },
-  fulfilRow: { display: "flex", justifyContent: "space-between", gap: "0.5rem", fontSize: "0.78rem" },
-  fItem: { color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
-  fQty: { fontWeight: 700, color: colors.textPrimary, flexShrink: 0 },
-  fMore: { fontSize: "0.72rem", color: colors.textSecondary, fontStyle: "italic" },
-  totalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.4rem", paddingTop: "0.4rem", borderTop: `1px solid ${colors.cardBorder}` },
-  totalLabel: { fontSize: "0.8rem", fontWeight: 700, color: colors.textPrimary },
-  totalVal: { fontSize: "0.85rem", fontWeight: 800, color: colors.teal },
-  statusLine: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" },
-  statusPill: { fontSize: "0.78rem", fontWeight: 700 },
+  client: { marginTop: "0.5rem", fontWeight: 600, color: "var(--k-ink)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" },
+  metaRow: { display: "flex", justifyContent: "space-between", marginTop: "0.35rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  meta: { marginTop: "0.2rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  fulfilBar: { marginTop: "0.6rem", borderTop: "1px dashed var(--k-line)", paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.2rem" },
+  fulfilRow: { display: "flex", justifyContent: "space-between", gap: "0.5rem", fontSize: "var(--k-font-sm)" },
+  fItem: { color: "var(--k-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 },
+  fQty: { fontWeight: 700, color: "var(--k-ink)", flexShrink: 0 },
+  fMore: { fontSize: "0.72rem", color: "var(--k-muted)", fontStyle: "italic" },
+  totalRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.4rem", paddingTop: "0.4rem", borderTop: "1px solid var(--k-line)" },
+  totalLabel: { fontSize: "var(--k-font-sm)", fontWeight: 700, color: "var(--k-ink)" },
+  totalVal: { fontSize: "var(--k-font)", fontWeight: 800, color: "var(--k-teal)" },
+  statusLine: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: "0.5rem" },
+  statusPill: { fontSize: "var(--k-font-sm)", fontWeight: 700 },
   invPill: { fontSize: "0.7rem", fontWeight: 700, padding: "0.1rem 0.5rem", borderRadius: 20 },
-  challanCount: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.textSecondary },
-  challanCountBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: colors.blue, background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline", boxShadow: "none" },
+  challanCountBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", fontSize: "0.75rem", color: "var(--k-blue)", background: "none", border: "none", padding: 0, minHeight: 0, cursor: "pointer", fontWeight: 600, textDecoration: "underline", boxShadow: "none" },
   actions: { display: "flex", gap: "0.4rem", marginTop: "0.75rem", flexWrap: "wrap", alignItems: "center" },
-  deliverBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.teal, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
-  billBtn: { display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.7rem", borderRadius: 8, border: "none", background: colors.blue, color: "#fff", fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" },
-  actBtn: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 8, border: `1px solid ${colors.cardBorder}`, background: "#fff", color: colors.blue, cursor: "pointer" },
-  statusSelect: { padding: "0.3rem 0.4rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.78rem", color: colors.textSecondary, background: "#fff", cursor: "pointer" },
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
-  pageBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
-  pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
-  loading: { display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", padding: "3rem 0" },
-  spin: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.teal, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  empty: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "3rem 1rem", textAlign: "center" },
+  actBtn: { borderColor: "var(--k-line)", background: "var(--k-surface)", color: "var(--k-blue)" },
+  statusSelect: { width: "auto", minHeight: "calc(var(--k-btn-h) - 8px)", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
 };

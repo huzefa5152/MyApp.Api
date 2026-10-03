@@ -9,12 +9,7 @@ import {
 import SearchableSelect from "./SearchableSelect";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
-
-const colors = {
-  textPrimary: "#1a2332", textSecondary: "#5f6d7e", cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb", inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1",
-  teal: "#00897b", blue: "#0d47a1", warn: "#e65100", warnLight: "#fff8e1", bg: "#f7f9fc",
-};
+import { Field, TableWrap, Alert } from "../ui/Kit";
 
 const fmtQty = (n) => { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : parseFloat(v.toFixed(4)).toString(); };
 const fmtDate = (d) => { if (!d) return "—"; const dt = new Date(d); const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`; };
@@ -206,14 +201,14 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
         </div>
 
         <div style={formStyles.body}>
-          {error && <div ref={errRef} style={s.err}>{error}</div>}
+          {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
           <p style={s.sub}>
             The delivered quantity was already recorded when the challan was created — attaching links its lines to the order (adding any items not on the order as new lines) and adopts the order's PO. No stock changes.
           </p>
 
           {/* Pick the not-fixed side */}
           <div style={{ marginBottom: "1rem" }}>
-            <label style={s.label}>{fromOrder ? "Challan to attach" : "Sales Order"}</label>
+            <Field label={fromOrder ? "Challan to attach" : "Sales Order"}>
             {fromOrder ? (
               <>
                 <SearchableSelect
@@ -247,6 +242,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                 loading={loading}
               />
             )}
+            </Field>
           </div>
 
           {/* Mapping grid */}
@@ -254,7 +250,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
             <>
               <div style={s.gridTitle}>Map each challan line to an order line — or add it as a new one</div>
               {anyOver && (
-                <div style={s.warn}><MdWarningAmber size={16} /> Some lines will over-deliver the order (delivered exceeds ordered). Allowed, but the order will flag as Over Delivered.</div>
+                <Alert tone="warn" icon={MdWarningAmber}>Some lines will over-deliver the order (delivered exceeds ordered). Allowed, but the order will flag as Over Delivered.</Alert>
               )}
 
               {isNarrow ? (
@@ -264,7 +260,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                       <div style={s.desc}><RichText text={l.description} /></div>
                       <div style={s.unit}>{fmtQty(l.quantity)} {l.unit}</div>
                       <label style={s.mlabel}>Fulfils ordered line</label>
-                      <select style={s.select} value={mapping[l.deliveryItemId] ?? EXTRA} onChange={(e) => setLineMap(l.deliveryItemId, e.target.value)}>
+                      <select className="k-select" value={mapping[l.deliveryItemId] ?? EXTRA} onChange={(e) => setLineMap(l.deliveryItemId, e.target.value)}>
                         <option value={EXTRA}>Add as new order line</option>
                         {soItems.map((s2) => <option key={s2.id} value={s2.id}>{soLineLabel(s2)}</option>)}
                       </select>
@@ -272,28 +268,34 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                   ))}
                 </div>
               ) : (
-                <div style={s.tableWrap}>
-                  <div style={s.thead}>
-                    <div style={{ flex: 2 }}>Challan line</div>
-                    <div style={s.qCol}>Qty</div>
-                    <div style={{ flex: 3 }}>Fulfils ordered line</div>
-                  </div>
-                  {challanLines.map((l) => (
-                    <div key={l.deliveryItemId} style={s.trow}>
-                      <div style={{ flex: 2, minWidth: 0 }}>
-                        <div style={s.desc}><RichText text={l.description} /></div>
-                        {l.itemTypeName && <div style={s.unit}>{l.itemTypeName}</div>}
-                      </div>
-                      <div style={s.qCol}>{fmtQty(l.quantity)} {l.unit}</div>
-                      <div style={{ flex: 3 }}>
-                        <select style={s.select} value={mapping[l.deliveryItemId] ?? EXTRA} onChange={(e) => setLineMap(l.deliveryItemId, e.target.value)}>
-                          <option value={EXTRA}>Add as new order line</option>
-                          {soItems.map((s2) => <option key={s2.id} value={s2.id}>{soLineLabel(s2)}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <TableWrap>
+                  <table className="k-table k-table--compact">
+                    <thead>
+                      <tr>
+                        <th>Challan line</th>
+                        <th style={s.qCol}>Qty</th>
+                        <th style={{ width: "50%" }}>Fulfils ordered line</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {challanLines.map((l) => (
+                        <tr key={l.deliveryItemId}>
+                          <td>
+                            <div style={s.desc}><RichText text={l.description} /></div>
+                            {l.itemTypeName && <div style={s.unit}>{l.itemTypeName}</div>}
+                          </td>
+                          <td style={{ ...s.qCol, fontWeight: 600 }}>{fmtQty(l.quantity)} {l.unit}</td>
+                          <td>
+                            <select className="k-select" aria-label="Fulfils ordered line" value={mapping[l.deliveryItemId] ?? EXTRA} onChange={(e) => setLineMap(l.deliveryItemId, e.target.value)}>
+                              <option value={EXTRA}>Add as new order line</option>
+                              {soItems.map((s2) => <option key={s2.id} value={s2.id}>{soLineLabel(s2)}</option>)}
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableWrap>
               )}
 
               {/* Resulting-fulfilment preview */}
@@ -305,7 +307,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                   return (
                     <div key={s2.id} style={s.previewRow}>
                       <span style={s.pDesc}>{richTextToPlain(s2.description || "")}</span>
-                      <span style={{ ...s.pQty, color: p.over ? colors.warn : colors.teal }}>
+                      <span style={{ ...s.pQty, color: p.over ? "#e65100" : "var(--k-teal)" }}>
                         {fmtQty(p.projected)}/{fmtQty(p.ordered)}{p.over ? " ⚠ over" : ""}
                       </span>
                     </div>
@@ -314,7 +316,7 @@ export default function AttachChallanToOrderModal({ companyId, order, challan, o
                 {challanLines.filter((l) => !mapping[l.deliveryItemId]).map((l, i) => (
                   <div key={`new-${i}`} style={s.previewRow}>
                     <span style={s.pDesc}>+ New order line: {richTextToPlain(l.description || "")}</span>
-                    <span style={{ ...s.pQty, color: colors.blue }}>{fmtQty(l.quantity)} {l.unit}</span>
+                    <span style={{ ...s.pQty, color: "var(--k-blue)" }}>{fmtQty(l.quantity)} {l.unit}</span>
                   </div>
                 ))}
               </div>
@@ -347,30 +349,23 @@ function normalizeChallanLines(lines) {
 }
 
 const s = {
-  sub: { fontSize: "0.85rem", color: colors.textSecondary, marginBottom: "1rem" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  hint: { fontSize: "0.75rem", color: colors.textSecondary, marginTop: "0.35rem", fontStyle: "italic" },
+  sub: { fontSize: "var(--k-font)", color: "var(--k-muted)", marginBottom: "1rem" },
+  hint: { fontSize: "0.75rem", color: "var(--k-muted)", fontStyle: "italic" },
   optLines: { display: "flex", flexDirection: "column", gap: "0.2rem" },
-  optLine: { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.8rem" },
-  optDesc: { color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
-  optQty: { fontWeight: 700, color: colors.textPrimary, flexShrink: 0, whiteSpace: "nowrap" },
-  optEmpty: { color: colors.textSecondary, fontStyle: "italic", fontSize: "0.78rem" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-  warn: { display: "flex", alignItems: "center", gap: "0.4rem", backgroundColor: colors.warnLight, color: colors.warn, padding: "0.55rem 0.85rem", borderRadius: 8, margin: "0.5rem 0 0.75rem", fontSize: "0.82rem", fontWeight: 500 },
-  gridTitle: { fontSize: "0.9rem", fontWeight: 700, color: colors.textPrimary, marginBottom: "0.5rem" },
-  tableWrap: { border: `1px solid ${colors.cardBorder}`, borderRadius: 10, overflow: "hidden" },
-  thead: { display: "flex", gap: "0.6rem", padding: "0.5rem 0.7rem", fontSize: "0.72rem", textTransform: "uppercase", fontWeight: 700, color: colors.textSecondary, background: colors.bg, borderBottom: `1px solid ${colors.cardBorder}` },
-  trow: { display: "flex", gap: "0.6rem", alignItems: "center", padding: "0.5rem 0.7rem", borderBottom: `1px solid ${colors.cardBorder}` },
-  qCol: { width: 110, flexShrink: 0, fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary },
-  desc: { fontSize: "0.88rem", fontWeight: 600, color: colors.textPrimary, whiteSpace: "pre-wrap" },
-  unit: { fontSize: "0.74rem", color: colors.textSecondary, marginTop: "0.1rem" },
-  select: { width: "100%", padding: "0.5rem 0.6rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.85rem", backgroundColor: colors.inputBg, color: colors.textPrimary, cursor: "pointer" },
+  optLine: { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "var(--k-font-sm)" },
+  optDesc: { color: "var(--k-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 },
+  optQty: { fontWeight: 700, color: "var(--k-ink)", flexShrink: 0, whiteSpace: "nowrap" },
+  optEmpty: { color: "var(--k-muted)", fontStyle: "italic", fontSize: "0.78rem" },
+  gridTitle: { fontSize: "var(--k-font)", fontWeight: 700, color: "var(--k-ink)", marginBottom: "0.5rem" },
+  qCol: { width: 110, whiteSpace: "nowrap" },
+  desc: { fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)", whiteSpace: "pre-wrap" },
+  unit: { fontSize: "0.74rem", color: "var(--k-muted)", marginTop: "0.1rem" },
   mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
-  mlabel: { display: "block", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, margin: "0.5rem 0 0.25rem" },
-  previewTitle: { fontSize: "0.8rem", fontWeight: 700, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: "0.03em", margin: "1rem 0 0.4rem" },
+  mcard: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" },
+  mlabel: { display: "block", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--k-muted)", fontWeight: 700, margin: "0.5rem 0 0.25rem" },
+  previewTitle: { fontSize: "var(--k-font-sm)", fontWeight: 700, color: "var(--k-muted)", textTransform: "uppercase", letterSpacing: "0.03em", margin: "1rem 0 0.4rem" },
   previewList: { display: "flex", flexDirection: "column", gap: "0.3rem" },
-  previewRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.83rem", padding: "0.3rem 0.5rem", borderRadius: 6, background: colors.bg },
-  pDesc: { color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 },
+  previewRow: { display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "var(--k-font-sm)", padding: "0.3rem 0.5rem", borderRadius: 6, background: "var(--k-surface-2)" },
+  pDesc: { color: "var(--k-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 },
   pQty: { fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap" },
 };

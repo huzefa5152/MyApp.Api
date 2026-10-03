@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import SearchableSelect from "./SearchableSelect";
+import SearchableClientSelect from "./SearchableClientSelect";
 import ItemTypeForm from "./ItemTypeForm";
 import LineItemsEditor from "./LineItemsEditor";
 import { MdPersonAdd } from "react-icons/md";
@@ -17,10 +17,7 @@ import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 
 import { todayYmd } from "../utils/dateInput";
-const colors = {
-  textSecondary: "#5f6d7e", cardBorder: "#e8edf3", inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2", danger: "#dc3545", dangerLight: "#fff0f1", teal: "#00897b",
-};
+import { Button, Field } from "../ui/Kit";
 
 const blankItem = () => ({ id: 0, _imageKey: crypto.randomUUID(), imagePath: null, itemTypeId: null, description: "", quantity: 1, unit: "", unitPrice: 0, rateHint: "" });
 
@@ -155,65 +152,58 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
-            {error && <div ref={errRef} style={s.err}>{error}</div>}
+            {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
-            <div style={s.row}>
-              <div style={{ flex: 2, minWidth: 220 }}>
-                <label style={s.label}>Client</label>
-                <SearchableSelect
-                  items={clients}
+            <div className="k-form-grid" style={s.grid}>
+              <Field label="Client">
+                <SearchableClientSelect
+                  clients={clients}
                   value={client?.id || ""}
                   onChange={(id, item) => setClient(item)}
                   placeholder="— Select Client —"
                 />
                 {canCreateClient ? (
-                  <button
-                    type="button"
-                    style={{ ...s.inlineAddBtn, marginTop: "0.4rem", minHeight: 44 }}
+                  <Button
+                    variant="secondary"
+                    icon={MdPersonAdd}
+                    style={s.inlineAddBtn}
                     onClick={() => setShowAddClient(true)}
                     title="Create a new client without leaving this form"
                   >
-                    <MdPersonAdd size={14} /> New Client
-                  </button>
+                    New Client
+                  </Button>
                 ) : (
                   <PermissionLackedHint perm="clients.manage.create" what="add a new client" />
                 )}
-
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Issue Date</label>
-                <input type="date" style={s.input} value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Valid for (days) <span style={s.opt}>(optional)</span></label>
-                <input type="number" min={1} step={1} style={s.input} value={validForDays} onChange={(e) => setValidForDays(e.target.value)} placeholder="blank = no expiry" />
-              </div>
+              </Field>
+              <Field label="Issue Date">
+                <input type="date" className="k-input" value={date} onChange={(e) => setDate(e.target.value)} />
+              </Field>
+              <Field label={<>Valid for (days) <span style={s.opt}>(optional)</span></>}>
+                <input type="number" min={1} step={1} className="k-input" value={validForDays} onChange={(e) => setValidForDays(e.target.value)} placeholder="blank = no expiry" />
+              </Field>
             </div>
-            <div style={s.row}>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={s.label}>Customer Enquiry Ref <span style={s.opt}>(optional)</span></label>
-                <input type="text" style={s.input} value={enquiryRef} onChange={(e) => setEnquiryRef(e.target.value)} placeholder="Their RFQ / enquiry number" />
-              </div>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <label style={s.label}>Enquiry Date <span style={s.opt}>(optional)</span></label>
-                <input type="date" style={s.input} value={enquiryDate} onChange={(e) => setEnquiryDate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1, minWidth: 120 }}>
-                <label style={s.label}>GST Rate (%)</label>
-                <input type="number" min="0" max="100" step="0.01" style={{ ...s.input, textAlign: "right" }} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />
-              </div>
-              <div style={{ flex: 1.5, minWidth: 180 }}>
-                <label style={s.label}>Contact Person <span style={s.opt}>(optional)</span></label>
+            <div className="k-form-grid" style={s.grid}>
+              <Field label={<>Customer Enquiry Ref <span style={s.opt}>(optional)</span></>}>
+                <input type="text" className="k-input" value={enquiryRef} onChange={(e) => setEnquiryRef(e.target.value)} placeholder="Their RFQ / enquiry number" />
+              </Field>
+              <Field label={<>Enquiry Date <span style={s.opt}>(optional)</span></>}>
+                <input type="date" className="k-input" value={enquiryDate} onChange={(e) => setEnquiryDate(e.target.value)} />
+              </Field>
+              <Field label="GST Rate (%)">
+                <input type="number" min="0" max="100" step="0.01" className="k-input" style={{ textAlign: "right" }} value={gstRate} onChange={(e) => setGstRate(e.target.value)} />
+              </Field>
+              <Field label={<>Contact Person <span style={s.opt}>(optional)</span></>}>
                 {contactOptions.length > 0 ? (
-                  <select style={s.input} value={contactPerson} onChange={(e) => setContactPerson(e.target.value)}>
+                  <select className="k-select" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)}>
                     <option value="">(none)</option>
                     {contactPerson && !contactOptions.includes(contactPerson) && <option value={contactPerson}>{contactPerson}</option>}
                     {contactOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 ) : (
-                  <input type="text" style={s.input} value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder={client ? "Optional (client has no saved contacts)" : "Pick a client first"} disabled={!client} />
+                  <input type="text" className="k-input" value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder={client ? "Optional (client has no saved contacts)" : "Pick a client first"} disabled={!client} />
                 )}
-              </div>
+              </Field>
             </div>
 
             <LineItemsEditor companyId={companyId}
@@ -285,32 +275,10 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
 }
 
 const s = {
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  itemsHeaderBar: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" },
-  inlineAddBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.45rem 0.75rem", borderRadius: 6, border: `1px solid ${colors.teal}`, backgroundColor: "#fff", color: colors.teal, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-  bulkApplyBar: { display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap", padding: "0.55rem 0.85rem", marginBottom: "0.5rem", borderRadius: 8, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff" },
-  bulkClearBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.35rem 0.7rem", borderRadius: 6, border: `1px solid ${colors.danger}`, backgroundColor: "#fff", color: colors.danger, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  opt: { color: colors.textSecondary, fontWeight: 400 },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  err: { backgroundColor: colors.dangerLight, color: colors.danger, padding: "0.65rem 1rem", borderRadius: 8, marginBottom: "1rem", fontWeight: 500, fontSize: "0.85rem" },
-  tableWrap: { maxHeight: 300, overflowY: "auto", overflowX: "auto", border: `1px solid ${colors.cardBorder}`, borderRadius: 10 },
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.02em", fontWeight: 700, color: colors.textSecondary, padding: "0.5rem 0.4rem", borderBottom: `2px solid ${colors.cardBorder}`, whiteSpace: "nowrap", background: "#fafbfc", position: "sticky", top: 0 },
-  td: { padding: "0.3rem 0.4rem", verticalAlign: "middle", borderBottom: `1px solid ${colors.cardBorder}` },
-  cellInput: { width: "100%", padding: "0.5rem 0.55rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.88rem", backgroundColor: colors.inputBg, color: "#1a2332", outline: "none", boxSizing: "border-box" },
-  hint: { fontSize: "0.7rem", color: colors.teal, marginTop: 2, fontWeight: 600 },
-  del: { display: "grid", placeItems: "center", padding: "0.4rem", borderRadius: 8, border: `1px solid ${colors.danger}25`, backgroundColor: colors.dangerLight, color: colors.danger, cursor: "pointer", margin: "0 auto" },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.3rem", marginTop: "0.6rem", padding: "0.4rem 0.9rem", borderRadius: 8, border: "none", backgroundColor: `${colors.teal}14`, color: colors.teal, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer" },
-  totals: { marginTop: "1rem", marginLeft: "auto", width: 280 },
-  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "0.9rem", color: colors.textSecondary },
-  grand: { borderTop: "2px solid #0d47a1", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "1rem", color: "#0d47a1" },
-  // Mobile stacked-card line items (rendered below 760px instead of the table).
-  mcards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  mcard: { border: `1px solid ${colors.cardBorder}`, borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
-  mcardHead: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" },
-  mnum: { flex: "0 0 auto", width: 24, height: 24, borderRadius: 7, background: "#f0f3f8", color: colors.textSecondary, display: "grid", placeItems: "center", fontSize: "0.78rem", fontWeight: 700 },
-  m3col: { display: "grid", gridTemplateColumns: "1fr 1fr 1.1fr", gap: "0.5rem", marginTop: "0.5rem" },
-  mlabel: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: colors.textSecondary, fontWeight: 700, marginBottom: "0.2rem" },
-  mamt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: `1px dashed ${colors.cardBorder}`, fontSize: "0.85rem", color: colors.textSecondary },
+  grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
+  inlineAddBtn: { marginTop: "0.4rem", alignSelf: "flex-start", color: "var(--k-teal)", borderColor: "var(--k-teal)" },
+  opt: { color: "var(--k-muted)", fontWeight: 400 },
+  totals: { marginTop: "1rem", marginLeft: "auto", width: 280, maxWidth: "100%" },
+  tRow: { display: "flex", justifyContent: "space-between", padding: "0.25rem 0", fontSize: "var(--k-font)", color: "var(--k-muted)" },
+  grand: { borderTop: "2px solid var(--k-blue)", marginTop: 4, paddingTop: 8, fontWeight: 800, fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-blue)" },
 };

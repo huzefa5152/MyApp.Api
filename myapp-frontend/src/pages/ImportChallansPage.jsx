@@ -6,22 +6,17 @@ import { getClientsByCompany } from "../api/clientApi";
 import { hasExcelTemplate, getTemplate } from "../api/printTemplateApi";
 import { previewChallanImport, commitChallanImport } from "../api/challanImportApi";
 import { notify } from "../utils/notify";
+import SearchableClientSelect from "../Components/SearchableClientSelect";
+import { PageHeader, Button, IconButton, Field, Card, TableWrap, StatGrid, StatCard, EmptyState, Alert } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
-  blueLight: "#1565c0",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
+  textSecondary: "var(--k-muted)",
+  cardBorder: "var(--k-line)",
+  danger: "var(--k-danger)",
+  dangerLight: "var(--k-danger-bg)",
   success: "#28a745",
-  successLight: "#e8f5e9",
   warning: "#f59f00",
   warningLight: "#fff8e1",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
 };
 
 // A file is recognized as a Delivery Challan if its name starts with
@@ -191,48 +186,36 @@ export default function ImportChallansPage() {
 
   if (!companies || companies.length === 0) {
     return (
-      <div style={styles.empty}>
-        <MdFileUpload size={48} color={colors.textSecondary} />
-        <p>No companies available. Please create one first.</p>
-      </div>
+      <EmptyState icon={MdFileUpload}>No companies available. Please create one first.</EmptyState>
     );
   }
 
   if (!canImport) {
     return (
-      <div style={{ textAlign: "center", padding: "4rem 1.5rem", background: "#fff", border: `1px solid ${colors.cardBorder}`, borderRadius: 14 }}>
-        <MdLock style={{ fontSize: "2.5rem", color: colors.textSecondary }} />
-        <h3 style={{ margin: "0.75rem 0 0.25rem" }}>Access denied</h3>
-        <p style={{ margin: 0, color: colors.textSecondary, fontSize: "0.9rem" }}>You don&apos;t have permission to import challans.</p>
-      </div>
+      <EmptyState icon={MdLock} title="Access denied">You don&apos;t have permission to import challans.</EmptyState>
     );
   }
 
   return (
     <div className="imp-page" style={styles.wrap}>
-      <div style={styles.header}>
-        <div>
-          <h2 style={styles.title}>Import Historical Challans</h2>
-          <p style={styles.subtitle}>
-            Upload old Excel challan files — we'll read them using this company's
-            print template and let you review before importing.
-          </p>
-        </div>
-        {step > 1 && (
-          <button style={styles.secondaryBtn} onClick={reset}>
-            <MdArrowBack /> Start over
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={MdFileUpload}
+        tone="blue"
+        title="Import Historical Challans"
+        subtitle="Upload old Excel challan files — we'll read them using this company's print template and let you review before importing."
+        actions={step > 1 ? (
+          <Button variant="secondary" icon={MdArrowBack} onClick={reset}>Start over</Button>
+        ) : null}
+      />
 
       <Stepper step={step} />
 
       {templateReady === false && step === 1 && targetCompany && (
-        <div style={styles.warnBanner}>
-          <MdError /> No Challan Excel template is configured for{" "}
+        <Alert tone="warn" icon={MdError}>
+          No Challan Excel template is configured for{" "}
           <b>{targetCompany.name}</b>. Please upload one in{" "}
           <i>Configuration → Print Templates</i> before importing.
-        </div>
+        </Alert>
       )}
 
       {step === 1 && (
@@ -297,7 +280,7 @@ function Stepper({ step }) {
             style={{
               ...styles.stepLabel,
               fontWeight: step === it.n ? 700 : 500,
-              color: step >= it.n ? colors.blue : colors.textSecondary,
+              color: step >= it.n ? "var(--k-blue)" : "var(--k-muted)",
             }}
           >
             {it.label}
@@ -307,7 +290,7 @@ function Stepper({ step }) {
               className="imp-stepper__line"
               style={{
                 ...styles.stepLine,
-                background: step > it.n ? colors.blue : colors.inputBorder,
+                background: step > it.n ? "var(--k-blue)" : "var(--k-line-strong)",
               }}
             />
           )}
@@ -368,28 +351,33 @@ function UploadStep({
   const misnamedCount = files.filter((f) => !parseDcFilename(f.name)).length;
 
   return (
-    <div style={styles.card}>
+    <Card>
       {/* Company picker — each company has its OWN Challan template, and */}
       {/* the template dictates where fields live. Picking the wrong one   */}
       {/* means the parser reads garbage. Surfacing this explicitly        */}
       {/* prevents quiet mistakes.                                         */}
+      {/* Local target-company <select> on purpose (NOT the shared         */}
+      {/* CompanyPicker): it must not change the app-wide company.         */}
       <div style={styles.companyPickerWrap}>
-        <label style={styles.fieldLabel}>Target Company</label>
-        <select
-          value={targetCompany?.id ?? ""}
-          onChange={(e) => {
-            const picked = companies.find((c) => c.id === parseInt(e.target.value));
-            setTargetCompany(picked || null);
-            setFiles([]);   // start over — old files may be wrong-template
-          }}
-          style={{ ...styles.input, maxWidth: "320px" }}
-        >
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.brandName || c.name}
-            </option>
-          ))}
-        </select>
+        <Field label="Target Company" htmlFor="import-target-company">
+          <select
+            id="import-target-company"
+            className="k-select"
+            value={targetCompany?.id ?? ""}
+            onChange={(e) => {
+              const picked = companies.find((c) => c.id === parseInt(e.target.value));
+              setTargetCompany(picked || null);
+              setFiles([]);   // start over — old files may be wrong-template
+            }}
+            style={{ maxWidth: "320px" }}
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.brandName || c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
         <small style={styles.companyPickerHint}>
           {templateReady === null && "Checking template..."}
           {templateReady === true && (
@@ -412,9 +400,10 @@ function UploadStep({
           </label>
           <select
             id="import-sheet-picker"
+            className="k-select"
             value={overrideSheet}
             onChange={(e) => setOverrideSheet(e.target.value)}
-            style={{ ...styles.input, maxWidth: 260 }}
+            style={{ width: "auto", maxWidth: 260 }}
             title="Pick which sheet the importer reads from each uploaded file. Only applies to this import batch — to persist, set the pin on the Print Templates page."
           >
             <option value="">
@@ -439,14 +428,14 @@ function UploadStep({
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
-        <MdFileUpload size={40} color={colors.blue} />
+        <MdFileUpload size={40} color="var(--k-blue)" />
         <p style={{ margin: "0.6rem 0 0.2rem", fontWeight: 600 }}>
           Drop Excel files here
         </p>
-        <p style={{ margin: 0, fontSize: "0.85rem", color: colors.textSecondary }}>
+        <p style={{ margin: 0, fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
           Filename should start with <code>DC #</code> • .xls, .xlsx, .xlsm
         </p>
-        <label style={{ ...styles.primaryBtn, marginTop: "1rem" }}>
+        <label className="k-btn k-btn--primary" style={{ marginTop: "1rem" }}>
           Browse files
           <input
             type="file"
@@ -469,9 +458,9 @@ function UploadStep({
                 </span>
               )}
             </span>
-            <button style={styles.linkBtn} onClick={() => setFiles([])}>
+            <Button variant="ghost" size="sm" onClick={() => setFiles([])}>
               Clear all
-            </button>
+            </Button>
           </div>
           <ul style={styles.fileList}>
             {files.map((f, i) => {
@@ -493,9 +482,7 @@ function UploadStep({
                   <span style={{ color: colors.textSecondary, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
                     {(f.size / 1024).toFixed(1)} KB
                   </span>
-                  <button style={styles.iconBtn} onClick={() => removeFile(i)}>
-                    <MdDelete />
-                  </button>
+                  <IconButton danger label="Remove file" icon={MdDelete} style={styles.iconBtn} onClick={() => removeFile(i)} />
                 </li>
               );
             })}
@@ -504,15 +491,15 @@ function UploadStep({
       )}
 
       <div style={styles.footerBtns}>
-        <button
-          style={{ ...styles.primaryBtn, opacity: disabled || !files.length ? 0.55 : 1 }}
+        <Button
+          variant="primary"
           disabled={disabled || !files.length}
           onClick={onNext}
         >
           {loading ? "Parsing..." : `Preview ${files.length} file(s)`}
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -576,7 +563,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
   const wrongCompanyCount = useMemo(() => rows.filter((r) => r.wrongCompany).length, [rows]);
 
   return (
-    <div style={styles.card}>
+    <Card>
       <div style={styles.reviewHeader}>
         <span>
           <b>{rows.length}</b> file(s) parsed • <b style={{ color: validCount === rows.length ? colors.success : colors.warning }}>
@@ -623,9 +610,7 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                   <span style={styles.rowWarn}>Needs attention</span>
                 ) : null}
               </div>
-              <button style={styles.iconBtn} onClick={() => removeRow(rowIdx)}>
-                <MdDelete />
-              </button>
+              <IconButton danger label="Remove file" icon={MdDelete} style={styles.iconBtn} onClick={() => removeRow(rowIdx)} />
             </div>
 
             {isWrongCo && (
@@ -650,28 +635,22 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               </div>
             )}
 
-            <div style={styles.fieldsGrid}>
+            <div className="k-form-grid" style={styles.fieldsGrid}>
               <Field label="Challan #">
                 <input
                   type="number"
+                  className="k-input"
                   value={row.challanNumber || ""}
                   onChange={(e) => updateRow(rowIdx, { challanNumber: parseInt(e.target.value) || 0 })}
-                  style={styles.input}
                 />
               </Field>
               <Field label="Client">
-                <select
+                <SearchableClientSelect
+                  clients={clients}
                   value={row.clientId || ""}
-                  onChange={(e) => updateRow(rowIdx, { clientId: parseInt(e.target.value) || null })}
-                  style={styles.input}
-                >
-                  <option value="">— pick client —</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => updateRow(rowIdx, { clientId: parseInt(id) || null })}
+                  placeholder="— pick client —"
+                />
                 {row.clientNameRaw && !row.clientId && (
                   <small style={{ color: colors.warning }}>
                     File said: "{row.clientNameRaw}"
@@ -681,31 +660,31 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
               <Field label="Delivery Date">
                 <input
                   type="date"
+                  className="k-input"
                   value={toInputDate(row.deliveryDate)}
                   onChange={(e) => updateRow(rowIdx, { deliveryDate: e.target.value || null })}
-                  style={styles.input}
                 />
               </Field>
               <Field label="PO Number">
                 <input
+                  className="k-input"
                   value={row.poNumber || ""}
                   onChange={(e) => updateRow(rowIdx, { poNumber: e.target.value })}
-                  style={styles.input}
                 />
               </Field>
               <Field label="PO Date">
                 <input
                   type="date"
+                  className="k-input"
                   value={toInputDate(row.poDate)}
                   onChange={(e) => updateRow(rowIdx, { poDate: e.target.value || null })}
-                  style={styles.input}
                 />
               </Field>
               <Field label="Site">
                 <input
+                  className="k-input"
                   value={row.site || ""}
                   onChange={(e) => updateRow(rowIdx, { site: e.target.value })}
-                  style={styles.input}
                 />
               </Field>
             </div>
@@ -713,14 +692,14 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
             <div style={{ marginTop: "0.9rem" }}>
               <div style={styles.itemsHeader}>
                 <span style={{ fontWeight: 600 }}>Items ({row.items?.length || 0})</span>
-                <button style={styles.linkBtn} onClick={() => addItem(rowIdx)}>
+                <Button variant="ghost" size="sm" onClick={() => addItem(rowIdx)}>
                   + Add item
-                </button>
+                </Button>
               </div>
 
               {/* Desktop / tablet — table */}
-              <div className="imp-items-table" style={{ overflowX: "auto" }}>
-                <table style={styles.itemTable}>
+              <TableWrap className="imp-items-table">
+                <table className="k-table k-table--compact">
                   <thead>
                     <tr>
                       <th>Description</th>
@@ -734,43 +713,41 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
                       <tr key={itemIdx}>
                         <td>
                           <input
+                            className="k-input"
                             value={it.description}
                             onChange={(e) => updateItem(rowIdx, itemIdx, { description: e.target.value })}
-                            style={styles.cellInput}
                           />
                         </td>
                         <td>
                           <input
                             type="number"
+                            className="k-input"
                             value={it.quantity}
                             onChange={(e) => updateItem(rowIdx, itemIdx, { quantity: parseInt(e.target.value) || 0 })}
-                            style={styles.cellInput}
                           />
                         </td>
                         <td>
                           <input
+                            className="k-input"
                             value={it.unit}
                             onChange={(e) => updateItem(rowIdx, itemIdx, { unit: e.target.value })}
-                            style={styles.cellInput}
                           />
                         </td>
-                        <td>
-                          <button style={styles.iconBtn} onClick={() => removeItem(rowIdx, itemIdx)}>
-                            <MdDelete />
-                          </button>
+                        <td className="k-actions">
+                          <IconButton danger label="Remove item" icon={MdDelete} style={styles.iconBtn} onClick={() => removeItem(rowIdx, itemIdx)} />
                         </td>
                       </tr>
                     ))}
                     {(!row.items || row.items.length === 0) && (
                       <tr>
-                        <td colSpan={4} style={{ textAlign: "center", color: colors.textSecondary, padding: "0.8rem" }}>
+                        <td colSpan={4} className="is-center k-muted">
                           No items. Click "+ Add item" to create one.
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
 
               {/* Mobile — stacked-card editors. Description on its own row
                   (full width — usually the longest), then Qty + Unit
@@ -829,16 +806,16 @@ function ReviewStep({ rows, setRows, clients, onBack, onCommit, loading }) {
       })}
 
       <div style={styles.footerBtns}>
-        <button style={styles.secondaryBtn} onClick={onBack}>Back</button>
-        <button
-          style={{ ...styles.primaryBtn, opacity: loading || validCount === 0 ? 0.6 : 1 }}
+        <Button variant="secondary" onClick={onBack}>Back</Button>
+        <Button
+          variant="primary"
           disabled={loading || validCount === 0}
           onClick={onCommit}
         >
           {loading ? "Importing..." : `Confirm Import (${validCount})`}
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -846,25 +823,13 @@ function ResultsStep({ results, onRestart }) {
   const success = results.filter((r) => r.success);
   const failed = results.filter((r) => !r.success);
   return (
-    <div style={styles.card}>
-      <div style={styles.resultSummary}>
-        <div style={{ ...styles.summaryBox, background: colors.successLight, color: colors.success }}>
-          <MdCheckCircle size={28} />
-          <div>
-            <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{success.length}</div>
-            <div>Imported</div>
-          </div>
-        </div>
-        <div style={{ ...styles.summaryBox, background: colors.dangerLight, color: colors.danger }}>
-          <MdError size={28} />
-          <div>
-            <div style={{ fontSize: "1.4rem", fontWeight: 700 }}>{failed.length}</div>
-            <div>Failed</div>
-          </div>
-        </div>
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={styles.itemTable}>
+    <Card>
+      <StatGrid>
+        <StatCard tone="green" icon={MdCheckCircle} label="Imported" value={success.length} />
+        <StatCard tone="red" icon={MdError} label="Failed" value={failed.length} />
+      </StatGrid>
+      <TableWrap>
+        <table className="k-table">
           <thead>
             <tr>
               <th>File</th>
@@ -885,27 +850,18 @@ function ResultsStep({ results, onRestart }) {
                     <span style={{ color: colors.danger, fontWeight: 600 }}>✗ Failed</span>
                   )}
                 </td>
-                <td style={{ color: colors.textSecondary, fontSize: "0.85rem" }}>
+                <td className="k-muted">
                   {r.error || (r.insertedId ? `ID ${r.insertedId}` : "")}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrap>
       <div style={styles.footerBtns}>
-        <button style={styles.primaryBtn} onClick={onRestart}>Import more</button>
+        <Button variant="primary" onClick={onRestart}>Import more</Button>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <label style={styles.field}>
-      <span style={styles.fieldLabel}>{label}</span>
-      {children}
-    </label>
+    </Card>
   );
 }
 
@@ -923,102 +879,77 @@ function toInputDate(v) {
 /*  Styles                                                             */
 /* ------------------------------------------------------------------ */
 const styles = {
-  wrap: { padding: "1rem", maxWidth: "1100px", margin: "0 auto" },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: "1rem",
-    marginBottom: "0.6rem",
-    flexWrap: "wrap",
-  },
-  title: { margin: 0, fontSize: "1.6rem", fontWeight: 700, color: colors.blue },
-  subtitle: { margin: "0.3rem 0 0", color: colors.textSecondary, fontSize: "0.9rem" },
-  empty: {
-    padding: "3rem", textAlign: "center", color: colors.textSecondary,
-    display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem",
-  },
+  wrap: { maxWidth: "1100px", margin: "0 auto" },
   stepper: {
-    display: "flex", alignItems: "center", gap: "0.4rem", margin: "1rem 0 1.2rem",
-    padding: "0.7rem 1rem", background: "#fff", border: `1px solid ${colors.cardBorder}`,
-    borderRadius: "10px", overflowX: "auto",
+    display: "flex", alignItems: "center", gap: "0.4rem", margin: "0 0 var(--k-gap)",
+    padding: "0.7rem 1rem", background: "var(--k-surface)", border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-card-radius)", overflowX: "auto",
   },
   stepWrap: { display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 },
   stepDot: {
     width: "28px", height: "28px", borderRadius: "50%",
-    background: colors.inputBg, color: colors.textSecondary,
+    background: "var(--k-surface-2)", color: "var(--k-muted)",
     display: "flex", alignItems: "center", justifyContent: "center",
-    fontWeight: 700, fontSize: "0.85rem",
-    border: `2px solid ${colors.inputBorder}`,
+    fontWeight: 700, fontSize: "var(--k-font-sm)",
+    border: "2px solid var(--k-line-strong)",
   },
-  stepDotActive: { background: colors.blue, color: "#fff", borderColor: colors.blue },
-  stepLabel: { fontSize: "0.85rem" },
+  stepDotActive: { background: "var(--k-blue)", color: "#fff", borderColor: "var(--k-blue)" },
+  stepLabel: { fontSize: "var(--k-font-sm)" },
   stepLine: { height: "2px", width: "2rem" },
-  card: {
-    background: "#fff", border: `1px solid ${colors.cardBorder}`,
-    borderRadius: "12px", padding: "1.3rem",
-    boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-  },
   companyPickerWrap: {
     display: "flex", flexDirection: "column", gap: "0.3rem",
     padding: "0.9rem 1rem",
-    background: colors.inputBg, borderRadius: "10px",
-    marginBottom: "1rem",
-    border: `1px solid ${colors.inputBorder}`,
+    background: "var(--k-surface-2)", borderRadius: "var(--k-radius)",
+    marginBottom: "var(--k-gap)",
+    border: "1px solid var(--k-line-strong)",
   },
   companyPickerHint: {
-    fontSize: "0.8rem", color: colors.textSecondary,
+    fontSize: "var(--k-font-sm)", color: "var(--k-muted)",
   },
   sheetPickerRow: {
     display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap",
     padding: "0.65rem 0.85rem",
-    background: "#f5f8fc", borderRadius: 10,
-    border: `1px solid ${colors.cardBorder}`,
-    marginBottom: "1rem",
+    background: "var(--k-surface-3)", borderRadius: "var(--k-radius)",
+    border: "1px solid var(--k-line)",
+    marginBottom: "var(--k-gap)",
   },
   sheetPickerLabel: {
-    fontSize: "0.85rem", fontWeight: 600, color: colors.textPrimary,
+    fontSize: "var(--k-font)", fontWeight: 600, color: "var(--k-ink)",
   },
   sheetPickerHint: {
-    fontSize: "0.78rem", color: colors.textSecondary,
+    fontSize: "var(--k-font-sm)", color: "var(--k-muted)",
     marginLeft: "auto",
   },
   dropzone: {
-    border: `2px dashed ${colors.inputBorder}`,
-    borderRadius: "10px", padding: "2rem 1rem",
-    textAlign: "center", background: colors.inputBg,
+    border: "2px dashed var(--k-line-strong)",
+    borderRadius: "var(--k-radius)", padding: "2rem 1rem",
+    textAlign: "center", background: "var(--k-surface-2)",
     display: "flex", flexDirection: "column", alignItems: "center",
   },
   filesHeader: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    padding: "0.3rem 0", fontSize: "0.9rem", color: colors.textPrimary,
+    display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap",
+    padding: "0.3rem 0", fontSize: "var(--k-font)", color: "var(--k-ink)",
   },
   fileList: { listStyle: "none", padding: 0, margin: "0.4rem 0 0" },
   fileRow: {
     display: "flex", gap: "0.6rem", alignItems: "center", justifyContent: "space-between",
-    padding: "0.55rem 0.75rem", borderRadius: "8px",
-    background: colors.inputBg, marginBottom: "0.3rem", fontSize: "0.9rem",
-  },
-  warnBanner: {
-    background: colors.warningLight, color: "#8a6d00",
-    border: `1px solid ${colors.warning}`, borderRadius: "8px",
-    padding: "0.75rem 1rem", display: "flex", alignItems: "center", gap: "0.5rem",
-    marginBottom: "1rem",
+    padding: "0.45rem 0.75rem", borderRadius: "var(--k-radius)",
+    background: "var(--k-surface-2)", marginBottom: "0.3rem", fontSize: "var(--k-font)",
   },
   reviewHeader: {
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    paddingBottom: "0.7rem", marginBottom: "1rem",
-    fontSize: "0.95rem", color: colors.textPrimary,
+    borderBottom: "1px solid var(--k-line)",
+    paddingBottom: "0.7rem", marginBottom: "var(--k-gap)",
+    fontSize: "var(--k-font)", color: "var(--k-ink)",
   },
   rowCard: {
-    border: `2px solid ${colors.cardBorder}`, borderRadius: "10px",
-    padding: "1rem", marginBottom: "1rem", background: colors.inputBg,
+    border: "2px solid var(--k-line)", borderRadius: "var(--k-radius)",
+    padding: "var(--k-card-pad)", marginBottom: "var(--k-gap)", background: "var(--k-surface-2)",
   },
   rowHead: {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
+    display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem",
     marginBottom: "0.6rem",
   },
-  fileLabel: { fontWeight: 600, fontSize: "0.95rem", color: colors.blue, marginRight: "0.6rem" },
+  fileLabel: { fontWeight: 600, fontSize: "var(--k-font)", color: "var(--k-blue)", marginRight: "0.6rem", overflowWrap: "anywhere" },
   rowWarn: {
     display: "inline-block", background: colors.warningLight, color: "#8a6d00",
     padding: "2px 8px", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600,
@@ -1026,63 +957,17 @@ const styles = {
   warnStrip: {
     background: colors.warningLight, color: "#8a6d00",
     borderRadius: "6px", padding: "0.5rem 0.8rem", marginBottom: "0.7rem",
-    fontSize: "0.85rem", lineHeight: 1.5,
+    fontSize: "var(--k-font-sm)", lineHeight: 1.5,
   },
-  fieldsGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: "0.7rem",
-  },
-  field: { display: "flex", flexDirection: "column", gap: "0.25rem" },
-  fieldLabel: { fontSize: "0.78rem", fontWeight: 600, color: colors.textSecondary },
-  input: {
-    padding: "0.45rem 0.6rem", borderRadius: "6px",
-    border: `1px solid ${colors.inputBorder}`, background: "#fff",
-    fontSize: "0.9rem", outline: "none",
-  },
+  fieldsGrid: { gap: "0.7rem" },
   itemsHeader: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    marginBottom: "0.4rem", fontSize: "0.9rem",
-  },
-  itemTable: {
-    width: "100%", borderCollapse: "collapse", fontSize: "0.87rem",
-  },
-  cellInput: {
-    width: "100%", padding: "0.35rem 0.5rem", borderRadius: "4px",
-    border: `1px solid ${colors.inputBorder}`, background: "#fff",
-    fontSize: "0.85rem", outline: "none",
+    marginBottom: "0.4rem", fontSize: "var(--k-font)",
   },
   footerBtns: {
     display: "flex", gap: "0.6rem", justifyContent: "flex-end",
     marginTop: "1.2rem", paddingTop: "1rem",
-    borderTop: `1px solid ${colors.cardBorder}`, flexWrap: "wrap",
+    borderTop: "1px solid var(--k-line)", flexWrap: "wrap",
   },
-  primaryBtn: {
-    padding: "0.55rem 1.1rem", border: "none", borderRadius: "8px",
-    background: colors.blue, color: "#fff", fontWeight: 600,
-    cursor: "pointer", fontSize: "0.88rem",
-    display: "inline-flex", alignItems: "center", gap: "0.4rem",
-  },
-  secondaryBtn: {
-    padding: "0.5rem 1rem", borderRadius: "8px",
-    border: `1px solid ${colors.inputBorder}`, background: "#fff",
-    color: colors.textPrimary, fontWeight: 600, cursor: "pointer",
-    display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.88rem",
-  },
-  linkBtn: {
-    background: "transparent", border: "none", color: colors.blueLight,
-    cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", padding: "0.2rem 0.4rem",
-  },
-  iconBtn: {
-    background: "transparent", border: "none", cursor: "pointer",
-    color: colors.danger, padding: "0.25rem", display: "inline-flex",
-  },
-  resultSummary: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-    gap: "0.7rem", marginBottom: "1rem",
-  },
-  summaryBox: {
-    display: "flex", alignItems: "center", gap: "0.7rem",
-    padding: "0.9rem 1rem", borderRadius: "10px",
-    fontWeight: 600,
-  },
+  iconBtn: { color: "var(--k-danger)" },
 };

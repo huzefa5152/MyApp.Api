@@ -11,6 +11,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MdContentCopy } from "react-icons/md";
 import { formStyles, modalSizes } from "../theme";
+import { IconButton } from "../ui/Kit";
 
 export default function DuplicateChallanDialog({ open, challanNumber, onConfirm, onCancel }) {
   const [count, setCount] = useState(1);
@@ -62,10 +63,10 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
         </div>
 
         <div style={{ padding: "16px 28px 4px", textAlign: "center" }}>
-          <h3 style={{ margin: "0 0 8px", fontSize: "1.15rem", fontWeight: 700, color: "#1a2332" }}>
+          <h3 style={{ margin: "0 0 8px", fontSize: "var(--ui-modal-title-size, 1.15rem)", fontWeight: 700, color: "var(--k-ink)" }}>
             Duplicate Challan #{challanNumber}?
           </h3>
-          <p style={{ margin: 0, fontSize: "0.88rem", color: "#5f6d7e", lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: "var(--k-font)", color: "var(--k-muted)", lineHeight: 1.5 }}>
             How many copies should be created? Each copy reuses the same challan
             number and can be edited (PO, items) independently.
           </p>
@@ -74,12 +75,11 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
         <form onSubmit={handleSubmit}>
           <div style={{ padding: "12px 28px 4px", display: "flex", justifyContent: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button
-                type="button"
+              <IconButton
+                label="Decrease"
                 onClick={() => setCount((c) => clamp((+c || 1) - 1))}
-                aria-label="Decrease"
                 style={S.stepBtn}
-              >−</button>
+              >−</IconButton>
               <input
                 ref={inputRef}
                 type="number"
@@ -89,17 +89,18 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
                 value={count}
                 onChange={(e) => setCount(e.target.value === "" ? "" : Number(e.target.value))}
                 onBlur={() => setCount((c) => clamp(+c))}
+                className="k-input"
                 style={S.input}
+                aria-label="Number of copies"
               />
-              <button
-                type="button"
+              <IconButton
+                label="Increase"
                 onClick={() => setCount((c) => clamp((+c || 1) + 1))}
-                aria-label="Increase"
                 style={S.stepBtn}
-              >+</button>
+              >+</IconButton>
             </div>
           </div>
-          <div style={{ textAlign: "center", fontSize: "0.75rem", color: "#98a4b3", padding: "0 28px 4px" }}>
+          <div style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--k-faint)", padding: "0 28px 4px" }}>
             Maximum 20 per request.
           </div>
 
@@ -126,24 +127,18 @@ export default function DuplicateChallanDialog({ open, challanNumber, onConfirm,
 
 const S = {
   stepBtn: {
-    width: 36, height: 36, borderRadius: 8, border: "1px solid #d0d7e2",
-    background: "#fff", color: "#1a2332", fontWeight: 700, fontSize: "1.1rem",
-    cursor: "pointer",
+    border: "1px solid var(--k-line-strong)", background: "var(--k-surface)",
+    color: "var(--k-ink)", fontWeight: 700, fontSize: "1.1rem",
   },
   input: {
-    width: 84, height: 36, padding: "0 10px", borderRadius: 8,
-    border: "1px solid #d0d7e2", background: "#fff",
-    color: "#1a2332", fontSize: "1.1rem", fontWeight: 700, textAlign: "center",
-    outline: "none",
+    width: 84, fontSize: "1.1rem", fontWeight: 700, textAlign: "center", padding: "0 10px",
   },
   cancelBtn: {
-    flex: 1, padding: "10px 20px", borderRadius: 10, border: "1px solid #d0d7e2",
-    background: "#fff", color: "#1a2332", fontWeight: 600, fontSize: "0.9rem",
-    cursor: "pointer",
+    ...formStyles.button, ...formStyles.cancel, flex: 1,
   },
+  // Purple keeps the duplicate action in the same colour family as the
+  // DUPLICATE pill and button on the challan card.
   confirmBtn: {
-    flex: 1, padding: "10px 20px", borderRadius: 10, border: "none",
-    background: "#4527a0", color: "#fff", fontWeight: 600, fontSize: "0.9rem",
-    cursor: "pointer",
+    ...formStyles.button, flex: 1, background: "#4527a0", color: "#fff",
   },
 };

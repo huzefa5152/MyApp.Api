@@ -10,23 +10,10 @@ import {
 } from "../api/poFormatApi";
 import { formStyles, modalSizes } from "../theme";
 import useScrollToError from "../hooks/useScrollToError";
+import { Field, Alert } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
   success: "#28a745",
-  successLight: "#e8f5e9",
-  warning: "#f57c00",
-  warningLight: "#fff3e0",
-  primary: "#0d47a1",
-  primaryLight: "#e3f2fd",
 };
 
 // Each form is mounted for one company; changing company closes the form.
@@ -182,75 +169,74 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 
         <div style={{ ...formStyles.body, maxHeight: "72vh", overflowY: "auto" }}>
           {error && (
-            <div ref={errRef} style={styles.errorAlert}>
-              <MdWarning size={16} /> {error}
+            <div ref={errRef}>
+              <Alert tone="error" icon={MdWarning}>{error}</Alert>
             </div>
           )}
 
           {!isEdit && existingMatchName && (
-            <div style={styles.infoAlert}>
-              <MdInfoOutline size={16} />
-              <span>A format already exists for this layout: <strong>{existingMatchName}</strong>. Check whether this is the format you need before adding another.</span>
-            </div>
+            <Alert tone="warn" icon={MdInfoOutline}>
+              A format already exists for this layout: <strong>{existingMatchName}</strong>. Check whether this is the format you need before adding another.
+            </Alert>
           )}
 
           <p style={styles.hint}>Company: <strong>{companyName}</strong>. This format is private to this company.</p>
-          <div style={styles.row}>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="po-format-client" style={styles.label}>Client *</label>
-              <select id="po-format-client" style={styles.input} disabled={clientsLoading}
+          <div className="k-form-grid" style={styles.grid}>
+            <Field label="Client *" htmlFor="po-format-client">
+              <select id="po-format-client" className="k-select" disabled={clientsLoading}
                 value={selectedClientId ?? ""}
                 onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">{clientsLoading ? "Loading clients..." : "Select client"}</option>
                 {availableClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               {!clientsLoading && availableClients.length === 0 && <p style={styles.hint}>No available clients. Each client can have one format in this company.</p>}
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>Format name *</label>
+            </Field>
+            <Field label="Format name *" htmlFor="po-format-name">
               <input
-                style={styles.input}
+                id="po-format-name"
+                className="k-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Standard PO layout"
               />
-            </div>
+            </Field>
           </div>
 
           {/* Sample PDF upload — required on create, optional on edit
               (upload replaces the stored sample and recomputes the
               fingerprint hash — useful if the client's template changed). */}
           <div style={{ marginBottom: "1rem" }}>
-            <label style={styles.label}>
-              Sample PDF {isEdit ? "(optional — upload to replace)" : "*"}
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileChange}
-              style={{ display: "none" }}
-            />
-            <div style={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
-              <MdUploadFile size={32} color={colors.textSecondary} />
-              <p style={{ margin: "0.5rem 0 0.25rem", color: colors.textSecondary, fontSize: "0.9rem" }}>
-                {uploading ? "Reading PDF…" : uploaded ? <><MdCheckCircle size={16} color={colors.success} style={{ verticalAlign: "middle" }} /> Sample loaded — fill the 5 fields below</> : isEdit ? "Click to upload a new sample PDF (optional)" : "Click to upload a sample PDF"}
-              </p>
-              <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>Max 10 MB</span>
-            </div>
+            <Field label={`Sample PDF ${isEdit ? "(optional — upload to replace)" : "*"}`}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                onChange={handleFileChange}
+                style={{ display: "none" }}
+              />
+              <div style={styles.dropZone} onClick={() => fileInputRef.current?.click()}>
+                <MdUploadFile size={32} color="var(--k-muted)" />
+                <p style={{ margin: "0.5rem 0 0.25rem", color: "var(--k-muted)", fontSize: "var(--k-font)" }}>
+                  {uploading ? "Reading PDF…" : uploaded ? <><MdCheckCircle size={16} color={colors.success} style={{ verticalAlign: "middle" }} /> Sample loaded — fill the 5 fields below</> : isEdit ? "Click to upload a new sample PDF (optional)" : "Click to upload a sample PDF"}
+                </p>
+                <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>Max 10 MB</span>
+              </div>
+            </Field>
           </div>
 
           {/* Raw text preview — helps the operator see exactly what PdfPig
               extracted so they can pick the correct label strings */}
           {rawText && (
             <div style={{ marginBottom: "1rem" }}>
-              <label style={styles.label}>Extracted text (for reference)</label>
-              <textarea
-                readOnly
-                style={{ ...styles.input, ...styles.textarea, fontFamily: "monospace", fontSize: "0.78rem", backgroundColor: "#fafbfc" }}
-                rows={8}
-                value={rawText}
-              />
+              <Field label="Extracted text (for reference)">
+                <textarea
+                  readOnly
+                  className="k-textarea"
+                  style={{ fontFamily: "monospace", fontSize: "0.78rem", backgroundColor: "var(--k-surface-2)" }}
+                  rows={8}
+                  value={rawText}
+                />
+              </Field>
               <div style={styles.hint}>
                 Use the exact strings you see above for the 5 fields below — they must be whole-word matches.
               </div>
@@ -263,71 +249,67 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
             Enter the exact text that appears on the PDF. Only the Description and Quantity column headers are required — the parser reads each item's description and quantity by column, so Unit and the PO labels are optional.
           </p>
 
-          <div style={styles.row}>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>PO Number label</label>
+          <div className="k-form-grid" style={styles.grid}>
+            <Field label="PO Number label">
               <input
-                style={styles.input}
+                className="k-input"
                 value={poNumberLabel}
                 onChange={(e) => setPoNumberLabel(e.target.value)}
                 placeholder='e.g. "P.O. #"'
               />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>PO Date label</label>
+            </Field>
+            <Field label="PO Date label">
               <input
-                style={styles.input}
+                className="k-input"
                 value={poDateLabel}
                 onChange={(e) => setPoDateLabel(e.target.value)}
                 placeholder='e.g. "P.O. Date"'
               />
-            </div>
+            </Field>
           </div>
 
-          <div style={styles.row}>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>Description column header *</label>
+          <div className="k-form-grid" style={styles.grid}>
+            <Field label="Description column header *">
               <input
-                style={styles.input}
+                className="k-input"
                 value={descriptionHeader}
                 onChange={(e) => setDescriptionHeader(e.target.value)}
                 placeholder='e.g. "Item Name"'
               />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>Quantity column header *</label>
+            </Field>
+            <Field label="Quantity column header *">
               <input
-                style={styles.input}
+                className="k-input"
                 value={quantityHeader}
                 onChange={(e) => setQuantityHeader(e.target.value)}
                 placeholder='e.g. "Quantity" or "Qty"'
               />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={styles.label}>Unit column header (optional)</label>
+            </Field>
+            <Field label="Unit column header (optional)">
               <input
-                style={styles.input}
+                className="k-input"
                 value={unitHeader}
                 onChange={(e) => setUnitHeader(e.target.value)}
                 placeholder='e.g. "Unit" or "UOM" — leave blank if none'
               />
-            </div>
+            </Field>
           </div>
 
           <div style={{ marginBottom: "1rem" }}>
-            <label style={styles.label}>Notes (optional)</label>
-            <textarea
-              style={{ ...styles.input, ...styles.textarea }}
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any operator notes — which unit, branch, variant this format covers."
-            />
+            <Field label="Notes (optional)">
+              <textarea
+                className="k-textarea"
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Any operator notes — which unit, branch, variant this format covers."
+              />
+            </Field>
           </div>
 
           {isEdit && (
             <div style={{ marginBottom: "1rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: colors.textPrimary, fontSize: "0.9rem", cursor: "pointer" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--k-ink)", fontSize: "var(--k-font)", cursor: "pointer" }}>
                 <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
                 Active — incoming PDFs matching this layout will auto-parse
               </label>
@@ -352,15 +334,9 @@ export default function POFormatForm({ format, companyId, companyName, onClose, 
 }
 
 const styles = {
-  row: { display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" },
-  label: { display: "block", marginBottom: "0.35rem", fontWeight: 600, fontSize: "0.85rem", color: colors.textSecondary },
-  input: { width: "100%", padding: "0.55rem 0.75rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, fontSize: "0.9rem", backgroundColor: colors.inputBg, color: colors.textPrimary, outline: "none", boxSizing: "border-box" },
-  textarea: { fontFamily: "inherit", resize: "vertical" },
-  dropZone: { border: `2px dashed ${colors.inputBorder}`, borderRadius: 10, padding: "1.5rem 1rem", textAlign: "center", cursor: "pointer", backgroundColor: colors.inputBg, transition: "border-color 0.2s, background-color 0.2s" },
-  sectionTitle: { margin: "0.5rem 0 0.25rem", fontSize: "0.95rem", fontWeight: 600, color: colors.textPrimary },
-  sectionHint: { margin: "0 0 0.75rem", fontSize: "0.82rem", color: colors.textSecondary },
-  hint: { marginTop: "0.25rem", fontSize: "0.78rem", color: colors.textSecondary, fontStyle: "italic" },
-  errorAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.6rem 0.85rem", borderRadius: 8, backgroundColor: colors.dangerLight, color: colors.danger, marginBottom: "1rem", fontSize: "0.85rem", fontWeight: 500 },
-  infoAlert: { display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.6rem 0.85rem", borderRadius: 8, backgroundColor: colors.warningLight, color: "#8a5a00", marginBottom: "1rem", fontSize: "0.85rem" },
-  companyChip: { display: "inline-flex", alignItems: "center", gap: "0.35rem", marginBottom: "1rem", padding: "0.3rem 0.7rem", borderRadius: 6, backgroundColor: colors.primaryLight, color: colors.primary, fontSize: "0.82rem" },
+  grid: { gap: "var(--k-gap)", marginBottom: "1rem" },
+  dropZone: { border: "2px dashed var(--k-line-strong)", borderRadius: "var(--k-radius)", padding: "1.5rem 1rem", textAlign: "center", cursor: "pointer", backgroundColor: "var(--k-surface-2)", transition: "border-color 0.2s, background-color 0.2s" },
+  sectionTitle: { margin: "0.5rem 0 0.25rem", fontSize: "calc(var(--k-font) + 0.05rem)", fontWeight: 600, color: "var(--k-ink)" },
+  sectionHint: { margin: "0 0 0.75rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  hint: { marginTop: "0.25rem", fontSize: "0.78rem", color: "var(--k-muted)", fontStyle: "italic" },
 };

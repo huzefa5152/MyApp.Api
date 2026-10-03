@@ -1,31 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import RichText from "../Components/RichText";
-import { MdHistory, MdBusiness, MdSearch, MdChevronLeft, MdChevronRight, MdInsights, MdVisibility } from "react-icons/md";
+import { MdHistory, MdBusiness, MdInsights, MdVisibility } from "react-icons/md";
 import { getItemRateHistory } from "../api/invoiceApi";
 import { getItemTypes } from "../api/itemTypeApi";
 import { getClientsByCompany } from "../api/clientApi";
 import EditBillForm from "../Components/EditBillForm";
-import { dropdownStyles } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
+import SearchableSelect from "../Components/SearchableSelect";
+import SearchableClientSelect from "../Components/SearchableClientSelect";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-  rowAlt: "#fafbfd",
-  summaryBg: "#f0f7ff",
-};
+import { PageHeader, CompanyPicker, Button, IconButton, Toolbar, SearchBox, TableWrap, StatGrid, StatCard, EmptyState, Loading } from "../ui/Kit";
 
 export default function ItemRateHistoryPage() {
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { companies, selectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   // Client-filter dropdown calls /api/clients/company/{id}. View-only
   // roles that lack clients.manage.view would 403 — skip both the fetch
@@ -150,219 +139,154 @@ export default function ItemRateHistoryPage() {
 
   return (
     <div className="irh-page">
-      <div style={styles.pageHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-          <div style={styles.headerIcon}>
-            <MdHistory size={28} color="#fff" />
-          </div>
-          <div>
-            <h2 style={styles.pageTitle}>Item Rate History</h2>
-            <p style={styles.pageSubtitle}>
-              {selectedCompany
-                ? `Search past bills to see the rate you've billed for an item`
-                : "Select a company"}
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        icon={MdHistory}
+        tone="brand"
+        title="Item Rate History"
+        subtitle={selectedCompany
+          ? `Search past bills to see the rate you've billed for an item`
+          : "Select a company"}
+      />
 
       {loadingCompanies ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner} />
-        </div>
+        <Loading>Loading companies…</Loading>
       ) : companies.length > 0 ? (
         <>
           {/* Company picker */}
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select
-              style={dropdownStyles.base}
-              value={selectedCompany?.id || ""}
-              onChange={(e) =>
-                setSelectedCompany(
-                  companies.find((c) => parseInt(c.id) === parseInt(e.target.value))
-                )
-              }
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.brandName || c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <CompanyPicker />
 
           {/* Filters */}
           {selectedCompany && (
-            <div className="filters-row">
-              <div className="filter-search-wrap filter-search-wrap--wide">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search by item description..."
-                  className="filter-search-input"
-                  value={search}
-                  onChange={handleSearchChange}
+            <Toolbar>
+              <SearchBox
+                placeholder="Search by item description..."
+                value={search}
+                onChange={(text) => handleSearchChange({ target: { value: text } })}
+              />
+              <div title="Pick an item from the catalog (exact match)" style={styles.pickerWrap}>
+                <SearchableSelect
+                  items={itemTypes}
+                  value={itemTypeId}
+                  onChange={(id) => handleItemTypeChange({ target: { value: String(id) } })}
+                  searchKeys={["name", "hsCode"]}
+                  subLabel={(it) => it.hsCode || ""}
+                  placeholder="All catalog items"
                 />
               </div>
-              <select
-                className="filter-select"
-                value={itemTypeId}
-                onChange={handleItemTypeChange}
-                title="Pick an item from the catalog (exact match)"
-              >
-                <option value="">All catalog items</option>
-                {itemTypes.map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.name}
-                    {it.hsCode ? ` — ${it.hsCode}` : ""}
-                  </option>
-                ))}
-              </select>
               {canViewClients && (
-                <select
-                  className="filter-select"
+                <SearchableClientSelect
+                  clients={clients}
                   value={clientId}
-                  onChange={handleFilterChange(setClientId)}
-                >
-                  <option value="">All Clients</option>
-                  {clients.map((cl) => (
-                    <option key={cl.id} value={cl.id}>
-                      {cl.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => handleFilterChange(setClientId)({ target: { value: String(id) } })}
+                  placeholder="All Clients"
+                  style={styles.pickerWrap}
+                />
               )}
-              <div className="filter-date-group">
+              <div style={styles.dateGroup}>
                 <input
                   type="date"
-                  className="filter-date-input"
+                  className="k-input"
+                  style={styles.dateInput}
                   value={dateFrom}
                   onChange={handleFilterChange(setDateFrom)}
                   title="From date"
+                  aria-label="From date"
                 />
-                <span className="filter-date-sep">–</span>
+                <span style={{ color: "var(--k-muted)" }}>–</span>
                 <input
                   type="date"
-                  className="filter-date-input"
+                  className="k-input"
+                  style={styles.dateInput}
                   value={dateTo}
                   onChange={handleFilterChange(setDateTo)}
                   title="To date"
+                  aria-label="To date"
                 />
               </div>
               {hasFilters && (
-                <button className="filter-clear-btn" onClick={resetFilters}>
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
                   Clear
-                </button>
+                </Button>
               )}
-            </div>
+            </Toolbar>
           )}
 
           {/* Summary band — avg / min / max across the FULL filtered set */}
           {selectedCompany && summary.total > 0 && (
-            <div style={styles.summaryBand}>
-              <div style={styles.summaryItem}>
-                <MdInsights size={16} color={colors.blue} />
-                <span style={styles.summaryLabel}>Lines:</span>
-                <span style={styles.summaryValue}>{summary.total}</span>
-              </div>
-              <div style={styles.summaryItem}>
-                <span style={styles.summaryLabel}>Avg rate:</span>
-                <span style={styles.summaryValue}>Rs. {fmt(summary.avg)}</span>
-              </div>
-              <div style={styles.summaryItem}>
-                <span style={styles.summaryLabel}>Min:</span>
-                <span style={styles.summaryValue}>Rs. {fmt(summary.min)}</span>
-              </div>
-              <div style={styles.summaryItem}>
-                <span style={styles.summaryLabel}>Max:</span>
-                <span style={styles.summaryValue}>Rs. {fmt(summary.max)}</span>
-              </div>
-            </div>
+            <StatGrid>
+              <StatCard tone="blue" icon={MdInsights} label="Lines" value={summary.total} />
+              <StatCard tone="teal" label="Avg rate" value={`Rs. ${fmt(summary.avg)}`} />
+              <StatCard tone="slate" label="Min" value={`Rs. ${fmt(summary.min)}`} />
+              <StatCard tone="slate" label="Max" value={`Rs. ${fmt(summary.max)}`} />
+            </StatGrid>
           )}
 
           {/* Grid */}
           {loading ? (
-            <div style={styles.loadingContainer}>
-              <div style={styles.spinner} />
-            </div>
+            <Loading>Loading rate history…</Loading>
           ) : selectedCompany && rows.length === 0 ? (
-            <div style={styles.emptyState}>
-              <MdHistory size={40} color={colors.cardBorder} />
-              <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>
-                {hasFilters
-                  ? "No bill lines match the current filters."
-                  : "Type an item name above to see past rates."}
-              </p>
-            </div>
+            <EmptyState icon={MdHistory}>
+              {hasFilters
+                ? "No bill lines match the current filters."
+                : "Type an item name above to see past rates."}
+            </EmptyState>
           ) : selectedCompany ? (
             <>
               {/* Desktop / tablet — table */}
-              <div className="irh-table" style={styles.tableWrap}>
-                <table style={styles.table}>
+              <TableWrap className="irh-table">
+                <table className="k-table">
                   <thead>
                     <tr>
-                      <th style={styles.th}>Bill #</th>
-                      <th style={styles.th}>Date</th>
-                      <th style={styles.th}>Client</th>
-                      <th style={styles.th}>Description</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>Unit Price</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>Line Total</th>
-                      <th style={{ ...styles.th, width: 60 }}></th>
+                      <th>Bill #</th>
+                      <th>Date</th>
+                      <th>Client</th>
+                      <th>Description</th>
+                      <th className="k-num">Qty</th>
+                      <th className="k-num">Unit Price</th>
+                      <th className="k-num">Line Total</th>
+                      <th style={{ width: 60 }}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r, idx) => (
-                      <tr
-                        key={r.invoiceItemId}
-                        style={{
-                          backgroundColor: idx % 2 === 0 ? "#fff" : colors.rowAlt,
-                        }}
-                      >
-                        <td style={styles.td}>
-                          <strong style={{ color: colors.blue }}>#{r.invoiceNumber}</strong>
+                    {rows.map((r) => (
+                      <tr key={r.invoiceItemId}>
+                        <td style={styles.top}>
+                          <strong style={{ color: "var(--k-blue)" }}>#{r.invoiceNumber}</strong>
                         </td>
-                        <td style={styles.td}>{new Date(r.date).toLocaleDateString()}</td>
-                        <td style={styles.td}>{r.clientName}</td>
-                        <td style={{ ...styles.td, maxWidth: 360 }}>
-                          <div style={{ fontSize: "0.85rem" }}><RichText text={r.description} /></div>
+                        <td style={styles.top}>{new Date(r.date).toLocaleDateString()}</td>
+                        <td style={styles.top}>{r.clientName}</td>
+                        <td style={{ ...styles.top, maxWidth: 360 }}>
+                          <div><RichText text={r.description} /></div>
                           {r.itemTypeName && (
-                            <div
-                              style={{
-                                fontSize: "0.72rem",
-                                color: colors.textSecondary,
-                                marginTop: 2,
-                              }}
-                            >
+                            <div className="k-muted" style={{ fontSize: "0.72rem", marginTop: 2 }}>
                               {r.itemTypeName}
                             </div>
                           )}
                         </td>
-                        <td style={{ ...styles.td, textAlign: "right" }}>
+                        <td className="k-num" style={styles.top}>
                           {r.quantity}
-                          {r.uom ? <span style={{ color: colors.textSecondary, fontSize: "0.75rem" }}> {r.uom}</span> : null}
+                          {r.uom ? <span className="k-muted" style={{ fontSize: "0.75rem" }}> {r.uom}</span> : null}
                         </td>
-                        <td style={{ ...styles.td, textAlign: "right", fontWeight: 600 }}>
+                        <td className="k-num" style={{ ...styles.top, fontWeight: 600 }}>
                           Rs. {fmt(r.unitPrice)}
                         </td>
-                        <td style={{ ...styles.td, textAlign: "right" }}>
+                        <td className="k-num" style={styles.top}>
                           Rs. {fmt(r.lineTotal)}
                         </td>
-                        <td style={{ ...styles.td, textAlign: "center" }}>
-                          <button
-                            style={styles.viewBtn}
+                        <td className="is-center" style={styles.top}>
+                          <IconButton
+                            icon={MdVisibility}
+                            size={16}
+                            label="View this bill"
                             onClick={() => setViewingId(r.invoiceId)}
-                            title="View this bill"
-                          >
-                            <MdVisibility size={14} />
-                          </button>
+                          />
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
+
 
               {/* Mobile — stacked cards. Same data, prioritised differently:
                   Unit Price is the answer this page exists to surface, so it
@@ -426,15 +350,11 @@ export default function ItemRateHistoryPage() {
               )}
             </>
           ) : (
-            <div style={styles.emptyState}>
-              <p style={{ color: colors.textSecondary }}>Select a company to begin.</p>
-            </div>
+            <EmptyState>Select a company to begin.</EmptyState>
           )}
         </>
       ) : (
-        <div style={styles.emptyState}>
-          <p style={{ color: colors.textSecondary }}>No companies available.</p>
-        </div>
+        <EmptyState icon={MdBusiness}>No companies available.</EmptyState>
       )}
 
       {viewingId && (
@@ -450,118 +370,8 @@ export default function ItemRateHistoryPage() {
 }
 
 const styles = {
-  pageHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "1.5rem",
-    flexWrap: "wrap",
-    gap: "1rem",
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  loadingContainer: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "0.75rem",
-    padding: "3rem 0",
-  },
-  spinner: {
-    width: 28,
-    height: 28,
-    border: `3px solid ${colors.cardBorder}`,
-    borderTopColor: colors.blue,
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
-  },
-  emptyState: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "3rem 1rem",
-    textAlign: "center",
-  },
-  summaryBand: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "1.25rem",
-    padding: "0.65rem 1rem",
-    marginBottom: "0.85rem",
-    backgroundColor: colors.summaryBg,
-    border: "1px solid #c5dcf5",
-    borderRadius: 10,
-  },
-  summaryItem: { display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem" },
-  summaryLabel: { color: colors.textSecondary, fontWeight: 500 },
-  summaryValue: { color: colors.textPrimary, fontWeight: 700 },
-  tableWrap: {
-    overflowX: "auto",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 10,
-    backgroundColor: "#fff",
-  },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "0.86rem" },
-  th: {
-    textAlign: "left",
-    padding: "0.65rem 0.85rem",
-    backgroundColor: "#f5f8fc",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    fontSize: "0.78rem",
-    fontWeight: 700,
-    color: colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-  td: {
-    padding: "0.6rem 0.85rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    color: colors.textPrimary,
-    verticalAlign: "top",
-  },
-  viewBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    padding: "0.3rem 0.5rem",
-    borderRadius: 6,
-    border: "1px solid #90caf9",
-    backgroundColor: "#e3f2fd",
-    color: "#0d47a1",
-    fontSize: "0.76rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  pagination: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: "1rem",
-    padding: "1rem 0",
-    marginTop: "0.5rem",
-  },
-  pageBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.2rem",
-    padding: "0.4rem 0.8rem",
-    borderRadius: 8,
-    border: `1px solid ${colors.inputBorder}`,
-    backgroundColor: "#fff",
-    color: colors.blue,
-    fontSize: "0.82rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
+  pickerWrap: { flex: "1 1 200px", maxWidth: 260, minWidth: 0 },
+  dateGroup: { display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" },
+  dateInput: { width: "auto" },
+  top: { verticalAlign: "top" },
 };

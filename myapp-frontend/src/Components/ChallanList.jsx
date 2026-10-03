@@ -3,19 +3,8 @@ import { createPortal } from "react-dom";
 import { MdReceipt, MdPerson, MdCalendarToday, MdVisibility, MdEdit, MdCancel, MdDelete, MdPrint, MdPictureAsPdf, MdGridOn, MdWarning, MdRequestQuote, MdLocationOn, MdContentCopy, MdLink, MdAssignment } from "react-icons/md";
 import ChallanModal from "./ChallanModal";
 import AttachmentBadge from "./AttachmentBadge";
-import { cardStyles, cardHover } from "../theme";
 import { usePermissions } from "../contexts/PermissionsContext";
-
-const colors = {
-  blue: "#0d47a1",
-  blueLight: "#1565c0",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-};
+import { Button, Card } from "../ui/Kit";
 
 const statusColors = {
   Pending: { bg: "#fff3e0", color: "#e65100", border: "#e6510030" },
@@ -64,7 +53,6 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
   const permDelete = has("challans.manage.delete");
   const permPrint = has("challans.print.view");
   const permCreateBill = has("bills.manage.create");
-  const permCreate = has("challans.manage.create");
   // 2026-05-08: Duplicate is gated by its own permission so a role can
   // be allowed to spawn copies without also being granted create-from-
   // scratch. The one-time migration in Program.cs auto-grants the new
@@ -110,19 +98,12 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
           // PO, so it isn't part of the attach-to-order flow.
           const canLink = onLinkOrder && c.status === "No PO" && !c.salesOrderId && !c.invoiceId;
           return (
-            <div
-              key={c.id}
-              style={cardStyles.card}
-              onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-              onMouseLeave={(e) =>
-                Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })
-              }
-            >
-              <div style={cardStyles.cardContent}>
+            <Card key={c.id} style={styles.card}>
+              <div style={styles.cardContent}>
                 <div>
                   <div style={styles.cardTopRow}>
-                    <h5 style={cardStyles.title}>
-                      <MdReceipt style={{ color: colors.blue, marginRight: 6, verticalAlign: "middle" }} />
+                    <h5 style={styles.title}>
+                      <MdReceipt style={{ color: "var(--k-blue)", marginRight: 6, verticalAlign: "middle" }} />
                       Challan #{c.challanNumber}
                     </h5>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -151,7 +132,7 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
 
                   {isDuplicate && c.duplicatedFromChallanNumber && (
                     <p style={{
-                      ...cardStyles.text,
+                      ...styles.text,
                       display: "flex",
                       alignItems: "center",
                       gap: "0.35rem",
@@ -164,101 +145,100 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                       Duplicate of Challan #{c.duplicatedFromChallanNumber}
                     </p>
                   )}
-                  <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <MdPerson style={{ color: colors.teal, flexShrink: 0 }} />
-                    <strong>Client:</strong> {c.clientName}
+                  <p style={styles.line}>
+                    <MdPerson style={{ color: "var(--k-teal)", flexShrink: 0 }} />
+                    <span style={styles.clamp}><strong>Client:</strong> {c.clientName}</span>
                   </p>
-                  <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0 }} />
-                    <strong>PO:</strong> {c.poNumber || "\u2014"}
+                  <p style={styles.line}>
+                    <MdReceipt style={{ color: "var(--k-muted)", flexShrink: 0 }} />
+                    <strong>PO:</strong> {c.poNumber || "—"}
                   </p>
                   {c.salesOrderNumber && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem", color: colors.blue, fontWeight: 600 }}>
+                    <p style={{ ...styles.line, color: "var(--k-blue)", fontWeight: 600 }}>
                       <MdAssignment size={14} style={{ flexShrink: 0 }} />
                       <strong>SO #{c.salesOrderNumber}</strong>
                     </p>
                   )}
-                  {/* Indent No + Site \u2014 surfaced on the card so the
+                  {/* Indent No + Site — surfaced on the card so the
                       operator can scan a list and see "is this the
                       Soorty PO for Unit-2?" without having to open the
                       view modal. Both fields are optional; only render
                       when set so unfilled cards don't get noise. */}
                   {c.indentNo && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      <MdReceipt style={{ color: colors.textSecondary, flexShrink: 0, opacity: 0.7 }} />
+                    <p style={styles.line}>
+                      <MdReceipt style={{ color: "var(--k-muted)", flexShrink: 0, opacity: 0.7 }} />
                       <strong>Indent:</strong> {c.indentNo}
                     </p>
                   )}
                   {c.site && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      <MdLocationOn size={14} style={{ color: colors.textSecondary, flexShrink: 0 }} />
+                    <p style={styles.line}>
+                      <MdLocationOn size={14} style={{ color: "var(--k-muted)", flexShrink: 0 }} />
                       <strong>Site:</strong> {c.site}
                     </p>
                   )}
                   {c.deliveryDate && (
-                    <p style={{ ...cardStyles.text, display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      <MdCalendarToday size={14} style={{ color: colors.textSecondary, flexShrink: 0 }} />
+                    <p style={styles.line}>
+                      <MdCalendarToday size={14} style={{ color: "var(--k-muted)", flexShrink: 0 }} />
                       {new Date(c.deliveryDate).toLocaleDateString()}
                     </p>
                   )}
-                  <p style={{ ...cardStyles.text, fontSize: "0.78rem", color: colors.textSecondary }}>
+                  <p style={{ ...styles.text, fontSize: "0.78rem", color: "var(--k-muted)" }}>
                     {c.items?.length || 0} item{(c.items?.length || 0) !== 1 ? "s" : ""}
                   </p>
                 </div>
 
-                <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
-                  <button
-                    style={{ ...styles.actionBtn, ...styles.viewBtn }}
-                    onClick={() => setSelectedChallan(c)}
-                  >
-                    <MdVisibility size={14} /> View
-                  </button>
+                <div style={styles.buttonGroup}>
+                  <Button size="sm" icon={MdVisibility} style={styles.viewBtn} onClick={() => setSelectedChallan(c)}>
+                    View
+                  </Button>
                   {permPrint && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.printBtn, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+                    <Button
+                      size="sm"
+                      icon={MdPrint}
+                      style={styles.printBtn}
                       disabled={printDisabled}
                       onClick={() => onPrint?.(c)}
                       title={printDisabled ? printDisabledReason : "Print"}
                     >
-                      <MdPrint size={14} /> Print
-                    </button>
+                      Print
+                    </Button>
                   )}
                   {permPrint && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.pdfBtn, opacity: printDisabled || exportingId ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+                    <Button
+                      size="sm"
+                      style={styles.pdfBtn}
                       disabled={printDisabled || !!exportingId}
                       onClick={() => onExportPdf?.(c)}
                       title={printDisabled ? printDisabledReason : "Export PDF"}
                     >
                       {exportingId === c.id + "-pdf" ? <span className="btn-spinner" /> : <MdPictureAsPdf size={14} />} PDF
-                    </button>
+                    </Button>
                   )}
                   {permPrint && onExportExcel && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.excelBtn, opacity: exportingId ? 0.5 : 1 }}
+                    <Button
+                      size="sm"
+                      style={styles.excelBtn}
                       disabled={!!exportingId}
                       onClick={() => onExportExcel(c)}
                     >
                       {exportingId === c.id + "-excel" ? <span className="btn-spinner" /> : <MdGridOn size={14} />} Excel
-                    </button>
+                    </Button>
                   )}
                   {permUpdate && isEditable && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.editBtn }}
+                    <Button
+                      size="sm"
+                      icon={MdEdit}
+                      style={styles.editBtn}
                       onClick={() => onEditItems?.(c)}
                       title={c.status === "Invoiced" ? "Edit items (bill will auto-sync)" : "Edit items"}
                     >
-                      <MdEdit size={14} /> Edit
-                    </button>
+                      Edit
+                    </Button>
                   )}
                   {canDuplicate && onDuplicate && (
-                    <button
-                      style={{
-                        ...styles.actionBtn,
-                        ...styles.duplicateBtn,
-                        opacity: isDuplicating || duplicatingId ? 0.55 : 1,
-                        cursor: isDuplicating || duplicatingId ? "not-allowed" : "pointer",
-                      }}
+                    <Button
+                      size="sm"
+                      style={styles.duplicateBtn}
                       // Disable the entire row's button while ANY duplicate is in
                       // flight — prevents double-clicks AND prevents starting a
                       // second duplicate before the first one finishes.
@@ -268,48 +248,51 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
                     >
                       {isDuplicating ? <span className="btn-spinner" /> : <MdContentCopy size={14} />}
                       {isDuplicating ? "Duplicating…" : "Duplicate"}
-                    </button>
+                    </Button>
                   )}
                   {canGenerateBill && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.generateBillBtn }}
+                    <Button
+                      size="sm"
+                      icon={MdRequestQuote}
+                      style={styles.generateBillBtn}
                       onClick={() => onGenerateBill?.(c)}
                       title="Open the New Bill form with this challan pre-selected"
                     >
-                      <MdRequestQuote size={14} /> Generate Bill
-                    </button>
+                      Generate Bill
+                    </Button>
                   )}
                   {canLink && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.linkBtn }}
+                    <Button
+                      size="sm"
+                      icon={MdLink}
+                      style={styles.linkBtn}
                       onClick={() => onLinkOrder?.(c)}
                       title="Link this challan to a Sales Order"
                     >
-                      <MdLink size={14} /> Link to Order
-                    </button>
+                      Link to Order
+                    </Button>
                   )}
                   {permUpdate && canCancel && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.cancelBtn }}
-                      onClick={() => onCancel?.(c)}
-                    >
-                      <MdCancel size={14} /> Cancel
-                    </button>
+                    <Button size="sm" icon={MdCancel} style={styles.cancelBtn} onClick={() => onCancel?.(c)}>
+                      Cancel
+                    </Button>
                   )}
                   {permDelete && canDelete && (
-                    <button
-                      style={{ ...styles.actionBtn, ...styles.deleteBtn }}
+                    <Button
+                      size="sm"
+                      icon={MdDelete}
+                      style={styles.deleteBtn}
                       onClick={() => onDelete?.(c)}
                       title={isDuplicate
                         ? "Delete this duplicate. The original challan keeps the same number — no gap."
                         : "Only the latest challan can be deleted — earlier ones must be edited to keep numbering gap-free."}
                     >
-                      <MdDelete size={14} /> Delete
-                    </button>
+                      Delete
+                    </Button>
                   )}
                 </div>
               </div>
-            </div>
+            </Card>
           );
         })}
       </div>
@@ -319,30 +302,18 @@ export default function ChallanList({ challans, onCancel, onDelete, onPrint, onE
   );
 }
 
+// Tinted action buttons: each action keeps its own colour family so operators
+// can scan a card's actions by colour; the kit Button supplies size + shape.
+const tint = (backgroundColor, color) => ({ backgroundColor, color, borderColor: "transparent" });
+
 const styles = {
-  searchWrapper: {
-    position: "relative",
-    marginBottom: "1.25rem",
-    maxWidth: 420,
-  },
-  searchIcon: {
-    position: "absolute",
-    left: 12,
-    top: "50%",
-    transform: "translateY(-50%)",
-    color: colors.textSecondary,
-  },
-  searchInput: {
-    width: "100%",
-    padding: "0.55rem 0.85rem 0.55rem 2.2rem",
-    borderRadius: 10,
-    border: `1px solid ${colors.inputBorder}`,
-    backgroundColor: colors.inputBg,
-    fontSize: "0.9rem",
-    color: colors.textPrimary,
-    outline: "none",
-    transition: "border-color 0.25s, box-shadow 0.25s",
-  },
+  card: { marginTop: 0, overflow: "hidden" },
+  cardContent: { display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%" },
+  title: { fontSize: "calc(var(--k-font) + 0.2rem)", fontWeight: 800, margin: "0 0 0.5rem", color: "var(--k-ink)", letterSpacing: "-0.01em" },
+  text: { fontSize: "var(--k-font)", color: "var(--k-muted)", margin: "0 0 0.2rem", lineHeight: 1.5 },
+  line: { fontSize: "var(--k-font)", color: "var(--k-muted)", margin: "0 0 0.2rem", lineHeight: 1.5, display: "flex", alignItems: "center", gap: "0.4rem" },
+  // Client names are user-supplied — clamp to two lines, never nowrap+ellipsis.
+  clamp: { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", minWidth: 0 },
   cardTopRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -362,30 +333,19 @@ const styles = {
     textTransform: "uppercase",
     letterSpacing: "0.03em",
   },
-  actionBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    padding: "0.3rem 0.6rem",
-    borderRadius: 6,
-    border: "none",
-    fontSize: "0.76rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "filter 0.2s",
-  },
-  viewBtn: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
-  printBtn: { backgroundColor: "#f3e5f5", color: "#7b1fa2" },
-  pdfBtn: { backgroundColor: "#ffebee", color: "#c62828" },
-  excelBtn: { backgroundColor: "#e8f5e9", color: "#2e7d32" },
-  editBtn: { backgroundColor: "#fff3e0", color: "#e65100" },
-  cancelBtn: { backgroundColor: "#fce4ec", color: "#c62828" },
-  deleteBtn: { backgroundColor: "#ffebee", color: "#b71c1c" },
-  generateBillBtn: { backgroundColor: "#e0f2f1", color: "#00695c" },
-  linkBtn: { backgroundColor: "#e3f2fd", color: "#0d47a1" },
+  buttonGroup: { display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem", paddingTop: "0.9rem", borderTop: "1px solid var(--k-line)" },
+  viewBtn: tint("#e3f2fd", "#0d47a1"),
+  printBtn: tint("#f3e5f5", "#7b1fa2"),
+  pdfBtn: tint("#ffebee", "#c62828"),
+  excelBtn: tint("#e8f5e9", "#2e7d32"),
+  editBtn: tint("#fff3e0", "#e65100"),
+  cancelBtn: tint("#fce4ec", "#c62828"),
+  deleteBtn: tint("#ffebee", "#b71c1c"),
+  generateBillBtn: tint("#e0f2f1", "#00695c"),
+  linkBtn: tint("#e3f2fd", "#0d47a1"),
   // Purple matches the "Duplicate of #N" subtitle and the DUPLICATE pill
   // so all three signals form one visual cue across the card.
-  duplicateBtn: { backgroundColor: "#ede7f6", color: "#4527a0" },
+  duplicateBtn: tint("#ede7f6", "#4527a0"),
   duplicateBadge: {
     backgroundColor: "#ede7f6",
     color: "#4527a0",

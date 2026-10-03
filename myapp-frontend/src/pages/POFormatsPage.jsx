@@ -5,38 +5,29 @@ import { useConfirm } from "../Components/ConfirmDialog";
 import { listPoFormats, getPoFormat, deletePoFormat } from "../api/poFormatApi";
 import { useCompany } from "../contexts/CompanyContext";
 import POFormatForm from "../Components/POFormatForm";
+import { PageHeader, CompanyPicker, Button, IconButton, TableWrap, EmptyState, Loading, Alert } from "../ui/Kit";
 
 const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  danger: "#dc3545",
-  dangerLight: "#fff0f1",
   success: "#28a745",
   successLight: "#e8f5e9",
-  warning: "#f57c00",
-  warningLight: "#fff3e0",
-  primary: "#0d47a1",
+  primary: "var(--k-blue)",
   primaryLight: "#e3f2fd",
 };
 
 export default function POFormatsPage() {
-  const { companies, selectedCompany, setSelectedCompany } = useCompany();
-  return <>
-    <div style={{ ...styles.companyRow, padding: "1rem 1.5rem 0", maxWidth: 1200, margin: "0 auto" }}>
-      <label htmlFor="po-format-company">Company</label>
-      <select id="po-format-company" style={{ padding: "0.5rem 0.75rem", border: `1px solid ${colors.cardBorder}`, borderRadius: 8, background: "white", maxWidth: "100%" }} value={selectedCompany?.id ?? ""}
-        onChange={e => setSelectedCompany(companies.find(c => c.id === Number(e.target.value)) || null)}>
-        {!selectedCompany && <option value="">Select company</option>}
-        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+  const { selectedCompany } = useCompany();
+  return (
+    <div style={styles.page}>
+      {selectedCompany ? (
+        <CompanyPOFormats key={selectedCompany.id} company={selectedCompany} />
+      ) : (
+        <>
+          <CompanyPicker />
+          <EmptyState icon={MdDescription}>No company access is configured for your account.</EmptyState>
+        </>
+      )}
     </div>
-    {selectedCompany ? <CompanyPOFormats key={selectedCompany.id} company={selectedCompany} />
-      : <p style={styles.page}>No company access is configured for your account.</p>}
-  </>;
+  );
 }
 
 function CompanyPOFormats({ company }) {
@@ -112,93 +103,86 @@ function CompanyPOFormats({ company }) {
   };
 
   return (
-    <div className="pof-page" style={styles.page}>
-      <div className="pof-header">
-        <div className="pof-header__title-block">
-          <h1 className="pof-header__title">PO Formats</h1>
-          <p className="pof-header__subtitle">
-            One PO format per client in {company.name}. Formats and PDF matching are private to this company.
-          </p>
-        </div>
-        {canCreate && (
-          <button className="pof-header__add" onClick={handleAdd}>
-            <MdAdd size={18} /> Add PO Format
-          </button>
-        )}
-      </div>
+    <>
+      <PageHeader
+        icon={MdDescription}
+        tone="blue"
+        title="PO Formats"
+        subtitle={`One PO format per client in ${company.name}. Formats and PDF matching are private to this company.`}
+        actions={canCreate ? (
+          <Button variant="primary" icon={MdAdd} onClick={handleAdd}>Add PO Format</Button>
+        ) : null}
+      />
+
+      <CompanyPicker />
 
       {error && (
-        <div style={styles.errorAlert}>
-          <MdWarning size={16} /> {error}
-        </div>
+        <Alert tone="error" icon={MdWarning}>{error}</Alert>
       )}
 
       {loading ? (
-        <div style={{ padding: "2rem", textAlign: "center", color: colors.textSecondary }}>Loading…</div>
+        <Loading>Loading…</Loading>
       ) : formats.length === 0 ? (
-        <div style={styles.emptyCard}>
-          <MdDescription size={36} color={colors.textSecondary} />
-          <h3 style={{ margin: "0.75rem 0 0.25rem", color: colors.textPrimary }}>No PO formats yet</h3>
-          <p style={{ margin: "0 0 1rem", color: colors.textSecondary, fontSize: "0.9rem" }}>
-            Add a format for each of your clients. You'll need a sample PDF and the column header names.
-          </p>
-          {canCreate && (
-            <button style={styles.addBtn} onClick={handleAdd}>
-              <MdAdd size={18} /> Add your first PO format
-            </button>
-          )}
-        </div>
+        <EmptyState
+          icon={MdDescription}
+          title="No PO formats yet"
+          action={canCreate ? (
+            <Button variant="primary" icon={MdAdd} onClick={handleAdd} style={{ marginTop: "0.6rem" }}>Add your first PO format</Button>
+          ) : null}
+        >
+          Add a format for each of your clients. You'll need a sample PDF and the column header names.
+        </EmptyState>
       ) : (
         <>
           {/* Desktop / tablet — table */}
-          <div className="pof-table" style={styles.card}>
-            <table style={styles.table}>
+          <TableWrap className="pof-table">
+            <table className="k-table">
               <thead>
                 <tr>
-                  <th style={styles.th}>Name</th>
-                  <th style={styles.th}>Client</th>
-                  <th style={styles.th}>Status</th>
-                  <th style={styles.th}>Last updated</th>
-                  <th style={{ ...styles.th, textAlign: "right" }}>Actions</th>
+                  <th>Name</th>
+                  <th>Client</th>
+                  <th>Status</th>
+                  <th>Last updated</th>
+                  <th className="k-num">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {formats.map((f) => (
                   <tr key={f.id}>
-                    <td style={styles.td}>
-                      <div style={{ fontWeight: 600, color: colors.textPrimary }}>{f.name}</div>
-                      <div style={{ fontSize: "0.75rem", color: colors.textSecondary }}>v{f.currentVersion}</div>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{f.name}</div>
+                      <div className="k-muted" style={{ fontSize: "0.75rem" }}>v{f.currentVersion}</div>
                     </td>
-                    <td style={styles.td}>
+                    <td>
                       {f.clientName ? (
                         <span style={styles.chip}>{f.clientName}</span>
                       ) : (
                         <span style={{ ...styles.chip, ...styles.chipMuted }}>Unassigned</span>
                       )}
                     </td>
-                    <td style={styles.td}>
+                    <td>
                       {f.isActive ? (
                         <span style={{ ...styles.chip, ...styles.chipSuccess }}>Active</span>
                       ) : (
                         <span style={{ ...styles.chip, ...styles.chipMuted }}>Inactive</span>
                       )}
                     </td>
-                    <td style={{ ...styles.td, color: colors.textSecondary, fontSize: "0.85rem" }}>
+                    <td className="k-muted">
                       {new Date(f.updatedAt).toLocaleDateString()}
                     </td>
-                    <td style={{ ...styles.td, textAlign: "right" }}>
+                    <td className="k-actions">
                       {canUpdate && (
-                        <button style={styles.iconBtn} onClick={() => handleEdit(f)} title="Edit"><MdEdit size={16} /></button>
+                        <IconButton icon={MdEdit} size={16} label="Edit" onClick={() => handleEdit(f)} />
                       )}
                       {canDelete && (
-                        <button style={{ ...styles.iconBtn, ...styles.iconBtnDanger }} onClick={() => handleDelete(f)} title="Delete"><MdDelete size={16} /></button>
+                        <IconButton danger icon={MdDelete} size={16} label="Delete" onClick={() => handleDelete(f)} />
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableWrap>
 
           {/* Mobile — stacked cards */}
           <div className="pof-cards">
@@ -265,29 +249,13 @@ function CompanyPOFormats({ company }) {
           onSaved={handleSaved}
         />
       )}
-    </div>
+    </>
   );
 }
 
 const styles = {
-  page: { padding: "1.5rem", maxWidth: 1200, margin: "0 auto" },
-  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" },
-  title: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  companyRow: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", flexWrap: "wrap" },
-  subtitle: { margin: "0.25rem 0 0", color: colors.textSecondary, fontSize: "0.9rem", maxWidth: 720 },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.6rem 1rem", borderRadius: 8, border: "none", backgroundColor: colors.primary, color: "white", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer" },
-  // Card wraps the PO formats table; overflowX makes the 5-column
-  // grid (Name / Client / Status / Last updated / Actions) scroll
-  // horizontally on mobile instead of getting cut off.
-  card: { backgroundColor: "white", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, overflowX: "auto", WebkitOverflowScrolling: "touch" },
-  table: { width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", padding: "0.75rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.05em", color: colors.textSecondary, fontWeight: 600, backgroundColor: colors.inputBg },
-  td: { padding: "0.85rem 1rem", borderBottom: `1px solid ${colors.cardBorder}`, fontSize: "0.9rem", color: colors.textPrimary, verticalAlign: "top" },
+  page: { maxWidth: 1200, margin: "0 auto" },
   chip: { display: "inline-block", padding: "0.2rem 0.6rem", borderRadius: 12, fontSize: "0.78rem", fontWeight: 600, backgroundColor: colors.primaryLight, color: colors.primary },
   chipSuccess: { backgroundColor: colors.successLight, color: colors.success },
-  chipMuted: { backgroundColor: "#f2f4f7", color: colors.textSecondary },
-  iconBtn: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0.4rem", borderRadius: 6, border: "none", backgroundColor: "transparent", color: colors.textSecondary, cursor: "pointer", marginLeft: "0.25rem" },
-  iconBtnDanger: { color: colors.danger },
-  emptyCard: { backgroundColor: "white", border: `2px dashed ${colors.cardBorder}`, borderRadius: 10, padding: "3rem 2rem", textAlign: "center" },
-  errorAlert: { display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1rem", borderRadius: 8, backgroundColor: colors.dangerLight, color: colors.danger, marginBottom: "1rem", fontSize: "0.88rem", fontWeight: 500 },
+  chipMuted: { backgroundColor: "#f2f4f7", color: "var(--k-muted)" },
 };
