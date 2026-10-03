@@ -1,5 +1,6 @@
 import { MdVisibility, MdEdit, MdDelete, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import DataTable from "./DataTable";
+import { IconButton } from "../ui/Kit";
 import StatusBadge from "./StatusBadge";
 import PaymentStatusBadge from "./PaymentStatusBadge";
 import AttachmentBadge from "./AttachmentBadge";
@@ -81,38 +82,32 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
 
   const renderActions = (b) => (
     <>
-      <button style={btn.view} onClick={() => onView?.(b)} title="View">
-        <MdVisibility size={14} />
-      </button>
+      <IconButton label="View" icon={MdVisibility} size={16} onClick={() => onView?.(b)} />
       {perms.canUpdate && (
-        <button style={btn.edit} onClick={() => onEdit?.(b)} title="Edit">
-          <MdEdit size={14} />
-        </button>
+        <IconButton label="Edit" icon={MdEdit} size={16} onClick={() => onEdit?.(b)} />
       )}
       {onPrint && (
-        <button
-          style={{ ...btn.print, opacity: printDisabled ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+        <IconButton
+          label="Print"
+          icon={MdPrint}
+          size={16}
           disabled={printDisabled}
           onClick={() => onPrint(b)}
           title={printDisabled ? printDisabledReason : "Print"}
-        >
-          <MdPrint size={14} />
-        </button>
+        />
       )}
       {onExportPdf && (
-        <button
-          style={{ ...btn.pdf, opacity: printDisabled || exportingId === b.id ? 0.5 : 1, cursor: printDisabled ? "not-allowed" : "pointer" }}
+        <IconButton
+          label="Download PDF"
+          icon={MdPictureAsPdf}
+          size={16}
           onClick={() => onExportPdf(b)}
           disabled={printDisabled || !!exportingId}
           title={printDisabled ? printDisabledReason : "Download PDF"}
-        >
-          <MdPictureAsPdf size={14} />
-        </button>
+        />
       )}
       {perms.canDelete && (
-        <button style={btn.delete} onClick={() => onDelete?.(b)} title="Delete">
-          <MdDelete size={14} />
-        </button>
+        <IconButton label="Delete" icon={MdDelete} size={16} danger onClick={() => onDelete?.(b)} />
       )}
     </>
   );
@@ -129,22 +124,3 @@ export default function PurchaseBillTable({ bills, perms, onView, onEdit, onDele
     />
   );
 }
-
-const baseBtn = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 30,
-  height: 28,
-  borderRadius: 6,
-  border: "none",
-  cursor: "pointer",
-  padding: 0,
-};
-const btn = {
-  view:   { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" },
-  edit:   { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" },
-  print:  { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" },
-  pdf:    { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" },
-  delete: { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" },
-};

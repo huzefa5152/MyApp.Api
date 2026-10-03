@@ -15,16 +15,8 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-};
+import SearchableClientSelect from "./SearchableClientSelect";
+import { Alert, Button, IconButton, TableWrap } from "../ui/Kit";
 
 export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, prefillFromInvoiceId = null, readOnly = false }) {
   const isEdit = !!billId;
@@ -294,33 +286,32 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
 
             {sourceBill && (
-              <div style={{
-                display: "flex", alignItems: "flex-start", gap: "0.65rem",
-                padding: "0.7rem 0.95rem", marginBottom: "0.85rem",
-                backgroundColor: "#fff8e1", border: "1px solid #ffcc80",
-                borderRadius: 8,
-              }}>
-                <MdReceipt size={20} color="#bf360c" style={{ flexShrink: 0, marginTop: 1 }} />
-                <div style={{ fontSize: "0.84rem", color: "#1a2332", lineHeight: 1.4 }}>
+              <Alert tone="warn" icon={MdReceipt}>
+                <div style={{ lineHeight: 1.4 }}>
                   <strong>Procuring against Sale Bill #{sourceBill.invoiceNumber}</strong>
                   {" "}for <strong>{sourceBill.clientName}</strong>
                   {" "}({new Date(sourceBill.date).toLocaleDateString()})
-                  <div style={{ fontSize: "0.76rem", color: "#5f6d7e", marginTop: 2 }}>
+                  <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: 2 }}>
                     Each row groups same-ItemType sale lines. Pick an HS-coded catalog item per row —
                     on save, every linked sale line back-fills with that HSCode / UOM / Sale Type and
                     becomes FBR-ready.
                   </div>
                 </div>
-              </div>
+              </Alert>
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Select supplier...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <SearchableClientSelect
+                  clients={suppliers}
+                  value={supplierId}
+                  onChange={(id) => setSupplierId(String(id))}
+                  placeholder="Select supplier..."
+                  noun="suppliers"
+                  disabled={readOnly}
+                  ariaLabel="Supplier"
+                />
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Bill Date *</label>
@@ -362,12 +353,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} readOnly={readOnly} />
-            <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: colors.inputBg }}>
+            <div style={itemsBox}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                <strong style={{ color: colors.textPrimary }}>Items ({items.length})</strong>
-                <button type="button" onClick={() => setItems([...items, newRow()])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
-                  <MdAdd size={14} /> Add line
-                </button>
+                <strong style={{ color: "var(--k-ink)" }}>Items ({items.length})</strong>
+                <Button size="sm" icon={MdAdd} onClick={() => setItems([...items, newRow()])}>Add line</Button>
               </div>
               {isNarrow ? (
                 <div style={mStyles.cards}>
@@ -386,7 +375,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                               style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem", ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
                             />
                             {linkedToSale && (
-                              <div style={{ fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2 }}>
+                              <div style={saleNote}>
                                 {it._saleLineCount > 1
                                   ? `${it._saleLineCount} sale lines, was: ${it._originalItemTypeName || "—"}`
                                   : `1 sale line, was: ${it._originalItemTypeName || "—"}`}
@@ -395,9 +384,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                             )}
                           </div>
                           {items.length > 1 && (
-                            <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
-                              <MdDelete size={18} />
-                            </button>
+                            <IconButton label="Remove line" icon={MdDelete} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                           )}
                         </div>
                         <div style={{ marginBottom: "0.4rem" }}>
@@ -424,17 +411,17 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                   })}
                 </div>
               ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+              <TableWrap>
+                <table className="k-table k-table--compact">
                   <thead>
-                    <tr style={{ backgroundColor: "#f5f8fc" }}>
-                      <th style={th}>Item Type (FBR catalog)</th>
-                      <th style={th}>Description *</th>
-                      <th style={{ ...th, textAlign: "right", width: 120, minWidth: 120 }}>Qty *</th>
-                      <th style={{ ...th, textAlign: "right", width: 100 }}>Unit Price *</th>
-                      <th style={{ ...th, width: 100 }}>UOM</th>
-                      <th style={{ ...th, textAlign: "right", width: 110 }}>Line Total</th>
-                      <th style={{ ...th, width: 36 }}></th>
+                    <tr>
+                      <th>Item Type (FBR catalog)</th>
+                      <th>Description *</th>
+                      <th className="k-num" style={{ width: 120, minWidth: 120 }}>Qty *</th>
+                      <th className="k-num" style={{ width: 100 }}>Unit Price *</th>
+                      <th style={{ width: 100 }}>UOM</th>
+                      <th className="k-num" style={{ width: 110 }}>Line Total</th>
+                      <th style={{ width: 36 }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -453,7 +440,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                                        ...(isAgainstSale && !it.itemTypeId ? { borderColor: "#dc3545" } : {}) }}
                             />
                             {linkedToSale && (
-                              <div style={{ fontSize: "0.7rem", color: "#5f6d7e", marginTop: 2 }}>
+                              <div style={saleNote}>
                                 {it._saleLineCount > 1
                                   ? `${it._saleLineCount} sale lines, was: ${it._originalItemTypeName || "—"}`
                                   : `1 sale line, was: ${it._originalItemTypeName || "—"}`}
@@ -479,12 +466,10 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           <td style={td}>
                             <input type="text" style={cellInput} value={it.uom} onChange={e => updateItem(idx, "uom", e.target.value)} />
                           </td>
-                          <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="k-num" style={{ ...td, fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td style={td}>
                             {items.length > 1 && (
-                              <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
-                                <MdDelete size={16} />
-                              </button>
+                              <IconButton label="Remove line" icon={MdDelete} size={16} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                             )}
                           </td>
                         </tr>
@@ -492,20 +477,20 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                     })}
                   </tbody>
                 </table>
-              </div>
+              </TableWrap>
               )}
             </div>
 
-            <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: 10, border: `1px solid ${colors.cardBorder}`, backgroundColor: "#f8faff", display: "grid", gridTemplateColumns: "1fr auto auto", rowGap: "0.35rem", columnGap: "1rem" }}>
-              <span style={{ color: colors.textSecondary }}>Subtotal:</span>
+            <div style={totalsBox}>
+              <span style={{ color: "var(--k-muted)" }}>Subtotal:</span>
               <span></span>
               <strong>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-              <span style={{ color: colors.textSecondary }}>GST ({gstRate}%):</span>
+              <span style={{ color: "var(--k-muted)" }}>GST ({gstRate}%):</span>
               <span></span>
               <strong>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-              <span style={{ color: colors.textPrimary, fontWeight: 700, fontSize: "1rem" }}>Grand Total:</span>
+              <span style={{ color: "var(--k-ink)", fontWeight: 700, fontSize: "calc(var(--k-font) + 0.1rem)" }}>Grand Total:</span>
               <span></span>
-              <strong style={{ fontSize: "1.05rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              <strong style={{ fontSize: "calc(var(--k-font) + 0.15rem)", color: "var(--k-blue)" }}>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
 
             <DocumentTaxFields
@@ -546,15 +531,19 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
   );
 }
 
-const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
-const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
-const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+// Line-item editor layout. The table is a kit k-table; cells stay top-aligned so the
+// "linked sale lines" note sits under its picker, and cell inputs stay compact in every theme.
+const td = { verticalAlign: "top" };
+const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "var(--k-font-sm)", border: "1px solid var(--k-line-strong)", borderRadius: 6, backgroundColor: "var(--k-input-bg)", color: "var(--k-ink)", outline: "none" };
+const saleNote = { fontSize: "0.7rem", color: "var(--k-muted)", marginTop: 2 };
+const itemsBox = { marginTop: "0.75rem", padding: "0.75rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line)", backgroundColor: "var(--k-surface-2)" };
+const totalsBox = { marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line)", backgroundColor: "var(--k-surface-2)", display: "grid", gridTemplateColumns: "1fr auto auto", rowGap: "0.35rem", columnGap: "1rem" };
 // Mobile stacked-card line items (rendered below 760px instead of the table).
 const mStyles = {
   cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  card: { border: "1px solid #e8edf3", borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  card: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" },
   head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
-  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "#5f6d7e", fontWeight: 700, marginBottom: "0.2rem" },
+  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--k-muted)", fontWeight: 700, marginBottom: "0.2rem" },
   grid3: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
-  amt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: "1px dashed #e8edf3", fontSize: "0.85rem", color: "#5f6d7e" },
+  amt: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.55rem", paddingTop: "0.45rem", borderTop: "1px dashed var(--k-line)", fontSize: "var(--k-font)", color: "var(--k-muted)" },
 };

@@ -18,17 +18,8 @@ import { usePermissions } from "../contexts/PermissionsContext";
 import { previewFbrPurchaseImport, commitFbrPurchaseImport, downloadFbrPurchaseSample } from "../api/fbrPurchaseImportApi";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { notify } from "../utils/notify";
+import { PageHeader, CompanyPicker, Button, Card, Field, TableWrap, EmptyState } from "../ui/Kit";
 import "./FbrPurchaseImportPage.css";
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBg: "#f8f9fb",
-  inputBorder: "#d0d7e2",
-};
 
 // Decision → display config. Single source of truth for chip colour,
 // label, and icon. Used for both summary chips and per-row tags.
@@ -78,7 +69,7 @@ function formatDate(s) {
 }
 
 export default function FbrPurchaseImportPage() {
-  const { selectedCompany, companies, setSelectedCompany } = useCompany();
+  const { selectedCompany, companies } = useCompany();
   const { has } = usePermissions();
   const confirm = useConfirm();
   const [file, setFile] = useState(null);
@@ -267,113 +258,100 @@ export default function FbrPurchaseImportPage() {
 
   return (
     <div className="fbr-imp-page" style={{ padding: "1.5rem 2rem", maxWidth: 1400, margin: "0 auto" }}>
-      <header className="fbr-imp-header" style={{ display: "flex", alignItems: "center", gap: "0.85rem", marginBottom: "0.75rem" }}>
-        <div className="fbr-imp-header__icon" style={styles.headerIcon}><MdCloudUpload size={28} color="#fff" /></div>
-        <div style={{ minWidth: 0 }}>
-          <h2 className="fbr-imp-header__title" style={styles.pageTitle}>FBR Purchase Import</h2>
-          <p className="fbr-imp-header__subtitle" style={styles.pageSubtitle}>
+      <PageHeader
+        icon={MdCloudUpload}
+        tone="brand"
+        title="FBR Purchase Import"
+        subtitle={(
+          <>
             Upload your FBR purchase sheet — Annexure-A (claimed only) or the Sales
             Ledger (all purchases) — and preview exactly which rows would land as new
             purchases before you commit.
-          </p>
-        </div>
-      </header>
+          </>
+        )}
+      />
+
+      {companies.length > 0 && <CompanyPicker />}
 
       {/* ── Upload card ─────────────────────────────────────────────── */}
-      <section className="fbr-imp-card" style={styles.card}>
+      <Card style={styles.card}>
         <div className="fbr-imp-upload-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "1rem" }}>
-          <div className="fbr-imp-upload-row__field" style={{ minWidth: 220 }}>
-            <label style={styles.label}>Company</label>
+          <Field label="Sheet format" className="fbr-imp-upload-row__field">
             <select
-              style={styles.input}
-              value={selectedCompany?.id || ""}
-              onChange={(e) => {
-                const id = parseInt(e.target.value);
-                const c = companies.find((cc) => cc.id === id);
-                if (c) setSelectedCompany(c);
-              }}
-            >
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-
-          <div className="fbr-imp-upload-row__field" style={{ minWidth: 200 }}>
-            <label style={styles.label}>Sheet format</label>
-            <select
-              style={styles.input}
+              className="k-select"
+              style={{ minWidth: 200 }}
               value={sheetFormat}
               onChange={(e) => setSheetFormat(e.target.value)}
             >
               <option value="annexa">Annexure-A — claimed only</option>
               <option value="ledger">Sales Ledger — all purchases</option>
             </select>
-          </div>
+          </Field>
 
-          <div className="fbr-imp-upload-row__field" style={{ flex: 1, minWidth: 280 }}>
-            <label style={styles.label}>FBR purchase sheet (.xls / .xlsx)</label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xls,.xlsx"
-              onChange={onSelectFile}
-              style={{ ...styles.input, padding: "0.4rem 0.5rem" }}
-            />
-            {file && (
-              <div style={{ fontSize: "0.78rem", color: colors.textSecondary, marginTop: "0.3rem", overflowWrap: "anywhere" }}>
-                {file.name} · {(file.size / 1024).toFixed(0)} KB
-              </div>
-            )}
+          <div className="fbr-imp-upload-row__field" style={{ flex: 1, minWidth: "min(280px, 100%)" }}>
+            <Field label="FBR purchase sheet (.xls / .xlsx)">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xls,.xlsx"
+                onChange={onSelectFile}
+                className="k-input"
+                style={styles.fileInput}
+              />
+              {file && (
+                <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: "0.3rem", overflowWrap: "anywhere" }}>
+                  {file.name} · {(file.size / 1024).toFixed(0)} KB
+                </div>
+              )}
+            </Field>
           </div>
 
           <div className="fbr-imp-upload-row__btns" style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              style={{ ...styles.primaryBtn, opacity: running || !file ? 0.5 : 1 }}
+            <Button
+              variant="primary"
+              icon={running ? undefined : MdCloudUpload}
               disabled={running || !file}
               onClick={onRun}
             >
-              {running ? <span className="btn-spinner" /> : <MdCloudUpload size={16} />}
+              {running && <span className="btn-spinner" />}
               {running ? "Running..." : "Run Preview"}
-            </button>
+            </Button>
             {result && (
-              <button type="button" style={styles.secondaryBtn} onClick={onReset}>
-                <MdRefresh size={16} /> Clear
-              </button>
+              <Button icon={MdRefresh} onClick={onReset}>Clear</Button>
             )}
           </div>
         </div>
 
         {/* Sample download + format hint — both layouts parse automatically;
             the selector above chooses which fictional sample to download. */}
-        <div className="fbr-imp-sample-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.6rem", marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: `1px solid ${colors.cardBorder}` }}>
-          <button
-            type="button"
-            style={{ ...styles.secondaryBtn, opacity: downloadingSample ? 0.6 : 1 }}
+        <div className="fbr-imp-sample-row" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.6rem", marginTop: "0.9rem", paddingTop: "0.9rem", borderTop: "1px solid var(--k-line)" }}>
+          <Button
+            icon={MdFileDownload}
             disabled={downloadingSample}
             onClick={onDownloadSample}
           >
-            <MdFileDownload size={16} /> {downloadingSample ? "Preparing..." : "Download sample"}
-          </button>
-          <span style={{ fontSize: "0.8rem", color: colors.textSecondary, lineHeight: 1.4, flex: 1, minWidth: 240 }}>
+            {downloadingSample ? "Preparing..." : "Download sample"}
+          </Button>
+          <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", lineHeight: 1.4, flex: 1, minWidth: "min(240px, 100%)" }}>
             {sheetFormat === "ledger"
               ? "Sales Ledger — the IRIS export with ALL purchases (claimed + unclaimed)."
               : "Annexure-A — the claimed-only export (the input tax you filed)."}
             {" "}Both layouts upload here; the sample is fictional (safe for demos) and re-uploadable.
           </span>
         </div>
-      </section>
+      </Card>
 
       {/* ── Commit result panel ─────────────────────────────────────────
            Shown after Commit completes. Replaces the preview view and
            summarises what landed in the DB. The operator can clear and
            start over (Run Preview again) once they've reviewed it. */}
       {commitResult && (
-        <section className="fbr-imp-card" style={{ ...styles.card, borderLeft: "4px solid #2e7d32" }}>
+        <Card style={{ ...styles.card, borderLeft: "4px solid #2e7d32" }}>
           <div className="fbr-imp-result-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.5rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
               <MdCheckCircle size={20} color="#2e7d32" />
-              <strong style={{ fontSize: "1rem", color: "#2e7d32" }}>Import committed</strong>
-              <span className="fbr-imp-result-head__time" style={{ fontSize: "0.82rem", color: colors.textSecondary, overflowWrap: "anywhere" }}>
+              <strong style={{ fontSize: "calc(var(--k-font) + 0.1rem)", color: "#2e7d32" }}>Import committed</strong>
+              <span className="fbr-imp-result-head__time" style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", overflowWrap: "anywhere" }}>
                 {commitResult.fileName} · {new Date(commitResult.committedAt).toLocaleString("en-PK")}
               </span>
             </div>
@@ -414,8 +392,8 @@ export default function FbrPurchaseImportPage() {
               the second pass. */}
           {commitResult.counts.invoicesFailed > 0 && (
             <div style={{ marginTop: "0.5rem" }}>
-              <strong style={{ fontSize: "0.85rem", color: "#b71c1c" }}>Failed invoices:</strong>
-              <ul style={{ marginTop: "0.3rem", paddingLeft: "1.4rem", color: colors.textPrimary, fontSize: "0.83rem" }}>
+              <strong style={{ fontSize: "var(--k-font)", color: "#b71c1c" }}>Failed invoices:</strong>
+              <ul style={{ marginTop: "0.3rem", paddingLeft: "1.4rem", color: "var(--k-ink)", fontSize: "var(--k-font-sm)" }}>
                 {commitResult.invoices
                   .filter((i) => i.outcome === "failed")
                   .map((i, idx) => (
@@ -427,41 +405,41 @@ export default function FbrPurchaseImportPage() {
               </ul>
             </div>
           )}
-        </section>
+        </Card>
       )}
 
       {/* ── Workbook warnings ───────────────────────────────────────── */}
       {result?.warnings?.length > 0 && (
-        <section className="fbr-imp-card" style={{ ...styles.card, borderLeft: "4px solid #e65100" }}>
+        <Card style={{ ...styles.card, borderLeft: "4px solid #e65100" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.4rem" }}>
             <MdWarning color="#e65100" />
             <strong style={{ color: "#e65100" }}>Workbook warnings</strong>
           </div>
-          <ul style={{ margin: 0, paddingLeft: "1.4rem", color: colors.textSecondary, fontSize: "0.83rem", overflowWrap: "anywhere" }}>
+          <ul style={{ margin: 0, paddingLeft: "1.4rem", color: "var(--k-muted)", fontSize: "var(--k-font-sm)", overflowWrap: "anywhere" }}>
             {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
           </ul>
-        </section>
+        </Card>
       )}
 
       {/* ── Summary chips ───────────────────────────────────────────── */}
       {summary && (
-        <section className="fbr-imp-card" style={styles.card}>
+        <Card style={styles.card}>
           <div className="fbr-imp-summary-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.6rem", marginBottom: "0.75rem" }}>
             <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-              <strong style={{ fontSize: "1rem", color: colors.textPrimary }}>{summary.fileName}</strong>
-              <span className="fbr-imp-summary-meta" style={{ marginLeft: "0.6rem", fontSize: "0.83rem", color: colors.textSecondary }}>
+              <strong style={{ fontSize: "calc(var(--k-font) + 0.1rem)", color: "var(--k-ink)" }}>{summary.fileName}</strong>
+              <span className="fbr-imp-summary-meta" style={{ marginLeft: "0.6rem", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
                 {summary.totalRows} rows · {summary.totalInvoices} invoices
               </span>
             </div>
-            <div className="fbr-imp-summary-actions" style={{ display: "flex", gap: "0.4rem" }}>
+            <div className="fbr-imp-summary-actions" style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
               {skippedCsvHref && (
                 <a
                   href={skippedCsvHref}
                   download={`fbr-skipped-${Date.now()}.csv`}
-                  style={styles.secondaryLink}
+                  className="k-btn k-btn--secondary"
                   title="Export every non-importable row to CSV for offline triage"
                 >
-                  <MdFileDownload size={14} /> Download skipped CSV
+                  <MdFileDownload size={16} aria-hidden="true" /> Download skipped CSV
                 </a>
               )}
               {(() => {
@@ -475,20 +453,16 @@ export default function FbrPurchaseImportPage() {
                 else if (willImportTotal === 0) disabledReason = "Nothing to import — every row was already claimed, already in ERP, or skipped.";
 
                 return (
-                  <button
-                    type="button"
-                    style={{
-                      ...styles.primaryBtn,
-                      backgroundColor: disabledReason ? "#9e9e9e" : "#2e7d32",
-                      cursor: disabledReason ? "not-allowed" : "pointer",
-                    }}
+                  <Button
+                    variant="teal"
+                    icon={committing ? undefined : MdCheckCircle}
                     disabled={!!disabledReason}
                     onClick={onCommit}
                     title={disabledReason || `Commit ${willImportInvoices.length} invoice${willImportInvoices.length !== 1 ? "s" : ""} (${willImportTotal} line${willImportTotal !== 1 ? "s" : ""}) into Purchase Bills.`}
                   >
-                    {committing ? <span className="btn-spinner" /> : <MdCheckCircle size={16} />}
+                    {committing && <span className="btn-spinner" />}
                     {committing ? "Committing..." : "Commit Import"}
-                  </button>
+                  </Button>
                 );
               })()}
             </div>
@@ -518,16 +492,12 @@ export default function FbrPurchaseImportPage() {
               );
             })}
           </div>
-        </section>
+        </Card>
       )}
 
       {/* ── Invoice list ────────────────────────────────────────────── */}
       {summary && result.invoices.length === 0 && (
-        <section className="fbr-imp-card" style={styles.card}>
-          <p style={{ margin: 0, color: colors.textSecondary }}>
-            No invoices parsed from this file. Check the workbook warnings above.
-          </p>
-        </section>
+        <EmptyState>No invoices parsed from this file. Check the workbook warnings above.</EmptyState>
       )}
 
       {result?.invoices?.map((inv, idx) => {
@@ -535,11 +505,12 @@ export default function FbrPurchaseImportPage() {
         const Icon = cfg.icon;
         const open = expandedInvoices.has(idx);
         return (
-          <section className="fbr-imp-card" key={`${inv.fbrInvoiceRefNo}-${idx}`} style={{ ...styles.card, padding: 0, overflow: "hidden" }}>
+          <Card flush key={`${inv.fbrInvoiceRefNo}-${idx}`} style={{ ...styles.card, overflow: "hidden" }}>
             <button
               type="button"
               onClick={() => toggleInvoice(idx)}
               className="fbr-imp-invoice-header"
+              aria-expanded={open}
               style={{ ...styles.invoiceHeader, borderLeft: `4px solid ${cfg.border}` }}
             >
               <div className="fbr-imp-invoice-header__main" style={{ display: "flex", alignItems: "center", gap: "0.55rem", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
@@ -547,31 +518,31 @@ export default function FbrPurchaseImportPage() {
                   <Icon size={14} />
                   {cfg.label}
                 </span>
-                <strong style={{ color: colors.textPrimary, fontSize: "0.95rem", overflowWrap: "anywhere" }}>{inv.invoiceNo || "(no invoice no)"}</strong>
-                <span className="fbr-imp-invoice-header__sep" style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>·</span>
-                <span className="fbr-imp-invoice-header__supplier" style={{ color: colors.textSecondary, fontSize: "0.82rem", overflowWrap: "anywhere", minWidth: 0 }}>
+                <strong style={{ color: "var(--k-ink)", fontSize: "calc(var(--k-font) + 0.05rem)", overflowWrap: "anywhere" }}>{inv.invoiceNo || "(no invoice no)"}</strong>
+                <span className="fbr-imp-invoice-header__sep" style={styles.headerMeta}>·</span>
+                <span className="fbr-imp-invoice-header__supplier" style={{ ...styles.headerMeta, overflowWrap: "anywhere", minWidth: 0 }}>
                   {inv.supplierName || inv.supplierNtn || "(unknown supplier)"}
                 </span>
-                <span className="fbr-imp-invoice-header__sep" style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>·</span>
-                <span className="fbr-imp-invoice-header__date" style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
+                <span className="fbr-imp-invoice-header__sep" style={styles.headerMeta}>·</span>
+                <span className="fbr-imp-invoice-header__date" style={styles.headerMeta}>
                   {formatDate(inv.invoiceDate)}
                 </span>
               </div>
               <div className="fbr-imp-invoice-header__meta" style={{ display: "flex", alignItems: "center", gap: "0.55rem", flexShrink: 0 }}>
-                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "0.82rem", color: colors.textPrimary }}>
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "var(--k-font-sm)", color: "var(--k-ink)" }}>
                   Rs. {formatPkr(inv.totalGrossValue)}
                 </span>
-                <span style={{ fontSize: "0.78rem", color: colors.textSecondary }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--k-muted)" }}>
                   {inv.lines.length} line{inv.lines.length !== 1 ? "s" : ""}
                 </span>
-                <span style={{ fontSize: "0.85rem", color: colors.blue }}>{open ? "▼" : "▶"}</span>
+                <span style={{ fontSize: "var(--k-font)", color: "var(--k-blue)" }}>{open ? "▼" : "▶"}</span>
               </div>
             </button>
 
             {open && (
-              <div className="fbr-imp-invoice-body" style={{ padding: "0.6rem 1rem 1rem", borderTop: `1px solid ${colors.cardBorder}` }}>
+              <div className="fbr-imp-invoice-body" style={{ padding: "0.6rem 1rem 1rem", borderTop: "1px solid var(--k-line)" }}>
                 {/* Bill-level meta */}
-                <div className="fbr-imp-bill-meta" style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.55rem" }}>
+                <div className="fbr-imp-bill-meta" style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", fontSize: "0.78rem", color: "var(--k-muted)", marginBottom: "0.55rem" }}>
                   <span><strong>FBR Ref:</strong> {inv.fbrInvoiceRefNo || "—"}</span>
                   <span><strong>Supplier NTN:</strong> {inv.supplierNtn || "—"}</span>
                   <span><strong>Match:</strong> {inv.matchedSupplierId ? `Supplier #${inv.matchedSupplierId}` : "Will create"}</span>
@@ -581,21 +552,21 @@ export default function FbrPurchaseImportPage() {
                 </div>
 
                 {/* Lines table — desktop */}
-                <div className="fbr-imp-table-wrap" style={{ overflowX: "auto" }}>
-                  <table style={styles.table}>
+                <TableWrap className="fbr-imp-table-wrap">
+                  <table className="k-table k-table--compact">
                     <thead>
                       <tr>
-                        <th style={styles.th}>Row</th>
-                        <th style={styles.th}>HS Code</th>
-                        <th style={styles.th}>Description</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>Qty</th>
-                        <th style={styles.th}>UoM</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>Value Excl Tax</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>GST</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>Extra Tax</th>
-                        <th style={{ ...styles.th, textAlign: "right" }}>ST Withheld</th>
-                        <th style={styles.th}>Item Match</th>
-                        <th style={styles.th}>Decision</th>
+                        <th>Row</th>
+                        <th>HS Code</th>
+                        <th>Description</th>
+                        <th className="k-num">Qty</th>
+                        <th>UoM</th>
+                        <th className="k-num">Value Excl Tax</th>
+                        <th className="k-num">GST</th>
+                        <th className="k-num">Extra Tax</th>
+                        <th className="k-num">ST Withheld</th>
+                        <th>Item Match</th>
+                        <th>Decision</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -606,19 +577,19 @@ export default function FbrPurchaseImportPage() {
                           <tr key={lidx}>
                             <td style={styles.td}>{ln.sourceRowNumber}</td>
                             <td style={{ ...styles.td, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{ln.hsCode || "—"}</td>
-                            <td style={styles.td}>{ln.description || <em style={{ color: colors.textSecondary }}>(blank)</em>}</td>
-                            <td style={{ ...styles.td, textAlign: "right" }}>{formatQty(ln.quantity)}</td>
+                            <td style={styles.td}>{ln.description || <em className="k-muted">(blank)</em>}</td>
+                            <td className="k-num" style={styles.td}>{formatQty(ln.quantity)}</td>
                             <td style={styles.td}>{ln.uom || "—"}</td>
-                            <td style={{ ...styles.td, textAlign: "right" }}>{formatPkr(ln.valueExclTax)}</td>
-                            <td style={{ ...styles.td, textAlign: "right" }}>{formatPkr(ln.gstAmount)}</td>
-                            <td style={{ ...styles.td, textAlign: "right" }}>{formatPkr(ln.extraTax)}</td>
-                            <td style={{ ...styles.td, textAlign: "right" }}>{formatPkr(ln.stWithheldAtSource)}</td>
+                            <td className="k-num" style={styles.td}>{formatPkr(ln.valueExclTax)}</td>
+                            <td className="k-num" style={styles.td}>{formatPkr(ln.gstAmount)}</td>
+                            <td className="k-num" style={styles.td}>{formatPkr(ln.extraTax)}</td>
+                            <td className="k-num" style={styles.td}>{formatPkr(ln.stWithheldAtSource)}</td>
                             <td style={styles.td}>
                               {ln.matchedItemTypeId ? (
-                                <span style={{ color: colors.textPrimary }}>
-                                  {ln.matchedItemTypeName} <small style={{ color: colors.textSecondary }}>· {ln.matchedBy}</small>
+                                <span>
+                                  {ln.matchedItemTypeName} <small className="k-muted">· {ln.matchedBy}</small>
                                 </span>
-                              ) : <em style={{ color: colors.textSecondary }}>—</em>}
+                              ) : <em className="k-muted">—</em>}
                             </td>
                             <td style={styles.td}>
                               <span style={{ ...styles.chipSmall, color: lcfg.color, backgroundColor: lcfg.bg, border: `1px solid ${lcfg.border}` }}>
@@ -630,7 +601,7 @@ export default function FbrPurchaseImportPage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </TableWrap>
 
                 {/* Lines — mobile cards (CSS toggles visibility) */}
                 <div className="fbr-imp-line-cards">
@@ -649,7 +620,7 @@ export default function FbrPurchaseImportPage() {
                         {ln.hsCode && <div className="fbr-imp-line-card__hs">HS {ln.hsCode}</div>}
 
                         <div className="fbr-imp-line-card__desc">
-                          {ln.description || <em style={{ color: colors.textSecondary }}>(blank)</em>}
+                          {ln.description || <em style={{ color: "var(--k-muted)" }}>(blank)</em>}
                         </div>
 
                         <div className="fbr-imp-line-card__grid">
@@ -686,9 +657,9 @@ export default function FbrPurchaseImportPage() {
                           {ln.matchedItemTypeId ? (
                             <span>
                               {ln.matchedItemTypeName}
-                              <small style={{ color: colors.textSecondary }}> · {ln.matchedBy}</small>
+                              <small style={{ color: "var(--k-muted)" }}> · {ln.matchedBy}</small>
                             </span>
-                          ) : <em style={{ color: colors.textSecondary }}>—</em>}
+                          ) : <em style={{ color: "var(--k-muted)" }}>—</em>}
                         </div>
                       </div>
                     );
@@ -696,74 +667,19 @@ export default function FbrPurchaseImportPage() {
                 </div>
               </div>
             )}
-          </section>
+          </Card>
         );
       })}
     </div>
   );
 }
 
+// Page-specific layout; themed roles (header, buttons, inputs, cards, table) come from the kit.
+// The decision chips keep their fixed semantic colours (green = import, amber = skip, red = blocked).
 const styles = {
-  headerIcon: {
-    width: 48, height: 48, borderRadius: 12,
-    background: "linear-gradient(135deg, #0d47a1, #00897b)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    flexShrink: 0,
-  },
-  pageTitle: { margin: 0, fontSize: "1.4rem", fontWeight: 800, color: colors.textPrimary },
-  pageSubtitle: { margin: 0, fontSize: "0.85rem", color: colors.textSecondary },
-  card: {
-    background: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 12,
-    padding: "1rem 1.1rem",
-    margin: "1rem 0",
-  },
-  label: { display: "block", fontSize: "0.78rem", color: colors.textSecondary, marginBottom: "0.25rem", fontWeight: 600 },
-  input: {
-    width: "100%",
-    padding: "0.5rem 0.6rem",
-    border: `1px solid ${colors.inputBorder}`,
-    borderRadius: 8,
-    backgroundColor: colors.inputBg,
-    fontSize: "0.88rem",
-    fontFamily: "inherit",
-    color: colors.textPrimary,
-    outline: "none",
-  },
-  primaryBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.4rem",
-    padding: "0.55rem 1rem",
-    backgroundColor: colors.blue,
-    color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    fontWeight: 600,
-    cursor: "pointer",
-    fontSize: "0.88rem",
-  },
-  secondaryBtn: {
-    display: "inline-flex", alignItems: "center", gap: "0.35rem",
-    padding: "0.55rem 0.9rem",
-    backgroundColor: "#fff",
-    color: colors.blue,
-    border: `1px solid ${colors.blue}`,
-    borderRadius: 8,
-    fontWeight: 600,
-    cursor: "pointer",
-    fontSize: "0.85rem",
-  },
-  secondaryLink: {
-    display: "inline-flex", alignItems: "center", gap: "0.3rem",
-    padding: "0.45rem 0.7rem",
-    backgroundColor: "#fff",
-    color: colors.teal,
-    border: `1px solid ${colors.teal}`,
-    borderRadius: 8,
-    fontWeight: 600,
-    fontSize: "0.8rem",
-    textDecoration: "none",
-  },
+  // Cards stack with the kit section gap (inline margin overrides `.k-card + .k-card`).
+  card: { margin: "0 0 var(--k-gap)" },
+  fileInput: { padding: "0.3rem 0.5rem", height: "auto" },
   chip: {
     display: "inline-flex", alignItems: "center", gap: "0.3rem",
     padding: "0.25rem 0.6rem",
@@ -784,34 +700,18 @@ const styles = {
     alignItems: "center",
     gap: "0.55rem",
     width: "100%",
+    margin: 0,
     padding: "0.7rem 1rem",
-    background: "#fafbfd",
+    background: "var(--k-surface-2)",
     border: "none",
+    borderRadius: 0,
+    boxShadow: "none",
     cursor: "pointer",
     textAlign: "left",
     fontFamily: "inherit",
+    fontWeight: 400,
+    color: "var(--k-ink)",
   },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: "0.8rem",
-  },
-  th: {
-    textAlign: "left",
-    padding: "0.45rem 0.5rem",
-    backgroundColor: "#f4f7fb",
-    color: colors.textPrimary,
-    fontWeight: 700,
-    fontSize: "0.74rem",
-    borderBottom: `2px solid ${colors.cardBorder}`,
-    textTransform: "uppercase",
-    letterSpacing: "0.02em",
-    whiteSpace: "nowrap",
-  },
-  td: {
-    padding: "0.45rem 0.5rem",
-    borderBottom: `1px solid ${colors.cardBorder}`,
-    color: colors.textPrimary,
-    verticalAlign: "top",
-  },
+  headerMeta: { color: "var(--k-muted)", fontSize: "var(--k-font-sm)" },
+  td: { verticalAlign: "top" },
 };

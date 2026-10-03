@@ -1,11 +1,9 @@
 import DocumentLinesNavigation from "../Components/DocumentLinesNavigation";
 import { useState, useEffect, useCallback } from "react";
-import { MdInventory2, MdAdd, MdBusiness, MdSearch, MdEdit, MdDelete, MdVisibility, MdChevronLeft, MdChevronRight, MdPrint, MdPictureAsPdf } from "react-icons/md";
+import { MdInventory2, MdAdd, MdBusiness, MdEdit, MdDelete, MdVisibility, MdPrint, MdPictureAsPdf } from "react-icons/md";
 import { getGoodsReceiptsByCompanyPaged, deleteGoodsReceipt, getGoodsReceiptPrintData } from "../api/goodsReceiptApi";
 import { getSuppliersByCompany } from "../api/supplierApi";
-import { dropdownStyles, cardStyles, cardHover } from "../theme";
 import usePageSize, { PAGE_SIZE_OPTIONS } from "../hooks/usePageSize";
-import PageSizeSelect from "../Components/PageSizeSelect";
 import Pagination from "../Components/Pagination";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -24,19 +22,12 @@ import { mergeTemplate } from "../utils/templateEngine";
 import { writeAndPrint } from "../utils/printDocument";
 import { exportToPdf } from "../utils/exportUtils";
 import { DEFAULT_TEMPLATES } from "../utils/templateSampleData";
-
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  inputBorder: "#d0d7e2",
-};
+import SearchableClientSelect from "../Components/SearchableClientSelect";
+import { PageHeader, CompanyPicker, Button, Toolbar, ToolbarSpacer, SearchBox, Card, Facts, EmptyState, Loading } from "../ui/Kit";
 
 export default function GoodsReceiptsPage() {
   const confirm = useConfirm();
-  const { companies, selectedCompany, setSelectedCompany, loading: loadingCompanies } = useCompany();
+  const { companies, selectedCompany, loading: loadingCompanies } = useCompany();
   const { has } = usePermissions();
   const tplPicker = usePrintTemplates("GoodsReceipt");
   const canCreate = has("goodsreceipts.manage.create");
@@ -131,62 +122,52 @@ export default function GoodsReceiptsPage() {
   return (
     <DocumentLinesNavigation type="receipt">
     <div>
-      <div style={styles.pageHeader}>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <div style={styles.headerIcon}><MdInventory2 size={28} color="#fff" /></div>
-          <div>
-            <h2 style={styles.pageTitle}>Goods Receipts</h2>
-            <p style={styles.pageSubtitle}>
-              {selectedCompany ? `${totalCount} receipt${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company"}
-            </p>
-          </div>
-        </div>
-        {companies.length > 0 && canCreate && (
-          <button style={styles.addBtn} onClick={() => { setEditingId(null); setShowForm(true); }}>
-            <MdAdd size={18} /> New Receipt
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={MdInventory2}
+        tone="teal"
+        title="Goods Receipts"
+        subtitle={selectedCompany ? `${totalCount} receipt${totalCount !== 1 ? "s" : ""} for ${selectedCompany.brandName || selectedCompany.name}` : "Select a company"}
+        actions={companies.length > 0 && canCreate ? (
+          <Button variant="primary" icon={MdAdd} onClick={() => { setEditingId(null); setShowForm(true); }}>New Receipt</Button>
+        ) : null}
+      />
 
       {loadingCompanies ? (
-        <div style={styles.loading}><div style={styles.spinner} /></div>
+        <Loading>Loading companies…</Loading>
       ) : companies.length === 0 ? (
-        <div style={styles.empty}>No companies available.</div>
+        <EmptyState icon={MdBusiness}>No companies available.</EmptyState>
       ) : (
         <>
-          <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <MdBusiness size={20} color={colors.blue} />
-            <select style={dropdownStyles.base} value={selectedCompany?.id || ""} onChange={e => setSelectedCompany(companies.find(c => parseInt(c.id) === parseInt(e.target.value)))}>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.brandName || c.name}</option>)}
-            </select>
-          </div>
+          <CompanyPicker />
 
           {selectedCompany && (
-            <div className="filters-row">
-              <div className="filter-search-wrap">
-                <MdSearch size={15} className="filter-search-icon" />
-                <input type="text" placeholder="Search GR#, supplier, item..." className="filter-search-input" value={search} onChange={onFilterChange(setSearch)} />
+            <Toolbar>
+              <SearchBox
+                value={search}
+                onChange={(text) => onFilterChange(setSearch)({ target: { value: text } })}
+                placeholder="Search GR#, supplier, item..."
+              />
+              <div style={filterBox}>
+                <SearchableClientSelect
+                  clients={suppliers}
+                  value={supplierFilter}
+                  onChange={(id) => onFilterChange(setSupplierFilter)({ target: { value: String(id) } })}
+                  placeholder="All Suppliers"
+                  noun="suppliers"
+                />
               </div>
-              <select className="filter-select" value={supplierFilter} onChange={onFilterChange(setSupplierFilter)}>
-                <option value="">All Suppliers</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                {canPrint && <PrintTemplateSelect picker={tplPicker} />}
-                {isBigScreen && (
-                  <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
-                )}
-              </div>
-            </div>
+              <ToolbarSpacer />
+              {canPrint && <PrintTemplateSelect picker={tplPicker} />}
+              {isBigScreen && (
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} ariaLabel="Goods receipts view mode" />
+              )}
+            </Toolbar>
           )}
 
           {loading ? (
-            <div style={styles.loading}><div style={styles.spinner} /></div>
+            <Loading>Loading goods receipts…</Loading>
           ) : receipts.length === 0 ? (
-            <div style={styles.empty}>
-              <MdInventory2 size={40} color={colors.cardBorder} />
-              <p style={{ color: colors.textSecondary, marginTop: "0.5rem" }}>No goods receipts yet.</p>
-            </div>
+            <EmptyState icon={MdInventory2}>No goods receipts yet.</EmptyState>
           ) : (
             <>
               {viewMode === "table" ? (
@@ -205,35 +186,32 @@ export default function GoodsReceiptsPage() {
                   onAttach={(g) => setAttachTarget(g)}
                 />
               ) : (
-              <div className="card-grid">
+              <div className="k-grid-cards">
                 {receipts.map(gr => (
-                  <div key={gr.id} style={cardStyles.card}
-                       onMouseEnter={(e) => Object.assign(e.currentTarget.style, cardHover)}
-                       onMouseLeave={(e) => Object.assign(e.currentTarget.style, { transform: "none", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" })}>
-                    <div style={cardStyles.cardContent}>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: "0.5rem" }}>
-                          <h5 style={{ ...cardStyles.title, marginBottom: 0 }}>
-                            <MdInventory2 style={{ color: colors.teal, marginRight: 6 }} />
-                            GR #{gr.goodsReceiptNumber}
-                          </h5>
-                          <AttachmentBadge count={attachCounts[gr.id]} onClick={() => setAttachTarget(gr)} />
-                        </div>
-                        <p style={cardStyles.text}><strong>Supplier:</strong> {gr.supplierName}</p>
-                        <p style={cardStyles.text}><strong>Date:</strong> {new Date(gr.receiptDate).toLocaleDateString()}</p>
-                        {gr.purchaseBillNumber && <p style={cardStyles.text}><strong>Linked PB:</strong> #{gr.purchaseBillNumber}</p>}
-                        {gr.supplierChallanNumber && <p style={cardStyles.text}><strong>Supplier DC:</strong> {gr.supplierChallanNumber}</p>}
-                        <p style={{ ...cardStyles.text, fontSize: "0.74rem" }}>{gr.items?.length || 0} items · {gr.status}</p>
-                      </div>
-                      <div style={{ ...cardStyles.buttonGroup, flexWrap: "wrap" }}>
-                        <button style={btnView} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdVisibility size={14} /> View</button>
-                        {canUpdate && <button style={btnEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}><MdEdit size={14} /> Edit</button>}
-                        {canPrint && <button style={{ ...btnPrint, opacity: tplPicker.noTemplate ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"} onClick={() => handlePrint(gr)}><MdPrint size={14} /> Print</button>}
-                        {canPrint && <button style={{ ...btnPdf, opacity: tplPicker.noTemplate || exportingId === gr.id ? 0.5 : 1, cursor: tplPicker.noTemplate ? "not-allowed" : "pointer" }} onClick={() => handleExportPdf(gr)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"}><MdPictureAsPdf size={14} /> PDF</button>}
-                        {canDelete && <button style={btnDelete} onClick={() => handleDelete(gr)}><MdDelete size={14} /> Delete</button>}
-                      </div>
+                  <Card
+                    key={gr.id}
+                    tone="teal"
+                    icon={MdInventory2}
+                    title={`GR #${gr.goodsReceiptNumber}`}
+                    actions={<AttachmentBadge count={attachCounts[gr.id]} onClick={() => setAttachTarget(gr)} />}
+                    style={docCard}
+                  >
+                    <Facts facts={[
+                      ["Supplier", gr.supplierName],
+                      ["Date", new Date(gr.receiptDate).toLocaleDateString()],
+                      gr.purchaseBillNumber && ["Linked PB", `#${gr.purchaseBillNumber}`],
+                      gr.supplierChallanNumber && ["Supplier DC", gr.supplierChallanNumber],
+                      ["Items", gr.items?.length || 0],
+                      ["Status", gr.status],
+                    ]} />
+                    <div style={cardActions}>
+                      <Button size="sm" icon={MdVisibility} onClick={() => { setEditingId(gr.id); setShowForm(true); }}>View</Button>
+                      {canUpdate && <Button size="sm" icon={MdEdit} onClick={() => { setEditingId(gr.id); setShowForm(true); }}>Edit</Button>}
+                      {canPrint && <Button size="sm" icon={MdPrint} disabled={tplPicker.noTemplate} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Print"} onClick={() => handlePrint(gr)}>Print</Button>}
+                      {canPrint && <Button size="sm" icon={MdPictureAsPdf} onClick={() => handleExportPdf(gr)} disabled={tplPicker.noTemplate || !!exportingId} title={tplPicker.noTemplate ? tplPicker.noTemplateReason : "Export PDF"}>PDF</Button>}
+                      {canDelete && <Button size="sm" variant="danger" icon={MdDelete} onClick={() => handleDelete(gr)}>Delete</Button>}
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
               )}
@@ -275,22 +253,7 @@ export default function GoodsReceiptsPage() {
   );
 }
 
-const styles = {
-  pageHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" },
-  headerIcon: { width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, #00695c, #00897b)`, display: "flex", alignItems: "center", justifyContent: "center" },
-  pageTitle: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: colors.textPrimary },
-  pageSubtitle: { margin: "0.15rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: { minHeight: 44, display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${colors.blue}, ${colors.teal})`, color: "#fff", fontSize: "0.9rem", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,71,161,0.25)" },
-  loading: { display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem 0" },
-  spinner: { width: 28, height: 28, border: `3px solid ${colors.cardBorder}`, borderTopColor: colors.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite" },
-  empty: { display: "flex", flexDirection: "column", alignItems: "center", padding: "3rem 1rem", textAlign: "center", color: colors.textSecondary },
-  pagination: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", padding: "1rem 0", marginTop: "0.5rem" },
-  pageBtn: { display: "inline-flex", alignItems: "center", gap: "0.2rem", padding: "0.4rem 0.8rem", borderRadius: 8, border: `1px solid ${colors.inputBorder}`, backgroundColor: "#fff", color: colors.blue, fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", boxShadow: "none" },
-  pageInfo: { fontSize: "0.82rem", color: colors.textSecondary, fontWeight: 500 },
-};
-const baseBtn = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.3rem 0.6rem", borderRadius: 6, border: "none", fontSize: "0.76rem", fontWeight: 600, cursor: "pointer" };
-const btnView = { ...baseBtn, backgroundColor: "#e3f2fd", color: "#0d47a1", border: "1px solid #90caf9" };
-const btnEdit = { ...baseBtn, backgroundColor: "#fff3e0", color: "#e65100" };
-const btnPrint = { ...baseBtn, backgroundColor: "#e8f5e9", color: "#1b5e20" };
-const btnPdf = { ...baseBtn, backgroundColor: "#f3e5f5", color: "#6a1b9a" };
-const btnDelete = { ...baseBtn, backgroundColor: "#ffebee", color: "#b71c1c" };
+// Page-specific layout only — every themed role comes from the kit.
+const filterBox = { flex: "1 1 200px", minWidth: 0, maxWidth: 260 };
+const docCard = { margin: 0 };
+const cardActions = { display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.9rem", paddingTop: "0.75rem", borderTop: "1px solid var(--k-line)" };

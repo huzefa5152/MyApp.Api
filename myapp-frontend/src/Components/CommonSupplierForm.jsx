@@ -9,6 +9,7 @@ import { formStyles, modalSizes } from "../theme";
 import CopyToCompaniesDialog from "./CopyToCompaniesDialog";
 import { notify } from "../utils/notify";
 import useScrollToError from "../hooks/useScrollToError";
+import { Alert, Button, Loading } from "../ui/Kit";
 
 /**
  * Mirror of <see cref="CommonClientForm"/> for the purchase side.
@@ -209,33 +210,30 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
             aria-label="Close"
             title="Close"
           >
-            <MdClose size={20} color="#fff" />
+            <MdClose size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "contents" }}>
           <div style={formStyles.body}>
             {loading ? (
-              <div style={s.notice}>Loading…</div>
+              <Loading>Loading…</Loading>
             ) : (
               <>
                 {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
 
                 {detail && (
-                  <div style={s.cascadeBanner}>
-                    <MdInfo size={18} color="#0d47a1" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <div>
-                      <div style={{ fontWeight: 700, marginBottom: 2 }}>
-                        Changes propagate to {detail.members?.length || 0} supplier
-                        {(detail.members?.length || 0) !== 1 ? "s" : ""} across {memberCompanyList || "this company"}
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: "#5f6d7e" }}>
-                        Every field below — including <strong>Sites</strong> — applies to every sibling
-                        company's record on save. Sites pre-fill from the longest existing list so the
-                        common case (you set them under one tenant, forgot the others) is a no-op rewrite.
-                      </div>
+                  <Alert tone="info" icon={MdInfo}>
+                    <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                      Changes propagate to {detail.members?.length || 0} supplier
+                      {(detail.members?.length || 0) !== 1 ? "s" : ""} across {memberCompanyList || "this company"}
                     </div>
-                  </div>
+                    <div style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
+                      Every field below — including <strong>Sites</strong> — applies to every sibling
+                      company's record on save. Sites pre-fill from the longest existing list so the
+                      common case (you set them under one tenant, forgot the others) is a no-op rewrite.
+                    </div>
+                  </Alert>
                 )}
 
                 <div style={formStyles.formGroup}>
@@ -370,23 +368,23 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                 {detail?.members?.length > 0 && (
                   <div style={s.membersBlock}>
                     <div style={s.membersHeader}>
-                      <MdBusiness size={16} color="#0d47a1" />
+                      <MdBusiness size={16} color="var(--k-blue)" />
                       <span style={{ fontWeight: 700 }}>Per-company members</span>
                       {canCopy && (() => {
                         const memberCompanyIds = new Set((detail.members || []).map((m) => m.companyId));
                         const remainingCount = companies.filter((c) => !memberCompanyIds.has(c.id)).length;
                         if (remainingCount === 0) return null;
                         return (
-                          <button
-                            type="button"
-                            style={s.addCompanyBtn}
+                          <Button
+                            size="sm"
+                            icon={MdAdd}
+                            style={{ marginLeft: "auto" }}
                             onClick={() => setAddingToCompanies(true)}
                             disabled={saving || deleting}
                             title="Add this common supplier to other companies that don't have it yet"
                           >
-                            <MdAdd size={14} />
                             Add to {remainingCount === 1 ? "1 more company" : `${remainingCount} more companies`}
-                          </button>
+                          </Button>
                         );
                       })()}
                     </div>
@@ -394,11 +392,11 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
                       {detail.members.map((m) => (
                         <div key={m.supplierId} style={s.memberRow}>
                           <div style={s.memberCompany}>
-                            <MdCheckCircle size={14} color="#28a745" /> {m.companyName}
+                            <MdCheckCircle size={14} color="#28a745" style={{ flexShrink: 0 }} /> <span style={s.clamp2}>{m.companyName}</span>
                           </div>
-                          <div style={s.memberSite}>{m.site || <em style={{ color: "#aab3bf" }}>(no sites)</em>}</div>
+                          <div style={s.memberSite}>{m.site || <em style={{ color: "var(--k-faint)" }}>(no sites)</em>}</div>
                           <div style={s.memberFlag}>
-                            {m.hasPurchaseBills ? "Has bills" : <span style={{ color: "#aab3bf" }}>—</span>}
+                            {m.hasPurchaseBills ? "Has bills" : <span style={{ color: "var(--k-faint)" }}>—</span>}
                           </div>
                         </div>
                       ))}
@@ -482,31 +480,23 @@ export default function CommonSupplierForm({ groupId, onClose, onSaved, onChange
   );
 }
 
+// Dialog-specific layout; colours and sizes come from the kit tokens.
+const clamp2 = { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" };
 const s = {
-  notice: { padding: "2rem", textAlign: "center", color: "#5f6d7e" },
-  cascadeBanner: {
-    display: "flex",
-    gap: "0.6rem",
-    background: "#eef4fb",
-    border: "1px solid #b7d4f0",
-    color: "#0d47a1",
-    padding: "0.7rem 0.9rem",
-    borderRadius: 8,
-    marginBottom: "1rem",
-  },
+  clamp2,
   membersBlock: {
     marginTop: "1rem",
-    background: "#f8fafc",
-    border: "1px solid #e8edf3",
-    borderRadius: 10,
+    background: "var(--k-surface-2)",
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
     padding: "0.65rem 0.85rem",
   },
   membersHeader: {
     display: "flex",
     alignItems: "center",
     gap: "0.4rem",
-    fontSize: "0.85rem",
-    color: "#1a2332",
+    fontSize: "var(--k-font)",
+    color: "var(--k-ink)",
     marginBottom: "0.5rem",
     flexWrap: "wrap",
   },
@@ -519,42 +509,28 @@ const s = {
     display: "grid",
     gridTemplateColumns: "1fr 2fr auto",
     gap: "0.5rem",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-font-sm)",
     padding: "0.35rem 0.4rem",
     borderRadius: 6,
-    background: "#fff",
-    border: "1px solid #f0f3f7",
+    background: "var(--k-surface)",
+    border: "1px solid var(--k-row-line)",
   },
-  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "#1a2332", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  memberSite: { color: "#5f6d7e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  memberFlag: { color: "#5f6d7e", fontSize: "0.78rem" },
+  // Company names / sites are operator-entered: two-line clamp, never nowrap + ellipsis.
+  memberCompany: { display: "inline-flex", alignItems: "center", gap: "0.25rem", fontWeight: 600, color: "var(--k-ink)", minWidth: 0 },
+  memberSite: { color: "var(--k-muted)", minWidth: 0, ...clamp2 },
+  memberFlag: { color: "var(--k-muted)", fontSize: "0.78rem" },
   fieldHelp: {
     fontSize: "0.75rem",
-    color: "#5f6d7e",
+    color: "var(--k-muted)",
     marginTop: "0.25rem",
     display: "block",
     lineHeight: 1.4,
   },
   deleteBtn: {
-    background: "#fff0f1",
-    backgroundColor: "#fff0f1",
-    color: "#dc3545",
+    background: "var(--k-danger-bg)",
+    backgroundColor: "var(--k-danger-bg)",
+    color: "var(--k-danger)",
     border: "1px solid rgba(220,53,69,0.2)",
     boxShadow: "none",
-  },
-  addCompanyBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.25rem",
-    marginLeft: "auto",
-    padding: "0.3rem 0.65rem",
-    borderRadius: 6,
-    border: "1px solid rgba(13,71,161,0.25)",
-    background: "#e3f2fd",
-    color: "#0d47a1",
-    fontSize: "0.76rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
   },
 };

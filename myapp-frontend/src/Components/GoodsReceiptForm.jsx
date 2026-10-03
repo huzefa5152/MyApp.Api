@@ -12,6 +12,9 @@ import AttachmentManager from "./AttachmentManager";
 import useScrollToError from "../hooks/useScrollToError";
 import DocumentNotesEditor from "./DocumentNotesEditor";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
+import SearchableClientSelect from "./SearchableClientSelect";
+import SearchableSelect from "./SearchableSelect";
+import { Button, IconButton, TableWrap } from "../ui/Kit";
 
 export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSaved }) {
   const isEdit = !!receiptId;
@@ -143,10 +146,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Supplier *</label>
-                <select style={formStyles.input} value={supplierId} onChange={e => setSupplierId(e.target.value)}>
-                  <option value="">Select...</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <SearchableClientSelect
+                  clients={suppliers}
+                  value={supplierId}
+                  onChange={(id) => setSupplierId(String(id))}
+                  placeholder="Select..."
+                  noun="suppliers"
+                  ariaLabel="Supplier"
+                />
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Receipt Date *</label>
@@ -154,10 +161,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
               </div>
               <div style={formStyles.formGroup}>
                 <label style={formStyles.label}>Linked Purchase Bill</label>
-                <select style={formStyles.input} value={purchaseBillId} onChange={e => setPurchaseBillId(e.target.value)}>
-                  <option value="">— optional —</option>
-                  {billsForSupplier.map(b => <option key={b.id} value={b.id}>PB #{b.purchaseBillNumber}</option>)}
-                </select>
+                <SearchableSelect
+                  items={billsForSupplier.map(b => ({ id: b.id, label: `PB #${b.purchaseBillNumber}` }))}
+                  value={purchaseBillId}
+                  onChange={(id) => setPurchaseBillId(String(id))}
+                  labelKey="label"
+                  placeholder="— optional —"
+                  ariaLabel="Linked Purchase Bill"
+                />
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "0.75rem" }}>
@@ -172,12 +183,10 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
             </div>
 
             <DocumentNotesEditor value={notes} onChange={setNotes} />
-            <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #e8edf3", backgroundColor: "#f8f9fb" }}>
+            <div style={itemsBox}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                <strong>Items ({items.length})</strong>
-                <button type="button" onClick={() => setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }])} style={{ ...formStyles.button, padding: "0.3rem 0.65rem", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#e3f2fd", color: "#0d47a1", border: "none" }}>
-                  <MdAdd size={14} /> Add line
-                </button>
+                <strong style={{ color: "var(--k-ink)" }}>Items ({items.length})</strong>
+                <Button size="sm" icon={MdAdd} onClick={() => setItems([...items, { id: 0, itemTypeId: null, description: "", quantity: 1, unit: "" }])}>Add line</Button>
               </div>
               {isNarrow ? (
                 <div style={mStyles.cards}>
@@ -200,9 +209,7 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                           />
                         </div>
                         {items.length > 1 && (
-                          <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
-                            <MdDelete size={18} />
-                          </button>
+                          <IconButton label="Remove line" icon={MdDelete} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                         )}
                       </div>
                       <div style={{ marginBottom: "0.4rem" }}>
@@ -223,14 +230,15 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                   ))}
                 </div>
               ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+              <TableWrap>
+              <table className="k-table k-table--compact">
                 <thead>
-                  <tr style={{ backgroundColor: "#f5f8fc" }}>
-                    <th style={th}>Item Type</th>
-                    <th style={th}>Description *</th>
-                    <th style={{ ...th, textAlign: "right", width: 80 }}>Qty *</th>
-                    <th style={{ ...th, width: 100 }}>UOM</th>
-                    <th style={{ ...th, width: 36 }}></th>
+                  <tr>
+                    <th>Item Type</th>
+                    <th>Description *</th>
+                    <th className="k-num" style={{ width: 80 }}>Qty *</th>
+                    <th style={{ width: 100 }}>UOM</th>
+                    <th style={{ width: 36 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -256,15 +264,14 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                       <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
                       <td style={td}>
                         {items.length > 1 && (
-                          <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
-                            <MdDelete size={16} />
-                          </button>
+                          <IconButton label="Remove line" icon={MdDelete} size={16} danger onClick={() => setItems(items.filter((_, i) => i !== idx))} />
                         )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </TableWrap>
               )}
             </div>
 
@@ -284,14 +291,16 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
   );
 }
 
-const th = { textAlign: "left", padding: "0.45rem 0.55rem", borderBottom: "1px solid #e8edf3", fontSize: "0.74rem", fontWeight: 700, color: "#5f6d7e", textTransform: "uppercase", letterSpacing: "0.04em" };
-const td = { padding: "0.4rem 0.45rem", borderBottom: "1px solid #f3f5f9", verticalAlign: "top" };
-const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "0.8rem", border: "1px solid #d0d7e2", borderRadius: 6, backgroundColor: "#f8f9fb", color: "#1a2332", outline: "none" };
+// Line-item editor layout: the table is a kit k-table; cells stay top-aligned and the
+// cell inputs stay compact in every theme.
+const td = { verticalAlign: "top" };
+const cellInput = { width: "100%", padding: "0.3rem 0.5rem", fontSize: "var(--k-font-sm)", border: "1px solid var(--k-line-strong)", borderRadius: 6, backgroundColor: "var(--k-input-bg)", color: "var(--k-ink)", outline: "none" };
+const itemsBox = { marginTop: "0.75rem", padding: "0.75rem", borderRadius: "var(--k-radius)", border: "1px solid var(--k-line)", backgroundColor: "var(--k-surface-2)" };
 // Mobile stacked-card line items (rendered below 760px instead of the table).
 const mStyles = {
   cards: { display: "flex", flexDirection: "column", gap: "0.6rem" },
-  card: { border: "1px solid #e8edf3", borderRadius: 12, padding: "0.7rem 0.75rem", background: "#fff" },
+  card: { border: "1px solid var(--k-line)", borderRadius: "var(--k-radius)", padding: "0.7rem 0.75rem", background: "var(--k-surface)" },
   head: { display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.5rem" },
-  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "#5f6d7e", fontWeight: 700, marginBottom: "0.2rem" },
+  label: { display: "block", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--k-muted)", fontWeight: 700, marginBottom: "0.2rem" },
   grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginTop: "0.4rem" },
 };

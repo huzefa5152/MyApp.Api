@@ -177,17 +177,17 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
   };
 
   const fieldError = (name) =>
-    errors[name] ? { border: "1px solid #dc3545" } : {};
+    errors[name] ? { border: "1px solid var(--k-danger)" } : {};
 
   const errorMsg = (name) =>
-    errors[name] ? <span style={{ color: "#dc3545", fontSize: "0.78rem", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
+    errors[name] ? <span style={{ color: "var(--k-danger)", fontSize: "var(--k-font-sm)", marginTop: "0.2rem", display: "block" }}>{errors[name]}</span> : null;
 
   return (
     <div style={backdrop}>
       <div style={modal}>
         <div style={header}>
           <h5 style={title}>{supplier ? "Edit Supplier" : "New Supplier"}</h5>
-          <button style={closeButton} onClick={onClose}>&times;</button>
+          <button type="button" style={closeButton} onClick={onClose} aria-label="Close">&times;</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>
           <div style={body}>
@@ -253,8 +253,8 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
             {/* FBR identity — pick Registration Type first; identity
                 fields render below conditionally. Same model as
                 ClientForm.  */}
-            <div style={{ marginTop: "0.5rem", padding: "0.75rem", borderRadius: 10, border: "1px solid #00695c30", backgroundColor: "#e0f2f1" }}>
-              <p style={{ margin: "0 0 0.5rem", fontWeight: 700, fontSize: "0.85rem", color: "#00695c" }}>FBR Details</p>
+            <div style={fbrBox}>
+              <p style={fbrTitle}>FBR Details</p>
               <div className="form-grid-2col">
                 <div style={formGroup}>
                   <label style={label}>Registration Type</label>
@@ -277,7 +277,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
               </div>
 
               {!regType && (
-                <p style={{ margin: "0.5rem 0 0", fontSize: "0.78rem", color: "#5f6d7e" }}>
+                <p style={{ margin: "0.5rem 0 0", fontSize: "var(--k-font-sm)", color: "var(--k-muted)" }}>
                   Pick a registration type to see the right identity fields.
                 </p>
               )}
@@ -300,7 +300,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                   )}
                   {showStrn && (
                     <div style={formGroup}>
-                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "#5f6d7e" }}>(optional)</span></label>
+                      <label style={label}>STRN <span style={{ fontWeight: 400, color: "var(--k-muted)" }}>(optional)</span></label>
                       <input
                         type="text"
                         name="strn"
@@ -320,7 +320,7 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
                   <label style={label}>CNIC (13 digits) *</label>
                   <input type="text" name="cnic" value={formData.cnic} onChange={handleChange} style={{ ...input, ...fieldError("cnic") }} placeholder="3520112345678" maxLength={13} />
                   {errorMsg("cnic")}
-                  <span style={{ fontSize: "0.75rem", color: "#5f6d7e", marginTop: "0.2rem", display: "block" }}>
+                  <span style={{ fontSize: "var(--k-font-sm)", color: "var(--k-muted)", marginTop: "0.2rem", display: "block" }}>
                     Unregistered vendors don't have NTN/STRN — CNIC is the FBR identity for individuals.
                   </span>
                 </div>
@@ -338,21 +338,25 @@ export default function SupplierForm({ supplier, companyId, companies = [], onCl
   );
 }
 
+// FBR identity section (teal accent) — sizes/colours follow the kit tokens.
+const fbrBox = { marginTop: "0.5rem", padding: "0.75rem", borderRadius: "var(--k-radius)", border: "1px solid #00695c30", backgroundColor: "#e0f2f1" };
+const fbrTitle = { margin: "0 0 0.5rem", fontWeight: 700, fontSize: "var(--k-font)", color: "#00695c" };
+
 const pickerStyles = {
   box: {
     background: "#f0f7ff",
     border: "1px solid #b7d4f0",
-    borderRadius: 10,
+    borderRadius: "var(--k-radius)",
     padding: "0.7rem 0.85rem",
     marginBottom: "0.9rem",
   },
   headerRow: { display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" },
-  title: { fontWeight: 700, fontSize: "0.88rem", color: "#0d47a1" },
-  hint: { fontSize: "0.74rem", color: "#5f6d7e" },
+  title: { fontWeight: 700, fontSize: "var(--k-font)", color: "var(--k-blue)" },
+  hint: { fontSize: "0.74rem", color: "var(--k-muted)" },
   chips: { display: "flex", flexWrap: "wrap", gap: "0.4rem" },
   chip: {
     fontFamily: "inherit",
-    fontSize: "0.82rem",
+    fontSize: "var(--k-font-sm)",
     fontWeight: 600,
     padding: "0.35rem 0.85rem",
     borderRadius: 999,

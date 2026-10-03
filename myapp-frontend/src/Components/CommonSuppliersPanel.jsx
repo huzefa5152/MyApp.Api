@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MdGroups, MdBusiness, MdEdit } from "react-icons/md";
 import { getCommonSuppliers } from "../api/supplierApi";
+import { Card, Alert } from "../ui/Kit";
 
 /**
  * "Common Suppliers" panel — mirror of <see cref="CommonClientsPanel"/>
@@ -12,16 +13,6 @@ import { getCommonSuppliers } from "../api/supplierApi";
  * change the panel content (Common Suppliers are cross-tenant by
  * definition).
  */
-const colors = {
-  blue: "#0d47a1",
-  teal: "#00897b",
-  textPrimary: "#1a2332",
-  textSecondary: "#5f6d7e",
-  cardBorder: "#e8edf3",
-  groupBg: "#f0f7ff",
-  groupBorder: "#b7d4f0",
-};
-
 export default function CommonSuppliersPanel({ companyId, onEdit, refreshKey }) {
   const [common, setCommon] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -54,17 +45,21 @@ export default function CommonSuppliersPanel({ companyId, onEdit, refreshKey }) 
   if (!loading && common.length === 0 && !error) return null;
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.header}>
-        <MdGroups size={20} color={colors.blue} />
-        <span style={styles.title}>Common Suppliers</span>
-        <span style={styles.subtitle}>
-          {loading ? "loading…"
-            : `${common.length} supplier${common.length !== 1 ? "s" : ""} shared across companies`}
-        </span>
-      </div>
-
-      {error && <div style={styles.error}>{error}</div>}
+    <Card
+      tone="blue"
+      icon={MdGroups}
+      title={(
+        <>
+          Common Suppliers
+          <span style={styles.subtitle}>
+            {loading ? "loading…"
+              : `${common.length} supplier${common.length !== 1 ? "s" : ""} shared across companies`}
+          </span>
+        </>
+      )}
+      style={styles.panel}
+    >
+      {error && <Alert tone="error">{error}</Alert>}
 
       {!loading && common.length > 0 && (
         <div style={styles.grid}>
@@ -75,8 +70,6 @@ export default function CommonSuppliersPanel({ companyId, onEdit, refreshKey }) 
               style={styles.card}
               onClick={() => onEdit?.(c)}
               title="Edit common supplier (changes apply to every company)"
-              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = ""; }}
             >
               <div style={styles.cardName}>{c.displayName}</div>
               <div style={styles.cardMeta}>
@@ -96,70 +89,52 @@ export default function CommonSuppliersPanel({ companyId, onEdit, refreshKey }) 
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
+// Panel-specific layout; colours and sizes come from the kit tokens so the panel follows the theme.
 const styles = {
-  panel: {
-    background: colors.groupBg,
-    border: `1px solid ${colors.groupBorder}`,
-    borderRadius: 12,
-    padding: "1rem 1.1rem",
-    marginBottom: "1.25rem",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    marginBottom: "0.75rem",
-    flexWrap: "wrap",
-  },
-  title: { fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary },
-  subtitle: { fontSize: "0.78rem", color: colors.textSecondary, marginLeft: "0.4rem" },
-  error: {
-    fontSize: "0.82rem",
-    color: "#842029",
-    background: "#fff0f1",
-    border: "1px solid #f5c6cb",
-    padding: "0.4rem 0.6rem",
-    borderRadius: 8,
-    marginBottom: "0.5rem",
-  },
+  panel: { marginBottom: "var(--k-gap)", background: "var(--k-tone-soft)" },
+  subtitle: { fontSize: "var(--k-font-sm)", fontWeight: 400, color: "var(--k-muted)", marginLeft: "0.4rem" },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))",
     gap: "0.75rem",
   },
   card: {
     textAlign: "left",
-    background: "#fff",
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: 10,
+    background: "var(--k-surface)",
+    border: "1px solid var(--k-line)",
+    borderRadius: "var(--k-radius)",
     padding: "0.7rem 0.85rem",
+    margin: 0,
     cursor: "pointer",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease",
-    boxShadow: "0 1px 4px rgba(13,71,161,0.06)",
+    boxShadow: "none",
     display: "flex",
     flexDirection: "column",
     gap: "0.25rem",
     fontFamily: "inherit",
-    color: colors.textPrimary,
+    fontWeight: 400,
+    color: "var(--k-ink)",
+    minWidth: 0,
   },
-  cardName: { fontSize: "0.95rem", fontWeight: 700, color: colors.textPrimary },
-  cardMeta: { fontSize: "0.78rem", color: colors.textSecondary },
+  cardName: { fontSize: "calc(var(--k-font) + 0.05rem)", fontWeight: 700, color: "var(--k-ink)", overflowWrap: "anywhere" },
+  cardMeta: { fontSize: "var(--k-font-sm)", color: "var(--k-muted)" },
+  // Two-line clamp (not nowrap + ellipsis) so similar company lists stay distinguishable.
   cardCompanies: {
     fontSize: "0.74rem",
-    color: colors.textSecondary,
+    color: "var(--k-muted)",
     fontStyle: "italic",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
     overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
   },
   cardEdit: {
     marginTop: "0.35rem",
     fontSize: "0.74rem",
-    color: colors.blue,
+    color: "var(--k-blue)",
     fontWeight: 600,
     display: "inline-flex",
     alignItems: "center",
