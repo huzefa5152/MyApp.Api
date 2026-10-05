@@ -47,6 +47,7 @@ namespace MyApp.Api.Models.Accounting
         // "Other" (no ContactId) covers direct income/expense with no party.
         public string ContactType { get; set; } = "Other";
         public int? ContactId { get; set; }
+        public string? ContactName { get; set; }
 
         // ── Where the money landed / came from ──
         // No Chart of Accounts in master, so BankAccountId is a plain nullable

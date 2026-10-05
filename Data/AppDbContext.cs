@@ -1553,6 +1553,8 @@ namespace MyApp.Api.Data
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .Property(p => p.Amount).HasPrecision(18, 2);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
+                .Property(p => p.ContactName).HasMaxLength(200);
+            modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .Property(p => p.ContactType).HasMaxLength(20);
             modelBuilder.Entity<MyApp.Api.Models.Accounting.Payment>()
                 .Property(p => p.Method).HasMaxLength(30);

@@ -293,6 +293,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-05
 
+- Record receipts and payments for clients, suppliers or named other contacts, with document settlements, advances/refunds and split income/expense accounts. Validate company ownership and post advances to party balances without treating direct income/expenses as receivables or payables.
+
 - Copy editable document details or selected line items into new sales/purchase documents, and duplicate unlocked lines in place. Keep fresh numbers and dates without copying payment, FBR or order/delivery links.
 
 - Add company-specific Print and PDF exports to all seven accounting reports, using the bill/invoice letterhead, fonts and table colors with 12 mm margins and repeated column headings.

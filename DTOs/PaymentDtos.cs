@@ -39,6 +39,7 @@ namespace MyApp.Api.DTOs
 
     public class PaymentAllocationDto
     {
+        public string Kind { get; set; } = "Document";
         public int Id { get; set; }
         public int? InvoiceId { get; set; }
         public int? InvoiceNumber { get; set; }
@@ -62,6 +63,7 @@ namespace MyApp.Api.DTOs
 
         public string ContactType { get; set; } = "Other";
         public int? ContactId { get; set; }
+        public string? ContactName { get; set; }
 
         public int? BankAccountId { get; set; }
         public string? BankAccountName { get; set; }
@@ -77,6 +79,7 @@ namespace MyApp.Api.DTOs
 
     public class CreatePaymentAllocationDto
     {
+        public string? Kind { get; set; }
         public int? InvoiceId { get; set; }
         public int? PurchaseBillId { get; set; }
         public int? AccountId { get; set; }

@@ -448,7 +448,7 @@ function PaymentViewDialog({ p, companyId, accent, docNoun, onClose }) {
           {p.notes && <div style={{ marginTop: 12 }}><div style={vd.k}>Notes</div><div style={{ marginTop: 5, padding: 10, border: "1px solid #e2e8f0", borderRadius: 8 }}><RichText text={p.notes} /></div></div>}
           {allocs.length > 0 && (
             <div style={{ marginTop: "0.6rem" }}>
-              <div style={vd.k}>{docNoun}s settled</div>
+              <div style={vd.k}>Allocation details</div>
               <div style={{ marginTop: 4 }}>
                 {allocs.map((a) => (
                   <div key={a.id} style={vd.allocRow}>

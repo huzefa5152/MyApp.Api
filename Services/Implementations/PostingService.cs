@@ -420,16 +420,18 @@ namespace MyApp.Api.Services.Implementations
                 }
                 else if (a.AccountId.HasValue)
                 {
-                    // A direct income or expense line with no document behind it.
+                    // Direct income/expense does not change a party control balance.
+                    // The payment header retains the payer/payee for activity and vouchers.
                     var target = accounts.FirstOrDefault(x => x.Id == a.AccountId.Value)
+                              ?? await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == a.AccountId.Value && x.CompanyId == payment.CompanyId)
                               ?? await SuspenseAsync(payment.CompanyId, accounts);
                     lines.Add(new JournalLine
                     {
                         AccountId = target.Id,
                         Debit = isReceipt ? 0m : a.Amount,
                         Credit = isReceipt ? a.Amount : 0m,
-                        PartyType = partyType,
-                        PartyId = partyType == null ? null : payment.ContactId,
+                        PartyType = null,
+                        PartyId = null,
                         Description = label,
                     });
                 }
@@ -452,12 +454,8 @@ namespace MyApp.Api.Services.Implementations
                 // refunds. With no party named there is nothing to attribute it
                 // to, so it goes to Suspense where it is visible.
                 //
-                // NOT REACHABLE THROUGH THE PAYMENTS API TODAY: PaymentService
-                // sets Payment.Amount to the sum of its allocations, so the
-                // remainder is always zero. This stays because Amount is a
-                // stored column an import or a back-post could set on its own,
-                // and a posting engine that cannot balance what it is handed is
-                // worse than one that carries an unused branch.
+                // Explicit OnAccount lines have no document/account target;
+                // their amount reaches this party-control posting.
                 var target = partyType switch
                 {
                     "Client" => await ResolveAsync(payment.CompanyId, accounts, ControlType.AccountsReceivable, "accounts receivable"),
