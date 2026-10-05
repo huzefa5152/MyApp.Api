@@ -161,11 +161,14 @@ def main():
         glco = company("_taxdesk gl")
         r = requests.post(f"{api}/accounting/gl/company/{glco}/enable", headers=h, timeout=300)
         check("setup: the ledger switches on", r.ok, f"http {r.status_code} {r.text[:200]}")
-        r = bring_in(glco, [line("KAPE-HC-90004", "2026-08-06", "8481.2000", f"TAXDESK GL VALVE {tag}", 4, 40000, duty=4000)])
+        # The second line is the shape that drifted on Alpha: a big quantity
+        # whose 4dp unit cost cannot reproduce the declared value exactly.
+        r = bring_in(glco, [line("KAPE-HC-90004", "2026-08-06", "8481.2000", f"TAXDESK GL VALVE {tag}", 4, 40000, duty=4000),
+                            line("KAPE-HC-90004", "2026-08-06", "8413.2000", f"TAXDESK GL PUMP {tag}", 160400, 2111111, rd=7777)])
         check("setup: a GD comes in with the ledger on", r.ok, f"http {r.status_code} {r.text[:200]}")
         t = requests.get(f"{api}/stock/company/{glco}/tie-out", headers=h, params={"month": "2026-08"}, timeout=300).json()
         check("stock equals the Inventory account to the paisa (declared basis)",
-              t.get("ledgerOn") is True and near(t.get("stockVsLedger"), 0, 0.01) and near(t.get("arrivalsBasisGap"), 0, 0.01),
+              t.get("ledgerOn") is True and near(t.get("stockVsLedger"), 0, 0.005) and near(t.get("arrivalsBasisGap"), 0, 0.005),
               str(t)[:300])
         check("what the GD owes equals Import Clearing, and it all ties",
               near(t.get("clearingDifference"), 0, 0.01) and t.get("agrees") is True, str(t)[:300])

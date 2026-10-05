@@ -587,6 +587,21 @@ namespace MyApp.Api.Services.Implementations
                           || l.Disposition == GdCostingDisposition.StockPosted))
                 .ToListAsync();
 
+            // What each arrival's stock movement actually received: the stock
+            // walk values it at qty x its stored unit cost (4dp), rounded per
+            // movement, which can sit a few paisa off the line's declared value
+            // (AY KAPE-HC-12274: 0.26). Inventory takes the movement's figure so
+            // the ledger equals the stock walk to the paisa; the reserve absorbs
+            // the rounding. A line with no movement (committed before arrivals
+            // became movements) keeps its declared value.
+            var movementIds = costedLines.Where(l => l.StockMovementId != null).Select(l => l.StockMovementId!.Value).ToList();
+            var movementValue = movementIds.Count == 0 ? new Dictionary<int, decimal>()
+                : (await _context.StockMovements.AsNoTracking()
+                    .Where(m => movementIds.Contains(m.Id) && m.UnitCostExcludingTax != null)
+                    .Select(m => new { m.Id, m.Quantity, Unit = m.UnitCostExcludingTax!.Value })
+                    .ToListAsync())
+                  .ToDictionary(m => m.Id, m => Money(m.Quantity * m.Unit));
+
             decimal inventoryTotal = 0m, landedTotal = 0m, inputTaxTotal = 0m, incomeTaxTotal = 0m;
             foreach (var line in costedLines)
             {
@@ -637,7 +652,8 @@ namespace MyApp.Api.Services.Implementations
                     // the monthly relief run on (2026-10-05). Booked at landed
                     // cost it left declared - landed between stock and ledger on
                     // every arrival (Pak Trade KAPE-HC-9509: 586,532.17).
-                    inventoryTotal += line.SellingValueExcludingTax;
+                    inventoryTotal += line.StockMovementId is int mid && movementValue.TryGetValue(mid, out var mv)
+                        ? mv : line.SellingValueExcludingTax;
                     landedTotal += line.CostExcludingTax;
                 }
 

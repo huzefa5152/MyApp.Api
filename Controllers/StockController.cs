@@ -1136,10 +1136,19 @@ namespace MyApp.Api.Controllers
                     .Where(c => c.CompanyId == companyId && c.Mode == GdCostingImportModeNames.NewArrivals
                              && c.ImportClearingCredited > 0m && c.GdDate < monthEnd)
                     .Select(c => c.Id).ToListAsync();
-                var declared = await _context.ImportConsignmentLines.AsNoTracking()
+                // Declared = what the stock walk received for each line: its
+                // movement's qty x stored unit cost, else the line's value.
+                var declaredRows = await _context.ImportConsignmentLines.AsNoTracking()
                     .Where(l => arrivalIds.Contains(l.ImportConsignmentId)
                              && (l.Disposition == GdCostingDisposition.CostOnly || l.Disposition == GdCostingDisposition.StockPosted))
-                    .SumAsync(l => (decimal?)l.SellingValueExcludingTax) ?? 0m;
+                    .Select(l => new
+                    {
+                        l.SellingValueExcludingTax,
+                        Qty = l.StockMovementId != null ? _context.StockMovements.Where(m => m.Id == l.StockMovementId).Select(m => (decimal?)m.Quantity).FirstOrDefault() : null,
+                        Unit = l.StockMovementId != null ? _context.StockMovements.Where(m => m.Id == l.StockMovementId).Select(m => m.UnitCostExcludingTax).FirstOrDefault() : null,
+                    })
+                    .ToListAsync();
+                var declared = declaredRows.Sum(r => r.Qty is decimal q && r.Unit is decimal u ? Money(q * u) : r.SellingValueExcludingTax);
                 var inventoryIds = roles.Where(x => x.ControlType == MyApp.Api.Models.Accounting.ControlType.Inventory)
                     .Select(x => x.Id).ToList();
                 var debited = await _context.JournalLines.AsNoTracking()
