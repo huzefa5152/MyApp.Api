@@ -16,6 +16,8 @@ import {
   MdExpandLess,
 } from "react-icons/md";
 import {
+  getRoleTenants,
+  copyRole,
   getRoles,
   createRole,
   updateRole,
@@ -51,15 +53,40 @@ const colors = {
 };
 
 
+/**
+ * The permission tree, cut down to the keys `myKeys` actually holds.
+ *
+ * `module -> pages -> permissions` in, same shape out, with empty pages and
+ * empty modules dropped so the editor does not render a heading over nothing.
+ * MCP permissions are managed separately from this product-role editor.
+ */
+function grantableTree(tree, myKeys, isSeedAdmin) {
+  return (tree || [])
+    .map((mod) => ({
+      ...mod,
+      pages: (mod.pages || [])
+        .map((pg) => ({
+          ...pg,
+          permissions: (pg.permissions || []).filter((p) => !p.key.startsWith("mcp.") && (isSeedAdmin || !myKeys || myKeys.size === 0 || myKeys.has(p.key))),
+        }))
+        .filter((pg) => pg.permissions.length > 0),
+    }))
+    .filter((mod) => mod.pages.length > 0);
+}
+
 export default function RolesPage() {
   const { user: currentUser } = useAuth();
-  const { has } = usePermissions();
+  const { has, permissions: myKeys, isSeedAdmin } = usePermissions();
   const canView = has("rbac.roles.view");
   const canCreate = has("rbac.roles.create");
   const canUpdate = has("rbac.roles.update");
   const canDelete = has("rbac.roles.delete");
 
   const [roles, setRoles] = useState([]);
+  const [tenants, setTenants] = useState([]);
+  const [tenantId, setTenantId] = useState("");
+  const [copySource, setCopySource] = useState(null);
+  const [copyTargets, setCopyTargets] = useState(new Set());
   const [tree, setTree] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -77,8 +104,15 @@ export default function RolesPage() {
     setLoading(true);
     try {
       const [rolesRes, treeRes] = await Promise.all([getRoles(), getPermissionTree()]);
-      setRoles(rolesRes.data);
-      setTree(treeRes.data);
+      setRoles(rolesRes.data.filter((role) => !(role.isSystemRole && ["MCP Access", "MCP Write"].includes(role.name))));
+      if (isSeedAdmin && canCreate) setTenants((await getRoleTenants()).data);
+      // Show only what THIS operator could actually hand out. The server
+      // enforces it either way -- a role may not grant a key its author does
+      // not hold -- but offering a checkbox that always fails on save is a
+      // trap, and for a tenant administrator on an edition it would also
+      // advertise the module they did not buy. The seed admin holds
+      // every product permission; MCP access is managed in the user profile.
+      setTree(grantableTree(treeRes.data, myKeys, isSeedAdmin));
     } catch {
       notify("Failed to load roles and permissions", "error");
     } finally {
@@ -86,7 +120,8 @@ export default function RolesPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  // Re-filter once the caller's own permission set has loaded.
+  useEffect(() => { fetchAll(); }, [isSeedAdmin, myKeys]);
 
   // ── Modal helpers ────────────────────────────────────────────────────────
   // Start with EVERY module collapsed so the operator sees a tidy stack of
@@ -100,6 +135,9 @@ export default function RolesPage() {
 
   const openCreate = () => {
     setEditRole(null);
+    setCopySource(null);
+    setCopyTargets(new Set());
+    setTenantId(String(currentUser?.id || ""));
     setForm({ name: "", description: "", permissionKeys: new Set() });
     setMsg(null);
     setCollapsedModules(allModulesCollapsed());
@@ -109,6 +147,8 @@ export default function RolesPage() {
 
   const openEdit = (role) => {
     setEditRole(role);
+    setCopySource(null);
+    setTenantId(String(role.tenantAdminUserId || ""));
     setForm({
       name: role.name,
       description: role.description || "",
@@ -128,6 +168,7 @@ export default function RolesPage() {
   };
 
   const togglePermission = (key) => {
+    if (copySource) return;
     setForm((f) => {
       const next = new Set(f.permissionKeys);
       if (next.has(key)) next.delete(key);
@@ -137,6 +178,7 @@ export default function RolesPage() {
   };
 
   const togglePage = (pagePerms, allSelected) => {
+    if (copySource) return;
     setForm((f) => {
       const next = new Set(f.permissionKeys);
       pagePerms.forEach((p) => {
@@ -148,6 +190,7 @@ export default function RolesPage() {
   };
 
   const toggleModule = (moduleGroup, allSelected) => {
+    if (copySource) return;
     setForm((f) => {
       const next = new Set(f.permissionKeys);
       moduleGroup.pages.forEach((pg) =>
@@ -179,6 +222,7 @@ export default function RolesPage() {
   };
 
   const toggleSection = (sectionGroup, allSelected) => {
+    if (copySource) return;
     setForm((f) => {
       const next = new Set(f.permissionKeys);
       sectionGroup.modules.forEach((mod) =>
@@ -209,17 +253,21 @@ export default function RolesPage() {
         return;
       }
 
-      if (editRole) {
+      if (copySource) {
+        if (copyTargets.size === 0) throw new Error("Select at least one tenant administrator");
+        await copyRole(copySource.id, { name: payload.name, tenantAdminUserIds: Array.from(copyTargets) });
+        setMsg({ type: "success", text: "Independent tenant roles created" });
+      } else if (editRole) {
         await updateRole(editRole.id, payload);
         setMsg({ type: "success", text: "Role updated" });
       } else {
-        await createRole(payload);
+        await createRole({ ...payload, ...(isSeedAdmin ? { tenantAdminUserId: Number(tenantId) } : {}) });
         setMsg({ type: "success", text: "Role created" });
       }
       await fetchAll();
       setTimeout(() => closeModal(), 700);
     } catch (err) {
-      const m = err.response?.data?.message || "Could not save role";
+      const m = err.response?.data?.message || err.message || "Could not save role";
       setMsg({ type: "error", text: m });
     } finally {
       setSaving(false);
@@ -253,6 +301,7 @@ export default function RolesPage() {
     () => tree.reduce((n, m) => n + m.pages.reduce((pn, pg) => pn + pg.permissions.length, 0), 0),
     [tree]
   );
+  const visibleSelectedKeys = tree.flatMap((module) => module.pages.flatMap((page) => page.permissions)).filter((permission) => form.permissionKeys.has(permission.key)).length;
 
   // Re-bucket the API tree (which is module → page → permission) into
   // section → module → page → permission so the Roles editor mirrors the
@@ -326,7 +375,7 @@ export default function RolesPage() {
                   <h3 style={styles.cardTitle}>{role.name}</h3>
                   {role.isSystemRole && <span style={styles.systemBadge}>System</span>}
                 </div>
-                {!role.isSystemRole && (canUpdate || canDelete) && (
+                {!role.isSystemRole && role.canEdit && (canUpdate || canDelete) && (
                   <div style={{ display: "flex", gap: "0.4rem" }}>
                     {canUpdate && (
                       <button
@@ -349,13 +398,19 @@ export default function RolesPage() {
                   </div>
                 )}
               </div>
+              {isSeedAdmin && !role.isSystemRole && <p style={styles.cardDescription}>
+                Tenant: {tenants.find(t => t.userId === role.tenantAdminUserId)?.username || `Administrator #${role.tenantAdminUserId}`}
+              </p>}
+              {isSeedAdmin && canCreate && !role.isSystemRole && <button style={styles.smallLinkBtn} onClick={() => {
+                openCreate(); setCopySource(role); setForm({ name: role.name, description: role.description || "", permissionKeys: new Set(role.permissionKeys) });
+              }}>Copy to tenants</button>}
               {role.description && (
                 <p style={styles.cardDescription}>{role.description}</p>
               )}
               <div style={styles.cardMeta}>
                 <span style={styles.metaChip}>
                   <MdAdminPanelSettings style={{ fontSize: "0.95rem" }} />
-                  {role.permissionKeys.length} permission{role.permissionKeys.length !== 1 ? "s" : ""}
+                  {role.permissionKeys.filter((key) => !key.startsWith("mcp.")).length} permissions
                 </span>
                 <span style={styles.metaChip}>
                   <MdPeople style={{ fontSize: "0.95rem" }} />
@@ -375,7 +430,7 @@ export default function RolesPage() {
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <h3 style={formStyles.title}>
-                {editRole ? `Edit role — ${editRole.name}` : "Create new role"}
+                {copySource ? "Copy role to tenants" : editRole ? `Edit role — ${editRole.name}` : "Create new role"}
               </h3>
               <button
                 type="button"
@@ -395,6 +450,22 @@ export default function RolesPage() {
                 </div>
               )}
 
+              {isSeedAdmin && !editRole && !copySource && <>
+                <label style={styles.label} htmlFor="role-tenant">Tenant administrator</label>
+                <select id="role-tenant" style={styles.input} value={tenantId} disabled={saving} onChange={e => setTenantId(e.target.value)}>
+                  <option value="">Select tenant administrator</option>
+                  {tenants.map(t => <option key={t.userId} value={t.userId}>{t.fullName || t.username} ({t.username}) - {t.companies.join(", ") || "No assigned companies"}</option>)}
+                </select>
+              </>}
+              {copySource && <>
+                <label style={styles.label}>Destination tenant administrators</label>
+                {tenants.map(t => <label key={t.userId} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, overflowWrap: "anywhere" }}>
+                  <input type="checkbox" checked={copyTargets.has(t.userId)} disabled={saving} onChange={e => setCopyTargets(prev => {
+                    const next = new Set(prev); if (e.target.checked) next.add(t.userId); else next.delete(t.userId); return next;
+                  })} />{t.fullName || t.username} ({t.username}) - {t.companies.join(", ") || "No assigned companies"}
+                </label>)}
+                <p style={styles.cardDescription}>Each copy has its own permissions and no user assignments. Later edits do not affect the original.</p>
+              </>}
               <label style={styles.label}>Role name</label>
               <input
                 style={styles.input}
@@ -412,9 +483,10 @@ export default function RolesPage() {
                 placeholder="What this role is for (optional)"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                disabled={saving}
+                disabled={saving || Boolean(copySource)}
               />
 
+              {!copySource && <>
               <div style={styles.permHeader}>
                 <label style={{ ...styles.label, marginTop: 0 }}>Permissions</label>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
@@ -445,7 +517,7 @@ export default function RolesPage() {
                     Expand all
                   </button>
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem", marginLeft: "0.5rem" }}>
-                    {form.permissionKeys.size} / {totalCatalogKeys} selected
+                    {visibleSelectedKeys} / {totalCatalogKeys} selected
                   </span>
                 </div>
               </div>
@@ -559,6 +631,7 @@ export default function RolesPage() {
                                     <input
                                       type="checkbox"
                                       checked={checked}
+                                      disabled={Boolean(copySource)}
                                       onChange={() => togglePermission(p.key)}
                                       style={styles.checkbox}
                                     />
@@ -578,15 +651,16 @@ export default function RolesPage() {
                   );
                 })}
               </div>
+              </>}
             </div>
 
             <div style={styles.modalFooter}>
               <button style={styles.cancelBtn} onClick={closeModal} disabled={saving}>
                 Cancel
               </button>
-              <button style={styles.saveBtn} onClick={handleSave} disabled={saving}>
+              <button style={styles.saveBtn} onClick={handleSave} disabled={saving || (!editRole && !copySource && isSeedAdmin && !tenantId) || (copySource && copyTargets.size === 0)}>
                 <MdSave style={{ fontSize: "1.1rem" }} />
-                {saving ? "Saving..." : editRole ? "Update role" : "Create role"}
+                {saving ? "Saving..." : copySource ? "Copy role" : editRole ? "Update role" : "Create role"}
               </button>
             </div>
           </div>
@@ -651,7 +725,7 @@ const styles = {
   },
   headerTitle: { margin: 0, fontSize: "1.4rem", fontWeight: 700, color: colors.textPrimary },
   headerSub: { margin: "0.2rem 0 0", fontSize: "0.88rem", color: colors.textSecondary },
-  addBtn: {
+  addBtn: { minHeight: 44,
     display: "flex",
     alignItems: "center",
     gap: "0.4rem",
@@ -684,7 +758,7 @@ const styles = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
     gap: "1rem",
   },
   card: {

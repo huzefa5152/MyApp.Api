@@ -2,6 +2,7 @@ namespace MyApp.Api.Models
 {
     public class AuditLog
     {
+        public const string TrustedScopePrefix = "v2:";
         public int Id { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
         public string Level { get; set; } = "Error"; // Error, Warning, Info

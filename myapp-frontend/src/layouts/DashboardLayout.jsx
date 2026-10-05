@@ -702,6 +702,7 @@ export default function DashboardLayout() {
               defaultOpen={activeSection === "administration"}
               isChildActive={activeSection === "administration"}
             >
+              {user?.isSeedAdmin && <NavLink to="/administrators" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}><MdAdminPanelSettings className="dl-subitem__icon" aria-hidden="true" /><span>Administrators</span></NavLink>}
               <Can permission="users.manage.view">
                 <NavLink to="/users" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdGroupAdd className="dl-subitem__icon" aria-hidden="true" />

@@ -84,6 +84,9 @@ namespace MyApp.Api.Controllers
             try
             {
                 var createdCompany = await _companyService.CreateAsync(dto);
+                var ownedCompany = await _context.Companies.FindAsync(createdCompany.Id);
+                ownedCompany!.CreatedByUserId = CurrentUserId;
+                await _context.SaveChangesAsync();
 
                 // Auto-grant the creator access to the company they just made.
                 // Without this, a non-seed-admin user creates a company and is

@@ -20,12 +20,14 @@ namespace MyApp.Api.Controllers
         private readonly IPermissionService _permissions;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly IManagementScopeService _scope;
         private readonly int _seedAdminUserId;
 
         public UsersController(AppDbContext context, IPermissionService permissions,
-            ICompanyAccessGuard access, IDivisionAccessGuard divisionAccess, IConfiguration configuration)
+            ICompanyAccessGuard access, IDivisionAccessGuard divisionAccess, IConfiguration configuration, IManagementScopeService scope)
         {
             _context = context;
+            _scope = scope;
             _permissions = permissions;
             _access = access;
             _divisionAccess = divisionAccess;
@@ -42,7 +44,9 @@ namespace MyApp.Api.Controllers
         [HasPermission("users.manage.view")]
         public async Task<ActionResult> GetUsers()
         {
+            var visible = await _scope.GetVisibleUserIdsAsync(CurrentUserId);
             var users = await _context.Users
+                .Where(u => visible.Contains(u.Id))
                 .OrderByDescending(u => u.CreatedAt)
                 .Select(u => new
                 {
@@ -63,6 +67,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("users.manage.view")]
         public async Task<ActionResult> GetUser(int id)
         {
+            if (id != CurrentUserId && !await _scope.CanManageUserAsync(CurrentUserId, id)) return NotFound(new { message = "User not found" });
             var user = await _context.Users
                 .Where(u => u.Id == id)
                 .Select(u => new
@@ -129,12 +134,19 @@ namespace MyApp.Api.Controllers
 
             if (roleIds.Count > 0)
             {
+                var visibleRoles = await RolesController.VisibleRoleIdsAsync(_context, _scope, _permissions, CurrentUserId);
+                if (roleIds.Any(id => !visibleRoles.Contains(id))) return BadRequest(new { message = "One or more role IDs are invalid" });
+                var grantable = await RolesController.GrantableKeysAsync(_permissions, CurrentUserId);
+                var keys = await _context.RolePermissions.Where(rp => roleIds.Contains(rp.RoleId)).Select(rp => rp.Permission!.Key).ToListAsync();
+                if (RolesController.UngrantableKeys(keys, grantable).Count > 0) return Forbid();
                 var foundRoleCount = await _context.Roles.CountAsync(r => roleIds.Contains(r.Id));
                 if (foundRoleCount != roleIds.Count)
                     return BadRequest(new { message = "One or more role IDs are invalid" });
             }
             if (companyIds.Count > 0)
             {
+                var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
+                if (companyIds.Any(id => !assignable.Contains(id))) return Forbid();
                 var validCompanyIds = await _context.Companies
                     .Where(c => companyIds.Contains(c.Id)).Select(c => c.Id).ToListAsync();
                 var unknownCompanies = companyIds.Except(validCompanyIds).ToList();
@@ -145,6 +157,11 @@ namespace MyApp.Api.Controllers
             // Division grants: each must target a company we're also granting, its
             // divisions must belong to that company, and the ACTOR must have access
             // to that company (mirrors [AuthorizeCompany] on the division endpoint).
+            foreach (var cid in companyIds)
+            {
+                var actorDivisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, cid);
+                if (actorDivisions != null && !divisionGrants.Any(g => g.CompanyId == cid && g.RestrictToDivisions)) return Forbid();
+            }
             var companyIdSet = companyIds.ToHashSet();
             var grantByCompany = new Dictionary<int, CreateUserDivisionGrantDto>();
             foreach (var g in divisionGrants)
@@ -157,6 +174,8 @@ namespace MyApp.Api.Controllers
                 await _access.AssertAccessAsync(CurrentUserId, g.CompanyId); // throws → 403
 
                 var wantDivs = (g.DivisionIds ?? new List<int>()).Distinct().ToList();
+                var actorDivisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, g.CompanyId);
+                if (actorDivisions != null && (!g.RestrictToDivisions || wantDivs.Any(id => !actorDivisions.Contains(id)))) return Forbid();
                 if (g.RestrictToDivisions && wantDivs.Count > 0)
                 {
                     var companyDivisionIds = await _context.Divisions
@@ -179,7 +198,8 @@ namespace MyApp.Api.Controllers
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 FullName = dto.FullName,
                 Role = desiredRole,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                CreatedByUserId = CurrentUserId > 0 ? CurrentUserId : null
             };
 
             // One transaction so a half-provisioned user is never committed.
@@ -225,6 +245,7 @@ namespace MyApp.Api.Controllers
 
             // Brand-new id, but drop any stale cache entries defensively so the
             // grants take effect on the very first request.
+            _scope.InvalidateAll();
             _permissions.InvalidateUser(user.Id);
             _access.InvalidateUser(user.Id);
             _divisionAccess.InvalidateUser(user.Id);
@@ -244,6 +265,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("users.manage.update")]
         public async Task<ActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
         {
+            if (id != CurrentUserId && !await _scope.CanManageUserAsync(CurrentUserId, id)) return NotFound(new { message = "User not found" });
             if (id == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin account cannot be modified" });
 
@@ -310,6 +332,8 @@ namespace MyApp.Api.Controllers
             if (id == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin account cannot be deleted" });
 
+            if (!await _scope.CanManageUserAsync(CurrentUserId, id)) return NotFound(new { message = "User not found" });
+
             // Prevent self-deletion
             var currentUsername = User.FindFirstValue(ClaimTypes.Name);
             var user = await _context.Users.FindAsync(id);
@@ -318,15 +342,23 @@ namespace MyApp.Api.Controllers
             if (user.Username == currentUsername)
                 return BadRequest(new { message = "You cannot delete your own account" });
 
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
             // Attachment.UploadedByUserId is a NoAction FK — detach the uploader
             // audit trail or a user who ever uploaded a file can't be deleted.
             await _context.Attachments
                 .Where(a => a.UploadedByUserId == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(a => a.UploadedByUserId, (int?)null));
 
+            var children = await _context.Users.Where(u => u.CreatedByUserId == id).ToListAsync();
+            foreach (var child in children) child.CreatedByUserId = user.CreatedByUserId;
+            var ownedCompanies = await _context.Companies.Where(c => c.CreatedByUserId == id).ToListAsync();
+            foreach (var company in ownedCompanies) company.CreatedByUserId = user.CreatedByUserId;
+            _scope.InvalidateAll();
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
 
+            await transaction.CommitAsync();
             return Ok(new { message = "User deleted" });
         }
     }

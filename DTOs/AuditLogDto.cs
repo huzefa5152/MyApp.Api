@@ -3,6 +3,7 @@ namespace MyApp.Api.DTOs
     public class AuditLogDto
     {
         public int Id { get; set; }
+        public int? CompanyId { get; set; }
         public DateTime Timestamp { get; set; }
         public string Level { get; set; } = "";
         public string? UserName { get; set; }

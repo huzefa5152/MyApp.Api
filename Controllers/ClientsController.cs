@@ -69,7 +69,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("clients.manage.view")]
         public async Task<ActionResult<CommonClientDetailDto>> GetCommonById(int groupId)
         {
-            var detail = await _groupService.GetByIdAsync(groupId);
+            var detail = await _groupService.GetByIdAsync(groupId, await _access.GetAccessibleCompanyIdsAsync(CurrentUserId));
             if (detail == null) return NotFound();
             return Ok(detail);
         }
@@ -87,7 +87,7 @@ namespace MyApp.Api.Controllers
             if (!ModelState.IsValid) return BadRequest(ModelState);
             try
             {
-                var result = await _groupService.UpdateAsync(groupId, dto);
+                var result = await _groupService.UpdateAsync(groupId, dto, await _access.GetAccessibleCompanyIdsAsync(CurrentUserId));
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -116,7 +116,7 @@ namespace MyApp.Api.Controllers
         {
             try
             {
-                var result = await _groupService.DeleteAsync(groupId);
+                var result = await _groupService.DeleteAsync(groupId, await _access.GetAccessibleCompanyIdsAsync(CurrentUserId));
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)

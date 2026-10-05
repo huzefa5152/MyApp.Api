@@ -27,6 +27,8 @@ namespace MyApp.Api.Data
             await EnsureAdministratorRoleAsync(db, seedAdminUserId);
             await EnsureStarterRolesAsync(db, seedAdminUserId);
             await BootstrapExistingAdminUsersAsync(db);
+            await EnsureEditionRolesAsync(db, seedAdminUserId);
+            await ScopeCustomRolesAsync(db, seedAdminUserId);
         }
 
         /// <summary>
@@ -173,6 +175,108 @@ namespace MyApp.Api.Data
                 Message = $"Starter roles seeded — created {created} of {StarterRoleCatalog.All.Count} (existing same-named roles left untouched)."
             });
             await db.SaveChangesAsync();
+        }
+
+        private static async Task ScopeCustomRolesAsync(AppDbContext db, int seedAdminUserId)
+        {
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await db.Database.ExecuteSqlRawAsync("""
+                DECLARE @result int;
+                EXEC @result = sys.sp_getapplock @Resource = 'custom-role-tenant-upgrade',
+                    @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 30000;
+                IF @result < 0 THROW 51000, 'Role tenant upgrade lock unavailable', 1;
+                """);
+            var roles = await db.Roles.Include(r => r.RolePermissions).Include(r => r.UserRoles)
+                .Where(r => !r.IsSystemRole && r.TenantAdminUserId == null).ToListAsync();
+            var parents = await db.Users.ToDictionaryAsync(u => u.Id, u => u.CreatedByUserId);
+            int Root(int userId)
+            {
+                var seen = new HashSet<int>();
+                while (parents.TryGetValue(userId, out var parent) && seen.Add(userId))
+                {
+                    if (userId == seedAdminUserId || parent == null || parent == seedAdminUserId) return userId;
+                    userId = parent.Value;
+                }
+                return seedAdminUserId;
+            }
+            foreach (var role in roles)
+            {
+                var owner = Root(role.CreatedByUserId ?? seedAdminUserId);
+                role.TenantAdminUserId = owner;
+                var foreignAssignments = role.UserRoles.GroupBy(ur => Root(ur.UserId))
+                    .Where(g => g.Key != owner).ToList();
+                foreach (var group in foreignAssignments)
+                {
+                    var copy = new Role { Name = role.Name, Description = role.Description,
+                        CreatedAt = role.CreatedAt, CreatedByUserId = seedAdminUserId, TenantAdminUserId = group.Key,
+                        RolePermissions = role.RolePermissions.Select(rp => new RolePermission { PermissionId = rp.PermissionId }).ToList() };
+                    db.Roles.Add(copy);
+                    foreach (var assignment in group)
+                    {
+                        db.UserRoles.Add(new UserRole { UserId = assignment.UserId, Role = copy,
+                            AssignedAt = assignment.AssignedAt, AssignedByUserId = assignment.AssignedByUserId });
+                        db.UserRoles.Remove(assignment);
+                    }
+                }
+            }
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
+
+        private static async Task EnsureEditionRolesAsync(AppDbContext db, int seedAdminUserId)
+        {
+            var permissionIdByKey = await db.Permissions
+                .ToDictionaryAsync(p => p.Key, p => p.Id, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (name, description, keys) in EditionCatalog.All)
+            {
+                var role = await db.Roles
+                    .Include(r => r.RolePermissions)
+                    .FirstOrDefaultAsync(r => (r.IsSystemRole || r.TenantAdminUserId == null) && r.Name == name);
+
+                if (role == null)
+                {
+                    role = new Role
+                    {
+                        Name = name,
+                        Description = description,
+                        IsSystemRole = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedByUserId = seedAdminUserId
+                    };
+                    db.Roles.Add(role);
+                    await db.SaveChangesAsync();
+                }
+                else
+                {
+                    var changed = false;
+                    // An edition that somehow lost its system flag would become
+                    // editable, and then it is no longer an edition.
+                    if (!role.IsSystemRole) { role.IsSystemRole = true; changed = true; }
+                    if (role.Description != description) { role.Description = description; changed = true; }
+                    if (changed) await db.SaveChangesAsync();
+                }
+
+                // Keys the catalog no longer defines simply do not resolve; the
+                // stale-permission sweep in UpsertPermissionsAsync has already
+                // removed the rows behind them.
+                var targetIds = keys
+                    .Where(permissionIdByKey.ContainsKey)
+                    .Select(k => permissionIdByKey[k])
+                    .ToHashSet();
+
+                var currentIds = role.RolePermissions.Select(rp => rp.PermissionId).ToHashSet();
+                var toAdd = targetIds.Except(currentIds).ToList();
+                var toRemove = role.RolePermissions.Where(rp => !targetIds.Contains(rp.PermissionId)).ToList();
+
+                foreach (var pid in toAdd)
+                    db.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = pid });
+                if (toRemove.Count > 0)
+                    db.RolePermissions.RemoveRange(toRemove);
+
+                if (toAdd.Count > 0 || toRemove.Count > 0)
+                    await db.SaveChangesAsync();
+            }
         }
 
         private static async Task UpsertPermissionsAsync(AppDbContext db)

@@ -198,8 +198,92 @@ namespace MyApp.Api.Data
         public DbSet<StockMovement> StockMovements { get; set; }
         public DbSet<OpeningStockBalance> OpeningStockBalances { get; set; }
 
+                public DbSet<McpAgentToken> McpAgentTokens { get; set; }
+        public DbSet<McpUserAccessPolicy> McpUserAccessPolicies { get; set; }
+        public DbSet<McpActivity> McpActivities { get; set; }
+        public DbSet<McpOAuthClient> McpOAuthClients { get; set; }
+        public DbSet<McpPendingAction> McpPendingActions { get; set; }
+        public DbSet<McpOAuthCode> McpOAuthCodes { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<User>().HasOne<User>().WithMany().HasForeignKey(u => u.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<User>().HasIndex(u => u.CreatedByUserId);
+            modelBuilder.Entity<Company>().HasOne<User>().WithMany().HasForeignKey(c => c.CreatedByUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Company>().HasIndex(c => c.CreatedByUserId);
+
+            modelBuilder.Entity<McpUserAccessPolicy>(e =>
+            {
+                e.HasKey(p => p.UserId);
+                e.Property(p => p.GrantedTools).HasMaxLength(8000);
+                e.Property(p => p.SelectedTools).HasMaxLength(8000);
+                e.Property(p => p.Revision).IsConcurrencyToken();
+                e.HasOne(p => p.User).WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            // Hosted MCP: per-agent credentials (hash only) and the append-only
+            // activity record. Activities carry no foreign keys on purpose.
+            modelBuilder.Entity<McpAgentToken>(e =>
+            {
+                e.Property(t => t.Name).HasMaxLength(100);
+                e.Property(t => t.TokenHash).HasMaxLength(64);
+                e.Property(t => t.Hint).HasMaxLength(16);
+                e.Property(t => t.CompanyIds).HasMaxLength(400);
+                e.Property(t => t.Scopes).HasMaxLength(200);
+                e.Property(t => t.OAuthClientId).HasMaxLength(64);
+                e.Property(t => t.RefreshHash).HasMaxLength(64);
+                e.HasIndex(t => t.RefreshHash);
+                e.HasIndex(t => t.TokenHash).IsUnique();
+                e.HasIndex(t => t.UserId);
+                e.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<McpPendingAction>(e =>
+            {
+                e.Property(a => a.PlanId).HasMaxLength(64);
+                e.Property(a => a.Kind).HasMaxLength(30);
+                e.Property(a => a.Summary).HasMaxLength(1000);
+                e.Property(a => a.IdempotencyKey).HasMaxLength(100);
+                e.Property(a => a.ResultRef).HasMaxLength(100);
+                e.Property(a => a.ResultSummary).HasMaxLength(300);
+                e.HasIndex(a => a.PlanId).IsUnique();
+                // One plan (or result) per agent token and idempotency key.
+                e.HasIndex(a => new { a.AgentTokenId, a.IdempotencyKey }).IsUnique().HasFilter("[IdempotencyKey] IS NOT NULL");
+                e.HasIndex(a => a.ExpiresAt);
+            });
+            modelBuilder.Entity<McpOAuthClient>(e =>
+            {
+                e.HasKey(c => c.Id);
+                e.Property(c => c.Id).HasMaxLength(64);
+                e.Property(c => c.Name).HasMaxLength(100);
+                e.Property(c => c.RedirectUris).HasMaxLength(2000);
+            });
+            modelBuilder.Entity<McpOAuthCode>(e =>
+            {
+                e.Property(c => c.CodeHash).HasMaxLength(64);
+                e.Property(c => c.ClientId).HasMaxLength(64);
+                e.Property(c => c.RedirectUri).HasMaxLength(500);
+                e.Property(c => c.CodeChallenge).HasMaxLength(128);
+                e.Property(c => c.CompanyIds).HasMaxLength(400);
+                e.Property(c => c.Scopes).HasMaxLength(200);
+                e.HasIndex(c => c.CodeHash).IsUnique();
+                e.HasIndex(c => c.ExpiresAt);
+            });
+            modelBuilder.Entity<McpActivity>(e =>
+            {
+                e.Property(a => a.AgentName).HasMaxLength(100);
+                e.Property(a => a.AuthKind).HasMaxLength(10);
+                e.Property(a => a.Username).HasMaxLength(100);
+                e.Property(a => a.Tool).HasMaxLength(60);
+                e.Property(a => a.Arguments).HasMaxLength(2000);
+                e.Property(a => a.Outcome).HasMaxLength(10);
+                e.Property(a => a.Detail).HasMaxLength(300);
+                e.Property(a => a.ResultRef).HasMaxLength(100);
+                e.Property(a => a.IpAddress).HasMaxLength(64);
+                e.Property(a => a.CorrelationId).HasMaxLength(64);
+                e.HasIndex(a => a.At);
+                e.HasIndex(a => new { a.CompanyId, a.At });
+                e.HasIndex(a => new { a.AgentTokenId, a.At });
+            });
+
             // Audit C-1 (2026-05-13): transparent encryption for the
             // PRAL bearer token. Reads decrypt the stored payload,
             // writes encrypt the operator-typed value. When DI didn't
@@ -1629,7 +1713,10 @@ namespace MyApp.Api.Data
 
             modelBuilder.Entity<Role>()
                 .HasIndex(r => r.Name)
-                .IsUnique();
+                .IsUnique().HasFilter("[TenantAdminUserId] IS NULL");
+            modelBuilder.Entity<Role>()
+                .HasIndex(r => new { r.TenantAdminUserId, r.Name })
+                .IsUnique().HasFilter("[TenantAdminUserId] IS NOT NULL");
             modelBuilder.Entity<Role>().Property(r => r.Name).HasMaxLength(100);
             modelBuilder.Entity<Role>().Property(r => r.Description).HasMaxLength(500);
 

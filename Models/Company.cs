@@ -3,6 +3,7 @@
     public class Company
     {
         public int Id { get; set; }
+        public int? CreatedByUserId { get; set; }
         public string Name { get; set; } = "";
         public string? BrandName { get; set; }
         public string? LogoPath { get; set; }

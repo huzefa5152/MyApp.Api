@@ -19,7 +19,8 @@ namespace MyApp.Api.Repositories.Implementations
             return log;
         }
 
-        public async Task<PagedResult<AuditLog>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null)
+        public async Task<PagedResult<AuditLog>> GetPagedAsync(int page, int pageSize, string? level = null,
+            string? search = null, IReadOnlyCollection<int>? companyScope = null)
         {
             // Defence-in-depth clamp (audit C-11) — controller already
             // clamps via PaginationHelper, but the repo is a public seam.
@@ -27,6 +28,13 @@ namespace MyApp.Api.Repositories.Implementations
             pageSize = Math.Clamp(pageSize, 1, 200);
 
             var query = _context.AuditLogs.AsNoTracking().AsQueryable();
+
+            // Tenant scope. A null set is unrestricted (seed admin only); any
+            // other caller sees rows belonging to a company they can reach, and
+            // never the CompanyId-less platform rows.
+            if (companyScope != null)
+                query = query.Where(a => a.CompanyId != null && companyScope.Contains(a.CompanyId.Value)
+                    && a.Fingerprint != null && a.Fingerprint.StartsWith(AuditLog.TrustedScopePrefix));
 
             if (!string.IsNullOrWhiteSpace(level))
                 query = query.Where(a => a.Level == level);
@@ -56,12 +64,18 @@ namespace MyApp.Api.Repositories.Implementations
         public async Task<AuditLog?> GetByIdAsync(int id)
             => await _context.AuditLogs.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
 
-        public async Task<int> GetCountByLevelAsync(string level, int hours = 24)
+        public async Task<int> GetCountByLevelAsync(string level, int hours = 24,
+            IReadOnlyCollection<int>? companyScope = null)
         {
             var since = DateTime.UtcNow.AddHours(-hours);
-            return await _context.AuditLogs
-                .AsNoTracking()
-                .CountAsync(a => a.Level == level && a.Timestamp >= since);
+            var query = _context.AuditLogs.AsNoTracking()
+                .Where(a => a.Level == level && a.Timestamp >= since);
+            // Same scope as the listing, or the summary tile would report a
+            // count the caller cannot open a single row of.
+            if (companyScope != null)
+                query = query.Where(a => a.CompanyId != null && companyScope.Contains(a.CompanyId.Value)
+                    && a.Fingerprint != null && a.Fingerprint.StartsWith(AuditLog.TrustedScopePrefix));
+            return await query.CountAsync();
         }
     }
 }

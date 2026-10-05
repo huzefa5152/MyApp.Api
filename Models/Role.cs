@@ -12,6 +12,7 @@ namespace MyApp.Api.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public int? CreatedByUserId { get; set; }
+        public int? TenantAdminUserId { get; set; }
 
         public ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
         public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();

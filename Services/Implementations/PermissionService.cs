@@ -8,83 +8,99 @@ namespace MyApp.Api.Services.Implementations
 {
     public class PermissionService : IPermissionService
     {
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
-        private const string CachePrefix = "perms:user:";
-        // Sentinel key used so InvalidateAll can bump a generation counter
-        // without enumerating every per-user cache entry.
-        private const string GenerationKey = "perms:generation";
+        // This service is scoped: cache once per request, never across requests.
+        private readonly Dictionary<int, HashSet<string>> _requestPermissions = new();
+        private readonly Dictionary<int, MyApp.Api.Models.McpUserAccessPolicy?> _requestMcpPolicies = new();
+
+        private async Task<MyApp.Api.Models.McpUserAccessPolicy?> McpPolicyAsync(int userId)
+        {
+            if (!_requestMcpPolicies.TryGetValue(userId, out var policy))
+                _requestMcpPolicies[userId] = policy = await _context.McpUserAccessPolicies.AsNoTracking().SingleOrDefaultAsync(p => p.UserId == userId);
+            return policy;
+        }
 
         private readonly AppDbContext _context;
-        private readonly IMemoryCache _cache;
         private readonly int _seedAdminUserId;
+        private readonly IManagementScopeService _scope;
 
-        public PermissionService(AppDbContext context, IMemoryCache cache, IConfiguration configuration)
+        public PermissionService(AppDbContext context, IMemoryCache cache, IConfiguration configuration, IManagementScopeService scope)
         {
             _context = context;
-            _cache = cache;
+            _scope = scope;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
-        public bool IsSeedAdmin(int userId) => userId == _seedAdminUserId;
+        public bool IsSeedAdmin(int userId) => userId > 0 && userId == _seedAdminUserId;
 
         public async Task<bool> HasPermissionAsync(int userId, string permissionKey)
         {
-            if (IsSeedAdmin(userId)) return true;
+            if (IsSeedAdmin(userId) && permissionKey is not ("mcp.access.use" or "mcp.write.use")) return true;
             var perms = await GetUserPermissionsAsync(userId);
             return perms.Contains(permissionKey);
         }
 
         public async Task<IReadOnlyCollection<string>> GetUserPermissionsAsync(int userId)
         {
-            if (IsSeedAdmin(userId))
-            {
-                // Seed admin implicitly has every catalog key — no DB hit needed.
-                return PermissionCatalog.All.Select(p => p.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            }
-
-            var generation = _cache.GetOrCreate(GenerationKey, e =>
-            {
-                e.Priority = CacheItemPriority.NeverRemove;
-                return 0L;
-            });
-
-            var cacheKey = $"{CachePrefix}{userId}:g{generation}";
-            if (_cache.TryGetValue<HashSet<string>>(cacheKey, out var cached) && cached is not null)
+            if (userId <= 0) return Array.Empty<string>();
+            if (_requestPermissions.TryGetValue(userId, out var cached))
                 return cached;
 
-            var perms = await _context.UserRoles
-                .Where(ur => ur.UserId == userId)
+            var tenant = IsSeedAdmin(userId) ? null : await RoleTenantScope.ResolveAsync(_context, _scope, userId);
+            var perms = IsSeedAdmin(userId) ? PermissionCatalog.All.Select(p => p.Key).ToList() : await _context.UserRoles
+                .Where(ur => ur.UserId == userId && (ur.Role!.IsSystemRole ||
+                    (tenant != null && ur.Role.TenantAdminUserId == tenant)))
                 .SelectMany(ur => ur.Role!.RolePermissions)
                 .Select(rp => rp.Permission!.Key)
                 .Distinct()
                 .ToListAsync();
 
             var set = new HashSet<string>(perms, StringComparer.OrdinalIgnoreCase);
-            _cache.Set(cacheKey, set, new MemoryCacheEntryOptions
+            var policy = await McpPolicyAsync(userId);
+            set.Remove("mcp.access.use");
+            set.Remove("mcp.write.use");
+            if (policy != null)
             {
-                SlidingExpiration = CacheTtl
-            });
+                set.Remove("mcp.access.use");
+                set.Remove("mcp.write.use");
+                if (policy.AccessGranted && policy.AccessEnabled)
+                {
+                    set.Add("mcp.access.use");
+                    if (policy.WritesGranted && policy.WritesEnabled) set.Add("mcp.write.use");
+                }
+            }
+            _requestPermissions[userId] = set;
             return set;
         }
 
         public void InvalidateUser(int userId)
         {
-            // Current-generation key is removed; older-generation keys expire naturally.
-            if (_cache.TryGetValue<long>(GenerationKey, out var gen))
+            _requestPermissions.Remove(userId);
+            _requestMcpPolicies.Remove(userId);
+        }
+
+        public async Task<bool> HasMcpToolAccessAsync(int userId, string toolName)
+        {
+            var tool = McpToolAccessCatalog.Find(toolName);
+            if (tool == null || !await HasPermissionAsync(userId, "mcp.access.use")) return false;
+            if (tool.SeedOnly && !IsSeedAdmin(userId)) return false;
+            if (tool.Write && !await HasPermissionAsync(userId, "mcp.write.use")) return false;
+            if (tool.Permissions.Length > 0)
             {
-                _cache.Remove($"{CachePrefix}{userId}:g{gen}");
+                var eligible = false;
+                foreach (var key in tool.Permissions)
+                    if (await HasPermissionAsync(userId, key)) { eligible = true; break; }
+                if (!eligible) return false;
             }
+            if (!tool.Configurable) return true;
+            var policy = await McpPolicyAsync(userId);
+            return policy == null || (McpUserAccessService.Names(policy.GrantedTools).Contains(toolName)
+                && (policy.SelectedTools == null || McpUserAccessService.Names(policy.SelectedTools).Contains(toolName)));
         }
 
         public void InvalidateAll()
         {
-            // Bumping the generation invalidates every per-user cache entry at once.
-            var gen = _cache.GetOrCreate(GenerationKey, e =>
-            {
-                e.Priority = CacheItemPriority.NeverRemove;
-                return 0L;
-            });
-            _cache.Set(GenerationKey, gen + 1, new MemoryCacheEntryOptions { Priority = CacheItemPriority.NeverRemove });
+            _requestPermissions.Clear();
+            _requestMcpPolicies.Clear();
         }
     }
 }

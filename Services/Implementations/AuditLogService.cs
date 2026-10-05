@@ -55,7 +55,8 @@ namespace MyApp.Api.Services.Implementations
             Message = a.Message,
             StackTrace = null,
             RequestBody = a.RequestBody,
-            QueryString = a.QueryString
+            QueryString = a.QueryString,
+            CompanyId = a.CompanyId
         };
 
         // Detail-shape DTO keeps StackTrace for the per-row drill-through.
@@ -72,17 +73,17 @@ namespace MyApp.Api.Services.Implementations
             Message = a.Message,
             StackTrace = a.StackTrace,
             RequestBody = a.RequestBody,
-            QueryString = a.QueryString
+            QueryString = a.QueryString,
+            CompanyId = a.CompanyId
         };
 
         public async Task LogAsync(AuditLog log)
         {
             try
             {
-                // Compute the dedup fingerprint if the caller didn't supply one.
+                // Recompute the tenant-bound, versioned fingerprint for every new event.
                 // SHA1 is plenty for in-app dedup keys (not cryptographic).
-                if (string.IsNullOrEmpty(log.Fingerprint))
-                    log.Fingerprint = ComputeFingerprint(log);
+                log.Fingerprint = ComputeFingerprint(log);
 
                 if (log.FirstOccurrence == null) log.FirstOccurrence = log.Timestamp;
                 if (log.LastOccurrence == null) log.LastOccurrence = log.Timestamp;
@@ -99,7 +100,8 @@ namespace MyApp.Api.Services.Implementations
                 {
                     var since = log.Timestamp - DedupWindow;
                     var existing = await _db.AuditLogs
-                        .Where(a => a.Fingerprint == log.Fingerprint && a.LastOccurrence >= since)
+                        .Where(a => a.Fingerprint == log.Fingerprint && a.CompanyId == log.CompanyId
+                            && a.LastOccurrence >= since)
                         .OrderByDescending(a => a.Id)
                         .FirstOrDefaultAsync();
 
@@ -137,15 +139,16 @@ namespace MyApp.Api.Services.Implementations
         {
             var msgNormalised = System.Text.RegularExpressions.Regex.Replace(
                 log.Message ?? "", @"\d+", "#");
-            var raw = $"{log.Level}|{log.ExceptionType}|{msgNormalised}|{log.RequestPath}|{log.StatusCode}";
+            var raw = $"{log.CompanyId}|{log.Level}|{log.ExceptionType}|{msgNormalised}|{log.RequestPath}|{log.StatusCode}";
             using var sha = SHA1.Create();
             var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
-            return Convert.ToHexString(bytes).ToLowerInvariant()[..40];
+            return AuditLog.TrustedScopePrefix + Convert.ToHexString(bytes).ToLowerInvariant()[..37];
         }
 
-        public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null, string? search = null)
+        public async Task<PagedResult<AuditLogDto>> GetPagedAsync(int page, int pageSize, string? level = null,
+            string? search = null, IReadOnlyCollection<int>? companyScope = null)
         {
-            var result = await _repository.GetPagedAsync(page, pageSize, level, search);
+            var result = await _repository.GetPagedAsync(page, pageSize, level, search, companyScope);
             return new PagedResult<AuditLogDto>
             {
                 Items = result.Items.Select(ToListDto).ToList(),
@@ -155,18 +158,27 @@ namespace MyApp.Api.Services.Implementations
             };
         }
 
-        public async Task<AuditLogDto?> GetByIdAsync(int id)
+        public async Task<AuditLogDto?> GetByIdAsync(int id, IReadOnlyCollection<int>? companyScope = null)
         {
             var log = await _repository.GetByIdAsync(id);
-            return log == null ? null : ToDetailDto(log);
+            if (log == null) return null;
+            // The id says nothing about who may read the row. A scoped caller
+            // gets null (the controller turns that into the same 404 a missing
+            // row gives) rather than a distinct refusal, so the endpoint cannot
+            // be used to probe which ids exist.
+            if (companyScope != null &&
+                (log.CompanyId == null || !companyScope.Contains(log.CompanyId.Value)
+                 || log.Fingerprint == null || !log.Fingerprint.StartsWith(AuditLog.TrustedScopePrefix, StringComparison.Ordinal)))
+                return null;
+            return ToDetailDto(log);
         }
 
-        public async Task<AuditSummaryDto> GetSummaryAsync()
+        public async Task<AuditSummaryDto> GetSummaryAsync(IReadOnlyCollection<int>? companyScope = null)
         {
             return new AuditSummaryDto
             {
-                ErrorsLast24h = await _repository.GetCountByLevelAsync("Error", 24),
-                WarningsLast24h = await _repository.GetCountByLevelAsync("Warning", 24)
+                ErrorsLast24h = await _repository.GetCountByLevelAsync("Error", 24, companyScope),
+                WarningsLast24h = await _repository.GetCountByLevelAsync("Warning", 24, companyScope)
             };
         }
     }

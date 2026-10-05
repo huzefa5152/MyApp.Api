@@ -296,6 +296,12 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-05
 
+
+- Restrict MCP catalog configuration to the seed administrator, with a searchable user picker, account identity and company context. Users connect AI applications through OAuth and can review or revoke their connections.
+
+- Add seed-admin tenant management and private administrator roles. Company access requires explicit assignments; seed-created companies stay isolated until assigned.
+- Add premium MCP connections with OAuth, company and role restrictions, immediate revocation, seed-only access grants, and a public setup guide linked from sign-in. MCP starts disabled for every account. Division-restricted company operations remain in the application.
+
 - All accounting report Print and PDF exports follow the company's bill/invoice letterhead, fonts and table colors, include every filtered row, and leave 12 mm page margins with repeated column headings.
 - Show freight/cartage below GST in commercial bill creation and edit totals when a charge is entered.
 - Preserve application files while entering deployment maintenance, resume only after a successful upload, and queue overlapping deployments.

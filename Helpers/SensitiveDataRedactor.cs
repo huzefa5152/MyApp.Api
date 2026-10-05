@@ -63,7 +63,7 @@ namespace MyApp.Api.Helpers
             "passwordhash", "confirmpassword",
             "fbrtoken", "token", "apikey", "api_key", "secret",
             "jwt", "authorization", "bearer",
-            "connectionstring",
+            "connectionstring", "access_token", "refresh_token", "client_secret", "code", "code_verifier", "code_challenge",
             // Customer Portal: the public token IS the access control for a
             // client's invoices, so it must never reach a log or an audit row.
             "publictoken", "portaltoken", "publicurl",

@@ -28,13 +28,15 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly IManagementScopeService _scope;
         private readonly int _seedAdminUserId;
         private readonly ILogger<UserDivisionsController> _logger;
 
         public UserDivisionsController(AppDbContext context, IDivisionAccessGuard divisionAccess,
-            IConfiguration configuration, ILogger<UserDivisionsController> logger)
+            IConfiguration configuration, ILogger<UserDivisionsController> logger, IManagementScopeService scope)
         {
             _context = context;
+            _scope = scope;
             _divisionAccess = divisionAccess;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
             _logger = logger;
@@ -55,8 +57,9 @@ namespace MyApp.Api.Controllers
         [AuthorizeCompany]
         public async Task<ActionResult<List<UserDivisionAssignmentDto>>> GetForCompany(int companyId)
         {
+            var visible = await _scope.GetManageableUserIdsAsync(CurrentUserId);
             var members = await _context.UserCompanies
-                .Where(uc => uc.CompanyId == companyId && uc.UserId != _seedAdminUserId)
+                .Where(uc => uc.CompanyId == companyId && uc.UserId != _seedAdminUserId && visible.Contains(uc.UserId))
                 .Select(uc => new
                 {
                     uc.UserId,
@@ -118,6 +121,7 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<SetUserDivisionsResultDto>> SetForUser(
             int userId, int companyId, [FromBody] SetUserDivisionsDto dto)
         {
+            if (!await _scope.CanManageUserAsync(CurrentUserId, userId)) return NotFound();
             if (userId == _seedAdminUserId)
                 return BadRequest(new { message = "The seed admin always has access to every division; assignments are not stored for it." });
 
@@ -127,6 +131,8 @@ namespace MyApp.Api.Controllers
                 return BadRequest(new { message = "The user has no access to this company — grant company access first (Tenant Access)." });
 
             var requested = (dto.DivisionIds ?? new List<int>()).Distinct().ToList();
+            var actorDivisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId);
+            if (actorDivisions != null && (!dto.RestrictToDivisions || requested.Any(id => !actorDivisions.Contains(id)))) return Forbid();
             var companyDivisionIds = await _context.Divisions
                 .Where(d => d.CompanyId == companyId)
                 .Select(d => d.Id)

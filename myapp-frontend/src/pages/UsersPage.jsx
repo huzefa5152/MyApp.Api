@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
   MdPeople,
@@ -101,7 +102,7 @@ export default function UsersPage() {
     // Best-effort — non-admin users may not have rbac.roles.view, in which
     // case the dropdown falls back to free-typing the legacy role name.
     getRoles()
-      .then(({ data }) => setAvailableRoles(data || []))
+      .then(({ data }) => setAvailableRoles((data || []).filter(role => !["MCP Access", "MCP Write"].includes(role.name))))
       .catch(() => setAvailableRoles([]));
     // Companies for the create dialog's access multi-select — best-effort,
     // only when the operator can actually grant tenant access.
@@ -227,7 +228,7 @@ export default function UsersPage() {
     setRolesLoading(true);
     try {
       const [rolesRes, userRolesRes] = await Promise.all([getRoles(), getUserRoles(u.id)]);
-      setAllRoles(rolesRes.data);
+      setAllRoles(rolesRes.data.filter(role => !["MCP Access", "MCP Write"].includes(role.name)));
       setAssignedRoleIds(new Set(userRolesRes.data.roles.map((r) => r.id)));
     } catch {
       setRolesMsg({ type: "error", text: "Failed to load roles" });
@@ -353,6 +354,7 @@ export default function UsersPage() {
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
+                  {currentUser?.isSeedAdmin && <Link to={`/profile?tab=mcp-catalog&userId=${u.id}`} style={{...styles.rolesBtn, minHeight:44}}>MCP access</Link>}
                   {u.id !== seedAdminUserId && (canAssignRoles || canUpdate || canDelete) && (
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                       {canAssignRoles && (

@@ -34,13 +34,15 @@ namespace MyApp.Api.Controllers
         private readonly AppDbContext _context;
         private readonly ICompanyAccessGuard _access;
         private readonly IDivisionAccessGuard _divisionAccess;
+        private readonly IManagementScopeService _scope;
         private readonly int _seedAdminUserId;
         private readonly ILogger<UserCompaniesController> _logger;
 
         public UserCompaniesController(AppDbContext context, ICompanyAccessGuard access,
-            IDivisionAccessGuard divisionAccess, IConfiguration configuration, ILogger<UserCompaniesController> logger)
+            IDivisionAccessGuard divisionAccess, IConfiguration configuration, ILogger<UserCompaniesController> logger, IManagementScopeService scope)
         {
             _context = context;
+            _scope = scope;
             _access = access;
             _divisionAccess = divisionAccess;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
@@ -63,8 +65,10 @@ namespace MyApp.Api.Controllers
         [HasPermission("tenantaccess.manage.view")]
         public async Task<ActionResult<List<UserCompanyAssignmentDto>>> GetAll()
         {
+            var visible = await _scope.GetManageableUserIdsAsync(CurrentUserId);
+            var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
             var users = await _context.Users
-                .Where(u => u.Id != _seedAdminUserId)
+                .Where(u => u.Id != _seedAdminUserId && visible.Contains(u.Id))
                 .OrderBy(u => u.FullName)
                 .Select(u => new
                 {
@@ -73,11 +77,13 @@ namespace MyApp.Api.Controllers
                 .ToListAsync();
 
             var companies = await _context.Companies
+                .Where(c => assignable.Contains(c.Id))
                 .OrderBy(c => c.Name)
                 .Select(c => new { c.Id, c.Name, c.IsTenantIsolated })
                 .ToListAsync();
 
             var assignments = await _context.UserCompanies
+                .Where(uc => visible.Contains(uc.UserId) && assignable.Contains(uc.CompanyId))
                 .Select(uc => new { uc.UserId, uc.CompanyId, uc.AssignedAt })
                 .ToListAsync();
             var byUser = assignments
@@ -113,6 +119,7 @@ namespace MyApp.Api.Controllers
         [HasPermission("tenantaccess.manage.view")]
         public async Task<ActionResult<UserCompanyAssignmentDto>> GetForUser(int userId)
         {
+            if (!await _scope.CanManageUserAsync(CurrentUserId, userId)) return NotFound();
             if (userId == _seedAdminUserId)
                 return BadRequest(new { message = "The seed admin always has access to every company." });
 
@@ -122,7 +129,9 @@ namespace MyApp.Api.Controllers
                 .FirstOrDefaultAsync();
             if (user == null) return NotFound();
 
+            var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
             var companies = await _context.Companies
+                .Where(c => assignable.Contains(c.Id))
                 .OrderBy(c => c.Name)
                 .Select(c => new { c.Id, c.Name, c.IsTenantIsolated })
                 .ToListAsync();
@@ -156,13 +165,16 @@ namespace MyApp.Api.Controllers
         public async Task<ActionResult<SetUserCompaniesResultDto>> SetForUser(
             int userId, [FromBody] SetUserCompaniesDto dto)
         {
+            if (!await _scope.CanManageUserAsync(CurrentUserId, userId)) return NotFound();
             if (userId == _seedAdminUserId)
                 return BadRequest(new { message = "The seed admin always has access to every company; assignments are not stored for it." });
 
             if (!await _context.Users.AnyAsync(u => u.Id == userId))
                 return NotFound(new { message = "User not found." });
 
+            var assignable = await _scope.GetAssignableCompanyIdsAsync(CurrentUserId);
             var requested = (dto.CompanyIds ?? new List<int>()).Distinct().ToList();
+            if (requested.Any(id => !assignable.Contains(id))) return Forbid();
             if (requested.Count > 0)
             {
                 var validIds = await _context.Companies
@@ -184,17 +196,27 @@ namespace MyApp.Api.Controllers
                 var requestedSet = requested.ToHashSet();
 
                 var toAdd = requestedSet.Except(existingSet).ToList();
-                var toRemove = existing.Where(e => !requestedSet.Contains(e.CompanyId)).ToList();
+                var toRemove = existing.Where(e => assignable.Contains(e.CompanyId) && !requestedSet.Contains(e.CompanyId)).ToList();
 
                 foreach (var cid in toAdd)
                 {
+                    var actorDivisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, cid);
                     _context.UserCompanies.Add(new UserCompany
                     {
                         UserId = userId,
                         CompanyId = cid,
+                            RestrictToDivisions = actorDivisions != null,
                         AssignedAt = DateTime.UtcNow,
                         AssignedByUserId = CurrentUserId == 0 ? (int?)null : CurrentUserId,
                     });
+                }
+                foreach (var cid in toAdd)
+                {
+                    var allowedDivisions = await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, cid);
+                    if (allowedDivisions != null)
+                        foreach (var did in allowedDivisions)
+                            if (!await _context.UserDivisions.AnyAsync(d => d.UserId == userId && d.DivisionId == did))
+                                _context.UserDivisions.Add(new UserDivision { UserId = userId, DivisionId = did, AssignedAt = DateTime.UtcNow, AssignedByUserId = CurrentUserId });
                 }
                 if (toRemove.Count > 0)
                     _context.UserCompanies.RemoveRange(toRemove);

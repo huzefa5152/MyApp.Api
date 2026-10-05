@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyApp.Api.Data;
+using MyApp.Api.Helpers;
 using MyApp.Api.DTOs;
 using MyApp.Api.Middleware;
 using MyApp.Api.Models;
@@ -23,12 +24,14 @@ namespace MyApp.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissions;
+        private readonly IManagementScopeService _scope;
         private readonly int _seedAdminUserId;
 
-        public UserRolesController(AppDbContext context, IPermissionService permissions, IConfiguration configuration)
+        public UserRolesController(AppDbContext context, IPermissionService permissions, IManagementScopeService scope, IConfiguration configuration)
         {
             _context = context;
             _permissions = permissions;
+            _scope = scope;
             _seedAdminUserId = configuration.GetValue<int>("AppSettings:SeedAdminUserId", 1);
         }
 
@@ -43,11 +46,19 @@ namespace MyApp.Api.Controllers
         [HasPermission("rbac.userroles.view")]
         public async Task<ActionResult<UserRolesDto>> Get(int userId)
         {
+            // Management scope (2026-09-11): own row or a descendant only;
+            // out-of-scope ids read as 404 so nothing leaks about them.
+            var actor = CurrentUserId() ?? 0;
+            if (userId != actor && !await _scope.CanManageUserAsync(actor, userId))
+                return NotFound(new { message = "User not found" });
+
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null) return NotFound(new { message = "User not found" });
 
+            var tenant = await RoleTenantScope.ResolveAsync(_context, _scope, userId);
             var roles = await _context.UserRoles
-                .Where(ur => ur.UserId == userId)
+                .Where(ur => ur.UserId == userId && (_scope.IsSeedAdmin(actor) || ur.Role!.IsSystemRole ||
+                    (tenant != null && ur.Role.TenantAdminUserId == tenant)))
                 .Include(ur => ur.Role)
                 .Select(ur => new RoleSummaryDto
                 {
@@ -82,19 +93,83 @@ namespace MyApp.Api.Controllers
             if (userId == _seedAdminUserId)
                 return BadRequest(new { message = "The primary admin's roles cannot be modified" });
 
+            // Management scope: only the seed admin or an ancestor may
+            // change this account's roles (an Administrator cannot
+            // re-role itself or anyone outside its tree).
+            if (!await _scope.CanManageUserAsync(CurrentUserId() ?? 0, userId))
+                return NotFound(new { message = "User not found" });
+
             var targetRoleIds = (dto.RoleIds ?? new List<int>()).Distinct().ToList();
+            var tenant = await RoleTenantScope.ResolveAsync(_context, _scope, userId);
+            if (targetRoleIds.Count > 0 && await _context.Roles.AnyAsync(r =>
+                targetRoleIds.Contains(r.Id) && !r.IsSystemRole &&
+                (tenant == null || r.TenantAdminUserId == null || r.TenantAdminUserId != tenant)))
+                return BadRequest(new { message = "A private role belongs to another tenant. Copy it into this tenant first." });
             if (targetRoleIds.Count > 0)
             {
-                var found = await _context.Roles.Where(r => targetRoleIds.Contains(r.Id)).Select(r => r.Id).ToListAsync();
-                if (found.Count != targetRoleIds.Count)
+                // MCP choices are edited in the profile. Retaining an already-assigned
+                // system MCP role is not a new grant, even when the manager pauses MCP.
+                var preservedMcpRoles = await _context.UserRoles
+                    .Where(ur => ur.UserId == userId && ur.Role!.IsSystemRole &&
+                        (ur.Role.Name == "MCP Access" || ur.Role.Name == "MCP Write"))
+                    .Select(ur => ur.RoleId).ToListAsync();
+                // Only roles the caller can see may be handed out: system
+                // roles, legacy rows, and custom roles from the caller's own
+                // chain. A sibling Administrator's role id is "invalid" here.
+                var visible = await RolesController.VisibleRoleIdsAsync(_context, _scope, _permissions, CurrentUserId() ?? 0);
+                if (targetRoleIds.Any(id => !visible.Contains(id) && !preservedMcpRoles.Contains(id)))
                     return BadRequest(new { message = "One or more role IDs are invalid" });
+
+                // Visible is not the same as grantable, and the difference is
+                // the whole edition boundary. Every SYSTEM role is visible to
+                // everyone - that is what lets an Administrator hand out the
+                // edition they were put on - so without this an Administrator
+                // on Sales Edition could assign Complete Edition to their own
+                // users and sell themselves an upgrade. A role may be assigned
+                // only when everything it grants is something the caller holds.
+                var grantable = await RolesController.GrantableKeysAsync(_permissions, CurrentUserId() ?? 0);
+                var overreaching = await _context.Roles
+                    .Where(r => targetRoleIds.Contains(r.Id) && !preservedMcpRoles.Contains(r.Id))
+                    .Select(r => new
+                    {
+                        r.Name,
+                        Keys = r.RolePermissions
+                            .Where(rp => rp.Permission != null)
+                            .Select(rp => rp.Permission!.Key)
+                            .ToList()
+                    })
+                    .ToListAsync();
+                foreach (var r in overreaching)
+                {
+                    var refused = RolesController.UngrantableKeys(r.Keys, grantable);
+                    if (refused.Count > 0)
+                        return BadRequest(new
+                        {
+                            message = $"You cannot assign \"{r.Name}\" - it grants more than you "
+                                    + $"hold yourself. Missing: {string.Join(", ", refused.Take(6))}"
+                                    + (refused.Count > 6 ? $" (+{refused.Count - 6} more)" : "")
+                        });
+                }
+            }
+
+            // Roles the target already holds that the caller cannot see stay
+            // untouched — the caller is editing the part of the set it can see.
+            var hiddenExisting = new HashSet<int>();
+            if (!_scope.IsSeedAdmin(CurrentUserId() ?? 0))
+            {
+                var visibleNow = await RolesController.VisibleRoleIdsAsync(_context, _scope, _permissions, CurrentUserId() ?? 0);
+                hiddenExisting = (await _context.UserRoles
+                        .Where(ur => ur.UserId == userId && !visibleNow.Contains(ur.RoleId))
+                        .Select(ur => ur.RoleId)
+                        .ToListAsync())
+                    .ToHashSet();
             }
 
             var existing = await _context.UserRoles.Where(ur => ur.UserId == userId).ToListAsync();
             var existingIds = existing.Select(ur => ur.RoleId).ToHashSet();
             var target = targetRoleIds.ToHashSet();
 
-            foreach (var ur in existing.Where(ur => !target.Contains(ur.RoleId)).ToList())
+            foreach (var ur in existing.Where(ur => !target.Contains(ur.RoleId) && !hiddenExisting.Contains(ur.RoleId)).ToList())
                 _context.UserRoles.Remove(ur);
 
             var assignedBy = CurrentUserId();

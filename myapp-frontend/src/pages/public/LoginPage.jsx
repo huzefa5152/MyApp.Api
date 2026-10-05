@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 // src/pages/public/LoginPage.jsx
 // Operator sign-in. Split layout: dark brand panel (left) + form panel
 // (right). Brand-neutral — both deployments (master "/", customize
@@ -247,6 +248,7 @@ export default function LoginPage() {
             </button>
           </form>
 
+          <p style={{textAlign:"center", padding:"0 16px"}}><Link to="/mcp-guide">Connect ChatGPT, Claude or a coding agent — MCP setup guide</Link></p>
           <div className="ht-form-footer">
             {/* Plain anchor to the SITE root, not a router Link: each
                 deployment's landing page lives at the real "/" — master's

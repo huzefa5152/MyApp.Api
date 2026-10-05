@@ -22,31 +22,42 @@ namespace MyApp.Api.Services.Interfaces
         /// <summary>
         /// "Common Clients" list for the panel above the company-scoped
         /// client list. Returns groups where <paramref name="companyId"/>
-        /// has a member AND at least one OTHER company also has a member.
-        /// Single-company groups are intentionally hidden — they're shown
-        /// only in the existing per-company list.
+        /// has a member AND at least one OTHER company ALSO REACHABLE BY THE
+        /// CALLER has a member. Single-company groups are intentionally
+        /// hidden — they're shown only in the existing per-company list.
+        ///
+        /// "Common" is relative to the caller: membership, CompanyCount and
+        /// CompanyNames are all computed over
+        /// <paramref name="accessibleCompanyIds"/> only. An operator holding a
+        /// single company therefore sees an EMPTY panel — nothing is shared
+        /// from where they stand — rather than the names of tenants they
+        /// cannot reach.
         /// </summary>
-        Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId, ISet<int> accessibleCompanyIds);
+        Task<List<CommonClientDto>> GetCommonClientsAsync(int companyId, IReadOnlyCollection<int> accessibleCompanyIds);
 
         /// <summary>
         /// Every <see cref="ClientGroup"/> (single-company AND multi-company) —
         /// used by config screens like PO Formats that pick one Client per
         /// legal entity rather than per company. CompanyCount is reported so
         /// the operator can still see at a glance which entries are
-        /// cross-tenant.
+        /// cross-tenant, but counts only companies the caller can reach.
+        /// Groups with no reachable member are omitted entirely.
         /// </summary>
-        Task<List<CommonClientDto>> GetAllGroupsAsync(ISet<int> accessibleCompanyIds);
+        Task<List<CommonClientDto>> GetAllGroupsAsync(IReadOnlyCollection<int> accessibleCompanyIds);
 
         /// <summary>
         /// Detail view: master fields + per-company members (sites etc.).
+        /// Members are restricted to <paramref name="accessibleCompanyIds"/>;
+        /// returns null when the caller can reach none of them, so a group in
+        /// another tenant is indistinguishable from one that doesn't exist.
         /// </summary>
-        Task<CommonClientDetailDto?> GetByIdAsync(int groupId);
+        Task<CommonClientDetailDto?> GetByIdAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds);
 
         /// <summary>
         /// Propagate master-field changes to every <see cref="Client"/> in
         /// the group. Returns the cascade summary for the toast.
         /// </summary>
-        Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto);
+        Task<CommonClientUpdateResultDto> UpdateAsync(int groupId, CommonClientUpdateDto dto, IReadOnlyCollection<int> accessibleCompanyIds);
 
         /// <summary>
         /// Delete the Common Client across every tenant: removes each
@@ -60,7 +71,7 @@ namespace MyApp.Api.Services.Interfaces
         /// that fails to delete (transactional — partial deletes are
         /// rolled back).
         /// </summary>
-        Task<CommonClientUpdateResultDto> DeleteAsync(int groupId);
+        Task<CommonClientUpdateResultDto> DeleteAsync(int groupId, IReadOnlyCollection<int> accessibleCompanyIds);
 
         /// <summary>
         /// Pure helper exposed so other paths (the startup backfill, the

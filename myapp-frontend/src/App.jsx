@@ -1,3 +1,6 @@
+import McpGuidePage from "./pages/public/McpGuidePage";
+import McpConnectPage from "./pages/McpConnectPage";
+import AdministratorsPage from "./pages/AdministratorsPage";
 // App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import DashboardLayout from "./layouts/DashboardLayout";
@@ -77,10 +80,13 @@ export default function App() {
 
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/mcp-guide" element={<McpGuidePage />} />
 
       {/* Protected app routes – auth guard + DashboardLayout */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
+          <Route path="/connect" element={<McpConnectPage />} />
+          <Route path="/administrators" element={<AdministratorsPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/companies/*" element={<RequirePermission anyPrefix="companies."><CompanyPage /></RequirePermission>} />
           <Route path="/configuration/divisions" element={<RequirePermission anyPrefix="divisions."><DivisionsPage /></RequirePermission>} />
