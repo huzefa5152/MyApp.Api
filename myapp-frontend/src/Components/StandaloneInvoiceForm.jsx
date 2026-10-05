@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { copyLine } from "../utils/documentCopy";
 import { defaultFurtherTaxRate } from "../utils/furtherTax";
 import DocumentTaxFields from "./DocumentTaxFields";
 import FreightChargesField from "./FreightChargesField";
@@ -616,6 +618,19 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+            {billsMode && <DocumentCopyPicker companyId={companyId} destination="Bill" disabled={!!salesOrderId}
+              onCopy={(source,lines,details) => {
+                const mapped = lines.map(line => ({ ...copyLine(line,blankRow),
+                  itemTypeId: line.itemTypeId ? String(line.itemTypeId) : "",
+                  uom: line.uom || line.unit || "", quantity: String(line.quantity), unitPrice: String(line.unitPrice || 0),
+                  lineTotal: String(lineTotalFrom(line.quantity,line.unitPrice || 0)) }));
+                setRows(prev => [...(details || prev.length===1 && !prev[0].description ? [] : prev), ...mapped]);
+                if(details) {
+                  setSelectedClientId(String(source.clientId));setPoNumber(source.poNumber || "");setPoDate(source.poDate?.slice(0,10)||"");
+                  setGstRate(source.gstRate??18);setFreightCharges(source.freightCharges||0);setPaymentTerms(source.paymentTerms||"");setNotes(source.notes||"");
+                  setFurtherTaxRate(source.furtherTaxRate??null);setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null);
+                }
+              }} />}
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             {loading ? (
@@ -1035,6 +1050,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                       <div style={{ marginTop: 2, fontSize: "0.62rem", color: colors.warn, fontWeight: 700 }}>Required</div>
                                     )}
                                   </div>
+                                  <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
                                   <button
                                     type="button"
                                     style={{ ...styles.removeRowBtn, minWidth: 44, minHeight: 44, flexShrink: 0 }}
@@ -1311,6 +1327,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                                     </td>
                                   )}
                                   <td style={{ ...styles.unifiedTd, textAlign: "center" }}>
+                                    <button type="button" style={{...styles.removeRowBtn,minWidth:44,minHeight:44}} title="Copy line" onClick={() => setRows(prev => [...prev,{...r,localId:crypto.randomUUID()}])}>Copy</button>
                                     <button
                                       type="button"
                                       style={styles.removeRowBtn}

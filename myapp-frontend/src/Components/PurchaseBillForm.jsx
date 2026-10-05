@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdReceipt } from "react-icons/md";
 import { createPurchaseBill, updatePurchaseBill, getPurchaseBillById } from "../api/purchaseBillApi";
@@ -290,6 +292,11 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
               disabled fieldset (so view-mode preview/download stay clickable). */}
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
           <fieldset disabled={readOnly} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
+            <DocumentCopyPicker companyId={companyId} destination="PurchaseBill" allowDetails={!isEdit && !isAgainstSale} disabled={readOnly || isAgainstSale}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, newRow).map(row => ({...row,uom:row.uom || row.unit || ""})));
+                if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setGstRate(source.gstRate??18);setPaymentTerms(source.paymentTerms||"");setPaymentMode(source.paymentMode||"");setSupplierIRN("");setSupplierBillNumber("");setWithholdingTaxRate(source.withholdingTaxRate??null);setWithholdingTaxAmount(null); }
+              }} />
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="purchase-bill" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={billId} lockedReason={readOnly ? "Document number is read-only in View." : undefined} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
 
@@ -394,6 +401,7 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                               </div>
                             )}
                           </div>
+                          <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])}>Copy</button>
                           {items.length > 1 && (
                             <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
                               <MdDelete size={18} />
@@ -481,7 +489,8 @@ export default function PurchaseBillForm({ companyId, billId, onClose, onSaved, 
                           </td>
                           <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td style={td}>
-                            {items.length > 1 && (
+                            <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,{...copyLine(it,newRow),uom:it.uom,hsCode:it.hsCode,saleType:it.saleType}])}>Copy</button>
+                          {items.length > 1 && (
                               <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
                                 <MdDelete size={16} />
                               </button>

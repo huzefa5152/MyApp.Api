@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useRef, useEffect, useMemo } from "react";
 import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
@@ -155,6 +157,11 @@ export default function SalesQuoteForm({ onClose, onSaved, companyId, quote }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <DocumentCopyPicker companyId={companyId} destination="Quote" allowDetails={!isEdit} disabled={false}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
+                if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setGstRate(source.gstRate??18);setContactPerson(source.contactPerson||"");setEnquiryRef(source.customerEnquiryRef||"");setEnquiryDate(source.enquiryDate?.slice(0,10)||"");setValidForDays(source.validUntil && source.date ? String(Math.max(0, Math.round((new Date(source.validUntil)-new Date(source.date))/86400000))) : ""); }
+              }} />
             {error && <div ref={errRef} style={s.err}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="quote" variant={quote ? "edit" : "create"} currentNumber={quote?.quoteNumber} editRecordId={quote?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div style={s.row}>

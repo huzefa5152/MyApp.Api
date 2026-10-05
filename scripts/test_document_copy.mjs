@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { copyLine, appendCopiedLines } from '../myapp-frontend/src/utils/documentCopy.js';
+const source = {id:93,_imageKey:'old',description:'Bolt',quantity:2.5,unit:'KG',unitPrice:123.45,itemTypeId:8,imagePath:'/sample.png',salesOrderItemId:77,deliveryItemId:55,invoiceId:12,delivered:2,sourceInvoiceItemIds:[7],supplierId:9,actualUnitCost:40};
+const original=JSON.stringify(source);
+const copy=copyLine(source,()=>({id:0,_imageKey:'blank',localId:'fresh',sourceInvoiceItemIds:[]}));
+assert.equal(copy.description,'Bolt');assert.equal(copy.quantity,2.5);assert.equal(copy.unitPrice,123.45);
+assert.equal(copy.id,0);assert.notEqual(copy._imageKey,'old');assert.equal(copy.localId,'fresh');
+for(const key of ['salesOrderItemId','deliveryItemId','invoiceId','delivered','supplierId','actualUnitCost']) assert.equal(copy[key],undefined);
+assert.deepEqual(copy.sourceInvoiceItemIds,[]);assert.equal(JSON.stringify(source),original);
+assert.notEqual(copyLine(source)._imageKey,copyLine(source)._imageKey);
+assert.equal(copyLine({description:'Invoice item',uom:'KG'}).unit,'KG');
+assert.equal(appendCopiedLines([{description:''}],[source]).length,1);
+assert.equal(appendCopiedLines([{description:'Keep me'}],[source]).length,2);
+assert.equal(appendCopiedLines([{description:'Keep me'}],[source])[0].description,'Keep me');
+console.log('18 copy invariants passed');

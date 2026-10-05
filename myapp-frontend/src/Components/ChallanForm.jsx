@@ -1,3 +1,6 @@
+import { todayYmd } from "../utils/dateInput";
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useRef, useEffect } from "react";
 import SmartItemAutocomplete from "./SmartItemAutocomplete";
 import SearchableSelect from "./SearchableSelect";
@@ -236,6 +239,11 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
 
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <DocumentCopyPicker companyId={companyId} destination="Challan" allowDetails={true} disabled={!!salesOrderId}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({description:"",quantity:1,unit:""})));
+                if(details) { setClient(clients.find(c=>c.id===source.clientId) || {id:source.clientId,label:source.clientName});setSite(source.site||"");setNotes(source.notes||"");setPoNumber(source.poNumber||"");setPoDate(source.poDate?.slice(0,10)||"");setIndentNo(source.indentNo||"");setSalesOrderId("");setDeliveryDate(todayYmd()); }
+              }} />
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="challan" clientId={client?.id} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>
 

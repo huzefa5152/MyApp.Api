@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines } from "../utils/documentCopy";
 import { useState, useEffect, useRef, useMemo } from "react";
 import SearchableSelect from "./SearchableSelect";
 import ItemTypeForm from "./ItemTypeForm";
@@ -153,6 +155,11 @@ export default function SalesOrderForm({ onClose, onSaved, companyId, order }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <DocumentCopyPicker companyId={companyId} destination="Order" allowDetails={!isEdit} disabled={!!salesQuoteId}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, blankItem));
+                if(details) { setClient({id:source.clientId,label:source.clientName});setNotes(source.notes||"");setPoNumber(source.customerPoNumber||"");setPoDate(source.customerPoDate?.slice(0,10)||"");setSite(source.site||"");setSalesQuoteId(""); }
+              }} />
             {error && <div ref={errRef} style={s.err}>{error}</div>}
             <div style={s.row}>
               <div style={{ flex: "1 1 100%", minWidth: 220 }}>

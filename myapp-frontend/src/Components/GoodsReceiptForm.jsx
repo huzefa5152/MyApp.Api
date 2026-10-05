@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines, copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import { createGoodsReceipt, updateGoodsReceipt, getGoodsReceiptById } from "../api/goodsReceiptApi";
@@ -138,6 +140,11 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ ...formStyles.body, maxHeight: "75vh", overflowY: "auto" }}>
+            <DocumentCopyPicker companyId={companyId} destination="GoodsReceipt" allowDetails={!isEdit} disabled={!!purchaseBillId}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
+                if(details) { setSupplierId(String(source.supplierId));setNotes(source.notes||"");setSite(source.site||"");setSupplierChallanNumber("");setPurchaseBillId(""); }
+              }} />
             {error && <div ref={errRef} style={formStyles.error}>{error}</div>}
             {<div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={companyId} documentType="goods-receipt" variant={isEdit ? "edit" : "create"} currentNumber={currentNumber} editRecordId={receiptId} mode={numberMode} onModeChange={setNumberMode} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} disabled={saving} /></div>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem" }}>
@@ -199,7 +206,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                             style={{ padding: "0.4rem 0.55rem", fontSize: "0.82rem" }}
                           />
                         </div>
-                        {items.length > 1 && (
+                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                          {items.length > 1 && (
                           <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: "0.4rem", minWidth: 44, minHeight: 44, flexShrink: 0 }}>
                             <MdDelete size={18} />
                           </button>
@@ -255,7 +263,8 @@ export default function GoodsReceiptForm({ companyId, receiptId, onClose, onSave
                       <td style={td}><input type="number" min={1} style={{ ...cellInput, textAlign: "right" }} value={it.quantity} onChange={e => updateItem(idx, "quantity", e.target.value)} /></td>
                       <td style={td}><input type="text" style={cellInput} value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} /></td>
                       <td style={td}>
-                        {items.length > 1 && (
+                        <button type="button" title="Copy line" style={{minHeight:44,minWidth:44,border:"1px solid #d0d7e2",borderRadius:8}} onClick={() => setItems(prev => [...prev,copyLine(it,() => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""}))])}>Copy</button>
+                          {items.length > 1 && (
                           <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#c62828", cursor: "pointer", padding: 0 }}>
                             <MdDelete size={16} />
                           </button>

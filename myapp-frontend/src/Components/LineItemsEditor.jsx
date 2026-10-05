@@ -1,3 +1,4 @@
+import { copyLine } from "../utils/documentCopy";
 import { useState, useEffect, useRef } from "react";
 import { MdAdd, MdDelete, MdContentPaste, MdRepeat } from "react-icons/md";
 import LookupAutocomplete from "./LookupAutocomplete";
@@ -172,6 +173,10 @@ export default function LineItemsEditor({
     addItem();
   };
 
+  const duplicateItem = idx => {
+    const next = [...items]; next.splice(idx+1,0,copyLine(items[idx],makeBlankItem));
+    onItemsChange(next); requestFocus(idx+1);
+  };
   const removeItem = (idx) => onItemsChange(items.filter((_, i) => i !== idx));
 
   // Enter anywhere in a row: last row + filled description → append & focus the
@@ -365,6 +370,7 @@ export default function LineItemsEditor({
                     </div>
                   )}
                   {!showItemType && <div style={{ flex: 1 }} />}
+                  {!locked && !items[idx].salesOrderItemId && <button type="button" style={{...s.del,color:colors.teal,minWidth:44,minHeight:44}} onClick={() => duplicateItem(idx)} title="Copy line">Copy</button>}
                   {items.length > 1 && !locked && (
                     <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                   )}
@@ -458,7 +464,8 @@ export default function LineItemsEditor({
                       <td style={{ ...s.td, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{lineTotal(item).toLocaleString()}</td>
                     )}
                     <td style={{ ...s.td, textAlign: "center" }}>
-                      {items.length > 1 && !locked && (
+                      {!locked && !items[idx].salesOrderItemId && <button type="button" style={{...s.del,color:colors.teal,minWidth:44,minHeight:44}} onClick={() => duplicateItem(idx)} title="Copy line">Copy</button>}
+                  {items.length > 1 && !locked && (
                         <button type="button" style={s.del} onClick={() => removeItem(idx)} title="Remove item"><MdDelete size={16} /></button>
                       )}
                     </td>

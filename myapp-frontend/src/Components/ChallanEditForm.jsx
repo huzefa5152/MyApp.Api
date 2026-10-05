@@ -1,3 +1,5 @@
+import DocumentCopyPicker from "./DocumentCopyPicker";
+import { appendCopiedLines } from "../utils/documentCopy";
 import BillNumberField, { billNumberPayload } from "./BillNumberField";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { MdInfo, MdContentCopy } from "react-icons/md";
@@ -247,6 +249,11 @@ export default function ChallanEditForm({ challan, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit}>
           <div style={formStyles.body}>
+            <DocumentCopyPicker companyId={challan.companyId} destination="Challan" allowDetails={false} disabled={!!challan.salesOrderId || !!challan.invoiceId}
+              onCopy={(source,lines,details) => {
+                setItems(prev => appendCopiedLines(details ? [] : prev, lines, () => ({id:0,itemTypeId:null,description:"",quantity:1,unit:""})));
+                if(details) {  }
+              }} />
             {error && <div ref={errRef} style={styles.errorAlert}>{error}</div>}
 
             <div style={{ maxWidth: 360, marginBottom: "0.75rem" }}><BillNumberField companyId={challan.companyId} documentType="challan" clientId={clientId} currentClientId={challan.clientId} variant="edit" currentNumber={challan.challanNumber} editRecordId={challan.id} number={customNumber} onNumberChange={setCustomNumber} onValidityChange={setNumberValid} lockedReason={isDuplicate ? "Duplicate challan numbers are inherited and cannot be changed." : undefined} disabled={saving} /></div>
