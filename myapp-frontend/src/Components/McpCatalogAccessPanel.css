@@ -50,3 +50,10 @@
   .mcp-catalog-search { max-width: none; }
   .mcp-catalog-footer .mcp-catalog-button { flex: 1 1 140px; }
 }
+
+.mcp-catalog-search select { width: 100%; min-height: 44px; padding: .7rem; border: 1px solid #cbd5e1; border-radius: 8px; background: white; color: #1a2332; font: inherit; }
+.mcp-catalog-selected-account { padding: 1rem; border-left: 4px solid #135e96; border-radius: 8px; background: #eef5fb; margin: 1rem 0; overflow-wrap: anywhere; }
+.mcp-catalog-selected-account p { margin-bottom: 0; }
+
+.mcp-catalog > p { margin: .75rem 0; }
+.mcp-catalog-search select:focus-visible { outline: 3px solid #85badc; outline-offset: 2px; }

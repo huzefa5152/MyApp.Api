@@ -293,6 +293,9 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-05
 
+
+- Restrict MCP catalog configuration to the seed administrator, with a searchable user picker, account identity and company context. Users connect AI applications through OAuth and can review or revoke their connections.
+
 - Reserve premium MCP grants for the primary admin, retain user self-service narrowing and company/role checks, and add a public OAuth setup guide linked from login.
 
 - Record receipts and payments for clients, suppliers or named other contacts, with document settlements, advances/refunds and split income/expense accounts. Validate company ownership and post advances to party balances without treating direct income/expenses as receivables or payables.

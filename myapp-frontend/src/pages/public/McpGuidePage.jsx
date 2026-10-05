@@ -21,11 +21,11 @@ export default function McpGuidePage() {
     <p>Open Settings → Connectors, add a custom connector using the address above, then sign in through Trader and approve your companies and actions. Enable the connector in your conversation. Your Claude plan or workspace may control whether custom connectors are available.</p>
     <p><a href="https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp" target="_blank" rel="noreferrer">Current Claude connector instructions</a></p>
     <h2>Codex and other coding agents</h2>
-    <p>Use the agent’s remote HTTP MCP configuration with this address and its OAuth sign-in flow. For clients that require a bearer token, sign in to Trader and open Profile → MCP Connections. Create a token for the companies and actions you need, then follow the client-specific configuration shown there. Keep tokens private. A client must support remote MCP and the selected authentication method.</p>
+    <p>Use your agent’s remote HTTP MCP configuration with the address above and choose OAuth. Sign in with your ERP account and review the requesting app, companies and actions before approving the connection. Your client must support remote MCP with OAuth.</p>
     <h2>What the assistant can access</h2>
     <p>Access is the intersection of your assigned companies, your ERP role permissions, the primary administrator’s MCP grants, your selected tools and your connection’s approved companies and scopes. Connecting never gives you another company or an extra role. Changes still require the existing prepare, review and approval flow; MCP access alone does not enable every operation.</p>
     <h2>Manage or disconnect</h2>
-    <p>In Profile → MCP Catalog Access, you can pause your connection or narrow your tools. In Profile → MCP Connections, review activity and revoke a connection or token. Revocation and changes to your roles, companies or MCP grants are checked on subsequent requests.</p>
+    <p>In Profile → MCP Connections, review activity and revoke a connection. Only the seed administrator can configure MCP catalog access for your account. Revocation and changes to your roles, companies or MCP grants are checked on subsequent requests.</p>
     <h2>If access is unavailable</h2>
     <p>“Purchase this premium feature” means your account has no active MCP access. Your administrator coordinates the purchase and the primary administrator assigns access. If no companies appear, ask for a company assignment. If an action is missing, your role, MCP tool selection or connection scope may not allow it. Reconnect after your permissions change if the AI app retains an older tool list.</p>
   </main>;

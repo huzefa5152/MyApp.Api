@@ -25,7 +25,7 @@ function payloadFrom(data, draft) {
     grantedTools: sorted(draft.grantedTools), selectedTools: sorted(draft.selectedTools) };
 }
 
-export default function McpCatalogAccessPanel({ targetUserId, onSaved }) {
+export default function McpCatalogAccessPanel({ targetUserId, onSaved, onDirtyChange }) {
   const { user } = useAuth();
   const userId = Number(targetUserId ?? user?.id ?? user?.userId);
   const [catalog, setCatalog] = useState(null);
@@ -72,6 +72,8 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved }) {
     && (!tool.write || (draft.writesGranted && draft.writesEnabled)));
   const dirty = Boolean(catalog && draft && JSON.stringify(payloadFrom(catalog, draft))
     !== JSON.stringify(payloadFrom(catalog, draftFrom(catalog))));
+
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const groups = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -155,7 +157,7 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved }) {
   const accountName = catalog.fullName || catalog.username || "Selected account";
   return <section className="mcp-catalog" aria-label={`AI access for ${accountName}`} aria-busy={saving}>
     <div className="mcp-catalog-heading">
-      <div><h3>{catalog.isSelf ? "My AI access" : "AI access for this account"}</h3>
+      <div><h3>{`MCP access for ${accountName}`}</h3>
         <p className="mcp-catalog-account">{accountName}{catalog.username && catalog.username !== accountName ? ` · ${catalog.username}` : ""}</p></div>
       <span className={`mcp-catalog-badge ${draft.accessGranted && draft.accessEnabled ? "is-active" : ""}`}>
         {draft.accessGranted && draft.accessEnabled ? "On" : "Off"}</span>
@@ -165,17 +167,14 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved }) {
     {!draft.accessGranted && !canManage && <p className="mcp-catalog-note">Purchase this premium feature. Contact your administrator to purchase MCP access; the primary administrator will enable your account.</p>}
 
     <fieldset className="mcp-catalog-controls" disabled={saving || conflict}>
-      {canManage && <div className="mcp-catalog-switches">
-        <label className="mcp-catalog-toggle"><input type="checkbox" checked={draft.accessGranted} disabled={!draft.accessGranted && catalog.canGrantAccess === false} onChange={event => changeFlag("accessGranted", event.target.checked)} />
-          <span><strong>Allow AI access</strong><small>Give this account permission to connect AI tools.</small></span></label>
-        <label className="mcp-catalog-toggle"><input type="checkbox" checked={draft.writesGranted} disabled={!draft.accessGranted || (!draft.writesGranted && catalog.canGrantWrites === false)} onChange={event => changeFlag("writesGranted", event.target.checked)} />
-          <span><strong>Allow write actions</strong><small>Permit approved changes using the chosen actions.</small></span></label>
-      </div>}
+      <legend>Connection permissions</legend>
       <div className="mcp-catalog-switches">
-        <label className="mcp-catalog-toggle"><input type="checkbox" checked={draft.accessGranted && draft.accessEnabled} disabled={!canSelect || !draft.accessGranted} onChange={event => changeFlag("accessEnabled", event.target.checked)} />
-          <span><strong>AI access switched on</strong><small>Switch off to pause AI while keeping these choices.</small></span></label>
-        <label className="mcp-catalog-toggle"><input type="checkbox" checked={draft.writesGranted && draft.writesEnabled} disabled={!canSelect || !draft.writesGranted} onChange={event => changeFlag("writesEnabled", event.target.checked)} />
-          <span><strong>Write actions switched on</strong><small>Switch off to keep AI read-only.</small></span></label>
+        <label className="mcp-catalog-toggle"><input type="checkbox" checked={draft.accessGranted && draft.accessEnabled} disabled={!canManage} onChange={event => {
+          changeFlag("accessGranted", event.target.checked); changeFlag("accessEnabled", event.target.checked);
+        }} /><span><strong>Enable MCP access</strong><small>Allow this user to connect through OAuth using the actions selected below.</small></span></label>
+        <label className="mcp-catalog-toggle"><input type="checkbox" checked={draft.writesGranted && draft.writesEnabled} disabled={!canManage || !draft.accessGranted || !draft.accessEnabled} onChange={event => {
+          changeFlag("writesGranted", event.target.checked); changeFlag("writesEnabled", event.target.checked);
+        }} /><span><strong>Allow changes through MCP</strong><small>Enable write actions. Keep this off for read-only access; changes still require approval.</small></span></label>
       </div>
     </fieldset>
 
@@ -188,15 +187,14 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved }) {
         <div className="mcp-catalog-group-heading"><h4>{label}</h4>
           <span>{tools.filter(tool => !tool.configurable || (canManage ? draft.grantedTools.has(tool.name) : draft.selectedTools.has(tool.name))).length}/{tools.length}</span></div>
         <div className="mcp-catalog-group-actions" role="group" aria-label={`${label} choices`}>
-          <button type="button" className="mcp-catalog-button" disabled={saving || conflict || !tools.some(canManage ? canGrantTool : canSelectTool)} onClick={() => changeGroup(tools, true)}>Select shown</button>
-          <button type="button" className="mcp-catalog-button" disabled={saving || conflict || !tools.some(canManage ? canGrantTool : canSelectTool)} onClick={() => changeGroup(tools, false)}>Clear shown</button>
+          <button type="button" className="mcp-catalog-button" disabled={saving || conflict || !tools.some(canManage ? canGrantTool : canSelectTool)} onClick={() => changeGroup(tools, true)}>Allow shown actions</button>
+          <button type="button" className="mcp-catalog-button" disabled={saving || conflict || !tools.some(canManage ? canGrantTool : canSelectTool)} onClick={() => changeGroup(tools, false)}>Remove shown actions</button>
         </div>
         <div className="mcp-catalog-tools">{tools.map(tool => <div className={`mcp-catalog-tool ${!tool.eligible ? "is-unavailable" : ""}`} key={tool.name}>
           <div className="mcp-catalog-tool-title"><strong>{toolLabel(tool)}</strong>
             <span className="mcp-catalog-tool-kind">{tool.write ? "Write" : "Read"}</span></div>
           {!tool.configurable ? <small className="mcp-catalog-help">Included automatically</small> : <div className="mcp-catalog-tool-choices">
-            {canManage && <label><input type="checkbox" checked={draft.grantedTools.has(tool.name)} disabled={saving || conflict || !canGrantTool(tool)} onChange={event => changeTool(tool, event.target.checked, true)} /><span>Allow</span></label>}
-            <label><input type="checkbox" checked={draft.selectedTools.has(tool.name)} disabled={saving || conflict || !canSelectTool(tool)} onChange={event => changeTool(tool, event.target.checked)} /><span>Use</span></label>
+            <label><input type="checkbox" checked={draft.grantedTools.has(tool.name) && draft.selectedTools.has(tool.name)} disabled={saving || conflict || !canGrantTool(tool)} onChange={event => changeTool(tool, event.target.checked, true)} /><span>Allow action</span></label>
             <small className={active(tool) ? "mcp-catalog-active-text" : "mcp-catalog-help"}>{active(tool) ? "Active" : "Inactive"}</small>
           </div>}
           {!tool.eligible && <small className="mcp-catalog-help">Unavailable with this account’s permissions.</small>}
@@ -206,10 +204,10 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved }) {
     </div>
     {groups.length === 0 && <p className="mcp-catalog-note">No actions match this search.</p>}
     {error && <p className="mcp-catalog-alert" role="alert">{error}</p>}
-    {saved && <p className="mcp-catalog-success" role="status">AI access settings saved.</p>}
+    {saved && <p className="mcp-catalog-success" role="status">MCP access saved for {accountName} (@{catalog.username}).</p>}
     <div className="mcp-catalog-footer">
       <button type="button" className="mcp-catalog-button" disabled={saving} onClick={load}>{conflict ? "Reload latest settings" : "Reload settings"}</button>
-      {canSelect && <button type="button" className="mcp-catalog-button mcp-catalog-primary" disabled={!dirty || saving || conflict} onClick={save}>{saving ? "Saving…" : "Save AI access"}</button>}
+      {canSelect && <button type="button" className="mcp-catalog-button mcp-catalog-primary" disabled={!dirty || saving || conflict} onClick={save}>{saving ? "Saving…" : `Save access for ${accountName}`}</button>}
       {dirty && !conflict && <span className="mcp-catalog-help">Unsaved changes</span>}
     </div>
   </section>;

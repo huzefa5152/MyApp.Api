@@ -36,9 +36,9 @@ public sealed class McpCatalogController(AppDbContext db, IPermissionService per
     // Premium grants belong exclusively to the primary administrator.
     private Task<bool> CanManageAsync(int uid) => Task.FromResult(management.IsSeedAdmin(Actor));
 
-    private Task<bool> CanReadAsync(int uid) => Task.FromResult(uid == Actor || management.IsSeedAdmin(Actor));
+    private Task<bool> CanReadAsync(int uid) => Task.FromResult(management.IsSeedAdmin(Actor));
 
-    // Normal signed-in users can read and narrow their own access even when MCP is disabled.
+    // Catalog configuration is available only to the seed administrator.
     [HttpGet("{userId:int}")]
     public async Task<IActionResult> Get(int userId)
     {
@@ -71,7 +71,7 @@ public sealed class McpCatalogController(AppDbContext db, IPermissionService per
         });
     }
 
-    // Users may narrow their own preferences; only the seed admin may change grants.
+    // Only the seed administrator may configure grants and tool selection.
     [HttpPut("{userId:int}")]
     public async Task<IActionResult> Save(int userId, [FromBody] SaveRequest request)
     {
