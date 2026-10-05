@@ -10,6 +10,7 @@ import SettleConsignmentDialog from "../Components/SettleConsignmentDialog";
 import CorrectConsignmentLineDialog from "../Components/CorrectConsignmentLineDialog";
 import { getImportConsignments, getImportConsignment, deleteImportConsignment } from "../api/importConsignmentApi";
 import usePersistentFilter from "../hooks/usePersistentFilter";
+import ConsignmentExtras from "../Components/costing/ConsignmentExtras";
 
 /**
  * Purchases → Consignments.
@@ -538,6 +539,9 @@ export default function ImportConsignmentsPage() {
                               onCorrect={(l) => setCorrecting({ consignment: detail, line: l })}
                             />
                             <ConsignmentSettlements detail={detail} />
+                            <ConsignmentExtras detail={detail} canManageCharges={canCorrect}
+                              canSeeLc={has("importcosting.lc.view")} canManageLc={has("importcosting.lc.manage")}
+                              onChanged={() => { load(); loadDetail(row.id); }} />
                           </td>
                         </tr>
                       )}

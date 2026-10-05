@@ -1,3 +1,5 @@
+using MyApp.Api.DTOs;
+using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -115,6 +117,54 @@ namespace MyApp.Api.Controllers
         /// Gated the same as running an import — if you can create one, you
         /// can unwind one.
         /// </summary>
+        /// <summary>GD-level charges (2026-10-05). Company from the STORED
+        /// consignment, like every route here.</summary>
+        [HttpGet("{id:int}/charges")]
+        [HasPermission("importcosting.consignments.view")]
+        public async Task<IActionResult> GetCharges(int id)
+        {
+            var guard = await GuardAsync(id);
+            if (guard != null) return guard;
+            return Ok(await _consignments.GetChargesAsync(id));
+        }
+
+        [HttpPost("{id:int}/charges")]
+        [HasPermission("importcosting.sheet.run")]
+        public async Task<IActionResult> AddCharge(int id, [FromBody] CreateImportConsignmentChargeDto dto)
+        {
+            var guard = await GuardAsync(id);
+            if (guard != null) return guard;
+            try { return Ok(await _consignments.AddChargeAsync(id, dto)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        }
+
+        [HttpDelete("{id:int}/charges/{chargeId:int}")]
+        [HasPermission("importcosting.sheet.run")]
+        public async Task<IActionResult> DeleteCharge(int id, int chargeId)
+        {
+            var guard = await GuardAsync(id);
+            if (guard != null) return guard;
+            try { return Ok(await _consignments.DeleteChargeAsync(id, chargeId)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        }
+
+        /// <summary>Resolves the company from the stored consignment and asserts
+        /// the caller may reach it (and every division of it, as a GD is
+        /// company-wide).</summary>
+        private async Task<IActionResult?> GuardAsync(int id)
+        {
+            var db = HttpContext.RequestServices.GetRequiredService<MyApp.Api.Data.AppDbContext>();
+            var companyId = await db.ImportConsignments.AsNoTracking().Where(c => c.Id == id)
+                .Select(c => (int?)c.CompanyId).FirstOrDefaultAsync();
+            if (companyId == null) return NotFound(new { message = "That consignment no longer exists." });
+            await _access.AssertAccessAsync(CurrentUserId, companyId.Value);
+            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId.Value) != null)
+                return StatusCode(403, new { message = "GD charges cover the whole GD, so they need access to every division." });
+            return null;
+        }
+
         [HttpDelete("{id:int}")]
         [HasPermission("importcosting.sheet.run")]
         public async Task<IActionResult> Delete(int id)

@@ -275,6 +275,39 @@ Both roll everything back. There is no half-correction.
 
 ---
 
+## 8a. Charges, customs units and letters of credit (2026-10-05)
+
+**GD charges.** Freight, the clearing agent's bill, wharfage, demurrage and
+port charges belong to the whole GD, not one line. Purchases ▸ Consignments ▸
+expand the GD ▸ **GD charges** ▸ choose the kind, type the amount and who it was
+paid to ▸ **Add charge**. (Only on a GD brought in as new goods.)
+
+- The charge is spread over the GD's lines by assessed value. A line worth 80% of
+  the GD carries 80% of the freight.
+- It raises each line's **landed cost**, the figure margins are worked out from.
+  It does **not** change the stock's declared value, the selling value or
+  anything filed with FBR.
+- With the ledger on, what the GD owes (Import Clearing) rises by exactly the
+  charge, so **settle the GD after its charges are in**. Inventory does not move;
+  the valuation reserve narrows by the charge.
+- Removing a charge puts every figure back. If the GD has already been settled
+  for more than it would then owe, the removal is refused: reduce the settlement
+  first.
+
+**Customs units.** Customs often states goods in a unit the books do not keep
+them in: Dozen or Kg on the GD, Pcs on the item. The review then shows the line
+as needing a fix, with **1 Dozen = [ ] Pcs**. Type the number once and press
+**Save and convert**: the line's quantity is converted, and every later GD for
+that item in Dozen converts by itself. The setting is per company and item;
+setting it to 0 removes it.
+
+**Letters of credit.** Purchases ▸ **Letters of Credit** ▸ **New LC** records
+the bank, supplier, currency, amount, exchange rate and dates. Link a GD to it
+from Consignments ▸ expand the GD ▸ **Letter of credit & bill of lading**, where
+the B/L number goes too. Each LC then lists its GDs with their assessed value,
+landed cost, what is owed and what is settled. This is a register only: nothing
+on this page posts to the ledger.
+
 ## 9. Settling a GD — and why most of yours cannot be
 
 **Only a New Arrivals import can be settled.** It is the only mode that credits

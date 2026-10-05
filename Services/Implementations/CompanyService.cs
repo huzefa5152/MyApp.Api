@@ -490,6 +490,8 @@ namespace MyApp.Api.Services.Implementations
                 //     DeliveryItems.InvoiceItemId already caught elsewhere in
                 //     this method.
                 await _context.ImportConsignments.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
+                // Letters of credit restrict on Company (2026-10-05).
+                await _context.ImportLetterOfCredits.Where(c => c.CompanyId == id).ExecuteDeleteAsync();
 
                 // 5e. Stock cost audit trail. StockCostChange.CompanyId is
                 //     Restrict for the same reason the balance it records is —

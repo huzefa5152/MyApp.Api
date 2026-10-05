@@ -148,6 +148,8 @@ namespace MyApp.Api.DTOs
         public decimal AddOnProfit { get; set; }
 
         public decimal CostExcludingTax { get; set; }
+        /// <summary>This line's share of the GD's charges (2026-10-05).</summary>
+        public decimal ChargesAllocated { get; set; }
         public decimal SellingValueExcludingTax { get; set; }
 
         /// <summary>One of <see cref="GdCostingDispositionNames"/>.</summary>
@@ -168,6 +170,11 @@ namespace MyApp.Api.DTOs
     {
         public int Id { get; set; }
         public int CompanyId { get; set; }
+        /// <summary>The LC the goods shipped against, its bill of lading and
+        /// the GD-level charges spread into landed cost (2026-10-05).</summary>
+        public int? ImportLcId { get; set; }
+        public string? BlNumber { get; set; }
+        public decimal TotalCharges { get; set; }
         public string GdNumber { get; set; } = "";
         public DateTime GdDate { get; set; }
         public decimal TotalCostExcludingTax { get; set; }
@@ -284,5 +291,33 @@ namespace MyApp.Api.DTOs
         public bool JournalEntryWithdrawn { get; set; }
 
         public List<string> Messages { get; set; } = new();
+    }
+
+    public class ImportConsignmentChargeDto
+    {
+        public int Id { get; set; }
+        public string Kind { get; set; } = "";
+        public decimal Amount { get; set; }
+        public string? Description { get; set; }
+        public string? PaidTo { get; set; }
+        public DateTime ChargeDate { get; set; }
+    }
+
+    public class CreateImportConsignmentChargeDto
+    {
+        public string? Kind { get; set; }
+        public decimal Amount { get; set; }
+        public string? Description { get; set; }
+        public string? PaidTo { get; set; }
+        public DateTime? ChargeDate { get; set; }
+    }
+
+    public class ImportConsignmentChargesResultDto
+    {
+        public int ConsignmentId { get; set; }
+        public decimal TotalCharges { get; set; }
+        public decimal ImportClearingCredited { get; set; }
+        public decimal LandedCostWithCharges { get; set; }
+        public List<ImportConsignmentChargeDto> Charges { get; set; } = new();
     }
 }

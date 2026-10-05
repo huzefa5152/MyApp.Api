@@ -9,7 +9,7 @@ using MyApp.Api.Services.Interfaces;
 namespace MyApp.Api.Services.Implementations
 {
     /// <inheritdoc cref="IImportConsignmentService"/>
-    public class ImportConsignmentService : IImportConsignmentService
+    public partial class ImportConsignmentService : IImportConsignmentService
     {
         private readonly AppDbContext _db;
         private readonly IPostingService _posting;
@@ -184,10 +184,15 @@ namespace MyApp.Api.Services.Implementations
                 Amount = r.Amount + r.AdjustmentAmount,
             }).ToList();
 
+            var chargesTotal = await _db.ImportConsignmentCharges.AsNoTracking()
+                .Where(x => x.ImportConsignmentId == c.Id).SumAsync(x => (decimal?)x.Amount) ?? 0m;
             return new ImportConsignmentDetailDto
             {
                 Id = c.Id,
                 CompanyId = c.CompanyId,
+                ImportLcId = c.ImportLcId,
+                BlNumber = c.BlNumber,
+                TotalCharges = chargesTotal,
                 GdNumber = c.GdNumber,
                 GdDate = c.GdDate,
                 TotalCostExcludingTax = c.TotalCostExcludingTax,
@@ -225,6 +230,7 @@ namespace MyApp.Api.Services.Implementations
                         IncomeTaxRate = l.IncomeTaxRate,
                         AddOnProfit = l.AddOnProfit,
                         CostExcludingTax = l.CostExcludingTax,
+                        ChargesAllocated = l.ChargesAllocated,
                         SellingValueExcludingTax = l.SellingValueExcludingTax,
                         Disposition = GdCostingDispositionNames.From(l.Disposition),
                         DispositionNote = l.DispositionNote,
@@ -667,7 +673,8 @@ namespace MyApp.Api.Services.Implementations
                 {
                     arrival.Quantity = dto.Quantity;
                     arrival.UnitCostExcludingTax = newSelling / dto.Quantity;
-                    arrival.ActualUnitCostExcludingTax = newCost / dto.Quantity;
+                    // Landed cost carries the line's share of the GD's charges.
+                    arrival.ActualUnitCostExcludingTax = (newCost + line.ChargesAllocated) / dto.Quantity;
                     arrival.SalesTaxRate = dto.SalesTaxRate;
                     result.ArrivalUpdated = true;
                 }

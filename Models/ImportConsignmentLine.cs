@@ -131,6 +131,12 @@ namespace MyApp.Api.Models
         /// comparison is kept.</summary>
         public decimal SellingValueExcludingTax { get; set; }
 
+        /// <summary>This line's share of the GD-level charges, by assessed value
+        /// (2026-10-05). Part of the landed cost (actual cost) the stock walk
+        /// carries for the line; NOT part of <see cref="CostExcludingTax"/>, which
+        /// stays the GD sheet's own figure.</summary>
+        public decimal ChargesAllocated { get; set; }
+
         public GdCostingDisposition Disposition { get; set; }
 
         /// <summary>Why, when <see cref="Disposition"/> is

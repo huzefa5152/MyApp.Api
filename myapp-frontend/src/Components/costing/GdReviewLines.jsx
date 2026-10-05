@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { MdAddCircleOutline, MdBuild, MdErrorOutline, MdRemoveCircleOutline, MdWarningAmber } from "react-icons/md";
 import { billColors } from "../bill/billTheme";
 import { MODE_NEW_ARRIVALS, lineAnchor, lineOutcome, moneyText, qtyText } from "../../utils/gdCostingEntry";
@@ -52,7 +52,34 @@ function extraNote(line, mode) {
   return rest || null;
 }
 
-function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfirmNew }) {
+/**
+ * A GD in the customs unit (Kg, Dozen, Set) against an item kept in another
+ * (Pcs): the operator says once how many item units make one customs unit,
+ * saved per company, and every later GD for that item converts on its own.
+ */
+function UnitConversion({ line, busy, onSetCustomsUnit }) {
+  const [factor, setFactor] = useState("");
+  const ok = Number(factor) > 0;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: "0.5rem", fontSize: 13 }}>
+      <span style={{ fontWeight: 700 }}>1 {line.unit} =</span>
+      <input type="number" min="0" step="any" value={factor} onChange={(e) => setFactor(e.target.value)} disabled={busy}
+        aria-label={`${line.matchedItemUnit} in one ${line.unit}`}
+        style={{ width: 110, minHeight: 44, padding: "0.3rem 0.5rem", border: `1px solid ${billColors.inputBorder}`, borderRadius: 8, boxSizing: "border-box" }} />
+      <span style={{ fontWeight: 700 }}>{line.matchedItemUnit}</span>
+      <button type="button" disabled={busy || !ok} onClick={() => onSetCustomsUnit(line, Number(factor))}
+        style={{ minHeight: 44, padding: "0.35rem 0.9rem", borderRadius: 8, border: "none", fontWeight: 700,
+          background: ok ? billColors.blue : "#c5ccd6", color: "#fff", cursor: ok ? "pointer" : "default" }}>
+        Save and convert
+      </button>
+      <span style={{ fontSize: 11.5, color: billColors.textSecondary, flexBasis: "100%" }}>
+        Saved for {line.itemTypeName || "this item"}; later GDs in {line.unit} convert by themselves.
+      </span>
+    </div>
+  );
+}
+
+function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfirmNew, onSetCustomsUnit }) {
   const o = lineOutcome(line, mode);
   const note = extraNote(line, mode);
   const t = o.blocking ? tone.fix : tone[o.kind] || tone.cost;
@@ -113,6 +140,10 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
             </li>
           ))}
         </ul>
+      )}
+      {onSetCustomsUnit && !line.leaveOut && line.itemTypeId && line.matchedItemUnit && line.unit
+        && problems.some((p) => p.field === "unit") && (
+        <UnitConversion line={line} busy={busy} onSetCustomsUnit={onSetCustomsUnit} />
       )}
       {warnings.length > 0 && !line.leaveOut && (
         <ul style={{ margin: "0.4rem 0 0", padding: 0, listStyle: "none" }}>
@@ -191,7 +222,7 @@ function LineCard({ line, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfi
   );
 }
 
-export default function GdReviewLines({ preview, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfirmNew }) {
+export default function GdReviewLines({ preview, mode, busy, onFix, onToggleLeaveOut, onChoose, onConfirmNew, onSetCustomsUnit }) {
   const groups = useMemo(() => {
     const byGd = new Map();
     for (const l of preview?.lines || []) {
@@ -218,7 +249,8 @@ export default function GdReviewLines({ preview, mode, busy, onFix, onToggleLeav
       </div>
       {g.lines.map((l) => (
         <LineCard key={l.sourceRow} line={l} mode={mode} busy={busy}
-          onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew} />
+          onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew}
+          onSetCustomsUnit={onSetCustomsUnit} />
       ))}
     </section>
   ));

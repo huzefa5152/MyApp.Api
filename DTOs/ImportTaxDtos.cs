@@ -80,6 +80,9 @@ namespace MyApp.Api.DTOs
         public decimal OtherTax { get; set; }
         public decimal IncomeTaxRate { get; set; }
         public decimal IncomeTax { get; set; }
+        /// <summary>This line's share of the GD's freight / clearing / other charges.</summary>
+        public decimal Charges { get; set; }
+        /// <summary>Landed cost INCLUDING <see cref="Charges"/>.</summary>
         public decimal LandedCost { get; set; }
         public decimal InputTax { get; set; }
         public decimal SellingValue { get; set; }

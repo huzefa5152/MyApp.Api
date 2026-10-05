@@ -10,7 +10,7 @@ import { notify } from "../utils/notify";
 import { useConfirm } from "../Components/ConfirmDialog";
 import { formStyles, modalSizes } from "../theme";
 import {
-  previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles,
+  previewGdCosting, previewGdCostingManual, commitGdCosting, getImportProfiles, setGdCustomsUnit,
 } from "../api/spreadsheetImportApi";
 import BillStep from "../Components/bill/BillStep";
 import BillChecklist from "../Components/bill/BillChecklist";
@@ -341,6 +341,14 @@ export default function GdCostingImportPage() {
     setConfirmNew(confirm);
     run("recheck", () => recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm }));
   };
+
+  // Customs unit -> item unit, saved per company; the re-check then converts
+  // the line (and every later GD for that item) on the server.
+  const onSetCustomsUnit = (line, factor) =>
+    run("recheck", async () => {
+      await setGdCustomsUnit(companyId, { itemTypeId: line.itemTypeId, customsUnit: line.unit, factor });
+      return recheck({ base: preview, modeNow: mode, leave: leaveOutChoice, chosen: chosenItem, src: source, confirm: confirmNew });
+    });
 
   // One click for a whole set of lines, and ONE re-check for all of them.
   const onBulkLeaveOut = (rows) => {
@@ -694,7 +702,8 @@ export default function GdCostingImportPage() {
               </div>
             )}
             <GdReviewLines preview={preview} mode={mode} busy={!!busy || stale}
-              onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew} />
+              onFix={onFix} onToggleLeaveOut={onToggleLeaveOut} onChoose={onChoose} onConfirmNew={onConfirmNew}
+              onSetCustomsUnit={onSetCustomsUnit} />
           </>
         )}
       </BillStep>

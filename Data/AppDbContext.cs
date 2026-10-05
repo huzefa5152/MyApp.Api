@@ -214,6 +214,8 @@ namespace MyApp.Api.Data
         public DbSet<StockRestatementLine> StockRestatementLines { get; set; }
         public DbSet<ImportConsignment> ImportConsignments { get; set; }
         public DbSet<ImportConsignmentLine> ImportConsignmentLines { get; set; }
+        public DbSet<ImportConsignmentCharge> ImportConsignmentCharges { get; set; }
+        public DbSet<ImportLetterOfCredit> ImportLetterOfCredits { get; set; }
         public DbSet<GdClaimPeriod> GdClaimPeriods { get; set; }
         public DbSet<StockCostChange> StockCostChanges { get; set; }
 
@@ -2340,6 +2342,43 @@ namespace MyApp.Api.Data
                 e.HasOne(c => c.Company).WithMany()
                     .HasForeignKey(c => c.CompanyId)
                     .OnDelete(DeleteBehavior.Restrict);
+                e.Property(c => c.BlNumber).HasMaxLength(60);
+                e.HasIndex(c => c.ImportLcId);
+            });
+
+            // 2026-10-05: GD-level charges. Cascade from the consignment only;
+            // CompanyId is a plain column (a second path is refused, 1785).
+            modelBuilder.Entity<ImportConsignmentCharge>(e =>
+            {
+                e.Property(x => x.Kind).HasMaxLength(20);
+                e.Property(x => x.Amount).HasPrecision(18, 2);
+                e.Property(x => x.Description).HasMaxLength(200);
+                e.Property(x => x.PaidTo).HasMaxLength(200);
+                e.Property(x => x.ChargeDate).HasColumnType("date");
+                e.HasIndex(x => x.CompanyId);
+                e.HasOne(x => x.ImportConsignment).WithMany(c => c.Charges)
+                    .HasForeignKey(x => x.ImportConsignmentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // 2026-10-05: letters of credit. Restrict on Company --
+            // CompanyService.DeleteAsync removes a company's LCs first.
+            modelBuilder.Entity<ImportLetterOfCredit>(e =>
+            {
+                e.Property(x => x.LcNumber).HasMaxLength(60);
+                e.Property(x => x.BankName).HasMaxLength(120);
+                e.Property(x => x.SupplierName).HasMaxLength(200);
+                e.Property(x => x.Currency).HasMaxLength(10);
+                e.Property(x => x.ForeignAmount).HasPrecision(18, 2);
+                e.Property(x => x.ExchangeRate).HasPrecision(18, 6);
+                e.Property(x => x.OpenedOn).HasColumnType("date");
+                e.Property(x => x.ExpiresOn).HasColumnType("date");
+                e.Property(x => x.Status).HasMaxLength(20);
+                e.Property(x => x.Notes).HasMaxLength(500);
+                e.HasIndex(x => new { x.CompanyId, x.LcNumber }).IsUnique();
+                e.HasOne(x => x.Company).WithMany()
+                    .HasForeignKey(x => x.CompanyId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<ImportConsignmentLine>(e =>
@@ -2367,6 +2406,7 @@ namespace MyApp.Api.Data
                 e.Property(l => l.AddOnProfit).HasPrecision(18, 2);
                 e.Property(l => l.CostExcludingTax).HasPrecision(18, 2);
                 e.Property(l => l.SellingValueExcludingTax).HasPrecision(18, 2);
+                e.Property(l => l.ChargesAllocated).HasPrecision(18, 2).HasDefaultValue(0m);
 
                 // Rates: percentages (18.00, not 0.18), precision (18,4).
                 e.Property(l => l.SalesTaxRate).HasPrecision(18, 4);
@@ -2424,6 +2464,10 @@ namespace MyApp.Api.Data
                 .HasIndex(s => new { s.CompanyId, s.ItemTypeId }).IsUnique();
             modelBuilder.Entity<CompanyItemTypeSetting>()
                 .Property(s => s.DisplayName).HasMaxLength(300);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .Property(s => s.CustomsUnit).HasMaxLength(50);
+            modelBuilder.Entity<CompanyItemTypeSetting>()
+                .Property(s => s.CustomsUnitFactor).HasPrecision(18, 6);
             modelBuilder.Entity<CompanyItemTypeSetting>()
                 .Property(s => s.Mode).HasConversion<byte>();
             modelBuilder.Entity<CompanyItemTypeSetting>()

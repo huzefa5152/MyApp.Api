@@ -108,6 +108,18 @@ namespace MyApp.Api.Models
         /// </summary>
         public string? DisplayName { get; set; }
 
+        /// <summary>
+        /// The unit customs declares this item in when it differs from the unit
+        /// the company sells it in (2026-10-05), e.g. a GD in "Kg" for an item
+        /// sold in "Pcs". A GD line in this unit is converted on import:
+        /// quantity x <see cref="CustomsUnitFactor"/>, in the item's own unit.
+        /// Null = no conversion; the GD's unit must then be the item's unit.
+        /// </summary>
+        public string? CustomsUnit { get; set; }
+
+        /// <summary>Selling units per ONE customs unit (1 Kg = 12.5 Pcs -> 12.5).</summary>
+        public decimal? CustomsUnitFactor { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

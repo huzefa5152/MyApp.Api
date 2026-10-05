@@ -240,6 +240,7 @@ export default function DashboardLayout() {
     "importcosting.sheet.run",
     "importcosting.consignments.view",
     "importcosting.taxdesk.view",
+    "importcosting.lc.view",
   ];
   const accountingKeys = [
     "accounting.receipts.view",
@@ -548,6 +549,12 @@ export default function DashboardLayout() {
                 <NavLink to="/imports/tax-desk" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdRequestQuote className="dl-subitem__icon" aria-hidden="true" />
                   <span>Import Tax Desk</span>
+                </NavLink>
+              </Can>
+              <Can permission="importcosting.lc.view">
+                <NavLink to="/imports/lcs" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdAccountBalance className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Letters of Credit</span>
                 </NavLink>
               </Can>
               {/* No Can wrapper: the guide explains the product and shows no
@@ -969,6 +976,7 @@ function getBreadcrumb(pathname) {
     "/imports/costing": "Purchases / Import Costing",
     "/imports/consignments": "Purchases / Consignments",
     "/imports/tax-desk": "Purchases / Import Tax Desk",
+    "/imports/lcs": "Purchases / Letters of Credit",
     "/item-types": "Configuration / Item Types",
     "/non-inventory-items": "Configuration / Non-Inventory Items",
     "/challans": "Sales / Delivery Challans",

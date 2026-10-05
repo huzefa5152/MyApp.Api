@@ -168,6 +168,29 @@ CheckBool("totals.productNamedTotal", GdCostingMapping.LooksLikeTotalsRow("Total
 CheckBool("totals.productNoCodeButQty", GdCostingMapping.LooksLikeTotalsRow("Total", 72905m, "", 10m), false);
 CheckBool("totals.realLineNoCode", GdCostingMapping.LooksLikeTotalsRow("SCREW DRIVER", 72905m, "", 0m), false);
 
+// GD charges (2026-10-05) spread by assessed value; the shares always add up to
+// the charge, the last line taking the rounding remainder.
+{
+    var lines = new List<ImportChargeAllocator.Line> { new(1, 40000m, 4m), new(2, 160000m, 10m) };
+    var s = ImportChargeAllocator.Allocate(lines, 10000m);
+    Check("charges.byValue.1", s[1], 2000m);
+    Check("charges.byValue.2", s[2], 8000m);
+    var thirds = ImportChargeAllocator.Allocate(
+        new List<ImportChargeAllocator.Line> { new(1, 1m, 1m), new(2, 1m, 1m), new(3, 1m, 1m) }, 100m);
+    Check("charges.thirds.1", thirds[1], 33.33m, 0m);
+    Check("charges.thirds.last", thirds[3], 33.34m, 0m);
+    Check("charges.thirds.sum", thirds.Values.Sum(), 100m, 0m);
+    var noValue = ImportChargeAllocator.Allocate(
+        new List<ImportChargeAllocator.Line> { new(1, 0m, 3m), new(2, 0m, 1m) }, 400m);
+    Check("charges.byQuantity.1", noValue[1], 300m, 0m);
+    Check("charges.byQuantity.2", noValue[2], 100m, 0m);
+    var none = ImportChargeAllocator.Allocate(lines, 0m);
+    Check("charges.zero", none.Values.Sum(), 0m, 0m);
+    var nothing = ImportChargeAllocator.Allocate(
+        new List<ImportChargeAllocator.Line> { new(1, 0m, 0m), new(2, 0m, 0m) }, 50m);
+    Check("charges.noWeights.lastTakesAll", nothing[2], 50m, 0m);
+}
+
 // -- Import tax desk (2026-10-05) ----------------------------------------
 // GD number parts: read, never guessed.
 var gp = GdNumberParts.Parse("KAPE-HC-12274");

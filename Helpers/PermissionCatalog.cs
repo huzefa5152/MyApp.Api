@@ -404,6 +404,8 @@ namespace MyApp.Api.Helpers
             new("importcosting.sheet.run",          "ImportCosting", "GD Costing Sheet", "Run",  "Import a GD costing workbook and load actual cost onto stock"),
             new("importcosting.consignments.view",  "ImportCosting", "Consignments",     "View", "View imported consignments and their lines"),
             new("importcosting.taxdesk.view",       "ImportCosting", "Import Tax Desk",  "View", "View the GD register, the monthly input-tax worksheet and the month-end tie-out"),
+            new("importcosting.lc.view",            "ImportCosting", "Letters of Credit", "View", "View letters of credit and the GDs shipped against them"),
+            new("importcosting.lc.manage",          "ImportCosting", "Letters of Credit", "Manage", "Record, edit and delete letters of credit, and link GDs and bills of lading to them"),
 
             // ── Reports ─────────────────────────────────────────────────────
             new("reports.sales.view",       "Reports", "Sales", "View",   "View the Sales report (FBR-submitted invoices grouped by date, monthly/yearly)"),

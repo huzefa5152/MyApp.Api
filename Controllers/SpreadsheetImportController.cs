@@ -365,6 +365,50 @@ namespace MyApp.Api.Controllers
         /// feeds straight into the existing <see cref="CommitGdCosting"/>,
         /// unchanged.
         /// </summary>
+        /// <summary>
+        /// Registers the unit customs declares an item in, and how many of the
+        /// item's own units make one of it (2026-10-05): "this GD says Kg, the
+        /// item is sold in Pcs; 1 Kg = 12.5 Pcs". Every later GD line for the
+        /// item in that unit is converted on import. Factor 0 or empty clears it.
+        /// Per company (CompanyItemTypeSettings), never on the shared catalog.
+        /// </summary>
+        [HttpPut("gd-costing/company/{companyId}/customs-unit")]
+        [HasPermission("importcosting.sheet.run")]
+        public async Task<IActionResult> SetCustomsUnit(int companyId, [FromBody] CustomsUnitDto dto)
+        {
+            await _access.AssertAccessAsync(CurrentUserId, companyId);
+            if (dto == null || dto.ItemTypeId <= 0)
+                return BadRequest(new { message = "Choose the item." });
+            if (!await ItemTypeMembership.IsVisibleAsync(_db, dto.ItemTypeId, new[] { companyId }))
+                return NotFound(new { message = "Item not found." });
+            var unit = (dto.CustomsUnit ?? "").Trim();
+            var clear = dto.Factor is not > 0m || unit.Length == 0;
+            if (!clear && dto.Factor > 1_000_000m)
+                return BadRequest(new { message = "That conversion is too large to be right." });
+            var item = await _db.ItemTypes.AsNoTracking().Where(i => i.Id == dto.ItemTypeId).Select(i => new { i.UOM }).FirstAsync();
+            if (!clear && FbrUomAliases.SameUnit(unit, item.UOM ?? ""))
+                return BadRequest(new { message = "That is already the item's own unit; nothing to convert." });
+            var setting = await _db.CompanyItemTypeSettings
+                .FirstOrDefaultAsync(s => s.CompanyId == companyId && s.ItemTypeId == dto.ItemTypeId);
+            if (setting == null)
+            {
+                if (clear) return Ok(new { itemTypeId = dto.ItemTypeId, customsUnit = (string?)null, factor = (decimal?)null });
+                setting = new CompanyItemTypeSetting { CompanyId = companyId, ItemTypeId = dto.ItemTypeId, Mode = InventoryItemMode.Default };
+                _db.CompanyItemTypeSettings.Add(setting);
+            }
+            setting.CustomsUnit = clear ? null : unit.Length > 50 ? unit[..50] : unit;
+            setting.CustomsUnitFactor = clear ? null : Math.Round(dto.Factor!.Value, 6);
+            await _db.SaveChangesAsync();
+            return Ok(new { itemTypeId = dto.ItemTypeId, customsUnit = setting.CustomsUnit, factor = setting.CustomsUnitFactor, itemUnit = item.UOM });
+        }
+
+        public class CustomsUnitDto
+        {
+            public int ItemTypeId { get; set; }
+            public string? CustomsUnit { get; set; }
+            public decimal? Factor { get; set; }
+        }
+
         [HttpPost("gd-costing/preview-manual")]
         [HasPermission("importcosting.sheet.run")]
         public async Task<ActionResult<GdCostingPreviewDto>> PreviewGdCostingManual(

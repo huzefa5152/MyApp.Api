@@ -298,6 +298,13 @@ Publish output optimized from 79 MB to 37 MB via:
 > running, incremental record of the product's evolution. (See the rule in
 > `CLAUDE.md`.)
 
+### 2026-10-06 — GD charges, customs units, letters of credit
+
+- **GD charges**: freight, the clearing agent's bill, wharfage, demurrage and port charges can be added to a GD on the Consignments screen. They are spread over the GD's lines by assessed value into landed cost (the margin figure), what the GD owes rises by the charge, and the stock's declared value does not move. Removing a charge puts every figure back.
+- **Customs units**: when a GD states goods in a different unit from the one the item is kept in (Dozen against Pcs, Kg against Pcs), the review asks once how many of the item's unit make one customs unit. The answer is saved for that company and item, and later GDs in that unit convert by themselves.
+- **Purchases → Letters of Credit**: record each LC (bank, supplier, currency, amount, rate, dates) and link GDs to it with their bill of lading number; each LC shows its GDs' assessed value, landed cost and what is still owed. Record-keeping only, nothing posts to the ledger.
+- **Fix**: a GD line with a very large quantity could leave a few paisa between the stock screen and the Inventory account. Arrivals now post exactly what the stock movement carries.
+
 ### 2026-10-05 — Import Tax Desk, dated restatements
 
 - **GDs brought in as new goods now post Inventory at declared value**, the value the stock screen and the monthly cost of sales use, so the ledger's Inventory agrees with the stock screen. What is owed on the GD (Import Clearing: landed cost plus import taxes) is unchanged; the difference sits in a new equity account, Inventory valuation reserve. GDs posted before the change were re-posted on the same basis.

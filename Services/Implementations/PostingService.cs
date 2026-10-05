@@ -674,8 +674,14 @@ namespace MyApp.Api.Services.Implementations
             incomeTaxTotal = Money(incomeTaxTotal);
             // What is OWED is the landed cost plus the import taxes, whatever
             // the goods are carried at; the declared - landed gap is equity.
-            var clearingTotal = landedTotal + inputTaxTotal + incomeTaxTotal;
-            var reserveTotal = inventoryTotal - landedTotal;
+            // GD-level charges (2026-10-05) are owed like the rest of the GD and
+            // raise its landed cost, so the reserve (declared - landed) narrows.
+            var chargesTotal = mode == GdCostingImportModeNames.NewArrivals
+                ? Money(await _context.ImportConsignmentCharges.AsNoTracking()
+                    .Where(c => c.ImportConsignmentId == consignment.Id).SumAsync(c => (decimal?)c.Amount) ?? 0m)
+                : 0m;
+            var clearingTotal = landedTotal + chargesTotal + inputTaxTotal + incomeTaxTotal;
+            var reserveTotal = inventoryTotal - landedTotal - chargesTotal;
 
             // Task 23: stamp what this posting actually credits onto the
             // consignment itself — the ONE place that knows the true figure

@@ -134,7 +134,7 @@ namespace MyApp.Api.Controllers
                     l.ImportConsignmentId, l.ImportConsignment.GdNumber, l.ImportConsignment.GdDate, l.ImportConsignment.Mode,
                     l.ClaimMonth, l.DescriptionOnSheet, l.HsCode, l.Quantity, l.Unit, l.AssessedValue, l.CustomsDuty,
                     l.Acd, l.RegulatoryDuty, l.Others, l.SalesTaxRate, l.AstRate, l.IncomeTaxRate, l.AddOnProfit,
-                    l.CostExcludingTax, l.SellingValueExcludingTax, l.SourceRow, l.Id,
+                    l.CostExcludingTax, l.ChargesAllocated, l.SellingValueExcludingTax, l.SourceRow, l.Id,
                     ItemName = l.ItemTypeId != null ? _db.ItemTypes.Where(i => i.Id == l.ItemTypeId).Select(i => i.Name).FirstOrDefault() : null,
                 })
                 .ToListAsync();
@@ -158,7 +158,7 @@ namespace MyApp.Api.Controllers
                     Quantity = l.Quantity, Unit = l.Unit, AssessedValue = l.AssessedValue, CustomsDuty = l.CustomsDuty,
                     Acd = l.Acd, RegulatoryDuty = l.RegulatoryDuty, SalesTaxRate = l.SalesTaxRate, SalesTax = c.SalesTax,
                     AstRate = l.AstRate, ValueAddedTax = c.Ast, OtherTax = l.Others, IncomeTaxRate = l.IncomeTaxRate,
-                    IncomeTax = c.IncomeTax, LandedCost = l.CostExcludingTax, InputTax = Math.Round(input, 2),
+                    IncomeTax = c.IncomeTax, Charges = l.ChargesAllocated, LandedCost = l.CostExcludingTax + l.ChargesAllocated, InputTax = Math.Round(input, 2),
                     SellingValue = l.SellingValueExcludingTax, Mode = l.Mode,
                 };
             }).ToList();

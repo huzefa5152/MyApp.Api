@@ -1590,6 +1590,32 @@ status_check(suite21, "alice re-posts Beta's arrival GDs", s, 403)
 s, _ = request("GET", f"/api/import-tax/company/{beta['id']}/gd-register", token=tokens["bob"])
 status_check(suite21, "bob reads Beta's own GD register", s, 200)
 
+# 5e. Letters of credit and GD charges (2026-10-05). The by-id routes resolve
+# the company from the stored row, never the request.
+s, _ = request("GET", f"/api/import-lcs/company/{beta['id']}", token=tokens["alice"])
+status_check(suite21, "alice lists Beta's letters of credit", s, 403)
+s, _ = request("POST", f"/api/import-lcs/company/{beta['id']}", token=tokens["alice"],
+               body={"lcNumber": "PROBE-LC", "openedOn": "2026-09-01"})
+status_check(suite21, "alice records an LC on Beta", s, 403)
+s, beta_lc = request("POST", f"/api/import-lcs/company/{beta['id']}", token=admin,
+                     body={"lcNumber": f"TI-LC-{uuid.uuid4().hex[:8]}", "openedOn": "2026-09-01"})
+if s == 200 and isinstance(beta_lc, dict):
+    s, _ = request("PUT", f"/api/import-lcs/{beta_lc['id']}", token=tokens["alice"],
+                   body={"lcNumber": "HIJACK", "openedOn": "2026-09-01"})
+    status_check(suite21, "alice edits Beta's LC by id", s, 403)
+    s, _ = request("DELETE", f"/api/import-lcs/{beta_lc['id']}", token=tokens["alice"])
+    status_check(suite21, "alice deletes Beta's LC by id", s, 403)
+    s, lcs = request("GET", f"/api/import-lcs/company/{beta['id']}", token=tokens["bob"])
+    check(suite21, "bob lists Beta's own LCs",
+          s == 200 and any(x.get("id") == beta_lc["id"] for x in (lcs or [])), f"status {s}")
+    request("DELETE", f"/api/import-lcs/{beta_lc['id']}", token=admin)
+else:
+    check(suite21, "a Beta LC to probe", False, f"status {s}")
+for method in ("GET", "POST"):
+    s, _ = request(method, "/api/import-consignments/999999999/charges", token=tokens["alice"],
+                   body={"kind": "freight", "amount": 1} if method == "POST" else None)
+    status_check(suite21, f"alice {method} charges on an unknown GD", s, 404)
+
 # 6. A PO format by id answers 404 to a tenant that cannot reach its company.
 s, fmts = request("GET", f"/api/poformats?companyId={beta['id']}", token=admin)
 beta_fmt = next((f for f in (fmts or []) if f.get("companyId") == beta["id"]), None)

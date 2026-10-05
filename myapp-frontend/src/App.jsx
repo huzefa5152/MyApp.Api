@@ -34,6 +34,7 @@ import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import GdCostingImportPage from "./pages/GdCostingImportPage";
 import ImportConsignmentsPage from "./pages/ImportConsignmentsPage";
 import ImportTaxDeskPage from "./pages/ImportTaxDeskPage";
+import ImportLcsPage from "./pages/ImportLcsPage";
 import ImportGuidePage from "./pages/ImportGuidePage";
 import SalesReportPage from "./pages/SalesReportPage";
 import InvoiceSalesDetailPage from "./pages/InvoiceSalesDetailPage";
@@ -174,6 +175,7 @@ export default function App() {
               run/write page above. */}
           <Route path="/imports/consignments" element={<RequirePermission permission="importcosting.consignments.view"><ImportConsignmentsPage /></RequirePermission>} />
           <Route path="/imports/tax-desk" element={<RequirePermission permission="importcosting.taxdesk.view"><ImportTaxDeskPage /></RequirePermission>} />
+          <Route path="/imports/lcs" element={<RequirePermission permission="importcosting.lc.view"><ImportLcsPage /></RequirePermission>} />
           {/* Reports */}
           <Route path="/reports/sales" element={<RequirePermission anyPrefix="reports.sales"><SalesReportPage /></RequirePermission>} />
           <Route path="/reports/invoice-sales-detail" element={<RequirePermission permission="reports.invoicedetail.view"><InvoiceSalesDetailPage /></RequirePermission>} />

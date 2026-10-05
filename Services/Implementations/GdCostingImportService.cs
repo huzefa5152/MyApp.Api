@@ -246,6 +246,30 @@ namespace MyApp.Api.Services.Implementations
                 asNew[i] = matches[i].MayBeNewItem && chosen[i] == null && (choice?.AsNewItem ?? false);
             }
 
+            // Customs unit -> selling unit (2026-10-05). A line matched to ONE
+            // item whose company registered this GD unit as its customs unit is
+            // converted before anything reasons about its quantity: qty x factor,
+            // in the item's own unit. A line echoed back from the review already
+            // carries the item's unit, so it is never converted twice.
+            var conversions = await _db.CompanyItemTypeSettings.AsNoTracking()
+                .Where(s => s.CompanyId == companyId && s.CustomsUnit != null && s.CustomsUnitFactor > 0m)
+                .Select(s => new { s.ItemTypeId, s.CustomsUnit, s.CustomsUnitFactor })
+                .ToDictionaryAsync(s => s.ItemTypeId, s => (Unit: s.CustomsUnit!, Factor: s.CustomsUnitFactor!.Value));
+            var converted = new string?[rows.Count];
+            if (conversions.Count > 0)
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    var eff = Effective(matches[i], chosen[i], asNew[i]);
+                    if (eff.Count != 1 || !index.Balances.TryGetValue(eff[0], out var bal)) continue;
+                    var itemUnit = bal.ItemType?.UOM;
+                    var unit = (rows[i].Unit ?? "").Trim();
+                    if (unit.Length == 0 || string.IsNullOrWhiteSpace(itemUnit) || FbrUomAliases.SameUnit(unit, itemUnit)) continue;
+                    if (!conversions.TryGetValue(bal.ItemTypeId, out var cv) || !FbrUomAliases.SameUnit(unit, cv.Unit)) continue;
+                    var qty = Math.Round(rows[i].Quantity * cv.Factor, 4, MidpointRounding.AwayFromZero);
+                    converted[i] = $"Converted from {FormatQty(rows[i].Quantity)} {unit} at {FormatQty(cv.Factor)} {itemUnit} per {unit} = {FormatQty(qty)} {itemUnit}.";
+                    rows[i] = rows[i] with { Quantity = qty, Unit = itemUnit };
+                }
+
             var outcomes = MatchAll(rows, index, mode, matches, chosen, leaveOut, asNew);
 
             preview.Lines = rows
@@ -267,6 +291,7 @@ namespace MyApp.Api.Services.Implementations
                     && (choiceI?.ConfirmNewStock ?? (newArrivalsMode || asNew[i]));
                 line.NameMismatch = matches[i].NameMismatch;
                 line.ItemAutoMatched = matches[i].MayBeNewItem;
+                if (converted[i] != null) line.MatchNote = JoinNotes(converted[i]!, line.MatchNote);
                 line.AsNewItem = asNew[i];
                 if (matches[i].RawIds.Count > 1 || matches[i].NameMismatch)
                     line.Candidates = matches[i].RawIds
@@ -1107,7 +1132,7 @@ namespace MyApp.Api.Services.Implementations
                 if (unit.Length > 0 && !string.IsNullOrWhiteSpace(itemUnit) && !FbrUomAliases.SameUnit(unit, itemUnit))
                     problems.Add(Problem(GdLineRules.Fields.Unit,
                         $"This GD says {unit}, but {matched.ItemType?.Name ?? "the item"} is kept in {itemUnit}. " +
-                        "Use the item's unit, or check the quantity."));
+                        $"Set how many {itemUnit} make one {unit}, or use the item's unit."));
                 return problems;
             }
 

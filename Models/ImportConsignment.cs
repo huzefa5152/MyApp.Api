@@ -136,5 +136,17 @@ namespace MyApp.Api.Models
         /// <see cref="OpeningStockLot"/> follows.
         /// </summary>
         public ICollection<ImportConsignmentLine> Lines { get; set; } = new List<ImportConsignmentLine>();
+
+        /// <summary>GD-level costs (freight, clearing, wharfage, demurrage...)
+        /// spread into the lines' landed cost (2026-10-05).</summary>
+        public ICollection<ImportConsignmentCharge> Charges { get; set; } = new List<ImportConsignmentCharge>();
+
+        /// <summary>The letter of credit the goods shipped against, if any
+        /// (2026-10-05). Plain column: an LC is optional record-keeping and must
+        /// never block deleting a GD.</summary>
+        public int? ImportLcId { get; set; }
+
+        /// <summary>Bill of lading / airway bill number (2026-10-05).</summary>
+        public string? BlNumber { get; set; }
     }
 }

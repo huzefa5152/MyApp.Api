@@ -89,6 +89,11 @@ export const previewGdCostingManual = ({ companyId, lines, mode, source }) =>
     { lines, ...(source ? { source } : {}) },
     { params: { companyId, ...(mode ? { mode } : {}) } });
 
+// How many of an item's own unit make one customs unit (Kg, Dozen, Set) for
+// this company; factor <= 0 clears it. Preview then converts such lines.
+export const setGdCustomsUnit = (companyId, body) =>
+  httpClient.put(`/spreadsheet-import/gd-costing/company/${companyId}/customs-unit`, body);
+
 export const commitGdCosting = (body) =>
   httpClient.post("/spreadsheet-import/gd-costing/commit", body, { timeout: LONG });
 

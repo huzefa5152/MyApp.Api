@@ -54,5 +54,12 @@ namespace MyApp.Api.Services.Interfaces
         /// </summary>
         Task<ImportConsignmentLineUpdateResultDto> UpdateLineAsync(
             int consignmentId, int lineId, UpdateImportConsignmentLineDto dto, int userId);
+    
+        /// <summary>GD-level charges (2026-10-05): list, add, delete. Add and
+        /// delete re-spread every charge by assessed value into the lines'
+        /// landed cost and re-post the GD.</summary>
+        Task<List<ImportConsignmentChargeDto>> GetChargesAsync(int consignmentId);
+        Task<ImportConsignmentChargesResultDto> AddChargeAsync(int consignmentId, CreateImportConsignmentChargeDto dto);
+        Task<ImportConsignmentChargesResultDto> DeleteChargeAsync(int consignmentId, int chargeId);
     }
 }
