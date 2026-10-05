@@ -2461,6 +2461,12 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, onLayoutSave
                     <span>GST ({gstRate}%):</span>
                     <strong>Rs. {gstAmount.toLocaleString()}</strong>
                   </div>
+                  {billsMode && Number(freightCharges) > 0 && (
+                    <div style={styles.totalsRow}>
+                      <span>Freight / cartage:</span>
+                      <strong>Rs. {Number(freightCharges).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                    </div>
+                  )}
                   {furtherTaxAmount > 0 && (
                     <div style={styles.totalsRow}>
                       <span>Further tax ({furtherTaxRate}%):</span>
