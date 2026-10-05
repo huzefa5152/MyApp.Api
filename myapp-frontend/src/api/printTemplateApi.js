@@ -20,6 +20,9 @@ export const getTemplatesByCompany = createInFlightRead(
 export const getTemplate = (companyId, templateType) =>
   httpClient.get(`/printtemplates/company/${companyId}/${templateType}`);
 
+export const getAccountingReportInvoiceLayout = (companyId) =>
+  httpClient.get(`/printtemplates/company/${companyId}/accounting-report-invoice-layout`);
+
 export const upsertTemplate = (companyId, templateType, htmlContent, templateJson, editorMode) =>
   templateWrites.put(`/printtemplates/company/${companyId}/${templateType}`, {
     htmlContent,

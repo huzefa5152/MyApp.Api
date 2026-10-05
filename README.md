@@ -293,6 +293,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-05
 
+- Add company-specific Print and PDF exports to all seven accounting reports, using the bill/invoice letterhead, fonts and table colors with 12 mm margins and repeated column headings.
 - Show freight/cartage below GST in commercial bill creation and edit totals when a charge is entered.
 - Add optional freight/cartage charges to commercial bills, including creation, editing, printing, template fields, customer balances and accounting. Sales-tax and FBR totals exclude freight. Existing bills default to zero freight.
 

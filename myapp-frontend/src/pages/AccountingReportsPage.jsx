@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   MdAssessment, MdBusiness, MdDownload, MdWarning, MdCheckCircle, MdRefresh,
+  MdPrint, MdPictureAsPdf,
 } from "react-icons/md";
 import { useCompany } from "../contexts/CompanyContext";
 import { usePermissions } from "../contexts/PermissionsContext";
@@ -8,6 +9,11 @@ import { colors, formStyles, dropdownStyles } from "../theme";
 import { todayYmd } from "../utils/dateInput";
 import useIsNarrow from "../hooks/useIsNarrow";
 import { downloadCsv } from "../utils/csvExport";
+import { getAccountingReportInvoiceLayout } from "../api/printTemplateApi";
+import { selectReportInvoiceTemplate } from "../utils/invoiceReportBranding";
+import { buildTraderAccountingReport } from "../utils/traderAccountingReportPrint";
+import { downloadAccountingReportPdf } from "../utils/accountingReportPdf";
+import { writeAndPrint } from "../utils/printDocument";
 import {
   getBalanceSheet, getProfitAndLoss, getAgedReceivables, getAgedPayables,
   getCashBook, getExpenseReport, getTaxControl,
@@ -56,11 +62,18 @@ export default function AccountingReportsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [printBusy, setPrintBusy] = useState("");
+  const [printError, setPrintError] = useState("");
+  const [dataScope, setDataScope] = useState("");
+  const requestSequence = useRef(0);
 
   const companyId = selectedCompany?.id;
   const current = TABS.find((t) => t.key === tab);
+  const scope = `${companyId}|${tab}|${from}|${to}`;
+  const ready = !!data && dataScope === scope && !loading && !error;
 
   const load = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     if (!companyId) { setData(null); return; }
     setLoading(true); setError("");
     try {
@@ -74,14 +87,37 @@ export default function AccountingReportsPage() {
         "tax-control": () => getTaxControl(companyId, from, to),
       };
       const { data: d } = await fetchers[tab]();
+      if (sequence !== requestSequence.current) return;
       setData(d);
+      setDataScope(`${companyId}|${tab}|${from}|${to}`);
     } catch (err) {
+      if (sequence !== requestSequence.current) return;
       setData(null);
       setError(err.response?.data?.error || "Could not load this report.");
-    } finally { setLoading(false); }
+    } finally { if (sequence === requestSequence.current) setLoading(false); }
   }, [companyId, tab, from, to]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); return () => { requestSequence.current++; }; }, [load]);
+
+  const exportReport = async (mode) => {
+    const popup = mode === "print" ? window.open("", "_blank") : null;
+    setPrintBusy(mode); setPrintError("");
+    try {
+      if (!ready) throw new Error("Report scope changed");
+      if (mode === "print" && !popup) throw new Error("Popup blocked");
+      const company = { ...selectedCompany };
+      const { data: layout } = await getAccountingReportInvoiceLayout(company.id);
+      const template = selectReportInvoiceTemplate(layout ? [layout] : [], company.id);
+      const period = current.period === "asOf" ? `As at ${fmtDate(to)}` : `${fmtDate(from)} – ${fmtDate(to)}`;
+      const html = await buildTraderAccountingReport(tab, data, company, template, current.label, period);
+      if (mode === "print") writeAndPrint(popup, html);
+      else await downloadAccountingReportPdf(html, `${tab}-${to}`,
+        ["balance-sheet", "profit-and-loss", "expenses"].includes(tab) ? "portrait" : "landscape");
+    } catch {
+      popup?.close();
+      setPrintError("Could not prepare the report. Check your connection and allow print popups, then try again.");
+    } finally { setPrintBusy(""); }
+  };
 
   const exportCsv = () => {
     if (!data) return;
@@ -166,7 +202,7 @@ export default function AccountingReportsPage() {
 
   const body = () => {
     if (!companyId) return <div style={st.empty}>Select a company to run a report.</div>;
-    if (loading) return <div style={st.empty}>Loading…</div>;
+    if (loading || (data && dataScope !== scope)) return <div style={st.empty}>Loading…</div>;
     if (error) return <div style={{ ...formStyles.error, margin: 0 }}>{error}</div>;
     if (!data) return <div style={st.empty}>Nothing to show.</div>;
 
@@ -319,8 +355,14 @@ export default function AccountingReportsPage() {
           <button style={st.secondaryBtn} onClick={load} disabled={!companyId}>
             <MdRefresh size={16} /> Refresh
           </button>
-          <button style={st.primaryBtn} onClick={exportCsv} disabled={!data}>
+          <button style={st.primaryBtn} onClick={exportCsv} disabled={!ready}>
             <MdDownload size={16} /> Export CSV
+          </button>
+          <button style={st.secondaryBtn} onClick={() => exportReport("print")} disabled={!ready || !!printBusy}>
+            <MdPrint size={18} /> {printBusy === "print" ? "Preparing…" : "Print"}
+          </button>
+          <button style={st.secondaryBtn} onClick={() => exportReport("pdf")} disabled={!ready || !!printBusy}>
+            <MdPictureAsPdf size={18} /> {printBusy === "pdf" ? "Building…" : "PDF"}
           </button>
         </div>
       </div>
@@ -365,6 +407,7 @@ export default function AccountingReportsPage() {
         ))}
       </div>
 
+      {printError && <div role="alert" style={formStyles.error}>{printError}</div>}
       {body()}
     </div>
   );
