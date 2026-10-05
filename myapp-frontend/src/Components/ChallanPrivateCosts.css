@@ -27,3 +27,8 @@
   .challan-private-mobile-label { display: block; font-size: 11px; font-weight: 600; color: #5f6d7e; margin-bottom: 3px; text-align: left; }
 }
 @media print { .challan-private-costs { display: none !important; } }
+
+.challan-private-add-supplier { min-height: 44px; border: 0; background: transparent; padding: 4px 0; color: #00695c; font: inherit; font-weight: 600; cursor: pointer; }
+.challan-private-add-supplier:disabled { opacity: .45; cursor: not-allowed; }
+.challan-private-add-supplier:focus-visible { outline: 2px solid #0d47a1; outline-offset: 2px; }
+.challan-private-supplier-modal { position: fixed; inset: 0; z-index: 1200; }

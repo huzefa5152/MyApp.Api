@@ -293,6 +293,7 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-05
 
+- Add suppliers directly while creating or editing delivery challans using the shared supplier form, automatically select the new supplier, and clarify actual cost as a per-unit price.
 
 - Restrict MCP catalog configuration to the seed administrator, with a searchable user picker, account identity and company context. Users connect AI applications through OAuth and can review or revoke their connections.
 

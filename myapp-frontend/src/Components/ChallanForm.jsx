@@ -361,7 +361,7 @@ export default function ChallanForm({ onClose, onSaved, companyId }) {
                 units={units}
                 itemsLabel="Items"
               />
-              <ChallanPrivateCosts items={items} onItemsChange={setItems} suppliers={suppliers} />
+              <ChallanPrivateCosts companyId={companyId} items={items} onItemsChange={setItems} suppliers={suppliers} />
             </div>
 
             {savedChallanId && <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "#fff3e0", color: "#92400e" }}>
