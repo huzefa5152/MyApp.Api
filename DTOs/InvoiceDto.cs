@@ -16,6 +16,9 @@
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
+        public decimal FreightCharges { get; set; }
+        public decimal CommercialTotal => GrandTotal + FreightCharges;
+        public string CommercialAmountInWords => MyApp.Api.Helpers.NumberToWordsConverter.Convert(CommercialTotal);
         public string AmountInWords { get; set; } = "";
         public string? PaymentTerms { get; set; }
 
@@ -210,6 +213,7 @@
 
     public class CreateInvoiceDto
     {
+        public decimal FreightCharges { get; set; }
         public string? Notes { get; set; }
         /// <summary>Optional Bill-print grouping for the new bill (true = grouped
         /// by item type; null/false = individual, the default). The Tax Invoice
@@ -302,6 +306,7 @@
     /// </summary>
     public class CreateStandaloneInvoiceDto
     {
+        public decimal FreightCharges { get; set; }
         public string? Notes { get; set; }
         /// <summary>Optional Bill-print grouping for the new bill (true = grouped
         /// by item type; null/false = individual, the default). The Tax Invoice
@@ -550,6 +555,7 @@
 
     public class UpdateInvoiceDto
     {
+        public decimal? FreightCharges { get; set; }
         public string? Notes { get; set; }
         /// <summary>
         /// Optional new bill date. When null, the existing date is preserved.

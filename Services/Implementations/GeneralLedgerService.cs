@@ -175,7 +175,7 @@ namespace MyApp.Api.Services.Implementations
             // Invoices (incl. credit/debit notes). Demo/cancelled/zero rows are
             // excluded here AND guarded inside PostInvoiceAsync.
             var invoiceIds = await _context.Invoices.AsNoTracking()
-                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled && i.GrandTotal != 0
+                .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled && i.GrandTotal + i.FreightCharges != 0
                             && (lockDate == null || i.Date > lockDate))
                 .OrderBy(i => i.Date).ThenBy(i => i.Id)
                 .Select(i => i.Id).ToListAsync();
@@ -448,7 +448,7 @@ namespace MyApp.Api.Services.Implementations
                     .Select(i => new
                     {
                         i.Id, i.ClientId, ClientName = i.Client!.Name, i.Date, i.DueDate,
-                        Gross = i.GrandTotal - i.WithholdingTaxAmount, i.AmountPaid,
+                        Gross = i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount, i.AmountPaid,
                     })
                     .ToListAsync();
 

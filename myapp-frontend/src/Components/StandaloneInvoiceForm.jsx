@@ -1,3 +1,4 @@
+import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdAdd, MdDelete, MdCheck, MdInfo, MdLock, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { createStandaloneInvoice } from "../api/invoiceApi";
@@ -160,6 +161,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   const [whtMode, setWhtMode] = useState("none");
   const [whtRate, setWhtRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
+  const [freightCharges, setFreightCharges] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
   // Document Type is locked to Sale Invoice (4) on the no-challan flow.
@@ -632,13 +634,15 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
   }, 0);
   const gstAmount = Math.round(subtotal * (parseFloat(gstRate) || 0) / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
+  const freightResolved = Number(freightCharges || 0);
+  const commercialTotal = grandTotal + freightResolved;
 
   // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
   // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
   const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
-  const balanceDue = grandTotal - whtResolved;
+  const balanceDue = Math.max(0, commercialTotal - whtResolved);
 
   const rowErrors = (r) => {
     const errs = [];
@@ -698,6 +702,7 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
         // rate + the typed amount. Backend recomputes/clamps the amount.
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
+        freightCharges: Number(freightCharges || 0),
         paymentTerms: paymentTerms || null,
         notes: notes.trim() || null,
         scenarioId: scenarioCode || null,
@@ -1431,12 +1436,13 @@ export default function StandaloneInvoiceForm({ companyId, company, onClose, onS
                         {showSRO && " · SRO Schedule + Item No referenced for reduced-rate items"}
                       </p>
 
-                      {/* Totals */}
+                      {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
+                        {/* Totals */}
                       <div style={styles.totalsBox}>
                         <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                         <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                         <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                          <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span>{billsMode ? "Commercial Total:" : "Grand Total:"}</span><span>Rs. {(billsMode ? commercialTotal : grandTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                         {whtResolved > 0 && (
                           <>

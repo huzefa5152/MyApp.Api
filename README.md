@@ -294,6 +294,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ## Changelog
 
+### 2026-10-05
+- Add optional freight/cartage charges to commercial bills, including creation, editing, printing, template fields, customer balances and accounting. Sales-tax and FBR totals exclude freight. Existing bills default to zero freight.
+
+
 ### 2026-10-03 - Auto and Custom document numbers (Customize)
 
 - Customer Ledger has a compact balance summary and clearer transaction layout. Accounting report selections refresh automatically, searches wait for a typing pause, and custom ranges validate before refreshing. Admin navigation, cards, forms and tables use tighter responsive spacing while phone controls remain touch-friendly.

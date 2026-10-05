@@ -1,3 +1,4 @@
+import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { MdSearch, MdCheck, MdInfo, MdLock, MdAdd, MdPersonAdd, MdExpandMore, MdExpandLess } from "react-icons/md";
 import { getPendingChallansByCompany } from "../api/challanApi";
@@ -129,6 +130,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   const [whtMode, setWhtMode] = useState("none");
   const [whtRate, setWhtRate] = useState("");
   const [whtAmount, setWhtAmount] = useState("");
+  const [freightCharges, setFreightCharges] = useState(0);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
   // 2026-05-12: todayYmd() returns LOCAL "YYYY-MM-DD" — pre-fix the UTC
@@ -769,13 +771,15 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
   }, 0);
   const gstAmount = Math.round(subtotal * gstRate / 100 * 100) / 100;
   const grandTotal = subtotal + gstAmount;
+  const freightResolved = Number(freightCharges || 0);
+  const commercialTotal = grandTotal + freightResolved;
 
   // Withholding tax — rate-mode = % of the gross (subtotal + GST), rounded to
   // 2dp exactly like the backend (Math.round(x*100)/100). Fixed-amount mode =
   // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
   const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
-  const balanceDue = grandTotal - whtResolved;
+  const balanceDue = Math.max(0, commercialTotal - whtResolved);
 
   const allPricesValid = allItems.length > 0 && allItems.every((i) => itemPrices[i.id] && parseFloat(itemPrices[i.id]) > 0);
   // Every line must be complete before the bill can be created: a classification
@@ -909,6 +913,7 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
         // rate + the typed amount. Backend recomputes/clamps the amount.
         withholdingTaxRate: whtMode === "rate" ? (parseFloat(whtRate) || 0) : null,
         withholdingTaxAmount: whtResolved,
+        freightCharges: Number(freightCharges || 0),
         paymentTerms: paymentTermsToSave,
         notes: notes.trim() || null,
         documentType: documentType || null,
@@ -1888,12 +1893,13 @@ export default function InvoiceForm({ companyId, company, onClose, onSaved, pref
                           )}
                         </p>
 
+                        {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} />}
                         {/* Totals */}
                         <div style={styles.totalsBox}>
                           <div style={styles.totalRow}><span>Subtotal:</span><span>Rs. {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           <div style={styles.totalRow}><span>GST ({gstRate}%):</span><span>Rs. {gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                           <div style={{ ...styles.totalRow, fontWeight: 700, fontSize: "1rem", borderTop: "2px solid #333", paddingTop: "0.5rem" }}>
-                            <span>Grand Total:</span><span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <span>{billsMode ? "Commercial Total:" : "Grand Total:"}</span><span>Rs. {(billsMode ? commercialTotal : grandTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
                           {whtResolved > 0 && (
                             <>

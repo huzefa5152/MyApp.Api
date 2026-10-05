@@ -170,10 +170,10 @@ namespace MyApp.Api.Services.Implementations
                          .GroupBy(a => a.InvoiceId!.Value))
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
-                // Cap at the COLLECTIBLE (GrandTotal − withheld), not GrandTotal:
+                // Cap at the commercial collectible including freight, less withheld:
                 // the withheld slice is settled by the customer at invoice time,
                 // so only the reduced balance can be received.
-                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+                var collectible = CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
                 var newTotal = inv.AmountPaid + grp.Sum(a => a.Amount + a.AdjustmentAmount);
                 if (newTotal > collectible)
                     throw new InvalidOperationException(
@@ -355,7 +355,7 @@ namespace MyApp.Api.Services.Implementations
             foreach (var grp in dto.Allocations.Where(a => a.InvoiceId.HasValue).GroupBy(a => a.InvoiceId!.Value))
             {
                 var inv = invoices.First(i => i.Id == grp.Key);
-                var collectible = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount);
+                var collectible = CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges);
                 var paidByOthers = await _context.PaymentAllocations
                     .Where(pa => pa.InvoiceId == grp.Key && pa.PaymentId != id && !pa.Payment.IsCancelled)
                     .SumAsync(pa => (decimal?)(pa.Amount + pa.AdjustmentAmount)) ?? 0m;

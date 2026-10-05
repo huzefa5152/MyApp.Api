@@ -348,7 +348,7 @@ namespace MyApp.Api.Services.Implementations
                 .Select(g => new { ClientId = g.Key, N = g.Count() })
                 .ToDictionaryAsync(x => x.ClientId, x => x.N);
 
-            // Money: AR = Σ(GrandTotal − AmountPaid) over sale invoices, LESS any
+            // Money: AR includes freight and deducts withheld tax and receipts, LESS any
             // money held on account for the client.
             //
             // Invoice-settling receipts are already reflected in AmountPaid, so
@@ -360,7 +360,7 @@ namespace MyApp.Api.Services.Implementations
                 .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                             && i.DocumentType != 9 && i.DocumentType != 10)
                 .GroupBy(i => i.ClientId)
-                .Select(g => new { ClientId = g.Key, Bal = g.Sum(i => i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid) })
+                .Select(g => new { ClientId = g.Key, Bal = g.Sum(i => i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount - i.AmountPaid) })
                 .ToDictionaryAsync(x => x.ClientId, x => x.Bal);
 
             var onAccountByClient = await (
@@ -475,9 +475,9 @@ namespace MyApp.Api.Services.Implementations
                     Id = i.Id,
                     Number = i.InvoiceNumber.ToString(),
                     Date = i.Date,
-                    Amount = i.GrandTotal,
-                    Balance = i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid,
-                    Status = (i.GrandTotal - i.WithholdingTaxAmount - i.AmountPaid) <= 0 ? "Paid" : (i.AmountPaid > 0 ? "Partial" : "Unpaid"),
+                    Amount = i.GrandTotal + i.FreightCharges,
+                    Balance = i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount - i.AmountPaid,
+                    Status = (i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount - i.AmountPaid) <= 0 ? "Paid" : (i.AmountPaid > 0 ? "Partial" : "Unpaid"),
                 })
                 .ToListAsync();
 
@@ -515,10 +515,10 @@ namespace MyApp.Api.Services.Implementations
             // Debits — sale invoices (exclude demo / cancelled / credit+debit notes).
             var invoices = await _context.Invoices.AsNoTracking()
                 .Where(i => i.ClientId == clientId && !i.IsDemo && !i.IsCancelled && i.DocumentType != 9 && i.DocumentType != 10)
-                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal })
+                .Select(i => new { i.Id, i.InvoiceNumber, i.Date, i.GrandTotal, i.FreightCharges })
                 .ToListAsync();
             foreach (var i in invoices)
-                entries.Add(new ClientStatementEntryDto { Date = i.Date, Type = "Sales Invoice", Reference = "INV-" + i.InvoiceNumber, DocId = i.Id, Debit = i.GrandTotal });
+                entries.Add(new ClientStatementEntryDto { Date = i.Date, Type = "Sales Invoice", Reference = "INV-" + i.InvoiceNumber, DocId = i.Id, Debit = CommercialTotalCalculator.Total(i.GrandTotal, i.FreightCharges) });
 
             // Credits — receipt allocations against this client's sale invoices.
             // One row per allocation (matching the reference), so Σ credits ==

@@ -206,7 +206,12 @@ def first_item_type_id(base: str, token: str) -> int | None:
     st, rows = http("GET", "/api/itemtypes", base, token=token)
     if st == 200 and isinstance(rows, list) and rows:
         return rows[0].get("id")
-    return None
+    st, created = http("POST", "/api/itemtypes", base, token=token, body={
+        "name": "_test Accounting Classified Goods", "hsCode": "8481.1000", "uom": "Pcs",
+        "saleType": "Goods at Standard Rate (default)"})
+    if st not in (200, 201):
+        raise Fatal(f"Cannot prepare classified test item: {st} {created}")
+    return created["id"]
 
 
 def make_account(base: str, token: str, cid: int, name: str, group_id: int, acct_type: str) -> int:
@@ -1736,6 +1741,34 @@ def suite_tax_control(base: str, token: str, cid: int):
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
+def suite_freight_receivables(base, token, cid):
+    S = "Commercial freight accounting"
+    st, customer = http("POST", "/api/clients", base, token=token,
+                        body={"name": "_test Freight Customer", "companyId": cid, "address": "x", "phone": "1"})
+    check(S, "isolated freight customer created", st in (200, 201), str(customer))
+    if st not in (200, 201):
+        return
+    before = report(base, token, cid, "profit-loss", period="allPeriods")
+    st, invoice = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "companyId": cid, "clientId": customer["id"], "date": pkt_date(0), "gstRate": 18,
+        "freightCharges": 250, "items": [{"description": "_test freight accounting", "quantity": 1,
+        "unitPrice": 1000, "uom": "Pcs", "itemTypeId": first_item_type_id(base, token)}]})
+    check(S, "freight invoice created", st in (200, 201), str(invoice))
+    if st not in (200, 201):
+        return
+    check(S, "tax total unaffected", eq(invoice.get("grandTotal"), 1180))
+    ledger = report(base, token, cid, "customer-ledger", period="allPeriods", clientId=customer["id"])
+    check(S, "GL AR debit includes freight", eq(ledger.get("totalDebit"), 1430), str(ledger))
+    check(S, "GL closing equals invoice collectible", eq(ledger.get("closingBalance"), invoice.get("balanceDue")))
+    outstanding = report(base, token, cid, "customer-outstanding", period="allPeriods", clientId=customer["id"])
+    rows = outstanding.get("rows") or []
+    check(S, "outstanding report agrees with commercial AR", len(rows) == 1 and
+          eq(rows[0].get("grandTotal"), 1430) and eq(rows[0].get("outstanding"), ledger.get("closingBalance")), str(outstanding))
+    after = report(base, token, cid, "profit-loss", period="allPeriods")
+    check(S, "freight credited as revenue without output tax", eq(float(after.get("totalIncome", 0))-
+          float(before.get("totalIncome", 0)), 1250), str(after))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default=DEFAULT_BASE)
@@ -1768,6 +1801,7 @@ def main() -> int:
         suite_statements_financial(args.base, token, cid)
         suite_documents(args.base, token, cid)
         suite_tax_control(args.base, token, cid)
+        suite_freight_receivables(args.base, token, cid)
         other_id = suite_isolation(args.base, token, cid, ctx)
     except Fatal as e:
         print(f"\n!! FATAL: {e}")

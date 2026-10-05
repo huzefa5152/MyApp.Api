@@ -431,6 +431,7 @@ namespace MyApp.Api.Services.Implementations
                 PaymentMode = ctx.Details ? bill.PaymentMode : null,
                 PoNumber = ctx.Details ? bill.PoNumber : null,
                 PoDate = ctx.Details ? bill.PoDate : null,
+                FreightCharges = ctx.Details ? bill.FreightCharges : 0m,
                 WithholdingTaxRate = ctx.Details ? bill.WithholdingTaxRate : null,
                 WithholdingTaxAmount = ctx.Details ? bill.WithholdingTaxAmount : 0,
                 PrintGroupBillByItemType = bill.PrintGroupBillByItemType,

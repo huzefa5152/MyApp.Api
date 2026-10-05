@@ -219,7 +219,7 @@ namespace MyApp.Api.Services.Implementations
         public async Task PostInvoiceAsync(Invoice invoice)
         {
             if (!await IsEnabledAsync(invoice.CompanyId)) return;
-            if (invoice.IsDemo || invoice.IsCancelled || invoice.GrandTotal == 0)
+            if (invoice.IsDemo || invoice.IsCancelled || invoice.GrandTotal + invoice.FreightCharges == 0)
             {
                 await RemoveForSourceAsync(invoice.CompanyId, SourceDocType.Invoice, invoice.Id);
                 return;
@@ -243,11 +243,12 @@ namespace MyApp.Api.Services.Implementations
             };
             var net = invoice.GrandTotal - invoice.GSTAmount;
             // Withholding tax (income-tax) splits the AR line: the customer
-            // settles only the collectible (GrandTotal − WHT); the withheld
+            // settles the commercial total including freight, less WHT; the withheld
             // slice is a receivable reclaimable from FBR (Manager parity). WHT is
             // 0 on notes (out of scope), so this is a no-op there.
             var wht = invoice.WithholdingTaxAmount;
-            var collectible = invoice.GrandTotal - wht;
+            var collectible = CommercialTotalCalculator.Collectible(
+                invoice.GrandTotal, wht, invoice.FreightCharges);
 
             // Split the net across the per-line resolved income accounts (design
             // §4/§6). Inventory item-type lines resolve to line → item-type
@@ -279,6 +280,10 @@ namespace MyApp.Api.Services.Implementations
             foreach (var kv in byAccount)
                 AddLine(lines, kv.Key, debit: isCreditNote ? kv.Value : 0m,
                     credit: isCreditNote ? 0m : kv.Value, invoice.DivisionId, label);
+            if (invoice.FreightCharges != 0m)
+                AddLine(lines, sales.Id, debit: isCreditNote ? invoice.FreightCharges : 0m,
+                    credit: isCreditNote ? 0m : invoice.FreightCharges,
+                    invoice.DivisionId, $"{label} — Freight / cartage charges");
             if (outputTax != null)
                 AddLine(lines, outputTax.Id, debit: isCreditNote ? invoice.GSTAmount : 0m,
                     credit: isCreditNote ? 0m : invoice.GSTAmount, invoice.DivisionId, label);

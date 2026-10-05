@@ -283,7 +283,14 @@ def first_item_type_id(base: str, token: str):
     standalone bill lines the tests create, per the item-type-required rule."""
     _, its = http("GET", "/api/itemtypes", base, token=token)
     rows = its if isinstance(its, list) else (its.get("items") or its.get("data") or [])
-    return rows[0]["id"] if rows else None
+    if rows:
+        return rows[0]["id"]
+    status, created = http("POST", "/api/itemtypes", base, token=token, body={
+        "name": "_test Basic Classified Goods", "hsCode": "8481.1000", "uom": "Pcs",
+        "saleType": "Goods at Standard Rate (default)"})
+    if status not in (200, 201):
+        raise RuntimeError(f"Cannot prepare classified test item: {status} {created}")
+    return created["id"]
 
 
 def test_standalone_bill(base: str, token: str, company: dict, client: dict) -> dict | None:
@@ -906,6 +913,45 @@ def test_twelve_decimal_precision(base: str, token: str, company: dict, client: 
               f"got {f2.get('grandTotal')}")
 
 
+def test_freight_charges(base, token, company, client, classified):
+    suite = "Commercial freight charges"
+    item_type = first_item_type_id(base, token)
+    common = {"companyId": company["id"], "clientId": client["id"],
+              "date": pkt_date_iso(), "gstRate": 18, "freightCharges": 250.50,
+              "withholdingTaxRate": 10}
+    standalone = dict(common, items=[{"description": "Freight regression goods", "quantity": 1,
+                      "uom": "Pcs", "unitPrice": 1000, "itemTypeId": item_type}])
+    status, bill = http("POST", "/api/invoices/standalone", base, token=token, body=standalone)
+    check(suite, "standalone accepts freight", status in (200, 201), str(bill))
+    if status not in (200, 201):
+        return
+    check(suite, "freight does not change tax total", bill.get("grandTotal") == 1180)
+    check(suite, "GST excludes freight", bill.get("gstAmount") == 180)
+    check(suite, "commercial total adds freight", bill.get("commercialTotal") == 1430.50)
+    check(suite, "withholding base excludes freight", bill.get("withholdingTaxAmount") == 118)
+    check(suite, "balance includes freight", bill.get("balanceDue") == 1312.50)
+    for kind, expected in [("bill", 1430.50), ("tax-invoice", 1180)]:
+        st, printed = http("GET", f"/api/invoices/{bill['id']}/print/{kind}", base, token=token)
+        check(suite, f"{kind} print total", st == 200 and abs(float(printed.get("grandTotal", 0))-int(expected + 0.5)) < 0.01, str(printed))
+    edit = {"gstRate": 18, "withholdingTaxRate": 10,
+            "items": [dict(i, unitPrice=2000) for i in bill["items"]]}
+    st, updated = http("PUT", f"/api/invoices/{bill['id']}", base, token=token, body=edit)
+    check(suite, "ordinary edit preserves freight", st == 200 and updated.get("freightCharges") == 250.50, str(updated))
+    st, bad = http("PUT", f"/api/invoices/{bill['id']}", base, token=token, body=dict(edit, freightCharges=-1))
+    check(suite, "negative freight rejected", st in (400, 422), str(bad))
+    st, cleared = http("PUT", f"/api/invoices/{bill['id']}", base, token=token, body=dict(edit, freightCharges=0))
+    check(suite, "zero clears freight", st == 200 and cleared.get("commercialTotal") == cleared.get("grandTotal"), str(cleared))
+    status, dc = http("POST", f"/api/deliverychallans/company/{company['id']}", base, token=token, body={
+        "clientId": client["id"], "deliveryDate": pkt_date_iso(), "poDate": pkt_date_iso(), "poNumber": "FREIGHT-TEST",
+        "items": [{"description": "Freight linked goods", "quantity": 1, "unit": "Pcs", "itemTypeId": (classified or {}).get("id", item_type)}]})
+    check(suite, "freight challan created", status in (200, 201), str(dc))
+    if status in (200, 201):
+        st, linked = http("POST", "/api/invoices", base, token=token, body=dict(common,
+            challanIds=[dc["id"]], items=[{"deliveryItemId": dc["items"][0]["id"], "unitPrice": 1000}]))
+        check(suite, "challan bill accepts freight with unchanged tax", st in (200, 201) and
+              linked.get("grandTotal") == 1180 and linked.get("commercialTotal") == 1430.50, str(linked))
+
+
 # ── Main ───────────────────────────────────────────────────────────
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
@@ -919,6 +965,7 @@ def main() -> int:
     token, company, client = setup(args.base, args.admin_user, args.admin_pw)
 
     # Pick one fully-FBR-classified ItemType so the challan lands billable.
+    first_item_type_id(args.base, token)  # Ensure a fresh database has a synthetic classified fixture.
     classified = pick_classified_item_type(args.base, token)
     if classified:
         print(f"\n=== Picked classified ItemType id={classified['id']} name='{classified['name']}' "
@@ -948,6 +995,7 @@ def main() -> int:
         test_link_multiple_deliveries(args.base, token, company, client, standalone,
                                       challan if bill_from_challan else None)
         test_private_challan_costs(args.base, token, company, client)
+        test_freight_charges(args.base, token, company, client, classified)
     finally:
         teardown(args.base, token, company, args.keep)
 

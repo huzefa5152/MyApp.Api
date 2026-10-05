@@ -553,7 +553,7 @@ namespace MyApp.Api.Services.Implementations
                 foreach (var i in await invoices.Select(i => new
                 {
                     i.Id, i.InvoiceNumber, i.Date, i.ClientId, i.DocumentType,
-                    Owed = i.GrandTotal - i.WithholdingTaxAmount, i.PaymentTerms, i.AmountPaid,
+                    Owed = i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount, i.PaymentTerms, i.AmountPaid,
                 }).ToListAsync())
                 {
                     // Notes carry no AmountPaid of their own, so only real invoices
@@ -1038,7 +1038,7 @@ namespace MyApp.Api.Services.Implementations
                 var q = _context.Invoices.AsNoTracking()
                     .Where(i => i.CompanyId == companyId && !i.IsDemo && !i.IsCancelled
                              && i.DocumentType != 9 && i.DocumentType != 10
-                             && i.GrandTotal - i.WithholdingTaxAmount > i.AmountPaid);
+                             && i.GrandTotal + i.FreightCharges - i.WithholdingTaxAmount > i.AmountPaid);
                 if (window.From.HasValue) q = q.Where(i => i.Date >= window.From!.Value);
                 if (window.To.HasValue) q = q.Where(i => i.Date <= window.To!.Value);
                 if (partyId.HasValue) q = q.Where(i => i.ClientId == partyId.Value);
@@ -1057,7 +1057,7 @@ namespace MyApp.Api.Services.Implementations
                 rows = (await q.Select(i => new
                 {
                     i.Id, i.InvoiceNumber, i.Date, i.DueDate, i.ClientId,
-                    Party = i.Client!.Name, i.GrandTotal, i.GSTAmount,
+                    Party = i.Client!.Name, GrandTotal = i.GrandTotal + i.FreightCharges, i.GSTAmount,
                     i.WithholdingTaxAmount, i.AmountPaid,
                     Division = i.Division != null ? i.Division.Name : null,
                 }).ToListAsync())
@@ -1238,7 +1238,7 @@ namespace MyApp.Api.Services.Implementations
                         it.Description, it.ItemTypeName, it.ItemTypeId,
                         it.Quantity, it.UOM, it.UnitPrice, it.LineTotal,
                         DocSubtotal = it.Invoice.Subtotal, DocTax = it.Invoice.GSTAmount,
-                        it.Invoice.GrandTotal, it.Invoice.AmountPaid, it.Invoice.DueDate,
+                        it.Invoice.GrandTotal, it.Invoice.FreightCharges, it.Invoice.AmountPaid, it.Invoice.DueDate,
                         it.Invoice.WithholdingTaxAmount,
                         Division = it.Invoice.Division != null ? it.Invoice.Division.Name : null,
                     })
@@ -1269,7 +1269,7 @@ namespace MyApp.Api.Services.Implementations
                         Tax = Apportion(x.LineTotal, x.DocSubtotal, x.DocTax),
                         Total = x.LineTotal + Apportion(x.LineTotal, x.DocSubtotal, x.DocTax),
                         PaymentStatus = PaymentStatusCalculator.Status(
-                            WithholdingTaxCalculator.Collectible(x.GrandTotal, x.WithholdingTaxAmount),
+                            CommercialTotalCalculator.Collectible(x.GrandTotal, x.WithholdingTaxAmount, x.FreightCharges),
                             x.AmountPaid, x.DueDate).ToString(),
                         Division = x.Division,
                     })
@@ -1383,7 +1383,7 @@ namespace MyApp.Api.Services.Implementations
                 var docTotals = await _context.Invoices.AsNoTracking()
                     .Where(i => docs.Contains(i.Id))
                     .GroupBy(_ => 1)
-                    .Select(g => new { Tax = g.Sum(x => x.GSTAmount), Grand = g.Sum(x => x.GrandTotal) })
+                    .Select(g => new { Tax = g.Sum(x => x.GSTAmount), Grand = g.Sum(x => x.GrandTotal + x.FreightCharges) })
                     .FirstOrDefaultAsync();
                 report.Totals["tax"] = docTotals?.Tax ?? 0m;
                 report.Totals["total"] = docTotals?.Grand ?? 0m;

@@ -662,6 +662,43 @@ def test_detail_and_print(base, token, a, portal_a, inv_a1):
           st == 200 and len(empty.get("items", [])) == 0, f"got {empty}")
 
 
+def test_freight_portal(base, token, company, item_type_id):
+    suite = "8. Commercial freight portal"
+    customer = make_client(base, token, company["id"], "_test Isolated Freight Portal")
+    st, invoice = http("POST", "/api/invoices/standalone", base, token=token, body={
+        "companyId": company["id"], "clientId": customer["id"], "date": TODAY_ISO,
+        "gstRate": 18, "freightCharges": 400, "items": [{"description": "Freight portal goods",
+        "quantity": 1, "unitPrice": 1000, "uom": "Pcs", "itemTypeId": item_type_id}]})
+    check(suite, "freight bill fixture created", st in (200, 201), str(invoice))
+    if st not in (200, 201):
+        return
+    st, portal = http("POST", "/api/customer-portals", base, token=token,
+                      body={"companyId": company["id"], "clientId": customer["id"]})
+    check(suite, "isolated customer portal created", st in (200, 201), str(portal))
+    if st not in (200, 201):
+        return
+    public_token = portal["publicUrl"].rsplit("/", 1)[-1]
+    path = f"/api/public/customer-portal/{public_token}"
+    st, detail = public(f"{path}/invoices/{invoice['invoiceNumber']}", base)
+    check(suite, "public detail includes freight", st == 200 and detail.get("freightCharges") == 400, str(detail))
+    check(suite, "public amount and balance are commercial", st == 200 and
+          detail.get("grandTotal") == 1580 and detail.get("balance") == 1580, str(detail))
+    check(suite, "public GST excludes freight", st == 200 and detail.get("gstAmount") == 180, str(detail))
+    st, header = public(path, base)
+    check(suite, "portal summary includes commercial collectible", st == 200 and
+          header.get("summary", {}).get("totalAmount") == 1580, str(header))
+    for kind, expected in [("Bill", 1580), ("TaxInvoice", 1180)]:
+        st, _ = http("PUT", f"/api/printtemplates/company/{company['id']}/{kind}", base, token=token,
+                      body={"htmlContent": "<div>{{invoiceNumber}} {{fmt grandTotal}}</div>"})
+        check(suite, f"{kind} template fixture saved", st in (200, 201, 204))
+        st, _ = http("PUT", f"/api/customer-portals/{portal['id']}/document-type", base, token=token,
+                      body={"documentType": kind})
+        check(suite, f"portal selects {kind}", st == 200)
+        st, rendered = public(f"{path}/invoices/{invoice['invoiceNumber']}/print", base)
+        data = rendered.get("printData", {}) if isinstance(rendered, dict) else {}
+        check(suite, f"{kind} public print total", st == 200 and data.get("grandTotal") == expected, str(rendered))
+
+
 # ── Reporter ───────────────────────────────────────────────────────
 def print_report() -> int:
     by_suite: dict[str, list[tuple[str, str]]] = {}
@@ -700,6 +737,7 @@ def main() -> int:
                                 portal_a, portal_a2, portal_b, item_type_id)
         test_payment_status(args.base, token, a, a1, portal_a, item_type_id)
         test_detail_and_print(args.base, token, a, portal_a, inv_a1)
+        test_freight_portal(args.base, token, b, item_type_id)
     finally:
         teardown(args.base, token, [a, b], args.keep)
     return print_report()

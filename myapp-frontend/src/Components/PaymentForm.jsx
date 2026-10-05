@@ -231,13 +231,18 @@ export default function PaymentForm({ mode, companyId, preset, editPayment = nul
         let shown = (data.items || [])
           .filter((d) => !d.isCancelled)
           .map((d) => {
-            const balanceDue = d.balanceDue ?? (d.grandTotal - (d.amountPaid || 0));
+            const gross = isReceipt
+              ? (d.commercialTotal ?? ((d.grandTotal || 0) + (d.freightCharges || 0)))
+              : d.grandTotal;
+            const balanceDue = d.balanceDue ?? (isReceipt
+              ? Math.max(0, gross - (d.withholdingTaxAmount || 0) - (d.amountPaid || 0))
+              : d.grandTotal - (d.amountPaid || 0));
             const own = ownRaw[d.id] ? (ownRaw[d.id].cash + ownRaw[d.id].adj) : 0;
             return {
               id: d.id,
               number: isReceipt ? d.invoiceNumber : d.purchaseBillNumber,
               date: d.date,
-              grandTotal: d.grandTotal,
+              grandTotal: gross,
               balanceDue,
               available: balanceDue + own,   // headroom this payment can settle
             };

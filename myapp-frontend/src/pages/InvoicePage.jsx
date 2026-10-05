@@ -1079,7 +1079,12 @@ export default function InvoicePage({ mode = "invoices" }) {
                     {inv.indentNo && <p style={cardStyles.text}><strong>Indent:</strong> {inv.indentNo}</p>}
                     {inv.site && <p style={cardStyles.text}><strong>Site:</strong> {inv.site}</p>}
                     <p style={cardStyles.text}><strong>Date:</strong> {new Date(inv.date).toLocaleDateString()}</p>
-                    <p style={cardStyles.text}><strong>Grand Total:</strong> Rs. {inv.grandTotal?.toLocaleString()}</p>
+                    {isBillsMode && inv.freightCharges > 0 && (
+                      <p style={cardStyles.text}><strong>Freight / cartage:</strong> Rs. {inv.freightCharges.toLocaleString()}</p>
+                    )}
+                    <p style={cardStyles.text}><strong>{isBillsMode ? "Commercial Total:" : "Grand Total:"}</strong> Rs. {(isBillsMode
+                      ? (inv.commercialTotal ?? ((inv.grandTotal || 0) + (inv.freightCharges || 0)))
+                      : inv.grandTotal)?.toLocaleString()}</p>
                     {/* Payment status + balance — clickable to see all receipts
                         applied to this invoice and how much remains. */}
                     {!inv.isCancelled && (

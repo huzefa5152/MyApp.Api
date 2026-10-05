@@ -209,6 +209,7 @@ namespace MyApp.Api.Services.Implementations
             GSTRate = inv.GSTRate,
             GSTAmount = inv.GSTAmount,
             GrandTotal = inv.GrandTotal,
+            FreightCharges = inv.FreightCharges,
             AmountInWords = inv.AmountInWords,
             PaymentTerms = inv.PaymentTerms,
             Notes = inv.Notes,
@@ -216,11 +217,11 @@ namespace MyApp.Api.Services.Implementations
             WithholdingTaxAmount = inv.WithholdingTaxAmount,
             DueDate = inv.DueDate,
             AmountPaid = inv.AmountPaid,
-            // Collectible = GrandTotal − WHT; balance due + status settle against
+            // Collectible = commercial total − WHT; balance due + status settle against
             // it so the withheld slice reads as settled at invoice time (Manager parity).
-            BalanceDue = PaymentStatusCalculator.BalanceDue(WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount), inv.AmountPaid),
-            PaymentStatus = PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount), inv.AmountPaid, inv.DueDate).ToString(),
-            DaysOverdue = PaymentStatusCalculator.DaysOverdue(WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount), inv.AmountPaid, inv.DueDate),
+            BalanceDue = PaymentStatusCalculator.BalanceDue(CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges), inv.AmountPaid),
+            PaymentStatus = PaymentStatusCalculator.Status(CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges), inv.AmountPaid, inv.DueDate).ToString(),
+            DaysOverdue = PaymentStatusCalculator.DaysOverdue(CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges), inv.AmountPaid, inv.DueDate),
             DocumentType = inv.DocumentType,
             PaymentMode = inv.PaymentMode,
             FbrInvoiceNumber = inv.FbrInvoiceNumber,
@@ -539,6 +540,7 @@ namespace MyApp.Api.Services.Implementations
 
         public async Task<InvoiceDto> CreateAsync(CreateInvoiceDto dto)
         {
+            var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
 
@@ -850,6 +852,7 @@ namespace MyApp.Api.Services.Implementations
                     GSTRate = dto.GSTRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
+                    FreightCharges = freightCharges,
                     WithholdingTaxRate = dto.WithholdingTaxRate,
                     WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
@@ -963,6 +966,7 @@ namespace MyApp.Api.Services.Implementations
         //     against the picked UOMs.
         public async Task<InvoiceDto> CreateStandaloneAsync(CreateStandaloneInvoiceDto dto)
         {
+            var freightCharges = CommercialTotalCalculator.Validate(dto.FreightCharges);
             var company = await _companyRepo.GetByIdAsync(dto.CompanyId);
             if (company == null) throw new KeyNotFoundException("Company not found.");
 
@@ -1195,6 +1199,7 @@ namespace MyApp.Api.Services.Implementations
                     GSTRate = dto.GSTRate,
                     GSTAmount = gstAmount,
                     GrandTotal = grandTotal,
+                    FreightCharges = freightCharges,
                     WithholdingTaxRate = dto.WithholdingTaxRate,
                     WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(dto.WithholdingTaxRate, grandTotal, dto.WithholdingTaxAmount),
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
@@ -1326,6 +1331,8 @@ namespace MyApp.Api.Services.Implementations
         {
             var invoice = await _invoiceRepo.GetByIdAsync(id);
             if (invoice == null) return null;
+            var freightCharges = dto.FreightCharges.HasValue
+                ? CommercialTotalCalculator.Validate(dto.FreightCharges.Value) : invoice.FreightCharges;
 
             if (!IsInvoiceEditable(invoice))
                 throw new InvalidOperationException(invoice.IsCancelled
@@ -1437,6 +1444,7 @@ namespace MyApp.Api.Services.Implementations
                 }
 
                 invoice.GSTRate = dto.GSTRate;
+                invoice.FreightCharges = freightCharges;
                 invoice.WithholdingTaxRate = dto.WithholdingTaxRate;
                 invoice.WithholdingTaxAmount = dto.WithholdingTaxAmount;   // reflowed below from rate/amount mode
                 invoice.PaymentTerms = dto.PaymentTerms;
@@ -1576,6 +1584,8 @@ namespace MyApp.Api.Services.Implementations
                 invoice.GSTAmount = Math.Round(invoice.Subtotal * invoice.GSTRate / 100, 2);
                 invoice.GrandTotal = invoice.Subtotal + invoice.GSTAmount;
                 invoice.WithholdingTaxAmount = WithholdingTaxCalculator.Resolve(invoice.WithholdingTaxRate, invoice.GrandTotal, invoice.WithholdingTaxAmount);
+                if (dto.FreightCharges.HasValue && invoice.AmountPaid > CommercialTotalCalculator.Collectible(invoice.GrandTotal, invoice.WithholdingTaxAmount, invoice.FreightCharges))
+                    throw new InvalidOperationException("The commercial bill total cannot be less than receipts already allocated to this bill.");
                 invoice.AmountInWords = NumberToWordsConverter.Convert(invoice.GrandTotal);
 
                 // Any edit invalidates a previous validation
@@ -2798,7 +2808,7 @@ namespace MyApp.Api.Services.Implementations
             }
             else
             {
-                var status = PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount), original.AmountPaid, original.DueDate).ToString();
+                var status = PaymentStatusCalculator.Status(CommercialTotalCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount, original.FreightCharges), original.AmountPaid, original.DueDate).ToString();
                 if (status != "Paid")
                     throw new InvalidOperationException("Only a fully paid invoice can have a Credit/Debit Note issued against it (FBR is off for this company). Record the payment first, or void the bill instead.");
             }
@@ -2982,6 +2992,7 @@ namespace MyApp.Api.Services.Implementations
                     GSTRate       = gstRate,
                     GSTAmount     = gstAmount,
                     GrandTotal    = grandTotal,
+                    FreightCharges = !partial && docType == 10 ? original.FreightCharges : 0m,
                     AmountInWords = NumberToWordsConverter.Convert(grandTotal),
                     PaymentTerms  = original.PaymentTerms,   // carries [SNxxx] scenario tag
                     DocumentType  = docType,
@@ -3089,7 +3100,7 @@ namespace MyApp.Api.Services.Implementations
             }
             else
             {
-                if (MyApp.Api.Helpers.PaymentStatusCalculator.Status(WithholdingTaxCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount), original.AmountPaid, original.DueDate)
+                if (MyApp.Api.Helpers.PaymentStatusCalculator.Status(CommercialTotalCalculator.Collectible(original.GrandTotal, original.WithholdingTaxAmount, original.FreightCharges), original.AmountPaid, original.DueDate)
                     != MyApp.Api.Helpers.PaymentStatus.Paid)
                     throw new InvalidOperationException("FBR integration is off for this company, so a bill can only be corrected once it is fully paid. Edit the bill directly, or record the remaining payment first.");
             }
@@ -3349,14 +3360,17 @@ namespace MyApp.Api.Services.Implementations
                 // Round to whole rupees for the printed bill so the displayed
                 // grand total matches AmountInWords. Stored DB value keeps
                 // 2-dp precision; this is purely a print transformation.
-                GrandTotal = NumberToWordsConverter.RoundForDisplay(inv.GrandTotal),
+                FreightCharges = inv.FreightCharges,
+                TotalBeforeFreight = inv.GrandTotal,
+                CommercialTotal = CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges),
+                GrandTotal = NumberToWordsConverter.RoundForDisplay(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 // Recompute words at print time so old bills (whose stored
                 // AmountInWords was written under the prior ceil rule) stay in
                 // sync with the rounded total without needing a re-save.
-                AmountInWords = NumberToWordsConverter.Convert(inv.GrandTotal),
+                AmountInWords = NumberToWordsConverter.Convert(CommercialTotalCalculator.Total(inv.GrandTotal, inv.FreightCharges)),
                 WithholdingTaxRate = inv.WithholdingTaxRate,
                 WithholdingTaxAmount = inv.WithholdingTaxAmount,
-                BalanceDueAfterWht = WithholdingTaxCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount),
+                BalanceDueAfterWht = CommercialTotalCalculator.Collectible(inv.GrandTotal, inv.WithholdingTaxAmount, inv.FreightCharges),
                 PaymentTerms = inv.PaymentTerms,
                 Items = groupBill
                     ? inv.Items

@@ -170,13 +170,16 @@ export const SAMPLE_DATA = {
     subtotal: 150000,
     gstRate: 18,
     gstAmount: 27000,
-    grandTotal: 177000,
+    grandTotal: 181000,
+    freightCharges: 4000,
+    totalBeforeFreight: 177000,
+    commercialTotal: 181000,
     // Withholding income tax (s.153): the preview must show the block
     // templates render only when withholdingTaxAmount is non-zero.
     withholdingTaxRate: 4.5,
     withholdingTaxAmount: 7965,
     balanceDueAfterWht: 169035,
-    amountInWords: "One Hundred Seventy Seven Thousand Rupees Only",
+    amountInWords: "One Hundred Eighty One Thousand Rupees Only",
     items: [
       { sNo: 1, quantity: 10, description: "Sample Item One", itemTypeName: "Pneumatic", unitPrice: 8000, lineTotal: 80000 },
       { sNo: 2, quantity: 5, description: "Sample Item Two", itemTypeName: "Pneumatic", unitPrice: 14000, lineTotal: 70000 },

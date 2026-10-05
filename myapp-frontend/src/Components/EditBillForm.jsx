@@ -1,3 +1,4 @@
+import FreightChargesField from "./FreightChargesField";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toLocalYmd, todayYmd } from "../utils/dateInput";
 import { MdInfo, MdAdd, MdCheckCircle, MdWarning, MdInventory2, MdLightbulb, MdRefresh, MdError, MdExpandMore, MdExpandLess, MdAutoAwesome, MdDelete } from "react-icons/md";
@@ -175,6 +176,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   const [billNumberOk, setBillNumberOk] = useState(true);
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
+  const [freightCharges, setFreightCharges] = useState(0);
   const [paymentMode, setPaymentMode] = useState("");
   const [documentType, setDocumentType] = useState(4);
   const [loading, setLoading] = useState(true);
@@ -300,6 +302,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
         const pt = data.paymentTerms ?? "";
         setPaymentTerms(pt);
         setNotes(data.notes || "");
+        setFreightCharges(data.freightCharges ?? 0);
         setPaymentMode(data.paymentMode ?? "");
         setDocumentType(data.documentType ?? 4);
 
@@ -898,7 +901,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
   // the typed PKR value. Balance due the buyer pays = grandTotal − WHT.
   const computedWhtAmount = Math.round(grandTotal * (parseFloat(whtRate) || 0)) / 100;
   const whtResolved = whtMode === "none" ? 0 : (whtMode === "rate" ? computedWhtAmount : (parseFloat(whtAmount) || 0));
-  const balanceDue = grandTotal - whtResolved;
+  const balanceDue = Math.max(0, grandTotal + (billsMode ? Number(freightCharges || 0) : 0) - whtResolved);
 
   // Field-level gating booleans, derived once for clarity:
   //   • lockNonItemType — locks every BILL-level field outside the
@@ -1255,6 +1258,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
           withholdingTaxAmount: whtResolved,
           paymentTerms: ptToSave,
           notes: notes.trim() || null,
+          ...(billsMode ? { freightCharges: Number(freightCharges || 0) } : {}),
           documentType: documentType || null,
           paymentMode: paymentMode || null,
           ...divisionPayload,
@@ -1929,6 +1933,8 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   </button>
                 )}
 
+                {billsMode && <FreightChargesField value={freightCharges} onChange={setFreightCharges} disabled={lockNonItemType || !invoice?.isEditable} />}
+
                 {/* Totals */}
                 <div style={styles.totalsBox}>
                   <div style={styles.totalsRow}>
@@ -1941,7 +1947,7 @@ export default function EditBillForm({ invoiceId, onClose, onSaved, readOnly: re
                   </div>
                   <div style={{ ...styles.totalsRow, borderTop: `1px solid ${colors.cardBorder}`, paddingTop: "0.5rem", marginTop: "0.5rem" }}>
                     <span style={{ fontWeight: 700 }}>Grand Total:</span>
-                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {grandTotal.toLocaleString()}</strong>
+                    <strong style={{ fontSize: "1.1rem", color: colors.blue }}>Rs. {(grandTotal + (billsMode ? Number(freightCharges || 0) : 0)).toLocaleString()}</strong>
                   </div>
                   {whtResolved > 0 && (
                     <>

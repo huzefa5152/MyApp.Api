@@ -97,6 +97,7 @@ namespace MyApp.Api.DTOs
         public decimal GSTRate { get; set; }
         public decimal GSTAmount { get; set; }
         public decimal GrandTotal { get; set; }
+        public decimal FreightCharges { get; set; }
         public decimal WithholdingTaxAmount { get; set; }
         /// <summary>Grand total less withholding tax — what the customer actually owes.</summary>
         public decimal Total { get; set; }
