@@ -2282,3 +2282,12 @@ body.dl-body--locked {
     background: rgba(0, 0, 0, 0.5);
   }
 }
+
+/* Keep the profile/MCP header usable for long account names on phones. */
+@media (max-width: 575.98px) {
+  .dl-topbar { padding: 0 0.75rem; gap: 0.5rem; }
+  .dl-topbar__breadcrumb { min-width: 0; overflow-wrap: anywhere; }
+  .dl-topbar__user-wrapper { min-width: 0; max-width: 55%; }
+  .dl-topbar__user { max-width: 100%; min-height: 44px; }
+  .dl-topbar__user > span { min-width: 0; overflow-wrap: anywhere; }
+}

@@ -33,12 +33,10 @@ public sealed class McpCatalogController(AppDbContext db, IPermissionService per
         public List<string> SelectedTools { get; set; } = [];
     }
 
-    private async Task<bool> CanManageAsync(int uid) => management.IsSeedAdmin(Actor) ||
-        (uid != Actor && await permissions.HasPermissionAsync(Actor, "users.manage.update") &&
-            await permissions.HasPermissionAsync(Actor, "rbac.userroles.assign") && await management.CanManageUserAsync(Actor, uid));
+    // Premium grants belong exclusively to the primary administrator.
+    private Task<bool> CanManageAsync(int uid) => Task.FromResult(management.IsSeedAdmin(Actor));
 
-    private async Task<bool> CanReadAsync(int uid) => uid == Actor || (await permissions.HasPermissionAsync(Actor,
-        "users.manage.view") && await management.CanManageUserAsync(Actor, uid));
+    private Task<bool> CanReadAsync(int uid) => Task.FromResult(uid == Actor || management.IsSeedAdmin(Actor));
 
     // Normal signed-in users can read and narrow their own access even when MCP is disabled.
     [HttpGet("{userId:int}")]
@@ -73,8 +71,7 @@ public sealed class McpCatalogController(AppDbContext db, IPermissionService per
         });
     }
 
-    // Manual guards are deliberate: self-service only narrows grants; managers require both
-    // user update and assignment authority, bounded by the existing management hierarchy.
+    // Users may narrow their own preferences; only the seed admin may change grants.
     [HttpPut("{userId:int}")]
     public async Task<IActionResult> Save(int userId, [FromBody] SaveRequest request)
     {

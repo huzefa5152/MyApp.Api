@@ -57,7 +57,7 @@ namespace MyApp.Api.Controllers
             var rows = await db.Roles.Include(r => r.RolePermissions).ThenInclude(rp => rp.Permission)
                 .Where(r => r.IsSystemRole || (tenant != null && r.TenantAdminUserId == tenant))
                 .ToListAsync();
-            var grantable = await GrantableKeysAsync(permissions, userId);
+            var grantable = new HashSet<string>(await permissions.GetUserPermissionsAsync(userId), StringComparer.OrdinalIgnoreCase);
             return rows.Where(r => RoleGrantableBy(r, grantable)).Select(r => r.Id).ToHashSet();
         }
 
@@ -85,7 +85,10 @@ namespace MyApp.Api.Controllers
             IPermissionService permissions, int userId)
         {
             var mine = await permissions.GetUserPermissionsAsync(userId);
-            return new HashSet<string>(mine, StringComparer.OrdinalIgnoreCase);
+            var grantable = new HashSet<string>(mine, StringComparer.OrdinalIgnoreCase);
+            if (!permissions.IsSeedAdmin(userId))
+                grantable.RemoveWhere(key => key.StartsWith("mcp.", StringComparison.OrdinalIgnoreCase));
+            return grantable;
         }
 
         /// <summary>
@@ -127,7 +130,7 @@ namespace MyApp.Api.Controllers
 
             if (!_scope.IsSeedAdmin(me))
             {
-                var grantable = await GrantableKeysAsync(_permissions, me);
+                var grantable = new HashSet<string>(await _permissions.GetUserPermissionsAsync(me), StringComparer.OrdinalIgnoreCase);
                 roles = roles
                     .Where(r => (r.IsSystemRole || (tenant != null && r.TenantAdminUserId == tenant)) && RoleGrantableBy(r, grantable))
                     .ToList();

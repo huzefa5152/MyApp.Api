@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
 import {
   MdSmartToy, MdAdd, MdClose, MdContentCopy, MdBlock, MdCheckCircle, MdInfo, MdVpnKey, MdHistory, MdChevronLeft, MdChevronRight,
@@ -140,7 +141,7 @@ export default function McpMyAccessPanel() {
       <p style={s.p}>Restart Claude Desktop and ask it to list your companies.</p></> },
     web: { label: "Claude.ai / ChatGPT", steps: <>
       <p style={s.p}>These connect by signing in with your ERP login, so there is no token to paste.</p>
-      <p style={s.p}>1. In Claude (Settings, Connectors, Add custom connector) or ChatGPT (Settings, Connectors, Developer mode, Create), enter this address:</p>
+      <p style={s.p}>1. In Claude (Settings, Connectors, Add custom connector) or ChatGPT (Settings, Apps, Advanced settings, Developer mode, Create), enter this address:</p>
       <CopyBlock label="address" text={url} />
       <p style={s.p}>2. When it asks you to sign in, you land on this site. Sign in with your ERP username and password, choose the companies, and press Approve.</p>
       <p style={s.p}>3. Back in the chat, ask it to list your companies. To disconnect, revoke the “(sign-in)” token below.</p></> },
@@ -151,13 +152,14 @@ export default function McpMyAccessPanel() {
     <div style={status.enabled ? s.ok : s.warn}>
       {status.enabled ? <MdCheckCircle style={s.bannerIcon} /> : <MdInfo style={s.bannerIcon} />}
       <div>
-        <strong>{status.enabled ? "MCP is enabled for your account" : "MCP is not enabled for your account"}</strong>
+        <strong>{status.enabled ? "MCP is enabled for your account" : "Purchase this premium feature"}</strong>
         <div style={s.sub}>{status.enabled
           ? "Your AI tools can use the companies you choose, with the same limits as your own login. Everything they do is recorded."
-          : "Ask your administrator to enable your connection in Profile → MCP Catalog Access. Then return to MCP Connections to create a token and connect your AI tool."}</div>
+          : "MCP is a premium feature. Contact your administrator to purchase access. The primary administrator will enable your account so you can connect ChatGPT, Claude or another compatible coding agent."}</div>
       </div>
     </div>
 
+    <Link to="/mcp-guide" style={{display:"inline-block",minHeight:44}}>Read the public MCP setup guide</Link>
     <h4 style={s.h4}><MdSmartToy aria-hidden /> Connect your AI</h4>
     <div style={s.pills} role="group" aria-label="AI tool">
       {Object.entries(guides).map(([k, g]) => <button key={k} type="button" aria-pressed={client === k}

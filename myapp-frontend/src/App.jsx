@@ -1,3 +1,4 @@
+import McpGuidePage from "./pages/public/McpGuidePage";
 // App.jsx
 import { lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
@@ -73,6 +74,7 @@ export default function App() {
 
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/mcp-guide" element={<McpGuidePage />} />
 
       {/* NOTE: the PUBLIC customer portal at /portal/<token> is NOT routed
           here. It renders in main.jsx, before and outside this router — the

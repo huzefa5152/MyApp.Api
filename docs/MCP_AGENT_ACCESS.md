@@ -48,8 +48,7 @@ read through the separate document print tool.
 - **Narrowed, never widened.** A token names its companies and scopes; the stricter of the
   user's access and the token's limits wins.
 - **Dedicated profile catalog.** Profile → MCP Catalog Access holds access and write
-  grants plus grouped tool choices. Administrators manage their descendants within their
-  own authority; the seed admin manages all accounts. A user's own choices can only narrow
+  grants plus grouped tool choices. Only the seed admin manages grants for all accounts. A user's own choices can only narrow
   assigned grants. Normal role dialogs contain business roles only. Existing opt-in role
   assignments remain compatible until an explicit profile policy is saved.
 - **Plans are single-use.** A plan lasts ten minutes, belongs to one token, and every gate is
@@ -70,7 +69,7 @@ read through the separate document print tool.
    Open its MCP access link, then enable access and choose its grouped tools in Profile.
    Enable write actions only when needed.
 2. **The tenant administrator creates staff** with business roles and company assignments,
-   then configures each person's MCP Catalog Access from the user's MCP access link.
+   then asks the seed admin to enable each person's premium MCP access from the user's MCP access link.
    Every selected action still needs its normal business permission.
 3. **Tenant staff: use a dedicated user per person or purpose,** and give each only the
    companies they need. Their reach never grows beyond what you assigned.
@@ -129,3 +128,11 @@ Check it works by asking the tool to list your companies. Only your own should a
 - Verify with `python scripts/test_mcp_isolation.py`, `test_mcp_agent_tokens.py`,
   `test_mcp_self_service.py`, `test_mcp_oauth.py`, `test_mcp_writes.py` and
   `test_mcp_documents.py` against a local backend. Design record: `docs/MCP_WRITE_DESIGN.md`.
+
+## Public connection guide
+
+The login page links to `/admin/mcp-guide` (or `/mcp-guide` in a root-mounted local build). It explains ChatGPT developer mode, OAuth sign-in, Claude custom connectors and coding-agent setup. The connection URL is always the current site's origin plus `/mcp`; no company or user data appears in the public guide.
+
+MCP access is a premium feature. Users without active access see a purchase/access notice in their profile and on OAuth consent. Tenant administrators coordinate access with the primary administrator; they cannot grant it through catalog edits, custom roles or new MCP system-role assignments. Users can narrow or pause their own grants. Existing MCP role assignments remain compatible.
+
+Provider availability depends on the provider plan and workspace policy. See [OpenAI's current instructions](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt) and [Claude's current instructions](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).

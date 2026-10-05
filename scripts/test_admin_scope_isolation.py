@@ -379,6 +379,19 @@ s, d = request("GET", "/api/auth/me", token=tUA1)
 check("revoke", "userA1 still authenticated (/auth/me 200)", s == 200, str(s))
 
 # ─────────────────────────────────────────────────────────────────────
+print("\n=== Premium MCP management is seed-only ===")
+s, catalog = request("GET", f"/api/mcp/catalog/{uA1['id']}", token=seed)
+check("mcp", "seed reads worker grants", s == 200 and catalog.get("canManageGrants") is True, str(s))
+if s == 200:
+    body = {key: catalog[key] for key in ("revision", "accessGranted", "writesGranted", "accessEnabled", "writesEnabled")}
+    body["grantedTools"] = [tool["name"] for tool in catalog["tools"] if tool["configurable"] and tool["granted"]]
+    body["selectedTools"] = [tool["name"] for tool in catalog["tools"] if tool["configurable"] and tool["selected"]]
+    for actor, credential in (("parent A", tA), ("sibling B", tB)):
+        status, _ = request("GET", f"/api/mcp/catalog/{uA1['id']}", token=credential)
+        check("mcp", actor + " cannot read another user's MCP grants", status == 404, str(status))
+        status, _ = request("PUT", f"/api/mcp/catalog/{uA1['id']}", token=credential, body=body)
+        check("mcp", actor + " cannot edit another user's MCP grants", status == 404, str(status))
+
 print("\n=== DELETE: removing Administrator A re-parents its tree to seed ===")
 s, d = request("DELETE", f"/api/users/{A['id']}", token=seed)
 check("delete", "seed deletes A -> 200", s == 200, f"{s} {d}")

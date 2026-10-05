@@ -353,7 +353,7 @@ export default function UsersPage() {
                   <span style={{ color: colors.textSecondary, fontSize: "0.82rem" }}>
                     Joined {new Date(u.createdAt).toLocaleDateString()}
                   </span>
-                  {canUpdate && (
+                  {currentUser?.isSeedAdmin === true && (
                     <button style={{ ...styles.rolesBtn, minHeight: 44 }}
                       onClick={() => navigate(`/profile?tab=mcp-catalog&userId=${u.id}`)} title={`MCP access for ${u.fullName}`}>
                       <MdSmartToy aria-hidden style={{ fontSize: "1rem" }} />

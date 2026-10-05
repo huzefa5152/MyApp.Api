@@ -162,7 +162,7 @@ export default function McpCatalogAccessPanel({ targetUserId, onSaved }) {
     </div>
     <p className="mcp-catalog-help">Choose the actions AI may use for this account. Company access and the account’s existing permissions still apply.</p>
     {catalog.legacy && <p className="mcp-catalog-note">Review the choices below and save to keep an explicit list of AI actions.</p>}
-    {!draft.accessGranted && !canManage && <p className="mcp-catalog-note">Your administrator has not enabled AI access for this account. Ask them to review your MCP Catalog Access.</p>}
+    {!draft.accessGranted && !canManage && <p className="mcp-catalog-note">Purchase this premium feature. Contact your administrator to purchase MCP access; the primary administrator will enable your account.</p>}
 
     <fieldset className="mcp-catalog-controls" disabled={saving || conflict}>
       {canManage && <div className="mcp-catalog-switches">
