@@ -425,7 +425,7 @@ export default function ImportGuidePage() {
             <tbody>
               <tr>
                 <td style={st.td}>Inventory</td>
-                <td style={st.td}>Total landed cost of every costed line</td>
+                <td style={st.td}>Total declared value of every costed line (the value the stock screen carries)</td>
                 <td style={st.td}>&mdash;</td>
               </tr>
               <tr>
@@ -441,11 +441,25 @@ export default function ImportGuidePage() {
               <tr>
                 <td style={{ ...st.td, fontWeight: 700 }}>Import Clearing</td>
                 <td style={st.td}>&mdash;</td>
-                <td style={{ ...st.td, fontWeight: 700 }}>The balancing total &mdash; what you owe</td>
+                <td style={{ ...st.td, fontWeight: 700 }}>Landed cost + the taxes above &mdash; what you owe</td>
+              </tr>
+              <tr>
+                <td style={st.td}>Inventory valuation reserve</td>
+                <td style={st.td}>&mdash;</td>
+                <td style={st.td}>Declared value less landed cost (an equity account)</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <p style={st.p}>
+          Stock is carried at its <strong>declared value</strong> everywhere in these books &mdash; the stock
+          screen, the monthly cost of sales, the opening stock &mdash; so the Inventory account takes the same
+          figure and the two always agree. The landed cost is still recorded on every line as the goods'
+          actual cost, for margin. What you owe does not change: Import Clearing is the landed cost plus the
+          import taxes. This applies from 5 Oct 2026, and GDs brought in before then have been
+          re-posted on the same basis.
+        </p>
 
         <h3 style={st.h3}>Import Clearing IS the accounts payable for an import</h3>
         <p style={st.p}>

@@ -25,6 +25,7 @@ namespace MyApp.Api.Data
     {
         private const string ImportClearingRef = "seed:import_clearing";
         private const string AdvanceIncomeTaxRef = "seed:advance_income_tax_imports";
+        private const string ValuationReserveRef = "seed:inventory_valuation_reserve";
 
         public static async Task SeedAsync(AppDbContext db)
         {
@@ -40,6 +41,12 @@ namespace MyApp.Api.Data
             await SeedOneAsync(db, AdvanceIncomeTaxRef, ControlType.AdvanceIncomeTaxOnImports,
                 "Advance Income Tax on Imports", AccountType.Asset,
                 siblingControl: ControlType.WithholdingReceivable, fallbackGroupRef: "seed:assets");
+
+            // 2026-10-05: arrivals post Inventory at declared value; the gap to
+            // landed cost lands in equity, beside the owner's capital.
+            await SeedOneAsync(db, ValuationReserveRef, ControlType.InventoryValuationReserve,
+                "Inventory valuation reserve", AccountType.Equity,
+                siblingControl: ControlType.Capital, fallbackGroupRef: "seed:equity");
         }
 
         private static async Task SeedOneAsync(AppDbContext db, string externalRef, ControlType control,

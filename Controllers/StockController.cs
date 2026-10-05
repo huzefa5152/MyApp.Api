@@ -1127,17 +1127,28 @@ namespace MyApp.Api.Controllers
                 dto.LedgerInventory = Money(Balance(MyApp.Api.Models.Accounting.ControlType.Inventory));
                 dto.LedgerImportClearing = Money(-Balance(MyApp.Api.Models.Accounting.ControlType.ImportClearing));
                 dto.StockVsLedger = Money(dto.StockValue - dto.LedgerInventory.Value);
-                // A New Arrivals GD debits Inventory at its LANDED cost while the
-                // stock walk (and the monthly cost-of-sales relief) carries its
-                // DECLARED value, so each posted arrival leaves exactly
-                // declared - landed between the two. Measured, not assumed.
-                dto.ArrivalsBasisGap = Money(await _context.ImportConsignmentLines.AsNoTracking()
-                    .Where(l => l.ImportConsignment.CompanyId == companyId
-                             && l.ImportConsignment.Mode == GdCostingImportModeNames.NewArrivals
-                             && l.ImportConsignment.ImportClearingCredited > 0m
-                             && l.ImportConsignment.GdDate < monthEnd
+                // A New Arrivals GD posted before 2026-10-05 debited Inventory at
+                // its LANDED cost while the stock walk carries DECLARED value; one
+                // posted since debits declared value. Measured from what each GD
+                // entry ACTUALLY debited, so a GD not yet re-posted shows here and
+                // a re-posted one does not.
+                var arrivalIds = await _context.ImportConsignments.AsNoTracking()
+                    .Where(c => c.CompanyId == companyId && c.Mode == GdCostingImportModeNames.NewArrivals
+                             && c.ImportClearingCredited > 0m && c.GdDate < monthEnd)
+                    .Select(c => c.Id).ToListAsync();
+                var declared = await _context.ImportConsignmentLines.AsNoTracking()
+                    .Where(l => arrivalIds.Contains(l.ImportConsignmentId)
                              && (l.Disposition == GdCostingDisposition.CostOnly || l.Disposition == GdCostingDisposition.StockPosted))
-                    .SumAsync(l => (decimal?)(l.SellingValueExcludingTax - l.CostExcludingTax)) ?? 0m);
+                    .SumAsync(l => (decimal?)l.SellingValueExcludingTax) ?? 0m;
+                var inventoryIds = roles.Where(x => x.ControlType == MyApp.Api.Models.Accounting.ControlType.Inventory)
+                    .Select(x => x.Id).ToList();
+                var debited = await _context.JournalLines.AsNoTracking()
+                    .Where(l => l.JournalEntry.CompanyId == companyId
+                             && l.JournalEntry.SourceDocType == MyApp.Api.Models.Accounting.SourceDocType.ImportConsignment
+                             && l.JournalEntry.SourceDocId != null && arrivalIds.Contains(l.JournalEntry.SourceDocId.Value)
+                             && inventoryIds.Contains(l.AccountId))
+                    .SumAsync(l => (decimal?)(l.Debit - l.Credit)) ?? 0m;
+                dto.ArrivalsBasisGap = Money(declared - debited);
                 dto.UnexplainedLedgerDifference = Money(dto.StockVsLedger.Value - dto.ArrivalsBasisGap);
                 dto.ClearingDifference = Money(dto.ConsignmentsOutstanding - dto.LedgerImportClearing.Value);
             }
@@ -1149,8 +1160,8 @@ namespace MyApp.Api.Controllers
                 dto.Notes.Add("Annex-H1 does not equal the stock screen. Annex-H1 is built from the monthly GD sheet, so an item "
                     + "holding stock with no GD line behind it is the usual cause: restate it from the stock sheet.");
             if (Off(dto.StockVsLedger) && dto.ArrivalsBasisGap != 0m)
-                dto.Notes.Add($"{dto.ArrivalsBasisGap:N2} of the difference is the GDs brought in as new arrivals: the "
-                    + "ledger books them at their landed cost, the stock screen at their declared value.");
+                dto.Notes.Add($"{dto.ArrivalsBasisGap:N2} of the difference is new-arrival GDs still booked at their landed "
+                    + "cost (posted before arrivals moved to declared value). Accounting > re-post arrivals books them at declared value.");
             if (Off(dto.UnexplainedLedgerDifference))
                 dto.Notes.Add(monthEnd > PakistanClock.Today
                     ? "The month is still running: the cost of goods sold for it is posted when the month closes, so the "

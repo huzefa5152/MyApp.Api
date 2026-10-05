@@ -125,5 +125,16 @@ namespace MyApp.Api.Models.Accounting
         /// same reasoning applies here, the other side of the ledger.
         /// </summary>
         AdvanceIncomeTaxOnImports = 21,
+
+        /// <summary>
+        /// Equity reserve for the gap between an arrived GD's DECLARED value and
+        /// its LANDED cost (2026-10-05, maintainer's decision). Stock and the
+        /// monthly cost-of-sales relief carry declared value; a New Arrivals GD
+        /// therefore debits Inventory at declared value, credits Import Clearing
+        /// with what is owed (landed cost + import taxes), and puts the
+        /// difference here -- the same treatment opening stock gets through
+        /// opening equity. Landed cost stays the margin figure (actual cost).
+        /// </summary>
+        InventoryValuationReserve = 23,
     }
 }

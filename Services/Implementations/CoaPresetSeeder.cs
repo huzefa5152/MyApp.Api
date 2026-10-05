@@ -103,6 +103,7 @@ namespace MyApp.Api.Services.Implementations
             // Owner's stake. Capital is control-typed because the posting engine
             // resolves it by role; Drawings is a plain account the owner may rename.
             await Account("capital", "Owner's capital", "equity", AccountType.Equity, ControlType.Capital);
+            await Account("inventory_valuation_reserve", "Inventory valuation reserve", "equity", AccountType.Equity, ControlType.InventoryValuationReserve);
             await Account("drawings", "Owner drawings", "equity", AccountType.Equity);
             await Account("retained", "Retained earnings", "equity", AccountType.Equity, ControlType.RetainedEarnings);
 

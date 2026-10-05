@@ -587,7 +587,7 @@ namespace MyApp.Api.Services.Implementations
                           || l.Disposition == GdCostingDisposition.StockPosted))
                 .ToListAsync();
 
-            decimal inventoryTotal = 0m, inputTaxTotal = 0m, incomeTaxTotal = 0m;
+            decimal inventoryTotal = 0m, landedTotal = 0m, inputTaxTotal = 0m, incomeTaxTotal = 0m;
             foreach (var line in costedLines)
             {
                 // Server truth, recomputed from the line's OWN stored raw inputs
@@ -632,7 +632,14 @@ namespace MyApp.Api.Services.Implementations
                 // amount — wrong on the common path, since a matched line is
                 // the ordinary case from month 2 onward.
                 if (mode == GdCostingImportModeNames.NewArrivals)
-                    inventoryTotal += line.CostExcludingTax;
+                {
+                    // Inventory at DECLARED value, the basis the stock walk and
+                    // the monthly relief run on (2026-10-05). Booked at landed
+                    // cost it left declared - landed between stock and ledger on
+                    // every arrival (Pak Trade KAPE-HC-9509: 586,532.17).
+                    inventoryTotal += line.SellingValueExcludingTax;
+                    landedTotal += line.CostExcludingTax;
+                }
 
                 // Others is folded into Input Tax here on purpose: the sheet's
                 // own row-2 label for that column is "GST /FED", so it is tax
@@ -646,9 +653,13 @@ namespace MyApp.Api.Services.Implementations
             }
 
             inventoryTotal = Money(inventoryTotal);
+            landedTotal = Money(landedTotal);
             inputTaxTotal = Money(inputTaxTotal);
             incomeTaxTotal = Money(incomeTaxTotal);
-            var clearingTotal = inventoryTotal + inputTaxTotal + incomeTaxTotal;
+            // What is OWED is the landed cost plus the import taxes, whatever
+            // the goods are carried at; the declared - landed gap is equity.
+            var clearingTotal = landedTotal + inputTaxTotal + incomeTaxTotal;
+            var reserveTotal = inventoryTotal - landedTotal;
 
             // Task 23: stamp what this posting actually credits onto the
             // consignment itself — the ONE place that knows the true figure
@@ -685,6 +696,14 @@ namespace MyApp.Api.Services.Implementations
                 var advanceIncomeTax = await ResolveAsync(consignment.CompanyId, accounts,
                     ControlType.AdvanceIncomeTaxOnImports, "advance income tax on imports");
                 AddLine(lines, advanceIncomeTax.Id, debit: incomeTaxTotal, credit: 0m, null, label);
+            }
+
+            if (reserveTotal != 0m)
+            {
+                var reserve = await ResolveAsync(consignment.CompanyId, accounts,
+                    ControlType.InventoryValuationReserve, "inventory valuation reserve");
+                AddLine(lines, reserve.Id, debit: reserveTotal < 0m ? -reserveTotal : 0m,
+                    credit: reserveTotal > 0m ? reserveTotal : 0m, null, label);
             }
 
             // The balancing leg — everything this GD's clearance and duties are

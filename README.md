@@ -300,6 +300,8 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-05 — Import Tax Desk, dated restatements
 
+- **GDs brought in as new goods now post Inventory at declared value**, the value the stock screen and the monthly cost of sales use, so the ledger's Inventory agrees with the stock screen. What is owed on the GD (Import Clearing: landed cost plus import taxes) is unchanged; the difference sits in a new equity account, Inventory valuation reserve. GDs posted before the change were re-posted on the same basis.
+
 - **Purchases → Import Tax Desk** for importers, read-only, three views:
   - **Input tax**: the month's sales-tax worksheet by claim month — output tax, import sales tax, the 3% value-added tax and GST/FED on the GDs claimed that month, purchase input tax, the Section 8B 90% cap, what carries forward, what is payable — plus every GD whose input tax lapsed or must be claimed soon. Excel download.
   - **GD register**: every GD line with its assessed value, duties, sales tax, value-added tax, income tax, landed cost and claim status; collectorate and GD type read from the GD number; a "not claimed yet" filter. Excel download.

@@ -1485,12 +1485,20 @@ division-restricted user is refused, never shown a partial return).
   opening balance + lines; a bare sum of journal lines misses the opening and was
   off by the whole opening stock), and the GD dues (credited less payments dated
   by then) against Import Clearing.
-- **Known basis gap:** a New Arrivals GD debits Inventory at LANDED cost while the
-  stock walk and the COGS relief carry DECLARED value, so each posted arrival
-  leaves exactly declared - landed between stock and ledger (Pak Trade
-  KAPE-HC-9509: 586,532.17). The tie-out measures it (`ArrivalsBasisGap`) and
-  reports what remains; fixing the posting basis is the maintainer's decision.
-- Suites: `scripts/test_import_tax_desk.py` (22 checks), harness `gdparts.*` /
+- **Arrivals post at DECLARED value** (2026-10-05, maintainer's decision). A
+  New Arrivals GD debits Inventory at its lines' declared (selling) value -- the
+  basis the stock walk and the monthly COGS relief carry -- credits Import
+  Clearing with what is OWED (landed cost + import taxes; the settlement cap is
+  unchanged) and puts declared - landed in `ControlType.InventoryValuationReserve`
+  (equity, seeded by `ImportCostingAccountSeeder` / the CoA preset), the same
+  treatment opening stock gets through opening equity. Landed cost stays the
+  margin figure. Booked at landed cost, every arrival left declared - landed
+  between stock and ledger (Pak Trade KAPE-HC-9509: 586,532.17). GDs posted before
+  the change are re-posted, idempotently, by `POST /api/accounting/gl/company/{id}/
+  repost-arrivals` (`accounting.gl.manage`, audited
+  `ARRIVALS_DECLARED_BASIS_REPOST`). The tie-out's `ArrivalsBasisGap` measures what
+  each GD entry ACTUALLY debited, so it reads zero once re-posted.
+- Suites: `scripts/test_import_tax_desk.py` (26 checks), harness `gdparts.*` /
   `itw.*`, tenant suite 21 (5d).
 
 ### 5c. Customer Portal — the only anonymous surface
@@ -1981,7 +1989,7 @@ them can be resolved from FBR.
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
 | FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `143 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
-| Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `22/22 checks passed` |
+| Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `26/26 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

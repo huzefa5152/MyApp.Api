@@ -1644,18 +1644,28 @@ def main():
             # Inventory while crediting Import Clearing for the full amount.
             c1 = compute_costing(assessed=100000, others=1000, st=18, ast=3, it=6)
             c2 = compute_costing(assessed=50000, duty=2000, st=18, ast=3, it=6)
-            expected_inventory = money(c1["cost"] + c2["cost"])
+            # Since 2026-10-05 (maintainer's decision) Inventory is debited at
+            # the DECLARED value -- the basis the stock walk and the monthly
+            # relief carry -- while Import Clearing still carries what is OWED
+            # (landed cost + import taxes). The difference goes to the
+            # Inventory valuation reserve. Before, Inventory took the landed
+            # cost and every arrival left declared - landed between stock and
+            # ledger; this section used to pin that.
+            expected_landed = money(c1["cost"] + c2["cost"])
+            expected_inventory = money(c1["sellingValue"] + c2["sellingValue"])
+            expected_reserve = money(expected_inventory - expected_landed)
             expected_input_tax = money(c1["salesTax"] + c1["ast"] + d(1000)
                                        + c2["salesTax"] + c2["ast"] + d(0))
             expected_income_tax = money(c1["incomeTax"] + c2["incomeTax"])
-            expected_clearing = money(expected_inventory + expected_input_tax + expected_income_tax)
+            expected_clearing = money(expected_landed + expected_input_tax + expected_income_tax)
+            expected_debits = money(expected_inventory + expected_input_tax + expected_income_tax)
 
             check("15: exactly one journal entry is reported, for the one GD",
                   len(glA_res.get("journalEntries") or []) == 1,
                   f"journalEntries={glA_res.get('journalEntries')}")
-            check("15: the commit response's totalPosted matches the balancing (Import Clearing) figure",
-                  close(glA_res.get("totalPosted"), float(expected_clearing)),
-                  f"totalPosted={glA_res.get('totalPosted')} expected={expected_clearing}")
+            check("15: the commit response's totalPosted is the entry's total debits",
+                  close(glA_res.get("totalPosted"), float(expected_debits)),
+                  f"totalPosted={glA_res.get('totalPosted')} expected={expected_debits}")
 
             je_id = (glA_res.get("journalEntries") or [{}])[0].get("journalEntryId")
             je_r = requests.get(f"{api}/journal-entries/{je_id}", headers=h, timeout=60) if je_id else None
@@ -1675,12 +1685,15 @@ def main():
                 by[nm] = by.get(nm, 0) + (l.get("debit") or 0) - (l.get("credit") or 0)
 
             inv = next((v for k, v in by.items() if "inventory on hand" in k), None)
-            check("15: Inventory is debited for BOTH lines' cost under New Arrivals -- the "
-                  "cost-only line's cost counts too, not the new-stock line's alone",
+            check("15: Inventory is debited at BOTH lines' declared value under New Arrivals -- the "
+                  "cost-only line counts too, not the new-stock line's alone",
                   inv is not None and close(inv, float(expected_inventory)),
                   f"inventory net-debit={inv} expected={expected_inventory} "
-                  f"(would be only {c2['cost']} if the cost-only line were wrongly excluded, "
-                  f"Finding 1 -- understating Inventory while Import Clearing still carried the full cost)")
+                  f"(landed cost would be {expected_landed}: the pre-2026-10-05 basis)")
+            res_ = next((v for k, v in by.items() if "valuation reserve" in k), None)
+            check("15: the declared - landed gap is credited to the Inventory valuation reserve",
+                  res_ is not None and close(-res_, float(expected_reserve)),
+                  f"reserve net-debit={res_} expected credit={expected_reserve}")
             check("15: the entry still balances once the cost-only line's cost is included",
                   je and close(je.get("totalDebit"), je.get("totalCredit")),
                   f"totalDebit={je.get('totalDebit')} totalCredit={je.get('totalCredit')}")
@@ -1738,7 +1751,9 @@ def main():
             je_again = requests.get(f"{api}/journal-entries/{je_id}", headers=h, timeout=60) if je_id else None
             check("15: re-posting is idempotent -- the SAME entry still carries the SAME total, not doubled",
                   je_again is not None and je_again.ok
-                  and close(je_again.json().get("totalCredit"), float(expected_clearing)),
+                  # The entry's total = Import Clearing + the valuation reserve
+                  # (= its total debits) since arrivals post at declared value.
+                  and close(je_again.json().get("totalCredit"), float(expected_debits)),
                   f"http {je_again.status_code if je_again is not None else 'n/a'}: "
                   f"totalCredit={je_again.json().get('totalCredit') if je_again is not None and je_again.ok else None}")
         finally:

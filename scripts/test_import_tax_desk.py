@@ -7,7 +7,8 @@ Import Tax Desk, end to end (2026-10-05).
     2. Input-tax worksheet: GD input tax lands in its CLAIM month (not the GD's),
        carries forward with no output tax, and the claim-window list names a GD
        whose input tax was never claimed.
-    3. Month-end tie-out (FIFO company, ledger off): stock = Annex-H1.
+    3. Month-end tie-out: ledger off (stock = Annex-H1) and ledger on (stock =
+       Inventory to the paisa now arrivals post at declared value; re-post idempotent).
     4. Refusals: a malformed month, a range past today.
 
 Both companies are created here and deleted at the end.
@@ -154,6 +155,27 @@ def main():
         check("stock and Annex-H1 agree", near(t.get("stockValue"), t.get("annexH1Closing")) and t.get("stockValue", 0) > 0, str(t)[:300])
         check("with the ledger off only the two are compared, and they tie",
               t.get("ledgerOn") is False and t.get("agrees") is True and t.get("ledgerInventory") is None, str(t)[:300])
+        # 3b. Ledger ON (2026-10-05): an arrival now debits Inventory at its
+        # DECLARED value, so stock and the Inventory account agree to the paisa
+        # and the landed - declared gap sits in the valuation reserve.
+        glco = company("_taxdesk gl")
+        r = requests.post(f"{api}/accounting/gl/company/{glco}/enable", headers=h, timeout=300)
+        check("setup: the ledger switches on", r.ok, f"http {r.status_code} {r.text[:200]}")
+        r = bring_in(glco, [line("KAPE-HC-90004", "2026-08-06", "8481.2000", f"TAXDESK GL VALVE {tag}", 4, 40000, duty=4000)])
+        check("setup: a GD comes in with the ledger on", r.ok, f"http {r.status_code} {r.text[:200]}")
+        t = requests.get(f"{api}/stock/company/{glco}/tie-out", headers=h, params={"month": "2026-08"}, timeout=300).json()
+        check("stock equals the Inventory account to the paisa (declared basis)",
+              t.get("ledgerOn") is True and near(t.get("stockVsLedger"), 0, 0.01) and near(t.get("arrivalsBasisGap"), 0, 0.01),
+              str(t)[:300])
+        check("what the GD owes equals Import Clearing, and it all ties",
+              near(t.get("clearingDifference"), 0, 0.01) and t.get("agrees") is True, str(t)[:300])
+        r = requests.post(f"{api}/accounting/gl/company/{glco}/repost-arrivals", headers=h, timeout=300)
+        g = (r.json() or {}).get("gds", []) if r.ok else []
+        check("re-posting arrivals is idempotent: same credit, still ties",
+              r.ok and len(g) == 1 and g[0].get("reposted") and near(g[0].get("clearingBefore"), g[0].get("clearingAfter"))
+              and requests.get(f"{api}/stock/company/{glco}/tie-out", headers=h, params={"month": "2026-08"}, timeout=300).json().get("agrees") is True,
+              r.text[:300])
+
         r = requests.get(f"{api}/stock/company/{wa}/tie-out", headers=h, params={"month": "2026-08"}, timeout=60)
         check("the tie-out needs FIFO by GD (weighted average refused)", r.status_code == 400, str(r.status_code))
 
