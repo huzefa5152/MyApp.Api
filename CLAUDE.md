@@ -1456,6 +1456,43 @@ GD panel and Excel export all say which GDs it took.
   and the READ-ONLY production check `cd scripts/stock_fifo_prod_check && dotnet run -c Release`
   (build the app first; it runs the shipped loader over real data, SELECT only).
 
+### 5b-18. The Import Tax Desk -- GD register, input-tax worksheet, tie-out (2026-10-05)
+
+Purchases -> Import Tax Desk (`pages/ImportTaxDeskPage.jsx`, permission
+`importcosting.taxdesk.view`). Three READ-ONLY views, company-wide (a
+division-restricted user is refused, never shown a partial return).
+
+- **The worksheet is by CLAIM month, from the documents, not the ledger.** The
+  ledger posts a GD's input tax on its GD date; the return claims it in its claim
+  month. `Helpers/InputTaxWorksheet` (pure) walks the carry-forward from the
+  company's first month of activity: output tax = bills' GST + further tax (credit
+  notes subtract; void, demo and FBR-cancelled excluded); input = the GDs CLAIMED
+  in the month (sales tax + 3% value-added tax + GST/FED, via
+  `ImportCostingCalculator`) + purchase bills less purchase debit notes;
+  admissible = min(available, cap% x output), never below zero. The cap and the
+  claim window are `TaxCompliance:Section8BCapPercent` / `AgingMonths` -- the SAME
+  settings the per-bill claim panel reads. It is a worksheet: the Tax Summary
+  report stays the ledger's account.
+- **A GD line's claim month** is its own, else the GD's `GdClaimPeriods` row.
+  Claim-by = GD month + window; listed as lapsed / open / claimed late.
+- **Collectorate and GD type are READ from the GD number** (`GdNumberParts`,
+  `KAPE-HC-12274`), never stored, and only codes whose meaning is certain are
+  named. A GD known only from the opening stock sheet is listed with no duty or
+  tax figures -- blank, never estimated.
+- **The tie-out** (`GET /api/stock/company/{id}/tie-out?month=`, FIFO only)
+  compares the FIFO walk to month end, the H1 roll-up of the monthly sheet, the
+  Inventory account (`IGeneralLedgerService.GetAccountBalancesAsync` -- account
+  opening balance + lines; a bare sum of journal lines misses the opening and was
+  off by the whole opening stock), and the GD dues (credited less payments dated
+  by then) against Import Clearing.
+- **Known basis gap:** a New Arrivals GD debits Inventory at LANDED cost while the
+  stock walk and the COGS relief carry DECLARED value, so each posted arrival
+  leaves exactly declared - landed between stock and ledger (Pak Trade
+  KAPE-HC-9509: 586,532.17). The tie-out measures it (`ArrivalsBasisGap`) and
+  reports what remains; fixing the posting basis is the maintainer's decision.
+- Suites: `scripts/test_import_tax_desk.py` (22 checks), harness `gdparts.*` /
+  `itw.*`, tenant suite 21 (5d).
+
 ### 5c. Customer Portal — the only anonymous surface
 
 `Controllers/PublicCustomerPortalController.cs` is one of just two
@@ -1944,6 +1981,7 @@ them can be resolved from FBR.
 | GD costing import: line rules on both paths, leave-out, choose item, file identity | `python scripts/test_gd_import_costing.py`; `node scripts/test_gd_costing_entry.mjs`; `cd scripts/gd_costing_harness && dotnet run -c Release` | `452 passed, 0 failed`; `54/54 checks passed`; `102 checks, 0 failed` |
 | Invoice Sales Detail: periods, filters, Excel = screen, Excel format pinned, access | `python scripts/test_invoice_sales_detail.py` (add `--db "<conn>"` for the FBR-submitted cases); `node scripts/test_invoice_sales_detail.mjs` | `64/64 checks passed` (with `--db`; 61 + 3 skipped without); `45/45 checks passed` |
 | FIFO by GD (claimed first, never blocks, WA unchanged) | `cd scripts/stock_fifo_harness && dotnet run -c Release`; `python scripts/test_stock_fifo.py`; `node scripts/test_fifo_pricing.mjs` | `143 checks, 0 failed`; `61/61 checks passed`; `11/11 checks passed` |
+| Import Tax Desk (register, input-tax worksheet, tie-out) | `python scripts/test_import_tax_desk.py` | `22/22 checks passed` |
 | Inventory Overlay (two books, one total; normal mode unchanged) | `python scripts/test_inventory_overlay.py` (add `--db <branch db>` for the submitted-lock case) | `71/71 checks passed` (1 skipped without `--db`) |
 | PO parser corpus (offline) | `cd scripts/po_parser_harness && dotnet run -c Release` | `ALL REGRESSION CORPORA PASSED` |
 | PO parser vs prod PDFs (read-only) | `python scripts/po_parser_prod_regression.py` (see guide) | `REGRESSIONS 0` |

@@ -168,6 +168,72 @@ CheckBool("totals.productNamedTotal", GdCostingMapping.LooksLikeTotalsRow("Total
 CheckBool("totals.productNoCodeButQty", GdCostingMapping.LooksLikeTotalsRow("Total", 72905m, "", 10m), false);
 CheckBool("totals.realLineNoCode", GdCostingMapping.LooksLikeTotalsRow("SCREW DRIVER", 72905m, "", 0m), false);
 
+// -- Import tax desk (2026-10-05) ----------------------------------------
+// GD number parts: read, never guessed.
+var gp = GdNumberParts.Parse("KAPE-HC-12274");
+CheckStr("gdparts.collectorate", gp.Collectorate ?? "", "KAPE");
+CheckStr("gdparts.collectorateName", gp.CollectorateName ?? "", "Karachi Appraisement (East)");
+CheckStr("gdparts.typeName", gp.TypeName ?? "", "Home consumption");
+var gu = GdNumberParts.Parse("LAPR-IB-55");
+CheckStr("gdparts.unknownCodeShownAsItself", gu.Collectorate ?? "", "LAPR");
+CheckBool("gdparts.unknownCodeNotNamed", gu.CollectorateName == null && gu.TypeName == null, true);
+CheckBool("gdparts.notAGdNumber", GdNumberParts.Parse("Opening stock").Collectorate == null, true);
+
+// The worksheet: 90% cap, carry forward month to month, payable never negative.
+{
+    var m = new List<InputTaxWorksheet.MonthFigures>
+    {
+        new(new DateTime(2026, 7, 1), 0m, 500m, 80m, 20m, 0m),       // imports, no sales: all carried
+        new(new DateTime(2026, 8, 1), 1000m, 0m, 0m, 0m, 100m),      // 600 brought forward + 100: under the 900 cap
+        new(new DateTime(2026, 9, 1), 100m, 0m, 0m, 0m, 0m),         // cap 90
+        new(new DateTime(2026, 10, 1), -50m, 0m, 0m, 0m, 0m),        // credit notes exceed bills
+    };
+    var w = InputTaxWorksheet.Build(m, Array.Empty<InputTaxWorksheet.GdTax>(), 90m, 6, new DateTime(2026, 10, 1));
+    Check("itw.jul.carried", w.Months[0].CarriedForward, 600m);
+    Check("itw.jul.admissible", w.Months[0].Admissible, 0m);
+    Check("itw.aug.available", w.Months[1].Available, 700m);
+    Check("itw.aug.admissible", w.Months[1].Admissible, 700m);
+    Check("itw.aug.payable", w.Months[1].Payable, 300m);
+    CheckBool("itw.aug.capNotApplied", w.Months[1].CapApplied, false);
+    var m2 = new List<InputTaxWorksheet.MonthFigures>
+    {
+        new(new DateTime(2026, 8, 1), 1000m, 1500m, 0m, 0m, 0m),
+        new(new DateTime(2026, 9, 1), 100m, 0m, 0m, 0m, 0m),
+        new(new DateTime(2026, 10, 1), -50m, 0m, 0m, 0m, 0m),
+    };
+    var w2 = InputTaxWorksheet.Build(m2, Array.Empty<InputTaxWorksheet.GdTax>(), 90m, 6, new DateTime(2026, 10, 1));
+    Check("itw.cap.admissible", w2.Months[0].Admissible, 900m);
+    Check("itw.cap.payable", w2.Months[0].Payable, 100m);
+    Check("itw.cap.carried", w2.Months[0].CarriedForward, 600m);
+    CheckBool("itw.cap.applied", w2.Months[0].CapApplied, true);
+    Check("itw.next.broughtForward", w2.Months[1].BroughtForward, 600m);
+    Check("itw.next.admissible", w2.Months[1].Admissible, 90m);
+    Check("itw.next.carried", w2.Months[1].CarriedForward, 510m);
+    Check("itw.negativeOutput.admissible", w2.Months[2].Admissible, 0m);
+    Check("itw.negativeOutput.payable", w2.Months[2].Payable, 0m);
+    Check("itw.negativeOutput.carriedKept", w2.Months[2].CarriedForward, 510m);
+
+    // The claim window: 6 periods after the GD's month.
+    var gds = new[]
+    {
+        new InputTaxWorksheet.GdTax("G-OLD", new DateTime(2026, 2, 10), null, "old", "8481.1000", 100m, 0m, 0m),
+        new InputTaxWorksheet.GdTax("G-OPEN", new DateTime(2026, 8, 3), null, "open", "8481.1000", 50m, 10m, 0m),
+        new InputTaxWorksheet.GdTax("G-LATE", new DateTime(2026, 1, 5), new DateTime(2026, 9, 1), "late", null, 30m, 0m, 0m),
+        new InputTaxWorksheet.GdTax("G-OK", new DateTime(2026, 9, 5), new DateTime(2026, 9, 1), "ok", null, 30m, 0m, 0m),
+        new InputTaxWorksheet.GdTax("G-NOTAX", new DateTime(2025, 1, 5), null, "none", null, 0m, 0m, 0m),
+    };
+    var w3 = InputTaxWorksheet.Build(new List<InputTaxWorksheet.MonthFigures>(), gds, 90m, 6, new DateTime(2026, 10, 1));
+    var byGd = w3.TimeLimit.ToDictionary(t => t.GdNumber);
+    CheckBool("itw.limit.lapsed", byGd.TryGetValue("G-OLD", out var o1) && o1.Status == InputTaxWorksheet.TimeLimitStatus.Lapsed, true);
+    CheckBool("itw.limit.lapsedClaimBy", o1?.ClaimBy == new DateTime(2026, 8, 1), true);
+    CheckBool("itw.limit.open", byGd.TryGetValue("G-OPEN", out var o2) && o2.Status == InputTaxWorksheet.TimeLimitStatus.Open
+        && o2.ClaimBy == new DateTime(2027, 2, 1) && o2.InputTax == 60m, true);
+    CheckBool("itw.limit.claimedLate", byGd.TryGetValue("G-LATE", out var o3) && o3.Status == InputTaxWorksheet.TimeLimitStatus.ClaimedLate, true);
+    CheckBool("itw.limit.claimedInTimeNotListed", byGd.ContainsKey("G-OK"), false);
+    CheckBool("itw.limit.noTaxNotListed", byGd.ContainsKey("G-NOTAX"), false);
+    CheckBool("itw.limit.lapsedListedFirst", w3.TimeLimit[0].Status == InputTaxWorksheet.TimeLimitStatus.Lapsed, true);
+}
+
 // A mapping with no GD number column cannot drive an import.
 {
     checks++;

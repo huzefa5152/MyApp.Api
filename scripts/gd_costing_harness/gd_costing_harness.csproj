@@ -32,5 +32,7 @@
     <Compile Include="..\..\Helpers\ExcelImport\GdCostingSheetReader.cs" />
     <Compile Include="..\..\Helpers\ExcelImport\ClaimMonthParser.cs" />
     <Compile Include="..\..\Helpers\GdLineRules.cs" />
+    <Compile Include="..\..\Helpers\InputTaxWorksheet.cs" />
+    <Compile Include="..\..\Helpers\GdNumberParts.cs" />
   </ItemGroup>
 </Project>

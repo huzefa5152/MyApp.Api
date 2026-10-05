@@ -1074,6 +1074,98 @@ namespace MyApp.Api.Controllers
             return (null, data);
         }
 
+        /// <summary>
+        /// The month-end tie-out (2026-10-05): the stock screen, the general
+        /// ledger and the Annex-H1 statement must tell one story, and what the
+        /// company owes on its GDs must agree with the Import Clearing account.
+        /// Read-only. Each figure is taken from where its own screen takes it --
+        /// the FIFO walk to the month's end, the Inventory and Import Clearing
+        /// accounts' balances on that date, the H1 roll-up of the monthly sheet,
+        /// and the consignments less the payments dated by then -- so a
+        /// difference here is a difference an auditor would find.
+        /// </summary>
+        [HttpGet("company/{companyId}/tie-out")]
+        [HasPermission("importcosting.taxdesk.view")]
+        [AuthorizeCompany]
+        public async Task<ActionResult<StockTieOutDto>> GetTieOut(int companyId, [FromQuery] string? month)
+        {
+            if (await _divisionAccess.GetAccessibleDivisionIdsAsync(CurrentUserId, companyId) != null)
+                return StatusCode(403, new { message = "The tie-out covers the whole company, so it needs access to every division." });
+            var (error, data) = await BuildMonthlyDataAsync(companyId, month, null);
+            if (error != null) return (ActionResult)error;
+            var monthStart = data!.Month;
+            var monthEnd = monthStart.AddMonths(1);
+            var dto = new StockTieOutDto { Month = monthStart, Fifo = true, LedgerOn = await _posting.IsEnabledAsync(companyId) };
+
+            var ids = await _context.OpeningStockBalances.AsNoTracking().Where(o => o.CompanyId == companyId)
+                .Select(o => o.ItemTypeId)
+                .Union(_context.StockMovements.AsNoTracking().Where(m => m.CompanyId == companyId).Select(m => m.ItemTypeId))
+                .Distinct().ToListAsync();
+            var atEnd = await FifoResultsBeforeAsync(companyId, ids, monthEnd);
+            dto.StockValue = Money(atEnd?.Results.Values.Sum(r => r.Position.ValueExcludingTax) ?? 0m);
+            dto.AnnexH1Closing = Money(AnnexH1.Build(data.Lines).Sum(r => r.ClosingValue) + data.LaterLinesValue);
+            dto.StockVsAnnexH1 = Money(dto.StockValue - dto.AnnexH1Closing.Value);
+
+            var credited = await _context.ImportConsignments.AsNoTracking()
+                .Where(c => c.CompanyId == companyId && c.GdDate < monthEnd).SumAsync(c => (decimal?)c.ImportClearingCredited) ?? 0m;
+            var settled = await _context.PaymentAllocations.AsNoTracking()
+                .Where(a => a.ImportConsignmentId != null && a.ImportConsignment!.CompanyId == companyId
+                         && !a.Payment.IsCancelled && a.Payment.Date < monthEnd)
+                .SumAsync(a => (decimal?)(a.Amount + a.AdjustmentAmount)) ?? 0m;
+            dto.ConsignmentsOutstanding = Money(credited - settled);
+
+            if (dto.LedgerOn)
+            {
+                // The ledger's own balance (account opening balance + journal
+                // lines to the month's last day), never a second sum of lines.
+                var gl = HttpContext.RequestServices.GetRequiredService<IGeneralLedgerService>();
+                var balances = await gl.GetAccountBalancesAsync(companyId, monthEnd.AddDays(-1));
+                var roles = await _context.Accounts.AsNoTracking().Where(x => x.CompanyId == companyId)
+                    .Select(x => new { x.Id, x.ControlType }).ToListAsync();
+                decimal Balance(MyApp.Api.Models.Accounting.ControlType role) =>
+                    roles.Where(x => x.ControlType == role).Sum(x => balances.GetValueOrDefault(x.Id));
+                dto.LedgerInventory = Money(Balance(MyApp.Api.Models.Accounting.ControlType.Inventory));
+                dto.LedgerImportClearing = Money(-Balance(MyApp.Api.Models.Accounting.ControlType.ImportClearing));
+                dto.StockVsLedger = Money(dto.StockValue - dto.LedgerInventory.Value);
+                // A New Arrivals GD debits Inventory at its LANDED cost while the
+                // stock walk (and the monthly cost-of-sales relief) carries its
+                // DECLARED value, so each posted arrival leaves exactly
+                // declared - landed between the two. Measured, not assumed.
+                dto.ArrivalsBasisGap = Money(await _context.ImportConsignmentLines.AsNoTracking()
+                    .Where(l => l.ImportConsignment.CompanyId == companyId
+                             && l.ImportConsignment.Mode == GdCostingImportModeNames.NewArrivals
+                             && l.ImportConsignment.ImportClearingCredited > 0m
+                             && l.ImportConsignment.GdDate < monthEnd
+                             && (l.Disposition == GdCostingDisposition.CostOnly || l.Disposition == GdCostingDisposition.StockPosted))
+                    .SumAsync(l => (decimal?)(l.SellingValueExcludingTax - l.CostExcludingTax)) ?? 0m);
+                dto.UnexplainedLedgerDifference = Money(dto.StockVsLedger.Value - dto.ArrivalsBasisGap);
+                dto.ClearingDifference = Money(dto.ConsignmentsOutstanding - dto.LedgerImportClearing.Value);
+            }
+            else
+                dto.Notes.Add("The general ledger is off for this company, so only the stock screen and Annex-H1 are compared.");
+
+            bool Off(decimal? d) => d is decimal v && Math.Abs(v) > 1m;
+            if (Off(dto.StockVsAnnexH1))
+                dto.Notes.Add("Annex-H1 does not equal the stock screen. Annex-H1 is built from the monthly GD sheet, so an item "
+                    + "holding stock with no GD line behind it is the usual cause: restate it from the stock sheet.");
+            if (Off(dto.StockVsLedger) && dto.ArrivalsBasisGap != 0m)
+                dto.Notes.Add($"{dto.ArrivalsBasisGap:N2} of the difference is the GDs brought in as new arrivals: the "
+                    + "ledger books them at their landed cost, the stock screen at their declared value.");
+            if (Off(dto.UnexplainedLedgerDifference))
+                dto.Notes.Add(monthEnd > PakistanClock.Today
+                    ? "The month is still running: the cost of goods sold for it is posted when the month closes, so the "
+                      + "Inventory account catches up then."
+                    : "The Inventory account does not equal the stock screen. Check for journal entries posted to Inventory "
+                      + "by hand, a GL lock date that stopped the month's cost-of-sales entry, or GDs imported while the "
+                      + "ledger was off (rebuild the ledger).");
+            if (Off(dto.ClearingDifference))
+                dto.Notes.Add("Import Clearing does not equal what the consignments still owe. Look for a GD payment entered "
+                    + "as an ordinary bank payment instead of Settle on the Consignments screen, or a journal to Import Clearing.");
+            dto.Agrees = !Off(dto.StockVsAnnexH1) && !Off(dto.StockVsLedger) && !Off(dto.ClearingDifference);
+            dto.AgreesOnceExplained = !Off(dto.StockVsAnnexH1) && !Off(dto.UnexplainedLedgerDifference) && !Off(dto.ClearingDifference);
+            return Ok(dto);
+        }
+
         /// <summary>Audit feed of every movement, newest first.</summary>
         [HttpGet("company/{companyId}/movements")]
         [HasPermission("stock.movements.view")]

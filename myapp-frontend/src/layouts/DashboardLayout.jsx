@@ -239,6 +239,7 @@ export default function DashboardLayout() {
     "fbrimport.purchase.preview",
     "importcosting.sheet.run",
     "importcosting.consignments.view",
+    "importcosting.taxdesk.view",
   ];
   const accountingKeys = [
     "accounting.receipts.view",
@@ -541,6 +542,12 @@ export default function DashboardLayout() {
                 <NavLink to="/imports/consignments" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
                   <MdHistory className="dl-subitem__icon" aria-hidden="true" />
                   <span>Consignments</span>
+                </NavLink>
+              </Can>
+              <Can permission="importcosting.taxdesk.view">
+                <NavLink to="/imports/tax-desk" className={({ isActive }) => "dl-subitem" + (isActive ? " dl-subitem--active" : "")}>
+                  <MdRequestQuote className="dl-subitem__icon" aria-hidden="true" />
+                  <span>Import Tax Desk</span>
                 </NavLink>
               </Can>
               {/* No Can wrapper: the guide explains the product and shows no
@@ -961,6 +968,7 @@ function getBreadcrumb(pathname) {
     "/fbr-import/purchase": "Purchases / FBR Purchase Import",
     "/imports/costing": "Purchases / Import Costing",
     "/imports/consignments": "Purchases / Consignments",
+    "/imports/tax-desk": "Purchases / Import Tax Desk",
     "/item-types": "Configuration / Item Types",
     "/non-inventory-items": "Configuration / Non-Inventory Items",
     "/challans": "Sales / Delivery Challans",

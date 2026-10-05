@@ -1579,6 +1579,15 @@ s, _ = request("POST", f"/api/stock/company/{beta['id']}/split", token=tokens["a
                body={"sourceItemTypeId": 1, "poolKeys": ["x"], "newItemName": "probe"})
 status_check(suite21, "alice splits a Beta item", s, 403)
 
+# 5d. Import Tax Desk (2026-10-05): every read is company-scoped.
+for path in ("import-tax/company/{id}/gd-register", "import-tax/company/{id}/gd-register/excel",
+             "import-tax/company/{id}/input-tax", "import-tax/company/{id}/input-tax/excel",
+             "stock/company/{id}/tie-out?month=2026-09"):
+    s, _ = request("GET", "/api/" + path.format(id=beta["id"]), token=tokens["alice"])
+    status_check(suite21, f"alice reads Beta's {path.split('/')[2].split('?')[0]}", s, 403)
+s, _ = request("GET", f"/api/import-tax/company/{beta['id']}/gd-register", token=tokens["bob"])
+status_check(suite21, "bob reads Beta's own GD register", s, 200)
+
 # 6. A PO format by id answers 404 to a tenant that cannot reach its company.
 s, fmts = request("GET", f"/api/poformats?companyId={beta['id']}", token=admin)
 beta_fmt = next((f for f in (fmts or []) if f.get("companyId") == beta["id"]), None)

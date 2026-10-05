@@ -33,6 +33,7 @@ import StockSplitPage from "./pages/StockSplitPage";
 import FbrPurchaseImportPage from "./pages/FbrPurchaseImportPage";
 import GdCostingImportPage from "./pages/GdCostingImportPage";
 import ImportConsignmentsPage from "./pages/ImportConsignmentsPage";
+import ImportTaxDeskPage from "./pages/ImportTaxDeskPage";
 import ImportGuidePage from "./pages/ImportGuidePage";
 import SalesReportPage from "./pages/SalesReportPage";
 import InvoiceSalesDetailPage from "./pages/InvoiceSalesDetailPage";
@@ -172,6 +173,7 @@ export default function App() {
               consignment (the correction path) — separate permission from the
               run/write page above. */}
           <Route path="/imports/consignments" element={<RequirePermission permission="importcosting.consignments.view"><ImportConsignmentsPage /></RequirePermission>} />
+          <Route path="/imports/tax-desk" element={<RequirePermission permission="importcosting.taxdesk.view"><ImportTaxDeskPage /></RequirePermission>} />
           {/* Reports */}
           <Route path="/reports/sales" element={<RequirePermission anyPrefix="reports.sales"><SalesReportPage /></RequirePermission>} />
           <Route path="/reports/invoice-sales-detail" element={<RequirePermission permission="reports.invoicedetail.view"><InvoiceSalesDetailPage /></RequirePermission>} />

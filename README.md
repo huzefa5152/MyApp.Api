@@ -300,6 +300,10 @@ Publish output optimized from 79 MB to 37 MB via:
 
 ### 2026-10-05 — Import Tax Desk, dated restatements
 
+- **Purchases → Import Tax Desk** for importers, read-only, three views:
+  - **Input tax**: the month's sales-tax worksheet by claim month — output tax, import sales tax, the 3% value-added tax and GST/FED on the GDs claimed that month, purchase input tax, the Section 8B 90% cap, what carries forward, what is payable — plus every GD whose input tax lapsed or must be claimed soon. Excel download.
+  - **GD register**: every GD line with its assessed value, duties, sales tax, value-added tax, income tax, landed cost and claim status; collectorate and GD type read from the GD number; a "not claimed yet" filter. Excel download.
+  - **Month-end tie-out**: stock screen = Inventory account = Annex-H1, and what the GDs still owe = Import Clearing, with the reason when they differ.
 - **Reconcile to my stock sheet now dates its GD restatement on the sheet's date** (e.g. 30 Sep for a September sheet) and compares quantities as they stood that day. It used to be dated the day it was applied, so the month's own monthly sheet, Annex-H1 and tie-out did not reflect it.
 
 ### 2026-10-03 — Annex-H1 stock statement
